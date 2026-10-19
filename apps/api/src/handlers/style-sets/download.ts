@@ -33,7 +33,7 @@ const config = {
 
 export default createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, recordAuditEvent }) {
+  async function* ({ safeDb, session, params, user, recordAuditEvent }) {
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const [styleSet] = await tx
@@ -61,6 +61,7 @@ export default createSafeRootHandler(
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
           resourceId: styleSet.id,
+          userId: user.id,
           s3Key: styleSet.s3Key,
           expiresInSeconds: STYLE_SET_DOWNLOAD_TTL_SECONDS,
           fileName: styleSet.fileName,

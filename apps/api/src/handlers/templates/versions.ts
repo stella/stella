@@ -153,6 +153,7 @@ export const listTemplateVersionsHandler = async ({
 // ── Get version ──────────────────────────────────────
 
 type GetVersionProps = {
+  userId: SafeId<"user">;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: SafeId<"template">;
@@ -161,6 +162,7 @@ type GetVersionProps = {
 };
 
 export const getTemplateVersionHandler = async ({
+  userId,
   scopedDb,
   organizationId,
   templateId,
@@ -197,6 +199,7 @@ export const getTemplateVersionHandler = async ({
       recordAuditEvent,
       resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
       resourceId: templateId,
+      userId,
       s3Key: version.s3Key,
       expiresInSeconds: PRESIGN_EXPIRES_IN,
       fileName: template.fileName,

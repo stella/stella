@@ -10,6 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
+import { checkSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 const LINK_GRANT_LIFETIME_MS = 60_000;
 const LINK_GRANT_PREFIX = "desktop-link";
@@ -68,8 +69,15 @@ export const createDesktopLinkGrant = async ({
   organizationId,
   db,
   now = new Date(Temporal.Now.instant().epochMilliseconds),
-}: CreateDesktopLinkGrantOptions) =>
-  await Result.tryPromise({
+}: CreateDesktopLinkGrantOptions) => {
+  const access = checkSessionCredentialIssuer("desktopAccount", {
+    userId,
+    organizationId,
+  });
+  if (Result.isError(access)) {
+    return access;
+  }
+  return await Result.tryPromise({
     try: async () => {
       await sweepExpiredLinkGrants(db, now);
       const expiresAt = new Date(now.getTime() + LINK_GRANT_LIFETIME_MS);
@@ -88,6 +96,7 @@ export const createDesktopLinkGrant = async ({
         cause,
       }),
   });
+};
 
 export type ConsumeDesktopLinkGrantOptions = {
   correlationId: string;

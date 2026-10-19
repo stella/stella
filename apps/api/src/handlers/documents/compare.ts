@@ -1094,6 +1094,7 @@ export const createDocumentCompareGenerator = (
               await dependencies.readFileHandler({
                 scopedDb,
                 fieldId: saved.fieldId,
+                userId: user.id,
                 organizationId: session.activeOrganizationId,
                 workspaceId,
                 purpose: "download",

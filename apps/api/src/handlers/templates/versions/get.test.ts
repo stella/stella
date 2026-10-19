@@ -45,6 +45,7 @@ afterEach(() => {
 });
 
 const organizationId = toSafeId<"organization">("org_1");
+const userId = toSafeId<"user">("user_1");
 const templateId = toSafeId<"template">("tpl_1");
 const versionId = toSafeId<"templateVersion">("ver_2");
 const s3Key = "org_1/templates/tpl_1/v2.docx";
@@ -102,6 +103,7 @@ describe("template version download", () => {
     const { getTransactionCount, scopedDb } = makeScopedDb();
     const props = {
       scopedDb,
+      userId,
       organizationId,
       templateId,
       versionId,
@@ -163,6 +165,7 @@ describe("template version download", () => {
 
     const result = await getTemplateVersionHandler({
       scopedDb,
+      userId,
       organizationId,
       templateId,
       versionId,
@@ -187,6 +190,7 @@ describe("template version download", () => {
 
     const result = await getTemplateVersionHandler({
       scopedDb,
+      userId,
       organizationId,
       templateId,
       versionId,

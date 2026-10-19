@@ -8,6 +8,7 @@ import {
   createAuthEndpoint,
   sensitiveSessionMiddleware,
 } from "better-auth/api";
+import { decodeCookieCache, getChunkedCookie } from "better-auth/cookies";
 import { parseSessionOutput, parseUserOutput } from "better-auth/db";
 import * as v from "valibot";
 
@@ -17,6 +18,7 @@ import { DAY_IN_MS } from "@stll/time";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { checkSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 export const SESSION_ABSOLUTE_AGE_MS = 90 * DAY_IN_MS;
 export const SESSION_IDLE_AGE_MS = 60 * 60 * 1000;
@@ -76,6 +78,7 @@ export type SessionLifetimeStore = {
 type SessionLifetimeOptions = {
   store: SessionLifetimeStore;
   now?: () => Date;
+  authorizeSession?: (session: Session) => Promise<boolean>;
 };
 
 const resolveObservedSession = async (
@@ -91,9 +94,41 @@ const resolveObservedSession = async (
     : null;
 };
 
+const authorizeObservedSession = async (
+  session: Session | null,
+  authorizeSession: SessionLifetimeOptions["authorizeSession"],
+) =>
+  session && (!authorizeSession || (await authorizeSession(session)))
+    ? session
+    : null;
+
+const createSessionLifetimeRequestHook = (
+  decorate: (auth: AuthContext) => void,
+) =>
+  createAuthMiddleware(async (ctx) => {
+    // Plugin initialization rebuilds the adapter; decorate its final instance.
+    decorate(ctx.context);
+    const encoded = getChunkedCookie(
+      ctx,
+      ctx.context.authCookies.sessionData.name,
+    );
+    if (encoded) {
+      const cached = await decodeCookieCache(ctx, encoded);
+      if (
+        cached &&
+        checkSessionCredentialIssuer("cookieCache", {
+          userId: cached.session.session.userId,
+        }).isErr()
+      ) {
+        ctx.query = { ...ctx.query, disableCookieCache: true };
+      }
+    }
+  });
+
 export const createSessionLifetime = ({
   store,
   now = () => new Date(),
+  authorizeSession,
 }: SessionLifetimeOptions) => {
   const decorated = new WeakSet<AuthContext["internalAdapter"]>();
   const observations = new WeakMap<
@@ -111,15 +146,17 @@ export const createSessionLifetime = ({
       memo = new Map();
       observations.set(ctx, memo);
     }
-    const result = store.observe({
-      token,
-      now: now(),
-      boundary:
-        ctx?.path === "/get-session" &&
-        ctx.getHeader?.(AUTH_SESSION_STARTUP_HEADER) === "1"
-          ? "startup"
-          : "activity",
-    });
+    const result = store
+      .observe({
+        token,
+        now: now(),
+        boundary:
+          ctx?.path === "/get-session" &&
+          ctx.getHeader?.(AUTH_SESSION_STARTUP_HEADER) === "1"
+            ? "startup"
+            : "activity",
+      })
+      .then((session) => authorizeObservedSession(session, authorizeSession));
     memo?.set(token, result);
     return await result;
   };
@@ -285,11 +322,7 @@ export const createSessionLifetime = ({
       before: [
         {
           matcher: () => true,
-          handler: createAuthMiddleware(async (ctx) => {
-            // Plugin initialization rebuilds the adapter; decorate its final instance.
-            decorate(ctx.context);
-            await Promise.resolve();
-          }),
+          handler: createSessionLifetimeRequestHook(decorate),
         },
       ],
     },

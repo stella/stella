@@ -50,6 +50,7 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
       workspaceId,
       session,
       params,
+      user,
       request,
       recordAuditEvent,
     }) {
@@ -186,6 +187,7 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
               recordAuditEvent,
               resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
               resourceId: loaded.invoice.id,
+              userId: user.id,
               s3Key: key,
               s3Keyspace: "exports",
               expiresInSeconds: EXPORT_URL_TTL_SECONDS,

@@ -134,6 +134,7 @@ export const deliverTemporaryRedline = async (
   const downloadUrl = await Result.tryPromise(
     async () =>
       await dependencies.presignDownloadUrl(key, {
+        userId,
         expiresIn: FILE_READ_URL_EXPIRY_SECONDS,
         fileName,
         // The key is organization-level `tmp/`, never workspace storage.

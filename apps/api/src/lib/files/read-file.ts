@@ -17,6 +17,7 @@ export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
 type FilePurpose = "download" | "display" | "native-display";
 
 type ReadFileHandlerProps = {
+  userId: SafeId<"user">;
   scopedDb: ScopedDb;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
@@ -59,6 +60,7 @@ export const fileFieldQuery = async (
 
 export const readFileHandler = async ({
   scopedDb,
+  userId,
   fieldId,
   organizationId,
   workspaceId,
@@ -104,6 +106,7 @@ export const readFileHandler = async ({
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: row.entityId,
+          userId,
           s3Key,
           expiresInSeconds: FILE_READ_URL_EXPIRY_SECONDS,
           ...(fileName === undefined ? {} : { fileName }),

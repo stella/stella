@@ -69,6 +69,7 @@ type JoinFolioCollabRoomResponse = {
 };
 
 type JoinFolioCollabRoomProps = {
+  sourceSessionId: string;
   body: JoinFolioCollabRoomBody;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
@@ -245,6 +246,7 @@ const claimFolioCollabRoomSeed = async ({
 const joinFolioCollabRoomHandler = async function* ({
   body: { entityId, propertyId },
   organizationId,
+  sourceSessionId,
   recordAuditEvent,
   safeDb,
   userId,
@@ -501,6 +503,7 @@ const joinFolioCollabRoomHandler = async function* ({
       }
 
       const { token, tokenExpiresAt } = await issueFolioCollabToken({
+        sourceSessionId,
         generation,
         permissions: { canEdit: true },
         roomId: room.id,
@@ -540,6 +543,7 @@ const joinFolioCollabRoomHandler = async function* ({
   }
 
   const seedDownloadUrl = await presignDocxFieldDownload({
+    userId,
     fileContent: joined.seedFileContent,
     organizationId,
     workspaceId,
@@ -583,6 +587,7 @@ const joinFolioCollabRoom = createSafeHandler(
     recordAuditEvent,
   }) {
     return yield* joinFolioCollabRoomHandler({
+      sourceSessionId: session.id,
       body,
       organizationId: session.activeOrganizationId,
       recordAuditEvent,

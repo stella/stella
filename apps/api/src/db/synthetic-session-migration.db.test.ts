@@ -184,6 +184,7 @@ describe.skipIf(!enabled)("monitoring session lifecycle", () => {
           "user_professional_use_acceptances",
           "organization_professional_use_acceptances",
           "system_audit_runs",
+          "folio_collab_room_tokens",
         ]) {
           await client.unsafe(
             `CREATE TABLE "${table}" (LIKE public."${table}" INCLUDING ALL)`,
@@ -286,6 +287,7 @@ describe.skipIf(!enabled)("monitoring session lifecycle", () => {
         expect(await store.revokeSyntheticSessions()).toEqual({
           status: "revoked",
           deletedSessions: 2,
+          deletedRoomTokens: 0,
         });
         expect(await store.mintSyntheticSession(request)).toBeNull();
         expect(await resolveSession()).toBeNull();
@@ -296,6 +298,7 @@ describe.skipIf(!enabled)("monitoring session lifecycle", () => {
         expect(await store.revokeSyntheticSessions()).toEqual({
           status: "revoked",
           deletedSessions: 0,
+          deletedRoomTokens: 0,
         });
         await client`DELETE FROM synthetic_session_control`;
         expect(await store.mintSyntheticSession(request)).toBeNull();

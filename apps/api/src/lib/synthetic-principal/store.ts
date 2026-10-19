@@ -172,12 +172,16 @@ export const createSyntheticSessionStore = (
           target: syntheticSessionControl.id,
           set: { status: "revoked", updatedAt: new Date() },
         });
-      const deletedSessions = await revokeMonitoringSessions(tx);
+      const { deletedSessions, deletedRoomTokens } =
+        await revokeMonitoringSessions(
+          tx,
+          brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
+        );
       await recordSystemAudit(tx, "system:monitoring-session-revoke", {
         subject: createSafeId<"systemScriptRun">(),
-        counts: { revokedControls: 1, deletedSessions },
+        counts: { revokedControls: 1, deletedSessions, deletedRoomTokens },
       });
-      return { status: "revoked", deletedSessions };
+      return { status: "revoked", deletedSessions, deletedRoomTokens };
     });
 
   const getSyntheticSessionStatus = async () => {

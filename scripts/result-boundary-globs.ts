@@ -245,6 +245,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/tanstack-ai-generate.ts",
   // All model engines consume this dispatch proof through a signal or rejection.
   "apps/api/src/lib/rate-limit/model-dispatch-admission.ts",
+  // Credential SDKs accept a typed rejection when issuance is unavailable.
+  "apps/api/src/lib/synthetic-principal/credential-policy.ts",
   // TanStack consumes this adapter through its Promise rejection contract;
   // structuredOutput cannot return a Result to the SDK.
   "apps/api/src/lib/stella-openrouter-text-adapter.ts",

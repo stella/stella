@@ -23,6 +23,7 @@ export const CONTENT_DELIVERY_AUDIT_ACTION = {
 } as const satisfies Record<ContentDisposition, AuditAction>;
 
 type AuditedPresignDownloadOptions = {
+  userId: string | null;
   tx: Transaction;
   recordAuditEvent: AuditRecorder;
   resourceType: AuditResourceType;
@@ -55,6 +56,7 @@ type AuditedPresignDownloadOptions = {
  * outer request boundary instead.
  */
 export const auditedPresignDownload = async ({
+  userId,
   tx,
   recordAuditEvent,
   resourceType,
@@ -86,6 +88,7 @@ export const auditedPresignDownload = async ({
   recordContentDeliveryReceipt();
 
   return await signDownload(s3Key, {
+    userId,
     expiresIn: expiresInSeconds,
     ...(fileName ? { fileName } : {}),
     ...(organizationId

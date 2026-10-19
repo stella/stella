@@ -23,6 +23,7 @@ describe("signed content delivery", () => {
       { type: "audited" },
       async () => {
         const result = await auditedPresignDownload({
+          userId: null,
           tx: asTestRaw<Transaction>({}),
           recordAuditEvent: async (_tx, event) => {
             events.push(event);
@@ -55,6 +56,7 @@ describe("signed content delivery", () => {
     await runWithContentDeliveryScope({ type: "audited" }, async () => {
       markContentDeliveryIntent();
       const result = await auditedPresignDownload({
+        userId: null,
         tx: asTestRaw<Transaction>({}),
         recordAuditEvent: async () => await Promise.reject(failure),
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
@@ -84,6 +86,7 @@ describe("signed content delivery", () => {
     await runWithContentDeliveryScope({ type: "audited" }, async () => {
       markContentDeliveryIntent();
       const delivery = auditedPresignDownload({
+        userId: null,
         tx: asTestRaw<Transaction>({}),
         recordAuditEvent: async () => {
           started.resolve(undefined);

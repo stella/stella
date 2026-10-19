@@ -345,10 +345,12 @@ export const readVersionDesktopEditTarget = async ({
 export const presignDocxFieldDownload = async ({
   fileContent,
   organizationId,
+  userId,
   workspaceId,
 }: {
   fileContent: DocxFieldContent;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
   workspaceId: SafeId<"workspace">;
 }) =>
   await presignDownloadUrl(
@@ -359,6 +361,7 @@ export const presignDocxFieldDownload = async ({
       workspaceId,
     }),
     {
+      userId,
       expiresIn: 900,
       fileName: fileContent.fileName,
       scope: { organizationId, workspaceId },
@@ -369,11 +372,13 @@ export const presignDocxDownloadFromFileId = async ({
   fileId,
   fileName,
   organizationId,
+  userId,
   workspaceId,
 }: {
   fileId: string;
   fileName: string;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
   workspaceId: SafeId<"workspace">;
 }) =>
   await presignDownloadUrl(
@@ -384,6 +389,7 @@ export const presignDocxDownloadFromFileId = async ({
       workspaceId,
     }),
     {
+      userId,
       expiresIn: 900,
       fileName,
       scope: { organizationId, workspaceId },
@@ -393,10 +399,12 @@ export const presignDocxDownloadFromFileId = async ({
 export const presignDesktopEditFileDownload = async ({
   fileTarget,
   organizationId,
+  userId,
   workspaceId,
 }: {
   fileTarget: DesktopEditableFileTarget;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
   workspaceId: SafeId<"workspace">;
 }) =>
   await presignDownloadUrl(
@@ -407,6 +415,7 @@ export const presignDesktopEditFileDownload = async ({
       workspaceId,
     }),
     {
+      userId,
       expiresIn: 900,
       fileName: fileTarget.fileContent.fileName,
       scope: { organizationId, workspaceId },
@@ -418,12 +427,14 @@ export const presignDesktopEditDownloadFromFileId = async ({
   fileName,
   fileType,
   organizationId,
+  userId,
   workspaceId,
 }: {
   fileId: string;
   fileName: string;
   fileType: DesktopEditFileType;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
   workspaceId: SafeId<"workspace">;
 }) =>
   await presignDownloadUrl(
@@ -434,6 +445,7 @@ export const presignDesktopEditDownloadFromFileId = async ({
       workspaceId,
     }),
     {
+      userId,
       expiresIn: 900,
       fileName,
       scope: { organizationId, workspaceId },

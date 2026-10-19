@@ -281,6 +281,7 @@ import {
   checkSyntheticPrincipalAccess,
   syntheticPrincipalAuthConfig,
 } from "@/api/lib/synthetic-principal/policy";
+import { authorizeSyntheticSession } from "@/api/lib/synthetic-principal/session-authority";
 import { includes, isRecord } from "@/api/lib/type-guards";
 import {
   checkMemberAdmission,
@@ -1084,6 +1085,8 @@ export const createAuth = (
       rotationEnabled: env.SESSION_TOKEN_ROTATION_ENABLED,
       capEnabled: env.SESSION_LIFETIME_CAP_ENABLED,
     }),
+    authorizeSession: async (session) =>
+      await authorizeSyntheticSession(rootDb, session),
   });
   const syntheticAuthHooks = createSyntheticPrincipalAuthHooks();
   const demoConfig = getDemoAccountConfig();
@@ -3144,6 +3147,7 @@ const resolveValidateAuth = async ({
         email: user.email,
       },
       session: {
+        id: session.id,
         activeOrganizationId,
       },
       getActiveWorkspaceIds,

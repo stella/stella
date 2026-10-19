@@ -69,6 +69,7 @@ const readUserFileThumbnail = createSafeRootHandler(
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
           resourceId: fileId,
+          userId: user.id,
           s3Key: thumbnailKey,
           expiresInSeconds: 900,
           workspaceId: file.workspaceId,

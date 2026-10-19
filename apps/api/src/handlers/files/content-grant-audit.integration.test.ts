@@ -220,6 +220,7 @@ const readUrl = async (
   await readFileHandler({
     scopedDb: scopedDbA(),
     fieldId,
+    userId: ids.userA1,
     organizationId: ids.orgA,
     workspaceId: ids.wsA1,
     purpose,

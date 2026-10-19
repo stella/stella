@@ -41,6 +41,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-room-contract";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 const openDesktopEditSessionBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -204,6 +205,7 @@ const hasActiveFolioCollabRoom = async ({
 
 const buildExistingOpenDesktopEditSessionResponse = async ({
   existingSession,
+  userId,
   organizationId,
   propertyId,
   recordAuditEvent,
@@ -213,6 +215,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
   workspaceId,
 }: {
   existingSession: ExistingOpenDesktopEditSession;
+  userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   propertyId: SafeId<"property">;
   recordAuditEvent: AuditRecorder;
@@ -271,6 +274,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
     return {
       baseVersionNumber: baseVersion.versionNumber,
       downloadUrl: await presignDesktopEditDownloadFromFileId({
+        userId,
         fileId: existingSession.checkpointFileId,
         fileName: existingSession.fileName,
         fileType: existingSession.fileType,
@@ -307,6 +311,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
   return {
     baseVersionNumber: baseVersion.versionNumber,
     downloadUrl: await presignDesktopEditFileDownload({
+      userId,
       fileTarget: baseVersionTarget,
       organizationId,
       workspaceId,
@@ -329,7 +334,11 @@ export const openDesktopEditSessionHandler = async function* ({
   userId,
   workspaceId,
 }: OpenDesktopEditSessionHandlerProps) {
-  const sessionToken = createDesktopEditSessionToken();
+  requireSessionCredentialIssuer("desktopEdit", { userId, organizationId });
+  const sessionToken = createDesktopEditSessionToken({
+    userId,
+    organizationId,
+  });
   const sessionTokenHash = hashDesktopEditSessionToken(sessionToken);
 
   // Force-takeover: reassign one open session to the current user by
@@ -435,6 +444,7 @@ export const openDesktopEditSessionHandler = async function* ({
       if (existingSession) {
         return {
           value: await buildExistingOpenDesktopEditSessionResponse({
+            userId,
             existingSession,
             organizationId,
             propertyId,
@@ -527,6 +537,7 @@ export const openDesktopEditSessionHandler = async function* ({
         value: {
           baseVersionNumber: currentTarget.baseVersionNumber,
           downloadUrl: await presignDesktopEditFileDownload({
+            userId,
             fileTarget: currentTarget,
             organizationId,
             workspaceId,

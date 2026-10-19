@@ -1176,6 +1176,7 @@ test("issued collaboration tokens store the legacy createHash digest", async () 
   const roomId = await insertRoom({ generation: 0, seedState: "empty" });
   const { token } = await testDb.transaction(async (tx) =>
     issueFolioCollabToken({
+      sourceSessionId: "ordinary-session",
       generation: 0,
       permissions: { canEdit: true },
       roomId,
@@ -1185,10 +1186,15 @@ test("issued collaboration tokens store the legacy createHash digest", async () 
     }),
   );
   const stored = await testDb
-    .select({ tokenHash: folioCollabRoomTokens.tokenHash })
+    .select({
+      tokenHash: folioCollabRoomTokens.tokenHash,
+      sourceSessionId: folioCollabRoomTokens.sourceSessionId,
+    })
     .from(folioCollabRoomTokens)
     .where(eq(folioCollabRoomTokens.roomId, roomId));
-  expect(stored).toEqual([{ tokenHash: legacyHex(token) }]);
+  expect(stored).toEqual([
+    { tokenHash: legacyHex(token), sourceSessionId: null },
+  ]);
 });
 
 test("deleting a claimant before seed acknowledgement warns the next member about discarded edits", async () => {

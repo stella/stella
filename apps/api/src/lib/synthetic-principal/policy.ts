@@ -14,24 +14,28 @@ import {
   SYNTHETIC_PRINCIPAL,
 } from "@/api/lib/synthetic-principal/constants";
 
+import { USER_SESSION_CREDENTIAL_ISSUERS } from "./credential-policy";
+
 export const SYNTHETIC_PRINCIPAL_POLICY = {
   "password-sign-in": "refused",
-  "email-code-sign-in": "refused",
+  "email-code-sign-in":
+    USER_SESSION_CREDENTIAL_ISSUERS.confirmationCode.disposition,
   "verify-email": "refused",
   session: "own-organization",
-  mcp: "refused",
+  mcp: USER_SESSION_CREDENTIAL_ISSUERS.oauth.disposition,
   "create-organization": "refused",
   "manage-organization": "refused",
-  "send-invitation": "refused",
-  "accept-invitation": "refused",
+  "send-invitation": USER_SESSION_CREDENTIAL_ISSUERS.invitation.disposition,
+  "accept-invitation": USER_SESSION_CREDENTIAL_ISSUERS.invitation.disposition,
   "join-organization": "refused",
   "change-email": "refused",
   "change-password": "refused",
   "enroll-two-factor": "refused",
-  "create-api-key": "refused",
+  "create-api-key": USER_SESSION_CREDENTIAL_ISSUERS.apiKey.disposition,
   "link-identity": "refused",
   "delete-account": "refused",
-  "account-control-operation": "refused",
+  "account-control-operation":
+    USER_SESSION_CREDENTIAL_ISSUERS.agentDelegation.disposition,
 } as const satisfies Record<ReviewAccountOperation, ReviewAccountDisposition>;
 
 export const syntheticPrincipalAuthConfig = {

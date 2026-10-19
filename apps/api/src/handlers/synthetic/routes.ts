@@ -1,4 +1,4 @@
-import Elysia, { NotFoundError } from "elysia";
+import Elysia from "elysia";
 import { timingSafeEqual } from "node:crypto";
 
 import { sha256Bytes } from "@stll/sha256/bun";
@@ -56,7 +56,7 @@ export const createSyntheticRoute = ({
         { keys, nowMs },
       );
       if (keyLabel === undefined) {
-        throw new NotFoundError();
+        return new Response(null, { status: 404 });
       }
       if (!(await reserveBudget())) {
         return status(429, { error: "Try again later." });
@@ -67,7 +67,7 @@ export const createSyntheticRoute = ({
         userAgent: request.headers.get("user-agent"),
       });
       if (session === null) {
-        throw new NotFoundError();
+        return new Response(null, { status: 404 });
       }
       return session;
     },

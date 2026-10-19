@@ -122,6 +122,7 @@ describe("presignUploadUrl", () => {
 
   test("binds checksum, content-length, and content-type into the signature", async () => {
     const result = await presignUploadUrl({
+      userId: null,
       key: "tmp/presign-shape-probe",
       expiresIn: 60,
       contentType: "application/octet-stream",
@@ -162,6 +163,7 @@ describe("presignUploadUrl", () => {
 
   test("signs the PUT method, not GET", async () => {
     const result = await presignUploadUrl({
+      userId: null,
       key: "tmp/presign-method-probe",
       expiresIn: 60,
       contentType: "text/plain",
@@ -185,6 +187,7 @@ describe("presignUploadUrl", () => {
 
   test("binds temporary upload tagging into a request header", async () => {
     const result = await presignUploadUrl({
+      userId: null,
       key: "org_1/ws_1/tmp/presign-tagging-probe",
       expiresIn: 60,
       contentType: "application/octet-stream",
@@ -212,6 +215,7 @@ describe("presignUploadUrl", () => {
 describe("presignDownloadUrl", () => {
   test("requires storage to return the shared no-store cache policy", async () => {
     const url = await presignDownloadUrl("org_1/ws_1/file_1.pdf", {
+      userId: null,
       expiresIn: 60,
     });
 
@@ -750,6 +754,7 @@ describe.skipIf(!rustfsReachable)(
 
     test("S3 rejects a PUT whose body sha256 does not match the signed checksum", async () => {
       const presign = await presignUploadUrl({
+        userId: null,
         key: probeKey,
         expiresIn: 60,
         contentType: "application/octet-stream",
@@ -781,6 +786,7 @@ describe.skipIf(!rustfsReachable)(
 
     test("S3 accepts a matching PUT and Bun's native reader returns its bytes", async () => {
       const presign = await presignUploadUrl({
+        userId: null,
         key: probeKey,
         expiresIn: 60,
         contentType: "application/octet-stream",
@@ -824,6 +830,7 @@ describe.skipIf(!rustfsReachable)(
       // Seed source via a presigned PUT so the helper's auth path
       // matches what finalize will use in real traffic.
       const seed = await presignUploadUrl({
+        userId: null,
         key: sourceKey,
         expiresIn: 60,
         contentType: "application/octet-stream",

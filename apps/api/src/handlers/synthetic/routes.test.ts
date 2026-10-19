@@ -3,6 +3,7 @@ import Elysia from "elysia";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
+import { getAuth } from "@/api/lib/auth";
 import { initRequestContext } from "@/api/lib/observability/request-context";
 import { answerRequestError } from "@/api/lib/observability/request-lifecycle";
 
@@ -29,7 +30,8 @@ const appFor = (options: Parameters<typeof createSyntheticRoute>[0]) =>
   new Elysia()
     .onRequest(({ request }) => initRequestContext(request))
     .onError(answerRequestError)
-    .use(createSyntheticRoute(options));
+    .use(createSyntheticRoute(options))
+    .mount(getAuth().handler);
 
 test("configured credentials mint the session and preserve its expiry", async () => {
   const received: Parameters<
@@ -62,10 +64,14 @@ test("unavailable credentials have the same response as an unmounted route", asy
   const reference = await unavailable.handle(mintRequest());
   const expected = {
     status: reference.status,
-    body: await reference.text(),
+    body: new Uint8Array(await reference.arrayBuffer()),
     contentType: reference.headers.get("content-type"),
   };
-  expect(expected.status).toBe(404);
+  expect(expected).toEqual({
+    status: 404,
+    body: new Uint8Array(),
+    contentType: null,
+  });
   const configured = appFor({
     keys,
     mintSession,
@@ -87,7 +93,7 @@ test("unavailable credentials have the same response as an unmounted route", asy
     const response = await app.handle(mintRequest(credential));
     expect({
       status: response.status,
-      body: await response.text(),
+      body: new Uint8Array(await response.arrayBuffer()),
       contentType: response.headers.get("content-type"),
     }).toEqual(expected);
   }
@@ -132,7 +138,12 @@ test("disabled session controls return the unavailable response", async () => {
     mintSession: async () => null,
   }).handle(mintRequest(key));
   expect(response.status).toBe(reference.status);
-  expect(await response.text()).toBe(await reference.text());
+  expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+    new Uint8Array(await reference.arrayBuffer()),
+  );
+  expect(response.headers.get("content-type")).toBe(
+    reference.headers.get("content-type"),
+  );
 });
 
 test("unavailable credentials ignore request body content", async () => {
@@ -153,7 +164,12 @@ test("unavailable credentials ignore request body content", async () => {
     mintSession: async () => null,
   }).handle(mintRequest());
   expect(response.status).toBe(reference.status);
-  expect(await response.text()).toBe(await reference.text());
+  expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+    new Uint8Array(await reference.arrayBuffer()),
+  );
+  expect(response.headers.get("content-type")).toBe(
+    reference.headers.get("content-type"),
+  );
 });
 
 test("the session credential is read only from its dedicated header", async () => {

@@ -32,7 +32,7 @@ const config = {
 
 const getTemplate = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, recordAuditEvent }) {
+  async function* ({ safeDb, session, params, user, recordAuditEvent }) {
     const templateId = params.templateId;
     const organizationId = session.activeOrganizationId;
 
@@ -73,6 +73,7 @@ const getTemplate = createSafeRootHandler(
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
           resourceId: templateId,
+          userId: user.id,
           s3Key: template.s3Key,
           expiresInSeconds: PRESIGN_EXPIRES_IN,
           fileName: template.fileName,

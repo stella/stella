@@ -25,6 +25,7 @@ export const OCR_EXPORT_FORMATS = ["searchable-pdf", "text"] as const;
 type OcrExportFormat = (typeof OCR_EXPORT_FORMATS)[number];
 
 type ReadOcrExportOptions = {
+  userId: SafeId<"user">;
   fieldId: SafeId<"field">;
   format: OcrExportFormat;
   organizationId: SafeId<"organization">;
@@ -42,6 +43,7 @@ const replaceExtension = (fileName: string, suffix: string) => {
 export const readOcrExport = async ({
   fieldId,
   format,
+  userId,
   organizationId,
   recordAuditEvent,
   scopedDb,
@@ -117,6 +119,7 @@ export const readOcrExport = async ({
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: row.entityId,
+          userId,
           s3Key,
           expiresInSeconds: OCR_EXPORT_URL_EXPIRY_SECONDS,
           fileName,

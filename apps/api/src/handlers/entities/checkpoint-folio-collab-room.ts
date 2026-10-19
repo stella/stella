@@ -164,6 +164,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
     request,
     safeDb,
     session,
+    user,
     workspaceId,
   }) {
     const target = yield* Result.await(
@@ -522,6 +523,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
     }
 
     const downloadUrl = await presignDocxDownloadFromFileId({
+      userId: user.id,
       fileId: nextFileId,
       fileName: target.room.fileName,
       organizationId: session.activeOrganizationId,

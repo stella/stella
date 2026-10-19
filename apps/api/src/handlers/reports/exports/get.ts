@@ -133,6 +133,7 @@ const readReportExport = createSafeHandler(
           Result.tryPromise({
             try: async () =>
               await presignDownloadUrl(resultS3Key, {
+                userId: user.id,
                 expiresIn: DOWNLOAD_URL_EXPIRES_SECONDS,
                 fileName: downloadFileName(resultS3Key),
                 scope: {

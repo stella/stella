@@ -48,6 +48,7 @@ export default createSafeHandler(
   async function* ({
     params: { fieldId },
     session: { activeOrganizationId: organizationId },
+    user,
     recordAuditEvent,
     scopedDb,
     workspaceId,
@@ -77,6 +78,7 @@ export default createSafeHandler(
                 recordAuditEvent,
                 resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
                 resourceId: row.entityId,
+                userId: user.id,
                 s3Key: createFileKey({
                   organizationId,
                   workspaceId,

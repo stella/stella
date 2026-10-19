@@ -43,6 +43,7 @@ import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
 import { resolveS3Credentials, TEMP_UPLOAD_TAGGING } from "@/api/lib/s3";
 import { createS3CredentialGuard } from "@/api/lib/s3/credential-guard";
 import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 export class S3PresignError extends TaggedError("S3PresignError")<{
   message: string;
@@ -64,6 +65,7 @@ export type PresignedUploadHeaders = {
 };
 
 export type PresignUploadOptions = {
+  userId: string | null;
   /** Final S3 key the client will write to. */
   key: string;
   /** Lifetime of the signed URL in seconds. Keep short — finalize is fast. */
@@ -863,6 +865,7 @@ export const putPresignedUpload = async ({
  * S3 reject the upload with `403 SignatureDoesNotMatch`.
  */
 export const presignUploadUrl = async ({
+  userId,
   key,
   expiresIn,
   contentType,
@@ -872,8 +875,12 @@ export const presignUploadUrl = async ({
   tagAsTemporaryUpload = false,
 }: PresignUploadOptions): Promise<
   Result<PresignUploadResult, S3PresignError>
-> =>
-  await Result.tryPromise({
+> => {
+  requireSessionCredentialIssuer("signedUpload", {
+    userId,
+    organizationId: scope?.organizationId,
+  });
+  return await Result.tryPromise({
     try: async () => {
       const client = await getPresignClient({
         expiresIn,
@@ -942,8 +949,10 @@ export const presignUploadUrl = async ({
         cause,
       }),
   });
+};
 
 export type PresignDownloadOptions = {
+  userId: string | null;
   expiresIn: number;
   fileName?: string;
   scope?: S3SigningScope;
@@ -951,8 +960,12 @@ export type PresignDownloadOptions = {
 
 export const presignDownloadUrl = async (
   key: string,
-  { expiresIn, fileName, scope }: PresignDownloadOptions,
+  { userId, expiresIn, fileName, scope }: PresignDownloadOptions,
 ): Promise<string> => {
+  requireSessionCredentialIssuer("signedDownload", {
+    userId,
+    organizationId: scope?.organizationId,
+  });
   const result = await Result.tryPromise({
     try: async () => {
       const client = await getPresignClient({

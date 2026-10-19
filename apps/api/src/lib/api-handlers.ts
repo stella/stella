@@ -568,6 +568,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
       email: string;
     };
     session: {
+      id: string;
       activeOrganizationId: SafeId<"organization">;
     };
     featureAccessSnapshot?: FeatureAccessSnapshot;

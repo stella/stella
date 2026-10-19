@@ -287,6 +287,7 @@ const createMessageExport = createSafeRootHandler(
             recordAuditEvent,
             resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
             resourceId: messageId,
+            userId: user.id,
             s3Key: key,
             s3Keyspace: "exports",
             expiresInSeconds: CHAT_EXPORT_URL_TTL_SECONDS,
