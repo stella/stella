@@ -6,13 +6,16 @@ import * as v from "valibot";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const diagnosticReport = v.object({
-  diagnostics: v.array(v.object({ code: v.string(), message: v.string() })),
+  diagnostics: v.array(
+    v.object({ code: v.string(), message: v.string(), filename: v.string() }),
+  ),
 });
 
-// A design system that cannot load is one failure. Without the patched plugin
-// every rule call site re-reported it, so a desktop run printed 77 class
-// errors for a single worker timeout.
-test("an unavailable Tailwind design system fails as one typed error", async () => {
+// A design system that cannot load is one failure per linted file. The plugin
+// otherwise re-reports it at every class of every rule, which reads like a set
+// of real class errors. Deduplication is keyed by the file's parsed tree, so
+// each lint of a file reports it again and nothing carries over between files.
+test("an unavailable Tailwind design system fails as one typed error per file", async () => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "stella-tailwind-design-system-"),
   );
@@ -61,10 +64,13 @@ test("an unavailable Tailwind design system fails as one typed error", async () 
     expect(stderr).not.toContain("Failed to load");
     expect(exitCode).toBe(1);
     const { diagnostics } = v.parse(diagnosticReport, JSON.parse(stdout));
-    expect(diagnostics, stdout).toHaveLength(1);
-    expect(diagnostics.at(0)?.message).toStartWith(
-      "tailwind design system not loaded: ",
-    );
+    expect(
+      diagnostics.map(({ filename }) => path.basename(filename)).toSorted(),
+      stdout,
+    ).toEqual(["first.tsx", "second.tsx"]);
+    for (const { message } of diagnostics) {
+      expect(message).toStartWith("tailwind design system not loaded: ");
+    }
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
