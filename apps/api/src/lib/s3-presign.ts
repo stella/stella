@@ -958,6 +958,7 @@ export const presignUploadUrl = async ({
 export type PresignDownloadOptions = {
   userId: string | null;
   organizationId?: string | null;
+  email?: string;
   expiresIn: number;
   sourceSessionId: string | null;
   readSessionAuthority: SyntheticSessionAuthorityReader;
@@ -969,6 +970,7 @@ export const presignDownloadUrl = async (
   key: string,
   {
     userId,
+    email,
     scope,
     organizationId = scope?.organizationId,
     expiresIn,
@@ -981,6 +983,7 @@ export const presignDownloadUrl = async (
     "signedDownload",
     {
       userId,
+      email,
       organizationId,
       fileOrganizationId: scope?.organizationId,
       requestedTtlSeconds: expiresIn,

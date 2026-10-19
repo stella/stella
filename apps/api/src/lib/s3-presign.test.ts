@@ -275,6 +275,25 @@ describe("presignDownloadUrl", () => {
     expect(new URL(url).searchParams.get("X-Amz-Expires")).toBe("900");
   });
 
+  test("refuses monitoring uploads", async () => {
+    expect(
+      await rejectionOf(
+        presignUploadUrl({
+          userId: SYNTHETIC_PRINCIPAL.user.id,
+          key: `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
+          expiresIn: 900,
+          contentType: "application/pdf",
+          contentLength: HELLO_BYTES.byteLength,
+          sha256Base64: HELLO_SHA256_BASE64,
+          scope: { organizationId: SYNTHETIC_PRINCIPAL.org.id },
+        }),
+      ),
+    ).toMatchObject({
+      status: 403,
+      code: "account_access_unavailable",
+    });
+  });
+
   test.each([
     {
       name: "monitoring user in another organization",
@@ -293,6 +312,7 @@ describe("presignDownloadUrl", () => {
     },
     {
       name: "monitoring file in another organization",
+      key: "org_1/file.pdf",
       options: {
         ...syntheticOptions(new Date(Date.now() + 60_000)),
         scope: { organizationId: "org_1" },
@@ -305,10 +325,25 @@ describe("presignDownloadUrl", () => {
         readSessionAuthority: async () => null,
       },
     },
-  ])("refuses $name", async ({ options }) => {
+    {
+      name: "monitoring email with other identifiers",
+      options: {
+        userId: "user_1",
+        organizationId: "org_1",
+        email: SYNTHETIC_PRINCIPAL.user.email,
+        expiresIn: 900,
+        sourceSessionId: "session_1",
+        readSessionAuthority: async () => null,
+        scope: { organizationId: "org_1" },
+      },
+    },
+  ])("refuses $name", async ({ key, options }) => {
     expect(
       await rejectionOf(
-        presignDownloadUrl(`${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`, options),
+        presignDownloadUrl(
+          key ?? `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
+          options,
+        ),
       ),
     ).toMatchObject({
       status: 403,
