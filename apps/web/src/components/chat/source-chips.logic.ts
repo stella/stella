@@ -170,9 +170,15 @@ const getDateField = (
   if (date === undefined) {
     return undefined;
   }
-  const isPlainDate = Result.try(() => Temporal.PlainDate.from(date)).isOk();
-  const isInstant = Result.try(() => Temporal.Instant.from(date)).isOk();
-  return isPlainDate || isInstant ? date : undefined;
+  // The row formats through `Date`, which rejects annotated Temporal forms
+  // ("2026-01-02[u-ca=iso8601]"), so a valid date is kept in its plain ISO
+  // form and anything else is dropped.
+  const plainDate = Result.try(() => Temporal.PlainDate.from(date));
+  if (Result.isOk(plainDate)) {
+    return plainDate.value.toString({ calendarName: "never" });
+  }
+  const instant = Result.try(() => Temporal.Instant.from(date));
+  return Result.isOk(instant) ? instant.value.toString() : undefined;
 };
 
 const getTextField = (
@@ -620,8 +626,9 @@ export const collectSourceChipEntries = ({
   for (const source of uniqueExternalSources) {
     const relation =
       isLinked([source.url, source.sourceUrl]) ||
-      (source.caseLaw?.decisionId !== undefined &&
-        decisionIds.has(source.caseLaw.decisionId))
+      [source.caseLaw?.decisionId, source.caseLawDecision?.decisionId].some(
+        (decisionId) => decisionId !== undefined && decisionIds.has(decisionId),
+      )
         ? "cited"
         : "consulted";
     if (source.caseLaw !== undefined) {

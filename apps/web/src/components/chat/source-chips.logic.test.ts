@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
+import {
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
 
 import {
   externalMcpCitedAssistantMessageFixture,
@@ -433,6 +437,53 @@ describe("answer source classification", () => {
       }),
     ]);
     expect(result.uniqueExternalSources).toHaveLength(1);
+  });
+
+  test("cites an incomplete decision source by its canonical decision route", () => {
+    const decisionId = "a5a95801-7a7c-4c8b-98b3-7d17c8b8d7f9";
+    const route = createCaseLawDecisionPath(
+      createCaseLawDecisionRouteParams({
+        caseNumber: "I. ÚS 2/26",
+        country: "CZE",
+        court: "Ústavní soud",
+        decisionId,
+      }),
+    );
+    const result = collectSourceChipEntries({
+      parts: [
+        decisionPart({
+          url: "https://example.test/cases/missing",
+          title: "Decision without citation metadata",
+          decisionId,
+          caseNumber: "I. ÚS 2/26",
+        }),
+        { type: "text", content: `[nález](${route})` },
+      ],
+    });
+    expect(result.entries.map(({ relation }) => relation)).toEqual(["cited"]);
+  });
+
+  test("keeps decision dates in the plain ISO form the row formats", () => {
+    const result = collectSourceChipEntries({
+      parts: [
+        decisionPart({
+          results: [
+            {
+              url: "https://example.test/cases/annotated",
+              caseNumber: "I. ÚS 3/26",
+              court: "Ústavní soud",
+              courtAbbreviation: "ÚS",
+              decisionDate: "2026-01-02[u-ca=iso8601]",
+            },
+          ],
+        }),
+      ],
+    });
+    const entry = result.entries.at(0);
+    const decisionDate =
+      entry?.type === "case-law" ? entry.caseLaw.decisionDate : undefined;
+    expect(decisionDate).toBe("2026-01-02");
+    expect(Number.isFinite(new Date(decisionDate ?? "").getTime())).toBe(true);
   });
 
   test("keeps a non-legal external URL whose path contains cases", () => {
