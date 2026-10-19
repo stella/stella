@@ -36,6 +36,7 @@ import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { GRADED_HANDLER_CODE_REASON } from "../apps/api/src/lib/errors/graded-handler-codes";
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
@@ -2271,6 +2272,85 @@ const countFailureLegacyOutputPins: FileCounter = (content, { file }) =>
     (spec) => specProperty(spec, "legacy") !== undefined,
   ).length;
 
+const HANDLER_ERROR_CLASS = "HandlerError";
+const CLASSIFY_FAILURE = "classifyFailure";
+const SERVER_ERROR_STATUSES: ReadonlySet<string> = new Set([
+  "500",
+  "502",
+  "503",
+]);
+const GRADED_HANDLER_CODES: ReadonlySet<string> = new Set(
+  Object.keys(GRADED_HANDLER_CODE_REASON),
+);
+
+const mayAnswerServerError = (expression: ts.Expression): boolean => {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (ts.isNumericLiteral(node) && SERVER_ERROR_STATUSES.has(node.text)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
+};
+
+const unwrapParentheses = (expression: ts.Expression): ts.Expression =>
+  ts.isParenthesizedExpression(expression)
+    ? unwrapParentheses(expression.expression)
+    : expression;
+
+/**
+ * One per `new HandlerError({ status: 5xx, … })` the failure grader can only
+ * call `unclassified`: no graded `code` literal, and not branded by a
+ * `classifyFailure(…)` wrapped around the construction. A status written as
+ * any expression holding a 5xx literal (a ternary, a lookup default) counts;
+ * an opaque status variable is out of reach of a syntax census.
+ */
+const countUnclassifiedHandlerFailures: FileCounter = (content, { file }) => {
+  if (!content.includes(HANDLER_ERROR_CLASS)) {
+    return 0;
+  }
+  const sourceFile = parseSource({ fileName: file, text: content });
+  const classified = new Set<ts.Node>();
+  let count = 0;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === CLASSIFY_FAILURE
+    ) {
+      const branded = node.arguments.at(0);
+      if (branded !== undefined) {
+        classified.add(unwrapParentheses(branded));
+      }
+    }
+    const spec = ts.isNewExpression(node) ? node.arguments?.at(0) : undefined;
+    if (
+      ts.isNewExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === HANDLER_ERROR_CLASS &&
+      spec !== undefined &&
+      ts.isObjectLiteralExpression(spec) &&
+      !classified.has(node)
+    ) {
+      const status = specProperty(spec, "status")?.initializer;
+      const code = specProperty(spec, "code")?.initializer;
+      const graded =
+        code !== undefined &&
+        ts.isStringLiteralLike(code) &&
+        GRADED_HANDLER_CODES.has(code.text);
+      if (status !== undefined && mayAnswerServerError(status) && !graded) {
+        count += 1;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return count;
+};
+
 const FAILURE_SINK_SOURCE_GLOBS = [
   "apps/api/src/**/*.{ts,tsx}",
   "apps/legal-atlas-runner/src/**/*.ts",
@@ -3507,6 +3587,16 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: FAILURE_SINK_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countFailureLegacyOutputPins,
+  },
+  {
+    scope: "file",
+    id: "unclassified-handler-failures",
+    description:
+      "`new HandlerError({ status: 5xx })` constructions with no graded `code` literal and no `classifyFailure(…)` brand: each one grades `unclassified`, which the post-release check alerts on whenever it fires. Name the failure (a graded code, a brand, or a typed error class with a declared reason) instead of adding one; gated per file",
+    include: FAILURE_SINK_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countUnclassifiedHandlerFailures,
+    perFile: true,
   },
   {
     scope: "repo",
