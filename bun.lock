@@ -1586,6 +1586,7 @@
   ],
   "patchedDependencies": {
     "@tanstack/ai@0.65.1": "patches/@tanstack%2Fai@0.65.1.patch",
+    "oxlint-tailwindcss@1.16.0": "patches/oxlint-tailwindcss@1.16.0.patch",
     "@tanstack/ai-anthropic@0.19.5": "patches/@tanstack%2Fai-anthropic@0.19.5.patch",
     "@tanstack/ai-mcp@0.8.0": "patches/@tanstack%2Fai-mcp@0.8.0.patch",
     "@better-auth/drizzle-adapter@1.7.6": "patches/@better-auth%2Fdrizzle-adapter@1.7.6.patch",
