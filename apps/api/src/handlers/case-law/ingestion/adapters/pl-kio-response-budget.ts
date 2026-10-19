@@ -33,7 +33,7 @@ const rejectPlKioHtmlBudget = (message: string): never => {
 };
 
 export const PL_KIO_HTML_BUDGET = {
-  maxDomAllocations: 12_000,
+  maxDomAllocations: 10_000,
   maxAttributesPerTag: 512,
   maxAttributesTotal: 20_000,
   maxScanStepsPerCharacter: 8,

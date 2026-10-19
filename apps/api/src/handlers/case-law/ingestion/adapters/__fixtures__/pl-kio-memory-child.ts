@@ -40,33 +40,48 @@ const suffix = "</body></html>";
 // Real KIO rulings are long prose paragraphs. Keep enough separate paragraphs
 // to exercise the AST while leaving the markup allocation budget well clear.
 const paragraphCount = Math.min(16, Math.floor(targetBytes / 1024));
-const paragraphs: string[] = [];
-for (let index = 0; index < paragraphCount; index += 1) {
-  paragraphs.push(`<p>Ustalenie ${index}. </p>`);
-}
-const markup = prefix + paragraphs.join("") + suffix;
-const paddingBytes = targetBytes - Buffer.byteLength(markup);
-if (paddingBytes < 0) {
-  panic("KIO memory fixture requires room for substantive document text");
-}
-const text = "x";
-let paddingRemaining = paddingBytes;
-let paragraphsRemaining = paragraphCount;
-const substantiveHtml = markup.replaceAll("</p>", () => {
-  const spanPaddingBytes = Math.ceil(paddingRemaining / paragraphsRemaining);
-  const padding = text
-    .repeat(Math.ceil(spanPaddingBytes / text.length))
-    .slice(0, spanPaddingBytes);
-  paddingRemaining -= spanPaddingBytes;
-  paragraphsRemaining -= 1;
-  return `${padding}</p>`;
-});
+const lowMarkupHtml = () => {
+  const paragraphs: string[] = [];
+  for (let index = 0; index < paragraphCount; index += 1) {
+    paragraphs.push(`<p>Ustalenie ${index}. </p>`);
+  }
+  const markup = prefix + paragraphs.join("") + suffix;
+  const paddingBytes = targetBytes - Buffer.byteLength(markup);
+  if (paddingBytes < 0) {
+    panic("KIO memory fixture requires room for substantive document text");
+  }
+  let paddingRemaining = paddingBytes;
+  let paragraphsRemaining = paragraphCount;
+  return markup.replaceAll("</p>", () => {
+    const padding = "x".repeat(
+      Math.ceil(paddingRemaining / paragraphsRemaining),
+    );
+    paddingRemaining -= padding.length;
+    paragraphsRemaining -= 1;
+    return `${padding}</p>`;
+  });
+};
 const workload = process.argv.at(3) ?? "accepted";
 const path = process.argv.at(4) ?? "fetch";
+const worstAcceptedHtml = () => {
+  // Three allocations and markup tokens per attributed span leave the parser's
+  // four document nodes inside the allocation budget while exercising its edge.
+  const spanCount = Math.floor((PL_KIO_HTML_BUDGET.maxDomAllocations - 4) / 3);
+  const inlineMarkup = '<span a="x">tekst</span>'.repeat(spanCount);
+  const shell = `${prefix}${inlineMarkup}${suffix}`;
+  const padding = targetBytes - Buffer.byteLength(shell);
+  if (padding < 0) {
+    panic("KIO worst accepted fixture exceeds its target byte count");
+  }
+  return `${prefix}<span a="x">${"x".repeat(padding)}tekst</span>${'<span a="x">tekst</span>'.repeat(spanCount - 1)}${suffix}`;
+};
+
 const documentHtmlOf = (kind: string) => {
   switch (kind) {
     case "accepted":
-      return substantiveHtml;
+      return targetBytes === PL_KIO_RESPONSE_BYTE_CAP.document
+        ? worstAcceptedHtml()
+        : lowMarkupHtml();
     case "svg":
       return `<svg><script>${"<g></g>".repeat(100_000)}</script></svg>`;
     case "attributes":
@@ -82,8 +97,9 @@ const documentHtmlOf = (kind: string) => {
       return panic(`Unknown KIO memory workload: ${kind}`);
   }
 };
-const documentHtml = documentHtmlOf(workload);
+let documentHtml = documentHtmlOf(workload);
 const documentBytes = Buffer.byteLength(documentHtml);
+const markupTokens = countMarkupTokens(documentHtml);
 // Each span allocates an element, an attribute and a text node; parse5 also
 // creates document/html/head/body nodes for this fragment.
 const boundaryRepeats = Math.floor(
@@ -99,7 +115,6 @@ const overflowBudget = readPlKioHtml(
     maxBytes: PL_KIO_RESPONSE_BYTE_CAP.document,
   },
 ).type;
-const markupTokens = countMarkupTokens(documentHtml);
 if (
   (workload === "accepted" && documentBytes !== targetBytes) ||
   targetBytes > PL_KIO_RESPONSE_BYTE_CAP.document ||
@@ -124,17 +139,22 @@ const assemble = () =>
   });
 let assembled: ReturnType<typeof assemblePlKioDecision>;
 if (path === "replay") {
-  const sourceRaw = encodeSourceRawEnvelope({
-    listing: JSON.stringify({
-      id: "30308",
-      documentType: "wyrok",
-      signature: "KIO 2845/25",
-      issueDate: "01-09-2025",
+  const raw = new TextEncoder().encode(
+    encodeSourceRawEnvelope({
+      listing: JSON.stringify({
+        id: "30308",
+        documentType: "wyrok",
+        signature: "KIO 2845/25",
+        issueDate: "01-09-2025",
+      }),
+      detail: detailHtml,
+      document: documentHtml,
     }),
-    detail: detailHtml,
-    document: documentHtml,
-  });
-  const raw = new TextEncoder().encode(sourceRaw);
+  );
+  // Production replay starts from stored bytes, not a second live copy of the
+  // source string used to build this fixture's envelope.
+  documentHtml = "";
+  Bun.gc(true);
   const replay = plKioAdapter.reparseStoredRaw?.({
     raw,
     contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -165,7 +185,7 @@ if (assembled.type !== "built") {
 const decision = assembled.decision;
 const budget = decision.metadata["documentStatus"] ?? "accepted";
 if (workload === "accepted" && budget !== "accepted") {
-  panic(`KIO fixture accepted workload was rejected: ${budget}`);
+  panic(`KIO fixture accepted workload was rejected: ${String(budget)}`);
 }
 const rawParts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
 if (

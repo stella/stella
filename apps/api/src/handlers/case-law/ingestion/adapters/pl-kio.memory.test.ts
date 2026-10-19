@@ -1,15 +1,19 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import { expect, test } from "bun:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { PL_KIO_RESPONSE_BYTE_CAP } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
+import {
+  PL_KIO_HTML_BUDGET,
+  PL_KIO_RESPONSE_BYTE_CAP,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
 
 const API_ROOT = path.resolve(import.meta.dir, "../../../../..");
 const MEMORY_CHILD = fileURLToPath(
   new URL("__fixtures__/pl-kio-memory-child.ts", import.meta.url),
 );
 const MEMORY_BUDGET_BYTES = 1024 * 1024 * 1024;
+const MEMORY_HEADROOM_BYTES = MEMORY_BUDGET_BYTES * 0.9;
 const MEMORY_WORKLOAD_TIMEOUT_MS = 180_000;
 const ATTRIBUTE_FLOOD_DEADLINE_MS = 10_000;
 const TWELVE_MIB = 12 * 1024 * 1024;
@@ -17,11 +21,34 @@ const SIXTEEN_MIB = 16 * 1024 * 1024;
 const RESPONSE_SIZES = [256 * 1024, 1024 * 1024, TWELVE_MIB, SIXTEEN_MIB];
 const INGESTION_PATHS = ["fetch", "replay"] as const;
 
+const samplePeakRss = async (pid: number): Promise<number> => {
+  const status = Bun.file(`/proc/${pid}/status`);
+  let peakBytes = 0;
+  while (true) {
+    const read = await Result.tryPromise({
+      try: async () => await status.text(),
+      catch: (error) => error,
+    });
+    if (Result.isError(read)) {
+      return peakBytes;
+    }
+    const match = /^VmRSS:\s+(?<kilobytes>\d+) kB$/mu.exec(read.value);
+    const kilobytes = Number(match?.groups?.["kilobytes"]);
+    if (Number.isFinite(kilobytes)) {
+      peakBytes = Math.max(peakBytes, kilobytes * 1024);
+    }
+    await Bun.sleep(5);
+  }
+};
+
 const runMemoryChild = async (
   targetBytes: number,
   workload = "accepted",
   ingestionPath: (typeof INGESTION_PATHS)[number] = "fetch",
 ) => {
+  // The API runner shares a process across test files. Do not make a child
+  // inherit live allocations from a large fixture exercised before this one.
+  Bun.gc(true);
   const child = Bun.spawn(
     [
       process.execPath,
@@ -43,12 +70,12 @@ const runMemoryChild = async (
       stderr: "pipe",
     },
   );
-  const [stdout, stderr, exitCode] = await Promise.all([
+  const [stdout, stderr, exitCode, peakBytes] = await Promise.all([
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
     child.exited,
+    samplePeakRss(child.pid),
   ]);
-  const usage = child.resourceUsage() ?? panic("KIO child RSS report missing");
   if (exitCode !== 0) {
     panic(`KIO memory child failed (${exitCode}): ${stderr}`);
   }
@@ -98,11 +125,11 @@ const runMemoryChild = async (
     overflowBudgetType: receipt.overflowBudgetType,
     path: receipt.path,
   };
-  return { receipt: memoryReceipt, peakBytes: usage.maxRSS, exitCode, stderr };
+  return { receipt: memoryReceipt, peakBytes, exitCode, stderr };
 };
 
 test(
-  "low-markup KIO documents retain text, AST and raw within the worker memory headroom",
+  "accepted KIO documents retain text, AST and raw within the worker memory headroom",
   async () => {
     for (const ingestionPath of INGESTION_PATHS) {
       for (const targetBytes of RESPONSE_SIZES) {
@@ -122,8 +149,16 @@ test(
         expect(receipt.boundaryBudgetType).toBe("accepted");
         expect(receipt.overflowBudgetType).toBe("markup-budget-exceeded");
         expect(receipt.path).toBe(ingestionPath);
+        if (targetBytes === PL_KIO_RESPONSE_BYTE_CAP.document) {
+          expect(PL_KIO_HTML_BUDGET.maxDomAllocations).toBeLessThanOrEqual(
+            10_000,
+          );
+          expect(receipt.markupTokens).toBeGreaterThanOrEqual(
+            PL_KIO_HTML_BUDGET.maxDomAllocations * 0.9,
+          );
+        }
         expect(peakBytes).toBeGreaterThan(0);
-        expect(peakBytes).toBeLessThan(MEMORY_BUDGET_BYTES);
+        expect(peakBytes).toBeLessThan(MEMORY_HEADROOM_BYTES);
         console.log(
           JSON.stringify({
             benchmark: "pl-kio-document-assembly",
@@ -147,7 +182,15 @@ test("markup-rich documents near the cap are refused within memory headroom", as
   expect(receipt.documentBytes).toBe(SIXTEEN_MIB);
   expect(receipt.budgetType).toBe("markup-budget-exceeded");
   expect(receipt.fulltextChars).toBe(0);
-  expect(peakBytes).toBeLessThan(MEMORY_BUDGET_BYTES);
+  expect(peakBytes).toBeLessThan(MEMORY_HEADROOM_BYTES);
+  console.log(
+    JSON.stringify({
+      workload: "rich",
+      path: "fetch",
+      peakBytes,
+      memoryBudgetBytes: MEMORY_BUDGET_BYTES,
+    }),
+  );
 });
 
 test.each(["svg", "attributes", "plaintext"])(
@@ -162,10 +205,11 @@ test.each(["svg", "attributes", "plaintext"])(
     expect(receipt.astBlocks).toBeNull();
     expect(receipt.rawContainsDocument).toBe(true);
     expect(peakBytes).toBeGreaterThan(0);
-    expect(peakBytes).toBeLessThan(MEMORY_BUDGET_BYTES);
+    expect(peakBytes).toBeLessThan(MEMORY_HEADROOM_BYTES);
     console.log(
       JSON.stringify({
         workload,
+        path: "fetch",
         peakBytes,
         memoryBudgetBytes: MEMORY_BUDGET_BYTES,
       }),
