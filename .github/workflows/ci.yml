@@ -6897,9 +6897,10 @@ jobs:
           COMPLETED_RUN_ID: ${{ needs.ci-plan.outputs.completed_run_id }}
           COMPLETION_MARKER: ${{ needs.ci-plan.outputs.completion_marker }}
           # The commit this run tested and, for a pull request or merge group,
-          # its base. Completion evidence is recorded for pull requests only.
+          # the base its plan compared against. Completion evidence is
+          # recorded for pull requests only.
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || inputs.sha || github.sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || needs.ci-plan.outputs.target_base_sha }}
           HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
           PATCH_ID: ${{ needs.ci-plan.outputs.patch_id }}
           WORKFLOW_VERSION: ${{ needs.ci-plan.outputs.pr_depth_workflow_version }}
