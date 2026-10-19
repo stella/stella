@@ -29,13 +29,11 @@ const message = (
   id: string,
   role: "assistant" | "user",
   text: string,
-): PersistedChatMessage =>
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the timing reads id, role and text parts only; a full persisted message adds unrelated fields.
-  ({
-    id,
-    role,
-    parts: [{ type: "text", content: text }],
-  });
+): PersistedChatMessage => ({
+  id,
+  role,
+  parts: [{ type: "text", content: text }],
+});
 
 const sent = message("user_secret_1", "user", "private question");
 
