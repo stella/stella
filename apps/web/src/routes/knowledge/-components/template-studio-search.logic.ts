@@ -4,8 +4,8 @@ import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 import { sanitizeFieldPath } from "@/routes/knowledge/-components/template-studio-model";
 import type { StudioField } from "@/routes/knowledge/-components/template-studio-store";
 
-export const SLASH_MENU_MAX_FIELDS = 50;
-export const MAX_TAG_SUGGESTIONS = 6;
+const SLASH_MENU_MAX_FIELDS = 50;
+const MAX_TAG_SUGGESTIONS = 6;
 
 export type SlashRootItem =
   | { kind: "create-field"; path: string }
