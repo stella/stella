@@ -17,16 +17,67 @@ const decoder = new TextDecoder();
 const gunzip = async (url: URL): Promise<string> =>
   decoder.decode(Bun.gunzipSync(await Bun.file(url).bytes()));
 
-const expectReuseMatchesFreshParse = (
-  sourceHtml: string,
-  blocks: Parameters<typeof astValidation.validateAst>[1],
-  reusedDocument: cheerio.CheerioAPI,
+type ValidateAndLogArgs = Parameters<typeof astValidation.validateAndLog>;
+
+type CapturedValidation = {
+  sourceHtml: ValidateAndLogArgs[1];
+  blocks: ValidateAndLogArgs[2];
+  options: ValidateAndLogArgs[3];
+  documentHtml: string | undefined;
+};
+
+const captureValidation = <Result>(parse: () => Result) => {
+  const calls: CapturedValidation[] = [];
+  const validateAndLog = astValidation.validateAndLog;
+  const validateSpy = spyOn(astValidation, "validateAndLog").mockImplementation(
+    (...args: ValidateAndLogArgs) => {
+      const [, sourceHtml, blocks, options] = args;
+      calls.push({
+        sourceHtml,
+        blocks,
+        options,
+        // validateAst mutates the supplied tree while extracting source text.
+        // Preserve what the parser handed over, before validation starts.
+        documentHtml: options?.document?.html(),
+      });
+      return validateAndLog(...args);
+    },
+  );
+
+  try {
+    const result = parse();
+    expect(calls).toHaveLength(1);
+    const call = calls.at(0);
+    if (call === undefined) {
+      throw new Error("parser did not validate its document");
+    }
+    return { result, call };
+  } finally {
+    validateSpy.mockRestore();
+  }
+};
+
+const validationResultsMatch = (call: CapturedValidation): boolean => {
+  if (call.documentHtml === undefined) {
+    throw new Error("parser validation did not receive a parsed document");
+  }
+  const { document: _document, ...options } = call.options ?? {};
+  const reused = astValidation.validateAst(call.sourceHtml, call.blocks, {
+    ...options,
+    document: cheerio.load(call.documentHtml),
+  });
+  const fresh = astValidation.validateAst(
+    call.sourceHtml,
+    call.blocks,
+    options,
+  );
+  return Bun.deepEquals(reused, fresh);
+};
+
+const expectCapturedDocumentMatchesFreshParse = (
+  call: CapturedValidation,
 ): void => {
-  expect(
-    astValidation.validateAst(sourceHtml, blocks, {
-      document: reusedDocument,
-    }),
-  ).toEqual(astValidation.validateAst(sourceHtml, blocks));
+  expect(validationResultsMatch(call)).toBeTrue();
 };
 
 describe("validation document reuse", () => {
@@ -35,21 +86,19 @@ describe("validation document reuse", () => {
       FIXTURES.pathname,
     )) {
       const html = await gunzip(new URL(name, FIXTURES));
-      const parsed = parseNssDecisionHtml({
-        caseNumber: name,
-        ecli: undefined,
-        court: "Nejvyšší správní soud",
-        decisionDate: undefined,
-        decisionType: undefined,
-        sourceUrl: undefined,
-        html,
-        detailMetadata: {},
-      });
-      expectReuseMatchesFreshParse(
-        html,
-        parsed.documentAst.blocks,
-        cheerio.load(html),
+      const { call } = captureValidation(() =>
+        parseNssDecisionHtml({
+          caseNumber: name,
+          ecli: undefined,
+          court: "Nejvyšší správní soud",
+          decisionDate: undefined,
+          decisionType: undefined,
+          sourceUrl: undefined,
+          html,
+          detailMetadata: {},
+        }),
       );
+      expectCapturedDocumentMatchesFreshParse(call);
     }
   });
 
@@ -61,22 +110,20 @@ describe("validation document reuse", () => {
       if (source.boundary !== "document") {
         continue;
       }
-      const parsed = parseEcjDecisionHtml({
-        caseNumber: name,
-        ecli: undefined,
-        court: "Court of Justice",
-        decisionDate: undefined,
-        decisionType: undefined,
-        sourceUrl: undefined,
-        language: undefined,
-        celex: name,
-        html,
-      });
-      expectReuseMatchesFreshParse(
-        html,
-        parsed.documentAst.blocks,
-        cheerio.load(html),
+      const { call } = captureValidation(() =>
+        parseEcjDecisionHtml({
+          caseNumber: name,
+          ecli: undefined,
+          court: "Court of Justice",
+          decisionDate: undefined,
+          decisionType: undefined,
+          sourceUrl: undefined,
+          language: undefined,
+          celex: name,
+          html,
+        }),
       );
+      expectCapturedDocumentMatchesFreshParse(call);
     }
   });
 
@@ -92,24 +139,22 @@ describe("validation document reuse", () => {
       if (!/<[a-z][\s\S]*>/iu.test(content)) {
         continue;
       }
-      const parsed = parsePlDecisionContent({
-        caseNumber: name,
-        ecli: undefined,
-        court: "",
-        decisionDate: undefined,
-        decisionType: undefined,
-        sourceUrl: "",
-        documentUrl: "",
-        content,
-        keywords: [],
-        statutes: [],
-        documentId: name,
-      });
-      expectReuseMatchesFreshParse(
-        content,
-        parsed.documentAst.blocks,
-        cheerio.load(content),
+      const { call } = captureValidation(() =>
+        parsePlDecisionContent({
+          caseNumber: name,
+          ecli: undefined,
+          court: "",
+          decisionDate: undefined,
+          decisionType: undefined,
+          sourceUrl: "",
+          documentUrl: "",
+          content,
+          keywords: [],
+          statutes: [],
+          documentId: name,
+        }),
       );
+      expectCapturedDocumentMatchesFreshParse(call);
     }
   });
 
@@ -119,29 +164,35 @@ describe("validation document reuse", () => {
     )) {
       const pageHtml = await gunzip(new URL(name, FIXTURES));
       const page = readPlTkCasePage(pageHtml);
-      expect(page).not.toBeNull();
-      for (const rulingId of page?.rulingIds ?? []) {
+      if (page === null) {
+        throw new Error(`fixture ${name} is not a TK case page`);
+      }
+      const caseNumber = page.record.caseNumber;
+      if (caseNumber === undefined) {
+        throw new Error(`fixture ${name} has no case number`);
+      }
+      for (const rulingId of page.rulingIds) {
         const ruling = readPlTkRuling(pageHtml, rulingId);
-        const textHtml = ruling?.textHtml;
+        if (ruling === null) {
+          throw new Error(`fixture ${name} has no ruling ${rulingId}`);
+        }
+        const textHtml = ruling.textHtml;
         if (textHtml === undefined) {
           continue;
         }
-        const sourceHtml = `<body>${textHtml}</body>`;
-        const parsed = parsePlTkText({
-          caseNumber: page.record.caseNumber,
-          court: "Trybunał Konstytucyjny",
-          decisionDate: ruling.decisionDate,
-          decisionType: ruling.decisionForm,
-          documentId: rulingId,
-          sourceUrl: "",
-          documentUrl: undefined,
-          textHtml,
-        });
-        expectReuseMatchesFreshParse(
-          sourceHtml,
-          parsed.documentAst.blocks,
-          cheerio.load(sourceHtml),
+        const { call } = captureValidation(() =>
+          parsePlTkText({
+            caseNumber,
+            court: "Trybunał Konstytucyjny",
+            decisionDate: ruling.decisionDate,
+            decisionType: ruling.decisionForm,
+            documentId: rulingId,
+            sourceUrl: "",
+            documentUrl: undefined,
+            textHtml,
+          }),
         );
+        expectCapturedDocumentMatchesFreshParse(call);
       }
     }
   });
@@ -172,5 +223,29 @@ describe("validation document reuse", () => {
         document: mutated,
       }),
     ).not.toEqual(astValidation.validateAst(xhtml, parsed.documentAst.blocks));
+  });
+
+  test("rejects a caller that mutates its document before validation", () => {
+    const sourceHtml = "<body><p>original source words</p></body>";
+    const { call } = captureValidation(() => {
+      const document = cheerio.load(sourceHtml);
+      document("p").text("replacement words");
+      return astValidation.validateAndLog(
+        { parser: "mutation-regression", caseNumber: "test" },
+        sourceHtml,
+        [
+          {
+            id: "mutation-paragraph",
+            anchorId: "mutation-paragraph",
+            type: "paragraph",
+            plainText: "original source words",
+            inlines: [{ type: "text", text: "original source words" }],
+          },
+        ],
+        { document },
+      );
+    });
+
+    expect(validationResultsMatch(call)).toBeFalse();
   });
 });

@@ -19,7 +19,6 @@ import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import type { MarkupResidue } from "@/api/lib/legal-search/parsers/markup-residue";
-import { logger } from "@/api/lib/observability/logger";
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -29,7 +28,7 @@ type Issue = {
   severity: "error" | "warning";
 };
 
-export type ValidationResult = {
+type ValidationResult = {
   ok: boolean;
   issues: Issue[];
   stats: {
@@ -64,7 +63,7 @@ export type ValidationResult = {
 };
 
 /** Explicit publisher policy; other sources keep the shared validation semantics. */
-export type ValidationSourcePolicy = {
+type ValidationSourcePolicy = {
   source: "courtlistener";
   projectSourceText: (text: string) => string;
   projectInlineText: (inlines: readonly Inline[]) => string;
@@ -616,216 +615,4 @@ export const validateAstReference = (
       work,
     },
   };
-};
-
-/**
- * Identity of the document being validated.
- *
- * A case number alone does not identify a document: courts that
- * publish in several languages emit one variant per language under the
- * same number, and a case can carry both a judgment and an Advocate
- * General's opinion. Anything acting on these logs — a person or an
- * agent sweeping for bad parses — needs enough here to fetch the exact
- * document back.
- */
-export type ValidationSubject = {
-  /** Adapter key, e.g. "eu-ecj". */
-  parser: string;
-  caseNumber: string;
-  language?: string | undefined;
-  /** Where this exact document can be re-fetched. */
-  url?: string | undefined;
-};
-
-/**
- * Log event emitted when source text did not survive into the AST.
- * Reported at ERROR: the text is unrecoverable from the stored
- * decision, and neither the reader nor the AI pipeline can tell.
- */
-export const AST_CONTENT_LOST = "case_law.ingestion.ast_content_lost";
-
-/**
- * Log event emitted when a block's text still carries the source's own
- * markup — RTF control words, a tag, an entity, a binary payload. Reported
- * at ERROR and swept per source: the text is wrong in the corpus, and
- * `sourceRaw` is what a fixed parser re-reads.
- */
-export const AST_MARKUP_RESIDUE = "case_law.ingestion.ast_markup_residue";
-
-/**
- * Log event emitted when the text is all present but its structure is
- * wrong or missing. Reported at WARN: degraded, not incorrect.
- */
-export const AST_STRUCTURE_DEGRADED =
-  "case_law.ingestion.ast_structure_degraded";
-
-/** The source oracle joins words across a rendered inline break. */
-export const AST_BOUNDARY_WHITESPACE =
-  "case_law.ingestion.ast_boundary_whitespace";
-
-/**
- * Log event emitted when a decision is stored with neither text nor an
- * AST. Reported at ERROR: nothing about the decision is readable, and
- * a source that starts doing this emits no other signal, because its
- * parser never runs.
- */
-export const DECISION_EMPTY = "case_law.ingestion.decision_empty";
-
-/**
- * Log event emitted when a decision is stored with text but no AST —
- * the unstructured-wall-of-text state. Reported at WARN.
- */
-export const AST_MISSING = "case_law.ingestion.ast_missing";
-
-/**
- * What a stored decision reports about itself, before any parser
- * result is considered.
- *
- * Kept as a pure function rather than inline branching in the pipeline
- * because this is the signal an operator or agent sweeps for; a change
- * that silently downgrades it would otherwise be invisible, and the
- * one place it must not be invisible is here.
- */
-export type StoredDecisionSignal =
-  | { event: typeof DECISION_EMPTY; level: "error" }
-  | { event: typeof AST_MISSING; level: "warn" };
-
-export const storedDecisionSignal = (stored: {
-  hasFulltext: boolean;
-  astBlocks: number;
-}): StoredDecisionSignal | undefined => {
-  if (stored.astBlocks > 0) {
-    return undefined;
-  }
-  return stored.hasFulltext
-    ? { event: AST_MISSING, level: "warn" }
-    : { event: DECISION_EMPTY, level: "error" };
-};
-
-/**
- * Validate, then log the outcome under a severity that reflects what
- * kind of failure it is. Returns the result for callers that want to
- * assert on it.
- */
-export type ValidationSignal =
-  | { event: typeof AST_MARKUP_RESIDUE; level: "error" }
-  | { event: typeof AST_CONTENT_LOST; level: "error" }
-  | { event: typeof AST_STRUCTURE_DEGRADED; level: "warn" };
-
-/**
- * Map a validation outcome onto the event an operator sweeps for.
- * Pure, and tested as such: this mapping is the whole value of the
- * signal, and a change that quietly turns loss into a warning would
- * otherwise show up only as an absence in a log search.
- */
-export const validationSignal = (
-  result: Pick<ValidationResult, "ok" | "issues">,
-): ValidationSignal | undefined => {
-  const issues = result.issues.filter(
-    (issue) => issue.code !== BOUNDARY_WHITESPACE,
-  );
-  if (issues.length === 0) {
-    return undefined;
-  }
-  // Residue outranks content loss, and the log line carries every code
-  // either way: retention is measured over text that includes the markup,
-  // so it reads high while the document is wrong. Fixing the parser and
-  // re-parsing from sourceRaw is the action for both.
-  if (issues.some((issue) => issue.code === MARKUP_RESIDUE)) {
-    return { event: AST_MARKUP_RESIDUE, level: "error" };
-  }
-  return result.ok
-    ? { event: AST_STRUCTURE_DEGRADED, level: "warn" }
-    : { event: AST_CONTENT_LOST, level: "error" };
-};
-
-export const validateAndLog = (
-  subject: ValidationSubject,
-  html: string,
-  blocks: Block[],
-  options?: Parameters<typeof validateAstReference>[2],
-): ValidationResult => {
-  const result = validateAstReference(html, blocks, options);
-  const subjectFields = {
-    parser: subject.parser,
-    caseNumber: subject.caseNumber,
-    ...(subject.language === undefined ? {} : { language: subject.language }),
-    ...(subject.url === undefined ? {} : { url: subject.url }),
-  };
-  if (result.stats.boundaryWhitespaceWords.length > 0) {
-    logger.warn(AST_BOUNDARY_WHITESPACE, {
-      ...subjectFields,
-      codes: BOUNDARY_WHITESPACE,
-      boundaryWordCount: result.stats.boundaryWhitespaceWords.length,
-      boundaryWords: result.stats.boundaryWhitespaceWords
-        .slice(0, 25)
-        .join(", "),
-    });
-  }
-  const signal = validationSignal(result);
-  if (!signal) {
-    return result;
-  }
-
-  // Court decisions are public documents; log full diagnostics so a
-  // failure is actionable straight from the log line, without
-  // re-fetching and re-parsing the source.
-  const common = {
-    ...subjectFields,
-    codes: result.issues
-      .filter((issue) => issue.code !== BOUNDARY_WHITESPACE)
-      .map((issue) => issue.code)
-      .join(","),
-    issues: result.issues
-      .filter((issue) => issue.code !== BOUNDARY_WHITESPACE)
-      .map((issue) => `${issue.code}: ${issue.message}`)
-      .join("; "),
-    blockCount: result.stats.blockCount,
-  };
-
-  if (signal.level === "warn") {
-    logger.warn(signal.event, common);
-    return result;
-  }
-
-  const residue = result.stats.markupResidue.at(0);
-  logger.error(signal.event, {
-    ...common,
-    ...(residue === undefined
-      ? {}
-      : {
-          residueRule: residue.rule,
-          residueAnchorId: residue.anchorId,
-          residueExcerpt: residue.excerpt,
-          residueBlocks: result.stats.markupResidue.length,
-        }),
-    retainedPct: result.stats.retainedPct,
-    missingWordCount: result.stats.missingWords.length,
-    missingWords: result.stats.missingWords.slice(0, 25).join(", "),
-  });
-
-  return result;
-};
-
-/**
- * Build minimal validation HTML from structured paragraphs.
- *
- * For parsers that consume structured data (JSON sections, RTF
- * paragraphs) rather than raw HTML, the source HTML is unsuitable
- * for validation: text from adjacent sections gets concatenated
- * without whitespace, creating phantom words like "zamítá.ii."
- * that the AST rightfully doesn't contain.
- *
- * This utility wraps each paragraph in a `<p>` tag so the
- * validator's cheerio-based word extraction sees proper word
- * boundaries between paragraphs.
- */
-export const buildValidationHtml = (paragraphs: readonly string[]): string => {
-  const parts: string[] = [];
-  for (const p of paragraphs) {
-    if (p.trim()) {
-      parts.push(`<p>${p}</p>`);
-    }
-  }
-  return `<body>${parts.join("")}</body>`;
 };
