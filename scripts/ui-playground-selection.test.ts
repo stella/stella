@@ -354,3 +354,56 @@ test("an untraced asset change selects every spec", () => {
     rmSync(fixture.root, { force: true, recursive: true });
   }
 });
+
+test("a computed dynamic import selects every spec", () => {
+  const fixture = createSelectionFixture();
+  try {
+    fixture.write(
+      "apps/web/src/routes/dev/fixture.tsx",
+      [
+        '// import("./commented") is not code',
+        'export type Lazy = typeof import("./types");',
+        "export const load = (variant: string) =>",
+        `  import(\`./variants/\${variant}.tsx\`);`,
+        "",
+      ].join("\n"),
+    );
+    fixture.write("apps/web/src/routes/dev/variants/wide.tsx", "export {};\n");
+    expect(
+      selectGeometrySpecs(
+        ["apps/web/src/routes/dev/variants/wide.tsx"],
+        fixture.root,
+      ),
+    ).toEqual([fixture.spec]);
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
+  }
+});
+
+test("literal dynamic imports, comments and type imports keep the closure exact", () => {
+  const fixture = createSelectionFixture();
+  try {
+    fixture.write(
+      "apps/web/src/routes/dev/fixture.tsx",
+      [
+        `// import(\`./variants/\${name}.tsx\`) in a comment`,
+        'export type Lazy = typeof import("./types");',
+        'export const load = () => import("./variants/wide");',
+        "",
+      ].join("\n"),
+    );
+    fixture.write("apps/web/src/routes/dev/types.ts", "export {};\n");
+    fixture.write("apps/web/src/routes/dev/variants/wide.tsx", "export {};\n");
+    expect(
+      selectGeometrySpecs(
+        ["apps/web/src/routes/dev/variants/wide.tsx"],
+        fixture.root,
+      ),
+    ).toEqual([fixture.spec]);
+    expect(
+      selectGeometrySpecs(["apps/web/src/unrelated.ts"], fixture.root),
+    ).toEqual([]);
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
+  }
+});

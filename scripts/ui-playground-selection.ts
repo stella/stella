@@ -282,9 +282,20 @@ export const staticImportClosure = (
     const source = readFileSync(absolute, "utf-8");
     let imports: readonly string[];
     try {
-      imports = new Bun.Transpiler({ loader, logLevel: "error" })
+      const transpiler = new Bun.Transpiler({ loader, logLevel: "error" });
+      imports = transpiler
         .scanImports(source)
         .map(({ path: imported }) => imported);
+      // A computed `import(...)` names no module the scan can follow. The
+      // emitted code has no comments or type-only imports, so any call beyond
+      // the literal ones leaves the closure unknown.
+      const emitted = transpiler.transformSync(source);
+      const dynamicCalls = emitted.match(/\bimport\s*\(/gu)?.length ?? 0;
+      const literalCalls =
+        emitted.match(/\bimport\s*\(\s*(["'])[^"'`]+\1\s*[,)]/gu)?.length ?? 0;
+      if (dynamicCalls > literalCalls) {
+        complete = false;
+      }
     } catch {
       imports = [
         ...source.matchAll(/(?:from\s*|import\s*\()(["'])([^"']+)\1/gu),
