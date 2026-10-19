@@ -1157,7 +1157,7 @@ type CorpusLegislationSearchOptions = {
   hitDispositions: CorpusHitDispositionCounter;
   observeStage: ObserveLegislationStage;
   now: () => number;
-  recordIndexScan: (durationMs: number, candidateCount: number) => void;
+  recordIndexScan: (scan: IndexScanTiming) => void;
   reads: CorpusLegislationReadDependencies;
 };
 
@@ -1167,19 +1167,43 @@ type CorpusLegislationSearchResult = {
   paginationOutcome: SearchPaginationOutcome;
 };
 
+type IndexScanTiming = {
+  durationMs: number;
+  candidateCount: number;
+  rounds: number;
+};
+
+// Index time is everything the page read spends outside the ranking callback,
+// so it pauses while candidates hydrate and rank, and the open interval is
+// closed when the read settles, including a read that fails mid-round.
 const createIndexRecorder = ({
   now,
   emit,
 }: {
   now: () => number;
-  emit: (durationMs: number, candidateCount: number) => void;
+  emit: (scan: IndexScanTiming) => void;
 }) => {
-  let startedAt = now();
-  return (candidateCount: number) => {
-    emit(now() - startedAt, candidateCount);
-    return () => {
-      startedAt = now();
-    };
+  const scan: IndexScanTiming = { durationMs: 0, candidateCount: 0, rounds: 0 };
+  let openedAt: number | undefined = now();
+  const closeInterval = () => {
+    if (openedAt !== undefined) {
+      scan.durationMs += now() - openedAt;
+      openedAt = undefined;
+    }
+  };
+  return {
+    pause: (candidateCount: number) => {
+      closeInterval();
+      scan.candidateCount += candidateCount;
+      scan.rounds += 1;
+      return () => {
+        openedAt = now();
+      };
+    },
+    settle: () => {
+      closeInterval();
+      emit(scan);
+    },
   };
 };
 
@@ -1237,54 +1261,55 @@ const corpusIndexSearch = async ({
         excludedWorkTokens.add(token);
       }
     }
-    const recordIndex = createIndexRecorder({ now, emit: recordIndexScan });
-    const page = await reads.readPage({
-      hitDispositions,
-      observer,
-      cluster,
-      indexId,
-      query,
-      limit: pageLimit,
-      order: RELEVANCE_ORDER,
-      // A legislation hit is a whole statute version; the native endpoint
-      // would return its full stored text for each of up to 300 hits a round.
-      scanTransport: SCORED_SCAN_TRANSPORT,
-      parsedCursor: cursor,
-      ...(active.type === "relaxed"
-        ? {
-            maxRounds: 1,
-          }
-        : {}),
-      snippetFields: ["text"],
-      projectionRevisionField: requireCorpusIndexManifest(
-        "legislation",
-        generation,
-      ).projection.projectionRevisionField,
-      extractId: extractCorpusDocumentId,
-      extractSnippet: extractCorpusSnippet,
-      unseenScoreUpperBound:
-        active.type === "strict" ? stableBlendUpperBound : (score) => score,
-      rankCandidates: async (candidates, { selectAppliedCandidates }) => {
-        const resumeIndexTiming = recordIndex(candidates.length);
-        const ranked = await rehydrateLegislationCandidates({
-          hitDispositions,
-          body,
-          candidates,
-          selectAppliedCandidates,
+    const indexTiming = createIndexRecorder({ now, emit: recordIndexScan });
+    return await reads
+      .readPage({
+        hitDispositions,
+        observer,
+        cluster,
+        indexId,
+        query,
+        limit: pageLimit,
+        order: RELEVANCE_ORDER,
+        // A legislation hit is a whole statute version; the native endpoint
+        // would return its full stored text for each of up to 300 hits a round.
+        scanTransport: SCORED_SCAN_TRANSPORT,
+        parsedCursor: cursor,
+        ...(active.type === "relaxed"
+          ? {
+              maxRounds: 1,
+            }
+          : {}),
+        snippetFields: ["text"],
+        projectionRevisionField: requireCorpusIndexManifest(
+          "legislation",
           generation,
-          legislationDb,
-          cursorId: cursor?.id,
-          namedWorks: active.type === "strict" ? namedWorks : [],
-          excludedWorkTokens: [...excludedWorkTokens],
-          ranking: active.type === "strict" ? "authority" : "lexical",
-          observeStage,
-          readCandidateRows: reads.readCandidateRows,
-        });
-        resumeIndexTiming();
-        return ranked;
-      },
-    });
-    return page;
+        ).projection.projectionRevisionField,
+        extractId: extractCorpusDocumentId,
+        extractSnippet: extractCorpusSnippet,
+        unseenScoreUpperBound:
+          active.type === "strict" ? stableBlendUpperBound : (score) => score,
+        rankCandidates: async (candidates, { selectAppliedCandidates }) => {
+          const resumeIndexTiming = indexTiming.pause(candidates.length);
+          const ranked = await rehydrateLegislationCandidates({
+            hitDispositions,
+            body,
+            candidates,
+            selectAppliedCandidates,
+            generation,
+            legislationDb,
+            cursorId: cursor?.id,
+            namedWorks: active.type === "strict" ? namedWorks : [],
+            excludedWorkTokens: [...excludedWorkTokens],
+            ranking: active.type === "strict" ? "authority" : "lexical",
+            observeStage,
+            readCandidateRows: reads.readCandidateRows,
+          });
+          resumeIndexTiming();
+          return ranked;
+        },
+      })
+      .finally(indexTiming.settle);
   };
 
   type PhasePage = NonNullable<Awaited<ReturnType<typeof readPhase>>>;
@@ -1489,12 +1514,12 @@ const createSearchStageAccumulator = (
       },
     );
   };
-  const recordIndexScan = (durationMs: number, candidateCount: number) => {
+  const recordIndexScan = (scan: IndexScanTiming) => {
     const stage = "index_scan";
     const accumulated = valueFor(stage);
-    accumulated.durationMs += durationMs;
-    accumulated.rounds += 1;
-    accumulated.candidateCount += candidateCount;
+    accumulated.durationMs += scan.durationMs;
+    accumulated.rounds += scan.rounds;
+    accumulated.candidateCount += scan.candidateCount;
     stages.set(stage, accumulated);
   };
   const settle = () => {

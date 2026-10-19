@@ -51,9 +51,11 @@ const timingCandidateIds = [
   "8d3f4056-7acc-4f3e-9b2c-4d5e6f708192",
 ] as const;
 
+type TimedSearchFailure = "none" | "hydration" | "index";
+
 const runTimedSearch = async (
   stageToolName?: string,
-  failHydration = false,
+  failure: TimedSearchFailure = "none",
 ) => {
   let clock = 0;
   let databaseReads = 0;
@@ -94,6 +96,9 @@ const runTimedSearch = async (
           },
         );
         clock += 5;
+        if (failure === "index") {
+          throw new Error("index read failed");
+        }
         const ranked = await options.rankCandidates(
           timingCandidateIds.map((id, index) => ({
             id,
@@ -167,7 +172,7 @@ const runTimedSearch = async (
       return await read(Object.create(null));
     }
     clock += databaseReads === 3 ? 11 : 3;
-    if (failHydration && databaseReads === 4) {
+    if (failure === "hydration" && databaseReads === 4) {
       throw new Error("hydration failed");
     }
     return await read({
@@ -226,7 +231,7 @@ test.each([
 );
 
 test("a failed second-round hydration reports the accumulated index scan only", async () => {
-  const { operation, records } = await runTimedSearch(undefined, true);
+  const { operation, records } = await runTimedSearch(undefined, "hydration");
   expect(await rejectionOf(operation)).toEqual(
     expect.objectContaining({ message: "hydration failed" }),
   );
@@ -236,6 +241,31 @@ test("a failed second-round hydration reports the accumulated index scan only", 
       durationMs: 12,
       rounds: 2,
       candidateCount: 6,
+    }),
+  ]);
+});
+
+test("a failed second-round index read keeps both index intervals", async () => {
+  const { operation, records } = await runTimedSearch(undefined, "index");
+  expect(await rejectionOf(operation)).toEqual(
+    expect.objectContaining({ message: "index read failed" }),
+  );
+  expect(records).toEqual([
+    expect.objectContaining({
+      stage: "index_scan",
+      durationMs: 12,
+      rounds: 1,
+      candidateCount: 3,
+    }),
+    expect.objectContaining({
+      stage: "candidate_hydration",
+      durationMs: 11,
+      rounds: 1,
+    }),
+    expect.objectContaining({
+      stage: "work_collapse_ranking",
+      durationMs: 13,
+      rounds: 1,
     }),
   ]);
 });
