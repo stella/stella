@@ -911,7 +911,7 @@ export const createMcpHttpRequestHandler = ({
         async () =>
           await handleMcpToolCall({
             args: toolRequest.params.arguments ?? {},
-            context,
+            context: { ...context, admitToolInvocation },
             mode,
             toolName,
           }),
@@ -947,37 +947,49 @@ export const createMcpHttpRequestHandler = ({
         toolRequest.params.arguments ?? {},
       );
     }
-    const admitted = await admitAction({
-      organizationId: context.organizationId,
-      userId: context.userId,
-      organizationStateDb: context.scopedDb,
-      periodIdentity: mcpActionPeriodIdentity(consumesServices),
-      run,
-    });
-    if (Result.isOk(admitted)) {
-      return admitted.value;
-    }
-    if (ActionAdmissionError.is(admitted.error)) {
-      if (admitted.error.reason === "unavailable") {
-        captureError(admitted.error, {
-          phase: "action-admission",
-          source: "mcp",
+    const admitToolInvocation: NonNullable<
+      McpRequestContext["admitToolInvocation"]
+    > = async (invoke) => {
+      const admitted = await admitAction({
+        organizationId: context.organizationId,
+        userId: context.userId,
+        organizationStateDb: context.scopedDb,
+        periodIdentity: mcpActionPeriodIdentity(consumesServices),
+        run: async (signal) => {
+          signal?.throwIfAborted();
+          return await invoke();
+        },
+      });
+      if (Result.isOk(admitted)) {
+        return admitted.value;
+      }
+      if (ActionAdmissionError.is(admitted.error)) {
+        if (admitted.error.reason === "unavailable") {
+          captureError(admitted.error, {
+            phase: "action-admission",
+            source: "mcp",
+          });
+        }
+        const refusal = actionAdmissionRefusal(admitted.error);
+        return structuredErrorResult({
+          code: refusal.code,
+          message: refusal.message,
+          hint: refusal.hint,
+          contactUrl: refusal.contactUrl,
+          retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
         });
       }
-      const refusal = actionAdmissionRefusal(admitted.error);
-      return mcpStructuredErrorResult({
-        code: refusal.code,
-        message: refusal.message,
-        hint: refusal.hint,
-        contactUrl: refusal.contactUrl,
-        retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
+      captureError(admitted.error, {
+        phase: "action-admission",
+        source: "mcp",
       });
-    }
-    captureError(admitted.error, {
-      phase: "action-admission",
-      source: "mcp",
-    });
-    return retryableToolErrorResult(mode, context);
+      return structuredErrorResult({
+        code: "internal_error",
+        message: "Tool execution failed",
+        hint: MCP_INTERNAL_ERROR_HINT,
+      });
+    };
+    return await run();
   };
 
   const createMcpServer = async ({

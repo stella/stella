@@ -363,7 +363,7 @@ describe("write tool permissions", () => {
       }),
     },
   ])(
-    "over http action admission wraps the $denial authority refusal",
+    "over http a $denial authority refusal consumes no admission",
     async ({ context }) => {
       let admissions = 0;
       const result = await callMcpToolOverHttp({
@@ -380,7 +380,7 @@ describe("write tool permissions", () => {
         mode: "default",
         toolName: "delete_matter",
       });
-      expect(admissions).toBe(1);
+      expect(admissions).toBe(0);
       const item = result.content.at(0);
       expect(
         item?.type === "text" ? JSON.parse(item.text) : null,

@@ -2276,6 +2276,21 @@ describe("capability executor upload purpose gate", () => {
     expect(errorEnvelope(result).code).toBe("permission_denied");
   });
 
+  test("a refused purpose consumes no rate-limit budget", async () => {
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "uploads.create",
+        input: { body: skillPackBody, params: { matterId: "ws_1" } },
+      },
+      context: createContext({
+        grantedScopes: ["stella:matters_write", "stella:skills"],
+        memberRole: "intern",
+      }),
+    });
+    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+  });
+
   test("a purpose the credential set does not cover -> permission_denied", async () => {
     const result = await handleCapabilityCall({
       args: {

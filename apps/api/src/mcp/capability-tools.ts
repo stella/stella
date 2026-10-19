@@ -1611,32 +1611,6 @@ type InvokeCapabilityOptions = {
   access: keyof typeof MCP_CAPABILITY_EXECUTORS;
 };
 
-const invokeCapabilityWithAuthority = async <T>({
-  context,
-  id,
-  permissions,
-  invoke,
-  map,
-}: {
-  context: McpRequestContext;
-  id: string;
-  permissions: readonly PermissionInput[];
-  invoke: () => Promise<T> | T;
-  map: (result: T) => McpToolResponse;
-}): Promise<McpToolResponse> => {
-  if (
-    permissions.some(
-      (permission) => !hasEffectiveAuthority(context, permission),
-    )
-  ) {
-    return structuredErrorResult({
-      code: "permission_denied",
-      message: `Your member role does not permit capability "${id}"`,
-    });
-  }
-  return map(await invoke());
-};
-
 const invokeCapabilityHandler = async ({
   args,
   context,
@@ -1996,6 +1970,44 @@ const capabilityReferenceRefusal = async ({
   return null;
 };
 
+const capabilityPermissionRefusal = ({
+  context,
+  id,
+  permissions,
+}: {
+  context: McpRequestContext;
+  id: string;
+  permissions: readonly PermissionInput[];
+}) =>
+  permissions.some((permission) => !hasEffectiveAuthority(context, permission))
+    ? structuredErrorResult({
+        code: "permission_denied",
+        message: `Your member role does not permit capability "${id}"`,
+      })
+    : null;
+
+const capabilityRateLimitRefusal = async (
+  context: McpRequestContext,
+  id: string,
+) => {
+  const rate = await (
+    context.testDependencies?.consumeInvokeCapabilityRateLimit ??
+    consumeInvokeCapabilityRateLimit
+  )({
+    capabilityId: id,
+    clientIp: context.clientIp ?? null,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
+  return rate.ok
+    ? null
+    : structuredErrorResult({
+        code: "rate_limited",
+        message: `Rate limit exceeded for capability "${id}"`,
+        hint: `Too many invocations of this capability; retry in about ${rate.retryAfterSeconds} seconds.`,
+      });
+};
+
 const executeInvoke = async ({
   context,
   entry,
@@ -2047,25 +2059,8 @@ const executeInvoke = async ({
     query: validatedQuery,
   } = validated;
 
-  const referenceRefusal = await capabilityReferenceRefusal({
-    context,
-    config: endpoint.config,
-    body: validatedBody,
-    params: validatedParams,
-    query: validatedQuery,
-    entry,
-    confirm,
-  });
-  if (referenceRefusal !== null) {
-    return referenceRefusal;
-  }
-
-  // 7. Workspace resolution (workspace kind only), from the RAW input params
-  // (route-macro parity: REST validates the path param independently of the
-  // handler config schema). Runs BEFORE the validateOnly return so
-  // `validateOnly: true` mirrors a real invoke: a missing/inaccessible/archived
-  // workspace fails here with the same envelope it would at execution, rather
-  // than validateOnly reporting a spurious `{ valid: true }`.
+  // Workspace resolution runs before validateOnly so the check mirrors an
+  // execution call.
   let workspaceId: SafeId<"workspace"> | undefined;
   let handlerParams = validatedParams;
   if (isWorkspace) {
@@ -2155,15 +2150,36 @@ const executeInvoke = async ({
     ...(purposeRequirement === null ? [] : [purposeRequirement.permission]),
   ];
 
+  const permissionRefusal = capabilityPermissionRefusal({
+    context,
+    id,
+    permissions: requiredPermissions,
+  });
+  if (permissionRefusal !== null) {
+    return permissionRefusal;
+  }
+
   if (validateOnly) {
-    return await invokeCapabilityWithAuthority({
+    const referenceRefusal = await capabilityReferenceRefusal({
       context,
-      id,
-      permissions: requiredPermissions,
-      invoke: () => ({ valid: true, capability: id }),
-      map: (payload) =>
-        untypedStructuredEgressPlan({ payload, textFields: [] }),
+      config: endpoint.config,
+      body: validatedBody,
+      params: validatedParams,
+      query: validatedQuery,
+      entry,
+      confirm,
     });
+    if (referenceRefusal !== null) {
+      return referenceRefusal;
+    }
+    const invoke = async () =>
+      untypedStructuredEgressPlan({
+        payload: { valid: true, capability: id },
+        textFields: [],
+      });
+    return context.admitToolInvocation === undefined
+      ? await invoke()
+      : await context.admitToolInvocation(invoke);
   }
 
   const request = context.request;
@@ -2175,46 +2191,43 @@ const executeInvoke = async ({
     });
   }
 
-  // 10. Gateway rate limit. Most capabilities are scoped per user, organization
-  // and capability; skill-source calls share the REST client-IP budget. Capping
-  // before execution prevents a runaway agent from driving backend cost through
-  // the generic path. validateOnly (above) is exempt: it never executes.
-  const rate = await (
-    context.testDependencies?.consumeInvokeCapabilityRateLimit ??
-    consumeInvokeCapabilityRateLimit
-  )({
-    capabilityId: id,
-    clientIp: context.clientIp ?? null,
-    organizationId: context.organizationId,
-    userId: context.userId,
-  });
-  if (!rate.ok) {
-    return structuredErrorResult({
-      code: "rate_limited",
-      message: `Rate limit exceeded for capability "${id}"`,
-      hint: `Too many invocations of this capability; retry in about ${rate.retryAfterSeconds} seconds.`,
-    });
-  }
+  const invoke = async () => {
+    // validateOnly does not execute capability work.
+    const rateLimitRefusal = await capabilityRateLimitRefusal(context, id);
+    if (rateLimitRefusal !== null) {
+      return rateLimitRefusal;
+    }
 
-  const ctx = await synthesizeCapabilityContext({
-    capabilityId: id,
-    context,
-    input: {
+    const referenceRefusal = await capabilityReferenceRefusal({
+      context,
+      config: endpoint.config,
       body: validatedBody,
-      params: handlerParams,
+      params: validatedParams,
       query: validatedQuery,
-    },
-    request,
-    workspaceId,
-  });
+      entry,
+      confirm,
+    });
+    if (referenceRefusal !== null) {
+      return referenceRefusal;
+    }
 
-  return await invokeCapabilityWithAuthority({
-    context,
-    id,
-    permissions: requiredPermissions,
-    invoke: async () => await endpoint.handler(ctx),
-    map: (result) => mapHandlerResult({ id, result }),
-  });
+    const ctx = await synthesizeCapabilityContext({
+      capabilityId: id,
+      context,
+      input: {
+        body: validatedBody,
+        params: handlerParams,
+        query: validatedQuery,
+      },
+      request,
+      workspaceId,
+    });
+
+    return mapHandlerResult({ id, result: await endpoint.handler(ctx) });
+  };
+  return context.admitToolInvocation === undefined
+    ? await invoke()
+    : await context.admitToolInvocation(invoke);
 };
 
 /**

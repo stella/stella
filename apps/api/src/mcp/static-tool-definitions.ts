@@ -53,6 +53,7 @@ import {
   PUBLIC_MCP_TOOL_DEFINITION,
   PUBLIC_MCP_TOOL_HANDLER,
 } from "@/api/mcp/tool-types";
+import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
 type DefaultMcpToolSets = readonly [
   typeof COMPAT_TOOL_SET,
@@ -615,37 +616,45 @@ export const invokeStaticMcpTool = async ({
     return { status: "input-authority-refused", denial: inputDenial };
   }
 
-  const earlyResponse = await beforeInvoke?.(scoped.args);
-  if (earlyResponse !== undefined && earlyResponse !== null) {
-    return {
-      status: "invoked",
-      response: earlyResponse,
-      inputNotes: normalized.notes,
-    };
-  }
-
-  if (PUBLIC_MCP_TOOL_DEFINITION in definition) {
-    const publicContext = createPublicMcpHandlerContext(context);
-    if (publicContext.isErr()) {
-      return { status: "authority-refused", denial: null };
+  const invoke = async (): Promise<McpToolResponse> => {
+    const earlyResponse = await beforeInvoke?.(scoped.args);
+    if (earlyResponse !== undefined && earlyResponse !== null) {
+      return earlyResponse;
     }
-    return {
-      status: "invoked",
-      response: await definition[PUBLIC_MCP_TOOL_HANDLER]({
+
+    if (PUBLIC_MCP_TOOL_DEFINITION in definition) {
+      const publicContext = createPublicMcpHandlerContext(context);
+      if (publicContext.isErr()) {
+        return structuredErrorResult({
+          code: "permission_denied",
+          message: `Tool ${definition.name} is unavailable.`,
+        });
+      }
+      return await definition[PUBLIC_MCP_TOOL_HANDLER]({
         args: scoped.args,
         context: publicContext.value,
-      }),
-      inputNotes: normalized.notes,
-    };
-  }
+      });
+    }
 
-  const handler = getStaticMcpToolHandler(definition.name, mode);
-  if (handler === undefined) {
-    return { status: "authority-refused", denial: null };
-  }
+    const handler = getStaticMcpToolHandler(definition.name, mode);
+    if (handler === undefined) {
+      return structuredErrorResult({
+        code: "permission_denied",
+        message: `Tool ${definition.name} is unavailable.`,
+      });
+    }
+    return await handler({ args: scoped.args, context });
+  };
+
+  const response =
+    context.admitToolInvocation === undefined ||
+    definition.name === MCP_CAPABILITY_EXECUTORS.read ||
+    definition.name === MCP_CAPABILITY_EXECUTORS.write
+      ? await invoke()
+      : await context.admitToolInvocation(invoke);
   return {
     status: "invoked",
-    response: await handler({ args: scoped.args, context }),
+    response,
     inputNotes: normalized.notes,
   };
 };
