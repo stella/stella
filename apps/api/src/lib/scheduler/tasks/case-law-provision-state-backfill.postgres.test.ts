@@ -6,7 +6,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 import {
-  PROVISION_EXTRACTION_ADMISSION,
+  PROVISION_EXTRACTION_ADMISSION_SCOPES,
   PROVISION_EXTRACTION_ADMISSION_REVISION,
 } from "@stll/legal-atlas/provision-extraction-admission";
 
@@ -97,9 +97,10 @@ const withFixture = async (
         `INSERT INTO ${schema}.case_law_provision_admission (key, revision) VALUES ('global', $1)`,
         [PROVISION_EXTRACTION_ADMISSION_REVISION],
       );
-      for (const { jurisdiction, language } of Object.values(
-        PROVISION_EXTRACTION_ADMISSION,
-      )) {
+      for (const {
+        jurisdiction,
+        language,
+      } of PROVISION_EXTRACTION_ADMISSION_SCOPES) {
         await operator.unsafe(
           `INSERT INTO ${schema}.case_law_provision_extraction_scopes (country, language, status, generation) VALUES ($1, $2, 'active', 1)`,
           [jurisdiction, language],
