@@ -153,7 +153,7 @@ const POSITIVE_FIXTURES: Record<string, () => Promise<Fixture> | Fixture> = {
     }),
   rtf_external_reference: async () => ({
     buffer: encoder.encode(
-      "{\\rtf1 INCLUDEPICTURE https://example.test/a.png}",
+      '{\\rtf1{\\field{\\*\\fldinst INCLUDEPICTURE "https://example.test/a.png"}}}',
     ),
     declaredMimeType: "application/rtf",
     fileName: "f.rtf",
@@ -235,6 +235,13 @@ describe("benign fixtures match no rule", () => {
       buffer: encoder.encode("Smlouva o dílo\nArticle 1\n"),
       declaredMimeType: "text/plain",
       fileName: "notes.txt",
+    }),
+    "rtf body text and hyperlink field": () => ({
+      buffer: encoder.encode(
+        '{\\rtf1 important link{\\field{\\*\\fldinst HYPERLINK "https://example.test/terms"}}}',
+      ),
+      declaredMimeType: "application/rtf",
+      fileName: "f.rtf",
     }),
   };
 

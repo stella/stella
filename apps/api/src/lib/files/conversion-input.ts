@@ -1,4 +1,7 @@
+import { panic } from "better-result";
+
 import { loadDocxArchive } from "@/api/lib/docx-archive";
+import { DOCUMENT_METADATA_ENTRY_MAX_BYTES } from "@/api/lib/files/document-properties";
 import type { ConvertibleMime } from "@/api/lib/files/pdf-derivative-policy";
 
 export type ConversionInputResult =
@@ -15,15 +18,84 @@ const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 const latin1 = (bytes: Uint8Array): string =>
   new TextDecoder("windows-1252").decode(bytes);
 
-const hasNetworkLocation = (value: string): boolean => {
-  const normalized = value.trim().toLowerCase();
-  return (
-    normalized.startsWith("//") ||
-    normalized.startsWith("http:") ||
-    normalized.startsWith("https:") ||
-    normalized.startsWith("ftp:") ||
-    normalized.startsWith("file:")
-  );
+const CHARACTER_REFERENCES: Readonly<Record<string, string>> = {
+  amp: "&",
+  apos: "'",
+  colon: ":",
+  gt: ">",
+  lt: "<",
+  quot: '"',
+};
+
+const decodeCharacterReferences = (value: string): string => {
+  let decoded = "";
+  let cursor = 0;
+  while (cursor < value.length) {
+    if (value[cursor] !== "&") {
+      decoded += value[cursor];
+      cursor++;
+      continue;
+    }
+    const end = value.indexOf(";", cursor + 1);
+    if (end === -1) {
+      decoded += value[cursor];
+      cursor++;
+      continue;
+    }
+    const reference = value.slice(cursor + 1, end);
+    let replacement = CHARACTER_REFERENCES[reference.toLowerCase()];
+    const radix =
+      reference.startsWith("#x") || reference.startsWith("#X") ? 16 : 10;
+    const digits = radix === 16 ? reference.slice(2) : reference.slice(1);
+    if (reference.startsWith("#")) {
+      const code = Number.parseInt(digits, radix);
+      replacement =
+        Number.isFinite(code) && code > 0 && code <= 0x10_ff_ff
+          ? String.fromCodePoint(code)
+          : undefined;
+    }
+    decoded += replacement ?? value.slice(cursor, end + 1);
+    cursor = end + 1;
+  }
+  return decoded;
+};
+
+const isSchemeCharacter = (character: string): boolean =>
+  (character >= "a" && character <= "z") ||
+  (character >= "0" && character <= "9") ||
+  character === "+" ||
+  character === "-" ||
+  character === ".";
+
+const isLocalReference = (value: string): boolean => {
+  let normalized = "";
+  for (const character of decodeCharacterReferences(value)) {
+    const code = character.codePointAt(0) ?? 0;
+    if (code > 0x1f && code !== 0x7f) {
+      normalized += character;
+    }
+  }
+  normalized = normalized.trim().toLowerCase();
+  if (
+    normalized.startsWith("#") ||
+    normalized.startsWith("data:") ||
+    normalized.startsWith("cid:")
+  ) {
+    return true;
+  }
+  if (normalized.startsWith("//") || normalized.startsWith("\\\\")) {
+    return false;
+  }
+  const colon = normalized.indexOf(":");
+  if (colon <= 0 || normalized[0] < "a" || normalized[0] > "z") {
+    return true;
+  }
+  for (let index = 1; index < colon; index++) {
+    if (!isSchemeCharacter(normalized[index] ?? "")) {
+      return true;
+    }
+  }
+  return false;
 };
 
 const attributeValue = (tag: string, name: string): string | null => {
@@ -99,7 +171,7 @@ const cssHasExternalReference = (source: string): boolean => {
       if (quote === '"' || quote === "'") {
         valueAt++;
       }
-      if (hasNetworkLocation(lower.slice(valueAt))) {
+      if (!isLocalReference(lower.slice(valueAt).split(/[\s;)]/u)[0] ?? "")) {
         return true;
       }
       at = valueAt + 1;
@@ -123,19 +195,26 @@ const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
       return true;
     }
     const attributes = ["src", "poster", "data", "background"];
-    if (lower.startsWith("<link")) {
-      attributes.push("href");
+    if (
+      lower.startsWith("<link") ||
+      lower.startsWith("<embed") ||
+      lower.startsWith("<input") ||
+      lower.startsWith("<image")
+    ) {
+      attributes.push("href", "xlink:href");
     }
     for (const name of attributes) {
       const value = attributeValue(tag, name);
-      if (value !== null && hasNetworkLocation(value)) {
+      if (value !== null && !isLocalReference(value)) {
         return true;
       }
     }
     const srcset = attributeValue(tag, "srcset");
     if (
       srcset !== null &&
-      srcset.split(",").some((part) => hasNetworkLocation(part.trim()))
+      srcset
+        .split(",")
+        .some((part) => !isLocalReference(part.trim().split(/\s/u)[0] ?? ""))
     ) {
       return true;
     }
@@ -159,56 +238,251 @@ const relationshipHasExternalReference = (source: string): boolean => {
   return false;
 };
 
+const firstTokenMatches = (
+  value: string,
+  keywords: ReadonlySet<string>,
+): boolean => {
+  let cursor = 0;
+  while (/\s/u.test(value[cursor] ?? "")) {
+    cursor++;
+  }
+  let end = cursor;
+  while (/[a-z]/iu.test(value[end] ?? "")) {
+    end++;
+  }
+  return keywords.has(value.slice(cursor, end).toUpperCase());
+};
+
+const OOXML_FIELD_KEYWORDS: ReadonlySet<string> = new Set([
+  "INCLUDEPICTURE",
+  "INCLUDETEXT",
+  "LINK",
+]);
+
+const ooxmlFieldHasExternalReference = (source: string): boolean => {
+  for (const tag of tags(source)) {
+    if (!tag.toLowerCase().startsWith("<w:fldsimple")) {
+      continue;
+    }
+    const instruction = attributeValue(tag, "w:instr");
+    if (
+      instruction !== null &&
+      firstTokenMatches(instruction, OOXML_FIELD_KEYWORDS)
+    ) {
+      return true;
+    }
+  }
+  const lower = source.toLowerCase();
+  let cursor = 0;
+  while ((cursor = lower.indexOf("<w:instrtext", cursor)) !== -1) {
+    const start = source.indexOf(">", cursor);
+    if (start === -1) {
+      break;
+    }
+    const end = lower.indexOf("</w:instrtext>", start + 1);
+    if (end === -1) {
+      break;
+    }
+    if (
+      firstTokenMatches(
+        decodeCharacterReferences(source.slice(start + 1, end)),
+        OOXML_FIELD_KEYWORDS,
+      )
+    ) {
+      return true;
+    }
+    cursor = end + 14;
+  }
+  return false;
+};
+
+const isOoxmlInspectedPath = (path: string): boolean => {
+  if (path.endsWith(".rels") || path === "word/document.xml") {
+    return true;
+  }
+  if (!path.startsWith("word/")) {
+    return false;
+  }
+  const name = path.slice("word/".length);
+  return (
+    (name.startsWith("header") || name.startsWith("footer")) &&
+    name.endsWith(".xml")
+  );
+};
+
+const isOdfInspectedPath = (path: string): boolean =>
+  path === "content.xml" ||
+  path === "styles.xml" ||
+  (path.endsWith("/content.xml") && path.includes("/"));
+
+type InspectedPart =
+  | { kind: "missing" }
+  | { kind: "too_large" }
+  | { kind: "source"; value: string };
+
+const readInspectedPart = async (
+  archive: Awaited<ReturnType<typeof loadDocxArchive>>,
+  path: string,
+): Promise<InspectedPart> => {
+  const entry = archive.zip.file(path);
+  if (entry === null) {
+    return { kind: "missing" };
+  }
+  return await new Promise<InspectedPart>((resolve, reject) => {
+    const stream = entry.nodeStream("nodebuffer");
+    const chunks: Buffer[] = [];
+    let size = 0;
+    stream.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > DOCUMENT_METADATA_ENTRY_MAX_BYTES) {
+        stream.destroy();
+        resolve({ kind: "too_large" });
+        return;
+      }
+      chunks.push(chunk);
+    });
+    stream.on("end", () =>
+      resolve({
+        kind: "source",
+        value: Buffer.concat(chunks, size).toString("utf-8"),
+      }),
+    );
+    stream.on("error", reject);
+  });
+};
+
 const archiveHas = async (
   bytes: Uint8Array,
+  select: (path: string) => boolean,
   inspect: (path: string, source: string) => boolean,
 ): Promise<boolean> => {
   const archive = await loadDocxArchive(bytes);
-  const paths = Object.keys(archive.zip.files);
-  for (const path of paths) {
-    const source = await archive.readEntryString(path);
-    if (source !== null && inspect(path, source)) {
-      return true;
+  const selectedPaths = Object.keys(archive.zip.files).filter(select);
+  for (const path of selectedPaths) {
+    const part = await readInspectedPart(archive, path);
+    switch (part.kind) {
+      case "missing":
+        break;
+      case "too_large":
+        return true;
+      case "source":
+        if (inspect(path, part.value)) {
+          return true;
+        }
+        break;
+      default:
+        part satisfies never;
+        panic("Unexpected inspected part");
     }
   }
   return false;
 };
 
 const ooxmlHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
-  await archiveHas(
-    bytes,
-    (path, source) =>
-      path.endsWith(".rels") && relationshipHasExternalReference(source),
+  await archiveHas(bytes, isOoxmlInspectedPath, (path, source) =>
+    path.endsWith(".rels")
+      ? relationshipHasExternalReference(source)
+      : ooxmlFieldHasExternalReference(source),
   );
 
 const odfHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
-  await archiveHas(bytes, (_path, source) => {
+  await archiveHas(bytes, isOdfInspectedPath, (_path, source) => {
     for (const tag of tags(source)) {
       if (tag.toLowerCase().startsWith("<text:a")) {
         continue;
       }
       const href = attributeValue(tag, "xlink:href");
-      if (href !== null && hasNetworkLocation(href)) {
+      if (href !== null && !isLocalReference(href)) {
         return true;
       }
     }
     return false;
   });
 
+const RTF_FIELD_KEYWORDS: ReadonlySet<string> = new Set([
+  "INCLUDEPICTURE",
+  "INCLUDETEXT",
+  "IMPORT",
+  "LINK",
+]);
+
 const rtfHasExternalReference = (bytes: Uint8Array): boolean => {
-  const source = latin1(bytes).toUpperCase();
-  return ["INCLUDEPICTURE", "INCLUDETEXT", "IMPORT", " LINK", "\\OBJLINK"].some(
-    (field) => source.includes(field),
-  );
+  const source = latin1(bytes);
+  const lower = source.toLowerCase();
+  if (lower.includes("\\objlink")) {
+    return true;
+  }
+  const marker = "{\\*\\fldinst";
+  let cursor = 0;
+  while ((cursor = lower.indexOf(marker, cursor)) !== -1) {
+    let end = cursor + marker.length;
+    let depth = 1;
+    while (end < source.length && depth > 0) {
+      if (source[end] === "{" && source[end - 1] !== "\\") {
+        depth++;
+      }
+      if (source[end] === "}" && source[end - 1] !== "\\") {
+        depth--;
+      }
+      end++;
+    }
+    if (
+      firstTokenMatches(
+        source.slice(cursor + marker.length, end - 1),
+        RTF_FIELD_KEYWORDS,
+      )
+    ) {
+      return true;
+    }
+    cursor = end;
+  }
+  return false;
 };
 
-const docHasExternalReference = (bytes: Uint8Array): boolean => {
-  const singleByte = latin1(bytes).toUpperCase();
-  const wide = new TextDecoder("utf-16le").decode(bytes).toUpperCase();
-  return ["INCLUDEPICTURE", "INCLUDETEXT", " LINK"].some(
-    (field) => singleByte.includes(field) || wide.includes(field),
-  );
+const LEGACY_FIELD_KEYWORDS: ReadonlySet<string> = new Set([
+  "INCLUDEPICTURE",
+  "INCLUDETEXT",
+  "LINK",
+]);
+const DOC_FIELD_KEYWORDS: ReadonlySet<string> = new Set([
+  ...LEGACY_FIELD_KEYWORDS,
+  "IMPORT",
+]);
+
+const binaryFieldsMatch = (
+  bytes: Uint8Array,
+  wide: boolean,
+  keywords: ReadonlySet<string>,
+): boolean => {
+  const step = wide ? 2 : 1;
+  for (let cursor = 0; cursor + step <= bytes.length; cursor += step) {
+    if (bytes[cursor] !== 0x13 || (wide && bytes[cursor + 1] !== 0)) {
+      continue;
+    }
+    const field: number[] = [];
+    cursor += step;
+    while (cursor + step <= bytes.length) {
+      if (bytes[cursor] === 0x14 && (!wide || bytes[cursor + 1] === 0)) {
+        break;
+      }
+      if (!wide || bytes[cursor + 1] === 0) {
+        field.push(bytes[cursor] ?? 0);
+      }
+      cursor += step;
+    }
+    if (firstTokenMatches(latin1(new Uint8Array(field)), keywords)) {
+      return true;
+    }
+  }
+  return false;
 };
+
+const docHasExternalReference = (bytes: Uint8Array): boolean =>
+  binaryFieldsMatch(bytes, false, DOC_FIELD_KEYWORDS) ||
+  binaryFieldsMatch(bytes, true, DOC_FIELD_KEYWORDS);
+const legacyOfficeHasExternalReference = (bytes: Uint8Array): boolean =>
+  binaryFieldsMatch(bytes, false, LEGACY_FIELD_KEYWORDS) ||
+  binaryFieldsMatch(bytes, true, LEGACY_FIELD_KEYWORDS);
 
 const safe = (): false => false;
 
@@ -220,8 +494,8 @@ const DETECTORS = {
     ooxmlHasExternalReference,
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
     ooxmlHasExternalReference,
-  "application/vnd.ms-excel": docHasExternalReference,
-  "application/vnd.ms-powerpoint": docHasExternalReference,
+  "application/vnd.ms-excel": legacyOfficeHasExternalReference,
+  "application/vnd.ms-powerpoint": legacyOfficeHasExternalReference,
   "application/vnd.oasis.opendocument.presentation": odfHasExternalReference,
   "application/vnd.oasis.opendocument.spreadsheet": odfHasExternalReference,
   "application/vnd.oasis.opendocument.text": odfHasExternalReference,

@@ -14,6 +14,9 @@ const zip = async (path: string, value: string): Promise<Uint8Array> =>
     }),
   );
 
+const binaryField = (instruction: string): Uint8Array =>
+  new Uint8Array([0x13, ...encode(instruction), 0x14]);
+
 type Fixture = { mime: ConvertibleMime; remote: Uint8Array; local: Uint8Array };
 
 const fixtures = {
@@ -45,7 +48,7 @@ const fixtures = {
       '{\\rtf1{\\field{\\*\\fldinst INCLUDEPICTURE "https://example.test/a.png"}}}',
     ),
     local: encode(
-      '{\\rtf1{\\field{\\*\\fldinst HYPERLINK "https://example.test/terms"}}{\\pict 89504e47}}',
+      '{\\rtf1 important{\\field{\\*\\fldinst HYPERLINK "https://example.test/terms"}}{\\pict 89504e47}}',
     ),
   },
   html: {
@@ -66,8 +69,8 @@ const fixtures = {
   },
   doc: {
     mime: "application/msword",
-    remote: encode("INCLUDETEXT https://example.test/content"),
-    local: encode("HYPERLINK https://example.test/terms"),
+    remote: binaryField("INCLUDETEXT https://example.test/content"),
+    local: encode("important link HYPERLINK https://example.test/terms"),
   },
 } as const satisfies Record<string, Fixture>;
 
@@ -91,6 +94,37 @@ describe("document conversion input", () => {
       });
     },
   );
+
+  test.each([
+    '<img src="&#104;ttp&colon;//example.test/a.png">',
+    '<img src="ht\tp://example.test/a.png">',
+    '<img src="\\\\example.test\\a.png">',
+    '<img src="smb://example.test/a.png">',
+  ])("refuses non-local HTML references", async (source) => {
+    expect(await checkConversionInput("text/html", encode(source))).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format: "text/html",
+    });
+  });
+
+  test("refuses OOXML field instructions for remote content", async () => {
+    const input = await zip(
+      "word/document.xml",
+      "<w:document><w:instrText>INCLUDEPICTURE https://example.test/a.png</w:instrText></w:document>",
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  });
 
   test("covers every document format outcome", () => {
     const formats = new Set(Object.values(fixtures).map(({ mime }) => mime));

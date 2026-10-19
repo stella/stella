@@ -57,7 +57,7 @@ rule html_external_reference
         description = "HTML contains an external resource reference"
         verdict = "suspicious"
     strings:
-        $attribute = /<(?:img|script|iframe|frame|video|audio|source|object|body|table|td)[^>]{0,1024}(?:src|srcset|poster|data|background)[\s]{0,8}=[\s]{0,8}("|')(?:https?:|ftp:|file:|\/\/)/ ascii nocase
+        $attribute = /<(?:img|image|script|iframe|frame|video|audio|source|object|embed|input|body|table|td)[^>]{0,1024}(?:src|srcset|poster|data|background|href|xlink:href)[\s]{0,8}=[\s]{0,8}("|')(?:https?:|ftp:|file:|\/\/)/ ascii nocase
         $link = /<link[^>]{0,1024}href[\s]{0,8}=[\s]{0,8}("|')(?:https?:|ftp:|file:|\/\/)/ ascii nocase
         $base = /<base(?:[\s>])/ ascii nocase
         $refresh = /<meta[^>]{0,1024}http-equiv[\s]{0,8}=[\s]{0,8}("|')refresh("|')/ ascii nocase
@@ -84,9 +84,10 @@ rule rtf_external_reference
         verdict = "suspicious"
     strings:
         $header = "{\\rtf" ascii nocase
-        $field = /(?:INCLUDEPICTURE|INCLUDETEXT|IMPORT|LINK|\\objlink)/ ascii nocase
+        $field = /\\fldinst[\s]{1,32}(?:INCLUDEPICTURE|INCLUDETEXT|IMPORT|LINK)(?:[\s\}])/ ascii nocase
+        $object_link = "\\objlink" ascii nocase
     condition:
-        $header and $field
+        $header and ($field or $object_link)
 }
 
 rule ooxml_dde
