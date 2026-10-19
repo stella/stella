@@ -1,3 +1,4 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { AT_RIS_HEADNOTE_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/at-courts.metadata-urls";
 import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";

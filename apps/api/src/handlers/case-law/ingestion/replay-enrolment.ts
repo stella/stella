@@ -1,3 +1,4 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { panic } from "better-result";
 
 import { defaultConfig, type HealthConfig } from "@stll/db-load-gate/health";

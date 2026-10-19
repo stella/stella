@@ -1,3 +1,4 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 /** Adapter keys for all supported court data sources. */
 export const ADAPTER_KEYS = {
   CZ_REGIONAL: "cz-regional",

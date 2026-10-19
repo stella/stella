@@ -1,3 +1,4 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: Known-gap declarations serve coverage reads only; manifest parser policies and parsed decision output are unchanged.
 import { panic } from "better-result";
 

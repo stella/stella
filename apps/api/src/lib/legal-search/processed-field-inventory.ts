@@ -1,3 +1,4 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: declarations about parser output; no parser reads this module.
 /**
  * What each case-law source's parsed decision carries, field by field.
