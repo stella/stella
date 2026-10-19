@@ -1323,8 +1323,10 @@ jobs:
           CHANGED_FILES: ${{ steps.changed-files.outputs.changed_files }}
         run: |
           mapfile -t changed_files < <(jq -r '.[]' <<< "$CHANGED_FILES")
-          specs=$(bun scripts/ui-playground-selection.ts "${changed_files[@]}") || \
+          specs=$(bun scripts/ui-playground-selection.ts "${changed_files[@]}") || specs=""
+          if ! jq -e 'type == "array" and all(.[]; type == "string")' <<< "$specs" >/dev/null; then
             specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          fi
           echo "specs=$specs" >> "$GITHUB_OUTPUT"
 
       - name: Plan query performance scope
@@ -3306,18 +3308,13 @@ jobs:
         run: echo "required=$REQUIRED" >> "$GITHUB_OUTPUT"
 
       - name: Check UI browser test scope
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: github.event_name != 'pull_request' && needs.ci-plan.outputs.package_checks_required == 'true'
         id: ui-browser-tests
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
-          SELECTED_SPECS: ${{ needs.ci-plan.outputs.ui_playground_specs }}
         run: |
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            [[ "$SELECTED_SPECS" != '[]' ]] && echo "required=true" >> "$GITHUB_OUTPUT" || echo "required=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "${HEAVY_ONLY:-false}" == true ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
             .github/actions/setup-playwright \
             .github/workflows/ci.yml \
@@ -3361,6 +3358,18 @@ jobs:
           fi
           echo "required=false" >> "$GITHUB_OUTPUT"
 
+      - name: Check UI playground test scope
+        id: ui-playground-tests
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SELECTED_SPECS: ${{ needs.ci-plan.outputs.ui_playground_specs }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" && "$SELECTED_SPECS" != '[]' ]]; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "required=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check extension browser test scope
         if: github.event_name != 'pull_request' && needs.ci-plan.outputs.package_checks_required == 'true'
         id: extension-browser-tests
@@ -3386,7 +3395,7 @@ jobs:
 
       - name: Setup Bun
         timeout-minutes: 2
-        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.ui-playground-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         env:
           NPM_TOKEN: ""
         # The Playwright image has npm but no unzip. Install Bun's native
@@ -3404,13 +3413,13 @@ jobs:
 
       # setup-bun reuses the matching ~/.bun/bin/bun above, avoiding unzip.
       - name: Restore Bun install cache
-        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.ui-playground-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
       - name: Turbo remote cache
-        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.ui-playground-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
@@ -3419,7 +3428,7 @@ jobs:
           use-relative-cache-path: "true"
 
       - name: Install dependencies
-        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.ui-playground-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
@@ -3429,7 +3438,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Prepare environment
-        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.ui-playground-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         # `cp`, not `mv`: renaming the tracked .env.example would dirty the
         # working tree in apps/api and apps/web. .env is gitignored.
         run: |
@@ -3440,7 +3449,7 @@ jobs:
 
       - name: Install UI browser test runtime
         timeout-minutes: 2
-        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.ui-playground-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: ./.github/actions/setup-playwright
         with:
           # The pinned image includes both desktop engines and screenshot fonts.
@@ -3472,7 +3481,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test UI playground visuals
-        if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'ui' && (steps.ui-browser-tests.outputs.required == 'true' || steps.ui-playground-tests.outputs.required == 'true')
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-playground-visuals.json
           SELECTED_SPECS: ${{ needs.ci-plan.outputs.ui_playground_specs }}

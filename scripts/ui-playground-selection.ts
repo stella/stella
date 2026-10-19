@@ -23,6 +23,22 @@ export type PlaygroundInventory = {
 const normalize = (file: string) =>
   file.replaceAll("\\", "/").replace(/^\.\//u, "");
 
+const importExportTarget = (value: unknown): string | undefined => {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+  if ("import" in value) {
+    return importExportTarget(value.import);
+  }
+  if ("default" in value) {
+    return importExportTarget(value.default);
+  }
+  return undefined;
+};
+
 export const registeredVisualNames = (source: string): ReadonlySet<string> => {
   const body =
     /export const visualRegistry\s*=\s*\{(?<body>[\s\S]*?)\n\}\s*as const/u.exec(
@@ -120,15 +136,42 @@ const resolveImport = (
   importer: string,
   root: string,
 ): { file?: string; internal: boolean } => {
+  const importPath = imported.split("?", 1)[0] ?? imported;
   let candidate: string | undefined;
-  if (imported.startsWith(".")) {
-    candidate = path.posix.join(path.posix.dirname(importer), imported);
-  } else if (imported.startsWith("@/")) {
-    candidate = `${WEB_SOURCE}/${imported.slice(2)}`;
+  if (importPath.startsWith(".")) {
+    candidate = path.posix.join(path.posix.dirname(importer), importPath);
+  } else if (importPath.startsWith("@/")) {
+    candidate = `${WEB_SOURCE}/${importPath.slice(2)}`;
   } else {
-    const workspace = /^@stll\/([^/]+)(?:\/(.*))?$/u.exec(imported);
+    const workspace = /^@stll\/([^/]+)(?:\/(.*))?$/u.exec(importPath);
     if (workspace !== null) {
-      const packageRoot = `packages/${workspace[1]}`;
+      const packagesDirectory = path.join(root, "packages");
+      if (!existsSync(packagesDirectory)) {
+        return { internal: true };
+      }
+      const packageRoot = readdirSync(packagesDirectory, {
+        withFileTypes: true,
+      })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => `packages/${entry.name}`)
+        .find((directory) => {
+          const manifestFile = path.join(root, directory, "package.json");
+          if (!existsSync(manifestFile)) {
+            return false;
+          }
+          const manifest: unknown = JSON.parse(
+            readFileSync(manifestFile, "utf-8"),
+          );
+          return (
+            typeof manifest === "object" &&
+            manifest !== null &&
+            "name" in manifest &&
+            manifest.name === `@stll/${workspace[1]}`
+          );
+        });
+      if (packageRoot === undefined) {
+        return { internal: false };
+      }
       const packageJson = path.join(root, packageRoot, "package.json");
       if (existsSync(packageJson)) {
         const manifest: unknown = JSON.parse(
@@ -145,9 +188,11 @@ const resolveImport = (
           const exported = Object.entries(manifest.exports).find(
             ([key]) => key === subpath,
           )?.[1];
-          if (typeof exported === "string") {
-            candidate = `${packageRoot}/${exported}`;
+          const target = importExportTarget(exported);
+          if (target === undefined) {
+            return { internal: true };
           }
+          candidate = `${packageRoot}/${target}`;
         }
       }
       candidate ??= `${packageRoot}/src${workspace[2] === undefined ? "/index" : `/${workspace[2]}`}`;
@@ -197,6 +242,8 @@ export const staticImportClosure = (
       const resolved = resolveImport(imported, file, root);
       if (resolved.file !== undefined) {
         pending.push(resolved.file);
+      } else if (resolved.internal) {
+        complete = false;
       }
     }
   }
@@ -240,6 +287,12 @@ export const readPlaygroundInventory = (
 export const isSharedPlaygroundHarness = (file: string): boolean => {
   const normalized = normalize(file);
   if (
+    normalized === "bun.lock" ||
+    normalized.startsWith("patches/") ||
+    /^apps\/web\/(?:vite|tailwind|postcss)\.config\.[^/]+$/u.test(normalized) ||
+    normalized === "apps/web/index.html" ||
+    normalized.startsWith("apps/web/public/") ||
+    /^packages\/[^/]+\/package\.json$/u.test(normalized) ||
     normalized === "apps/web/e2e/playwright.ui-playground.config.ts" ||
     normalized === METADATA ||
     normalized === REGISTRY ||

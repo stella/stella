@@ -4555,11 +4555,22 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
   );
   expect(new Set(matrixSuites)).toEqual(new Set(["desktop", "ui"]));
   expect(matrixSuites).toHaveLength(2);
-  expect(
-    evaluate(browser.strategy.matrix.suite, {
-      values: { "github.event_name": "pull_request" },
-    }),
-  ).toEqual(["desktop"]);
+  for (const [desktop, specs, expected] of [
+    ["true", '["spec"]', ["desktop", "ui"]],
+    ["false", '["spec"]', ["ui"]],
+    ["true", "[]", ["desktop"]],
+    ["false", "[]", ["desktop"]],
+  ] as const) {
+    expect(
+      evaluate(browser.strategy.matrix.suite, {
+        values: {
+          "github.event_name": "pull_request",
+          "needs.ci-plan.outputs.desktop_browser_required": desktop,
+          "needs.ci-plan.outputs.ui_playground_specs": specs,
+        },
+      }),
+    ).toEqual(expected);
+  }
   const suites = browser.steps.filter(
     ({ run }) => run?.includes("test:browser") || run?.includes("test:e2e"),
   );

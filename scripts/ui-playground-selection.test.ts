@@ -14,6 +14,7 @@ import {
   readPlaygroundInventory,
   replaySelection,
   selectGeometrySpecs,
+  staticImportClosure,
 } from "./ui-playground-selection";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -108,4 +109,66 @@ test("replay summarizes how many change sets select specs", () => {
   expect(summary.runs).toBe(2);
   expect(summary.selecting).toBe(1);
   expect(summary.meanSpecs).toBeGreaterThan(0);
+});
+
+test("unresolved internal imports fail the closure closed", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ui-playground-imports-"));
+  const write = (file: string, source: string) => {
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    writeFileSync(path.join(root, file), source);
+  };
+  try {
+    write("apps/web/src/relative.ts", 'import "./missing";');
+    write("apps/web/src/alias.ts", 'import "@/missing";');
+    write("apps/web/src/conditional.ts", 'import "@stll/conditional";');
+    write(
+      "packages/different-directory/package.json",
+      JSON.stringify({
+        name: "@stll/renamed",
+        exports: { ".": "./src/index.ts" },
+      }),
+    );
+    write(
+      "packages/different-directory/src/index.ts",
+      "export const ok = true;",
+    );
+    write(
+      "packages/conditional/package.json",
+      JSON.stringify({
+        name: "@stll/conditional",
+        exports: { ".": { browser: "./src/index.ts" } },
+      }),
+    );
+    expect(staticImportClosure("apps/web/src/relative.ts", root).complete).toBe(
+      false,
+    );
+    expect(staticImportClosure("apps/web/src/alias.ts", root).complete).toBe(
+      false,
+    );
+    expect(
+      staticImportClosure("apps/web/src/conditional.ts", root).complete,
+    ).toBe(false);
+    write("apps/web/src/renamed.ts", 'import "@stll/renamed";');
+    expect(staticImportClosure("apps/web/src/renamed.ts", root)).toMatchObject({
+      complete: true,
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("render inputs outside source select every geometry spec", () => {
+  const all = readPlaygroundInventory(ROOT).specs;
+  for (const file of [
+    "bun.lock",
+    "patches/example.patch",
+    "apps/web/vite.config.ts",
+    "apps/web/tailwind.config.js",
+    "apps/web/postcss.config.mjs",
+    "apps/web/index.html",
+    "apps/web/public/icon.svg",
+    "packages/ui/package.json",
+  ]) {
+    expect(selectGeometrySpecs([file], ROOT), file).toEqual(all);
+  }
 });
