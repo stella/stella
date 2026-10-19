@@ -205,6 +205,15 @@ export const listGatewayMcpToolDefinitions = async ({
   }
 
   return definitions
+    .filter(
+      (definition) =>
+        mcpToolAuthorityRefusal({
+          authority: context,
+          definition,
+          toolName: definition.name,
+          userEmail: context.userEmail,
+        }) === null,
+    )
     .filter((definition) =>
       isMcpDescriptorFeatureEnabled({
         context,
@@ -274,7 +283,10 @@ export const getGatewayMcpToolDefinition = async ({
     });
     return externalTool === null
       ? undefined
-      : externalToolDefinition(externalTool);
+      : authorizedDynamicDefinition(
+          context,
+          externalToolDefinition(externalTool),
+        );
   }
 
   if (!isSkillToolName(toolName)) {
@@ -285,8 +297,21 @@ export const getGatewayMcpToolDefinition = async ({
   // A `manual` skill is served as a prompt, never as a tool.
   return skill === null || !modelMayStartUninvoked(skill)
     ? undefined
-    : skillToolDefinition(skill);
+    : authorizedDynamicDefinition(context, skillToolDefinition(skill));
 };
+
+const authorizedDynamicDefinition = (
+  context: McpRequestContext,
+  definition: McpToolDefinition,
+): McpToolDefinition | undefined =>
+  mcpToolAuthorityRefusal({
+    authority: context,
+    definition,
+    toolName: definition.name,
+    userEmail: context.userEmail,
+  }) === null
+    ? definition
+    : undefined;
 
 /**
  * A third-party connector tool is served exactly as its upstream declared it:

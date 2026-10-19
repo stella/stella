@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 
-import { normalizeCountry } from "@stll/agent-input";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   type PublicCaseLawCountry,
@@ -20,7 +19,6 @@ import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { documentHydrationFor } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
@@ -156,24 +154,12 @@ export const rankCorpusCountries = <TCountry extends string>(
  * select.
  */
 export const resolveCompatCorpusCountries = async (
-  context: McpRequestContext,
-): Promise<CompatCorpusCountries> => {
-  const practised = (await loadPracticeJurisdictions(context)).flatMap(
-    ({ countryCode, isPrimary }) => {
-      // The column stores alpha-2 and the corpus keys on alpha-3; the shared
-      // country reader is what converts between them everywhere else too.
-      const normalized = normalizeCountry(countryCode, { spelling: "alpha-3" });
-      return normalized.ok
-        ? [{ alpha3: normalized.value.alpha3, isPrimary }]
-        : [];
-    },
-  );
-
-  return {
-    caseLaw: rankCorpusCountries(PUBLIC_CASE_LAW_COUNTRIES, practised),
-    legislation: rankCorpusCountries(PUBLIC_LEGISLATION_COUNTRIES, practised),
-  };
-};
+  _context: McpRequestContext,
+): Promise<CompatCorpusCountries> =>
+  await Promise.resolve({
+    caseLaw: rankCorpusCountries(PUBLIC_CASE_LAW_COUNTRIES, []),
+    legislation: rankCorpusCountries(PUBLIC_LEGISLATION_COUNTRIES, []),
+  });
 
 /**
  * A decision's heading: the court that decided it and the docket it decided

@@ -51,7 +51,7 @@ const skillRows = [
 
 const contextFor = (memberRole: "external" | "owner"): McpRequestContext => {
   const safeDb: McpRequestContext["safeDb"] = async (run) =>
-    await Result.ok(
+    Result.ok(
       await run(
         asTestRaw<Transaction>({
           select: (selection: Record<string, unknown>) => {

@@ -5,6 +5,7 @@ import type {
 import type * as v from "valibot";
 
 import type { SearchPaginationOutcome } from "@stll/api-contract/search";
+import type { PermissionInput } from "@stll/permissions";
 
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
@@ -13,7 +14,10 @@ import type {
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ALL_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type {
+  McpRequestContext,
+  PublicMcpHandlerContext,
+} from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import type {
   McpReadToolAuthority,
@@ -613,6 +617,30 @@ export type TypedMcpToolHandler<TData> = (options: {
   args: Record<string, unknown>;
   context: McpRequestContext;
 }) => TypedMcpToolHandlerResult<TData>;
+
+export type PublicMcpToolHandler<TData = unknown> = (options: {
+  args: Record<string, unknown>;
+  context: PublicMcpHandlerContext;
+}) => McpToolResponse<TData> | Promise<McpToolResponse<TData>>;
+
+type PublicReadDefinition = McpToolDefinition & {
+  access: "read";
+  authority: { kind: "public"; reason: string };
+};
+type TenantReadDefinition = McpToolDefinition & {
+  access: "read";
+  authority: { kind: "tenant"; permissions: PermissionInput };
+};
+
+export const definePublicReadTool = <TData>(
+  definition: PublicReadDefinition,
+  handler: PublicMcpToolHandler<TData>,
+) => ({ ...definition, handler });
+
+export const defineTenantReadTool = <TData>(
+  definition: TenantReadDefinition,
+  handler: McpToolHandler<TData>,
+) => ({ ...definition, handler });
 
 type TypedHandlerData<THandler> =
   THandler extends McpToolHandler<infer TData> ? TData : never;

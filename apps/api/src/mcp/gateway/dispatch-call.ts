@@ -31,6 +31,10 @@ import {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
 } from "@/api/mcp/gateway/external-tools";
+import {
+  externalToolDefinition,
+  skillToolDefinition,
+} from "@/api/mcp/gateway/list-tools";
 import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
 import {
   readSkillTool,
@@ -42,6 +46,7 @@ import type {
   SkillToolRead,
 } from "@/api/mcp/gateway/skills";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import { mcpToolAuthorityRefusal } from "@/api/mcp/tool-authority";
 import type {
   InternalToolErrorResult,
   InternalToolResult,
@@ -151,6 +156,7 @@ export const dispatchGatewayToolCall = async ({
       result: await dependencies.callGatewayExternalMcpTool({
         args,
         context,
+        definitionFor: externalToolDefinition,
         toolName,
       }),
     };
@@ -204,6 +210,15 @@ export const dispatchGatewayToolCall = async ({
   }
 
   const skill = resolved;
+  const refusal = mcpToolAuthorityRefusal({
+    authority: context,
+    definition: skillToolDefinition(skill),
+    toolName,
+    userEmail: context.userEmail,
+  });
+  if (refusal !== null) {
+    return { type: "internal", result: structuredErrorResult(refusal) };
+  }
   const resourcePath = input.output.resource ?? null;
   const auditRead = async (outcome: SkillReadOutcome) =>
     await dependencies.recordSkillReadAudit({

@@ -25,7 +25,10 @@ import type {
   searchDecisionsHandler,
 } from "@/api/handlers/case-law/decisions/search";
 import type { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
-import type { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import type {
+  admitLawRead,
+  LawReadAdmission,
+} from "@/api/handlers/legal-resolve/admission";
 import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import type {
@@ -317,6 +320,37 @@ export type McpRequestContext = {
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
   userEmail: string;
+};
+
+/** The deliberately small execution context available to public-law tools. */
+export type PublicMcpHandlerContext = {
+  lawReadAdmission: LawReadAdmission;
+  thirdPartyOutboundPermit?: ThirdPartyOutboundPermit;
+  testDependencies?: Pick<
+    NonNullable<McpRequestContext["testDependencies"]>,
+    | "getLawTextBlock"
+    | "listCaseLawProvisionDecisions"
+    | "listStatuteVersionsHandler"
+    | "readCaseLawCourtNames"
+    | "readCaseLawCoverageHandler"
+    | "readDecisionReaderSource"
+    | "readGatedDecisionCitationDigest"
+    | "readGatedDecisionCitations"
+    | "readGatedDecisionWithDocument"
+    | "readLegislationProvisionVersions"
+    | "readProvisionHistoryHandler"
+    | "readProvisionPreviewHandler"
+    | "readPublicLegislationHandler"
+    | "readVersionBlocks"
+    | "readsSharedPublicLawCorpus"
+    | "resolveDecision"
+    | "resolveLawCitation"
+    | "resolveStatuteExpression"
+    | "resolveStatuteWorkVersion"
+    | "searchConsolidatedLegislation"
+    | "searchDecisionsHandler"
+    | "searchLegislationHandler"
+  >;
 };
 
 /**

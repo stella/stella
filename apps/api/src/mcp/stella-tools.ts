@@ -1335,26 +1335,21 @@ export const STELLA_TOOL_DEFINITIONS = [
   }),
 ] as const satisfies readonly McpToolDefinition[];
 
-const buildOnboardingNextStep = () =>
-  `This organization has no practice jurisdictions yet. Call ` +
-  `${SET_PRACTICE_JURISDICTIONS_TOOL} with \`jurisdictions: [{ country_code, ` +
-  `is_primary }]\` to enable jurisdiction-aware tools, or have the user ` +
-  `complete onboarding at ${getAppBaseUrl()}.`;
+const emptyCaseLawSearchNextStep = {
+  nextStep:
+    "Try a broader query, remove optional filters, or call case_law_coverage to inspect available jurisdictions.",
+} as const;
 
-/**
- * The onboarding step an empty result carries as its `nextStep` while the
- * organization has no practice jurisdictions. It is a field of the tool's own
- * output contract, so the model sees it whichever result representation the
- * host shows. Callers ask only for an empty result.
- */
 const onboardingNextStep = async (
   context: McpRequestContext,
-): Promise<{ nextStep?: string }> => {
-  const jurisdictions = await loadPracticeJurisdictions(context);
-  return jurisdictions.length > 0
+): Promise<{ nextStep?: string }> =>
+  (await loadPracticeJurisdictions(context)).length > 0
     ? {}
-    : { nextStep: buildOnboardingNextStep() };
-};
+    : {
+        nextStep:
+          `Call ${SET_PRACTICE_JURISDICTIONS_TOOL} to configure practice jurisdictions, ` +
+          `or complete onboarding at ${getAppBaseUrl()}.`,
+      };
 
 // The list_matters cursor is the boundary matter id alone; the query
 // resolves its (lastActivityAt, id) in-DB. A malformed id is rejected here
@@ -2629,7 +2624,7 @@ const listSearchCaseLawProvision = async ({
     paginationOutcome: page.paginationOutcome,
     results: merged.map(caseLawSearchResult),
     total: page.total,
-    ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
+    ...(merged.length === 0 ? emptyCaseLawSearchNextStep : {}),
   });
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
 };
@@ -2861,7 +2856,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       : SEARCH_PAGINATION_COMPLETE,
     results: merged.map(caseLawSearchResult),
     total: single?.total ?? SEARCH_TOTAL_NOT_COUNTED,
-    ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
+    ...(merged.length === 0 ? emptyCaseLawSearchNextStep : {}),
   });
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
 };

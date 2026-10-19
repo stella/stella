@@ -102,7 +102,6 @@ import {
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import { withToolAuthChallenge } from "@/api/mcp/tool-auth-challenge";
-import { mcpToolAuthorityRefusal } from "@/api/mcp/tool-authority";
 import { resolveMcpReadClass } from "@/api/mcp/tool-types";
 import type {
   McpReadClass,
@@ -896,18 +895,6 @@ export const createMcpHttpRequestHandler = ({
         missingScope,
         requiredScopes,
       });
-    }
-
-    // Before admission: an unauthorized call must not spend the caller's
-    // action budget, nor be answered with an admission refusal instead.
-    const authorityRefusal = mcpToolAuthorityRefusal({
-      authority: context,
-      definition,
-      toolName,
-      userEmail: context.userEmail,
-    });
-    if (authorityRefusal !== null) {
-      return mcpStructuredErrorResult(authorityRefusal);
     }
 
     const resultDisposition = toolResultDisposition(definition.annotations);

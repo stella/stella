@@ -16,6 +16,7 @@ import {
   callGatewayExternalMcpTool,
   listGatewayExternalMcpTools,
 } from "@/api/mcp/gateway/external-tools";
+import { externalToolDefinition } from "@/api/mcp/gateway/list-tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const loadActiveMcpConnectionsForUserMock = mock();
@@ -183,6 +184,7 @@ describe("external MCP gateway tools", () => {
     const result = await callGatewayExternalMcpTool({
       args: {},
       context,
+      definitionFor: externalToolDefinition,
       toolName: "mcp__registry__lookup",
       dependencies,
     });

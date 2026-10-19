@@ -23,7 +23,11 @@ import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import { consumeMcpGatewayRateLimit } from "@/api/mcp/gateway/rate-limit";
-import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
+import { mcpToolAuthorityRefusal } from "@/api/mcp/tool-authority";
+import type {
+  InternalToolErrorResult,
+  McpToolDefinition,
+} from "@/api/mcp/tool-types";
 import {
   MCP_INTERNAL_ERROR_HINT,
   serializeToolResult,
@@ -148,11 +152,13 @@ export const resolveGatewayExternalMcpTool = async ({
 export const callGatewayExternalMcpTool = async ({
   args,
   context,
+  definitionFor,
   toolName,
   dependencies = defaultDependencies,
 }: {
   args: Record<string, unknown>;
   context: McpRequestContext;
+  definitionFor: (resolved: ResolvedExternalMcpTool) => McpToolDefinition;
   toolName: string;
   dependencies?: ExternalGatewayDependencies;
 }) => {
@@ -178,6 +184,16 @@ export const callGatewayExternalMcpTool = async ({
       message: `Unknown tool: ${toolName}`,
       hint: "Call tools/list for the tools available to this session.",
     });
+  }
+
+  const authorityRefusal = mcpToolAuthorityRefusal({
+    authority: context,
+    definition: definitionFor(resolved),
+    toolName,
+    userEmail: context.userEmail,
+  });
+  if (authorityRefusal !== null) {
+    return mcpStructuredErrorResult(authorityRefusal);
   }
 
   const permit = context.thirdPartyOutboundPermit;
