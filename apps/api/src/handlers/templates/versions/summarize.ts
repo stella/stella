@@ -40,7 +40,7 @@ const config = {
   },
   access: "write",
   params: templateVersionSummarizeParamsSchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 /**

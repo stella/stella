@@ -19,6 +19,7 @@
     "./decision-body-state.logic": "./src/decision-body-state.logic.ts",
     "./decision-text": "./src/decision-text.tsx",
     "./decision-text.logic": "./src/decision-text.logic.ts",
+    "./display-elision-policy": "./src/display-elision-policy.tsx",
     "./document-ast-text": "./src/document-ast-text.tsx",
     "./fallback-legal-anchors": "./src/fallback-legal-anchors.ts",
     "./headnote-block": "./src/headnote-block.tsx",

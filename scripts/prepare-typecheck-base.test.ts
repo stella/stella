@@ -128,6 +128,7 @@ type FallbackOptions = {
   installerArgs?: readonly string[];
   source?: string;
   measurementExit?: number;
+  baseHasRetry?: boolean;
 };
 
 const runFallback = ({
@@ -137,6 +138,7 @@ const runFallback = ({
   installerArgs = [],
   source,
   measurementExit = 0,
+  baseHasRetry = true,
 }: FallbackOptions) => {
   const root = mkdtempSync(path.join(tmpdir(), "typecheck-base-prepared-"));
   try {
@@ -149,9 +151,16 @@ const runFallback = ({
       path.join(base, "apps/api/scripts/generate-capability-runtime.ts"),
       "",
     );
+    if (baseHasRetry) {
+      writeFileSync(
+        path.join(base, "scripts/retry.sh"),
+        '#!/bin/bash\necho "base retry helper used" >&2\nexit 97\n',
+      );
+    }
+    // The helper beside the script under test, as in the current checkout.
     writeFileSync(
-      path.join(base, "scripts/retry.sh"),
-      '#!/bin/bash\nexec "$@"\n',
+      path.join(root, "retry.sh"),
+      readFileSync(path.resolve(import.meta.dir, "retry.sh")),
     );
     for (const [name, stub] of Object.entries({
       "serial-install":
@@ -285,6 +294,12 @@ for (const failure of [
     }
   });
 }
+
+test("a base checkout without the retry helper still installs through the current one", () => {
+  const result = runFallback({ failure: "none", baseHasRetry: false });
+  expect(result.exitCode, result.stderr).toBe(0);
+  expect(result.commands).toContain(`${result.base}:ci --ignore-scripts`);
+});
 
 test("failed exact-base measurement remains fatal after an unavailable recording", () => {
   const result = runFallback({ failure: "lookup", measurementExit: 83 });

@@ -23,7 +23,7 @@ import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import { findDuplicatePositionSourceId } from "@/api/lib/workflow/playbook-positions-validation";
 
@@ -66,11 +66,11 @@ export const prepareReferenceProposal = async function* ({
       }),
     );
   }
-  yield* requireTanStackAIAvailableForRole({
+  yield* requireTanStackAIAvailableForTask({
     dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
-    role: "pdf",
+    task: "pdf",
   });
 
   const targetRef = { ...body.target, workspaceId };
@@ -108,7 +108,7 @@ export const prepareReferenceProposal = async function* ({
   }
 
   const authorization = await authorizeHandlerUsage({
-    metering: { actionType: "chat", modelRole: "pdf" },
+    metering: { actionType: "chat", modelTask: "pdf" },
     organizationId,
     orgAIConfig,
     workspaceId,

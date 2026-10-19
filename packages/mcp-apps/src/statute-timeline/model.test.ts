@@ -13,7 +13,6 @@ import { parseStatuteTimelineHistory } from "./parse";
 type FoundVersion = Extract<ProvisionVersion, { status: "found" }>;
 
 const version = (overrides: Partial<FoundVersion> = {}): FoundVersion => ({
-  appUrl: null,
   url: null,
   documentId: "version-1",
   resourceName: "resource-1",
@@ -103,7 +102,6 @@ describe("statute timeline model", () => {
 
   test("parses found, withheld and truncated wording using the exact projection", () => {
     const withheldVersion = {
-      appUrl: null,
       url: null,
       documentId: "version-2",
       resourceName: "resource-2",
@@ -225,7 +223,6 @@ describe("statute timeline model", () => {
         [
           newer,
           {
-            appUrl: null,
             url: null,
             documentId: "withheld",
             resourceName: "resource-withheld",

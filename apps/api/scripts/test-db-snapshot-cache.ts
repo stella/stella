@@ -193,6 +193,7 @@ type AcquireOptions = {
   validate: (filePath: string) => Promise<boolean>;
   signal?: AbortSignal;
   timeoutMs?: number;
+  waitForLock?: (signal: AbortSignal | undefined) => Promise<void>;
 };
 
 const assertNotAborted = (signal: AbortSignal | undefined) => {
@@ -368,6 +369,7 @@ export const acquireCachedSnapshot = async ({
   validate,
   signal,
   timeoutMs = LOCK_TIMEOUT_MS,
+  waitForLock: wait = waitForLock,
 }: AcquireOptions): Promise<CacheResult> => {
   assertNotAborted(signal);
   try {
@@ -410,7 +412,7 @@ export const acquireCachedSnapshot = async ({
             } catch {
               // Another waiter may already have removed it.
             }
-            await waitForLock(signal);
+            await wait(signal);
             continue;
           }
           try {
@@ -432,7 +434,7 @@ export const acquireCachedSnapshot = async ({
         }
         // Another process may have released or replaced the lock.
       }
-      await waitForLock(signal);
+      await wait(signal);
       continue;
     }
     try {

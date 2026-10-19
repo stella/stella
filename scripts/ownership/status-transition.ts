@@ -1,10 +1,10 @@
-import { STATUS_COLUMNS } from "../../apps/api/src/lib/db/status-tables.gen.ts";
+import { WRITABLE_STATUS_COLUMNS } from "../../apps/api/src/lib/db/status-tables.gen.ts";
 import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "../../apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts";
 import type { OwnershipEntry } from "../ownership-types.ts";
 
 const statusTransitionColumns = () => {
   const columns = new Map(
-    Object.entries(STATUS_COLUMNS).map(([table, names]) => [
+    Object.entries(WRITABLE_STATUS_COLUMNS).map(([table, names]) => [
       table,
       new Set<string>(names),
     ]),

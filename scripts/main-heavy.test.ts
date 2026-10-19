@@ -13,6 +13,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { ciExpressionContext } from "./ci-expression-context";
 import { contextFromNested, evaluate, UNKNOWN } from "./github-expression";
 import { mainHeavyJobs, thinJobs } from "./main-heavy-plan";
 
@@ -256,28 +257,22 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
     queue_required_jobs: "[]",
     fix_tests_on_base_required: "false",
   };
-  const context = {
-    inputs: { heavy_only: true, pr_depth_only: false, sha: "a".repeat(40) },
-    github: {
-      sha: "b".repeat(40),
-      workflow_sha: "c".repeat(40),
-      event_name: "workflow_dispatch",
-      event: { pull_request: { draft: false, labels: [] } },
-    },
-    needs: Object.fromEntries(
+  const context = ciExpressionContext({
+    event: "workflow_dispatch",
+    heavyOnly: true,
+    plan,
+    needsResults: Object.fromEntries(
       Object.keys(workflow.jobs).map((job) => [
         job,
-        {
-          result: THIN_JOBS.some((thin) => thin === job)
-            ? "skipped"
-            : "success",
-          outputs: plan,
-        },
+        THIN_JOBS.some((thin) => thin === job) ? "skipped" : "success",
       ]),
     ),
-    always: () => true,
-    cancelled: () => false,
-  };
+  });
+  Object.assign(context.inputs, { sha: "a".repeat(40) });
+  Object.assign(context.github, {
+    sha: "b".repeat(40),
+    workflow_sha: "c".repeat(40),
+  });
   const executed = new Set<string>();
   const visit = (job: string) => {
     if (executed.has(job)) {
@@ -379,7 +374,8 @@ test("heavy test shards execute full scope while ordinary runs retain affected s
             ...Bun.env,
             EVENT_NAME: event,
             HEAVY_ONLY: String(heavyOnly),
-            BASE_REF: "main",
+            COMPARISON_BASE: "0123abc",
+            TEST_SCOPE: "--filter=...[0123abc...HEAD]",
             GITHUB_OUTPUT: output,
             GITHUB_ENV: environment,
           },
@@ -393,10 +389,46 @@ test("heavy test shards execute full scope while ordinary runs retain affected s
         expect(
           readFileSync(environment, "utf-8"),
           `${event}/${String(heavyOnly)}`,
-        ).toBe(full ? "" : "TURBO_SCM_BASE=origin/main\n");
+        ).toBe(full ? "" : "TURBO_SCM_BASE=0123abc\n");
       } finally {
         rmSync(fixture, { recursive: true, force: true });
       }
+    }
+  }
+});
+
+test("ordinary test shards run the full tree without the planner's base or scope", () => {
+  const affected = ciWorkflow.jobs["ci-tests"]?.steps?.find(
+    ({ name }) => name === "Compute affected flag",
+  );
+  const script = v.parse(v.string(), affected?.run);
+  for (const [comparisonBase, testScope] of [
+    ["", "--filter=...[0123abc...HEAD]"],
+    ["0123abc", ""],
+  ]) {
+    const fixture = mkdtempSync(path.join(tmpdir(), "missing-test-scope-"));
+    try {
+      const output = path.join(fixture, "output");
+      const environment = path.join(fixture, "environment");
+      writeFileSync(output, "");
+      writeFileSync(environment, "");
+      const result = Bun.spawnSync(["bash", "-euc", script], {
+        cwd: fixture,
+        env: {
+          ...Bun.env,
+          EVENT_NAME: "pull_request",
+          HEAVY_ONLY: "false",
+          COMPARISON_BASE: comparisonBase,
+          TEST_SCOPE: testScope,
+          GITHUB_OUTPUT: output,
+          GITHUB_ENV: environment,
+        },
+      });
+      expect(result.exitCode).toBe(0);
+      expect(readFileSync(output, "utf-8")).toBe("flag=\n");
+      expect(readFileSync(environment, "utf-8")).toBe("");
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
     }
   }
 });
@@ -510,18 +542,11 @@ test("only the final job can publish the main/heavy status", () => {
   const jobsWithStatusPermission = Object.entries(mainWorkflow.jobs)
     .filter(([, job]) => job.permissions?.["statuses"] === "write")
     .map(([name]) => name);
-  // The suites call only grants a ceiling: ci.yml declares the scope for the
-  // merge-queue yield, which runs on pull_request events and never here.
-  expect(jobsWithStatusPermission).toEqual(["suites", "status"]);
+  expect(jobsWithStatusPermission).toEqual(["status"]);
   const ciStatusWriters = Object.values(ciWorkflow.jobs)
     .flatMap((job) => job.steps ?? [])
     .filter((step) => /commitstatus|\/statuses\b/iu.test(JSON.stringify(step)));
-  expect(ciStatusWriters.map(({ name }) => name)).toEqual([
-    "Yield to the merge queue",
-  ]);
-  expect(String(ciStatusWriters[0]?.["if"])).toContain(
-    "github.event_name == 'pull_request'",
-  );
+  expect(ciStatusWriters).toEqual([]);
   expect(mainWorkflow.jobs.status.permissions).toEqual({
     contents: "read",
     actions: "read",

@@ -332,6 +332,19 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   });
 };
 
+export const installPgliteAiMemoryActiveUserGuard = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  await installPgliteMigration({
+    db,
+    migrationPath: nodePath.join(
+      DRIZZLE_DIR,
+      "20261018050200_ai_memory_active_user_guard",
+      "migration.sql",
+    ),
+  });
+};
+
 const TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261004003000_tree_parent_cycle_guard",
@@ -649,6 +662,15 @@ export const installPgliteStatuteCitationCounts = async (
   ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
     await db.execute(sql.raw(statement));
   }
+  for (const statement of readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261010212100_case_law_publication_filter",
+      "migration.sql",
+    ),
+  ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
+    await db.execute(sql.raw(statement));
+  }
 };
 
 const PROVISION_EXTRACTION_STATE_STATEMENT_PREFIXES = [
@@ -734,6 +756,29 @@ export const installPgliteServiceClientCredentialCascade = async (
   );
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install the country invariant directly from its committed migration. */
+export const installPgliteCaseLawCountryShape = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261016010000_case_law_country_uppercase",
+      "migration.sql",
+    ),
+  );
+  for (const statement of statements) {
+    const source = executableSql(statement);
+    if (
+      source.startsWith("CREATE OR REPLACE FUNCTION") ||
+      source.startsWith("DROP TRIGGER") ||
+      source.startsWith("CREATE TRIGGER")
+    ) {
+      await db.execute(sql.raw(statement));
+    }
   }
 };
 

@@ -31,7 +31,7 @@ jobs:
       !(github.event_name == 'workflow_dispatch'
       && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@'))
       || github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -63,6 +63,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""

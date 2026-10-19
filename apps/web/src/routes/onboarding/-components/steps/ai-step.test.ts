@@ -70,7 +70,7 @@ describe("AI provider continuation", () => {
     allProvidersConfirmed: true,
   } as const;
 
-  test("requires recommended models for every role", () => {
+  test("requires provider support for every model group", () => {
     expect(
       canContinueWithProviderConfiguration({
         providers: ["google"],
