@@ -299,6 +299,7 @@ export const ChatTabPanel = ({
     approvalPendingMessageId,
   } = useChatSession({
     chat,
+    timingSurface: "inspector-chat",
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,

@@ -109,6 +109,10 @@ import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-dec
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
+import {
+  searchTiming,
+  useSearchResultsTiming,
+} from "@/lib/analytics/search-timing";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
@@ -277,6 +281,7 @@ export function PublicCaseLawIndex({
   // this value is the field's own write coming back, not somebody else's.
   const [requestedQuery, setRequestedQuery] = useState(search.q ?? "");
   const writeQuery = useDebouncedCallback((value: string) => {
+    searchTiming.requested("case-law", value);
     detached(
       navigate({
         replace: true,
@@ -326,6 +331,11 @@ export function PublicCaseLawIndex({
     // so a step never blanks the table.
     placeholderData: keepPreviousData,
   });
+  useSearchResultsTiming(
+    "case-law",
+    search.q ?? "",
+    pageData !== undefined && !isPlaceholderData,
+  );
   // The loader warms these after search; background navigations keep the
   // same order without suspending the page on optional filter choices.
   const { data: browseFacets } = useDecisionBrowseFacets({

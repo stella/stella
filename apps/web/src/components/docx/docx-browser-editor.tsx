@@ -74,7 +74,7 @@ import { useDocxComments } from "./use-docx-comments";
 import { useDocxCompatibility } from "./use-docx-compatibility";
 import { useDocxEditOpening } from "./use-docx-edit-opening";
 import { useDocxEditorMode } from "./use-docx-editor-mode";
-import { useDocxEditorView } from "./use-docx-editor-view";
+import { DOCX_TIMING_SURFACE, useDocxEditorView } from "./use-docx-editor-view";
 import { useDocxEditorViewport } from "./use-docx-editor-viewport";
 import type { DocxEditorSurface } from "./use-docx-editor-viewport";
 import { useDocxPreviewFile } from "./use-docx-preview-file";
@@ -196,6 +196,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const { editorView, editorProps: editorViewProps } = useDocxEditorView({
     entityId,
     fieldId,
+    surface,
     workspaceId,
   });
   const pendingEditRequestRef = useRef(false);
@@ -321,6 +322,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       markDirty: editSession.markDirty,
       saveCheckpoint: editSession.saveCheckpoint,
       setAutosaveStatus,
+      timingSurface: DOCX_TIMING_SURFACE[surface],
     });
   const comments = useDocxComments(handleChange);
 

@@ -3,15 +3,24 @@ import { useState } from "react";
 import type { EditorView } from "@tiptap/pm/view";
 
 import { useAutocompleteStream } from "@/components/autocomplete/use-autocomplete-stream";
+import { documentOpenTiming } from "@/lib/analytics/document-open-timing";
+import type { DocumentTimingSurface } from "@/lib/analytics/types";
 
 import {
   useDocxAnonymizationHighlights,
   useDocxAnonymizationSelection,
 } from "./use-docx-anonymization";
+import type { DocxEditorSurface } from "./use-docx-editor-viewport";
+
+export const DOCX_TIMING_SURFACE = {
+  fullView: "full-view",
+  inspector: "inspector",
+} as const satisfies Record<DocxEditorSurface, DocumentTimingSurface>;
 
 type UseDocxEditorViewOptions = {
   entityId: string;
   fieldId: string;
+  surface: DocxEditorSurface;
   workspaceId: string;
 };
 
@@ -23,6 +32,7 @@ type UseDocxEditorViewOptions = {
 export const useDocxEditorView = ({
   entityId,
   fieldId,
+  surface,
   workspaceId,
 }: UseDocxEditorViewOptions) => {
   // Track the live ProseMirror view so we can dispatch the
@@ -54,7 +64,13 @@ export const useDocxEditorView = ({
     editorProps: {
       onAnonymizationMatchesChange,
       ...anonymizationSelectionProps,
-      onEditorViewReady: setEditorView,
+      onEditorViewReady: (view: EditorView | null) => {
+        setEditorView(view);
+        // A live view is the editor accepting input: the end of an open.
+        if (view !== null) {
+          documentOpenTiming.editorReady(fieldId, DOCX_TIMING_SURFACE[surface]);
+        }
+      },
     },
   };
 };
