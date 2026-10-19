@@ -21,7 +21,9 @@ use crate::diagnostics::{
   DiagnosticNotificationPreferences, DiagnosticSession, DiagnosticStoreLoadIssue,
   DiagnosticUpdate, DiagnosticsInput, render_diagnostics,
 };
-use crate::document_sessions::{self, AccountOwner, CopyRetirement, RetiredSession};
+use crate::document_sessions::{
+  self, AccountOwner, CopyRetirement, EditorState, RetiredSession,
+};
 use crate::http_client::DesktopHttpClient;
 use crate::session_store::{self, PersistedDesktopSession, StoreLoadIssue};
 use crate::types::*;
@@ -81,6 +83,7 @@ const GENERIC_OFFICE_DOWNLOAD_MIME_TYPES: &[&str] =
 
 // Internal session with runtime-only fields
 struct DesktopSession {
+  editor_state: EditorState,
   account_owner: AccountOwner,
   download_sha: Option<String>,
   // Persisted fields
@@ -128,6 +131,7 @@ struct SyncCheckpointInput {
 impl DesktopSession {
   fn to_persisted(&self) -> PersistedDesktopSession {
     PersistedDesktopSession {
+      editor_state: self.editor_state,
       account_owner: Some(self.account_owner.clone()),
       download_sha: self.download_sha.clone(),
       api_base_url: self.api_base_url.clone(),
@@ -191,6 +195,12 @@ pub struct OpenDocument<'a> {
 enum SessionStoreAccess {
   Pending,
   Ready,
+}
+
+#[derive(PartialEq, Eq)]
+enum RetirementPass {
+  Pending,
+  ObserveEditors,
 }
 
 pub struct SessionManager {
@@ -475,61 +485,89 @@ fn is_temporary_lock_file_for(candidate: &str, file_name: &str) -> bool {
     || is_libre_office_lock_file_for(candidate, file_name)
 }
 
-async fn has_temporary_lock_file(dir: &Path, file_name: &str) -> bool {
-  match tokio::fs::read_dir(dir).await {
-    Ok(mut entries) => {
-      while let Ok(Some(entry)) = entries.next_entry().await {
-        if is_temporary_lock_file_for(&entry.file_name().to_string_lossy(), file_name) {
-          return true;
-        }
-      }
-      false
+async fn has_temporary_lock_file(dir: &Path, file_name: &str) -> std::io::Result<bool> {
+  let mut entries = match tokio::fs::read_dir(dir).await {
+    Ok(entries) => entries,
+    Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+    Err(error) => return Err(error),
+  };
+  while let Some(entry) = entries.next_entry().await? {
+    if is_temporary_lock_file_for(&entry.file_name().to_string_lossy(), file_name) {
+      return Ok(true);
     }
-    Err(_) => false,
   }
+  Ok(false)
 }
 
-fn append_probe_reports_locked(file_path: &Path) -> bool {
-  match crate::local_store::open_private(
-    crate::local_store::OpenMode::AppendExisting,
-    file_path,
-  ) {
-    Ok(_) => false,
-    Err(e) => matches!(
-      e.kind(),
-      ErrorKind::PermissionDenied | ErrorKind::WouldBlock
-    ),
+async fn observe_editor(original: &Path, current: &Path) -> EditorState {
+  let Some(file_name) = original.file_name() else {
+    return EditorState::Unknown;
+  };
+  for directory in [original.parent(), current.parent()].into_iter().flatten() {
+    match has_temporary_lock_file(directory, &file_name.to_string_lossy()).await {
+      Ok(true) => return EditorState::Attached,
+      Ok(false) => {}
+      Err(error) => {
+        tracing::warn!(error = %error, "document editor observation is unavailable");
+        return EditorState::Unknown;
+      }
+    }
   }
-}
-
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-async fn lsof_reports_open(file_path: &Path) -> bool {
-  match Command::new("lsof").arg("-t").arg(file_path).output().await {
-    Ok(output) if output.status.success() => !output.stdout.is_empty(),
-    Ok(output) => !output.stdout.is_empty(),
-    Err(_) => false,
+  match tokio::fs::symlink_metadata(current).await {
+    Ok(metadata) if metadata.is_file() => {}
+    Ok(_) => return EditorState::Unknown,
+    Err(error) if error.kind() == ErrorKind::NotFound => return EditorState::Unknown,
+    Err(error) => {
+      tracing::warn!(error = %error, "document editor observation is unavailable");
+      return EditorState::Unknown;
+    }
   }
-}
-
-async fn local_file_appears_open(file_path: &Path, file_name: &str) -> bool {
-  let dir = file_path.parent().unwrap_or(Path::new("."));
-
-  if has_temporary_lock_file(dir, file_name).await {
-    return true;
-  }
-
-  if append_probe_reports_locked(file_path) {
-    return true;
-  }
-
   #[cfg(any(target_os = "macos", target_os = "linux"))]
   {
-    lsof_reports_open(file_path).await
+    const EDITOR_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
+    match tokio::time::timeout(
+      EDITOR_PROBE_TIMEOUT,
+      Command::new("lsof")
+        .kill_on_drop(true)
+        .arg("-t")
+        .arg("+w")
+        .arg("--")
+        .arg(current)
+        .output(),
+    )
+    .await
+    {
+      Ok(Ok(output)) if !output.stdout.is_empty() => EditorState::Attached,
+      Ok(Ok(output)) if output.status.code() == Some(1) && output.stderr.is_empty() => {
+        EditorState::Closed
+      }
+      _ => EditorState::Unknown,
+    }
   }
-
-  #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+  #[cfg(windows)]
   {
-    false
+    match crate::local_store::open_private(
+      crate::local_store::OpenMode::ExclusiveRead,
+      current,
+    ) {
+      Ok(_) => EditorState::Closed,
+      Err(error)
+        if matches!(
+          error.kind(),
+          ErrorKind::PermissionDenied | ErrorKind::WouldBlock
+        ) =>
+      {
+        EditorState::Attached
+      }
+      Err(error) => {
+        tracing::warn!(error = %error, "document editor observation is unavailable");
+        EditorState::Unknown
+      }
+    }
+  }
+  #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+  {
+    EditorState::Unknown
   }
 }
 
@@ -591,7 +629,7 @@ impl SessionManager {
       return self.initialize(owner).await;
     }
     if self.account_owner == owner {
-      return self.retry_retired_sessions().await;
+      return self.retry_retired_sessions(RetirementPass::Pending).await;
     }
     let mut persisted: Vec<_> = self
       .sessions
@@ -619,12 +657,15 @@ impl SessionManager {
     self.unconfirmed_sessions.clear();
     self.account_owner = owner;
     self.persist_sessions_result().await?;
-    self.retry_retired_sessions().await?;
+    self.retry_retired_sessions(RetirementPass::Pending).await?;
     self.emit_state_change();
     Ok(())
   }
 
-  pub async fn retry_retired_sessions(&mut self) -> Result<(), String> {
+  async fn retry_retired_sessions(
+    &mut self,
+    pass: RetirementPass,
+  ) -> Result<(), String> {
     if self.store_access != SessionStoreAccess::Ready {
       return Err(crate::i18n::t("settings.errorReadState").into());
     }
@@ -632,7 +673,10 @@ impl SessionManager {
       .retired_sessions
       .iter()
       .enumerate()
-      .filter(|(_, record)| !record.finished())
+      .filter(|(_, record)| {
+        !record.finished()
+          || (pass == RetirementPass::ObserveEditors && record.needs_editor_check())
+      })
       .map(|(index, _)| index)
       .collect();
     if indices.is_empty() {
@@ -642,8 +686,43 @@ impl SessionManager {
     self.persist_sessions_result().await?;
     let mut changed = false;
     let mut set_aside = false;
+    let mut recovery_changed = false;
     for index in indices {
       let mut record = self.retired_sessions[index].clone();
+      let paths = match &record.copy {
+        CopyRetirement::Pending {
+          source,
+          destination,
+          ..
+        } if record.editor_state == EditorState::Closed
+          || pass == RetirementPass::ObserveEditors =>
+        {
+          Some((
+            source.clone(),
+            if source.exists() {
+              source.clone()
+            } else {
+              destination.clone()
+            },
+          ))
+        }
+        CopyRetirement::Quarantined { source, path, .. }
+          if record.editor_state == EditorState::Closed
+            || (pass == RetirementPass::ObserveEditors
+              && record.needs_editor_check()) =>
+        {
+          Some((source.clone(), path.clone()))
+        }
+        _ => None,
+      };
+      if let Some((original, current)) = paths {
+        record.editor_state = observe_editor(&original, &current).await;
+      }
+      if record.finished() && record.editor_state != EditorState::Closed {
+        self.retired_sessions[index] = record;
+        changed = true;
+        continue;
+      }
       let root = self.edit_root.clone();
       let result = tokio::task::spawn_blocking(move || {
         let result = document_sessions::retire_session(
@@ -663,6 +742,8 @@ impl SessionManager {
         self.retired_sessions[index].copy,
         CopyRetirement::Pending { .. }
       ) && matches!(record.copy, CopyRetirement::Quarantined { .. });
+      recovery_changed |= self.retired_sessions[index].copy != record.copy
+        || self.retired_sessions[index].token != record.token;
       self.retired_sessions[index] = record;
       changed = true;
     }
@@ -671,6 +752,9 @@ impl SessionManager {
     });
     if changed {
       self.persist_sessions_result().await?;
+    }
+    if recovery_changed {
+      self.emit_state_change();
     }
     if set_aside {
       self.show_notification(
@@ -752,7 +836,14 @@ impl SessionManager {
     account_owner: Option<AccountOwner>,
   ) -> Result<(), String> {
     self.account_owner = account_owner;
-    let store = session_store::load_session_store(&self.store_path).await;
+    let mut store = session_store::load_session_store(&self.store_path).await;
+    // Editor observations are confirmed again after each launch.
+    for session in &mut store.sessions {
+      session.editor_state = EditorState::Unknown;
+    }
+    for record in &mut store.retired_sessions {
+      record.editor_state = EditorState::Unknown;
+    }
 
     // Older stores record only the remembered web origin. Restore its pair
     // only when unique; an ambiguous API selection needs explicit reconnection.
@@ -847,6 +938,7 @@ impl SessionManager {
       };
 
       let session = DesktopSession {
+        editor_state: EditorState::Unknown,
         account_owner: owned.owner,
         download_sha: persisted.download_sha,
         api_base_url: persisted.api_base_url,
@@ -891,7 +983,7 @@ impl SessionManager {
     }
     self.store_access = SessionStoreAccess::Ready;
     self.persist_sessions_result().await?;
-    self.retry_retired_sessions().await?;
+    self.retry_retired_sessions(RetirementPass::Pending).await?;
     self.retry_pending_cleanup().await;
     self.persist_sessions_result().await
   }
@@ -1021,6 +1113,7 @@ impl SessionManager {
         session.file_path = file_path;
         session.last_checkpoint_at = remote.last_checkpoint_at.clone();
         session.last_error = None;
+        session.editor_state = EditorState::Unknown;
         session.local_open_seen = false;
         session.closed_recheck_count = 0;
         session.changed_during_remote_save = false;
@@ -1095,6 +1188,7 @@ impl SessionManager {
 
     // Create new session
     let session = DesktopSession {
+      editor_state: EditorState::Unknown,
       account_owner: AccountOwner::for_account(account),
       download_sha: Some(local_sha.clone()),
       api_base_url: normalize_api_base_url(&request.api_base_url),
@@ -1185,12 +1279,14 @@ impl SessionManager {
     })
   }
 
-  pub fn open_session_file(&self, session_id: &str) -> bool {
-    self
-      .sessions
-      .get(session_id)
-      .map(|s| open_path_native(&s.file_path).is_ok())
-      .unwrap_or(false)
+  pub fn open_session_file(&mut self, session_id: &str) -> bool {
+    let Some(session) = self.sessions.get_mut(session_id) else {
+      return false;
+    };
+    session.editor_state = EditorState::Unknown;
+    session.local_open_seen = false;
+    session.closed_recheck_count = 0;
+    open_path_native(&session.file_path).is_ok()
   }
 
   pub fn reveal_session(&self, session_id: &str) -> bool {
@@ -2043,7 +2139,10 @@ impl SessionManager {
   // --- Retry loop (called from spawned timer) ---
 
   pub async fn retry_pending_work(&mut self) {
-    if let Err(error) = self.retry_retired_sessions().await {
+    if let Err(error) = self
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+    {
       tracing::warn!(error = %error, "document recovery retry remains pending");
     }
     self.retry_pending_cleanup().await;
@@ -2229,7 +2328,7 @@ impl SessionManager {
     session.cancel_timers();
     self.session_ids_by_key.remove(&session.key);
     self.persist_sessions_result().await?;
-    self.retry_retired_sessions().await?;
+    self.retry_retired_sessions(RetirementPass::Pending).await?;
     self.emit_state_change();
     Ok(())
   }
@@ -2542,6 +2641,7 @@ async fn handle_filesystem_event(
     };
 
     if is_relevant {
+      session.editor_state = EditorState::Attached;
       if session.pending_finalize && !session.finalize_in_flight {
         session.pending_finalize = false;
         session.local_open_seen = true;
@@ -2621,7 +2721,7 @@ async fn open_poll_loop(manager: Arc<Mutex<SessionManager>>, session_id: String)
   loop {
     interval.tick().await;
 
-    let Some((file_path, file_name)) = ({
+    let Some(file_path) = ({
       let mgr = manager.lock().await;
       match mgr.sessions.get(&session_id) {
         Some(s)
@@ -2630,7 +2730,7 @@ async fn open_poll_loop(manager: Arc<Mutex<SessionManager>>, session_id: String)
             && !s.checkpoint_in_flight
             && !s.finalize_in_flight =>
         {
-          Some((s.file_path.clone(), s.file_name.clone()))
+          Some(s.file_path.clone())
         }
         Some(s)
           if !s.pending_finalize
@@ -2645,7 +2745,8 @@ async fn open_poll_loop(manager: Arc<Mutex<SessionManager>>, session_id: String)
       continue;
     };
 
-    let appears_open = local_file_appears_open(Path::new(&file_path), &file_name).await;
+    let editor_state =
+      observe_editor(Path::new(&file_path), Path::new(&file_path)).await;
 
     let mut mgr = manager.lock().await;
     let Some(session) = mgr.sessions.get_mut(&session_id) else {
@@ -2659,7 +2760,13 @@ async fn open_poll_loop(manager: Arc<Mutex<SessionManager>>, session_id: String)
       continue;
     }
 
-    if appears_open {
+    if editor_state == EditorState::Unknown {
+      session.editor_state = EditorState::Unknown;
+      session.closed_recheck_count = 0;
+      continue;
+    }
+    if editor_state == EditorState::Attached {
+      session.editor_state = EditorState::Attached;
       session.local_open_seen = true;
       session.closed_recheck_count = 0;
       continue;
@@ -2674,6 +2781,7 @@ async fn open_poll_loop(manager: Arc<Mutex<SessionManager>>, session_id: String)
       continue;
     }
 
+    session.editor_state = EditorState::Closed;
     session.open_poll_timer.take();
     mgr.finish_session(&session_id);
     mgr.persist_sessions().await;
@@ -2870,6 +2978,7 @@ mod tests {
 
   fn persisted_session_for_test(id: &str) -> PersistedDesktopSession {
     PersistedDesktopSession {
+      editor_state: EditorState::Unknown,
       account_owner: Some(AccountOwner::fixture("account")),
       download_sha: None,
       api_base_url: "https://api.example.com".to_string(),
@@ -2900,6 +3009,7 @@ mod tests {
     session_token: &str,
   ) -> DesktopSession {
     DesktopSession {
+      editor_state: persisted.editor_state,
       account_owner: persisted.account_owner.unwrap(),
       download_sha: persisted.download_sha,
       api_base_url: persisted.api_base_url,
@@ -2931,6 +3041,32 @@ mod tests {
       open_poll_timer: None,
       sse_listener: None,
     }
+  }
+
+  #[tokio::test]
+  async fn editor_observations_keep_the_original_folder_hints() {
+    let sandbox = std::env::temp_dir()
+      .join(format!("desktop-editor-hints-{}", uuid::Uuid::new_v4()));
+    let original = sandbox.join("editing/document.docx");
+    let recovery = sandbox.join("recovery/document.docx");
+    let hint = original.with_file_name("~$document.docx");
+    for path in [&original, &recovery] {
+      crate::local_store::create_private_dir(path.parent().unwrap()).unwrap();
+    }
+    crate::local_store::write_private_atomic(&original, b"document").unwrap();
+    crate::local_store::write_private_atomic(&hint, b"editor").unwrap();
+    crate::local_store::move_private(&original, &recovery).unwrap();
+    assert_eq!(
+      observe_editor(&original, &recovery).await,
+      EditorState::Attached
+    );
+    crate::local_store::remove_private(&hint).unwrap();
+    crate::local_store::remove_private(&recovery).unwrap();
+    assert_eq!(
+      observe_editor(&original, &recovery).await,
+      EditorState::Unknown
+    );
+    std::fs::remove_dir_all(sandbox).unwrap();
   }
 
   #[tokio::test]
@@ -3000,6 +3136,8 @@ mod tests {
     let mut record = RetiredSession::plan(stored, &manager.quarantine_root()).unwrap();
     record.token = document_sessions::TokenRetirement::Deleted;
     record.copy = CopyRetirement::Quarantined {
+      source: PathBuf::from("/unused"),
+      synced_sha: None,
       path: manager
         .quarantine_root()
         .join(owner.as_str())
@@ -3049,7 +3187,12 @@ mod tests {
     let runtime = desktop_session_for_test(stored, "token");
     manager.sessions.insert(runtime.id.clone(), runtime);
     assert!(manager.set_account_owner(None).await.is_err());
-    assert!(manager.retry_retired_sessions().await.is_err());
+    assert!(
+      manager
+        .retry_retired_sessions(RetirementPass::Pending)
+        .await
+        .is_err()
+    );
     assert!(manager.get_snapshot().sessions.is_empty());
     assert_eq!(manager.retired_sessions.len(), 1);
     assert!(matches!(

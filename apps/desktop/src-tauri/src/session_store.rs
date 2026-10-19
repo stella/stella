@@ -15,6 +15,8 @@ const fn default_persisted_file_type() -> DesktopEditFileType {
 #[serde(rename_all = "camelCase")]
 pub struct PersistedDesktopSession {
   #[serde(default)]
+  pub editor_state: crate::document_sessions::EditorState,
+  #[serde(default)]
   pub account_owner: Option<crate::document_sessions::AccountOwner>,
   #[serde(default)]
   pub download_sha: Option<String>,
@@ -184,6 +186,7 @@ mod tests {
 
   fn make_session() -> PersistedDesktopSession {
     PersistedDesktopSession {
+      editor_state: crate::document_sessions::EditorState::Unknown,
       account_owner: None,
       download_sha: None,
       api_base_url: "https://api.example.com".into(),

@@ -213,6 +213,8 @@ mod platform;
 #[derive(Clone, Copy)]
 pub enum OpenMode {
   Read,
+  #[cfg(windows)]
+  ExclusiveRead,
   CreateNew,
   Append,
   AppendExisting,
@@ -561,6 +563,39 @@ mod tests {
     assert!(directory_target.is_dir());
     assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 2);
     fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
+  #[cfg(windows)]
+  #[test]
+  fn local_file_creation_observes_shared_handles() {
+    let path = unique_path();
+    create_private_dir(path.parent().unwrap()).unwrap();
+    write_private_atomic(&path, b"document").unwrap();
+    drop(open_private(OpenMode::ExclusiveRead, &path).unwrap());
+    let reader = open_private(OpenMode::Read, &path).unwrap();
+    assert!(open_private(OpenMode::ExclusiveRead, &path).is_err());
+    drop(reader);
+    drop(open_private(OpenMode::ExclusiveRead, &path).unwrap());
+    fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
+  #[test]
+  fn local_file_creation_moves_without_replacing_a_copy() {
+    let source = unique_path();
+    let destination = source.with_file_name("recovery.docx");
+    create_private_dir(source.parent().unwrap()).unwrap();
+    write_private_atomic(&source, b"first").unwrap();
+    move_private(&source, &destination).unwrap();
+    assert!(!source.exists());
+    assert_eq!(fs::read(&destination).unwrap(), b"first");
+    write_private_atomic(&source, b"second").unwrap();
+    assert_eq!(
+      move_private(&source, &destination).unwrap_err().kind(),
+      std::io::ErrorKind::AlreadyExists
+    );
+    assert_eq!(fs::read(&source).unwrap(), b"second");
+    assert_eq!(fs::read(&destination).unwrap(), b"first");
+    fs::remove_dir_all(source.parent().unwrap()).unwrap();
   }
 
   /// A store path in its own fresh directory, so `persist` restricts that
