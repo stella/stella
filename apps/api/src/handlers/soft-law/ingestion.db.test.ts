@@ -33,7 +33,10 @@ import type {
   SoftLawEntry,
   SoftLawDocumentInput,
 } from "@/api/lib/legal-search/soft-law-types";
-import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
+import {
+  SoftLawIngestionError,
+  storedSoftLawDiscoveryEntry,
+} from "@/api/lib/legal-search/soft-law-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
@@ -193,6 +196,14 @@ test("legacy retry receipts have a replayable document-entry migration", async (
   expect(migration).toContain(
     `WHERE "status" = 'retryable' AND "entry"->>'type' IS NULL`,
   );
+});
+
+test("a retry receipt written without its entry type after the migration still resumes as a document", () => {
+  // An older worker can still write this shape while a deployment rolls out.
+  const { type: _type, ...legacy } = entry();
+  const current = entry();
+  expect(storedSoftLawDiscoveryEntry(legacy)).toEqual(current);
+  expect(storedSoftLawDiscoveryEntry(current)).toBe(current);
 });
 
 if (!databaseUrl || !enabled) {

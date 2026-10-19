@@ -24,6 +24,7 @@ import {
   SOFT_LAW_EXTRACTION_QUALITIES,
   SOFT_LAW_EXTRACTION_QUALITY_RANK,
   SoftLawIngestionError,
+  storedSoftLawDiscoveryEntry,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
   SoftLawEntry,
@@ -239,27 +240,32 @@ const loadSoftLawAttempts = async (
     entries,
   }: { runId: string; entries: readonly SoftLawDiscoveryEntry[] },
 ) =>
-  await scopedDb(
-    async (tx) =>
-      await tx
-        .select()
-        .from(softLawIngestionAttempts)
-        .where(
-          and(
-            eq(softLawIngestionAttempts.sourceId, sourceId),
-            eq(softLawIngestionAttempts.runId, runId),
-            or(
-              inArray(
-                softLawIngestionAttempts.url,
-                entries.map((entry) => entry.url),
+  (
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select()
+          .from(softLawIngestionAttempts)
+          .where(
+            and(
+              eq(softLawIngestionAttempts.sourceId, sourceId),
+              eq(softLawIngestionAttempts.runId, runId),
+              or(
+                inArray(
+                  softLawIngestionAttempts.url,
+                  entries.map((entry) => entry.url),
+                ),
+                eq(softLawIngestionAttempts.status, "retryable"),
               ),
-              eq(softLawIngestionAttempts.status, "retryable"),
             ),
-          ),
-        )
-        .orderBy(softLawIngestionAttempts.url)
-        .limit(SOFT_LAW_BATCH_LIMIT * 2),
-  );
+          )
+          .orderBy(softLawIngestionAttempts.url)
+          .limit(SOFT_LAW_BATCH_LIMIT * 2),
+    )
+  ).map((attempt) => ({
+    ...attempt,
+    entry: storedSoftLawDiscoveryEntry(attempt.entry),
+  }));
 const loadSoftLawMatches = async (
   { sourceId, scopedDb }: SoftLawStoreContext,
   { entries, identityKeys }: LoadSoftLawMatchesOptions,
@@ -516,7 +522,17 @@ const persistSoftLawVersions = async (
     ...new Map(items.map((item) => [item.documentId, item])).values(),
   ];
   if (currentObservations.length) {
-    const preserveStoredExtraction = sql`excluded.extracted_text IS NULL OR ${extractionQualityRank(sql`excluded.extraction_quality`)} < ${extractionQualityRank(sql`${softLawDocumentVersions.extractionQuality}`)}`;
+    // Quality rank decides: a worse extraction never replaces a better one,
+    // and a textless one never replaces stored text of equal rank. A failed
+    // extraction still yields to a later textless parse (needs_ocr), which
+    // clears the stale failure.
+    const incomingRank = extractionQualityRank(
+      sql`excluded.extraction_quality`,
+    );
+    const storedRank = extractionQualityRank(
+      sql`${softLawDocumentVersions.extractionQuality}`,
+    );
+    const preserveStoredExtraction = sql`(${incomingRank} < ${storedRank} OR (${incomingRank} = ${storedRank} AND excluded.extracted_text IS NULL))`;
     await tx
       .insert(softLawDocumentVersions)
       .values(

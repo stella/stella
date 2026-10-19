@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 import type { Result } from "better-result";
 
 import type {
@@ -166,6 +166,43 @@ export type SoftLawRejectedEntry = {
   };
 };
 export type SoftLawDiscoveryEntry = SoftLawEntry | SoftLawRejectedEntry;
+
+/**
+ * A retry receipt as stored. Workers released before the entry discriminator
+ * wrote document entries without `type`, and one may still do so while a
+ * deployment rolls out after the receipt migration ran. Remove this branch and
+ * `storedSoftLawDiscoveryEntry` in the release after the one carrying it, once
+ * no such worker can run.
+ */
+export type StoredSoftLawDiscoveryEntry =
+  | SoftLawDiscoveryEntry
+  | (Omit<SoftLawEntry, "type"> & { type?: undefined });
+
+export const storedSoftLawDiscoveryEntry = (
+  entry: StoredSoftLawDiscoveryEntry,
+): SoftLawDiscoveryEntry => {
+  switch (entry.type) {
+    case "document":
+    case "rejected":
+      return entry;
+    case undefined:
+      return {
+        type: "document",
+        url: entry.url,
+        ...(entry.sourcePages === undefined
+          ? {}
+          : { sourcePages: entry.sourcePages }),
+        ...(entry.sourceRaw === undefined
+          ? {}
+          : { sourceRaw: entry.sourceRaw }),
+        metadata: entry.metadata,
+        sourceDates: entry.sourceDates,
+      };
+    default:
+      entry satisfies never;
+      return panic("Unhandled stored soft-law entry type");
+  }
+};
 export type SoftLawDocumentInput = {
   metadata: SoftLawMetadata;
   raw: readonly {

@@ -352,6 +352,21 @@ if (!databaseUrl || !enabled) {
               extractionFailure: "Publisher text extraction failed",
             });
           }
+          // A textless parse of the same bytes is a better extraction than a
+          // failure: it upgrades the quality and clears the stale failure.
+          expect(
+            await run([draft, ...others], {
+              extractionQuality: "needs_ocr",
+              text: null,
+            }),
+          ).toEqual({ status: "complete" });
+          for (const version of await versions()) {
+            expect(version).toMatchObject({
+              extractionQuality: "needs_ocr",
+              extractedText: null,
+              extractionFailure: null,
+            });
+          }
           expect(await run([draft, ...others])).toEqual({ status: "complete" });
           const repairedVersions = await versions();
           expect(
