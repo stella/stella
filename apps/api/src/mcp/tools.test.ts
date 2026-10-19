@@ -78,7 +78,10 @@ import type {
   SanctionsCheckResult,
 } from "@/api/lib/business-registries/sanctions-check";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CITATION_READ_DIRECTIONS,
+  CITATION_TREATMENTS,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
@@ -1502,6 +1505,16 @@ describe("OpenAI-compatible MCP tools", () => {
           description:
             "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
         },
+        doctrine: {
+          type: "string",
+          enum: ["distinguishes", "limits"],
+          description: "Only citations with this reviewed doctrinal finding.",
+        },
+        polarity: {
+          type: "string",
+          enum: [...CITATION_TREATMENTS],
+          description: "Only citations with this polarity reading.",
+        },
         limit: withKind(
           {
             type: "integer",
@@ -2604,7 +2617,6 @@ describe("OpenAI-compatible MCP tools", () => {
       ],
       results: [
         {
-          appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
           url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
           source_url: "https://example.test/decision",
           caseNumber: "29 Cdo 123/2024",
@@ -2927,7 +2939,6 @@ describe("OpenAI-compatible MCP tools", () => {
       ],
       results: [
         {
-          appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
           url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
           source_url: "https://example.test/decision",
           caseNumber: "29 Cdo 123/2024",
@@ -3583,7 +3594,6 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(parseToolPayload(result)).toMatchObject({
           results: [
             {
-              appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
               url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
               decisionId: DECISION_ID,
               resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
@@ -3619,7 +3629,7 @@ describe("OpenAI-compatible MCP tools", () => {
               decisionType: "judgment",
               ecli: "ECLI:CZ:NS:2025:31.CDO.900.2025.1",
               language: "cs",
-              // Multilingual: the appUrl names the version, as the web route does.
+              // Multilingual: the url names the version, as the web route does.
               languageAlternates: [
                 { language: "cs", id: CITING_DECISION_ID },
                 { language: "en", id: DECISION_ID },
@@ -3652,6 +3662,8 @@ describe("OpenAI-compatible MCP tools", () => {
       args: {
         decision_id: DECISION_ID,
         direction: "cited_by",
+        doctrine: "limits",
+        polarity: "negative",
         limit: 5,
       },
       context: createContext(),
@@ -3663,6 +3675,8 @@ describe("OpenAI-compatible MCP tools", () => {
       cursor: undefined,
       decisionId: DECISION_ID,
       direction: "cited_by",
+      doctrine: "limits",
+      polarity: "negative",
       limit: 5,
       surface: "search",
     });
@@ -3670,6 +3684,8 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionId: DECISION_ID,
       direction: "cited_by",
       doctrineAvailability: "available",
+      doctrine: "limits",
+      polarity: "negative",
       nextCursor: "Y2l0YXRpb25fY3Vyc29yXzI",
       citations: [
         {
@@ -3679,7 +3695,6 @@ describe("OpenAI-compatible MCP tools", () => {
           polarity: "negative",
           doctrine: "unread",
           decision: {
-            appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
             url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
             caseNumber: "31 Cdo 900/2025",
             citationAuthority: 2.5,
@@ -3712,7 +3727,11 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_citations defaults the page size and passes the cursor through", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
-      page: { items: [], nextCursor: null, doctrineAvailability: "available" },
+      page: {
+        items: [],
+        nextCursor: null,
+        doctrineAvailability: "available",
+      },
     });
 
     await handleMcpToolCall({
@@ -3733,6 +3752,35 @@ describe("OpenAI-compatible MCP tools", () => {
       limit: LIMITS.caseLawAgentCitationPageSizeDefault,
       surface: "search",
     });
+  });
+
+  test("read_case_law_citations refuses doctrine filters when doctrine is unavailable", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "doctrine_unavailable",
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        decision_id: DECISION_ID,
+        direction: "cited_by",
+        doctrine: "distinguishes",
+      },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe("Doctrine filtering is unavailable");
+    expect(error["hint"]).toBe(
+      "Call read_case_law_citations again without doctrine; the response's doctrineAvailability will report whether doctrine can be read.",
+    );
+    expect(error["issues"]).toEqual([
+      {
+        path: "doctrine",
+        message: "Doctrine is unavailable on this case-law surface.",
+      },
+    ]);
   });
 
   test("read_case_law_citations answers not found for a subject the gate denies", async () => {
@@ -3810,6 +3858,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "language",
       "date_from",
       "date_to",
+      "as_of",
       "limit",
       "cursor",
     ]);
@@ -3840,9 +3889,11 @@ describe("OpenAI-compatible MCP tools", () => {
       ),
     );
     expect(schema?.["additionalProperties"]).toBe(false);
-    // The corpus search has no as-of filter, so it must not advertise one:
-    // a point-in-time question is answered by read_statute.
-    expect(schema?.properties?.["as_of"]).toBeUndefined();
+    expect(schema?.properties?.["as_of"]).toMatchObject({
+      type: "string",
+      format: "date",
+      maxLength: 10,
+    });
     expect(searchTool?.description).toContain("No facets are returned");
   });
 
@@ -3971,6 +4022,8 @@ describe("OpenAI-compatible MCP tools", () => {
           {
             documentId: STATUTE_ID,
             effectiveDate: "2014-01-01",
+            versionValidFrom: "2014-01-01",
+            versionValidTo: null,
             eli: STATUTE_ELI,
             country: "CZE",
             documentType: "act",
@@ -3992,12 +4045,17 @@ describe("OpenAI-compatible MCP tools", () => {
       const result = await handleMcpToolCall({
         // Lower case on the wire: the country is folded by the contract, so a
         // model writing `cze` reaches the same jurisdiction.
-        args: { country: "cze", query: "nahrada skody" },
+        args: {
+          as_of: "2027-01-01",
+          country: "cze",
+          query: "nahrada skody",
+        },
         context: createContext(),
         toolName: "search_legislation",
       });
 
       expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0)).toEqual({
+        asOf: "2027-01-01",
         jurisdiction: "CZE",
         limit: 10,
         query: "nahrada skody",
@@ -4007,13 +4065,14 @@ describe("OpenAI-compatible MCP tools", () => {
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         results: [
           {
-            appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
             url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
             source_url: "https://example.test/89-2012",
             country: "CZE",
             documentId: STATUTE_ID,
             documentType: "act",
             effectiveDate: "2014-01-01",
+            versionValidFrom: "2014-01-01",
+            versionValidTo: null,
             eli: STATUTE_ELI,
             language: "cs",
             match: { type: matchType },
@@ -4158,7 +4217,6 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(parseToolPayload(result)).toEqual({
       nextCursor: encodePaginationCursor([8000]),
       statute: {
-        appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01`,
         url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01`,
         source_url: "https://example.test/89-2012",
         charCount: expectedText.length,
@@ -4199,6 +4257,63 @@ describe("OpenAI-compatible MCP tools", () => {
         ],
       },
     });
+  });
+
+  test("read_statute emits navigation once and reassembles every text window", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readPublicLegislationHandlerMock.mockResolvedValue(
+      createStatuteReadResult(),
+    );
+    listStatuteVersionsHandlerMock.mockResolvedValue(
+      createStatuteVersionsPage(),
+    );
+
+    type StatuteTextPage = {
+      nextCursor: string | null;
+      statute: {
+        text: string | null;
+        outline?: unknown;
+        outlineTruncated?: unknown;
+        versions?: unknown;
+      };
+    };
+    const pages: StatuteTextPage[] = [];
+    let cursor: string | undefined;
+    do {
+      const payload = asTestRaw<StatuteTextPage>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: {
+              eli: STATUTE_ELI,
+              ...(cursor === undefined ? {} : { cursor }),
+            },
+            context: createContext(),
+            toolName: "read_statute",
+          }),
+        ),
+      );
+      pages.push(payload);
+      cursor = payload.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+
+    expect(pages.length).toBeGreaterThan(1);
+    expect(
+      pages
+        .slice(1)
+        .every(
+          ({ statute }) =>
+            !("outline" in statute) &&
+            !("outlineTruncated" in statute) &&
+            !("versions" in statute),
+        ),
+    ).toBe(true);
+    expect(pages.map(({ statute }) => statute.text ?? "").join("")).toBe(
+      `\u00a7 1729\n\n${LONG_PROVISION_BODY}`,
+    );
+    expect(listStatuteVersionsHandlerMock).toHaveBeenCalledTimes(1);
   });
 
   test("read_statute tells an unknown act apart from a date the corpus does not cover", async () => {
@@ -4625,7 +4740,7 @@ describe("OpenAI-compatible MCP tools", () => {
           anchor: PROVISION_ANCHOR,
           eli: STATUTE_ELI,
           message:
-            "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.",
+            "The source licence does not permit AI use of this wording. Read it at the statute's url instead.",
           status: "text_withheld",
         },
       ],
@@ -4737,7 +4852,6 @@ describe("OpenAI-compatible MCP tools", () => {
       eli: STATUTE_ELI,
       items: [
         {
-          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: STATUTE_ID,
@@ -4751,7 +4865,6 @@ describe("OpenAI-compatible MCP tools", () => {
           ...EFFECTIVE_LABEL,
         },
         {
-          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: STATUTE_PRIOR_ID,
@@ -4817,7 +4930,6 @@ describe("OpenAI-compatible MCP tools", () => {
       eli: STATUTE_ELI,
       items: [
         {
-          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: STATUTE_ID,
@@ -4831,12 +4943,11 @@ describe("OpenAI-compatible MCP tools", () => {
           ...EFFECTIVE_LABEL,
         },
         {
-          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: STATUTE_PRIOR_ID,
           message:
-            "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.",
+            "The source licence does not permit AI use of this wording. Read it at the statute's url instead.",
           resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
           status: "text_withheld",
           versionValidFrom: "2012-03-22",

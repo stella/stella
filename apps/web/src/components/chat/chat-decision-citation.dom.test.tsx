@@ -260,8 +260,7 @@ test("passive answer links and complete carried source metadata schedule no deci
   ).href;
   useExternalSourceStore.getState().registerSources([
     {
-      url: first.sourceUrl,
-      appUrl: readerUrl,
+      url: readerUrl,
       sourceUrl: first.sourceUrl,
       title: first.caseNumber,
       caseLawDecision: {
@@ -335,8 +334,7 @@ test("the court's number the link carries shows at first paint, from a read or a
   ).href;
   useExternalSourceStore.getState().registerSources([
     {
-      url: first.sourceUrl,
-      appUrl: readerUrl,
+      url: readerUrl,
       sourceUrl: first.sourceUrl,
       title: first.caseNumber,
       caseLawDecision: {

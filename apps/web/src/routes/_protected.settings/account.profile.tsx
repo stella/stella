@@ -46,6 +46,7 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { SettingsPageHeader } from "@/components/settings-page-header";
 import {
   LANG_ENDONYMS,
   REGIONAL_FORMAT_LABELS,
@@ -75,7 +76,6 @@ import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/
 import { PersonalDataExportCard } from "@/routes/_protected.settings/-components/account/personal-data-export-card";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 import {
   accountDeletionLeavesTasksUnassigned,

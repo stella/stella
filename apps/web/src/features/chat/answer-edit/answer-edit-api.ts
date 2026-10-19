@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import type { InferOk } from "better-result";
 
+import type { ChatMessageAcceptedEdit } from "@stll/api-contract/chat-message-revisions";
 import { sha256Hex } from "@stll/sha256/browser";
 
 import { api } from "@/lib/api";
@@ -50,9 +51,11 @@ export const requestAnswerEdit = async ({
       APIError.is(error) ? error : toAPIError({ status: 500, value: error }),
   });
 
-export type AnswerEditProposal = InferOk<
-  Awaited<ReturnType<typeof requestAnswerEdit>>
->;
+export type AnswerEditProposal = {
+  content: InferOk<Awaited<ReturnType<typeof requestAnswerEdit>>>["content"];
+  replacement: string;
+  edit: ChatMessageAcceptedEdit;
+};
 
 type AcceptAnswerEditOptions = {
   threadId: string;

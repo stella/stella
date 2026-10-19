@@ -135,6 +135,7 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
+import { applyDiscoveryMetadataCachePolicy } from "@/api/lib/auth/discovery-metadata-cache";
 import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
@@ -174,7 +175,10 @@ import {
   completeRequest,
   withFinalResponseCompletion,
 } from "@/api/lib/observability/request-lifecycle";
-import { emitEventLoopDelayMetric } from "@/api/lib/observability/request-metrics";
+import {
+  emitEventLoopDelayMetric,
+  emitProcessMemoryLog,
+} from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import {
   closeActionAdmissionRedis,
@@ -277,6 +281,7 @@ const readProcessMemoryReport = () => {
 const startEventLoopDelayReporting = () => {
   let reporting: Promise<void> | undefined;
   startEventLoopDelayMonitor({
+    onReportInterval: () => emitProcessMemoryLog(readProcessMemoryReport()),
     onReport: (delay) => {
       if (reporting !== undefined) {
         return;
@@ -286,7 +291,6 @@ const startEventLoopDelayReporting = () => {
           emitEventLoopDelayMetric({
             ...delay,
             rootPool,
-            memory: readProcessMemoryReport(),
           }),
         )
         .finally(() => {
@@ -359,6 +363,9 @@ const api = new Elysia()
   .use(multipartFormParser)
   .onRequest(({ set }) => {
     setSecurityHeaders(set);
+  })
+  .onRequest(({ request, set }) => {
+    applyDiscoveryMetadataCachePolicy({ request, set });
   })
   .onRequest(async (context) => {
     const { request, set } = context;

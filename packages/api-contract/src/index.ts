@@ -152,6 +152,15 @@ export type {
   ChatDecisionPassageTarget,
 } from "./chat-decision-passage-link";
 export {
+  CHAT_CORPORA,
+  CHAT_CORPUS_HREF_PREFIX,
+  formatChatCorpusId,
+  parseChatCorpusHref,
+  parseChatCorpusId,
+  toChatCorpusHref,
+} from "./chat-corpus-scope";
+export type { ChatCorpus, ChatCorpusScope } from "./chat-corpus-scope";
+export {
   CHAT_MENTION_CATEGORIES,
   CHAT_MENTION_HREF_PREFIXES,
   CHAT_REFERENCE_CATEGORIES,
