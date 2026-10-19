@@ -171,6 +171,14 @@ test("EDPB listing excludes binding decisions while consultation pagination rema
   ).unwrap();
   expect(consultations.documents.length).toBeGreaterThan(0);
   expect(consultations.next).toBe(`${ORIGIN}/public-consultations_en?page=1`);
+  // The captured page lists open consultations in their own view beside the
+  // closed overview; both are publications of the index.
+  expect(consultations.documents).toEqual(
+    expect.arrayContaining([
+      `${ORIGIN}/public-consultations/guidelines-022026-on-anonymisation_en`,
+      `${ORIGIN}/public-consultations/guidelines-12026-on-processing-of-personal-data-for-scientific-research_en`,
+    ]),
+  );
 });
 
 const fakeFetch = (

@@ -162,19 +162,24 @@ export const parseEdpbListing = (html: string, url: string) =>
     const $ = load(html);
     const indexUrl = yield* sourceUrl(url);
     const indexPath = new URL(indexUrl).pathname;
+    // The required view proves the page is the index; the consultations page
+    // also lists open ones in a separate view, which may legitimately be empty.
     let marker = "";
+    let sections = "";
     if (indexPath === "/documents_en") {
       marker = ".view-documents-overview-documents";
+      sections = marker;
     }
     if (indexPath === "/public-consultations_en") {
       marker = ".view-public-consultations-closed-overview";
+      sections = `${marker}, .view-public-consultations-open-upcoming`;
     }
     if (!marker || $(marker).length === 0) {
       return yield* invalidSource(
         "EDPB response lacks its expected publication index",
       );
     }
-    const cards = $(marker)
+    const cards = $(sections)
       .find(".document-card, .node-public-consultation-card")
       .toArray();
     if (cards.length === 0) {
