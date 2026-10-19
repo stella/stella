@@ -31,19 +31,19 @@ import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
-import type {
-  AllHandlerOutputsTyped,
-  AssertTrue,
-  HandlerOutputsMatchByName,
-  McpToolHandler,
-} from "@/api/mcp/tool-types";
 import {
   ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
   type AccountOperationCheck,
   hasMcpToolAuthority,
   hasMcpToolInputAuthority,
   isAccountAuthorizedForMcpTool,
-} from "@/api/mcp/write-tool-authority";
+} from "@/api/mcp/tool-authority";
+import type {
+  AllHandlerOutputsTyped,
+  AssertTrue,
+  HandlerOutputsMatchByName,
+  McpToolHandler,
+} from "@/api/mcp/tool-types";
 
 import type {
   ChatProjectableToolName,

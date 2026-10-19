@@ -17,13 +17,13 @@ import { MCP_MODES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
-import type { McpToolDefinition } from "@/api/mcp/tool-types";
-import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
   isAccountAuthorizedForMcpTool,
   isMemberAuthorizedForMcpTool,
   type McpToolAuthorityDeclaration,
-} from "@/api/mcp/write-tool-authority";
+} from "@/api/mcp/tool-authority";
+import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import { handleMcpToolCall } from "@/api/mcp/tools";
 import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";

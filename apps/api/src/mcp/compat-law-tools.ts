@@ -89,6 +89,10 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    authority: {
+      kind: "public",
+      reason: "Reads published or capability metadata.",
+    },
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:
@@ -111,6 +115,10 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    authority: {
+      kind: "public",
+      reason: "Reads published or capability metadata.",
+    },
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:

@@ -37,6 +37,7 @@ import {
   getStaticMcpToolOutputContract,
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
+import { selectableOperations } from "@/api/mcp/tool-authority";
 import type {
   McpToolDefinition,
   RuntimeMcpToolOutputContract,
@@ -45,7 +46,6 @@ import {
   defineMcpToolOutput,
   deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
-import { selectableOperations } from "@/api/mcp/write-tool-authority";
 import {
   compileWireSchema,
   createWireSchemaValidator,

@@ -14,6 +14,7 @@ import {
   type AgentSkillScope,
 } from "@/api/db/schema";
 import { DEFAULT_SKILL_BODY_BY_SLUG } from "@/api/lib/agent-skills/default-skills";
+import { SKILL_READ_PERMISSIONS } from "@/api/lib/agent-skills/permissions";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -55,7 +56,7 @@ const config = {
     "the assistant may use it on its own, `manual` when it runs only on the " +
     "user's request. Also reports " +
     "whether you may manage team skills.",
-  permissions: { chat: ["create"] },
+  permissions: SKILL_READ_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {

@@ -9,7 +9,7 @@ import {
 } from "@/api/mcp/capability-tools";
 import { MCP_MODES, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
-import { isAccountAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
+import { isAccountAuthorizedForMcpTool } from "@/api/mcp/tool-authority";
 
 const reviewEmail = "review@example.test";
 const demoEmail = "limited@example.test";

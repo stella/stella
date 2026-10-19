@@ -35,15 +35,15 @@ import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-to
 import { CAPABILITY_FEATURE_BINDINGS } from "@/api/mcp/generated/capability-feature-bindings";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
-import type { McpToolDefinition } from "@/api/mcp/tool-types";
-import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
   isMemberAuthorizedForMcpTool,
   isMemberAuthorizedForMcpToolInput,
   type McpToolAuthorityDeclaration,
   type McpWriteToolOperationSelector,
   selectableOperations,
-} from "@/api/mcp/write-tool-authority";
+} from "@/api/mcp/tool-authority";
+import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import { handleMcpToolCall } from "@/api/mcp/tools";
 import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 

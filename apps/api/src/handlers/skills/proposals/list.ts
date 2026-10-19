@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals } from "@/api/db/schema";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
+import { SKILL_READ_PERMISSIONS } from "@/api/lib/agent-skills/permissions";
 import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -22,7 +23,7 @@ const config = {
     "and without their bodies. baseIsCurrent " +
     "reports whether a proposal still branches from the skill's newest " +
     "revision.",
-  permissions: { chat: ["create"] },
+  permissions: SKILL_READ_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {

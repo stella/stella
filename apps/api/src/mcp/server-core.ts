@@ -102,6 +102,7 @@ import {
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import { withToolAuthChallenge } from "@/api/mcp/tool-auth-challenge";
+import { mcpToolAuthorityRefusal } from "@/api/mcp/tool-authority";
 import { resolveMcpReadClass } from "@/api/mcp/tool-types";
 import type {
   McpReadClass,
@@ -117,7 +118,6 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
-import { mcpToolAuthorityRefusal } from "@/api/mcp/write-tool-authority";
 
 const MAX_TOOL_NAME_SUGGESTION_CHARS = 128;
 const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();

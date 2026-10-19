@@ -337,6 +337,7 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       readOnlyHint: true,
     },
     access: "read",
+    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     name: "prepare_feedback",

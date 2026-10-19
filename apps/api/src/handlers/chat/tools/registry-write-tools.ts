@@ -36,11 +36,11 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
 } from "@/api/mcp/static-tool-definitions";
-import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import {
   hasMcpToolAuthority,
   isAccountAuthorizedForMcpTool,
-} from "@/api/mcp/write-tool-authority";
+} from "@/api/mcp/tool-authority";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 
 /**
  * Chat's write surface, projected from the `access: "write"` slice of the MCP

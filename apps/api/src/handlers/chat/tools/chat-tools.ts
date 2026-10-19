@@ -130,7 +130,7 @@ import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
-import { isAccountAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
+import { isAccountAuthorizedForMcpTool } from "@/api/mcp/tool-authority";
 
 const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
 

@@ -125,6 +125,10 @@ const missing = () =>
 const common = {
   consumesServices: false,
   access: "read",
+  authority: {
+    kind: "public",
+    reason: "Reads published or capability metadata.",
+  },
   readClass: "public",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",

@@ -9,15 +9,15 @@ import {
   isMcpDescriptorFeatureEnabled,
 } from "@/api/mcp/feature-access";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
+import {
+  hasMcpToolAuthority,
+  isAccountAuthorizedForMcpTool,
+} from "@/api/mcp/tool-authority";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 import { enumProp } from "@/api/mcp/tool-utils";
 import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
-import {
-  hasMcpToolAuthority,
-  isAccountAuthorizedForMcpTool,
-} from "@/api/mcp/write-tool-authority";
 
 /**
  * A session that cannot confirm is not offered tools that always need

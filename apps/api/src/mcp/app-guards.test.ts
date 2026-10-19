@@ -10,6 +10,7 @@ const readerTool = {
   name: "reader_blocks",
   description: "Read decision blocks",
   access: "read",
+  authority: { kind: "public", reason: "Reads fixture public data." },
   readClass: "public",
   annotationReasons: {
     readOnlyHint: "Reads fixture data without modifying it.",

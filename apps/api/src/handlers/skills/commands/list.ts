@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 
 import { AGENT_SKILL_SCOPES, agentSkills } from "@/api/db/schema";
+import { SKILL_READ_PERMISSIONS } from "@/api/lib/agent-skills/permissions";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
@@ -22,7 +23,7 @@ const config = {
     "composer's command menu: id, scope, name, description, command, and the " +
     "full instruction body to insert on pick. Capped at 250 rows and not " +
     "paginated; use skills.list for the whole catalogue.",
-  permissions: { chat: ["create"] },
+  permissions: SKILL_READ_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {

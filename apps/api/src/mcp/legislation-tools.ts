@@ -397,6 +397,10 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       as_of: { kind: AGENT_INPUT_NORMALIZATION_KIND.date, bound: "start" },
     },
     access: "read",
+    authority: {
+      kind: "public",
+      reason: "Reads published or capability metadata.",
+    },
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public legislation corpus (legislationPublicReadDb), the
@@ -428,6 +432,10 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     inputSchema: readStatuteArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
+    authority: {
+      kind: "public",
+      reason: "Reads published or capability metadata.",
+    },
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -462,6 +470,10 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       },
     },
     access: "read",
+    authority: {
+      kind: "public",
+      reason: "Reads published or capability metadata.",
+    },
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -489,6 +501,10 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     inputSchema: readProvisionHistoryArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
+    authority: {
+      kind: "public",
+      reason: "Reads published or capability metadata.",
+    },
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",

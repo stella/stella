@@ -7,6 +7,7 @@ import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import {
+  hasEffectiveAuthority,
   mcpMemberAuthority,
   type McpEffectiveAuthority,
 } from "@/api/mcp/effective-authority";
@@ -70,6 +71,10 @@ export type McpWriteToolPermissions =
     }
   | { type: "delegated"; reason: string };
 
+export type McpReadToolAuthority =
+  | { kind: "tenant"; permissions: PermissionInput }
+  | { kind: "public"; reason: string };
+
 /** A `presence` selector: `property` set selects `present`, else `absent`. */
 export const selectOperationByPresence = (
   property: string,
@@ -127,7 +132,7 @@ const selectWriteToolOperation = (
  * `sandbox` admits it.
  */
 export type McpToolAuthorityDeclaration =
-  | { access: "read" }
+  | { access: "read"; authority: McpReadToolAuthority }
   | {
       access: "write";
       permissions: McpWriteToolPermissions;
@@ -135,10 +140,11 @@ export type McpToolAuthorityDeclaration =
     };
 
 /**
- * Whether a member may be offered this tool and reach its dispatch. Reads
- * carry no tool-level grant (their scope and per-row checks govern them). A
- * tool whose input selects its operation is offered when any operation is
- * held; `isMemberAuthorizedForMcpToolInput` decides the call.
+ * Whether a member may be offered this tool and reach its dispatch. Tenant
+ * reads require their declared grant; intentionally public reads carry their
+ * reason beside the definition. A tool whose input selects its operation is
+ * offered when any operation is held; `isMemberAuthorizedForMcpToolInput`
+ * decides the call.
  *
  * Nothing caches the result today (discovery, chat registration and skill
  * availability recompute it per request). A cache of any offered-tool list
@@ -150,7 +156,10 @@ export const isMemberAuthorizedForMcpTool = (
   definition: McpToolAuthorityDeclaration,
 ): boolean => {
   if (definition.access === "read") {
-    return true;
+    return (
+      definition.authority.kind === "public" ||
+      hasMemberPermission(authority, definition.authority.permissions)
+    );
   }
   const { permissions } = definition;
   switch (permissions.type) {
@@ -198,8 +207,18 @@ export const isMemberAuthorizedForMcpToolInput = (
 export const hasMcpToolAuthority = (
   authority: McpEffectiveAuthority,
   definition: McpToolAuthorityDeclaration,
-): boolean =>
-  isMemberAuthorizedForMcpTool(mcpMemberAuthority(authority), definition);
+): boolean => {
+  if (definition.access === "read") {
+    return (
+      definition.authority.kind === "public" ||
+      hasEffectiveAuthority(authority, definition.authority.permissions)
+    );
+  }
+  return isMemberAuthorizedForMcpTool(
+    mcpMemberAuthority(authority),
+    definition,
+  );
+};
 
 /** `isMemberAuthorizedForMcpToolInput` for an MCP request. */
 export const hasMcpToolInputAuthority = (
@@ -207,11 +226,13 @@ export const hasMcpToolInputAuthority = (
   definition: McpToolAuthorityDeclaration,
   input: Readonly<Record<string, unknown>>,
 ): boolean =>
-  isMemberAuthorizedForMcpToolInput(
-    mcpMemberAuthority(authority),
-    definition,
-    input,
-  );
+  definition.access === "read"
+    ? hasMcpToolAuthority(authority, definition)
+    : isMemberAuthorizedForMcpToolInput(
+        mcpMemberAuthority(authority),
+        definition,
+        input,
+      );
 
 export type AccountOperationCheck = typeof checkRestrictedAccountOperation;
 

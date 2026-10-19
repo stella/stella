@@ -17,8 +17,8 @@ import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import { isMemberAuthorizedForMcpTool } from "@/api/mcp/tool-authority";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
-import { isMemberAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
 
 /**
  * A registry tool counts as offered only where its own registry gates pass:

@@ -118,6 +118,7 @@ import {
   deriveTextFieldPaths,
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
+import { selectOperationByPresence } from "@/api/mcp/tool-authority";
 import type {
   InternalToolResult,
   McpTextFieldSpec,
@@ -150,7 +151,6 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
-import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 type DocumentToolName =
@@ -2448,6 +2448,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         "The mode/parent_id dependency remains authoritative in the runtime schema.",
     },
     access: "read",
+    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2481,6 +2482,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         "The compare_with_version_id/version_id dependency remains authoritative in the runtime schema.",
     },
     access: "read",
+    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2576,6 +2578,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "upload/version tools replace only a document's primary file.",
     inputSchema: listPropertiesArgsSchema,
     access: "read",
+    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",

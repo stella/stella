@@ -331,6 +331,7 @@ const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
     readClass: "both",
     anonymized: {
       exposure: "anonymize",
@@ -360,6 +361,7 @@ const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
     readClass: resolveCompatFetchReadClass,
     anonymized: {
       exposure: "anonymize",

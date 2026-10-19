@@ -157,6 +157,7 @@ import {
   deriveTextFieldPaths,
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
+import { selectOperationByPresence } from "@/api/mcp/tool-authority";
 import type {
   InternalToolErrorResult,
   McpTextFieldSpec,
@@ -188,7 +189,6 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
-import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type TemplateToolName =
@@ -688,6 +688,7 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   access: "read",
+  authority: { kind: "tenant", permissions: { workspace: ["read"] } },
   readClass: "tenant",
   anonymized: {
     exposure: "anonymize",
@@ -779,6 +780,7 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
   inputSchema: listTemplatesArgsSchema,
   access: "read",
+  authority: { kind: "tenant", permissions: { workspace: ["read"] } },
   readClass: "tenant",
   anonymized: {
     exposure: "anonymize",

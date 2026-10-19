@@ -6,6 +6,7 @@ import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillRevisions } from "@/api/db/schema";
 import { toAgentSkillRevisionResponse } from "@/api/handlers/skills/response";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
+import { SKILL_READ_PERMISSIONS } from "@/api/lib/agent-skills/permissions";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -21,7 +22,7 @@ const config = {
   description:
     "Read one recorded revision of an agent skill in full, including the " +
     "instruction body as it stood at that point.",
-  permissions: { chat: ["create"] },
+  permissions: SKILL_READ_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {

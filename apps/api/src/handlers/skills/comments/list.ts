@@ -6,6 +6,7 @@ import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillComments } from "@/api/db/schema";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
+import { SKILL_READ_PERMISSIONS } from "@/api/lib/agent-skills/permissions";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -82,7 +83,7 @@ const config = {
     "List the comments anchored to an agent skill, oldest first, across its " +
     "revisions and proposals. Each carries the character range and the quoted " +
     "text it was written against, and whether it has been resolved.",
-  permissions: { chat: ["create"] },
+  permissions: SKILL_READ_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {

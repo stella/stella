@@ -7,6 +7,7 @@ import {
   SKILL_INVOCATION,
 } from "@/api/lib/agent-skills/invocation";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
+import { SKILL_READ_PERMISSIONS } from "@/api/lib/agent-skills/permissions";
 import {
   anySkillRequiresTools,
   resolveSkillToolAvailability,
@@ -32,6 +33,7 @@ import {
 } from "@/api/lib/mcp-upstream/namespace";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import {
   hasGrantedScope,
@@ -68,6 +70,9 @@ const loadSkillTools = async ({
   mode: McpMode;
   scopes: readonly string[] | undefined;
 }): Promise<ResolvedSkillTool[]> => {
+  if (!hasEffectiveAuthority(context, SKILL_READ_PERMISSIONS)) {
+    return [];
+  }
   // A load fault propagates instead of `[]`, so a transient DB outage is not
   // mistaken for "no skills": dispatch maps it to a retryable error and
   // `tools/list` fails loudly rather than silently dropping skill tools.

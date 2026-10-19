@@ -48,6 +48,11 @@ import {
   getStaticMcpToolHandler,
 } from "@/api/mcp/static-tool-definitions";
 import { scopeToolResultToSurface } from "@/api/mcp/surface-tool-mentions";
+import {
+  mcpToolAuthorityDenialRefusal,
+  mcpToolAuthorityRefusal,
+  mcpToolInputAuthorityDenial,
+} from "@/api/mcp/tool-authority";
 import type {
   InternalToolResult,
   McpToolDefinition,
@@ -66,11 +71,6 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
-import {
-  mcpToolAuthorityDenialRefusal,
-  mcpToolAuthorityRefusal,
-  mcpToolInputAuthorityDenial,
-} from "@/api/mcp/write-tool-authority";
 
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,

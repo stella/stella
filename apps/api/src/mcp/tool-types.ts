@@ -15,9 +15,12 @@ import type {
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
+import type {
+  McpReadToolAuthority,
+  McpWriteToolPermissions,
+} from "@/api/mcp/tool-authority";
 import type { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
-import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
 
 /**
  * v2 types `Tool["inputSchema"]` as an arbitrary JSON value, which loses the
@@ -181,6 +184,7 @@ export const resolveMcpReadClass = async (
 export type McpToolAccessBranch =
   | {
       access: "read";
+      authority: McpReadToolAuthority;
       readClass: McpReadClass | McpReadClassResolver;
       annotations: McpToolAnnotations & { readOnlyHint: true };
     }
@@ -190,7 +194,7 @@ export type McpToolAccessBranch =
       annotations: McpToolAnnotations & { readOnlyHint: false };
       /**
        * The member authority every call needs; discovery and dispatch enforce
-       * it centrally through `write-tool-authority.ts`.
+       * it centrally through `tool-authority.ts`.
        */
       permissions: McpWriteToolPermissions;
       /**

@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import { toAgentSkillResponse } from "@/api/handlers/skills/response";
+import { SKILL_READ_PERMISSIONS } from "@/api/lib/agent-skills/permissions";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -22,7 +23,7 @@ const config = {
     "(`auto` or `manual`: whether the assistant may use it on its own), and every " +
     "resource file with its content. A team skill is readable by every " +
     "member of the organization; a private one only by its author.",
-  permissions: { chat: ["create"] },
+  permissions: SKILL_READ_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {

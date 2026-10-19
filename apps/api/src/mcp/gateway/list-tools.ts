@@ -2,6 +2,7 @@ import type { Tool as McpTool } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 
 import { modelMayStartUninvoked } from "@/api/lib/agent-skills/invocation";
+import { SKILL_READ_PERMISSIONS } from "@/api/lib/agent-skills/permissions";
 import {
   isExternalMcpToolName,
   isSkillToolName,
@@ -47,6 +48,10 @@ import {
   getStaticMcpToolDefinition,
   getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
+import {
+  mcpToolAuthorityRefusal,
+  type McpWriteToolPermissions,
+} from "@/api/mcp/tool-authority";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpAnonymizedPolicy,
@@ -55,10 +60,6 @@ import type {
   McpToolAnnotations,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
-import {
-  mcpToolAuthorityRefusal,
-  type McpWriteToolPermissions,
-} from "@/api/mcp/write-tool-authority";
 
 // The gate's one owner is `mcp/tool-feature.ts`, so the resource list and the
 // connect-time instructions apply the same predicate without importing the
@@ -91,6 +92,7 @@ const externalMcpToolAccess = ({
 }):
   | {
       access: "read";
+      authority: { kind: "tenant"; permissions: { workspace: ["read"] } };
       readClass: "tenant";
       annotations: McpToolAnnotations & {
         destructiveHint: false;
@@ -111,6 +113,7 @@ const externalMcpToolAccess = ({
   readOnlyHint === true
     ? {
         access: "read",
+        authority: { kind: "tenant", permissions: { workspace: ["read"] } },
         readClass: "tenant",
         annotations: {
           title,
@@ -333,6 +336,7 @@ export const skillToolDefinition = (
   skill: Pick<ResolvedSkillTool, "description" | "displayName" | "exposedName">,
 ): McpToolDefinition => ({
   access: "read",
+  authority: { kind: "tenant", permissions: SKILL_READ_PERMISSIONS },
   readClass: "tenant",
   annotations: {
     ...SKILL_TOOL_ANNOTATIONS,

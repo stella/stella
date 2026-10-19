@@ -1053,6 +1053,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "overview instead: counts, recent entities, linked contacts, and members.",
     inputSchema: listMattersArgsSchema,
     access: "read",
+    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1077,6 +1078,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "asks to search outside a single matter or you do not yet know the right matter.",
     inputSchema: searchAcrossMattersArgsSchema,
     access: "read",
+    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1108,6 +1110,10 @@ export const STELLA_TOOL_DEFINITIONS = [
       decision_type: FILTER_NORMALIZATION,
     },
     access: "read",
+    authority: {
+      kind: "public",
+      reason: "Reads published or capability metadata.",
+    },
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
@@ -1141,6 +1147,10 @@ export const STELLA_TOOL_DEFINITIONS = [
       }),
     },
     access: "read",
+    authority: {
+      kind: "public",
+      reason: "Reads published or capability metadata.",
+    },
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -1163,6 +1173,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "windows; pass the returned nextCursor back as cursor to read more.",
     inputSchema: readContentAcrossMattersArgsSchema,
     access: "read",
+    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1205,6 +1216,10 @@ export const STELLA_TOOL_DEFINITIONS = [
       include: { kind: "string-list" },
     },
     access: "read",
+    authority: {
+      kind: "public",
+      reason: "Reads published or capability metadata.",
+    },
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
@@ -1240,6 +1255,10 @@ export const STELLA_TOOL_DEFINITIONS = [
       "`url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
+    authority: {
+      kind: "public",
+      reason: "Reads published or capability metadata.",
+    },
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
@@ -1267,6 +1286,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "surfaces a contact the user wants to inspect more closely.",
     inputSchema: readContactArgsSchema,
     access: "read",
+    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
