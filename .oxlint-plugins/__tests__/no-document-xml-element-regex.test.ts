@@ -10,6 +10,13 @@ test("keeps document element parsing on the shared reader", async () => {
       { sourcePath: "apps/api/src/lib/files/read.ts" },
     ),
   ).toEqual([1, 2]);
+  expect(
+    await lintSingleRule(
+      "no-document-xml-element-regex",
+      "xml.match(/<item>[\\s\\S]*?<\\/item>/u);",
+      { sourcePath: "apps/api/src/lib/document-translation/segments.ts" },
+    ),
+  ).toEqual([1]);
 });
 
 test("accepts bounded patterns and code outside document modules", async () => {

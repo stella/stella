@@ -6,6 +6,7 @@ const isDocumentXmlPath = (filename: string): boolean =>
   filename.includes("/apps/api/src/lib/files/") ||
   filename.includes("/apps/api/src/lib/docx/") ||
   filename.includes("/apps/api/src/lib/docx-") ||
+  filename.includes("/apps/api/src/lib/document-translation/") ||
   filename.includes("/packages/docx-utils/") ||
   filename.endsWith(
     ".oxlint-plugins/__fixtures__/no-document-xml-element-regex.fixture.ts",
