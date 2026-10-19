@@ -6,6 +6,10 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import {
+  UNTRUSTED_CONTENT_CLOSE,
+  UNTRUSTED_CONTENT_OPEN,
+} from "@stll/api-contract/untrusted-content-fence";
 
 import {
   externalMcpCitedAssistantMessageFixture,
@@ -84,6 +88,24 @@ describe("external source extraction from tool output", () => {
       "El Pleno del Tribunal Constitucional",
     );
     expect(sources.at(0)?.text).toBeUndefined();
+  });
+
+  test("extracts a source from JSON fenced as an untrusted connector result", () => {
+    const payload = JSON.stringify({
+      title: "Decision 105/2022",
+      url: "https://registry.example/decisions/105-2022",
+    });
+    const fenced = `External connector result (connector "registry", tool "search").\n${UNTRUSTED_CONTENT_OPEN}\n${payload}\n${UNTRUSTED_CONTENT_CLOSE}`;
+    const sources: ExternalSourceEntry[] = [];
+
+    collectExternalSources(fenced, sources);
+
+    expect(sources.map(({ title, url }) => ({ title, url }))).toEqual([
+      {
+        title: "Decision 105/2022",
+        url: "https://registry.example/decisions/105-2022",
+      },
+    ]);
   });
 
   test("extracts full document text when get_document returns it", () => {
