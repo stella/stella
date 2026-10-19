@@ -9,7 +9,7 @@ GlobalRegistrator.register({
   url: "http://localhost:3000/settings/account/profile",
 });
 const originalFetch = globalThis.fetch;
-const { act, cleanup, fireEvent, render, screen } =
+const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -19,7 +19,10 @@ const { AuthenticatedUserProvider } =
 const { PersonalDataExportCard } = await import("./personal-data-export-card");
 
 let latestExport: AccountDataExportStatus | null = null;
+let deferredLatestExportResponse: Promise<Response> | null = null;
+let deferredPostResponse: Promise<Response> | null = null;
 const requestedPaths: string[] = [];
+const latestGetSignals: AbortSignal[] = [];
 
 const requestUrl = (input: RequestInfo | URL): string => {
   if (input instanceof Request) {
@@ -36,9 +39,23 @@ globalThis.fetch = Object.assign(
     requestedPaths.push(`${method} ${url.pathname}`);
 
     if (url.pathname === "/v1/me/data-exports" && method === "GET") {
+      const signal = init?.signal ?? request?.signal;
+      if (signal) {
+        latestGetSignals.push(signal);
+      }
+      if (deferredLatestExportResponse) {
+        const response = deferredLatestExportResponse;
+        deferredLatestExportResponse = null;
+        return response;
+      }
       return Response.json({ latest: latestExport });
     }
     if (url.pathname === "/v1/me/data-exports" && method === "POST") {
+      if (deferredPostResponse) {
+        const response = deferredPostResponse;
+        deferredPostResponse = null;
+        return response;
+      }
       latestExport = {
         id: "0199d851-071b-7000-8000-000000000001",
         status: "requested",
@@ -62,7 +79,10 @@ afterEach(async () => {
   }
   clients.length = 0;
   latestExport = null;
+  deferredLatestExportResponse = null;
+  deferredPostResponse = null;
   requestedPaths.length = 0;
+  latestGetSignals.length = 0;
 });
 
 afterAll(async () => {
@@ -99,6 +119,8 @@ const renderAccountCard = () => {
       </IntlProvider>
     </QueryClientProvider>,
   );
+
+  return client;
 };
 
 test("a person requests, waits for, and downloads their account export", async () => {
@@ -155,4 +177,63 @@ test("an expired export offers a replacement request", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Request a new export" }));
   expect(await screen.findByText("Preparing your export…")).toBeTruthy();
   expect(requestedPaths).toContain("POST /v1/me/data-exports");
+});
+
+test("a replacement request supersedes an older in-flight status read", async () => {
+  const oldExport = {
+    id: "0199d851-071b-7000-8000-000000000004",
+    status: "failed",
+  } as const satisfies AccountDataExportStatus;
+  latestExport = oldExport;
+  const client = renderAccountCard();
+
+  expect(await screen.findByRole("alert")).toBeTruthy();
+
+  const deferredGet = Promise.withResolvers<Response>();
+  deferredLatestExportResponse = deferredGet.promise;
+  void client.invalidateQueries();
+  await waitFor(() => {
+    expect(
+      requestedPaths.filter((path) => path === "GET /v1/me/data-exports"),
+    ).toHaveLength(2);
+  });
+  const staleGetSignal = latestGetSignals.at(-1);
+  expect(staleGetSignal?.aborted).toBe(false);
+
+  const deferredPost = Promise.withResolvers<Response>();
+  deferredPostResponse = deferredPost.promise;
+  fireEvent.click(screen.getByRole("button", { name: "Request a new export" }));
+  await waitFor(() => expect(staleGetSignal?.aborted).toBe(true));
+
+  latestExport = {
+    id: "0199d851-071b-7000-8000-000000000005",
+    status: "requested",
+  };
+  deferredPost.resolve(Response.json(latestExport));
+  expect(await screen.findByText("Preparing your export…")).toBeTruthy();
+
+  const deferredPoll = Promise.withResolvers<Response>();
+  deferredLatestExportResponse = deferredPoll.promise;
+  deferredGet.resolve(Response.json({ latest: oldExport }));
+  await act(async () => {
+    await deferredGet.promise;
+  });
+
+  await waitFor(() => {
+    expect(
+      requestedPaths.filter((path) => path === "GET /v1/me/data-exports")
+        .length,
+    ).toBeGreaterThanOrEqual(3);
+  });
+  expect(screen.getByText("Preparing your export…")).toBeTruthy();
+  deferredPoll.resolve(Response.json({ latest: latestExport }));
+  await waitFor(
+    () => {
+      expect(
+        requestedPaths.filter((path) => path === "GET /v1/me/data-exports")
+          .length,
+      ).toBeGreaterThanOrEqual(4);
+    },
+    { timeout: 5000 },
+  );
 });

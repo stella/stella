@@ -41,9 +41,13 @@ export const PersonalDataExportCard = () => {
   useQueryViewError(latestView);
 
   const requestExport = useMutation({
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: latestOptions.queryKey });
+    },
     mutationFn: async () => unwrapEden(await api.me["data-exports"].post()),
-    onSuccess: (status) => {
+    onSuccess: async (status) => {
       queryClient.setQueryData(latestOptions.queryKey, status);
+      await queryClient.invalidateQueries({ queryKey: latestOptions.queryKey });
     },
     onError: (error) => {
       analytics.captureError(error);
