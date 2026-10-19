@@ -17,6 +17,8 @@ import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-co
 import { createSafeId } from "@/api/lib/branded-types";
 import { readAccountProfileForExport } from "@/api/lib/db/account-row";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { SYNTHETIC_SESSION_CONTROL_TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transition } from "@/api/lib/db/transitions";
 import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedOrganizationId,
@@ -162,16 +164,17 @@ export const createSyntheticSessionStore = (
 
   const revokeSyntheticSessions = async () =>
     await withAggregateTransaction(database, async (tx) => {
-      await tx
-        .insert(syntheticSessionControl)
-        .values({
-          id: SYNTHETIC_SESSION_CONTROL_ID,
-          status: "revoked",
-        })
-        .onConflictDoUpdate({
-          target: syntheticSessionControl.id,
-          set: { status: "revoked", updatedAt: new Date() },
-        });
+      const controlTransition = await transition({
+        tx,
+        spec: SYNTHETIC_SESSION_CONTROL_TRANSITIONS,
+        id: SYNTHETIC_SESSION_CONTROL_ID,
+        options: {
+          from: ["enabled"],
+          to: "revoked",
+          set: { updatedAt: new Date() },
+        },
+        recordTransitionAuditEvent: async () => await Promise.resolve(),
+      });
       const { deletedSessions, deletedRoomTokens } =
         await revokeMonitoringSessions(
           tx,
@@ -179,7 +182,11 @@ export const createSyntheticSessionStore = (
         );
       await recordSystemAudit(tx, "system:monitoring-session-revoke", {
         subject: createSafeId<"systemScriptRun">(),
-        counts: { revokedControls: 1, deletedSessions, deletedRoomTokens },
+        counts: {
+          revokedControls: controlTransition.type === "transitioned" ? 1 : 0,
+          deletedSessions,
+          deletedRoomTokens,
+        },
       });
       return { status: "revoked", deletedSessions, deletedRoomTokens };
     });

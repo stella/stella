@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
+import { decidePinnedSessionLifetime } from "@/api/lib/auth/session-lifetime";
 import { SYNTHETIC_PRINCIPAL } from "@/api/lib/synthetic-principal/constants";
 import {
   checkSyntheticPrincipalAccess,
@@ -11,6 +12,20 @@ import {
 } from "@/api/lib/synthetic-principal/policy";
 
 describe("synthetic principal access", () => {
+  test("keeps monitoring sessions fixed for 30 minutes", () => {
+    const createdAt = new Date("2026-10-19T12:00:00.000Z");
+
+    expect(
+      decidePinnedSessionLifetime({
+        id: "synthetic-session-example",
+        createdAt,
+      }),
+    ).toEqual({
+      refreshMode: "fixed",
+      expiresAt: new Date("2026-10-19T12:30:00.000Z"),
+    });
+  });
+
   test("refuses every operation classified as unavailable", () => {
     for (const operation of Object.values(REVIEW_ACCOUNT_OPERATION)) {
       if (SYNTHETIC_PRINCIPAL_POLICY[operation] !== "refused") {

@@ -160,6 +160,7 @@ import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   createSessionLifetime,
+  decidePinnedSessionLifetime,
   SESSION_LIFETIME_FIELDS,
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
@@ -1804,10 +1805,17 @@ export const createAuth = (
       },
       session: {
         create: {
-          before: async (session) =>
-            (await demoSessionPolicy(session)) ??
-            (await reviewSessionPolicy(session)) ??
-            (await syntheticSessionPolicy(session)),
+          before: async (session) => {
+            const accountPolicy =
+              (await demoSessionPolicy(session)) ??
+              (await reviewSessionPolicy(session)) ??
+              (await syntheticSessionPolicy(session));
+            const data = accountPolicy?.data ?? session;
+            const lifetime = decidePinnedSessionLifetime(data);
+            return accountPolicy || lifetime
+              ? { data: { ...data, ...lifetime } }
+              : undefined;
+          },
         },
       },
       user: {

@@ -17,12 +17,34 @@ import { DAY_IN_MS } from "@stll/time";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import {
+  SYNTHETIC_SESSION_LIFETIME_MS,
+  SYNTHETIC_SESSION_PREFIX,
+} from "@/api/lib/synthetic-principal/constants";
 import { checkSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 export const SESSION_ABSOLUTE_AGE_MS = 90 * DAY_IN_MS;
 export const SESSION_IDLE_AGE_MS = 60 * 60 * 1000;
 export const SESSION_PRIOR_TOKEN_GRACE_MS = 60 * 1000;
 const cookieCacheVersion = "session-lifetime-v2";
+
+type SessionLifetimeDecision = {
+  refreshMode: "fixed";
+  expiresAt: Date;
+};
+
+/** Keeps framework session creation aligned with explicitly minted credentials. */
+export const decidePinnedSessionLifetime = (
+  session: Pick<Session, "id" | "createdAt">,
+): SessionLifetimeDecision | undefined =>
+  session.id.startsWith(SYNTHETIC_SESSION_PREFIX)
+    ? {
+        refreshMode: "fixed",
+        expiresAt: new Date(
+          session.createdAt.getTime() + SYNTHETIC_SESSION_LIFETIME_MS,
+        ),
+      }
+    : undefined;
 
 export const SESSION_LIFETIME_FIELDS = {
   refreshMode: {
