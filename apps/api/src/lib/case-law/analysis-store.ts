@@ -113,10 +113,14 @@ export const createMemoryAnalysisStore = (
       const wrote =
         held !== null &&
         "status" in held &&
-        held.startedAt === sentinel.startedAt &&
+        "runId" in held &&
+        held.runId === sentinel.runId &&
         held.inputFingerprint === sentinel.inputFingerprint;
       if (wrote) {
-        memoryAnalyses.set(decisionId, { ...sentinel, partialTree });
+        memoryAnalyses.set(decisionId, {
+          ...sentinel,
+          partialTree: [...partialTree],
+        });
       }
       return await Promise.resolve(wrote);
     },
@@ -127,7 +131,8 @@ export const createMemoryAnalysisStore = (
       if (
         held !== null &&
         "status" in held &&
-        held.startedAt === sentinel.startedAt &&
+        "runId" in held &&
+        held.runId === sentinel.runId &&
         held.inputFingerprint === sentinel.inputFingerprint
       ) {
         memoryAnalyses.delete(decisionId);
@@ -143,7 +148,8 @@ export const createMemoryAnalysisStore = (
       if (
         held !== null &&
         "status" in held &&
-        held.startedAt === sentinel.startedAt &&
+        "runId" in held &&
+        held.runId === sentinel.runId &&
         held.inputFingerprint === sentinel.inputFingerprint
       ) {
         memoryFailures.set(memoryFailureKey(decisionId, keyTag), failure);

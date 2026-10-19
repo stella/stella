@@ -46,12 +46,25 @@ describe("parsePersistedDecisionAnalysis", () => {
     const sentinel = {
       version: CURRENT_ANALYSIS_VERSION,
       status: "generating",
+      runId: "019a04dd-36d8-7000-8000-000000000001",
       startedAt: "2026-04-30T12:00:00.000Z",
       inputFingerprint: FINGERPRINT,
     } as const;
 
     expect(parsePersistedDecisionAnalysis(sentinel)).toEqual(sentinel);
     expect(isAnalysisGenerating(sentinel)).toBe(true);
+  });
+
+  test("keeps a legacy sentinel without a run id until it becomes stale", () => {
+    const sentinel = {
+      version: CURRENT_ANALYSIS_VERSION,
+      status: "generating",
+      startedAt: "2026-04-30T12:00:00.000Z",
+      inputFingerprint: FINGERPRINT,
+    } as const;
+
+    expect(parsePersistedDecisionAnalysis(sentinel)).toEqual(sentinel);
+    expect(isAnalysisGenerating(sentinel)).toBe(false);
   });
 
   test("rejects a sentinel without a fingerprint", () => {

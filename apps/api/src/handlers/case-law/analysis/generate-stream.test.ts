@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { AnalysisHeadingInput } from "@stll/legal-ast/analysis";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { analysisFailureRecord } from "@/api/lib/case-law/analysis-failure";
 import type { AnalysisStore } from "@/api/lib/case-law/analysis-store";
 import { createMemoryAnalysisStore } from "@/api/lib/case-law/analysis-store";
 import { ModelOutputInvalidError } from "@/api/lib/errors/provider-call-error";
@@ -170,6 +171,75 @@ describe("streamed case-law analysis generation", () => {
       "partial:First,Second",
       "final",
     ]);
+  });
+
+  test("does not expose sections appended inside the publication interval", async () => {
+    const { sentinel, store } = await setup();
+    let now = 0;
+    await run(store, sentinel, {
+      nowMs: () => now,
+      async *streamAnalysis() {
+        yield partial([first, draft]);
+        now = 100;
+        yield partial([first, second, draft]);
+        expect(store.peek(decisionId)).toMatchObject({
+          partialTree: [{ label: "First" }],
+        });
+        yield complete();
+      },
+    });
+  });
+
+  test("a superseded run cannot write, clear, or fail its replacement", async () => {
+    const { sentinel: superseded, store } = await setup();
+    const replacement = await store.claim({
+      decisionId,
+      fingerprint,
+      observed: store.peek(decisionId),
+    });
+    if (replacement === null) {
+      throw new Error("expected a replacement run to claim the decision");
+    }
+    expect(replacement.startedAt).toBe(superseded.startedAt);
+    expect(replacement.runId).not.toBe(superseded.runId);
+
+    const replacementTree = [{ ...first, children: [] }];
+    expect(
+      await store.savePartial({
+        decisionId,
+        partialTree: replacementTree,
+        sentinel: replacement,
+      }),
+    ).toBe(true);
+    const held = store.peek(decisionId);
+
+    expect(
+      await store.savePartial({
+        decisionId,
+        partialTree: [{ ...second, children: [] }],
+        sentinel: superseded,
+      }),
+    ).toBe(false);
+    expect(store.peek(decisionId)).toEqual(held);
+
+    await store.clear({ decisionId, sentinel: superseded });
+    expect(store.peek(decisionId)).toEqual(held);
+
+    await store.fail({
+      decisionId,
+      keyTag: "platform",
+      sentinel: superseded,
+      failure: analysisFailureRecord({
+        code: "failed",
+        fingerprint,
+        now: new Date("2026-10-18T12:00:00.000Z"),
+        reader: { source: "platform" },
+      }),
+    });
+    expect(store.peek(decisionId)).toEqual(held);
+    expect(
+      await store.readFailure({ decisionId, keyTag: "platform" }),
+    ).toBeNull();
   });
 
   test("paces refused writes from a superseded run", async () => {

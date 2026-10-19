@@ -780,6 +780,42 @@ describe("a failed analysis run", () => {
     expect(poll.starts).toBe(0);
   });
 
+  test("a superseded run with the same timestamp and fingerprint cannot mutate its replacement", async () => {
+    const decisionId = await insertDecision();
+    const store = createDbAnalysisStore(db);
+    const now = new Date("2026-10-19T00:00:00.000Z");
+    const superseded = analysisSentinel(FINGERPRINT, now);
+    const replacement = analysisSentinel(FINGERPRINT, now);
+    expect(replacement.runId).not.toBe(superseded.runId);
+    await holdRow(decisionId, replacement);
+
+    expect(
+      await store.savePartial({
+        decisionId,
+        partialTree: [],
+        sentinel: superseded,
+      }),
+    ).toBe(false);
+    expect(await storedValue(decisionId)).toEqual(replacement);
+
+    await store.clear({ decisionId, sentinel: superseded });
+    expect(await storedValue(decisionId)).toEqual(replacement);
+
+    await store.fail({
+      decisionId,
+      keyTag: "platform",
+      sentinel: superseded,
+      failure: analysisFailureRecord({
+        code: "failed",
+        fingerprint: FINGERPRINT,
+        now,
+        reader: { source: "platform" },
+      }),
+    });
+    expect(await storedValue(decisionId)).toEqual(replacement);
+    expect(await failureRows(decisionId)).toEqual([]);
+  });
+
   test("an organization that switched its provider after a failed run runs on the new one", async () => {
     const decisionId = await insertDecision();
     await read({ decisionId, model: fakeGoogle(["cut-off"]).model });

@@ -211,7 +211,7 @@ const releaseRun = async (
           eq(caseLawDecisions.id, decisionId),
           // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
           sql`${caseLawDecisions.analysis}->>'status' = 'generating'`,
-          sql`${caseLawDecisions.analysis}->>'startedAt' = ${sentinel.startedAt}`,
+          sql`${caseLawDecisions.analysis}->>'runId' = ${sentinel.runId}`,
           sql`${storedAnalysisFingerprintFor(caseLawDecisions)} = ${sentinel.inputFingerprint}`,
         ),
       );
@@ -225,7 +225,7 @@ const releaseRun = async (
       UPDATE "case_law_decisions" SET "analysis" = NULL
       WHERE "id" = ${decisionId}::uuid
         AND "analysis"->>'status' = 'generating'
-        AND "analysis"->>'startedAt' = ${sentinel.startedAt}
+        AND "analysis"->>'runId' = ${sentinel.runId}
         AND "analysis"->>'inputFingerprint' = ${sentinel.inputFingerprint}
       RETURNING "id"
     )
@@ -404,7 +404,7 @@ export const createDbAnalysisStore = (
         and(
           eq(caseLawDecisions.id, decisionId),
           sql`${caseLawDecisions.analysis}->>'status' = 'generating'`,
-          sql`${caseLawDecisions.analysis}->>'startedAt' = ${sentinel.startedAt}`,
+          sql`${caseLawDecisions.analysis}->>'runId' = ${sentinel.runId}`,
           sql`${storedAnalysisFingerprintFor(caseLawDecisions)} = ${sentinel.inputFingerprint}`,
         ),
       )

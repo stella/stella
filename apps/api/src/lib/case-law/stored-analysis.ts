@@ -35,6 +35,7 @@ export const analysisSentinel = (
 ): AnalysisGenerating => ({
   version: CURRENT_ANALYSIS_VERSION,
   status: "generating",
+  runId: Bun.randomUUIDv7(),
   startedAt: now.toISOString(),
   inputFingerprint: fingerprint,
 });
