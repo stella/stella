@@ -18,7 +18,22 @@ class TestResizeObserver {
   unobserve(target: Element) {
     TestResizeObserver.observed.delete(target);
   }
+  static notify() {
+    const stub: ResizeObserver = {
+      disconnect: () => undefined,
+      observe: () => undefined,
+      unobserve: () => undefined,
+    };
+    TestResizeObserver.callback?.([], stub);
+  }
 }
+
+const divOf = (node: Element | null | undefined): HTMLDivElement => {
+  if (!(node instanceof HTMLDivElement)) {
+    throw new TypeError("Expected the scroller element");
+  }
+  return node;
+};
 globalThis.ResizeObserver = TestResizeObserver;
 
 const { act, cleanup, fireEvent, render } =
@@ -59,16 +74,13 @@ test("shows directional controls and scrolls forward", () => {
       <button type="button">Item</button>
     </HorizontalScroller>,
   );
-  const viewport = view.getByText("Item").parentElement
-    ?.parentElement as HTMLDivElement;
+  const viewport = divOf(view.getByText("Item").parentElement?.parentElement);
   Object.defineProperties(viewport, {
     clientWidth: { value: 100 },
     scrollWidth: { value: 300 },
     scrollBy: { value: scrollBy },
   });
-  act(() =>
-    TestResizeObserver.callback?.([], new TestResizeObserver(() => undefined)),
-  );
+  act(() => TestResizeObserver.notify());
   expect(view.getByLabelText("Previous").getAttribute("aria-disabled")).toBe(
     "true",
   );
@@ -95,7 +107,7 @@ test("converts vertical wheel input and reveals focused content", () => {
     </HorizontalScroller>,
   );
   const item = view.getByText("Item");
-  const viewport = item.parentElement?.parentElement as HTMLDivElement;
+  const viewport = divOf(item.parentElement?.parentElement);
   Object.defineProperties(viewport, {
     clientWidth: { value: 100 },
     scrollWidth: { value: 300 },
@@ -129,8 +141,7 @@ test("scrolls a right-to-left row towards its inline end on a downward wheel", (
       <button type="button">Item</button>
     </HorizontalScroller>,
   );
-  const viewport = view.getByText("Item").parentElement
-    ?.parentElement as HTMLDivElement;
+  const viewport = divOf(view.getByText("Item").parentElement?.parentElement);
   viewport.style.direction = "rtl";
   Object.defineProperties(viewport, {
     clientWidth: { value: 100 },
@@ -147,21 +158,15 @@ test("updates its controls when content changes at a fixed viewport size", () =>
       <button type="button">Item 0</button>
     </HorizontalScroller>,
   );
-  const content = view.getByText("Item 0").parentElement as HTMLDivElement;
-  const viewport = content.parentElement as HTMLDivElement;
+  const content = divOf(view.getByText("Item 0").parentElement);
+  const viewport = divOf(content.parentElement);
   expect(TestResizeObserver.observed.has(content)).toBe(true);
   let scrollWidth = 100;
   Object.defineProperties(viewport, {
     clientWidth: { value: 100 },
     scrollWidth: { get: () => scrollWidth },
   });
-  const contentResized = () =>
-    act(() =>
-      TestResizeObserver.callback?.(
-        [],
-        new TestResizeObserver(() => undefined),
-      ),
-    );
+  const contentResized = () => act(() => TestResizeObserver.notify());
   contentResized();
   expect(view.queryByLabelText("Next")).toBeNull();
 
@@ -181,8 +186,7 @@ test("leaves ctrl+wheel to the page for pinch zoom", () => {
       <button type="button">Item</button>
     </HorizontalScroller>,
   );
-  const viewport = view.getByText("Item").parentElement
-    ?.parentElement as HTMLDivElement;
+  const viewport = divOf(view.getByText("Item").parentElement?.parentElement);
   Object.defineProperties(viewport, {
     clientWidth: { value: 100 },
     scrollWidth: { value: 300 },
@@ -215,8 +219,7 @@ test("hands the wheel back to the page at the edge it would move past", () => {
       <button type="button">Item</button>
     </HorizontalScroller>,
   );
-  const viewport = view.getByText("Item").parentElement
-    ?.parentElement as HTMLDivElement;
+  const viewport = divOf(view.getByText("Item").parentElement?.parentElement);
   let scrollLeft = 0;
   Object.defineProperties(viewport, {
     clientWidth: { value: 100 },
@@ -248,16 +251,15 @@ test("lets keyboard users reach and operate an overflowing row of static content
       <span>Static item</span>
     </HorizontalScroller>,
   );
-  const viewport = view.getByText("Static item").parentElement
-    ?.parentElement as HTMLDivElement;
+  const viewport = divOf(
+    view.getByText("Static item").parentElement?.parentElement,
+  );
   Object.defineProperties(viewport, {
     clientWidth: { value: 100 },
     scrollWidth: { value: 300 },
     scrollBy: { value: scrollBy },
   });
-  act(() =>
-    TestResizeObserver.callback?.([], new TestResizeObserver(() => undefined)),
-  );
+  act(() => TestResizeObserver.notify());
   const next = view.getByLabelText("Next");
   expect(next.tabIndex).toBe(0);
   next.focus();
@@ -273,8 +275,9 @@ test("keeps focus on a control that scrolled the row to its edge", () => {
       <span>Static item</span>
     </HorizontalScroller>,
   );
-  const viewport = view.getByText("Static item").parentElement
-    ?.parentElement as HTMLDivElement;
+  const viewport = divOf(
+    view.getByText("Static item").parentElement?.parentElement,
+  );
   let scrollLeft = 0;
   Object.defineProperties(viewport, {
     clientWidth: { value: 100 },
@@ -282,9 +285,7 @@ test("keeps focus on a control that scrolled the row to its edge", () => {
     scrollLeft: { get: () => scrollLeft },
     scrollBy: { value: scrollBy },
   });
-  act(() =>
-    TestResizeObserver.callback?.([], new TestResizeObserver(() => undefined)),
-  );
+  act(() => TestResizeObserver.notify());
   const next = view.getByLabelText("Next");
   next.focus();
   scrollLeft = 200;
