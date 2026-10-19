@@ -1,7 +1,8 @@
+import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
+import type { RootDatabase } from "@/api/db/root";
 import { syntheticSessionControl } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
@@ -13,6 +14,7 @@ import {
 import { revokeMonitoringSessions } from "@/api/lib/auth-artifacts";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
+import { decidePinnedSessionLifetime } from "@/api/lib/auth/session-lifetime";
 import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readAccountProfileForExport } from "@/api/lib/db/account-row";
@@ -30,7 +32,6 @@ import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-a
 import {
   SYNTHETIC_PRINCIPAL,
   SYNTHETIC_SESSION_CONTROL_ID,
-  SYNTHETIC_SESSION_LIFETIME_MS,
   SYNTHETIC_SESSION_PREFIX,
 } from "./constants";
 
@@ -41,7 +42,7 @@ type MintSyntheticSessionOptions = {
 };
 
 export const createSyntheticSessionStore = (
-  database: Pick<typeof rootDb, "transaction" | "select">,
+  database: Pick<RootDatabase, "transaction" | "select">,
 ) => {
   const mintSyntheticSession = async ({
     keyLabel,
@@ -106,16 +107,17 @@ export const createSyntheticSessionStore = (
         userId: brandPersistedUserId(principal.user.id),
       });
 
-      const expiresAt = new Date(now.getTime() + SYNTHETIC_SESSION_LIFETIME_MS);
       const token = Bun.randomUUIDv7();
       const id = `${SYNTHETIC_SESSION_PREFIX}${token}`;
+      const lifetime =
+        decidePinnedSessionLifetime({ id, createdAt: now }) ??
+        panic("Dedicated session id did not select its fixed lifetime");
       await tx.insert(session).values({
         id,
         token,
-        refreshMode: "fixed",
+        ...lifetime,
         userId: SYNTHETIC_PRINCIPAL.user.id,
         activeOrganizationId: SYNTHETIC_PRINCIPAL.org.id,
-        expiresAt,
         createdAt: now,
         updatedAt: now,
         ipAddress: "synthetic-monitor",
@@ -140,7 +142,7 @@ export const createSyntheticSessionStore = (
           keyLabel,
           requestId: requestId ?? null,
           userAgent,
-          expiresAt: expiresAt.toISOString(),
+          expiresAt: lifetime.expiresAt.toISOString(),
         },
       });
       return {
@@ -149,7 +151,7 @@ export const createSyntheticSessionStore = (
           token,
           env.BETTER_AUTH_SECRET,
         ),
-        expiresAt: expiresAt.toISOString(),
+        expiresAt: lifetime.expiresAt.toISOString(),
       };
     });
     if (minted) {
@@ -176,18 +178,20 @@ export const createSyntheticSessionStore = (
         recordTransitionAuditEvent: async () => await Promise.resolve(),
       });
       const { deletedSessions, deletedRoomTokens } =
-        await revokeMonitoringSessions(
+        await revokeMonitoringSessions({
           tx,
-          brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
-        );
-      await recordSystemAudit(tx, "system:monitoring-session-revoke", {
-        subject: createSafeId<"systemScriptRun">(),
-        counts: {
-          revokedControls: controlTransition.type === "transitioned" ? 1 : 0,
-          deletedSessions,
-          deletedRoomTokens,
-        },
-      });
+          userId: brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
+          recordAuditEvent: async (counts) => {
+            await recordSystemAudit(tx, "system:monitoring-session-revoke", {
+              subject: createSafeId<"systemScriptRun">(),
+              counts: {
+                revokedControls:
+                  controlTransition.type === "transitioned" ? 1 : 0,
+                ...counts,
+              },
+            });
+          },
+        });
       return { status: "revoked", deletedSessions, deletedRoomTokens };
     });
 
@@ -209,11 +213,3 @@ export const createSyntheticSessionStore = (
     getSyntheticSessionStatus,
   };
 };
-
-export const mintSyntheticSession = async (
-  options: MintSyntheticSessionOptions,
-) => await createSyntheticSessionStore(rootDb).mintSyntheticSession(options);
-export const revokeSyntheticSessions = async () =>
-  await createSyntheticSessionStore(rootDb).revokeSyntheticSessions();
-export const getSyntheticSessionStatus = async () =>
-  await createSyntheticSessionStore(rootDb).getSyntheticSessionStatus();

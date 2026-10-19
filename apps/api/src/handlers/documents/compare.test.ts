@@ -598,6 +598,7 @@ describe("documents.compare", () => {
       workspaceId,
       purpose: "download",
       recordAuditEvent: harness.auditRecorder,
+      userId: harness.context.user.id,
     });
   });
 

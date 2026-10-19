@@ -475,15 +475,24 @@ export const revokeAllUserOAuthTokens = async (
     .where(eq(oauthRefreshToken.userId, userId));
 };
 
-/** Ends the fixed monitoring sessions as part of the control transaction. */
-export const revokeMonitoringSessions = async (
-  tx: Pick<Transaction, "delete">,
-  userId: SafeId<"user">,
-) => {
+type RevokeDedicatedSessionsOptions = {
+  tx: Pick<Transaction, "delete">;
+  userId: SafeId<"user">;
+  recordAuditEvent: (counts: {
+    deletedSessions: number;
+    deletedRoomTokens: number;
+  }) => Promise<void>;
+};
+
+/** Ends the fixed dedicated sessions as part of the control transaction. */
+export const revokeMonitoringSessions = async ({
+  tx,
+  userId,
+  recordAuditEvent,
+}: RevokeDedicatedSessionsOptions) => {
   if (!isSyntheticPrincipal({ userId })) {
     panic("Monitoring session cleanup requires its dedicated user");
   }
-  // audit: skip - The enclosing revoke transaction records control and deleted-session counts.
   const removedRoomTokens = await tx
     .delete(folioCollabRoomTokens)
     .where(eq(folioCollabRoomTokens.userId, userId))
@@ -497,8 +506,10 @@ export const revokeMonitoringSessions = async (
       ),
     )
     .returning({ id: sessionTable.id });
-  return {
+  const counts = {
     deletedSessions: removed.length,
     deletedRoomTokens: removedRoomTokens.length,
   };
+  await recordAuditEvent(counts);
+  return counts;
 };

@@ -35,3 +35,13 @@ export const SYNTHETIC_SESSION_CONTROL_STATUSES = [
   "enabled",
   "revoked",
 ] as const;
+
+export const isSyntheticSessionPrincipal = ({
+  sessionId,
+  principalId,
+}: {
+  sessionId: string;
+  principalId: string;
+}): boolean =>
+  principalId === SYNTHETIC_PRINCIPAL.user.id &&
+  sessionId.startsWith(SYNTHETIC_SESSION_PREFIX);

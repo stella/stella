@@ -5,15 +5,18 @@ import { timingSafeEqual } from "node:crypto";
 import { sha256Bytes } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import { bindOwnerSyntheticSessionStore } from "@/api/db/root";
 import { env } from "@/api/env";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { getRequestId } from "@/api/lib/observability/request-context";
 import { reserveSyntheticSessionBudget } from "@/api/lib/rate-limit/synthetic-session-budget";
-import { mintSyntheticSession } from "@/api/lib/synthetic-principal/store";
+import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 
 type SyntheticRouteOptions = {
   keys: typeof env.SYNTHETIC_SESSION_KEYS;
-  mintSession: typeof mintSyntheticSession;
+  mintSession: ReturnType<
+    typeof createSyntheticSessionStore
+  >["mintSyntheticSession"];
   reserveBudget?: () => Promise<boolean>;
   nowMs?: () => number;
 };
@@ -43,20 +46,19 @@ const authorizedKeyLabel = (
   return label;
 };
 
-export const createSyntheticRoute = ({
+const createSyntheticSessionHandler = ({
   keys,
   mintSession,
   reserveBudget = reserveSyntheticSessionBudget,
   nowMs = () => Temporal.Now.instant().epochMilliseconds,
 }: SyntheticRouteOptions) => {
-  const route = new Elysia({ name: "synthetic-session", prefix: "/synthetic" });
-  if (keys === undefined) {
-    return route;
-  }
   const createSession = async ({
     request,
     status,
   }: Pick<Context, "request" | "status">) => {
+    if (keys === undefined) {
+      return new Response(null, { status: 404 });
+    }
     const keyLabel = authorizedKeyLabel(
       request.headers.get("x-stella-synthetic-key"),
       { keys, nowMs },
@@ -80,12 +82,24 @@ export const createSyntheticRoute = ({
   declareAggregateMutation(createSession, {
     type: "independent",
     reason:
-      "The monitoring session store serializes its singleton control row and owns the account, session, and audit writes in one transaction.",
+      "The dedicated session store serializes its singleton control row and owns the account, session, and audit writes in one transaction.",
   });
-  return route.post("/session", createSession, { parse: "none" });
+  return createSession;
 };
 
+export const createSyntheticRoute = (options: SyntheticRouteOptions) => {
+  const createSession = createSyntheticSessionHandler(options);
+  return new Elysia({ name: "synthetic-session", prefix: "/synthetic" }).post(
+    "/session",
+    createSession,
+    { parse: "none" },
+  );
+};
+
+const syntheticSessionStore = bindOwnerSyntheticSessionStore(
+  createSyntheticSessionStore,
+);
 export const syntheticRoute = createSyntheticRoute({
   keys: env.SYNTHETIC_SESSION_KEYS,
-  mintSession: mintSyntheticSession,
+  mintSession: syntheticSessionStore.mintSyntheticSession,
 });

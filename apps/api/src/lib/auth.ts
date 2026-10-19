@@ -52,7 +52,11 @@ import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
 import { isUuid } from "@stll/uuid-codec";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
-import { rootDb, rlsDb } from "@/api/db/root";
+import {
+  bindOwnerSyntheticSessionAuthorityReader,
+  rootDb,
+  rlsDb,
+} from "@/api/db/root";
 import {
   featureEnrolments,
   userProfessionalUseAcceptances,
@@ -278,11 +282,12 @@ import {
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
 import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
+import { isSyntheticSessionPrincipal } from "@/api/lib/synthetic-principal/constants";
 import {
   checkSyntheticPrincipalAccess,
   syntheticPrincipalAuthConfig,
 } from "@/api/lib/synthetic-principal/policy";
-import { authorizeSyntheticSession } from "@/api/lib/synthetic-principal/session-authority";
+import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
 import { includes, isRecord } from "@/api/lib/type-guards";
 import {
   checkMemberAdmission,
@@ -303,6 +308,9 @@ import {
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 
 /** Access token lifetime in seconds (15 minutes). */
+const syntheticSessionAuthorityReader =
+  bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
+
 const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
@@ -1086,8 +1094,6 @@ export const createAuth = (
       rotationEnabled: env.SESSION_TOKEN_ROTATION_ENABLED,
       capEnabled: env.SESSION_LIFETIME_CAP_ENABLED,
     }),
-    authorizeSession: async (session) =>
-      await authorizeSyntheticSession(rootDb, session),
   });
   const syntheticAuthHooks = createSyntheticPrincipalAuthHooks();
   const demoConfig = getDemoAccountConfig();
@@ -2985,6 +2991,19 @@ const resolveValidateAuth = async ({
   const rawOrgId = session?.activeOrganizationId;
 
   if (!session || !user || !rawOrgId) {
+    return { ok: false as const, statusCode: 401 as const };
+  }
+
+  if (
+    isSyntheticSessionPrincipal({
+      sessionId: session.id,
+      principalId: user.id,
+    }) &&
+    (await syntheticSessionAuthorityReader({
+      sessionId: session.id,
+      userId: user.id,
+    })) === null
+  ) {
     return { ok: false as const, statusCode: 401 as const };
   }
 

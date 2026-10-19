@@ -182,8 +182,6 @@ const setup = async () => {
       expiresIn: 604_800,
       updateAge: 86_400,
     }),
-    authorizeSession: async (current) =>
-      await authorizeSyntheticSession(asTestRaw(testDb), current),
   });
   const auth = betterAuth({
     baseURL: "http://localhost:3001",
@@ -247,15 +245,14 @@ const setup = async () => {
       expect((await authorizeRoom()).status).not.toBe("authorized");
     },
     session: async () => {
-      expect(
-        await auth.api.getSession({
-          headers: { cookie },
-          query: { disableCookieCache: true },
-        }),
-      ).toBeNull();
+      expect(await authorizeSyntheticSession(asTestRaw(testDb), source)).toBe(
+        false,
+      );
     },
     cookieCache: async () => {
-      expect(await auth.api.getSession({ headers: { cookie } })).toBeNull();
+      expect(await authorizeSyntheticSession(asTestRaw(testDb), source)).toBe(
+        false,
+      );
     },
     oauth: async () => {
       expect([401, 403]).toContain(

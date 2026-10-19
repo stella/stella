@@ -21,7 +21,6 @@ import {
   SYNTHETIC_SESSION_LIFETIME_MS,
   SYNTHETIC_SESSION_PREFIX,
 } from "@/api/lib/synthetic-principal/constants";
-import { checkSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 export const SESSION_ABSOLUTE_AGE_MS = 90 * DAY_IN_MS;
 export const SESSION_IDLE_AGE_MS = 60 * 60 * 1000;
@@ -100,7 +99,6 @@ export type SessionLifetimeStore = {
 type SessionLifetimeOptions = {
   store: SessionLifetimeStore;
   now?: () => Date;
-  authorizeSession?: (session: Session) => Promise<boolean>;
 };
 
 const resolveObservedSession = async (
@@ -114,22 +112,6 @@ const resolveObservedSession = async (
         user: parseUserOutput(options, user),
       }
     : null;
-};
-
-const authorizeObservedSession = async (
-  session: Session | null,
-  authorizeSession: SessionLifetimeOptions["authorizeSession"],
-) =>
-  session && (!authorizeSession || (await authorizeSession(session)))
-    ? session
-    : null;
-
-const sessionCookieCacheVersion = (session: Pick<Session, "userId">) => {
-  if (checkSessionCredentialIssuer("cookieCache", session).isErr()) {
-    // A single-use version sends every monitoring read to the session store.
-    return Bun.randomUUIDv7();
-  }
-  return cookieCacheVersion;
 };
 
 const createRevokeSessionByIdEndpoint = (
@@ -159,7 +141,6 @@ const createRevokeSessionByIdEndpoint = (
 export const createSessionLifetime = ({
   store,
   now = () => new Date(),
-  authorizeSession,
 }: SessionLifetimeOptions) => {
   const decorated = new WeakSet<AuthContext["internalAdapter"]>();
   const observations = new WeakMap<
@@ -177,19 +158,15 @@ export const createSessionLifetime = ({
       memo = new Map();
       observations.set(ctx, memo);
     }
-    const result = store
-      .observe({
-        token,
-        now: now(),
-        boundary:
-          ctx?.path === "/get-session" &&
-          ctx.getHeader?.(AUTH_SESSION_STARTUP_HEADER) === "1"
-            ? "startup"
-            : "activity",
-      })
-      .then(async (session) =>
-        authorizeObservedSession(session, authorizeSession),
-      );
+    const result = store.observe({
+      token,
+      now: now(),
+      boundary:
+        ctx?.path === "/get-session" &&
+        ctx.getHeader?.(AUTH_SESSION_STARTUP_HEADER) === "1"
+          ? "startup"
+          : "activity",
+    });
     memo?.set(token, result);
     return await result;
   };
@@ -352,7 +329,7 @@ export const createSessionLifetime = ({
 
   return {
     plugin,
-    cookieCacheVersion: sessionCookieCacheVersion,
+    cookieCacheVersion,
     prepare: decorate,
   };
 };

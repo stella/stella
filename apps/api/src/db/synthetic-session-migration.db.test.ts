@@ -229,6 +229,7 @@ describe.skipIf(!enabled)("monitoring session lifecycle", () => {
         });
         const resolveSession = async () =>
           await auth.api.getSession({
+            query: { disableRefresh: true },
             headers: new Headers({
               cookie: `${first.cookieName}=${encodeURIComponent(first.cookieValue)}`,
             }),

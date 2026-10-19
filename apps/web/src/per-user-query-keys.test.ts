@@ -120,6 +120,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
   "account-exports/get.ts": { kind: "no-web-caller", calls: [] },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
+  "files/thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
   "search-history/list.ts": {
     kind: "keyed",
     calls: ['api["search-history"].get'],
@@ -576,6 +577,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "not-per-user",
     reason: "the caller is recorded for usage only",
   },
+  "templates/get.ts": { kind: "owned-id", reason: DOWNLOAD },
   "templates/fills/preview.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "templates/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
   "templates/lookup-formats/list.ts": {
@@ -590,6 +592,8 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }),
     ],
   },
+  "templates/versions/get.ts": { kind: "owned-id", reason: DOWNLOAD },
+  "style-sets/download.ts": { kind: "owned-id", reason: DOWNLOAD },
   "time-entries/get.ts": { kind: "not-per-user", reason: JOINS_NAMES },
   "time-entries/list.ts": {
     kind: "keyed",

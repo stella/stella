@@ -2,10 +2,10 @@ import { panic } from "better-result";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
-import {
-  getSyntheticSessionStatus,
-  revokeSyntheticSessions,
-} from "@/api/lib/synthetic-principal/store";
+import { bindOwnerSyntheticSessionStore } from "@/api/db/root";
+import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
+
+const store = bindOwnerSyntheticSessionStore(createSyntheticSessionStore);
 
 await runScriptWithErrorOutput(async () => {
   const command = process.argv.at(2);
@@ -14,10 +14,10 @@ await runScriptWithErrorOutput(async () => {
   }
   switch (command) {
     case "revoke":
-      console.log(JSON.stringify(await revokeSyntheticSessions()));
+      console.log(JSON.stringify(await store.revokeSyntheticSessions()));
       return;
     case "status":
-      console.log(JSON.stringify(await getSyntheticSessionStatus()));
+      console.log(JSON.stringify(await store.getSyntheticSessionStatus()));
       return;
   }
 });
