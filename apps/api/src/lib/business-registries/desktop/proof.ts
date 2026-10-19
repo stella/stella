@@ -30,6 +30,11 @@ const proofPayload = v.object({
   nonce: v.optional(v.string()),
 });
 
+// One proof has exactly one string form: each segment must re-encode to
+// itself, so non-zero padding bits and impossible lengths are refused.
+const isCanonicalBase64Url = (segment: string) =>
+  Buffer.from(segment, "base64url").toString("base64url") === segment;
+
 export const deviceProofRefusal = (
   code:
     | "desktop_proof_invalid"
@@ -102,7 +107,8 @@ export class VerifiedDesktopDeviceProof {
     if (
       !compact ||
       compact.length > MAX_PROOF_BYTES ||
-      !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u.test(compact)
+      !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u.test(compact) ||
+      !compact.split(".").every(isCanonicalBase64Url)
     ) {
       return Result.err(deviceProofRefusal("desktop_proof_invalid"));
     }

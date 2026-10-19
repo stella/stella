@@ -1,6 +1,9 @@
+import { eq } from "drizzle-orm";
+
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
@@ -15,39 +18,49 @@ import {
 } from "@/api/lib/public-law-shared-query";
 
 const decisionAnalysisColumns = {
-  id: true,
-  language: true,
-  court: true,
-  country: true,
-  decisionType: true,
-  documentAst: true,
-  analysis: true,
+  id: publishedCaseLawDecisions.id,
+  language: publishedCaseLawDecisions.language,
+  court: publishedCaseLawDecisions.court,
+  country: publishedCaseLawDecisions.country,
+  decisionType: publishedCaseLawDecisions.decisionType,
+  documentAst: publishedCaseLawDecisions.documentAst,
+  analysis: publishedCaseLawDecisions.analysis,
   // Object-storage pointers: under canonical corpus storage the row's own
   // `documentAst` is trimmed and the object is the document.
-  astS3Key: true,
-  contentHash: true,
+  astS3Key: publishedCaseLawDecisions.astS3Key,
+  contentHash: publishedCaseLawDecisions.contentHash,
   // The rest identifies the document to its publisher, for the
   // development-only re-parse on read (`decisions/dev-reparse.ts`).
-  caseNumber: true,
-  ecli: true,
-  decisionDate: true,
-  documentUrl: true,
-  metadata: true,
-} as const;
+  caseNumber: publishedCaseLawDecisions.caseNumber,
+  ecli: publishedCaseLawDecisions.ecli,
+  decisionDate: publishedCaseLawDecisions.decisionDate,
+  documentUrl: publishedCaseLawDecisions.documentUrl,
+  metadata: publishedCaseLawDecisions.metadata,
+};
 
 export const readDecisionAnalysis = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawAnalysis,
   async (
     tx: CaseLawPublicReadTransaction,
     decisionId: SafeId<"caseLawDecision">,
-  ) =>
-    await tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: decisionId } },
-      columns: decisionAnalysisColumns,
-      // `descriptor` carries the source's reuse terms and is read only to
-      // decide whether the text may be fed to a model; it is never returned.
-      with: { source: { columns: { adapterKey: true, descriptor: true } } },
-    }),
+  ) => {
+    const [row] = await tx
+      .select({
+        ...decisionAnalysisColumns,
+        source: {
+          adapterKey: caseLawSources.adapterKey,
+          descriptor: caseLawSources.descriptor,
+        },
+      })
+      .from(publishedCaseLawDecisions)
+      .leftJoin(
+        caseLawSources,
+        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+      )
+      .where(eq(publishedCaseLawDecisions.id, decisionId))
+      .limit(1);
+    return row;
+  },
 );
 
 type DecisionAstPointers = {

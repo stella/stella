@@ -2,8 +2,10 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
-import { caseLawBrowseFacetCounts, caseLawDecisions } from "@/api/db/schema";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import {
+  caseLawBrowseFacetCounts,
+  publishedCaseLawDecisions,
+} from "@/api/db/schema";
 
 type RefreshDb = Pick<typeof rootDb, "select" | "transaction">;
 
@@ -11,13 +13,14 @@ type RefreshDb = Pick<typeof rootDb, "select" | "transaction">;
 export const pgFtsBrowseFacetPublishedQuery = (db: Pick<RefreshDb, "select">) =>
   db
     .select({
-      sourceId: sql`${caseLawDecisions.sourceId}`.as("source_id"),
-      country: sql`${caseLawDecisions.country}`.as("country"),
-      court: sql`${caseLawDecisions.court}`.as("court"),
-      decisionDate: sql`${caseLawDecisions.decisionDate}`.as("decision_date"),
+      sourceId: sql`${publishedCaseLawDecisions.sourceId}`.as("source_id"),
+      country: sql`${publishedCaseLawDecisions.country}`.as("country"),
+      court: sql`${publishedCaseLawDecisions.court}`.as("court"),
+      decisionDate: sql`${publishedCaseLawDecisions.decisionDate}`.as(
+        "decision_date",
+      ),
     })
-    .from(caseLawDecisions)
-    .where(publishedCaseLawDecision);
+    .from(publishedCaseLawDecisions);
 
 /** Recount source-scoped buckets so public reads can apply live source policy. */
 export const refreshPgFtsBrowseFacets = async (

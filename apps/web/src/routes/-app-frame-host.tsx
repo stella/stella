@@ -34,6 +34,11 @@ const LazyKnowledgePublicFrame = lazy(async () => {
   return { default: module.KnowledgePublicFrame };
 });
 
+const LazyAdminAppFrame = lazy(async () => {
+  const module = await import("@/routes/-admin-app-frame");
+  return { default: module.AdminAppFrame };
+});
+
 const ROUTE_ID_SEPARATOR = "\n";
 
 const isAuthenticatedUser = (value: unknown): value is AuthenticatedUser =>
@@ -75,12 +80,14 @@ type AppFrameHostProps = {
   children: ReactElement;
   frames?: {
     member: ComponentType<{ children: ReactElement; user: AuthenticatedUser }>;
+    admin?: ComponentType<{ children: ReactElement; user: AuthenticatedUser }>;
     public: ComponentType<{ children: ReactElement }>;
   };
 };
 
 export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
   const MemberFrame = frames?.member ?? LazyProtectedAppFrame;
+  const AdminFrame = frames?.admin ?? LazyAdminAppFrame;
   const PublicFrame = frames?.public ?? LazyKnowledgePublicFrame;
   const routeIdKey = useRouterState({
     select: (state) =>
@@ -157,19 +164,22 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
   }
 
   switch (frame) {
-    case "member":
+    case "admin":
+    case "member": {
+      const SignedInFrame = frame === "admin" ? AdminFrame : MemberFrame;
       return memberUser === undefined ? (
         <ProtectedPendingSkeleton />
       ) : (
         <Suspense fallback={<ProtectedPendingSkeleton />}>
-          <MemberFrame
+          <SignedInFrame
             key={`${memberUser.activeOrganizationId}:${memberUser.id}`}
             user={memberUser}
           >
             {children}
-          </MemberFrame>
+          </SignedInFrame>
         </Suspense>
       );
+    }
     case "public":
       return (
         <Suspense fallback={<ProtectedPendingSkeleton />}>

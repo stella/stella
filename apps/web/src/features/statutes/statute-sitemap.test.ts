@@ -54,7 +54,10 @@ describe("public statute sitemap", () => {
       signal: AbortSignal.timeout(1000),
     });
 
-    expect(shards.unwrapOr([]).map(({ country }) => country)).toEqual(["cze"]);
+    expect(shards.unwrapOr([]).map(({ country }) => country)).toEqual([
+      "cze",
+      "svk",
+    ]);
     expect(requestedUrls).toEqual([
       "http://localhost:3001/v1/law/sitemap/shards",
     ]);
@@ -199,7 +202,7 @@ describe("public statute sitemap", () => {
     expect(xml).toContain(
       "<loc>http://localhost:3000/sitemaps/law-statutes/cze.xml</loc>",
     );
-    expect(xml).not.toContain(
+    expect(xml).toContain(
       "<loc>http://localhost:3000/sitemaps/law-statutes/svk/07.xml</loc>",
     );
     expect(xml).not.toContain("/xaa");

@@ -480,9 +480,6 @@ const ASK_USER_TITLE = messages.chat.tool["ask-user"];
 const BUSY_TEXTS = [messages.chat.thinking, messages.chat.analyzingSources];
 /** The approval tool the recordings call; its one input is the call's id. */
 const CALL_ID_PATTERN = /^call-\d+$/u;
-/** A folded step list's summary (`common.stepCount`). */
-const STEP_COUNT_PATTERN = /^\d+ steps?$/u;
-
 /**
  * Every card frame on screen. A card is the bordered box a tool call renders
  * in (`ToolApprovalCard`, `AskUserCard`), found by the text a user reads in
@@ -511,9 +508,10 @@ const readScreen = (container: HTMLElement): ScreenState => {
       container.querySelector('[aria-busy="true"], [data-slot="skeleton"]') !==
         null || BUSY_TEXTS.some((text) => container.textContent.includes(text)),
     denied: [],
-    stepLists: [...container.querySelectorAll("summary")].filter((summary) =>
-      STEP_COUNT_PATTERN.test(summary.textContent.trim()),
-    ).length,
+    // Counted by structure: the summary's text names what the run did and
+    // changes with the copy.
+    stepLists: container.querySelectorAll('[data-slot="chat-step-list"]')
+      .length,
   };
   let askUserIndex = 0;
   for (const frame of cardFrames(container)) {

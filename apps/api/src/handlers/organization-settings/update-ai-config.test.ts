@@ -5,12 +5,14 @@ import { describe, expect, spyOn, test } from "bun:test";
 import {
   TANSTACK_AI_PROVIDERS,
   BYOK_DEFAULT_MODELS,
-  MODEL_ROLES,
+  MODEL_OVERRIDE_GROUPS,
+  MODEL_OVERRIDE_GROUP_TASK,
 } from "@stll/ai-catalog";
+import { resolveDefaultOverrideModels } from "@stll/ai-catalog/model-defaults-ledger";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { resolveOrgAIModelForRole } from "@/api/lib/ai-config";
+import { resolveOrgAIModelForTask } from "@/api/lib/ai-config";
 import type {
   DataRegion,
   OrgAIConfig,
@@ -116,6 +118,14 @@ describe("organization AI settings validation", () => {
       );
       expect(result).toMatchObject({
         providers: [{ provider: "google", region: "global" }],
+        defaultModels: resolveDefaultOverrideModels(["google"]),
+        providerDefaultModels: [
+          {
+            provider: "google",
+            defaultModels: resolveDefaultOverrideModels(["google"]),
+          },
+        ],
+        overrideModels,
       });
       const written = db.written();
       expect(written).toBeDefined();
@@ -190,6 +200,14 @@ describe("Anthropic workspace settings", () => {
         providers: [
           { provider: "anthropic", anthropicWorkspaceId: "wrk_fixture" },
         ],
+        defaultModels: resolveDefaultOverrideModels(["anthropic"]),
+        providerDefaultModels: [
+          {
+            provider: "anthropic",
+            defaultModels: resolveDefaultOverrideModels(["anthropic"]),
+          },
+        ],
+        overrideModels: anthropicOverrides,
       });
       expect(JSON.stringify(result)).not.toContain("sk-ant-usr-fixture");
       expect(requests).toHaveLength(1);
@@ -496,13 +514,17 @@ describe("sparse custom model settings", () => {
       expect(saved.providers.at(0)?.apiKey).toBe("fixture-google-replacement");
       expect(saved.providers.at(1)?.apiKey).toBe("fixture-anthropic-existing");
       expect(saved.overrideModels).toBeNull();
-      for (const role of MODEL_ROLES) {
+      for (const role of MODEL_OVERRIDE_GROUPS) {
         const selection = {
           provider: "google",
           modelId: BYOK_DEFAULT_MODELS.google[role].modelId,
         } satisfies OrgAIModelSelection;
-        expect(resolveOrgAIModelForRole(existing, role)).toEqual(selection);
-        expect(resolveOrgAIModelForRole(saved, role)).toEqual(selection);
+        expect(
+          resolveOrgAIModelForTask(existing, MODEL_OVERRIDE_GROUP_TASK[role]),
+        ).toEqual(selection);
+        expect(
+          resolveOrgAIModelForTask(saved, MODEL_OVERRIDE_GROUP_TASK[role]),
+        ).toEqual(selection);
       }
       expect(probe).toHaveBeenCalledTimes(1);
     } finally {

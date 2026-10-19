@@ -11,9 +11,10 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
+  caseLawSources,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -83,8 +84,8 @@ import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
 import {
   decodeSystemOneAnswers,
   planSystemOneAnswers,
@@ -381,7 +382,7 @@ const answerDecision = async (
   const analyticsOptions = {
     dataClass: "customer",
     feature: "case-law.research-answers",
-    modelRole: "fast",
+    modelTask: "short-text",
     organizationId: input.organizationId,
     orgAIConfig: input.orgAIConfig,
     modelTier: input.admission.modelTier,
@@ -406,7 +407,7 @@ const answerDecision = async (
   const tier = await answerWithSystemOne({
     generation: (prompt, questionCount) => ({
       dataClass: "customer",
-      role: "fast",
+      task: "short-text",
       serviceTier: "standard",
       orgAIConfig: input.orgAIConfig,
       managedAIResidency: input.managedAIResidency,
@@ -422,7 +423,7 @@ const answerDecision = async (
       }),
       caching: resolveCaching({
         promptCachingEnabled: input.promptCachingEnabled,
-        role: "fast",
+        task: "short-text",
         scopeKey: decisionId,
       }),
       system: RESEARCH_SYSTEM_PROMPT,
@@ -461,8 +462,8 @@ const answerDecision = async (
 
   const generated = await Result.tryPromise({
     try: async () => {
-      const { modelId } = getTanStackTextModelInfoForRole(
-        "fast",
+      const { modelId } = getTanStackTextModelInfoForTask(
+        "short-text",
         input.orgAIConfig,
         {
           dataClass: "customer",
@@ -470,9 +471,9 @@ const answerDecision = async (
           modelTier: input.admission.modelTier,
         },
       );
-      const output = await generateTanStackObjectForRole({
+      const output = await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: "fast",
+        task: "short-text",
         serviceTier: "standard",
         orgAIConfig: input.orgAIConfig,
         managedAIResidency: input.managedAIResidency,
@@ -483,7 +484,7 @@ const answerDecision = async (
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled: input.promptCachingEnabled,
-          role: "fast",
+          task: "short-text",
           scopeKey: decisionId,
         }),
         system: RESEARCH_SYSTEM_PROMPT,
@@ -612,24 +613,28 @@ const readResearchDecision = async (
   tx: CaseLawPublicReadTransaction,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<ResearchDecisionRow | null> => {
-  const row = await tx.query.caseLawDecisions.findFirst({
-    where: { id: { eq: decisionId } },
-    columns: {
-      id: true,
-      caseNumber: true,
-      court: true,
-      country: true,
-      language: true,
-      decisionType: true,
-      documentAst: true,
-      astS3Key: true,
-      textS3Key: true,
-      contentHash: true,
-      fulltext: true,
-    },
-    // `descriptor` decides redistribution and derived-AI use; never returned.
-    with: { source: { columns: { descriptor: true } } },
-  });
+  const [row] = await tx
+    .select({
+      id: publishedCaseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      court: publishedCaseLawDecisions.court,
+      country: publishedCaseLawDecisions.country,
+      language: publishedCaseLawDecisions.language,
+      decisionType: publishedCaseLawDecisions.decisionType,
+      documentAst: publishedCaseLawDecisions.documentAst,
+      astS3Key: publishedCaseLawDecisions.astS3Key,
+      textS3Key: publishedCaseLawDecisions.textS3Key,
+      contentHash: publishedCaseLawDecisions.contentHash,
+      fulltext: publishedCaseLawDecisions.fulltext,
+      source: { descriptor: caseLawSources.descriptor },
+    })
+    .from(publishedCaseLawDecisions)
+    .leftJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(eq(publishedCaseLawDecisions.id, decisionId))
+    .limit(1);
   return row ?? null;
 };
 
@@ -771,10 +776,10 @@ const readCurrentResearchRevisionTx = async (
     .select({
       appliedRevision: caseLawCorpusAppliedRevision(generation),
     })
-    .from(caseLawDecisions)
+    .from(publishedCaseLawDecisions)
     .where(
       and(
-        eq(caseLawDecisions.id, decisionId),
+        eq(publishedCaseLawDecisions.id, decisionId),
         currentCaseLawCorpusProjection(generation),
       ),
     )

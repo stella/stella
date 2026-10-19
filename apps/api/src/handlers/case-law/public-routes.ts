@@ -279,6 +279,7 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   caseLawDb: caseLawPublicReadDb,
   locate: ({ params: { slug }, query: { country, language } }) => {
     const countryRead = readPublicLawCountry(country, {
+      domain: "caseLaw",
       admitted: PUBLIC_CASE_LAW_PAGE_COUNTRIES,
       surface: "pages",
     });

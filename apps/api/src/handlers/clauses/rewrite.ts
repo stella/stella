@@ -9,7 +9,7 @@
  * The model never emits structure: it returns revised text per editable
  * (non-directive) paragraph keyed by index, and we swap only that text. Lists,
  * headings, paragraph order, and every `{{ }}` directive stay exactly as
- * authored. Reuses the `generateTanStackObjectForRole` structured-output
+ * authored. Reuses the `generateTanStackObjectForTask` structured-output
  * pattern (see suggest-template-fields).
  */
 
@@ -28,7 +28,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 const REWRITE_TIMEOUT_MS = 45_000;
 
@@ -110,7 +110,7 @@ const config = {
     consumesServices: true,
   },
   body: rewriteClauseBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 const rewriteClause = createSafeRootHandler(
@@ -151,7 +151,7 @@ const rewriteClause = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "clauses.rewrite",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
       modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
@@ -161,10 +161,10 @@ const rewriteClause = createSafeRootHandler(
     const output = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await generateTanStackObjectForRole({
+          await generateTanStackObjectForTask({
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
-            role: "fast",
+            task: "short-text",
             orgAIConfig,
             managedAIResidency,
             organizationId,
@@ -173,7 +173,7 @@ const rewriteClause = createSafeRootHandler(
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,
-              role: "fast",
+              task: "short-text",
               scopeKey: organizationId,
             }),
             system: SYSTEM_PROMPT,

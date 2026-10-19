@@ -37,7 +37,10 @@ import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
 import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
-import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
+import {
+  CASE_LAW_RESULTS_RESOURCE_URI,
+  CITATION_GRAPH_RESOURCE_URI,
+} from "@stll/mcp-apps/resource-uri";
 import { Temporal } from "@stll/time";
 
 import { workspaces } from "@/api/db/schema";
@@ -71,8 +74,12 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CITATION_READ_DIRECTIONS,
+  CITATION_TREATMENTS,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
+import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import {
   type CaseLawProvisionFilter,
   type CaseLawProvisionScope,
@@ -230,6 +237,7 @@ import {
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
+import { searchNotesForCall } from "./search-notes";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
   input,
@@ -948,6 +956,20 @@ const readCaseLawCitationsArgsSchema = nullAsAbsent(
         "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
       ),
     ),
+    doctrine: v.optional(
+      v.pipe(
+        v.picklist(
+          DOCTRINAL_TREATMENTS.filter((value) => value !== "not_stated"),
+        ),
+        v.description("Only citations with this reviewed doctrinal finding."),
+      ),
+    ),
+    polarity: v.optional(
+      v.pipe(
+        v.picklist(CITATION_TREATMENTS),
+        v.description("Only citations with this polarity reading."),
+      ),
+    ),
     limit: v.optional(
       v.pipe(
         v.number(),
@@ -1204,11 +1226,10 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "Read one page of citations with their citing passages. `cited_by` " +
-      "reads decisions citing this one, `cites` what it cites. `polarity` " +
-      "is a stance: 'unclassified' means none was read, 'mixed' that " +
-      "mentions disagreed. `doctrine` is 'distinguishes' or 'limits' only " +
-      "where a reviewed reading found the court doing so in its own words; " +
+      "Read citations with citing passages. `cited_by` reads citers; `cites` reads citations. " +
+      "Filters `doctrine` and `polarity` combine with AND. `polarity`: " +
+      "'unclassified' means unread; 'mixed' means mentions disagreed. " +
+      "`doctrine` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. " +
       "'not_stated' does not mean followed; 'unread' means none " +
       "was read; null when `doctrineAvailability` is 'unavailable'. " +
       "`passage.evidenceQuote` is the verbatim evidence when text is " +
@@ -1224,6 +1245,12 @@ export const STELLA_TOOL_DEFINITIONS = [
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind the same feature flag.
     feature: "FEATURE_PUBLIC_LAW",
+    _meta: {
+      ui: {
+        resourceUri: CITATION_GRAPH_RESOURCE_URI,
+        visibility: ["model", "app"],
+      },
+    },
     name: "read_case_law_citations",
     scope: "stella:read",
   }),
@@ -2375,7 +2402,7 @@ const caseLawSearchResult = ({
   return {
     matchedQueries,
     ...legalCitationLinkFields({
-      appUrl: buildCaseLawDecisionAppUrl({
+      url: buildCaseLawDecisionAppUrl({
         caseNumber: hit.caseNumber,
         country: hit.country,
         court: hit.court,
@@ -2567,14 +2594,17 @@ const listSearchCaseLawProvision = async ({
   const payload = boundCaseLawSearchHeadnotes({
     headnotes: "included",
     facets: page.facets,
-    searches: [
-      {
-        query: provisionText,
-        queryUsed: page.queryUsed,
-        paginationOutcome: page.paginationOutcome,
-        warnings: [...filterWarnings, ...page.warnings],
-      },
-    ],
+    searches: searchNotesForCall(
+      [
+        {
+          query: provisionText,
+          queryUsed: page.queryUsed,
+          paginationOutcome: page.paginationOutcome,
+          warnings: [...filterWarnings, ...page.warnings],
+        },
+      ],
+      [],
+    ),
     nextCursor: page.nextCursor,
     paginationOutcome: page.paginationOutcome,
     results: merged.map(caseLawSearchResult),
@@ -2583,6 +2613,8 @@ const listSearchCaseLawProvision = async ({
   });
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
 };
+
+const SEARCH_ADMISSION = { domain: "caseLaw", surface: "search" } as const;
 
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
@@ -2605,7 +2637,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     queries,
   } = parsed.output;
   const limit = normalizePage(parsed.output.limit ?? DEFAULT_SEARCH_LIMIT);
-  const unavailable = publicCountryUnavailable(country, "search");
+  const unavailable = publicCountryUnavailable(country, SEARCH_ADMISSION);
   if (unavailable !== null) {
     return toolDataResult(unavailable);
   }
@@ -2749,12 +2781,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const single =
     queries.length === 1 && !first.exhausted ? first.page : undefined;
   const mergedCursor = mergedCaseLawSearchCursor(pages);
-
   // One entry per query, in input order. Required words and warnings belong
   // to each phrasing independently of the first phrasing's facets.
-  const guidance = mcpCaseLawSearchGuidance(context);
   const searches = requests.map(
     ({ interpretation, query, subCursor }, index) => {
+      const warnings = index === 0 ? filterWarnings : [];
       const outcome = pages.at(index);
       if (outcome === undefined || outcome.exhausted) {
         // Exhausted phrasings echo the prior interpretation without new warnings.
@@ -2762,7 +2793,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           query,
           queryUsed: interpretation.queryUsed,
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-          warnings: [...filterWarnings, ...provisionRead.warnings],
+          warnings: warnings.concat(provisionRead.warnings),
         };
       }
       const values = facetValuesForFilters({
@@ -2780,13 +2811,13 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         queryUsed: outcome.page.queryUsed,
         paginationOutcome: outcome.page.paginationOutcome,
         warnings: [
-          ...filterWarnings,
+          ...warnings,
           ...provisionRead.warnings,
           ...outcome.page.warnings.map((warning) =>
             withFacetValues(warning, values),
           ),
           ...manyRequiredTermsWarnings({
-            guidance,
+            guidance: mcpCaseLawSearchGuidance(context),
             subCursor,
             page: outcome.page,
             slots: perQueryLimit,
@@ -2799,7 +2830,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const payload = boundCaseLawSearchHeadnotes({
     headnotes: "included",
     facets: first.exhausted ? null : first.page.facets,
-    searches,
+    searches: searchNotesForCall(searches, requests),
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
     paginationOutcome: pages.some(
       (outcome) =>
@@ -2956,7 +2987,7 @@ type FoundDecision = Extract<
 >["decision"];
 
 type DecisionTextPartOptions = {
-  appUrl: string | null;
+  url: string | null;
   language: string;
   located: readonly LocatedDecisionBlock[] | null;
   /** Notes for the entry's message; a page past the end adds one. */
@@ -2970,7 +3001,7 @@ type DecisionTextPartOptions = {
 
 /** The text an entry answers with: its page, or the paragraphs a query matched. */
 const decisionTextPart = ({
-  appUrl,
+  url,
   language,
   located,
   messages,
@@ -3005,7 +3036,7 @@ const decisionTextPart = ({
           headingPath: paragraph.headingPath,
           text: paragraph.text,
           ...(paragraph.hit ? { hit: true as const } : {}),
-          ...decisionBlockDeepLink({ appUrl, ...paragraph }),
+          ...decisionBlockDeepLink({ url, ...paragraph }),
         })),
         ...(found.truncated ? { truncated: true as const } : {}),
       },
@@ -3040,12 +3071,12 @@ const publishedTextFields = (read: ReadCaseLawDecisionSuccess) =>
 
 /** The optional fields `include` asked for, each only where it says something. */
 const decisionStaticFields = ({
-  appUrl,
+  url,
   digest,
   includedFields,
   read,
 }: {
-  appUrl: string | null;
+  url: string | null;
   digest: CitationDigestRead | undefined;
   includedFields: ReadonlySet<DecisionReadInclude>;
   read: ReadCaseLawDecisionSuccess;
@@ -3071,9 +3102,9 @@ const decisionStaticFields = ({
   const textFields = publishedTextFields(read);
   // The shared link contract over one publisher page: the decision's own,
   // else the source's public home, which is what the attribution resolves
-  // to. The legacy `appUrl` beside it would only repeat `url`.
+  // to.
   const links = legalCitationLinkFields({
-    appUrl,
+    url,
     sourceUrl: read.sourceAttributionUrl ?? read.documentUrl,
   });
   // The publisher's name says something only where it is not the court's.
@@ -3194,7 +3225,7 @@ const decisionItemResult = ({
   const readableText = blocks === null ? read.fulltext : astText;
   const plainText = aiTextAllowed ? readableText : null;
   const text = plainText === null || plainText.length === 0 ? null : plainText;
-  const appUrl = caseLawDecisionAppUrlOf(read);
+  const url = caseLawDecisionAppUrlOf(read);
 
   const messages: string[] =
     read.resolution.type === DECISION_READ_RESOLUTION.ABSORBED_SUPPLEMENT
@@ -3210,7 +3241,7 @@ const decisionItemResult = ({
     text === null || starts === null
       ? {}
       : decisionTextPart({
-          appUrl,
+          url,
           language: read.language,
           located: blocks === null ? null : locateDecisionBlocks(blocks, text),
           messages,
@@ -3237,7 +3268,7 @@ const decisionItemResult = ({
       decisionId: read.id,
       caseNumber: read.caseNumber,
       ...nonDocketReference(read),
-      ...decisionStaticFields({ appUrl, digest, includedFields, read }),
+      ...decisionStaticFields({ url, digest, includedFields, read }),
       ...textPart,
       ...(text === null
         ? {}
@@ -3252,7 +3283,7 @@ const decisionItemResult = ({
             outline: navigation.entries.map((entry) => ({
               title: entry.title,
               page: pageOfOffset(starts, entry.start),
-              ...decisionBlockDeepLink({ appUrl, ...entry }),
+              ...decisionBlockDeepLink({ url, ...entry }),
             })),
             ...(navigation.numberedEntriesTruncated
               ? { outlineNumberedEntriesTruncated: true as const }
@@ -3565,7 +3596,13 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
-  const { cursor, decision_id: decisionId, direction } = parsed.output;
+  const {
+    cursor,
+    decision_id: decisionId,
+    direction,
+    doctrine,
+    polarity,
+  } = parsed.output;
   const limit = normalizePage(
     parsed.output.limit ?? LIMITS.caseLawAgentCitationPageSizeDefault,
   );
@@ -3581,6 +3618,8 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
     cursor,
     decisionId: brandPersistedCaseLawDecisionId(decisionId),
     direction,
+    ...(doctrine === undefined ? {} : { doctrine }),
+    ...(polarity === undefined ? {} : { polarity }),
     limit,
     surface: "search",
   });
@@ -3596,10 +3635,25 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
       tool: "read_case_law_citations",
     });
   }
+  if (read.type === "doctrine_unavailable") {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Doctrine filtering is unavailable",
+      issues: [
+        {
+          path: "doctrine",
+          message: "Doctrine is unavailable on this case-law surface.",
+        },
+      ],
+      hint: "Call read_case_law_citations again without doctrine; the response's doctrineAvailability will report whether doctrine can be read.",
+    });
+  }
 
   return toolDataResult(
     projectionPayload(READ_CASE_LAW_CITATIONS_PROJECTION, {
       doctrineAvailability: read.page.doctrineAvailability,
+      ...(doctrine === undefined ? {} : { doctrine }),
+      ...(polarity === undefined ? {} : { polarity }),
       decisionId,
       direction,
       nextCursor: read.page.nextCursor,
@@ -3614,7 +3668,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
             ? null
             : {
                 ...legalCitationLinkFields({
-                  appUrl: buildCaseLawDecisionAppUrl({
+                  url: buildCaseLawDecisionAppUrl({
                     caseNumber: item.decision.caseNumber,
                     country: item.decision.country,
                     court: item.decision.court,

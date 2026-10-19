@@ -132,7 +132,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
       <ThemeImage
         lightSrc={media.src}
         darkSrc={media.darkSrc}
-        alt={media.alt}
+        alt={t(media.altKey)}
         class={`h-full w-full border object-cover object-top ${compact ? "rounded-lg" : "rounded-[1.1rem]"}`}
         style="border-color: color-mix(in srgb, var(--foreground) 11%, transparent); box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5)"
         loading="lazy"

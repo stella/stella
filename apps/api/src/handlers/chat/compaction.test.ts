@@ -1,4 +1,5 @@
-import type { ModelMessage } from "@tanstack/ai";
+import { EventType } from "@tanstack/ai";
+import type { AnyTextAdapter, ModelMessage, StreamChunk } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -16,8 +17,10 @@ import {
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
 import { LIMITS } from "@/api/lib/limits";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
   chatThreadNeedsCompaction,
@@ -550,7 +553,7 @@ Continue drafting the termination analysis.
       orgAIConfig: null,
       managedAIResidency: "eu",
       preserveTokens: 20,
-      role: "chat",
+      task: "chat",
       tenantWorkspaceIds: [],
       summarizeWithModel: async (transcript) => {
         transcriptSeenBySummarizer = transcript;
@@ -569,6 +572,68 @@ Continue drafting the termination analysis.
       content:
         "Earlier model-step history compacted from 2 message(s).\n\ntanstack summary",
     });
+  });
+
+  test("meters model compaction against the fallback model that answers", async () => {
+    const requestedModelId = "requested-model";
+    const answeringModelId = "answering-fallback-model";
+    const meteredModelIds: string[] = [];
+    const adapter = asTestRaw<AnyTextAdapter>({
+      async *chatStream(): AsyncIterable<StreamChunk> {
+        yield {
+          type: EventType.RUN_STARTED,
+          runId: "compaction-run",
+          threadId: "compaction-thread",
+        };
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "compaction-message",
+          delta: "fallback summary",
+        };
+        yield {
+          type: EventType.RUN_FINISHED,
+          finishReason: "stop",
+          runId: "compaction-run",
+          threadId: "compaction-thread",
+        };
+      },
+    });
+    const answeringModel = asTestRaw<ResolvedTanStackTextModel>({
+      adapter,
+      keySource: "instance",
+      modelId: answeringModelId,
+      modelOptions: {},
+      provider: "openai",
+    });
+    const middleware = { name: "record-compaction-model" };
+    const forModel = (model: { modelId: string }) => {
+      meteredModelIds.push(model.modelId);
+      return { captureError: () => undefined, forModel, middleware };
+    };
+
+    const compacted = await compactModelMessagesForModel({
+      abortSignal: AbortSignal.timeout(1000),
+      aiAnalytics: { captureError: () => undefined, forModel, middleware },
+      messages: [
+        { role: "user", content: "old request ".repeat(80) },
+        { role: "assistant", content: "old response ".repeat(80) },
+        { role: "user", content: "latest request" },
+      ],
+      modelId: requestedModelId,
+      organizationId: toSafeId<"organization">("org_compaction"),
+      admission: testModelAdmission(toSafeId<"organization">("org_compaction")),
+      orgAIConfig: null,
+      managedAIResidency: "eu",
+      preserveTokens: 20,
+      resolveTextModel: () => answeringModel,
+      task: "chat",
+      tenantWorkspaceIds: [],
+      triggerTokens: 50,
+    });
+
+    expect(Result.isOk(compacted)).toBe(true);
+    expect(answeringModelId).not.toBe(requestedModelId);
+    expect(meteredModelIds).toEqual([answeringModelId]);
   });
 
   test("preserves model history from the latest user turn boundary", () => {

@@ -11,6 +11,7 @@ import {
   decisionCaseName,
   visibleDecisionBlocks,
 } from "@stll/decision-reader/decision-text.logic";
+import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -1088,9 +1089,11 @@ const GatedAnalysisInvitation = ({
         data-slot="gated-analysis-invitation"
         role="region"
       >
-        <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
-          <SparklesIcon className="size-3.5" />
-          {t("caseLaw.notesFilter.ai")}
+        <span className="text-muted-foreground text-xs">
+          <ReaderAiLabel
+            context="caseLaw"
+            label={t("caseLaw.notesFilter.ai")}
+          />
         </span>
       </div>
     );

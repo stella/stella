@@ -20,6 +20,17 @@ export const aggregateFences = () => {
   const userId = mintAuthProviderId<"user">();
   const answerId = createSafeId<"legalReaderAnswer">();
   return {
+    account: { aggregate: "account", id: userId, mode: "no key update" },
+    accountExport: {
+      aggregate: "accountExport",
+      id: { id: Bun.randomUUIDv7(), userId },
+      mode: "share",
+    },
+    folioCollabRoom: {
+      aggregate: "folioCollabRoom",
+      id: { id: createSafeId<"folioCollabRoom">(), workspaceId },
+      mode: "update",
+    },
     signingSession: {
       aggregate: "signingSession",
       id: {
@@ -156,6 +167,7 @@ export const aggregateFences = () => {
       mode: "update",
     },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
+    sampleCase: { aggregate: "sampleCase", id: { workspaceId } },
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },

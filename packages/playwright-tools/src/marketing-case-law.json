@@ -1,0 +1,47 @@
+[
+  {
+    "country": "CZE",
+    "caseNumber": "27 Cdo 59/2022",
+    "language": "cs",
+    "highlightAnchor": "p-74",
+    "underlineAnchor": "p-73",
+    "aiNote": "A prior demand by the company is not required: statutory liability protects creditors even when the company cannot or will not pursue compensation.",
+    "comment": "For the claim: establish the director’s breach, uncompensated loss and the creditor’s inability to recover from the company.",
+    "question": "Must a creditor first make the company demand compensation from its director?",
+    "answer": "No. Liability under § 159(3) does not depend on the company actively demanding compensation. That would defeat the protection of creditors when the company cannot or will not act.",
+    "followUp": "How can the director be released from that liability?",
+    "followUpAnswer": "By compensating the company for the loss caused by the breach of duty. The court distinguishes that route from requiring the company to make a prior demand.",
+    "highlightNumber": 38,
+    "underlineNumber": 37
+  },
+  {
+    "country": "CZE",
+    "caseNumber": "IV.ÚS 1394/24",
+    "language": "cs",
+    "highlightAnchor": "p-138",
+    "underlineAnchor": "p-137",
+    "aiNote": "The courts must assess the evidence in its historical and legal context. Isolated facts cannot replace an evaluation of the record as a whole.",
+    "comment": "On remand: map every relevant document to the restitution conditions and explain how the evidence fits together.",
+    "question": "Can the courts decide the restitution claim from isolated facts?",
+    "answer": "No. The Constitutional Court criticised the failure to consider decisive facts together and in their historical and legal context. The resulting factual findings conflicted with the case file.",
+    "followUp": "Why was the formal approach to the restitution claim rejected?",
+    "followUpAnswer": "It defeated the purpose of § 2(2) of Act 243/1992: mitigating property wrongs without penalising claimants for failing to use merely formal procedural remedies in the post-1948 context.",
+    "highlightNumber": 99,
+    "underlineNumber": 98
+  },
+  {
+    "country": "CZE",
+    "caseNumber": "27 Cdo 1525/2025",
+    "language": "cs",
+    "highlightAnchor": "p-16",
+    "underlineAnchor": "p-15",
+    "aiNote": "Alleged procedural defects do not themselves establish admissibility. The appeal must present a qualifying question of substantive or procedural law.",
+    "comment": "Before filing: identify the legal question and specify the admissibility ground. Keep procedural complaints tied to an admissible appeal.",
+    "question": "Can procedural defects alone make this appeal admissible?",
+    "answer": "No. Complaints about procedural defects do not themselves present the qualifying legal question required by § 237. Such defects are considered only once the appeal is admissible.",
+    "followUp": "Why must the filing satisfy the statutory requirements?",
+    "followUpAnswer": "The court considers the requirements and consequences clearly stated in the procedural code. Even minimal care, by reading the relevant provisions, should establish what the appeal must contain.",
+    "highlightNumber": 11,
+    "underlineNumber": 10
+  }
+]

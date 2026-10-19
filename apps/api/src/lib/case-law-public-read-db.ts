@@ -4,14 +4,10 @@ import type { PublicLawReadOptions } from "@/api/lib/public-law-read-db";
 
 const CASE_LAW_PUBLIC_READ_DB = Symbol("caseLawPublicReadDb");
 
-type CaseLawQueryKey = Extract<keyof Transaction["query"], "caseLawDecisions">;
-
 export type CaseLawPublicReadTransaction = Pick<
   Transaction,
   "execute" | "select"
-> & {
-  query: Pick<Transaction["query"], CaseLawQueryKey>;
-};
+>;
 
 type CaseLawReadOptions = PublicLawReadOptions;
 

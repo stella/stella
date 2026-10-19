@@ -88,7 +88,7 @@ const refineSearchEndpoint = createSafeRootHandler(
     actionAdmission: { type: "handler", actionKind: "search.refine" },
     mcp: { type: "internal", reason: "search_ui" },
     body: refineSearchBodySchema,
-    requiresUsage: { actionType: "chat", modelRole: "fast" },
+    requiresUsage: { actionType: "chat", modelTask: "short-text" },
   } satisfies HandlerConfig,
   async function* ({
     body,
@@ -132,7 +132,7 @@ const summarizeSearchEndpoint = createSafeRootHandler(
     actionAdmission: { type: "handler", actionKind: "search.summarize" },
     mcp: { type: "internal", reason: "search_ui" },
     body: summarizeSearchBodySchema,
-    requiresUsage: { actionType: "chat", modelRole: "fast" },
+    requiresUsage: { actionType: "chat", modelTask: "short-text" },
   } satisfies HandlerConfig,
   async function* ({
     body,

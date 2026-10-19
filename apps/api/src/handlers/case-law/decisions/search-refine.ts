@@ -32,8 +32,8 @@ import {
 } from "@/api/lib/legal-search/public-law-country";
 import type { PublicCountryUnavailableAnswer } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 const CASE_LAW_REFINE_MAX_ATTEMPTS = 3;
 const CASE_LAW_REFINE_TIMEOUT_MS = 20_000;
@@ -57,7 +57,7 @@ const config = {
     country: tPublicLawCountry,
     locale: t.Optional(t.String({ maxLength: 16 })),
   }),
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "search-expand" },
 } satisfies HandlerConfig;
 
 const refineCaseLawSearch = createSafeRootHandler(
@@ -75,6 +75,7 @@ const refineCaseLawSearch = createSafeRootHandler(
     user,
   }): SafeHandlerGenerator<{ query: string } | PublicCountryUnavailableAnswer> {
     const countryRead = readPublicLawCountry(body.country, {
+      domain: "caseLaw",
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
       surface: "search",
     });
@@ -93,11 +94,11 @@ const refineCaseLawSearch = createSafeRootHandler(
       );
     }
 
-    yield* requireTanStackAIAvailableForRole({
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "search-expand",
     });
 
     // The language the search stems and drops function words in, so the
@@ -118,7 +119,7 @@ const refineCaseLawSearch = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "case-law.search.refine",
-      modelRole: "fast",
+      modelTask: "search-expand",
       orgAIConfig,
       modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId, jurisdiction: country },
@@ -143,10 +144,10 @@ const refineCaseLawSearch = createSafeRootHandler(
       });
       const generated = await Result.tryPromise({
         try: async () =>
-          await generateTanStackObjectForRole({
+          await generateTanStackObjectForTask({
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
-            role: "fast",
+            task: "search-expand",
             serviceTier: "standard",
             orgAIConfig,
             managedAIResidency,
@@ -155,7 +156,7 @@ const refineCaseLawSearch = createSafeRootHandler(
             analytics,
             caching: resolveCaching({
               promptCachingEnabled,
-              role: "fast",
+              task: "search-expand",
               scopeKey: null,
             }),
             system: CASE_LAW_SEARCH_REFINE_SYSTEM,

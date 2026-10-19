@@ -152,6 +152,15 @@ export type {
   ChatDecisionPassageTarget,
 } from "./chat-decision-passage-link";
 export {
+  CHAT_CORPORA,
+  CHAT_CORPUS_HREF_PREFIX,
+  formatChatCorpusId,
+  parseChatCorpusHref,
+  parseChatCorpusId,
+  toChatCorpusHref,
+} from "./chat-corpus-scope";
+export type { ChatCorpus, ChatCorpusScope } from "./chat-corpus-scope";
+export {
   CHAT_MENTION_CATEGORIES,
   CHAT_MENTION_HREF_PREFIXES,
   CHAT_REFERENCE_CATEGORIES,
@@ -371,6 +380,7 @@ export {
   CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
   CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX,
+  CLAUSE_NUMBERING_LEVEL_LIMITS,
   DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
   DOCX_SUGGESTIONS_PENDING_MAX,
   ENTITIES_PER_WORKSPACE_MAX,

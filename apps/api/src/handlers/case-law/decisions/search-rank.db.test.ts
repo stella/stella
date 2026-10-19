@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import {
   caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSources,
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
@@ -23,6 +24,7 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
   type SearchCursor,
 } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -237,8 +239,8 @@ test("a missing applied passage count cannot prove a singleton", async () => {
         .select({
           canRecur: caseLawCorpusDocumentCanRecur("missing-generation"),
         })
-        .from(caseLawDecisions)
-        .where(eq(caseLawDecisions.id, singletonId)),
+        .from(publishedCaseLawDecisions)
+        .where(eq(publishedCaseLawDecisions.id, singletonId)),
   );
   expect(rows).toEqual([{ canRecur: true }]);
 });
@@ -364,6 +366,7 @@ test.each(
     let windowMoved = false;
     const readPage = async (parsedCursor: SearchCursor | null) =>
       await readCorpusIndexSearchPage({
+        scanTransport: NATIVE_SCAN_TRANSPORT,
         observer: "unobserved",
         cluster: "q09",
         indexId: corpusIndexId(GENERATION, "CZE"),

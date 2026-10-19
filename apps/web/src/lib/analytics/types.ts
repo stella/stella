@@ -24,6 +24,7 @@ export const WEB_ANALYTICS_EVENTS = {
   feedbackDialogOpened: "feedback_dialog_opened",
   feedbackReportSubmitted: "feedback_report_submitted",
   provisionPlacementGaps: "provision_placement_gaps",
+  inspectorRestoreRecovered: "inspector_restore_recovered",
 } as const;
 
 export type WebAnalyticsEvent =
@@ -54,6 +55,9 @@ export type Analytics = {
   ) => void;
   captureProvisionPlacementGaps: (
     properties: ProvisionPlacementGapsProperties,
+  ) => void;
+  captureInspectorRestoreRecovered: (
+    properties: InspectorRestoreRecoveredProperties,
   ) => void;
   captureRouteErrorLifecycle: (
     properties: RouteErrorLifecycleProperties,
@@ -103,6 +107,12 @@ export type ErrorCaptureContext =
 // Stored citations a decision reader could not place: one event per decision,
 // reader surface and reason, counting the rows. A placement gap is a data
 // outcome (corpus coverage or linker drift), not an exception.
+/** The inspector restored its tabs minimized because the previous load never
+ *  settled after restoring them. Counts only, never tab content. */
+type InspectorRestoreRecoveredProperties = {
+  tabCount: number;
+};
+
 type ProvisionPlacementGapsProperties = {
   surface: string;
   kind: ProvisionPlacementFailureKind;

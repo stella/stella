@@ -39,17 +39,7 @@ export type PublicLawReadIsolation = "read-committed" | "repeatable-read";
 
 export type PublicLawReadOptions = { isolation?: PublicLawReadIsolation };
 
-type PublicLawQueryKey = Extract<
-  keyof Transaction["query"],
-  "caseLawDecisions"
->;
-
-type PublicLawSharedReadTransaction = Pick<
-  Transaction,
-  "execute" | "select"
-> & {
-  query: Pick<Transaction["query"], PublicLawQueryKey>;
-};
+type PublicLawSharedReadTransaction = Pick<Transaction, "execute" | "select">;
 
 export type PublicLawDatabaseRolePermissions = {
   canAccessOtherDatabase: boolean;

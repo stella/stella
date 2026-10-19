@@ -37,6 +37,7 @@ jobs:
           persist-credentials: false
 
       - name: Check the served site
+        timeout-minutes: 4
         env:
           LANDING_SITE: https://stll.app
         run: bash scripts/check-landing-served.sh

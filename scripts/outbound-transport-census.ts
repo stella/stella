@@ -992,12 +992,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/features/avt/use-load-sample-case.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Downloads the bundled sample statement from the web app's origin.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/web/src/features/case-law/components/case-viewer/reader-answers-query.ts",
     class: "operator-configured-infrastructure",
     reason: "Streams reader answers from the configured API.",

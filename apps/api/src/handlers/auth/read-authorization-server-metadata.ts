@@ -5,11 +5,12 @@ import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
 } from "@/api/lib/api-handlers";
+import { DISCOVERY_METADATA_CACHE_POLICY } from "@/api/lib/security-headers";
 
 const readAuthorizationServerMetadata = createSafePublicHandler(
   {
     contract: "patch",
-    cache: { kind: "public", maxAge: 300 },
+    cache: DISCOVERY_METADATA_CACHE_POLICY,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
   },

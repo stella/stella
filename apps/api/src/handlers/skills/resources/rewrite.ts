@@ -16,8 +16,8 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 const REWRITE_PROMPT_MAX_CHARS = 2000;
 const REWRITE_TIMEOUT_MS = 60_000;
@@ -49,7 +49,7 @@ const config = {
   },
   params: rewriteSkillResourceParamsSchema,
   body: rewriteSkillResourceBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 const rewriteSkillResource = createSafeRootHandler(
@@ -67,11 +67,11 @@ const rewriteSkillResource = createSafeRootHandler(
     session,
     user,
   }) {
-    yield* requireTanStackAIAvailableForRole({
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "short-text",
     });
 
     yield* Result.await(
@@ -120,7 +120,7 @@ const rewriteSkillResource = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "skills.rewrite_resource",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
       modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
@@ -135,13 +135,13 @@ const rewriteSkillResource = createSafeRootHandler(
 
     const generation = await Result.tryPromise({
       try: async () =>
-        await generateTanStackTextForRole({
+        await generateTanStackTextForTask({
           dataClass: "customer",
           admission: configuredModelAdmission({ modelAdmission }),
           abortSignal: AbortSignal.timeout(REWRITE_TIMEOUT_MS),
           finishPolicy: "require-complete",
           maxOutputTokens: REWRITE_MAX_OUTPUT_TOKENS,
-          role: "fast",
+          task: "short-text",
           serviceTier: "standard",
           orgAIConfig,
           managedAIResidency,
@@ -151,7 +151,7 @@ const rewriteSkillResource = createSafeRootHandler(
           analytics: aiAnalytics,
           caching: resolveCaching({
             promptCachingEnabled,
-            role: "fast",
+            task: "short-text",
             scopeKey: `${session.activeOrganizationId}:skills:${params.skillId}:${resource.path}`,
           }),
           prompt,

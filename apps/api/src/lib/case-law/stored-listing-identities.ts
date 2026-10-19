@@ -10,7 +10,6 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import {
-  rowHoldsDocument,
   rowHoldsDocumentFor,
   supplementIsMergedFor,
 } from "@/api/lib/case-law/stored-payload";
@@ -43,7 +42,7 @@ export const readStoredListingIdentities = async ({
   return await tx
     .select({
       key: sql<string>`incoming.key`,
-      withText: sql<boolean>`bool_or((${caseLawDecisions.id} is not null and ${rowHoldsDocument}) or (${merged} and ${rowHoldsDocumentFor(judgment)}))`,
+      withText: sql<boolean>`bool_or((${caseLawDecisions.id} is not null and ${rowHoldsDocumentFor(caseLawDecisions)}) or (${merged} and ${rowHoldsDocumentFor(judgment)}))`,
     })
     .from(
       sql`jsonb_to_recordset(${JSON.stringify(incoming)}::text::jsonb) AS incoming(key text, "documentId" text, "caseNumber" text, language text)`,

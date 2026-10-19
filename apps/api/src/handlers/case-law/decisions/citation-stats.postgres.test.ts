@@ -16,7 +16,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
+import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution-sql";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

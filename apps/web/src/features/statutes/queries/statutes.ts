@@ -39,6 +39,7 @@ export type StatuteListFilters = {
   query?: string;
   /** Works in force, or works no longer in force; both when absent. */
   validity?: LegislationListValidity;
+  year?: string;
 };
 
 type StatuteListKey = StatuteListFilters & { pageSize: PublicLawPageSize };
@@ -68,6 +69,7 @@ const statuteKeys = {
       pageSize: key.pageSize,
       query: key.query,
       validity: key.validity,
+      year: key.year,
     },
   ],
   shelf: (country: string) => [...statuteKeys.all, "shelf", { country }],
@@ -119,6 +121,7 @@ const readStatutesPage = async ({
       ...(filters.number !== undefined && { number: filters.number }),
       ...(filters.query !== undefined && { query: filters.query }),
       ...(filters.validity !== undefined && { validity: filters.validity }),
+      ...(filters.year !== undefined && { year: Number(filters.year) }),
     },
     fetch: { signal },
   });
@@ -155,6 +158,7 @@ export const statutesInfiniteOptions = (
 const PUBLIC_STATUTE_SEARCH_PAGE_SIZE = PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX;
 
 export type StatuteSearchFilters = {
+  asOf?: string;
   country: string;
   query: string;
   documentType?: string;

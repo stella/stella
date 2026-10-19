@@ -281,6 +281,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/gh-retry.sh
+            scripts/retry.sh
             scripts/desktop-release-step.ts
             .github/actions/desktop-windows-build/
           sparse-checkout-cone-mode: false
@@ -291,6 +292,7 @@ jobs:
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/release-tooling/scripts" "$RUNNER_TEMP/release-tooling/actions"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/desktop-release-step.ts" "$RUNNER_TEMP/release-tooling/scripts/desktop-release-step.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/retry.sh" "$RUNNER_TEMP/release-tooling/scripts/retry.sh"
           cp -R "$GITHUB_WORKSPACE/.gh-retry/.github/actions/desktop-windows-build" "$RUNNER_TEMP/release-tooling/actions/desktop-windows-build"
           echo "RELEASE_TOOLING=$RUNNER_TEMP/release-tooling" >> "$GITHUB_ENV"
 
@@ -314,7 +316,10 @@ jobs:
           no-cache: true
 
       - name: Install dependencies
-        run: bun ci --ignore-scripts
+        timeout-minutes: 5
+        # The pinned release checkout may predate retry.sh; the workflow
+        # revision's copy is kept with the other release tooling.
+        run: bash "$RELEASE_TOOLING/scripts/retry.sh" bun ci --ignore-scripts
         env:
           # Signing-key secrets are loaded into later steps in this job.
           # Keep NPM_TOKEN out of the install-time environment so a
@@ -659,6 +664,7 @@ jobs:
           persist-credentials: false
 
       - name: Promote release to latest
+        timeout-minutes: 10
         run: bash scripts/promote-desktop-release.sh
 
   carry-forward:
@@ -762,4 +768,5 @@ jobs:
         run: bun scripts/check-api-deployment.ts
 
       - name: Promote release to latest
+        timeout-minutes: 10
         run: bash scripts/promote-desktop-release.sh

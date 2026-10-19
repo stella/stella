@@ -309,7 +309,7 @@ test("the real generation runtime receives sanitized state and the canonical dec
     question: signedQuestion,
     client: null,
     generation: {
-      role: "fast",
+      task: "classify",
       dataClass: "customer",
       orgAIConfig: null,
       managedAIResidency: "eu",
@@ -369,7 +369,7 @@ test("a generative runtime deadline stays a typed undecided result without cance
     client: null,
     abortSignal: controller.signal,
     generation: {
-      role: "fast",
+      task: "classify",
       dataClass: "customer",
       orgAIConfig: null,
       managedAIResidency: "eu",
@@ -509,7 +509,7 @@ test("choice generation sends a closed probability schema through the real runti
     question: kindQuestion,
     client: null,
     generation: {
-      role: "fast",
+      task: "classify",
       dataClass: "customer",
       orgAIConfig: null,
       managedAIResidency: "eu",
@@ -543,7 +543,7 @@ test("the generation deadline bounds a stalled resolver without aborting the cal
     client: null,
     abortSignal: controller.signal,
     generation: {
-      role: "fast",
+      task: "classify",
       dataClass: "customer",
       orgAIConfig: null,
       managedAIResidency: "eu",
@@ -635,7 +635,7 @@ test.each(["success", "failed-middle", "stalled-middle"])(
       questions,
       client: null,
       generation: {
-        role: "fast",
+        task: "classify",
         dataClass: "customer",
         orgAIConfig: null,
         managedAIResidency: "eu",
@@ -1205,7 +1205,7 @@ test("a question that cannot fit the provider budget fails without dispatching",
     }),
     client: null,
     generation: {
-      role: "fast",
+      task: "classify",
       dataClass: "customer",
       orgAIConfig: null,
       managedAIResidency: "eu",
