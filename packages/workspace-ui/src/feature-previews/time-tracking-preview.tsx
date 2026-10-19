@@ -18,16 +18,41 @@ export type TimeTrackingPreviewLabels = {
   summary: string;
 };
 
+export type TimeTrackingPreviewEntry = {
+  /** `HH:MM`; `start` is unique within the day. */
+  start: string;
+  end: string;
+  minutes: number;
+  description: string;
+  matter: PreviewMatter;
+};
+
+/** The day's content: the running timer (its elapsed time frozen, since a
+ *  static scene shows one moment) and the entries already recorded. The
+ *  day's total is computed. */
+export type TimeTrackingPreviewData = {
+  /** `YYYY-MM-DD`. */
+  day: string;
+  running: {
+    description: string;
+    matter: PreviewMatter;
+    elapsedMinutes: number;
+  };
+  /** In the order they were worked. */
+  entries: readonly TimeTrackingPreviewEntry[];
+};
+
 /** A running timer on a matter above the day's recorded entries and their
  *  total. */
 export const TimeTrackingPreview = ({
   labels,
   locale,
+  data: { day, running, entries } = DEFAULT_DATA,
   className,
-}: FeaturePreviewProps<TimeTrackingPreviewLabels>) => {
+}: FeaturePreviewProps<TimeTrackingPreviewLabels, TimeTrackingPreviewData>) => {
   const totalMinutes =
-    ENTRIES.reduce((sum, entry) => sum + entry.minutes, 0) +
-    RUNNING.elapsedMinutes;
+    entries.reduce((sum, entry) => sum + entry.minutes, 0) +
+    running.elapsedMinutes;
 
   return (
     <FeaturePreviewSurface
@@ -37,7 +62,7 @@ export const TimeTrackingPreview = ({
         <span className="whitespace-nowrap">
           {formatPreviewDate({
             locale,
-            date: DAY,
+            date: day,
             options: { weekday: "long", day: "numeric", month: "long" },
           })}
         </span>
@@ -52,19 +77,19 @@ export const TimeTrackingPreview = ({
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="truncate text-sm font-medium">
-              {RUNNING.description}
+              {running.description}
             </span>
-            <PreviewMatterLabel matter={RUNNING.matter} />
+            <PreviewMatterLabel matter={running.matter} />
           </div>
           <span className="shrink-0 text-xl font-medium tabular-nums">
-            {formatPreviewDuration(locale, RUNNING.elapsedMinutes)}
+            {formatPreviewDuration(locale, running.elapsedMinutes)}
           </span>
           <span className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
             <SquareIcon className="size-3 fill-current" />
           </span>
         </div>
         <ul className="flex min-h-0 flex-col divide-y">
-          {ENTRIES.map((entry) => (
+          {entries.map((entry) => (
             <li
               className="flex min-w-0 items-center gap-3 py-2"
               key={entry.start}
@@ -101,38 +126,35 @@ const PreviewMatterLabel = ({ matter }: { matter: PreviewMatter }) => (
   </span>
 );
 
-// Mock content depicting user data, not interface text; deliberately
-// untranslated. The running timer's elapsed time is frozen: a static scene
-// shows one moment.
-const DAY = "2026-10-19";
-
-const RUNNING = {
-  description: "Prepare witness statements",
-  matter: PREVIEW_MATTERS.cargo,
-  elapsedMinutes: 84,
-} as const;
-
-// Chronological, as the day was worked.
-const ENTRIES = [
-  {
-    start: "08:30",
-    end: "09:15",
-    minutes: 45,
-    description: "Review disclosure list",
+// The default content; see `mock-data.ts`.
+const DEFAULT_DATA = {
+  day: "2026-10-19",
+  running: {
+    description: "Prepare witness statements",
     matter: PREVIEW_MATTERS.cargo,
+    elapsedMinutes: 84,
   },
-  {
-    start: "09:30",
-    end: "11:00",
-    minutes: 90,
-    description: "Mark up share purchase agreement",
-    matter: PREVIEW_MATTERS.acquisition,
-  },
-  {
-    start: "11:15",
-    end: "11:45",
-    minutes: 30,
-    description: "Call with landlord's solicitors",
-    matter: PREVIEW_MATTERS.lease,
-  },
-] as const;
+  entries: [
+    {
+      start: "08:30",
+      end: "09:15",
+      minutes: 45,
+      description: "Review disclosure list",
+      matter: PREVIEW_MATTERS.cargo,
+    },
+    {
+      start: "09:30",
+      end: "11:00",
+      minutes: 90,
+      description: "Mark up share purchase agreement",
+      matter: PREVIEW_MATTERS.acquisition,
+    },
+    {
+      start: "11:15",
+      end: "11:45",
+      minutes: 30,
+      description: "Call with landlord's solicitors",
+      matter: PREVIEW_MATTERS.lease,
+    },
+  ],
+} as const satisfies TimeTrackingPreviewData;
