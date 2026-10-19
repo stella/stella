@@ -381,7 +381,12 @@ export const runtimeReferences = (
   let count = 0;
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) && !isOutsideRuntimeCode(node)) {
-      const symbol = checker.getSymbolAtLocation(node);
+      // `{ generate }` names its property; the value is the imported binding.
+      const symbol =
+        ts.isShorthandPropertyAssignment(node.parent) &&
+        node.parent.name === node
+          ? checker.getShorthandAssignmentValueSymbol(node.parent)
+          : checker.getSymbolAtLocation(node);
       if (symbol !== undefined && importedBindings.has(symbol)) {
         count += 1;
       }

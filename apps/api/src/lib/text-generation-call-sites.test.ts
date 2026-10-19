@@ -107,6 +107,16 @@ describe("text generation call site census", () => {
     expect(runtimeReferences("namespace.ts", source, textExports)).toBe(1);
   });
 
+  test("a seam import passed in a dependency object is a reference", () => {
+    const source = `
+      import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+      const deps = { generateTanStackTextForTask };
+      await deps.generateTanStackTextForTask({});
+    `;
+
+    expect(runtimeReferences("deps.ts", source, textExports)).toBe(1);
+  });
+
   test("a local with a seam export name is not an imported reference", () => {
     const source = `
       const generateTanStackTextForTask = () => "local";
