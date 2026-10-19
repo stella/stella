@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { getDomain } from "tldts";
 import * as v from "valibot";
 
@@ -480,6 +480,143 @@ export const getMcpOAuthRedirectUri = (): string => {
 };
 
 export type McpClientRegistrationMode = "cimd" | "dcr" | "unsupported";
+
+export type AuthorizationResponseRegistrationMode =
+  | "cimd"
+  | "dcr"
+  | "pre_registered";
+
+export type AuthorizationResponseBinding =
+  | {
+      type: "issuer";
+      issuer: string;
+      registrationMode: AuthorizationResponseRegistrationMode;
+      issSupportedAdvertised: true;
+    }
+  | {
+      type: "redirect";
+      bindingId: string;
+      registrationMode: AuthorizationResponseRegistrationMode;
+      issSupportedAdvertised: false;
+    }
+  | {
+      type: "unbound";
+      reason:
+        | "no_issuer_support_shared_client"
+        | "no_issuer_support_shared_redirect"
+        | "state_without_binding";
+      registrationMode: AuthorizationResponseRegistrationMode;
+      issSupportedAdvertised: false;
+    };
+
+export const AUTHORIZATION_RESPONSE_BINDING_MODE = "observe" as const;
+
+export const createAuthorizationResponseBinding = ({
+  authorizationServer,
+  registrationMode,
+}: {
+  authorizationServer: UpstreamAuthorizationServerMetadata;
+  registrationMode: AuthorizationResponseRegistrationMode;
+}): AuthorizationResponseBinding => {
+  if (
+    authorizationServer.authorization_response_iss_parameter_supported === true
+  ) {
+    return {
+      type: "issuer",
+      issuer: authorizationServer.issuer,
+      registrationMode,
+      issSupportedAdvertised: true,
+    };
+  }
+
+  return registrationMode === "cimd"
+    ? {
+        type: "unbound",
+        reason: "no_issuer_support_shared_client",
+        registrationMode,
+        issSupportedAdvertised: false,
+      }
+    : {
+        type: "unbound",
+        reason: "no_issuer_support_shared_redirect",
+        registrationMode,
+        issSupportedAdvertised: false,
+      };
+};
+
+export type AuthorizationResponseBindingVerdict =
+  | { type: "accepted"; issPresent: boolean; issMatches: boolean | null }
+  | {
+      type: "would_refuse";
+      reason: "issuer_absent" | "issuer_mismatch" | "binding_unavailable";
+      issPresent: boolean;
+      issMatches: boolean | null;
+    };
+
+export const evaluateAuthorizationResponseBinding = (
+  binding: AuthorizationResponseBinding,
+  response: { issuer: string | undefined },
+): AuthorizationResponseBindingVerdict => {
+  const issPresent = response.issuer !== undefined;
+  switch (binding.type) {
+    case "issuer": {
+      const issMatches = response.issuer === binding.issuer;
+      if (!issPresent) {
+        return {
+          type: "would_refuse",
+          reason: "issuer_absent",
+          issPresent,
+          issMatches,
+        };
+      }
+      return issMatches
+        ? { type: "accepted", issPresent, issMatches }
+        : {
+            type: "would_refuse",
+            reason: "issuer_mismatch",
+            issPresent,
+            issMatches,
+          };
+    }
+    case "redirect":
+      return { type: "accepted", issPresent, issMatches: null };
+    case "unbound":
+      return {
+        type: "would_refuse",
+        reason: "binding_unavailable",
+        issPresent,
+        issMatches: null,
+      };
+    default: {
+      binding satisfies never;
+      return panic("Unhandled authorization response binding");
+    }
+  }
+};
+
+export const observeAuthorizationResponseBinding = async <T>({
+  binding,
+  exchange,
+  observe,
+  response,
+}: {
+  binding: AuthorizationResponseBinding;
+  exchange: () => Promise<T>;
+  observe: (verdict: AuthorizationResponseBindingVerdict) => void;
+  response: { issuer: string | undefined };
+}): Promise<T> => {
+  const verdict = evaluateAuthorizationResponseBinding(binding, response);
+  observe(verdict);
+
+  switch (AUTHORIZATION_RESPONSE_BINDING_MODE) {
+    case "observe":
+      return exchange();
+    default: {
+      AUTHORIZATION_RESPONSE_BINDING_MODE satisfies never;
+      return panic("Unhandled authorization response binding mode");
+    }
+  }
+};
 
 // Client ID Metadata Documents are the MCP spec's preferred registration
 // mechanism; Dynamic Client Registration is retained for authorization
