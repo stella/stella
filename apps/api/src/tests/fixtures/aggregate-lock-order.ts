@@ -20,6 +20,12 @@ export const aggregateFences = () => {
   const userId = mintAuthProviderId<"user">();
   const answerId = createSafeId<"legalReaderAnswer">();
   return {
+    account: { aggregate: "account", id: userId, mode: "no key update" },
+    accountExport: {
+      aggregate: "accountExport",
+      id: { id: Bun.randomUUIDv7(), userId },
+      mode: "share",
+    },
     folioCollabRoom: {
       aggregate: "folioCollabRoom",
       id: { id: createSafeId<"folioCollabRoom">(), workspaceId },
@@ -57,6 +63,14 @@ export const aggregateFences = () => {
       aggregate: "definition",
       id: { id: definitionId, organizationId },
       mode: "update",
+    },
+    legislationAmendmentWork: {
+      aggregate: "legislationAmendmentWork",
+      id: {
+        sourceId: createSafeId<"legislationSource">(),
+        eli: "eli/cz/sb/2012/89",
+        language: "cs",
+      },
     },
     scoutCensus: {
       aggregate: "scoutCensus",
