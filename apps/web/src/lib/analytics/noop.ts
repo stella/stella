@@ -41,6 +41,8 @@ export const noopAnalytics: Analytics = {
   captureGuideStepSkipped: noop,
   captureProvisionPlacementGaps: noop,
   captureInspectorRestoreRecovered: noop,
+  captureFollowupShown: noop,
+  captureFollowupSelected: noop,
   captureFeedbackDialogOpened: noop,
   captureFeedbackReportSubmitted: noop,
   captureRouteErrorLifecycle: noopAsync,

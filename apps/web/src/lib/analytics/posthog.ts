@@ -737,6 +737,8 @@ const forwardedCaptures: Pick<
   | "captureFeedbackReportSubmitted"
   | "captureProvisionPlacementGaps"
   | "captureInspectorRestoreRecovered"
+  | "captureFollowupShown"
+  | "captureFollowupSelected"
 > = {
   capturePageHangSuspected: (properties) => {
     posthog.capture(WEB_ANALYTICS_EVENTS.pageHangSuspected, properties);
@@ -758,6 +760,12 @@ const forwardedCaptures: Pick<
   },
   captureInspectorRestoreRecovered: (properties) => {
     posthog.capture(WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered, properties);
+  },
+  captureFollowupShown: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.followupShown, properties);
+  },
+  captureFollowupSelected: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.followupSelected, properties);
   },
 };
 
@@ -839,6 +847,8 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
         case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
         case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
+        case WEB_ANALYTICS_EVENTS.followupShown:
+        case WEB_ANALYTICS_EVENTS.followupSelected:
           return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
         default: {
           event.event satisfies never;
