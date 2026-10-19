@@ -56,15 +56,15 @@ const BABEL_TOOLCHAINS = [
   { expectedMajor: 7, packagePath: "apps/mobile/package.json" },
 ] as const;
 // `typescript` is the TypeScript 7 compiler (the version `bun check` embeds).
-// TypeScript 7 exposes no classic compiler API, so tools built on it use the
-// side-by-side `@typescript/typescript6` package, and Astro's checker, which
+// TypeScript 7 exposes no classic compiler API, so tools built on it import
+// TypeScript 6 through the `typescript6` alias, and Astro's checker, which
 // supports only TypeScript 5 and 6, gets its own pinned copy.
 const TYPESCRIPT_TOOLCHAIN = {
   oxlint: "1.87.0",
   oxlintConfig: "1.4.0",
   tsgolint: "7.0.2003",
   typescript: "7.0.2",
-  typescript6Api: "6.0.2",
+  typescript6Api: "npm:typescript@6.0.3",
   typescript6Astro: "6.0.3",
 } as const;
 const TYPESCRIPT6_COMPATIBILITY = {
@@ -81,7 +81,7 @@ const TYPESCRIPT6_COMPATIBILITY = {
     specifier: "^0.9.9",
   },
   compilerApi: {
-    dependency: "@typescript/typescript6",
+    dependency: "typescript6",
     packagePath: "packages/scripts/package.json",
     specifier: "catalog:",
   },
@@ -335,7 +335,7 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       specifier: TYPESCRIPT_TOOLCHAIN.oxlintConfig,
     },
     {
-      dependency: "@typescript/typescript6",
+      dependency: "typescript6",
       field: "devDependencies",
       specifier: "catalog:",
     },
@@ -360,7 +360,7 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       specifier: TYPESCRIPT_TOOLCHAIN.typescript,
     },
     {
-      dependency: "@typescript/typescript6",
+      dependency: "typescript6",
       field: "catalog",
       specifier: TYPESCRIPT_TOOLCHAIN.typescript6Api,
     },
@@ -481,8 +481,7 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       }
 
       if (
-        readDependencySpecifier(packageJsonPath, "@typescript/typescript6") !==
-          null &&
+        readDependencySpecifier(packageJsonPath, "typescript6") !== null &&
         relativePackagePath !==
           TYPESCRIPT6_COMPATIBILITY.compilerApi.packagePath
       ) {

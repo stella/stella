@@ -1,4 +1,3 @@
-import ts from "@typescript/typescript6";
 import { mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 /**
  * The schema index: every table and column as one grep-able line.
@@ -19,6 +18,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";

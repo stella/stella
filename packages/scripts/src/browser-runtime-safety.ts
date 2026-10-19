@@ -1,4 +1,4 @@
-import ts from "@typescript/typescript6";
+import ts from "typescript6";
 
 const hasTemplateBinding = (
   access: ts.PropertyAccessExpression,

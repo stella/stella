@@ -1,5 +1,5 @@
-import ts from "@typescript/typescript6";
 import path from "node:path";
+import ts from "typescript6";
 
 import { parseSource } from "./parse-memo";
 

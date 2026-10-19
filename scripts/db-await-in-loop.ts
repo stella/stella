@@ -81,10 +81,10 @@
 //
 // Usage: bun scripts/db-await-in-loop.ts
 
-import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";

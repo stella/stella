@@ -1,4 +1,4 @@
-import ts from "@typescript/typescript6";
+import ts from "typescript6";
 
 /**
  * Compiler options the native checker (tsgo) accepts but the JavaScript

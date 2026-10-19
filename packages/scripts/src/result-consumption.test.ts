@@ -1,7 +1,7 @@
-import ts from "@typescript/typescript6";
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
 
 import { CODE_CHECK_LEGS } from "./code-quality-partition";
 import {

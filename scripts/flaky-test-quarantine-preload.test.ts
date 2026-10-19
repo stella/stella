@@ -1,4 +1,3 @@
-import ts from "@typescript/typescript6";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -11,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";

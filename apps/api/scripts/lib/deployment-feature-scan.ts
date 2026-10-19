@@ -25,8 +25,8 @@
 //      flagged capability, or is declared always-on; the rest are
 //      unclassified.
 
-import ts from "@typescript/typescript6";
 import { panic } from "better-result";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 

@@ -1,6 +1,6 @@
-import * as ts from "@typescript/typescript6";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
+import * as ts from "typescript6";
 import { createStore } from "zustand";
 import { immer } from "zustand/middleware/immer";
 

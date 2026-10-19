@@ -1,7 +1,7 @@
-import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
+import ts from "typescript6";
 
 import { printContract, verifyDeterminism } from "./generate-web-api-types";
 import { nameAliases } from "./lib/web-api-alias-names";

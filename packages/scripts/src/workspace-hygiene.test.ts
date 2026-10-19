@@ -478,7 +478,7 @@ describe("workspace hygiene", () => {
       webPackageJson: {
         dependencies: {},
         devDependencies: {
-          "@typescript/typescript6": "catalog:",
+          typescript6: "catalog:",
           typescript: "catalog:",
         },
         name: "@stll/web",
@@ -541,13 +541,13 @@ const createWorkspaceRoot = ({
         : {}),
       oxlint: repositoryPackage.catalog.oxlint,
       typescript: "7.0.2",
-      "@typescript/typescript6": "6.0.2",
+      typescript6: "npm:typescript@6.0.3",
     },
     catalogs: { ts6: { typescript: "6.0.3" } },
     devDependencies: {
       "@stll/oxlint-config":
         repositoryPackage.devDependencies["@stll/oxlint-config"],
-      "@typescript/typescript6": "catalog:",
+      typescript6: "catalog:",
       "oxlint-tsgolint": "7.0.2003",
       typescript: "catalog:",
       ...rootDevDependencies,
@@ -582,7 +582,7 @@ const createWorkspaceRoot = ({
   writeFileSync(
     path.join(rootDir, "packages/scripts/package.json"),
     JSON.stringify({
-      dependencies: { "@typescript/typescript6": "catalog:" },
+      dependencies: { typescript6: "catalog:" },
       name: "@stll/scripts",
       scripts: {
         typecheck: "bun check --no-pretty --all --project=tsconfig.json",

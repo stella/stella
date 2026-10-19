@@ -19,7 +19,7 @@
 // Within a rank, ties keep the printed text order, and equal text is the same
 // printout either way.
 
-import ts from "@typescript/typescript6";
+import ts from "typescript6";
 
 import { hasFlag } from "./typescript-internals";
 

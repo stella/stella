@@ -624,7 +624,7 @@ const noZodImport = {
 const noClassicTypeScriptImport = {
   name: "typescript",
   message:
-    "TypeScript 7 exposes no compiler API at 'typescript'. Use '@typescript/typescript6' for the classic API, or 'typescript/unstable/*' for the TypeScript 7 API.",
+    "TypeScript 7 exposes no compiler API at 'typescript'. Use 'typescript6' for the classic API, or 'typescript/unstable/*' for the TypeScript 7 API.",
 };
 
 const webLocalApiImportGroup = ["@/api/*", "@/api/**/*"];

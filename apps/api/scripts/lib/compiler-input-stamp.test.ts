@@ -1,4 +1,3 @@
-import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import {
@@ -12,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import {
@@ -163,7 +163,7 @@ test("portable stamps preserve directory names and relative compiler globs", asy
       "bun",
       "-e",
       `
-      import ts from ${JSON.stringify(Bun.resolveSync("@typescript/typescript6", import.meta.dir))};
+      import ts from ${JSON.stringify(Bun.resolveSync("typescript6", import.meta.dir))};
       import { createCompilerInputRecorder } from ${JSON.stringify(path.join(import.meta.dir, "compiler-input-stamp.ts"))};
       const root = process.cwd();
       const recorder = createCompilerInputRecorder();

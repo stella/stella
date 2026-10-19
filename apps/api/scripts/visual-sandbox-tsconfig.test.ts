@@ -1,7 +1,7 @@
-import ts from "@typescript/typescript6";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
 
 const API_ROOT = path.resolve(import.meta.dir, "..");
 const API_CONFIG = path.join(API_ROOT, "tsconfig.json");

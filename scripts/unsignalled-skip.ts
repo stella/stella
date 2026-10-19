@@ -1,5 +1,5 @@
-import ts from "@typescript/typescript6";
 import { panic } from "better-result";
+import ts from "typescript6";
 
 import { parseSource } from "./parse-memo";
 import { isExcludedSource } from "./source-globs";

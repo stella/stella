@@ -1,10 +1,10 @@
 /** Prevent automated retries from hiding flaky test behavior. */
 
-import ts from "@typescript/typescript6";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import ts from "typescript6";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const PLAYWRIGHT_CONFIG = /(?:^|\/)playwright[^/]*\.config\.(?:[cm]?[jt]s)$/u;

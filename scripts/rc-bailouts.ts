@@ -1,4 +1,3 @@
-import ts from "@typescript/typescript6";
 // React Compiler bailout guard.
 //
 // The React Compiler memoizes most components automatically, so manual
@@ -22,6 +21,7 @@ import ts from "@typescript/typescript6";
 // compiler skip, including unsupported syntax that is valid React.
 import { readFileSync, writeFileSync } from "node:fs";
 import { transformSync, type OxcError } from "oxc-transform-react";
+import ts from "typescript6";
 
 import { REACT_COMPILER_OPTIONS } from "../packages/scripts/src/react-compiler-options";
 import { BASELINE_PATHS } from "./baseline-paths";

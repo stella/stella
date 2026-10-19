@@ -1,6 +1,6 @@
-import ts from "@typescript/typescript6";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
 
 const TEST_DIRECTORY = path.resolve(
   import.meta.dirname,

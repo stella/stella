@@ -1,6 +1,6 @@
-import ts from "@typescript/typescript6";
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
+import ts from "typescript6";
 
 /**
  * Every consumer of the public country lists names the surface it serves.

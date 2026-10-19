@@ -1,5 +1,5 @@
-import ts from "@typescript/typescript6";
 import { describe, expect, test } from "bun:test";
+import ts from "typescript6";
 
 const srcRoot = new URL("../../", import.meta.url);
 const propertyName = (name: ts.PropertyName) =>

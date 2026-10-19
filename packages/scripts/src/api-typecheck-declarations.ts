@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
-import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";

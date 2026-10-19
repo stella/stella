@@ -1,6 +1,6 @@
-import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import ts from "typescript6";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 

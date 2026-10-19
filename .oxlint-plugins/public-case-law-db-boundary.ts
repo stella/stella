@@ -40,10 +40,10 @@
 // role itself, whose grants and policies the reader-role suite exercises.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import ts from "@typescript/typescript6";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 

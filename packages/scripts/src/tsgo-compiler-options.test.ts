@@ -1,6 +1,6 @@
-import ts from "@typescript/typescript6";
 import { expect, test } from "bun:test";
 import path from "node:path";
+import ts from "typescript6";
 
 import {
   TSGO_ONLY_COMPILER_OPTIONS,

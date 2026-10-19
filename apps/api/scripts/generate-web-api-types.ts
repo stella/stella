@@ -1,4 +1,3 @@
-import ts from "@typescript/typescript6";
 import { Result, panic } from "better-result";
 // Prints the API types apps/web consumes (`WebApiContract` in
 // src/eden-contract.ts) into apps/web/src/generated/api-routes.gen.ts. apps/web
@@ -43,6 +42,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { printError } from "@stll/errors";

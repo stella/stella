@@ -40,7 +40,7 @@ test("the pattern recognizes every import form", () => {
     expect(CLASSIC_API_IMPORT.test(source)).toBe(true);
   }
   for (const source of [
-    'import ts from "@typescript/typescript6";',
+    'import ts from "typescript6";',
     'import { API } from "typescript/unstable/sync";',
     'const language = "typescript";',
   ]) {

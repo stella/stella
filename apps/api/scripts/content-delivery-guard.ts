@@ -1,7 +1,7 @@
-import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 

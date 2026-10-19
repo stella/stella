@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
-import ts from "@typescript/typescript6";
 import { plugin } from "bun";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
 import { IntlProvider } from "use-intl";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";

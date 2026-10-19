@@ -1,8 +1,8 @@
-import ts from "@typescript/typescript6";
 import { Result, TaggedError } from "better-result";
 import { readFileSync, realpathSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import path from "node:path";
+import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 

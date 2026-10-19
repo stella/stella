@@ -19,8 +19,8 @@
 // cannot fund a new security waiver, because the two live in different
 // budgets and the security budget rises on its own.
 
-import ts from "@typescript/typescript6";
 import { panic } from "better-result";
+import ts from "typescript6";
 
 import { parseSource } from "./parse-memo";
 

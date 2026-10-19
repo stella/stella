@@ -1,4 +1,3 @@
-import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import {
@@ -10,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import {

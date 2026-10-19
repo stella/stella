@@ -27,7 +27,6 @@
 // surviving rows, and fills a generated reason for a new one; the membership
 // check then refuses any row the base does not already have.
 
-import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import {
   mkdirSync,
@@ -38,6 +37,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";

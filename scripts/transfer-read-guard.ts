@@ -1,7 +1,7 @@
-import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
 
 import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { runLedgerMembershipGuard } from "./ledger-membership.ts";

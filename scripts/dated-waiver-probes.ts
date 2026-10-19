@@ -1,7 +1,7 @@
-import ts from "@typescript/typescript6";
 import { panic, Result } from "better-result";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import {
