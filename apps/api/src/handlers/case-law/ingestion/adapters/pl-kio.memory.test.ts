@@ -3,10 +3,7 @@ import { expect, test } from "bun:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  PL_KIO_HTML_BUDGET,
-  PL_KIO_RESPONSE_BYTE_CAP,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
+import { PL_KIO_RESPONSE_BYTE_CAP } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
 
 const API_ROOT = path.resolve(import.meta.dir, "../../../../..");
 const MEMORY_CHILD = fileURLToPath(
@@ -15,13 +12,16 @@ const MEMORY_CHILD = fileURLToPath(
 const MEMORY_BUDGET_BYTES = 1024 * 1024 * 1024;
 const MEMORY_WORKLOAD_TIMEOUT_MS = 180_000;
 const ATTRIBUTE_FLOOD_DEADLINE_MS = 10_000;
-const RESPONSE_SIZES = [
-  256 * 1024,
-  1024 * 1024,
-  PL_KIO_RESPONSE_BYTE_CAP.document,
-];
+const TWELVE_MIB = 12 * 1024 * 1024;
+const SIXTEEN_MIB = 16 * 1024 * 1024;
+const RESPONSE_SIZES = [256 * 1024, 1024 * 1024, TWELVE_MIB, SIXTEEN_MIB];
+const INGESTION_PATHS = ["fetch", "replay"] as const;
 
-const runMemoryChild = async (targetBytes: number, workload = "accepted") => {
+const runMemoryChild = async (
+  targetBytes: number,
+  workload = "accepted",
+  ingestionPath: (typeof INGESTION_PATHS)[number] = "fetch",
+) => {
   const child = Bun.spawn(
     [
       process.execPath,
@@ -30,6 +30,7 @@ const runMemoryChild = async (targetBytes: number, workload = "accepted") => {
       MEMORY_CHILD,
       String(targetBytes),
       workload,
+      ingestionPath,
     ],
     {
       timeout:
@@ -78,7 +79,9 @@ const runMemoryChild = async (targetBytes: number, workload = "accepted") => {
     !("boundaryBudgetType" in receipt) ||
     typeof receipt.boundaryBudgetType !== "string" ||
     !("overflowBudgetType" in receipt) ||
-    typeof receipt.overflowBudgetType !== "string"
+    typeof receipt.overflowBudgetType !== "string" ||
+    !("path" in receipt) ||
+    typeof receipt.path !== "string"
   ) {
     panic(`KIO child emitted an invalid receipt: ${outputLine}`);
   }
@@ -93,48 +96,59 @@ const runMemoryChild = async (targetBytes: number, workload = "accepted") => {
     markupTokens: receipt.markupTokens,
     boundaryBudgetType: receipt.boundaryBudgetType,
     overflowBudgetType: receipt.overflowBudgetType,
+    path: receipt.path,
   };
   return { receipt: memoryReceipt, peakBytes: usage.maxRSS, exitCode, stderr };
 };
 
 test(
-  "inline-rich KIO documents retain text, AST and raw within the worker memory headroom",
+  "low-markup KIO documents retain text, AST and raw within the worker memory headroom",
   async () => {
-    for (const targetBytes of RESPONSE_SIZES) {
-      const { receipt, peakBytes, exitCode, stderr } =
-        await runMemoryChild(targetBytes);
-      expect(exitCode, stderr).toBe(0);
-      expect(receipt.targetBytes).toBe(targetBytes);
-      expect(receipt.documentBytes).toBe(targetBytes);
-      expect(receipt.fulltextChars).toBeGreaterThan(targetBytes * 0.7);
-      expect(receipt.astBlocks).toBeGreaterThan(0);
-      expect(receipt.rawEnvelopeBytes).toBeGreaterThanOrEqual(targetBytes);
-      expect(receipt.rawContainsDocument).toBe(true);
-      expect(receipt.budgetType).toBe("accepted");
-      expect(receipt.boundaryBudgetType).toBe("accepted");
-      expect(receipt.overflowBudgetType).toBe("markup-budget-exceeded");
-      if (targetBytes === PL_KIO_RESPONSE_BYTE_CAP.document) {
-        expect(receipt.markupTokens).toBeGreaterThanOrEqual(
-          PL_KIO_HTML_BUDGET.maxDomAllocations * 0.9,
+    for (const ingestionPath of INGESTION_PATHS) {
+      for (const targetBytes of RESPONSE_SIZES) {
+        const { receipt, peakBytes, exitCode, stderr } = await runMemoryChild(
+          targetBytes,
+          "accepted",
+          ingestionPath,
+        );
+        expect(exitCode, stderr).toBe(0);
+        expect(receipt.targetBytes).toBe(targetBytes);
+        expect(receipt.documentBytes).toBe(targetBytes);
+        expect(receipt.fulltextChars).toBeGreaterThan(targetBytes * 0.7);
+        expect(receipt.astBlocks).toBeGreaterThan(0);
+        expect(receipt.rawEnvelopeBytes).toBeGreaterThanOrEqual(targetBytes);
+        expect(receipt.rawContainsDocument).toBe(true);
+        expect(receipt.budgetType).toBe("accepted");
+        expect(receipt.boundaryBudgetType).toBe("accepted");
+        expect(receipt.overflowBudgetType).toBe("markup-budget-exceeded");
+        expect(receipt.path).toBe(ingestionPath);
+        expect(peakBytes).toBeGreaterThan(0);
+        expect(peakBytes).toBeLessThan(MEMORY_BUDGET_BYTES);
+        console.log(
+          JSON.stringify({
+            benchmark: "pl-kio-document-assembly",
+            targetBytes,
+            peakBytes,
+            memoryBudgetBytes: MEMORY_BUDGET_BYTES,
+            retainedFulltextChars: receipt.fulltextChars,
+            astBlocks: receipt.astBlocks,
+            markupTokens: receipt.markupTokens,
+            path: ingestionPath,
+          }),
         );
       }
-      expect(peakBytes).toBeGreaterThan(0);
-      expect(peakBytes).toBeLessThan(MEMORY_BUDGET_BYTES);
-      console.log(
-        JSON.stringify({
-          benchmark: "pl-kio-document-assembly",
-          targetBytes,
-          peakBytes,
-          memoryBudgetBytes: MEMORY_BUDGET_BYTES,
-          retainedFulltextChars: receipt.fulltextChars,
-          astBlocks: receipt.astBlocks,
-          markupTokens: receipt.markupTokens,
-        }),
-      );
     }
   },
   MEMORY_WORKLOAD_TIMEOUT_MS,
 );
+
+test("markup-rich documents near the cap are refused within memory headroom", async () => {
+  const { receipt, peakBytes } = await runMemoryChild(SIXTEEN_MIB, "rich");
+  expect(receipt.documentBytes).toBe(SIXTEEN_MIB);
+  expect(receipt.budgetType).toBe("markup-budget-exceeded");
+  expect(receipt.fulltextChars).toBe(0);
+  expect(peakBytes).toBeLessThan(MEMORY_BUDGET_BYTES);
+});
 
 test.each(["svg", "attributes", "plaintext"])(
   "rejected %s expansion stays within memory headroom through production assembly",

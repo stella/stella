@@ -1026,6 +1026,8 @@ export type StoredRawListing =
       parts: SourceRawParts;
       /** The listing row, verified to name the decision the database holds. */
       listing: Record<string, unknown>;
+      /** The decoded envelope, reusable when replay preserves it verbatim. */
+      sourceRaw: string;
     }
   | StoredRawReparseRejected;
 
@@ -1061,7 +1063,8 @@ export const readStoredRawListing = ({
     };
   }
 
-  const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
+  const sourceRaw = new TextDecoder().decode(stored.raw);
+  const parts = decodeSourceRawEnvelope(sourceRaw);
   const listingRaw = parts?.[part];
   if (parts === null || listingRaw === undefined) {
     return {
@@ -1092,7 +1095,7 @@ export const readStoredRawListing = ({
     };
   }
 
-  return { type: "listing", parts, listing };
+  return { type: "listing", parts, listing, sourceRaw };
 };
 
 /**

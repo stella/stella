@@ -844,6 +844,8 @@ type AssemblePlKioDecisionOptions = {
     | { type: "read"; html: string }
     | { type: "unavailable" }
     | { type: typeof PL_KIO_DOCUMENT_REJECTION.OVERSIZED };
+  /** A replay can retain its decoded envelope without serializing it again. */
+  sourceRaw?: string;
 };
 
 type PlKioDocumentReadState = {
@@ -984,6 +986,28 @@ const plKioCourtStorage = ({
   return { court, courtTooLong, quarantineReason, unavailableCourt };
 };
 
+type PlKioSourceRawOptions = Pick<
+  AssemblePlKioDecisionOptions,
+  "detailHtml" | "item"
+> & { documentParts: SourceRawParts };
+
+const plKioSourceRawOf = ({
+  detailHtml,
+  documentParts,
+  item,
+}: PlKioSourceRawOptions) =>
+  encodeSourceRawEnvelope({
+    [RAW_PART.LISTING]: JSON.stringify(item),
+    ...(detailHtml === undefined ? {} : { [RAW_PART.DETAIL]: detailHtml }),
+    ...documentParts,
+  });
+
+const plKioIdentifiersOf = (dockets: readonly string[]) =>
+  dockets.map((value) => ({
+    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    value,
+  }));
+
 /**
  * Build one ruling from the responses in hand. No I/O: the crawl, the
  * reconciliation and a replay of the stored envelope all reach this with the
@@ -993,6 +1017,7 @@ export const assemblePlKioDecision = ({
   detailHtml,
   document: documentRead,
   item,
+  sourceRaw: replaySourceRaw,
 }: AssemblePlKioDecisionOptions): PlKioBuildResult => {
   const id = publisherIdOf(item);
   const quarantineId = plKioQuarantineId(item);
@@ -1126,17 +1151,16 @@ export const assemblePlKioDecision = ({
       ? undefined
       : [{ role: "presiding", nameAsPrinted: presiding }];
 
-  const identifiers: DecisionIdentifier[] = otherDockets.map((value) => ({
-    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-    value,
-  }));
+  const identifiers: DecisionIdentifier[] = plKioIdentifiersOf(otherDockets);
   const [firstIdentifier, ...restIdentifiers] = identifiers;
 
-  const sourceRaw = encodeSourceRawEnvelope({
-    [RAW_PART.LISTING]: JSON.stringify(item),
-    ...(detailHtml === undefined ? {} : { [RAW_PART.DETAIL]: detailHtml }),
-    ...documentReadState.rawParts,
-  });
+  const sourceRaw =
+    replaySourceRaw ??
+    plKioSourceRawOf({
+      detailHtml,
+      documentParts: documentReadState.rawParts,
+      item,
+    });
 
   const keyed: ProcurementRulingKeyInput = {
     caseNumber,
@@ -1542,6 +1566,7 @@ const reparsePlKioStoredRaw = (
     item: normalizePlKioListingItem(read.listing),
     detailHtml: read.parts[RAW_PART.DETAIL],
     document,
+    sourceRaw: read.sourceRaw,
   });
   return { type: "parsed", result: built.decision };
 };

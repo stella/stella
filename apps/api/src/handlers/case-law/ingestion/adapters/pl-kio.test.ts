@@ -888,9 +888,9 @@ describe("walking a month", () => {
     ).toBe(true);
   });
 
-  test("a converted document above 2 MiB retains its text on fetch and replay", async () => {
+  test("a low-markup 12 MiB document retains its text on fetch and replay", async () => {
     const content = await gzFixtureText("pl-kio-content-30308.html.gz");
-    const documentBytes = 2 * 1024 * 1024 + 1;
+    const documentBytes = 12 * 1024 * 1024;
     const documentHtml = `<!--${"x".repeat(documentBytes - new TextEncoder().encode(content).byteLength - 7)}-->${content}`;
     expect(new TextEncoder().encode(documentHtml).byteLength).toBe(
       documentBytes,

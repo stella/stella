@@ -1,8 +1,15 @@
 import { panic } from "better-result";
 import { Buffer } from "node:buffer";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
-import { assemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  assemblePlKioDecision,
+  plKioAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import {
   PL_KIO_HTML_BUDGET,
   PL_KIO_RESPONSE_BYTE_CAP,
@@ -28,42 +35,34 @@ const countMarkupTokens = (html: string) => {
   return tokens;
 };
 
-const spanCount = Math.min(
-  Math.floor(targetBytes / 256),
-  Math.floor((PL_KIO_HTML_BUDGET.maxDomAllocations - 204) / 3),
-);
 const prefix = "<html><body>";
 const suffix = "</body></html>";
-const span = (index: number) =>
-  `<span style="font-weight:bold">Ustalenie ${index}. </span>`;
+// Real KIO rulings are long prose paragraphs. Keep enough separate paragraphs
+// to exercise the AST while leaving the markup allocation budget well clear.
+const paragraphCount = Math.min(16, Math.floor(targetBytes / 1024));
 const paragraphs: string[] = [];
-for (let index = 0; index < spanCount; index += 1) {
-  if (index % 66 === 0) {
-    paragraphs.push("<p>");
-  }
-  paragraphs.push(span(index));
-  if (index % 66 === 65 || index === spanCount - 1) {
-    paragraphs.push("</p>");
-  }
+for (let index = 0; index < paragraphCount; index += 1) {
+  paragraphs.push(`<p>Ustalenie ${index}. </p>`);
 }
 const markup = prefix + paragraphs.join("") + suffix;
 const paddingBytes = targetBytes - Buffer.byteLength(markup);
 if (paddingBytes < 0) {
   panic("KIO memory fixture requires room for substantive document text");
 }
-const text = "Izba stwierdza okolicznosci. ";
+const text = "x";
 let paddingRemaining = paddingBytes;
-let spansRemaining = spanCount;
-const substantiveHtml = markup.replaceAll("</span>", () => {
-  const spanPaddingBytes = Math.ceil(paddingRemaining / spansRemaining);
+let paragraphsRemaining = paragraphCount;
+const substantiveHtml = markup.replaceAll("</p>", () => {
+  const spanPaddingBytes = Math.ceil(paddingRemaining / paragraphsRemaining);
   const padding = text
     .repeat(Math.ceil(spanPaddingBytes / text.length))
     .slice(0, spanPaddingBytes);
   paddingRemaining -= spanPaddingBytes;
-  spansRemaining -= 1;
-  return `${padding}</span>`;
+  paragraphsRemaining -= 1;
+  return `${padding}</p>`;
 });
 const workload = process.argv.at(3) ?? "accepted";
+const path = process.argv.at(4) ?? "fetch";
 const documentHtmlOf = (kind: string) => {
   switch (kind) {
     case "accepted":
@@ -74,6 +73,11 @@ const documentHtmlOf = (kind: string) => {
       return `<div ${Array.from({ length: 200_000 }, (_, index) => `a${index}`).join(" ")}></div>`;
     case "plaintext":
       return "x\n\n".repeat(100_000);
+    case "rich":
+      return `<html><body>${'<span a="x">tekst</span>'.repeat(PL_KIO_HTML_BUDGET.maxDomAllocations)}</body></html>${"x".repeat(targetBytes)}`.slice(
+        0,
+        targetBytes,
+      );
     default:
       return panic(`Unknown KIO memory workload: ${kind}`);
   }
@@ -89,9 +93,12 @@ const markupBoundaryHtml = '<span a="x">text</span>'.repeat(boundaryRepeats);
 const boundaryBudget = readPlKioHtml(markupBoundaryHtml, {
   maxBytes: PL_KIO_RESPONSE_BYTE_CAP.document,
 }).type;
-const overflowBudget = readPlKioHtml(`${markupBoundaryHtml}<span>x</span>`, {
-  maxBytes: PL_KIO_RESPONSE_BYTE_CAP.document,
-}).type;
+const overflowBudget = readPlKioHtml(
+  `${markupBoundaryHtml}${"<span>x</span>".repeat(2)}`,
+  {
+    maxBytes: PL_KIO_RESPONSE_BYTE_CAP.document,
+  },
+).type;
 const markupTokens = countMarkupTokens(documentHtml);
 if (
   (workload === "accepted" && documentBytes !== targetBytes) ||
@@ -104,16 +111,53 @@ if (
   );
 }
 
-const assembled = assemblePlKioDecision({
-  item: {
-    id: "30308",
-    documentType: "wyrok",
-    signature: "KIO 2845/25",
-    issueDate: "01-09-2025",
-  },
-  detailHtml,
-  document: { type: "read", html: documentHtml },
-});
+const assemble = () =>
+  assemblePlKioDecision({
+    item: {
+      id: "30308",
+      documentType: "wyrok",
+      signature: "KIO 2845/25",
+      issueDate: "01-09-2025",
+    },
+    detailHtml,
+    document: { type: "read", html: documentHtml },
+  });
+let assembled: ReturnType<typeof assemblePlKioDecision>;
+if (path === "replay") {
+  const sourceRaw = encodeSourceRawEnvelope({
+    listing: JSON.stringify({
+      id: "30308",
+      documentType: "wyrok",
+      signature: "KIO 2845/25",
+      issueDate: "01-09-2025",
+    }),
+    detail: detailHtml,
+    document: documentHtml,
+  });
+  const raw = new TextEncoder().encode(sourceRaw);
+  const replay = plKioAdapter.reparseStoredRaw?.({
+    raw,
+    contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    sourceDocumentId: "30308",
+    caseNumber: "KIO 2845/25",
+    language: "pl",
+    court: String(),
+    ecli: null,
+    decisionDate: "2025-09-01",
+    decisionType: "wyrok",
+    sourceUrl: null,
+    documentUrl: null,
+    metadata: {},
+  });
+  if (replay?.type !== "parsed") {
+    panic(`KIO memory fixture replay was not parsed: ${replay?.type}`);
+  }
+  assembled = { type: "built", decision: replay.result };
+} else if (path === "fetch") {
+  assembled = assemble();
+} else {
+  panic(`Unknown KIO memory path: ${path}`);
+}
 if (assembled.type !== "built") {
   panic(`KIO memory fixture was not assembled: ${assembled.type}`);
 }
@@ -124,7 +168,10 @@ if (workload === "accepted" && budget !== "accepted") {
   panic(`KIO fixture accepted workload was rejected: ${budget}`);
 }
 const rawParts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
-if (rawParts === null || !Object.values(rawParts).includes(documentHtml)) {
+if (
+  rawParts === null ||
+  Buffer.byteLength(rawParts.document ?? "") !== documentBytes
+) {
   panic("KIO memory fixture document was not retained in the raw envelope");
 }
 
@@ -141,6 +188,7 @@ process.stdout.write(
     rawContainsDocument: true,
     budgetType: budget,
     markupTokens,
+    path,
     boundaryBudgetType: boundaryBudget,
     overflowBudgetType: overflowBudget,
   })}\n`,
