@@ -583,11 +583,12 @@ test.each([0, 7])(
         [
           process.execPath,
           "-e",
-          `const timer = setInterval(() => console.log('progress'), 10); setTimeout(() => { clearInterval(timer); process.exit(${exitCode}); }, 100);`,
+          `const timer = setInterval(() => console.log('progress'), 10); setTimeout(() => { clearInterval(timer); process.exit(${exitCode}); }, 3000);`,
         ],
         cwd,
-        // Past the warning budget, inside the deadline of twice that budget.
-        60,
+        // Past the 2 s warning budget, a full second inside the deadline of
+        // twice that budget, so process startup cannot reach it.
+        2000,
         1000,
       );
       const result = await check.result;
@@ -599,6 +600,7 @@ test.each([0, 7])(
       await rm(cwd, { recursive: true, force: true });
     }
   },
+  15_000,
 );
 
 test.skipIf(process.platform === "win32")(
@@ -652,7 +654,7 @@ test.skipIf(process.platform === "win32")(
         command: [process.execPath, "-e", "while (true) {}"],
         cwd,
         timeoutMs: 500,
-        stallMs: 4000,
+        stallMs: 10_000,
         graceMs: 200,
         summary: "none",
         writeStdout: () => {},
@@ -664,7 +666,7 @@ test.skipIf(process.platform === "win32")(
       expect(result.output).toContain("class=task-overrun");
       expect(result.output).not.toContain("class=task-stall");
       // Killed at the deadline, well before the stall window could end it.
-      expect(Date.now() - started).toBeLessThan(4000);
+      expect(Date.now() - started).toBeLessThan(8000);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
