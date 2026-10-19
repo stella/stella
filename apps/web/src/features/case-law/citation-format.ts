@@ -252,7 +252,7 @@ const hungarianCitation = (input: CitationInput): string => {
 };
 
 /** Quotation typography follows the cited jurisdiction, like the citation. */
-export const QUOTATION_MARKS = {
+const QUOTATION_MARKS = {
   CZE: ["„", "“"],
   EU: ["“", "”"],
   HUN: ["„", "”"],
@@ -285,11 +285,6 @@ export const formatJurisdictionQuotation = (
       : QUOTATION_MARKS[normalizedCountry];
   return `${marks[0]}${text}${marks[1]}`;
 };
-
-export const formatDecisionQuotation = (
-  text: string,
-  country: string,
-): string => formatJurisdictionQuotation(text, country);
 
 const austrianCitation = (input: CitationInput): string => {
   const date = parseDecisionDate(input.decisionDate);

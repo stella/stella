@@ -118,9 +118,9 @@ export const copyTextFor = ({
   return copyTextFromSegments(segments, blockQuote);
 };
 
-export type ReaderCopySegment = { text: string; emphasis: boolean };
+type ReaderCopySegment = { text: string; emphasis: boolean };
 
-export type ReaderCopyText = {
+type ReaderCopyText = {
   html: string;
   plain: string;
   segments: readonly ReaderCopySegment[];

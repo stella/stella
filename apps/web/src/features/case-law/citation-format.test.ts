@@ -8,7 +8,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
   formatDecisionCitation,
-  formatDecisionQuotation,
+  formatJurisdictionQuotation,
 } from "@/features/case-law/citation-format";
 import type { CitationInput } from "@/features/case-law/citation-format";
 import type { StatuteCountry } from "@/lib/statutes/statute-route";
@@ -191,21 +191,23 @@ describe("Hungarian citation typography", () => {
 
   test("quotation typography is invariant to route or corpus country form", () => {
     for (const country of CASE_LAW_BROWSER_COUNTRIES) {
-      expect(formatDecisionQuotation("text", country)).toBe(
+      expect(formatJurisdictionQuotation("text", country)).toBe(
         EXPECTED_QUOTATIONS[country],
       );
-      expect(formatDecisionQuotation("text", country.toLowerCase())).toBe(
+      expect(formatJurisdictionQuotation("text", country.toLowerCase())).toBe(
         EXPECTED_QUOTATIONS[country],
       );
     }
-    expect(formatDecisionQuotation("teljesítés", "HUN")).toBe("„teljesítés”");
+    expect(formatJurisdictionQuotation("teljesítés", "HUN")).toBe(
+      "„teljesítés”",
+    );
   });
 
   test("every statute country uses its jurisdiction marks", () => {
     for (const [country, expected] of Object.entries(
       EXPECTED_STATUTE_QUOTATIONS,
     )) {
-      expect(formatDecisionQuotation("text", country)).toBe(expected);
+      expect(formatJurisdictionQuotation("text", country)).toBe(expected);
     }
   });
 });
