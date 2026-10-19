@@ -38,6 +38,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawSources: "case_law_sources",
   corpusIndexGenerations: "corpus_index_generations",
   corpusIndexGroupEnrollments: "corpus_index_group_enrollments",
+  corpusIndexJurisdictionServing: "corpus_index_jurisdiction_serving",
   corpusIndexProjectionIntents: "corpus_index_projection_intents",
   corpusIndexProjectionStates: "corpus_index_projection_states",
   legislationDocuments: "legislation_documents",
@@ -81,6 +82,19 @@ export const CENSUS_COLUMN_GRANTS_BY_RELATION = {
     observed_at: "permitted",
     expected_slices: "permitted",
     evidence_ref: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+/**
+ * Deploy this expansion before the alias migration, grants and readers.
+ * Promote these columns to required in the following release; preceding
+ * supported tasks must tolerate the grants throughout the rollover.
+ */
+export const LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION = {
+  legislation_work_identifiers: {
+    source_id: "permitted",
+    identifier: "permitted",
+    eli: "permitted",
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
@@ -262,6 +276,7 @@ export const caseLawDecisionViewGrantStatements = () =>
 
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   ...CENSUS_COLUMN_GRANTS_BY_RELATION,
+  ...LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,
   case_law_citation_doctrine_reviews:
     DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citation_doctrine_reviews,
   case_law_citations: {
@@ -354,6 +369,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     jurisdiction: "required",
     work_identifier: "required",
     work_number: "required",
+    eu_work_number: "required",
+    eu_work_year: "required",
     work_year: "required",
     work_collection: "required",
     work_eli: "required",
@@ -480,6 +497,13 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     index_group: "required",
     effective_digest: "required",
     provisioning_status: "required",
+  },
+  // Which generation answers a jurisdiction the serving generation no longer
+  // holds: the row the acceptance of every indexed hit follows.
+  corpus_index_jurisdiction_serving: {
+    family: "required",
+    jurisdiction: "required",
+    generation: "required",
   },
   // Exactly what deciding "this generation holds this decision now" reads.
   // The revision joins its physical passage count; work schedules and failure

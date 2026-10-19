@@ -6,7 +6,6 @@ import { Temporal } from "@stll/time";
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
 import type { RootPoolReport } from "@/api/lib/observability/root-pool-window";
 import type { BudgetName } from "@/api/lib/rate-limit/budget-observability";
-import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 /**
  * Per-request latency, split by request class, emitted as a CloudWatch
  * Embedded Metric Format (EMF) line on stdout.
@@ -27,11 +26,46 @@ import type { PublicCorpusClass } from "@/api/public-corpus-policy";
  * class regardless of route cardinality; `http.route` and
  * `http.status_code` ride along as queryable properties, not dimensions.
  */
+import { APP_VERSION, SERVICE_VERSION_KEY } from "@/api/lib/version";
+import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
+
+type McpRequestMetricInput = {
+  method: string;
+  mode: string;
+  overlap: boolean;
+  path: string;
+  toolName?: string;
+  phases: Record<
+    "auth" | "context" | "server_build" | "tool_projection" | "dispatch",
+    number
+  >;
+  queryCount: number;
+  totalMs: number;
+};
+
+export const buildMcpRequestMetricRecord = ({
+  phases,
+  totalMs,
+  ...fields
+}: McpRequestMetricInput) => ({
+  event: "mcp.request.phases",
+  ...fields,
+  auth: Math.floor(phases.auth),
+  context: Math.floor(phases.context),
+  server_build: Math.floor(phases.server_build),
+  tool_projection: Math.floor(phases.tool_projection),
+  dispatch: Math.floor(phases.dispatch),
+  total: Math.ceil(totalMs),
+});
+
+export const emitMcpRequestMetric = (input: McpRequestMetricInput): void => {
+  writeMetricLine(buildMcpRequestMetricRecord(input));
+};
 
 /** One rejection per budget name; caller identifiers are never dimensions. */
 export const emitRateLimitRejectedMetric = (budgetName: BudgetName): void => {
@@ -398,7 +432,9 @@ type FailureMetricInput = {
  * sustained rate. Emitted per observation, before any log or capture
  * suppression, so the count is the failure rate rather than the admitted
  * rate. Cardinality is bounded by the closed handle and reason sets; a frame,
- * request id or tenant id never becomes a dimension.
+ * request id or tenant id never becomes a dimension. The release rides along
+ * as a queryable property, never a dimension: each release would otherwise
+ * open new series.
  */
 const buildFailureMetricRecord = ({
   sink,
@@ -417,6 +453,7 @@ const buildFailureMetricRecord = ({
   },
   sink,
   reason,
+  [SERVICE_VERSION_KEY]: APP_VERSION,
   [FAILURE_METRIC_NAME]: 1,
 });
 

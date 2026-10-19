@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { panic } from "better-result";
-import { getTableName, sql } from "drizzle-orm";
+import { getTableName, isTable, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { getViewConfig, isPgView, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
@@ -40,6 +40,7 @@ import {
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPgliteCaseLawCountryShape,
   installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
   installPgliteWorkspaceContactCapacity,
@@ -325,6 +326,17 @@ const grantedPublicLawColumns = (
       ),
   );
 
+// Expansion releases may declare permitted grants before their relations exist.
+// The harness pushes only this checkout's schema, so it cannot grant those yet.
+export const availableSchemaRelationNames = new Set<string>(
+  Object.values(schema).flatMap((relation) => {
+    if (isTable(relation)) {
+      return [getTableName(relation)];
+    }
+    return isPgView(relation) ? [getViewConfig(relation).name] : [];
+  }),
+);
+
 /**
  * Role grants the harness runs after `stella`'s table privileges are set from
  * the migrations (`applyStellaTablePrivileges`). Table-level privileges of
@@ -545,6 +557,16 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT UPDATE (provisioning_status, attested_at, updated_at)
       ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
   `,
+  // The serving pointer is written by the gated flip and deleted when a
+  // whole generation is promoted; ingestion may not rewrite its key.
+  `
+    GRANT SELECT, INSERT, DELETE ON TABLE "corpus_index_jurisdiction_serving"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE (generation, from_generation, flipped_at)
+      ON TABLE "corpus_index_jurisdiction_serving" TO stella_ingestion
+  `,
   // The withdrawal trail is append-only: ingestion records, the app reads.
   `
     GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
@@ -586,6 +608,7 @@ export const ROLE_GRANT_STATEMENTS = [
   ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
     .filter(
       ([relation, columns]) =>
+        availableSchemaRelationNames.has(relation) &&
         relation !== getTableName(schema.caseLawDecisionAliases) &&
         relation !== getTableName(schema.caseLawDecisionCitationStats) &&
         relation !== getTableName(schema.caseLawDecisionCitationStatsState) &&
@@ -778,6 +801,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
+  await installPgliteCaseLawCountryShape(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteDesktopPresenceRls(db);

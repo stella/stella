@@ -7,6 +7,7 @@ import * as v from "valibot";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
 import serviceImages from "./ci-service-images.json" with { type: "json" };
 import {
   contextFromNested,
@@ -118,49 +119,39 @@ const context = (
   event: string,
   heavyOnly: boolean,
   plan: Record<string, string>,
-) => ({
-  github: {
-    event_name: event,
-    event: {
-      action: "synchronize",
-      pull_request: { draft: false, labels: [] },
+) => {
+  const value = ciExpressionContext({
+    event: modelledEvent(event),
+    heavyOnly,
+    plan,
+    needsResults: Object.fromEntries(
+      ciNeeds.map((job) => [
+        job,
+        heavyOnly && THIN_JOBS.some((thin) => thin === job)
+          ? "skipped"
+          : "success",
+      ]),
+    ),
+    stepOutputs: {
+      "marketing-release": {
+        required: plan["marketing_screenshots_required"] ?? "false",
+      },
     },
-  },
-  inputs: {
-    heavy_only: heavyOnly,
-    pr_depth_only: false,
-    query_perf_mode: "compare",
-  },
-  steps: {
+  });
+  value.steps = {
     "changed-files": { outputs: plan },
     "marketing-release": {
-      outputs: { required: plan["marketing_screenshots_required"] },
+      outputs: { required: plan["marketing_screenshots_required"] ?? "false" },
     },
-  },
-  needs: Object.fromEntries(
-    ciNeeds.map((job) => [
-      job,
-      {
-        result:
-          heavyOnly && THIN_JOBS.some((thin) => thin === job)
-            ? "skipped"
-            : "success",
-        outputs:
-          job === "ci-plan"
-            ? {
-                run_required: "true",
-                coverage_profile: "normal-v1",
-                queue_required_jobs: "[]",
-                pr_depth_reused: "false",
-                ...plan,
-              }
-            : {},
+    "completed-depth": {
+      outputs: {
+        run_required: plan["run_required"] ?? "true",
+        pr_heavy_suites: "run",
       },
-    ]),
-  ),
-  always: () => true,
-  cancelled: () => false,
-});
+    },
+  };
+  return value;
+};
 
 const planned = (plan: Record<string, string>, job: string) => {
   const scope = scopes[job];

@@ -45,6 +45,7 @@ import {
 } from "./code-check-affected";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
+import { rootScriptLintPaths } from "./root-script-lint";
 
 const WORKSPACES = new Set([
   "apps/api",
@@ -328,6 +329,45 @@ describe("affected code-check planning", () => {
     expect(oxc).toContain("--type-check");
     expect(oxc?.at(-1)).toBe("scripts/guard.ts");
   });
+
+  test("runs the real type-aware lint only for changed root scripts", () => {
+    const fixture = "scripts/code-check-affected-type-aware.fixture.ts";
+    const unchanged = "scripts/generate-cloud-setup.test.ts";
+    writeFileSync(
+      fixture,
+      [
+        "const unsafe: unknown = {};\n",
+        "console.log(`value: $",
+        "{unsafe}`);\n",
+      ].join(""),
+    );
+    try {
+      expect(rootScriptLintPaths([unchanged, fixture])).toEqual([
+        fixture,
+        unchanged,
+      ]);
+      const planned = plan([fixture], []);
+      if (planned.type !== "scoped") {
+        throw new Error("Expected a scoped code-check plan");
+      }
+      const command = scopedCommands(planned).find((candidate) =>
+        candidate.includes("oxlint"),
+      );
+      expect(command).toBeDefined();
+      expect(command).toContain(fixture);
+      expect(command).not.toContain(unchanged);
+      const result = Bun.spawnSync(command ?? [], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode).not.toBe(0);
+      expect(
+        `${result.stdout.toString()}${result.stderr.toString()}`,
+      ).toContain("Invalid type used in template literal expression");
+    } finally {
+      rmSync(fixture, { force: true });
+    }
+  }, 30_000);
 
   test("checks configured adapter paths without trying to lint a deleted source", () => {
     expect(plan(["packages/ui/src/removed.ts"], ["packages/ui"], [])).toEqual({
