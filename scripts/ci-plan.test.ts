@@ -8103,3 +8103,30 @@ test("a merge-from-base head skips its heavy suites only on verified reuse, and 
     },
   ]);
 });
+
+test("every code-quality leg stops a stalled check well inside its job budget", () => {
+  const legs = [
+    { job: "code-quality-api", step: "Code quality", minutes: 15 },
+    { job: "code-quality-web-rest", step: "Code quality (web)", minutes: 10 },
+    { job: "code-quality-web-rest", step: "Code quality (rest)", minutes: 12 },
+  ];
+  for (const { job, step, minutes } of legs) {
+    const parsed = v.parse(
+      v.looseObject({
+        "timeout-minutes": v.number(),
+        steps: v.array(
+          v.looseObject({
+            name: v.optional(v.string()),
+            run: v.optional(v.string()),
+            "timeout-minutes": v.optional(v.number()),
+          }),
+        ),
+      }),
+      ciJobs[job],
+    );
+    const found = parsed.steps.find(({ name }) => name === step);
+    expect(found?.run, step).toContain("code-check");
+    expect(found?.["timeout-minutes"], step).toBe(minutes);
+    expect(minutes, step).toBeLessThan(parsed["timeout-minutes"]);
+  }
+});

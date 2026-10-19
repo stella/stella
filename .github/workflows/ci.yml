@@ -3624,6 +3624,8 @@ jobs:
           cp .env.example .env
 
       - name: Code quality
+        # Measured at most ~8 min; a stalled check must not hold the job.
+        timeout-minutes: 15
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -3774,6 +3776,8 @@ jobs:
           cp .env.example .env
 
       - name: Code quality (web)
+        # Measured at most ~3 min; a stalled check must not hold the job.
+        timeout-minutes: 10
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -3815,6 +3819,8 @@ jobs:
           bun scripts/typecheck-coverage.ts
 
       - name: Code quality (rest)
+        # Measured at most ~4 min; a stalled check must not hold the job.
+        timeout-minutes: 12
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
