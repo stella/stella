@@ -124,7 +124,9 @@ const mountToolbar = async () => {
 test("native copy confirms only for a selection inside the reader", async () => {
   const view = await mountToolbar();
 
-  act(() => document.dispatchEvent(new Event("copy", { bubbles: true })));
+  await act(async () => {
+    document.dispatchEvent(new Event("copy", { bubbles: true }));
+  });
   expect(view.getByRole("button", { name: "Copied" })).toBeTruthy();
 
   await act(async () => cleanup());
@@ -138,7 +140,9 @@ test("native copy confirms only for a selection inside the reader", async () => 
   range.selectNodeContents(outside);
   document.getSelection()?.removeAllRanges();
   document.getSelection()?.addRange(range);
-  act(() => document.dispatchEvent(new Event("copy", { bubbles: true })));
+  await act(async () => {
+    document.dispatchEvent(new Event("copy", { bubbles: true }));
+  });
 
   expect(outsideView.queryByRole("button", { name: "Copied" })).toBeNull();
 });

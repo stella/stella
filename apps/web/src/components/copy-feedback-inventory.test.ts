@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
 
 const REPO_ROOT = path.join(import.meta.dir, "../../../..");
 const SOURCE_ROOTS = [
@@ -41,41 +41,18 @@ const ALLOWED = {
 
 describe("copy feedback ownership", () => {
   test("every copy success toast is an explained baseline", () => {
-    const discovered = sourceFiles(SOURCE_ROOTS)
-      .filter((file) => {
-        const source = readFileSync(file, "utf-8");
-        return (
-          source.includes("copyToClipboard(") &&
+    const discovered = SOURCE_ROOTS.flatMap((root) => sourceFileIndex(root))
+      .filter(
+        ({ relativePath, sourceText }) =>
+          !/(?:^|\/)(?:node_modules|dist)\//u.test(relativePath) &&
+          sourceText.includes("copyToClipboard(") &&
           /stellaToast[\s\S]{0,300}common\.copied|common\.copied[\s\S]{0,300}stellaToast/u.test(
-            source,
-          )
-        );
-      })
-      .map((file) => repoRelativePath(REPO_ROOT, file))
+            sourceText,
+          ),
+      )
+      .map(({ filePath }) => repoRelativePath(REPO_ROOT, filePath))
       .toSorted();
 
     expect(discovered).toEqual(Object.keys(ALLOWED).toSorted());
   });
 });
-
-function sourceFiles(roots: readonly string[]): string[] {
-  const files: string[] = [];
-  const pending = [...roots];
-  while (pending.length > 0) {
-    const directory = pending.pop();
-    if (directory === undefined) {
-      continue;
-    }
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const entryPath = path.join(directory, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name !== "node_modules" && entry.name !== "dist") {
-          pending.push(entryPath);
-        }
-      } else if ([".ts", ".tsx"].includes(path.extname(entry.name))) {
-        files.push(entryPath);
-      }
-    }
-  }
-  return files;
-}
