@@ -60,6 +60,7 @@ export const SuggestedFollowupChips = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const shownSuggestionSetsRef = useRef(new Set<string>());
+  // Dedupe stays client-side: the thread keys the shown set, never an event.
   const suggestionSetKey = `${threadId}:${messageId}:${JSON.stringify(prompts)}`;
 
   useExternalSyncEffect(() => {
@@ -74,9 +75,8 @@ export const SuggestedFollowupChips = ({
       count: prompts.length,
       source: "generated",
       surface: analyticsSurface,
-      threadId,
     });
-  }, [analytics, analyticsSurface, prompts.length, suggestionSetKey, threadId]);
+  }, [analytics, analyticsSurface, prompts.length, suggestionSetKey]);
 
   if (prompts.length === 0) {
     return null;
@@ -99,7 +99,6 @@ export const SuggestedFollowupChips = ({
             index,
             source: "generated",
             surface: analyticsSurface,
-            threadId,
             via: "chip",
           });
           onSelect(prompt);

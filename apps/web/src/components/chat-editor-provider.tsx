@@ -639,9 +639,7 @@ export const useChatEditor = ({
   threadRef,
   suggestedFollowupPrompt,
 }: {
-  followupAnalytics?:
-    | { surface: FollowupSurface; threadId: ChatThreadRef["threadId"] }
-    | undefined;
+  followupAnalytics?: { surface: FollowupSurface } | undefined;
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
   sentMessageHistoryHtml?: readonly string[] | undefined;
@@ -663,7 +661,7 @@ export const useChatEditor = ({
   // oxlint-disable-next-line react/refs -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
   suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
   // The editor's key handler is installed once; this reads the current
-  // surface and thread when Tab accepts the suggestion.
+  // surface when Tab accepts the suggestion.
   const reportGhostAccepted = useLatestCallback(() => {
     if (followupAnalytics === undefined) {
       return;
@@ -672,7 +670,6 @@ export const useChatEditor = ({
       index: 0,
       source: "generated",
       surface: followupAnalytics.surface,
-      threadId: followupAnalytics.threadId,
       via: "ghost-tab",
     });
   });

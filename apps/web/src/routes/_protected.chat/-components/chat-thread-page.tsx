@@ -353,7 +353,7 @@ export const ChatThreadPage = ({
     }
   };
   const controller = useChatEditor({
-    followupAnalytics: { surface: "chat-thread", threadId: threadRef.threadId },
+    followupAnalytics: { surface: "chat-thread" },
     sentMessageHistoryHtml,
     suggestedFollowupPrompt,
     threadRef,

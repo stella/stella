@@ -21,6 +21,11 @@ const { PromptEditorContent } = await import("./prompt-editor");
 afterEach(cleanup);
 afterAll(async () => unregisterDomEnvironment());
 
+const payloadKeys = (payload: unknown): string[] =>
+  typeof payload === "object" && payload !== null
+    ? Object.keys(payload).toSorted()
+    : [];
+
 test("Tab accepts the ghost follow-up and reports only its position", async () => {
   const payloads: unknown[] = [];
   const captureFollowupSelected = mock((payload: unknown) =>
@@ -34,7 +39,7 @@ test("Tab accepts the ghost follow-up and reports only its position", async () =
   });
   const Composer = () => {
     const controller = useChatEditor({
-      followupAnalytics: { surface: "inspector-chat", threadId },
+      followupAnalytics: { surface: "inspector-chat" },
       suggestedFollowupPrompt: suggestion,
       threadRef: { scope: "global", threadId },
     });
@@ -62,9 +67,11 @@ test("Tab accepts the ghost follow-up and reports only its position", async () =
     index: 0,
     source: "generated",
     surface: "inspector-chat",
-    threadId,
     via: "ghost-tab",
   });
+  expect(payloads.map(payloadKeys)).toEqual([
+    ["index", "source", "surface", "via"],
+  ]);
   expect(JSON.stringify(payloads)).not.toContain(suggestion);
   client.clear();
 });

@@ -1681,10 +1681,7 @@ const FileChatOverlayInner = ({
   });
 
   const editorController = useChatEditor({
-    followupAnalytics: {
-      surface: "document-chat",
-      threadId: threadRef.threadId,
-    },
+    followupAnalytics: { surface: "document-chat" },
     placeholder: filePlaceholder,
     suggestedFollowupPrompt,
     threadRef,

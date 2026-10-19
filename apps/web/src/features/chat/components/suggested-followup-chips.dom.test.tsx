@@ -16,6 +16,11 @@ const { SuggestedFollowupChips } = await import("./suggested-followup-chips");
 afterEach(cleanup);
 afterAll(async () => unregisterDomEnvironment());
 
+const payloadKeys = (payload: unknown): string[] =>
+  typeof payload === "object" && payload !== null
+    ? Object.keys(payload).toSorted()
+    : [];
+
 test("reports each shown set once and the selected chip without prompt text", async () => {
   const captured: unknown[] = [];
   const captureFollowupShown = mock((payload: unknown) =>
@@ -57,8 +62,13 @@ test("reports each shown set once and the selected chip without prompt text", as
     index: 1,
     source: "generated",
     surface: "chat-thread",
-    threadId,
     via: "chip",
   });
+  // Exactly these fields: no thread, document or prompt identifies the
+  // conversation a suggestion came from.
+  expect(captured.map(payloadKeys)).toEqual([
+    ["count", "source", "surface"],
+    ["index", "source", "surface", "via"],
+  ]);
   expect(JSON.stringify(captured)).not.toContain("private prompt");
 });

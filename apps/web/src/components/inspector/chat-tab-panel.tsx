@@ -352,10 +352,7 @@ export const ChatTabPanel = ({
   // chat. Thread ref is shared with `chatThreadOptions` above so
   // drafts persist across tab close/open.
   const editorController = useChatEditor({
-    followupAnalytics: {
-      surface: "inspector-chat",
-      threadId: threadRef.threadId,
-    },
+    followupAnalytics: { surface: "inspector-chat" },
     placeholder: t("chat.contextPlaceholder", { context: contextLabel }),
     suggestedFollowupPrompt,
     threadRef,

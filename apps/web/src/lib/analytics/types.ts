@@ -5,7 +5,6 @@ import type {
 } from "@stll/api-contract/provision-placement";
 
 import type { ErrorReference } from "@/lib/analytics/error-reference";
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 export const WEB_ANALYTICS_EVENTS = {
   exception: "$exception",
@@ -76,10 +75,11 @@ export type FollowupSurface =
   | "document-chat"
   | "inspector-chat";
 
+// Click-through needs where and how a suggestion was used, never which
+// conversation it came from.
 type FollowupProperties = {
   source: "generated";
   surface: FollowupSurface;
-  threadId: ChatThreadId;
 };
 
 type FollowupShownProperties = FollowupProperties & {
