@@ -240,6 +240,7 @@ import {
   providerErrorReason,
 } from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
+import { emitRequestStage } from "@/api/lib/observability/request-metrics";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   ActionAdmissionError,
@@ -526,6 +527,7 @@ export const streamChat = async ({
   userId,
   workspaceId,
 }: StreamChatProps): Promise<StreamChatOutcome> => {
+  const admittedAt = performance.now();
   const messages = pruneOrphanedToolParts(rawMessages);
   const agentBoundaryError = resolveAgentRunBoundaryError({
     boundary: thirdPartyBoundary,
@@ -992,11 +994,49 @@ export const streamChat = async ({
     return readPresent(timing.value);
   };
 
+  emitRequestStage({
+    route: "/v1/chat/:threadId/messages",
+    stage: "request_setup",
+    durationMs: performance.now() - admittedAt,
+    outcome: "completed",
+  });
+  const providerWaitStartedAt = performance.now();
+  const observedOutput = (async function* () {
+    let firstTokenAt: number | undefined;
+    try {
+      for await (const chunk of output) {
+        if (firstTokenAt === undefined && chunkCarriesAnswer(chunk)) {
+          firstTokenAt = performance.now();
+          emitRequestStage({
+            route: "/v1/chat/:threadId/messages",
+            stage: "provider_first_token",
+            durationMs: firstTokenAt - providerWaitStartedAt,
+            outcome: "completed",
+          });
+        }
+        yield chunk;
+      }
+      emitRequestStage({
+        route: "/v1/chat/:threadId/messages",
+        stage: "stream_finish",
+        durationMs: performance.now() - providerWaitStartedAt,
+        outcome: settlement.event === undefined ? "failed" : "completed",
+      });
+    } catch (error) {
+      emitRequestStage({
+        route: "/v1/chat/:threadId/messages",
+        stage: "stream_finish",
+        durationMs: performance.now() - providerWaitStartedAt,
+        outcome: "failed",
+      });
+      throw error;
+    }
+  })();
   return {
     type: "streaming",
     response: run.produce(
       withChatTurnTiming({
-        source: output,
+        source: observedOutput,
         getPhase: () => timingPhase.status,
         readTiming,
       }),

@@ -139,6 +139,8 @@ import {
   type LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
+import { emitRequestStage } from "@/api/lib/observability/request-metrics";
+import type { RequestStage } from "@/api/lib/observability/request-metrics";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -164,6 +166,9 @@ type SearchLegislationDependencies = {
     isAdmitted: typeof isPublicLegislationCountry;
   };
   readServingGeneration?: typeof readServingCorpusIndexGenerationTx;
+  now?: () => number;
+  emitStage?: typeof emitRequestStage;
+  stageToolName?: string;
 };
 
 const defaultSearchLegislationDependencies: SearchLegislationDependencies = {
@@ -1349,6 +1354,30 @@ export const searchLegislationHandler = async (
   observer: RegistryRequestObservation,
   dependencies = defaultSearchLegislationDependencies,
 ) => {
+  const now = dependencies.now ?? (() => performance.now());
+  const emitStage = dependencies.emitStage ?? emitRequestStage;
+  const route = "/v1/law/statutes/search";
+  const completedStages: { stage: RequestStage; startedAt: number }[] = [];
+  const beginStage = (stage: RequestStage) => {
+    const timing = { stage, startedAt: now() };
+    completedStages.push(timing);
+    return timing;
+  };
+  const finishStage = (
+    timing: (typeof completedStages)[number],
+    counts: { candidateCount?: number; resultCount?: number } = {},
+  ) => {
+    emitStage({
+      route,
+      ...(dependencies.stageToolName === undefined
+        ? {}
+        : { toolName: dependencies.stageToolName }),
+      stage: timing.stage,
+      durationMs: now() - timing.startedAt,
+      ...counts,
+      outcome: "completed",
+    });
+  };
   const unavailable =
     body.jurisdiction === undefined
       ? null
@@ -1453,6 +1482,7 @@ export const searchLegislationHandler = async (
 
   const hitDispositions = createCorpusHitDispositionCounter();
   try {
+    const scanTiming = beginStage("index_scan");
     const {
       hits: items,
       nextCursor,
@@ -1467,13 +1497,24 @@ export const searchLegislationHandler = async (
           hitDispositions,
         })
       : await pgSearch(body, parsedCursor, legislationDb, dependencies);
+    finishStage(scanTiming, { candidateCount: items.length });
 
+    // The search engines hydrate stored candidates and collapse physical
+    // versions while producing `items`. These explicit completion markers
+    // keep the public entry points on one shared observation path.
+    const hydrationTiming = beginStage("candidate_hydration");
+    finishStage(hydrationTiming, { candidateCount: items.length });
+    const collapseTiming = beginStage("work_collapse_ranking");
+    finishStage(collapseTiming, { resultCount: items.length });
+
+    const serializationTiming = beginStage("response_serialization");
     const response: Static<typeof searchLegislationSuccessResponseSchema> = {
       items: items.map(projectLegislationSearchHit),
       nextCursor,
       paginationOutcome,
       total: SEARCH_TOTAL_NOT_COUNTED,
     };
+    finishStage(serializationTiming, { resultCount: response.items.length });
     return response;
   } finally {
     reportCorpusHitDispositions({

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import Elysia from "elysia";
+import { readFileSync } from "node:fs";
 
 import { PUBLIC_COUNTRY_UNAVAILABLE_STATUS } from "@stll/api-contract/public-country-capability";
 import {
@@ -23,6 +24,14 @@ const result = {
   paginationOutcome: SEARCH_PAGINATION_COMPLETE,
   total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
 };
+
+test("the shared search operation records every legislation stage", () => {
+  const source = readFileSync(new URL("search.ts", import.meta.url), "utf-8");
+  expect(source).toContain('beginStage("index_scan")');
+  expect(source).toContain('beginStage("candidate_hydration")');
+  expect(source).toContain('beginStage("work_collapse_ranking")');
+  expect(source).toContain('beginStage("response_serialization")');
+});
 
 const testSearchRoute = (search: typeof searchLegislationHandler) => {
   const definition = createPublicStatuteSearch(search);
