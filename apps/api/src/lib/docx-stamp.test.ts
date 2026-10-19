@@ -1,7 +1,7 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { XMLValidator } from "fast-xml-parser";
 import JSZip from "jszip";
+import { SaxesParser } from "saxes";
 
 import { writeZipEntry } from "@stll/docx-utils";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -105,6 +105,9 @@ const readZipFile = async (
   }
   return file.async("string");
 };
+
+const isWellFormedXml = (xml: string): boolean =>
+  Result.try(() => new SaxesParser().write(xml).close()).isOk();
 
 // ── Tests ───────────────────────────────────────────────
 
@@ -260,8 +263,8 @@ describe("injectStamp", () => {
     const stamped = await injectStamp(docx, stamp, code, baseUrl);
     const footer = await readZipFile(stamped, "word/footer1.xml");
 
-    expect(XMLValidator.validate(footer ?? "")).toBe(true);
-    expect(XMLValidator.validate(`${footer ?? ""}</w:p>`)).not.toBe(true);
+    expect(isWellFormedXml(footer ?? "")).toBe(true);
+    expect(isWellFormedXml(`${footer ?? ""}</w:p>`)).toBe(false);
     expect(footer).not.toContain("old stamp");
     expect(footer).toContain(stamp);
   });
@@ -291,8 +294,8 @@ describe("injectStamp", () => {
     const stamped = await injectStamp(docx, stamp, code, baseUrl);
     const footer = await readZipFile(stamped, "word/footer1.xml");
 
-    expect(XMLValidator.validate(footer ?? "")).toBe(true);
-    expect(XMLValidator.validate(`${footer ?? ""}</w:p>`)).not.toBe(true);
+    expect(isWellFormedXml(footer ?? "")).toBe(true);
+    expect(isWellFormedXml(`${footer ?? ""}</w:p>`)).toBe(false);
     expect(footer).not.toContain('w:rsidR="outer"');
     expect(footer).not.toContain("old stamp");
     expect(footer).toContain(stamp);

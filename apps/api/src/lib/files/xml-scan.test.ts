@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { XMLParser } from "fast-xml-parser";
+import { SaxesParser } from "saxes";
 
 import { assertProperty } from "@stll/property-testing";
 
@@ -14,7 +14,33 @@ import {
   xmlElementText,
 } from "./xml-scan";
 
-const XML_PARSER = new XMLParser({ ignoreAttributes: false });
+type XmlOracleEvent =
+  | { type: "open"; name: string; attributes: [string, string][] }
+  | { type: "text"; value: string }
+  | { type: "close"; name: string };
+
+const parseXmlWithOracle = (xml: string): XmlOracleEvent[] => {
+  const events: XmlOracleEvent[] = [];
+  const parser = new SaxesParser();
+  parser.on("opentag", (tag) => {
+    events.push({
+      type: "open",
+      name: tag.name,
+      attributes: Object.entries(tag.attributes),
+    });
+  });
+  parser.on("text", (value) => {
+    events.push({ type: "text", value });
+  });
+  parser.on("cdata", (value) => {
+    events.push({ type: "text", value });
+  });
+  parser.on("closetag", (tag) => {
+    events.push({ type: "close", name: tag.name });
+  });
+  parser.write(xml).close();
+  return events;
+};
 
 test("reads and transforms qualified elements in document order", () => {
   const xml =
@@ -118,9 +144,11 @@ test("matches a reference parser with generated non-element markup", () => {
         const xml = `<root>${prefix}<p><p>nested</p>${inside.join("")}text</p>${suffix}</root>`;
         const expected = `<root>${prefix}<p>updated</p>${suffix}</root>`;
 
-        expect(XML_PARSER.parse(xml)).toBeDefined();
+        expect(parseXmlWithOracle(xml)).toBeDefined();
         const actual = replaceXmlElementContent(xml, "p", "updated").unwrap();
-        expect(XML_PARSER.parse(actual)).toEqual(XML_PARSER.parse(expected));
+        expect(parseXmlWithOracle(actual)).toEqual(
+          parseXmlWithOracle(expected),
+        );
       },
     ),
   );
@@ -142,14 +170,16 @@ test("matches a reference parser for generated nested documents", () => {
           return `${opening}${nestedOpening}value${nestedClosing}</p>`;
         });
         const xml = `<root>${elements.join("")}</root>`;
-        expect(XML_PARSER.parse(xml)).toBeDefined();
+        expect(parseXmlWithOracle(xml)).toBeDefined();
 
         const expected = `<root>${depths
           .map((_, index) => `<p data-index="${String(index)}">updated</p>`)
           .join("")}</root>`;
         const actual = replaceXmlElementContent(xml, "p", "updated").unwrap();
 
-        expect(XML_PARSER.parse(actual)).toBeDefined();
+        expect(parseXmlWithOracle(actual)).toEqual(
+          parseXmlWithOracle(expected),
+        );
         expect(actual).toBe(expected);
       },
     ),
