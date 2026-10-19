@@ -1603,7 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Également consultés ({count})",
+      "alsoConsulted": "Également consultés ({count, number})",
       "courtTiers": {
         "constitutional": "Juridictions constitutionnelles",
         "other": "Autres juridictions",

@@ -1603,7 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Szintén áttekintve ({count})",
+      "alsoConsulted": "Szintén áttekintve ({count, number})",
       "courtTiers": {
         "constitutional": "Alkotmánybíróságok",
         "other": "Egyéb bíróságok",

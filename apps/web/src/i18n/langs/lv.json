@@ -1603,7 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Arī aplūkoti ({count})",
+      "alsoConsulted": "Arī aplūkoti ({count, number})",
       "courtTiers": {
         "constitutional": "Konstitucionālās tiesas",
         "other": "Citas tiesas",

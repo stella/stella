@@ -1603,7 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Ebenfalls konsultiert ({count})",
+      "alsoConsulted": "Ebenfalls konsultiert ({count, number})",
       "courtTiers": {
         "constitutional": "Verfassungsgerichte",
         "other": "Übrige Gerichte",

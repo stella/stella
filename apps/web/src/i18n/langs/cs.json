@@ -1603,7 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Také konzultováno ({count})",
+      "alsoConsulted": "Také konzultováno ({count, number})",
       "courtTiers": {
         "constitutional": "Ústavní soudy",
         "other": "Ostatní soudy",

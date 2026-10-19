@@ -1603,7 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "También consultadas ({count})",
+      "alsoConsulted": "También consultadas ({count, number})",
       "courtTiers": {
         "constitutional": "Tribunales constitucionales",
         "other": "Otros tribunales",
