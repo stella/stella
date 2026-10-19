@@ -54,6 +54,10 @@ export class PublisherBodyNotReplayableError extends TaggedError(
 export class PublisherRequestAbortedError extends TaggedError(
   "publisher_request_aborted",
 )<RefusalFields & { cause: unknown }> {}
+/** A licensed bypass is evidence that must be recorded; without a sink it is refused. */
+export class PublisherBypassUnauditedError extends TaggedError(
+  "publisher_bypass_unaudited",
+)<RefusalFields & { cause: unknown }> {}
 export type PublisherPolicyError =
   | RobotsDisallowedError
   | AgentExcludedError
@@ -62,7 +66,8 @@ export type PublisherPolicyError =
   | PublisherRedirectLimitError
   | PublisherTargetRefusedError
   | PublisherBodyNotReplayableError
-  | PublisherRequestAbortedError;
+  | PublisherRequestAbortedError
+  | PublisherBypassUnauditedError;
 
 export type PublisherFetchResult = {
   response: Response;
@@ -96,6 +101,7 @@ type PublisherFetcherOptions<Target extends PublisherTarget> = {
   robotsRetryMs?: number;
   defaultMinimumIntervalMs?: number;
   robotsLoadTimeoutMs?: number;
+  /** Audit sink for licensed bypasses; without it a licensed bypass is refused. */
   onTelemetry?: (event: PublisherTelemetry) => void;
 };
 type PublisherFetchOptions = {
@@ -838,7 +844,7 @@ type PublisherRuntime<Target extends PublisherTarget> = {
     signal?: AbortSignal,
   ) => Promise<number>;
   defaultMinimumIntervalMs: number;
-  onTelemetry: (event: PublisherTelemetry) => void;
+  onTelemetry: ((event: PublisherTelemetry) => void) | undefined;
 };
 
 type WalkState = {
@@ -892,6 +898,17 @@ const enforcePublisherPolicy = async <Target extends PublisherTarget>(
     state.url.origin === state.requestedOrigin ? options.policy : undefined;
   if (policy?.type !== "licensed") {
     return Result.err(evaluated.refusal);
+  }
+  if (runtime.onTelemetry === undefined) {
+    return Result.err(
+      new PublisherBypassUnauditedError({
+        message:
+          "A licensed bypass needs an onTelemetry sink to record its evidence",
+        url: state.url.href,
+        origin: state.url.origin,
+        cause: evaluated.refusal,
+      }),
+    );
   }
   runtime.onTelemetry({
     event: "publisher_fetch_policy_bypass",
@@ -1045,7 +1062,7 @@ export const createPolitePublisherFetch = <Target extends PublisherTarget>({
   robotsRetryMs = ROBOTS_RETRY_MS,
   robotsLoadTimeoutMs = ROBOTS_LOAD_TIMEOUT_MS,
   defaultMinimumIntervalMs = DEFAULT_MINIMUM_INTERVAL_MS,
-  onTelemetry = () => undefined,
+  onTelemetry,
 }: PublisherFetcherOptions<Target>) => {
   const robotsFor = createRobotsCache({
     fetcher,

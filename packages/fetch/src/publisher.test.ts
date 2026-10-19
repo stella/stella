@@ -408,8 +408,12 @@ describe("publisher scheduler", () => {
 
   test("a licensed policy does not authorize a redirect to another origin", async () => {
     const requested: string[] = [];
+    const bypasses: unknown[] = [];
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
+      onTelemetry: (event) => {
+        bypasses.push(event.origin);
+      },
       fetcher: async (input) => {
         const url = input.url;
         requested.push(url.href);
@@ -434,6 +438,7 @@ describe("publisher scheduler", () => {
     expect(Result.isError(outcome) && outcome.error._tag).toBe(
       "robots_disallowed",
     );
+    expect(bypasses).toEqual(["https://source.example"]);
     expect(requested).toEqual([
       "https://source.example/robots.txt",
       "https://source.example/case",
@@ -589,6 +594,33 @@ describe("publisher scheduler", () => {
     const outcome = await request("https://publisher.example/case");
     expect(outcome.isOk()).toBe(true);
     expect(resources).toBe(1);
+  });
+
+  test("a licensed bypass without an audit sink is refused before the resource is fetched", async () => {
+    const requested: string[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        requested.push(input.url.href);
+        return input.url.pathname === "/robots.txt"
+          ? new Response("User-agent: *\nDisallow: /")
+          : new Response("licensed document");
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const outcome = await request("https://publisher.example/one", {
+      policy: {
+        type: "licensed",
+        basis: "publisher agreement",
+        evidenceUrl: "https://publisher.example/license",
+      },
+    });
+
+    expect(Result.isError(outcome) && outcome.error._tag).toBe(
+      "publisher_bypass_unaudited",
+    );
+    expect(requested).toEqual(["https://publisher.example/robots.txt"]);
   });
 
   test("licensed sources record their basis and cap unsupported delays", async () => {
