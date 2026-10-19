@@ -35,7 +35,7 @@ const message = (
     id,
     role,
     parts: [{ type: "text", content: text }],
-  }) as PersistedChatMessage;
+  });
 
 const sent = message("user_secret_1", "user", "private question");
 
