@@ -1603,13 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Szintén áttekintve ({count, number})",
-      "courtTiers": {
-        "constitutional": "Alkotmánybíróságok",
-        "other": "Egyéb bíróságok",
-        "regional": "Ítélőtáblák és törvényszékek",
-        "supreme": "Legfelsőbb bíróságok"
-      }
+      "alsoConsulted": "Szintén áttekintve ({count, number})"
     },
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",

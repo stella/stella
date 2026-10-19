@@ -1603,13 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Ebenfalls konsultiert ({count, number})",
-      "courtTiers": {
-        "constitutional": "Verfassungsgerichte",
-        "other": "Übrige Gerichte",
-        "regional": "Ober- und Landesgerichte",
-        "supreme": "Oberste Gerichte"
-      }
+      "alsoConsulted": "Ebenfalls konsultiert ({count, number})"
     },
     "sourcePlaceholder": "Chat über {title}",
     "sourcePlaceholderAction": "Chat über",

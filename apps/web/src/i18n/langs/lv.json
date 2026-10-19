@@ -1603,13 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Arī aplūkoti ({count, number})",
-      "courtTiers": {
-        "constitutional": "Konstitucionālās tiesas",
-        "other": "Citas tiesas",
-        "regional": "Apgabaltiesas",
-        "supreme": "Augstākās tiesas"
-      }
+      "alsoConsulted": "Arī aplūkoti ({count, number})"
     },
     "sourcePlaceholder": "Tērzēt par {title}",
     "sourcePlaceholderAction": "Tērzēt par",

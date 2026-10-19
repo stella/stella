@@ -1603,13 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Samuti vaadatud ({count, number})",
-      "courtTiers": {
-        "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
-        "other": "Muud kohtud",
-        "regional": "Ringkonnakohtud",
-        "supreme": "Riigikohtud"
-      }
+      "alsoConsulted": "Samuti vaadatud ({count, number})"
     },
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",

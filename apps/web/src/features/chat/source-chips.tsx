@@ -101,7 +101,7 @@ const SourceEntryList = ({
   messageId: string;
   workspaceId: string | undefined;
 }) => {
-  const t = useTranslations("chat.sourceChips.courtTiers");
+  const t = useTranslations("caseLaw.courtTiers");
   const caseLaw = entries.filter((entry) => entry.type === "case-law");
   const remaining = entries.filter((entry) => entry.type !== "case-law");
   const tiers = COURT_TIER_LABELS;

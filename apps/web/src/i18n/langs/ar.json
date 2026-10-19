@@ -1603,13 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "تمت مراجعتها أيضًا ({count, number})",
-      "courtTiers": {
-        "constitutional": "المحاكم الدستورية",
-        "other": "المحاكم الأخرى",
-        "regional": "محاكم الاستئناف والمحاكم الإقليمية",
-        "supreme": "المحاكم العليا"
-      }
+      "alsoConsulted": "تمت مراجعتها أيضًا ({count, number})"
     },
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",

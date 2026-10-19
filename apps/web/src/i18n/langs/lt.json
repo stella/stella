@@ -1603,13 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Taip pat peržiūrėta ({count, number})",
-      "courtTiers": {
-        "constitutional": "Konstituciniai teismai",
-        "other": "Kiti teismai",
-        "regional": "Apeliaciniai ir apygardų teismai",
-        "supreme": "Aukščiausieji teismai"
-      }
+      "alsoConsulted": "Taip pat peržiūrėta ({count, number})"
     },
     "sourcePlaceholder": "Kalbėtis apie {title}",
     "sourcePlaceholderAction": "Kalbėtis apie",

@@ -1603,13 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Również sprawdzono ({count, number})",
-      "courtTiers": {
-        "constitutional": "Trybunały konstytucyjne",
-        "other": "Pozostałe sądy",
-        "regional": "Sądy apelacyjne i okręgowe",
-        "supreme": "Sądy najwyższe"
-      }
+      "alsoConsulted": "Również sprawdzono ({count, number})"
     },
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",

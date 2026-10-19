@@ -1603,13 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Também consultadas ({count, number})",
-      "courtTiers": {
-        "constitutional": "Tribunais constitucionais",
-        "other": "Demais tribunais",
-        "regional": "Tribunais regionais e de justiça",
-        "supreme": "Tribunais superiores"
-      }
+      "alsoConsulted": "Também consultadas ({count, number})"
     },
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",

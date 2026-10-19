@@ -1603,13 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Également consultés ({count, number})",
-      "courtTiers": {
-        "constitutional": "Juridictions constitutionnelles",
-        "other": "Autres juridictions",
-        "regional": "Cours d'appel et tribunaux régionaux",
-        "supreme": "Juridictions suprêmes"
-      }
+      "alsoConsulted": "Également consultés ({count, number})"
     },
     "sourcePlaceholder": "Discuter de {title}",
     "sourcePlaceholderAction": "Discuter de",

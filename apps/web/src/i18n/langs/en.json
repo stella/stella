@@ -1603,13 +1603,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Also consulted ({count, number})",
-      "courtTiers": {
-        "constitutional": "Constitutional courts",
-        "other": "Other courts",
-        "regional": "High and regional courts",
-        "supreme": "Supreme courts"
-      }
+      "alsoConsulted": "Also consulted ({count, number})"
     },
     "sourcePlaceholder": "Chat about {title}",
     "sourcePlaceholderAction": "Chat about",
