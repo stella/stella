@@ -276,7 +276,12 @@ export const withOriginalWords = (
 ): CaseLawIndexSearch =>
   previous.rewrittenFrom === undefined
     ? previous
-    : { ...withQuery(previous, previous.rewrittenFrom), rewrite: "off" };
+    : {
+        ...withQuery(previous, previous.rewrittenFrom),
+        rewrite: "off",
+        // `withQuery` keeps everything when the query is already the original.
+        rewrittenFrom: undefined,
+      };
 
 /**
  * The sort as the URL carries it: absent while it is the default, so the same

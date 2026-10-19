@@ -147,6 +147,12 @@ describe("the address of a rewrite", () => {
     });
   });
 
+  test("going back clears the rewrite when the query already is the original", () => {
+    expect(
+      withOriginalWords({ q: ORIGINAL, rewrittenFrom: ORIGINAL }),
+    ).toMatchObject({ q: ORIGINAL, rewrittenFrom: undefined, rewrite: "off" });
+  });
+
   test("going back is a no-op where nothing was rewritten", () => {
     const search = { q: ORIGINAL };
     expect(withOriginalWords(search)).toBe(search);
