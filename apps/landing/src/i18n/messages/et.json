@@ -97,13 +97,13 @@
     "chooseLanguage": "Vali keel",
     "docxEditor": "Eraldiseisev DOCX-redaktor",
     "featurePreviews": {
-      "matters": {
-        "open": "Avatud",
-        "inProgress": "Töös",
-        "done": "Valmis"
-      },
       "documents": {
         "comments": "Kommentaarid"
+      },
+      "matters": {
+        "done": "Valmis",
+        "inProgress": "Töös",
+        "open": "Avatud"
       },
       "research": {
         "caseLaw": "Kohtupraktika"

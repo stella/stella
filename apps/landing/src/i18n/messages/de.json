@@ -97,13 +97,13 @@
     "chooseLanguage": "Sprache auswählen",
     "docxEditor": "Eigenständiger DOCX-Editor",
     "featurePreviews": {
-      "matters": {
-        "open": "Offen",
-        "inProgress": "In Bearbeitung",
-        "done": "Erledigt"
-      },
       "documents": {
         "comments": "Kommentare"
+      },
+      "matters": {
+        "done": "Erledigt",
+        "inProgress": "In Bearbeitung",
+        "open": "Offen"
       },
       "research": {
         "caseLaw": "Rechtsprechung"

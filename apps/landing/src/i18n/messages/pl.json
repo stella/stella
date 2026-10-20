@@ -97,13 +97,13 @@
     "chooseLanguage": "Wybierz język",
     "docxEditor": "Samodzielny edytor DOCX",
     "featurePreviews": {
-      "matters": {
-        "open": "Otwarte",
-        "inProgress": "W toku",
-        "done": "Ukończone"
-      },
       "documents": {
         "comments": "Komentarze"
+      },
+      "matters": {
+        "done": "Ukończone",
+        "inProgress": "W toku",
+        "open": "Otwarte"
       },
       "research": {
         "caseLaw": "Orzecznictwo"
