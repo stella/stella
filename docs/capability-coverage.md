@@ -684,10 +684,10 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 | account_lifecycle | 4 |
-| assistant_chat | 17 |
+| assistant_chat | 18 |
 | auth_plumbing | 36 |
 | billing_ui | 1 |
-| chat_thread_ui | 12 |
+| chat_thread_ui | 16 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |

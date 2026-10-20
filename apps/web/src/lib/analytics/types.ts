@@ -26,6 +26,8 @@ export const WEB_ANALYTICS_EVENTS = {
   provisionPlacementGaps: "provision_placement_gaps",
   caseLawAnalysisTiming: "case_law_analysis_timing",
   inspectorRestoreRecovered: "inspector_restore_recovered",
+  followupShown: "followup_shown",
+  followupSelected: "followup_selected",
 } as const;
 
 export type WebAnalyticsEvent =
@@ -63,11 +65,34 @@ export type Analytics = {
   captureInspectorRestoreRecovered: (
     properties: InspectorRestoreRecoveredProperties,
   ) => void;
+  captureFollowupShown: (properties: FollowupShownProperties) => void;
+  captureFollowupSelected: (properties: FollowupSelectedProperties) => void;
   captureRouteErrorLifecycle: (
     properties: RouteErrorLifecycleProperties,
   ) => Promise<void>;
   identifyUser: (user: AnalyticsUserIdentity) => void;
   reset: (options?: AnalyticsResetOptions) => void;
+};
+
+export type FollowupSurface =
+  | "chat-thread"
+  | "document-chat"
+  | "inspector-chat";
+
+// Click-through needs where and how a suggestion was used, never which
+// conversation it came from.
+type FollowupProperties = {
+  source: "generated";
+  surface: FollowupSurface;
+};
+
+type FollowupShownProperties = FollowupProperties & {
+  count: number;
+};
+
+type FollowupSelectedProperties = FollowupProperties & {
+  index: number;
+  via: "chip" | "ghost-tab";
 };
 
 // Why a guide step could not be shown against the live app surface. Emitted so
