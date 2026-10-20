@@ -252,6 +252,7 @@ const runFederated401 = async (
       {
         modelId: MODEL,
         organizationId: null,
+        userId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: undefined,
         reasoningEffort: undefined,
