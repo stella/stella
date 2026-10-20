@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { DESKTOP_WINDOWS_DRY_RUN_INPUTS } from "./ci-plan-scope";
 import {
   configureWindowsSigning,
   desktopArtifacts,
@@ -328,15 +329,7 @@ test("the CI dry-run selector covers every script the release build runs", () =>
     ),
   ].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
   expect(references.length).toBeGreaterThan(0);
-  const ciWorkflow = readFileSync(
-    new URL("../.github/workflows/ci.yml", import.meta.url),
-    "utf-8",
-  );
-  const selector = ciWorkflow
-    .split("\n")
-    .find((line) => line.trim().startsWith("apps/desktop/*|scripts/"));
-  expect(selector).toBeDefined();
-  const patterns = (selector ?? "").trim().replace(/\)$/u, "").split("|");
+  const patterns = [...DESKTOP_WINDOWS_DRY_RUN_INPUTS];
   expect(patterns).not.toContain("scripts/*");
   for (const reference of new Set(references)) {
     expect(

@@ -1616,6 +1616,9 @@
         "team": "Tiimi AI oskused"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Samuti vaadatud ({count, number})"
+    },
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",
     "sources": "Allikad:",

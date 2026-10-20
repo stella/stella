@@ -1616,6 +1616,9 @@
         "team": "Umiejętności AI zespołu"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Również sprawdzono ({count, number})"
+    },
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",
     "sources": "Źródła:",

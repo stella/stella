@@ -1616,6 +1616,9 @@
         "team": "Compétences de l’équipe"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Également consultés ({count, number})"
+    },
     "sourcePlaceholder": "Discuter de {title}",
     "sourcePlaceholderAction": "Discuter de",
     "sources": "Sources :",

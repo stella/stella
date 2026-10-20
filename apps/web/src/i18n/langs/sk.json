@@ -1616,6 +1616,9 @@
         "team": "Tímové AI zručnosti"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Tiež konzultované ({count, number})"
+    },
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",
     "sources": "Zdroje:",
