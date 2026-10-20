@@ -19,9 +19,9 @@ await runScriptWithErrorOutput(async () => {
     return;
   }
   const lane = await enterCaseLawMaintenanceLane();
-  const result = await importCorpusSliceIntoDatabase(
-    options.value.prefix,
-    {
+  const result = await importCorpusSliceIntoDatabase({
+    prefix: options.value.prefix,
+    storage: {
       read: async (key) =>
         await readCorpusS3Bytes(key, AbortSignal.timeout(300_000)),
       write: async (key, bytes, contentType) =>
@@ -32,9 +32,9 @@ await runScriptWithErrorOutput(async () => {
           signal: AbortSignal.timeout(300_000),
         }),
     },
-    lane.rootDb,
-    lane.ingestionDb,
-  );
+    database: lane.rootDb,
+    ingestionDatabase: lane.ingestionDb,
+  });
   await lane.release();
   if (Result.isError(result)) {
     throw result.error;

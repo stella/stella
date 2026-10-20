@@ -1,7 +1,16 @@
-import { expect, test } from "bun:test";
+import type { PGlite } from "@electric-sql/pglite";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { drizzle } from "drizzle-orm/pglite";
+import * as v from "valibot";
 
+import type { Transaction } from "@/api/db/root";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { corpusSliceManifest } from "@/api/lib/case-law/corpus-slice";
+import {
+  corpusSliceManifest,
+  parseCorpusSliceManifest,
+} from "@/api/lib/case-law/corpus-slice";
+import { corpusSliceCensus } from "@/api/lib/case-law/corpus-slice-census";
 import {
   buildCorpusSliceExport,
   CORPUS_SLICE_EXPORT_TABLES,
@@ -9,6 +18,21 @@ import {
   importCorpusSlice,
   writeCorpusSliceExport,
 } from "@/api/lib/case-law/corpus-slice-transfer";
+import {
+  exportCorpusSliceFromDatabase,
+  importCorpusSliceIntoDatabase,
+} from "@/api/lib/case-law/corpus-slice-transfer-execution";
+import type {
+  CaseLawIngestionHandle,
+  CaseLawRootHandle,
+} from "@/api/lib/case-law/maintenance-lane";
+import { parseExportCorpusSliceArguments } from "@/api/scripts/export-corpus-slice-plan";
+import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  createTestPglite,
+  withPublicLawReaderRole,
+} from "@/api/tests/pglite-test-db";
 
 const decisionId = createSafeId<"caseLawDecision">();
 const sourceId = createSafeId<"caseLawSource">();
@@ -31,7 +55,7 @@ const exported = buildCorpusSliceExport({
     {
       id: decisionId,
       sourceId,
-      corpusTextS3Key: "case-law/example/text.json",
+      textS3Key: "case-law/example/text.json",
     },
   ],
   supplements: [],
@@ -45,6 +69,17 @@ test("export reads only the public case-law table allowlist", () => {
     "case_law_decision_supplements",
     "case_law_citations",
   ]);
+});
+
+test("export has no object-copy or arbitrary-bucket mode", () => {
+  expect(
+    parseExportCorpusSliceArguments([
+      "round-4",
+      "--copy-objects",
+      "--target-bucket",
+      "another-bucket",
+    ]).isErr(),
+  ).toBe(true);
 });
 
 test("slice import is a fixed point and removes decisions absent from the manifest", async () => {
@@ -132,4 +167,203 @@ test("stored transfer verifies every shard before opening the write path", async
   });
   expect(result.isErr()).toBe(true);
   expect(writes).toBe(0);
+});
+
+describe("the database-to-database corpus slice transfer", () => {
+  const includedId = createSafeId<"caseLawDecision">();
+  const excludedId = createSafeId<"caseLawDecision">();
+  const staleId = createSafeId<"caseLawDecision">();
+  const transferSourceId = createSafeId<"caseLawSource">();
+  const staleSourceId = createSafeId<"caseLawSource">();
+  const objectKeys = [
+    "case-law/test/raw.json",
+    "case-law/test/text.json",
+    "case-law/test/ast.json",
+  ];
+  const storageObjects = new Map<string, Uint8Array>();
+  const storage = {
+    read: async (key: string) => storageObjects.get(key) ?? null,
+    write: async (key: string, bytes: Uint8Array) => {
+      storageObjects.set(key, bytes);
+    },
+  };
+  let sourceClient: PGlite;
+  let targetClient: PGlite;
+  let sourceDb: ReturnType<typeof drizzle>;
+  let targetDb: ReturnType<typeof drizzle>;
+
+  const rootHandle = (
+    database: ReturnType<typeof drizzle>,
+    client: PGlite,
+  ): CaseLawRootHandle =>
+    asTestRaw<CaseLawRootHandle>({
+      transaction: async <T>(fn: (tx: Transaction) => Promise<T>) =>
+        await database.transaction(
+          async (tx) => await fn(asTestRaw<Transaction>(tx)),
+        ),
+      execute: async (
+        query: Parameters<typeof database.execute>[0] | string,
+      ) =>
+        typeof query === "string"
+          ? (await client.query(query)).rows
+          : await database.execute(query),
+    });
+
+  const ingestionHandle =
+    (database: ReturnType<typeof drizzle>): CaseLawIngestionHandle =>
+    async <T>(fn: (tx: Transaction) => Promise<T>) =>
+      await database.transaction(
+        async (tx) => await fn(asTestRaw<Transaction>(tx)),
+      );
+
+  const decision = ({
+    id,
+    sourceId: decisionSourceId,
+    decisionDate,
+    keys,
+  }: {
+    id: ReturnType<typeof createSafeId<"caseLawDecision">>;
+    sourceId: ReturnType<typeof createSafeId<"caseLawSource">>;
+    decisionDate: string;
+    keys?: readonly string[];
+  }) => ({
+    id,
+    sourceId: decisionSourceId,
+    caseNumber: id,
+    country: "ZZZ",
+    language: "en",
+    court: "Transfer Court",
+    decisionDate,
+    sourceRawS3Key: keys?.at(0),
+    textS3Key: keys?.at(1),
+    astS3Key: keys?.at(2),
+  });
+
+  beforeAll(async () => {
+    [sourceClient, targetClient] = await Promise.all([
+      createTestPglite(),
+      createTestPglite(),
+    ]);
+    sourceDb = drizzle({ client: sourceClient });
+    targetDb = drizzle({ client: targetClient });
+    await sourceDb.insert(caseLawSources).values(
+      caseLawSourceRow({
+        id: transferSourceId,
+        adapterKey: "transfer-source",
+        name: "Transfer source",
+      }),
+    );
+    await sourceDb.insert(caseLawDecisions).values([
+      decision({
+        id: includedId,
+        sourceId: transferSourceId,
+        decisionDate: "2026-01-01",
+        keys: objectKeys,
+      }),
+      decision({
+        id: excludedId,
+        sourceId: transferSourceId,
+        decisionDate: "2010-01-01",
+        keys: ["excluded/raw.json", "excluded/text.json", "excluded/ast.json"],
+      }),
+    ]);
+    await targetDb.insert(caseLawSources).values(
+      caseLawSourceRow({
+        id: staleSourceId,
+        adapterKey: "stale-source",
+        name: "Stale source",
+      }),
+    );
+    await targetDb.insert(caseLawDecisions).values(
+      decision({
+        id: staleId,
+        sourceId: staleSourceId,
+        decisionDate: "2025-01-01",
+      }),
+    );
+  }, 120_000);
+
+  afterAll(async () => {
+    await Promise.all([sourceClient.close(), targetClient.close()]);
+  });
+
+  test("real execution transfers a complete fixed point and verifies object keys", async () => {
+    await exportCorpusSliceFromDatabase({
+      database: rootHandle(sourceDb, sourceClient),
+      storage,
+      prefix: "round-4",
+      asOf: new Date("2026-10-20T00:00:00.000Z"),
+      batchSize: 1,
+    });
+
+    const objectBytes = storageObjects.get("round-4/objects.ndjson");
+    expect(objectBytes).toBeDefined();
+    expect(new TextDecoder().decode(objectBytes).split("\n")).toEqual(
+      objectKeys.toSorted().map((key) => JSON.stringify({ key })),
+    );
+
+    const first = await importCorpusSliceIntoDatabase({
+      prefix: "round-4",
+      storage,
+      database: rootHandle(targetDb, targetClient),
+      ingestionDatabase: ingestionHandle(targetDb),
+      reconcileProjection: async () => undefined,
+    });
+    expect(first).toMatchObject({ value: { removed: 1 } });
+    const manifestBytes = storageObjects.get("round-4/manifest.json");
+    expect(manifestBytes).toBeDefined();
+    const envelope = v.parse(
+      v.object({ corpus: v.unknown() }),
+      JSON.parse(new TextDecoder().decode(manifestBytes)),
+    );
+    const parsedManifest = parseCorpusSliceManifest(envelope.corpus);
+    expect(parsedManifest.isOk()).toBe(true);
+    if (parsedManifest.isErr()) {
+      throw parsedManifest.error;
+    }
+    const readTarget = async <T>(
+      read: (tx: Pick<typeof targetDb, "select">) => Promise<T>,
+    ): Promise<T> =>
+      await withPublicLawReaderRole(targetDb, async (tx) => await read(tx));
+    expect(
+      await corpusSliceCensus(parsedManifest.value, readTarget),
+    ).toMatchObject({ verdict: "complete" });
+    expect(
+      await targetDb.select({ id: caseLawDecisions.id }).from(caseLawDecisions),
+    ).toEqual([{ id: includedId }]);
+
+    expect(
+      await importCorpusSliceIntoDatabase({
+        prefix: "round-4",
+        storage,
+        database: rootHandle(targetDb, targetClient),
+        ingestionDatabase: ingestionHandle(targetDb),
+        reconcileProjection: async () => undefined,
+      }),
+    ).toMatchObject({
+      value: { changed: 0, removed: 0, projectionsEnqueued: 0 },
+    });
+  }, 120_000);
+
+  test("a tampered stored shard is refused without a database write", async () => {
+    const shardKey = "round-4/decisions.ndjson";
+    expect(storageObjects.get(shardKey)).toBeDefined();
+    const original = storageObjects.get(shardKey) ?? new Uint8Array();
+    storageObjects.set(shardKey, new TextEncoder().encode("tampered"));
+    const before = await targetDb
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions);
+    const result = await importCorpusSliceIntoDatabase({
+      prefix: "round-4",
+      storage,
+      database: rootHandle(targetDb, targetClient),
+      ingestionDatabase: ingestionHandle(targetDb),
+      reconcileProjection: async () => undefined,
+    });
+    expect(result.isErr()).toBe(true);
+    expect(
+      await targetDb.select({ id: caseLawDecisions.id }).from(caseLawDecisions),
+    ).toEqual(before);
+    storageObjects.set(shardKey, original);
+  });
 });

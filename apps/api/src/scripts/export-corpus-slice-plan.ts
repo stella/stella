@@ -4,9 +4,7 @@ export const CORPUS_SLICE_TRANSFER_BATCH_SIZE = 500;
 
 export type ExportCorpusSliceOptions = {
   prefix: string;
-  mode: "dry-run" | "export" | "copy-objects";
-  targetBucket?: string;
-  resumeAfterDecisionId?: string;
+  mode: "dry-run" | "export";
 };
 
 export class ExportCorpusSliceArgumentsError extends TaggedError(
@@ -24,32 +22,19 @@ export const parseExportCorpusSliceArguments = (
       }),
     );
   }
-  const copyObjects = args.includes("--copy-objects");
-  const execute = args.includes("--execute");
-  const targetIndex = args.indexOf("--target-bucket");
-  const resumeIndex = args.indexOf("--resume-after-decision-id");
-  const targetBucket =
-    targetIndex === -1 ? undefined : args.at(targetIndex + 1);
-  const resumeAfterDecisionId =
-    resumeIndex === -1 ? undefined : args.at(resumeIndex + 1);
-  if (copyObjects && targetBucket === undefined) {
+  const unsupported = args
+    .slice(1)
+    .find((argument) => argument !== "--execute");
+  if (unsupported !== undefined) {
     return Result.err(
       new ExportCorpusSliceArgumentsError({
-        message: "--copy-objects requires --target-bucket <name>",
+        message: `unsupported export option: ${unsupported}`,
       }),
     );
   }
-  let mode: ExportCorpusSliceOptions["mode"] = "dry-run";
-  if (execute) {
-    mode = "export";
-  }
-  if (copyObjects) {
-    mode = "copy-objects";
-  }
+  const execute = args.includes("--execute");
   return Result.ok({
     prefix,
-    mode,
-    ...(targetBucket === undefined ? {} : { targetBucket }),
-    ...(resumeAfterDecisionId === undefined ? {} : { resumeAfterDecisionId }),
+    mode: execute ? "export" : "dry-run",
   });
 };

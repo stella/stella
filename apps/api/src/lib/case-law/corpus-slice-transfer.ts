@@ -85,8 +85,9 @@ export const buildCorpusSliceExport = ({
   for (const row of [...decisions, ...supplements]) {
     for (const field of [
       "sourceRawS3Key",
-      "corpusTextS3Key",
-      "corpusAstS3Key",
+      "textS3Key",
+      "normalizedS3Key",
+      "astS3Key",
     ]) {
       const snakeField = field.replaceAll(
         /[A-Z]/gu,

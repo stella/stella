@@ -1,7 +1,8 @@
-import { TaggedError } from "better-result";
+import { panic } from "better-result";
 import type { Result } from "better-result";
 import * as v from "valibot";
 
+import type { Transaction } from "@/api/db/root";
 import {
   corpusSliceManifest,
   isInCorpusSlice,
@@ -18,7 +19,6 @@ import type {
   CaseLawIngestionHandle,
   CaseLawRootHandle,
 } from "@/api/lib/case-law/maintenance-lane";
-import { reconcileCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 const TABLES = {
@@ -41,10 +41,7 @@ const readTable = async (
   const rows: TransferRow[] = [];
   let offset = 0;
   while (true) {
-    const relation =
-      table === "decisions"
-        ? "(SELECT d.*, s.adapter_key AS source_key FROM case_law_decisions d JOIN case_law_sources s ON s.id = d.source_id)"
-        : TABLES[table];
+    const relation = TABLES[table];
     const page = await database.execute<{ row: string }>(
       `SELECT row_to_json(t)::text AS row FROM ${relation} t ORDER BY 1 LIMIT ${batchSize} OFFSET ${offset}`,
     );
@@ -88,11 +85,20 @@ export const exportCorpusSliceFromDatabase = async ({
     readTable(database, "supplements", batchSize),
     readTable(database, "citations", batchSize),
   ]);
+  const sourceKeys = new Map(
+    sources.map((row) => [
+      v.parse(v.string(), field(row, "id", "id")),
+      v.parse(v.string(), field(row, "adapterKey", "adapter_key")),
+    ]),
+  );
   const censusRows = allDecisions.map((row) => ({
     id: brandPersistedCaseLawDecisionId(
       v.parse(v.string(), field(row, "id", "id")),
     ),
-    sourceKey: v.parse(v.string(), field(row, "sourceKey", "source_key")),
+    sourceKey: v.parse(
+      v.string(),
+      sourceKeys.get(v.parse(v.string(), field(row, "sourceId", "source_id"))),
+    ),
     court: v.parse(v.string(), field(row, "court", "court")),
     decisionDate: v.parse(
       v.nullable(v.string()),
@@ -126,15 +132,9 @@ export const exportCorpusSliceFromDatabase = async ({
 };
 
 const sqlString = (value: string): string => `'${value.replaceAll("'", "''")}'`;
-class CorpusSliceExecutionError extends TaggedError(
-  "CorpusSliceExecutionError",
-)<{ message: string }> {}
-
 const identifier = (value: string): string => {
   if (!/^[a-z][a-z0-9_]*$/u.test(value)) {
-    throw new CorpusSliceExecutionError({
-      message: "invalid corpus transfer column",
-    });
+    return panic("invalid corpus transfer column");
   }
   return `"${value}"`;
 };
@@ -142,6 +142,7 @@ const identifier = (value: string): string => {
 const importStore = (
   database: CaseLawRootHandle,
   ingestionDatabase: CaseLawIngestionHandle,
+  reconcileProjection: ProjectionReconciler,
 ) => ({
   upsert: async (table: TransferTable, rows: readonly TransferRow[]) => {
     if (rows.length === 0) {
@@ -174,7 +175,7 @@ const importStore = (
   enqueueProjectionDesiredState: async (ids: ReadonlySet<unknown>) =>
     await ingestionDatabase(async (tx) => {
       for (const id of ids) {
-        await reconcileCorpusProjectionDesiredStateTx(tx, {
+        await reconcileProjection(tx, {
           family: "case_law",
           entityId: brandPersistedCaseLawDecisionId(v.parse(v.string(), id)),
         });
@@ -183,14 +184,39 @@ const importStore = (
     }),
 });
 
-export const importCorpusSliceIntoDatabase = async (
-  prefix: string,
-  storage: CorpusSliceTransferStorage,
-  database: CaseLawRootHandle,
-  ingestionDatabase: CaseLawIngestionHandle,
-): Promise<Result<CorpusSliceImportResult, CorpusSliceTransferError>> =>
+type ProjectionReconciler = (
+  tx: Transaction,
+  subject: {
+    family: "case_law";
+    entityId: ReturnType<typeof brandPersistedCaseLawDecisionId>;
+  },
+) => Promise<unknown>;
+
+const reconcileProjection: ProjectionReconciler = async (tx, subject) => {
+  const { reconcileCorpusProjectionDesiredStateTx } =
+    await import("@/api/lib/legal-search/corpus-index-projection-desired-state");
+  return await reconcileCorpusProjectionDesiredStateTx(tx, subject);
+};
+
+type ImportExecutionOptions = {
+  prefix: string;
+  storage: CorpusSliceTransferStorage;
+  database: CaseLawRootHandle;
+  ingestionDatabase: CaseLawIngestionHandle;
+  reconcileProjection?: ProjectionReconciler;
+};
+
+export const importCorpusSliceIntoDatabase = async ({
+  prefix,
+  storage,
+  database,
+  ingestionDatabase,
+  reconcileProjection: reconcile = reconcileProjection,
+}: ImportExecutionOptions): Promise<
+  Result<CorpusSliceImportResult, CorpusSliceTransferError>
+> =>
   await importStoredCorpusSlice(
     prefix,
     storage,
-    importStore(database, ingestionDatabase),
+    importStore(database, ingestionDatabase, reconcile),
   );
