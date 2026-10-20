@@ -69,7 +69,7 @@ const GLUED_MARK =
  * An EU act number with a mark glued to its last digit (`2022/20652`): EU
  * acts are numbered with at most four digits, so a fifth is the mark.
  */
-const GLUED_ACT_MARK = /(?<!\d)(\d{4}\/\d{1,4})(\d{1,3})(?!\d)/gu;
+const GLUED_ACT_MARK = /(?<!\d)(\d{4}\/\d{4})(\d{1,3})(?!\d)/gu;
 
 const SECTION_LINE = /^(\d{1,2}(?:\.\d{1,2}){0,4})\.?\s+(\p{Lu}.*)$/u;
 const PARAGRAPH_LINE = /^(\d{1,4})\s+(\S.*)$/u;

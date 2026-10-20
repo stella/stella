@@ -75,10 +75,16 @@ const withId = (block: BlockWithoutId, id: string): Block => ({
 /**
  * Ids for `blocks` in document order. A label printed twice (a numbering
  * restarting in an annex) keeps its first id and the repeats take `-2`,
- * `-3`, so ids stay unique without renumbering the first occurrence.
+ * `-3`, skipping emitted ids and every structural label in the document.
  */
 export const assignBlockIds = (blocks: readonly KeyedBlock[]): Block[] => {
-  const taken = new Map<string, number>();
+  const reserved = new Set(
+    blocks.flatMap(({ key }) =>
+      key.type === "positional" ? [] : [baseIdOf(key, FRONT_SCOPE, 0)],
+    ),
+  );
+  const emitted = new Set<string>();
+  const suffixes = new Map<string, number>();
   let scope = FRONT_SCOPE;
   let ordinal = 0;
   return blocks.map(({ block, key }) => {
@@ -86,9 +92,16 @@ export const assignBlockIds = (blocks: readonly KeyedBlock[]): Block[] => {
       ordinal += 1;
     }
     const base = baseIdOf(key, scope, ordinal);
-    const seen = taken.get(base) ?? 0;
-    taken.set(base, seen + 1);
-    const id = seen === 0 ? base : `${base}-${String(seen + 1)}`;
+    let id = base;
+    if (emitted.has(id)) {
+      let suffix = suffixes.get(base) ?? 1;
+      do {
+        suffix += 1;
+        id = `${base}-${String(suffix)}`;
+      } while (reserved.has(id) || emitted.has(id));
+      suffixes.set(base, suffix);
+    }
+    emitted.add(id);
     if (key.type === "section") {
       scope = id;
       ordinal = 0;

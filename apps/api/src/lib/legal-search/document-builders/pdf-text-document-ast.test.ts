@@ -89,6 +89,42 @@ const inlinesOf = (block: Block): Inline[] =>
   block.type === "heading" || block.type === "paragraph" ? block.inlines : [];
 
 describe("the PDF text builder", () => {
+  test("keeps an ordinary act number intact when its last digit names a footnote", () => {
+    const ast = build(
+      [
+        "The authority applies Regulation (EU) 2016/679 in full.",
+        " ",
+        "9",
+        " A note on this page.",
+      ].join("\n"),
+    );
+    expect(ast.blocks.some(({ id }) => id === "fn-9")).toBe(true);
+    const body = ast.blocks.filter(({ id }) => id !== "fn-9");
+    expect(body.map(({ plainText }) => plainText).join(" ")).toBe(
+      "The authority applies Regulation (EU) 2016/679 in full.",
+    );
+    expect(body.flatMap((block) => marksOf(inlinesOf(block)))).toEqual([]);
+    expect(
+      body.map((block) => textWithoutMarks(inlinesOf(block))).join(" "),
+    ).toBe("The authority applies Regulation (EU) 2016/679 in full.");
+  });
+
+  test("lifts a footnote glued after a four-digit act number", () => {
+    const ast = build(
+      [
+        "The authority applies Regulation (EU) 2022/20652 in full.",
+        " ",
+        "2",
+        " A note on this page.",
+      ].join("\n"),
+    );
+    const body = ast.blocks.filter(({ id }) => id !== "fn-2");
+    expect(body.flatMap((block) => marksOf(inlinesOf(block)))).toEqual(["2"]);
+    expect(
+      body.map((block) => textWithoutMarks(inlinesOf(block))).join(" "),
+    ).toBe("The authority applies Regulation (EU) 2022/2065 in full.");
+  });
+
   test("reads sections, numbered paragraphs, footnotes and their marks", () => {
     const page = (lines: string[]) => lines.join("\n");
     const ast = build(
