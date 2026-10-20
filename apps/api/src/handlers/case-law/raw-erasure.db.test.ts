@@ -322,13 +322,11 @@ const seedLinkedPair = async () => {
       sourceId: canonicalSource,
       sourceDocumentId: "raw-owner-court",
       decisionId: canonicalId,
-      rawOwnerDecisionId: canonicalId,
     },
     {
       sourceId: republisherSource,
       sourceDocumentId: "raw-owner-republisher",
       decisionId: retiredId,
-      rawOwnerDecisionId: retiredId,
     },
   ]);
   await db.transaction(async (tx) => {
@@ -1018,7 +1016,6 @@ describe("the raw object census", () => {
       sourceId,
       sourceDocumentId: "reserved",
       decisionId: reserved,
-      rawOwnerDecisionId: reserved,
     });
     await observe({
       sourceId,

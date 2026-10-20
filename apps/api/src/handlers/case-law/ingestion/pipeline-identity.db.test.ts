@@ -182,7 +182,6 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId,
         sourceDocumentId: "retired-publisher",
         decisionId: retiredId,
-        rawOwnerDecisionId: retiredId,
       });
       await db.insert(caseLawDecisionAliases).values({
         retiredDecisionId: retiredId,

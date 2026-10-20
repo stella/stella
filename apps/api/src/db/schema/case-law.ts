@@ -1320,10 +1320,6 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
       .varchar("source_document_id", { length: 256 })
       .notNull(),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
-    /** Decision prefix that owns this observation's raw objects; linking does not move them. */
-    rawOwnerDecisionId: safeUuid<"caseLawDecision">(
-      "raw_owner_decision_id",
-    ).notNull(),
     /** Raw payload for this publisher observation, including republished copies. */
     sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
     sourceRawContentType: p.varchar("source_raw_content_type", { length: 128 }),

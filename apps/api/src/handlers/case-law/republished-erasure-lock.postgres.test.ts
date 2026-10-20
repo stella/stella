@@ -92,13 +92,11 @@ if (!databaseUrl || !enabled) {
             sourceId: canonicalSource,
             sourceDocumentId: "canonical",
             decisionId: canonicalId,
-            rawOwnerDecisionId: canonicalId,
           },
           {
             sourceId: republisherSource,
             sourceDocumentId: "retired",
             decisionId: retiredId,
-            rawOwnerDecisionId: retiredId,
           },
         ]);
 

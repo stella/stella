@@ -768,7 +768,6 @@ export const resolveDecisionIdentityTx = async (
           sourceId,
           sourceDocumentId,
           decisionId,
-          rawOwnerDecisionId: decisionId,
         })),
       )
       .onConflictDoNothing();

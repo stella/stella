@@ -6,6 +6,7 @@ import { Temporal, DAY_IN_MS } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  caseLawDecisionAliasMovedIdentities,
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
   caseLawRawSweeps,
@@ -316,15 +317,36 @@ export const sweepCaseLawRawDecision = async ({
     return { type: kept };
   }
 
-  const identityOwners = await scopedDb(
+  // A linked identity's raw objects stay under the decision it was moved from.
+  const identities = await scopedDb(
     async (tx) =>
       await tx
         .select({
-          decisionId: caseLawDecisionSourceIdentities.rawOwnerDecisionId,
+          decisionId: caseLawDecisionSourceIdentities.decisionId,
+          movedFrom: caseLawDecisionAliasMovedIdentities.retiredDecisionId,
           sourceId: caseLawDecisionSourceIdentities.sourceId,
         })
         .from(caseLawDecisionSourceIdentities)
+        .leftJoin(
+          caseLawDecisionAliasMovedIdentities,
+          and(
+            eq(
+              caseLawDecisionAliasMovedIdentities.sourceId,
+              caseLawDecisionSourceIdentities.sourceId,
+            ),
+            eq(
+              caseLawDecisionAliasMovedIdentities.sourceDocumentId,
+              caseLawDecisionSourceIdentities.sourceDocumentId,
+            ),
+          ),
+        )
         .where(eq(caseLawDecisionSourceIdentities.decisionId, decisionId)),
+  );
+  const identityOwners = identities.map(
+    ({ decisionId: ownerId, movedFrom, sourceId }) => ({
+      decisionId: movedFrom ?? ownerId,
+      sourceId,
+    }),
   );
   const rawOwners = new Map(
     [owner, ...identityOwners].map((rawOwner) => [

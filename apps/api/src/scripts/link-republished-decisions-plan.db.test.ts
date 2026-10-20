@@ -7,6 +7,7 @@ import { compareCodeUnit } from "@stll/collation";
 
 import {
   caseLawDecisionAliases,
+  caseLawDecisionAliasMovedIdentities,
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
   caseLawSources,
@@ -75,21 +76,18 @@ beforeAll(
         sourceId: courtSource,
         sourceDocumentId: "court-1",
         decisionId: canonicalId,
-        rawOwnerDecisionId: canonicalId,
         sourceRawS3Key: "raw/court",
       },
       {
         sourceId: republisherSource,
         sourceDocumentId: "publisher-1",
         decisionId: retiredId,
-        rawOwnerDecisionId: retiredId,
         sourceRawS3Key: "raw/republisher",
       },
       {
         sourceId: republisherSource,
         sourceDocumentId: "publisher-already-canonical",
         decisionId: canonicalId,
-        rawOwnerDecisionId: canonicalId,
         sourceRawS3Key: "raw/already-canonical",
       },
     ]);
@@ -147,13 +145,11 @@ test("apply skips a candidate whose canonical decision was erased after selectio
       sourceId: courtSource,
       sourceDocumentId: "erasure-court",
       decisionId: selectedCanonicalId,
-      rawOwnerDecisionId: selectedCanonicalId,
     },
     {
       sourceId: republisherSource,
       sourceDocumentId: "erasure-republisher",
       decisionId: selectedRetiredId,
-      rawOwnerDecisionId: selectedRetiredId,
     },
   ]);
   const candidates = await selectRepublishedDecisionCandidates(db, 100);
@@ -247,27 +243,15 @@ test("apply resolves the retired id and reverse restores identity ownership", as
     new Set([canonicalId]),
   );
   expect(
-    identities
-      .map(({ sourceDocumentId, rawOwnerDecisionId }) => ({
-        sourceDocumentId,
-        rawOwnerDecisionId,
-      }))
-      .toSorted((a, b) =>
-        compareCodeUnit(a.sourceDocumentId, b.sourceDocumentId),
-      ),
+    await db
+      .select({
+        retiredDecisionId:
+          caseLawDecisionAliasMovedIdentities.retiredDecisionId,
+        sourceDocumentId: caseLawDecisionAliasMovedIdentities.sourceDocumentId,
+      })
+      .from(caseLawDecisionAliasMovedIdentities),
   ).toEqual([
-    {
-      sourceDocumentId: "court-1",
-      rawOwnerDecisionId: canonicalId,
-    },
-    {
-      sourceDocumentId: "publisher-1",
-      rawOwnerDecisionId: retiredId,
-    },
-    {
-      sourceDocumentId: "publisher-already-canonical",
-      rawOwnerDecisionId: canonicalId,
-    },
+    { retiredDecisionId: retiredId, sourceDocumentId: "publisher-1" },
   ]);
   const resolved = await db
     .select({ id: canonicalDecisionIdSql(caseLawDecisions.id) })
@@ -478,13 +462,11 @@ test("reverse restores the projection desired state for every repaired pair", as
       sourceId: secondCourtSource,
       sourceDocumentId: "second-court",
       decisionId: secondCanonicalId,
-      rawOwnerDecisionId: secondCanonicalId,
     },
     {
       sourceId: republisherSource,
       sourceDocumentId: "second-republisher",
       decisionId: secondRetiredId,
-      rawOwnerDecisionId: secondRetiredId,
     },
   ]);
 
@@ -656,13 +638,11 @@ test("reverse prioritizes a reversible pair and refuses erased or unrestorable p
         sourceId: courtSource,
         sourceDocumentId: `${pair.docket}-court`,
         decisionId: pair.canonicalId,
-        rawOwnerDecisionId: pair.canonicalId,
       },
       {
         sourceId: republisherSource,
         sourceDocumentId: `${pair.docket}-republisher`,
         decisionId: pair.retiredId,
-        rawOwnerDecisionId: pair.retiredId,
       },
     ]),
   );
@@ -671,7 +651,6 @@ test("reverse prioritizes a reversible pair and refuses erased or unrestorable p
     sourceId: republisherSource,
     sourceDocumentId: "reverse-unrestorable-republisher-mirror",
     decisionId: unrestorableRetiredId,
-    rawOwnerDecisionId: unrestorableRetiredId,
   });
   const candidates = await selectRepublishedDecisionCandidates(db, 100);
   const reverseCandidates = candidates.filter(({ duplicate }) =>
