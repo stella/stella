@@ -437,10 +437,11 @@ pub const EDITOR_SESSION_EVENT: &str = "clipboard-editor-session";
 const EDITOR_SESSIONS_UNAVAILABLE: &str = "clipboard editor state is unavailable";
 
 impl ClipboardEditorSessions {
+  /// Starts a session timed from now: the open latency runs from here until
+  /// the editor first reads its clip.
   fn begin(
     &self,
     item_id: String,
-    requested: Instant,
     open_kind: ClipboardOpenKind,
   ) -> Result<u64, String> {
     let mut sessions = self.0.lock().map_err(|_| EDITOR_SESSIONS_UNAVAILABLE)?;
@@ -448,7 +449,7 @@ impl ClipboardEditorSessions {
     let session = sessions.last;
     sessions.open = Some(OpenEditor {
       item_id,
-      requested,
+      requested: Instant::now(),
       open_kind,
       read: false,
     });
@@ -482,13 +483,12 @@ impl ClipboardEditorSessions {
 /// Opens the editor on `item_id`, reusing the window when it exists. A new
 /// window shows itself once its page has loaded.
 pub fn open_editor(app: &AppHandle, item_id: String) -> Result<(), String> {
-  let requested = Instant::now();
   let sessions = app.state::<ClipboardEditorSessions>();
   let Some(window) = app.get_webview_window(CLIPBOARD_EDITOR_WINDOW_LABEL) else {
-    sessions.begin(item_id, requested, ClipboardOpenKind::FirstOpen)?;
+    sessions.begin(item_id, ClipboardOpenKind::FirstOpen)?;
     return build_editor(app);
   };
-  let session = sessions.begin(item_id, requested, ClipboardOpenKind::Reopen)?;
+  let session = sessions.begin(item_id, ClipboardOpenKind::Reopen)?;
   announce_session(app, &EditorSessionEvent::Open { session });
   place_editor(app, &window);
   window
@@ -639,11 +639,7 @@ mod tests {
     assert!(sessions.read().unwrap().is_none());
 
     let first = sessions
-      .begin(
-        "a".to_string(),
-        Instant::now(),
-        ClipboardOpenKind::FirstOpen,
-      )
+      .begin("a".to_string(), ClipboardOpenKind::FirstOpen)
       .unwrap();
     let read = sessions.read().unwrap().unwrap();
     assert_eq!(read.item_id, "a");
@@ -654,7 +650,7 @@ mod tests {
     assert!(sessions.read().unwrap().unwrap().first_read.is_none());
 
     let second = sessions
-      .begin("b".to_string(), Instant::now(), ClipboardOpenKind::Reopen)
+      .begin("b".to_string(), ClipboardOpenKind::Reopen)
       .unwrap();
     assert!(second > first);
     let read = sessions.read().unwrap().unwrap();
