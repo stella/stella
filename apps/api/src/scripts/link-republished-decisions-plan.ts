@@ -401,7 +401,7 @@ export const reverseRepublishedDecisionBatch = async (
              d.created_at AS retired_created_at,
              cs.adapter_key AS canonical_adapter_key,
              c.created_at AS canonical_created_at,
-             c.redacted_at AS canonical_redacted_at
+             (c.redacted_at IS NOT NULL OR d.redacted_at IS NOT NULL) AS either_erased
         FROM case_law_decision_aliases a
         JOIN case_law_decisions d ON d.id = a.retired_decision_id
         JOIN case_law_decisions c ON c.id = a.canonical_decision_id
@@ -410,13 +410,13 @@ export const reverseRepublishedDecisionBatch = async (
        WHERE d.source_id <> c.source_id
          AND EXISTS (SELECT 1 FROM case_law_decision_alias_moved_identities m
                       WHERE m.retired_decision_id = a.retired_decision_id)
-       ORDER BY (c.redacted_at IS NOT NULL), a.retired_decision_id
+       ORDER BY (c.redacted_at IS NOT NULL OR d.redacted_at IS NOT NULL), a.retired_decision_id
        LIMIT ${limit}
     ), restored AS (
       UPDATE case_law_decision_source_identities identity
          SET decision_id = selected.retired_decision_id
         FROM selected
-       WHERE selected.canonical_redacted_at IS NULL
+       WHERE NOT selected.either_erased
          AND identity.decision_id = selected.canonical_decision_id
          AND (identity.source_id, identity.source_document_id) IN (
            SELECT moved.source_id, moved.source_document_id
@@ -444,7 +444,7 @@ export const reverseRepublishedDecisionBatch = async (
            selected.retired_created_at AS "retiredCreatedAt",
            selected.canonical_adapter_key AS "canonicalAdapterKey",
            selected.canonical_created_at AS "canonicalCreatedAt",
-           selected.canonical_redacted_at IS NOT NULL AS "refusedErased"
+           selected.either_erased AS "refusedErased"
       FROM selected
       LEFT JOIN deleted
         ON deleted."retiredId" = selected.retired_decision_id
