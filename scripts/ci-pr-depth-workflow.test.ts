@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -275,6 +276,7 @@ const planStep = (name: string) =>
     v.looseObject({
       if: v.optional(v.string()),
       run: v.optional(v.string()),
+      "working-directory": v.optional(v.string()),
       with: v.optional(v.record(v.string(), v.unknown())),
     }),
     planSteps.find((step) => step.name === name),
@@ -304,6 +306,65 @@ const runDerivation = ({ runnerTemp }: RunDerivationOptions) => {
     rmSync(workspace, { recursive: true, force: true });
   }
 };
+
+test("the PR job derivation never reads Bun config from the pull request tree before trust", () => {
+  // The step runs before the trust check, so its working directory must hold
+  // only the trusted tooling copies: Bun loads bunfig.toml (preload scripts)
+  // and tsconfig paths from the current directory.
+  expect(derivation["working-directory"]).toBe(`\${{ runner.temp }}`);
+  const runnerTemp = mkdtempSync(path.join(tmpdir(), "pr-jobs-runner-"));
+  const pullRequestTree = mkdtempSync(path.join(tmpdir(), "pr-jobs-tree-"));
+  const marker = path.join(pullRequestTree, "preloaded");
+  try {
+    for (const file of ["ci-pr-jobs.ts", "ci-pr-jobs-cli.ts"]) {
+      writeFileSync(
+        path.join(runnerTemp, file),
+        readFileSync(new URL(file, import.meta.url), "utf-8"),
+      );
+    }
+    writeFileSync(
+      path.join(runnerTemp, "ci-workflow.yml"),
+      readFileSync(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+        "utf-8",
+      ),
+    );
+    writeFileSync(
+      path.join(pullRequestTree, "bunfig.toml"),
+      'preload = ["./hostile.ts"]\n',
+    );
+    writeFileSync(
+      path.join(pullRequestTree, "hostile.ts"),
+      `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, "ran");\n`,
+    );
+    const output = path.join(runnerTemp, "output");
+    const derive = (cwd: string) => {
+      writeFileSync(output, "");
+      return Bun.spawnSync(
+        [process.execPath, path.join(runnerTemp, "ci-pr-jobs-cli.ts")],
+        {
+          cwd,
+          env: {
+            ...process.env,
+            GITHUB_OUTPUT: output,
+            RUNNER_TEMP: runnerTemp,
+          },
+        },
+      );
+    };
+    // Control: from the pull request tree, the hostile preload runs.
+    derive(pullRequestTree);
+    expect(existsSync(marker)).toBe(true);
+    rmSync(marker);
+    // From the step's working directory it never does, and the plan still works.
+    const result = derive(runnerTemp);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(existsSync(marker)).toBe(false);
+  } finally {
+    rmSync(runnerTemp, { recursive: true, force: true });
+    rmSync(pullRequestTree, { recursive: true, force: true });
+  }
+});
 
 test("the planner derives exactly prDepthJobs before any source checkout", () => {
   // The workflow file comes from the unconditional tooling fetch at

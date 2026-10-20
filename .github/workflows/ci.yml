@@ -426,6 +426,10 @@ jobs:
 
       - name: Derive PR jobs
         id: pr-jobs-plan
+        # Before the trust check: run from RUNNER_TEMP, which holds only the
+        # trusted tooling copies, so Bun never reads a bunfig.toml (preload)
+        # or tsconfig from the pull request checkout.
+        working-directory: ${{ runner.temp }}
         run: bun "$RUNNER_TEMP/ci-pr-jobs-cli.ts"
 
       - name: Check completed suite depth
