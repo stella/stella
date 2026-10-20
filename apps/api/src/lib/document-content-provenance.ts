@@ -263,7 +263,16 @@ const resolveCurrentExtractedRowsFromDatabase = async (
     if (!sourceField) {
       return [];
     }
-    return [{ ...current, sourceFieldId: sourceField.id, name: entity.name }];
+    // The version this row was resolved against, legacy rows included, so a
+    // caller can fence its own earlier snapshot to the same version.
+    return [
+      {
+        ...current,
+        currentVersionId: version.id,
+        sourceFieldId: sourceField.id,
+        name: entity.name,
+      },
+    ];
   });
 };
 

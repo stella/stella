@@ -1878,10 +1878,10 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
         ).at(0);
   // The text must belong to the version this read started from: a version
   // promoted between the two reads would pair new text with old metadata.
-  const sourceVersionId = currentExtracted?.sourceEntityVersionId;
   const versionChanged =
-    typeof sourceVersionId === "string" &&
-    sourceVersionId !== currentDocument.currentVersion.id;
+    currentExtracted !== undefined &&
+    currentExtracted !== null &&
+    currentExtracted.currentVersionId !== currentDocument.currentVersion.id;
   if (
     docxOutcome.kind !== "markdown" &&
     (!currentExtracted || versionChanged)
