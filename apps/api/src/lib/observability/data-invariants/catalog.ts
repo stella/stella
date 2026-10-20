@@ -1,5 +1,6 @@
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
+import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -78,10 +79,10 @@ export const productionDataInvariants = (
     [DATA_INVARIANT_ID.caseLawIngestionDailyBand]:
       caseLawIngestionDailyBandInvariant({
         db,
-        bands: envBase.DATA_INVARIANT_CASE_LAW_DAILY_BANDS,
+        bands: env.DATA_INVARIANT_CASE_LAW_DAILY_BANDS,
       }),
     [DATA_INVARIANT_ID.caseLawSearchCanaries]: caseLawSearchCanariesInvariant({
-      canaries: envBase.DATA_INVARIANT_CASE_LAW_CANARIES,
+      canaries: env.DATA_INVARIANT_CASE_LAW_CANARIES,
       search: searchCaseLawCanary,
     }),
     [DATA_INVARIANT_ID.queryExpansionDictionaries]:
