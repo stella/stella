@@ -2533,12 +2533,12 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
+          fetch-depth: 0
           persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             .github/workflows
             .github/actions
-            .github/ci-job-classification.json
             .github/ci-job-classification-decisions.json
             .github/ci-job-classification-sources.json
             scripts/check-ci-job-classification.ts
@@ -2548,6 +2548,7 @@ jobs:
             packages/sha256/src/types.ts
 
       - name: Check workflow job classifications
+        id: job-classification
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -3645,6 +3646,9 @@ jobs:
           cp .env.example .env
 
       - name: Code quality
+        # Past the code-check warning budget (~18 min), a stalled check must
+        # not hold the job until the job's own timeout.
+        timeout-minutes: 20
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -3795,6 +3799,9 @@ jobs:
           cp .env.example .env
 
       - name: Code quality (web)
+        # Past the code-check warning budget (~18 min), a stalled check must
+        # not hold the job until the job's own timeout.
+        timeout-minutes: 20
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -3836,6 +3843,9 @@ jobs:
           bun scripts/typecheck-coverage.ts
 
       - name: Code quality (rest)
+        # Past the code-check warning budget (~18 min), a stalled check must
+        # not hold the job until the job's own timeout.
+        timeout-minutes: 20
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -4268,7 +4278,9 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    # The rehearsal step's budget plus the setup before it (checkout, install,
+    # image pulls); scripts/rehearse-migration-upgrade.test.ts derives both.
+    timeout-minutes: 42
     permissions:
       contents: read
       packages: read # pull the promoted release's API image
@@ -4352,8 +4364,11 @@ jobs:
         if: always()
         run: docker logout ghcr.io
 
+      # The script owns the budgets: base and seed, then the upgrade and its
+      # fixed-point rerun, each bounded by REHEARSAL_MIGRATE_BUDGET_SECONDS.
+      # This cap only catches a hang outside them.
       - name: Rehearse the upgrade from the promoted release at scale
-        timeout-minutes: 9
+        timeout-minutes: 38
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           REHEARSAL_BASE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/stella-api

@@ -48,6 +48,7 @@ import { FOLIO_COLLAB_SEED_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
+import { createOpaqueToken } from "@/api/lib/entities/opaque-tokens";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
@@ -76,11 +77,13 @@ import {
 } from "@/api/lib/s3";
 import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
+import { requireSessionCredentialAuthority } from "@/api/lib/synthetic-principal/credential-policy";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const FOLIO_COLLAB_TOKEN_PART_LENGTH = 32;
 const FOLIO_COLLAB_TOKEN_CLEANUP_BATCH_SIZE = 100;
 const FOLIO_COLLAB_SNAPSHOT_CLEANUP_GRACE_MS = 60_000;
 const FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS = 10_000;
@@ -91,14 +94,6 @@ export {
   FOLIO_COLLAB_TOKEN_TTL_MS,
   FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
 };
-
-const createFolioCollabToken = () =>
-  Bun.randomUUIDv7()
-    .replaceAll("-", "")
-    .slice(0, FOLIO_COLLAB_TOKEN_PART_LENGTH) +
-  Bun.randomUUIDv7()
-    .replaceAll("-", "")
-    .slice(0, FOLIO_COLLAB_TOKEN_PART_LENGTH);
 
 const hashFolioCollabToken = (token: string) => hashSha256Hex(token);
 
@@ -150,6 +145,7 @@ export type AuthorizedFolioCollabRoom = {
   roomId: SafeId<"folioCollabRoom">;
   scopedDb: ScopedDb;
   tokenExpiresAt: Date;
+  sourceSessionExpiresAt: Date | null;
   tokenId: SafeId<"folioCollabRoomToken">;
   userId: SafeId<"user">;
   userName: string;
@@ -175,6 +171,8 @@ type FolioCollabTokenIssueDb = {
 };
 
 type IssueFolioCollabTokenOptions = {
+  sourceSessionId: string | null;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
   generation: number;
   permissions: FolioCollabTokenPermissions;
   roomId: SafeId<"folioCollabRoom">;
@@ -208,6 +206,8 @@ export const cleanupExpiredFolioCollabRoomTokens = async ({
 };
 
 export const issueFolioCollabToken = async ({
+  sourceSessionId,
+  readSessionAuthority,
   generation,
   permissions,
   roomId,
@@ -215,12 +215,29 @@ export const issueFolioCollabToken = async ({
   userId,
   workspaceId,
 }: IssueFolioCollabTokenOptions) => {
-  const token = createFolioCollabToken();
+  const token = createOpaqueToken();
   const now = new Date();
-  const tokenExpiresAt = computeFolioCollabTokenExpiresAt(now);
+  const authority = isSyntheticPrincipal({ userId })
+    ? requireSessionCredentialAuthority(
+        await readSessionAuthority({
+          sessionId: sourceSessionId,
+          userId,
+          now,
+        }),
+      )
+    : null;
+  const tokenExpiresAt = authority
+    ? new Date(
+        Math.min(
+          computeFolioCollabTokenExpiresAt(now).getTime(),
+          authority.expiresAt.getTime(),
+        ),
+      )
+    : computeFolioCollabTokenExpiresAt(now);
   await cleanupExpiredFolioCollabRoomTokens({ db: tx, workspaceId });
   await tx.insert(folioCollabRoomTokens).values({
     expiresAt: tokenExpiresAt,
+    sourceSessionId: authority?.sessionId ?? null,
     generation,
     id: createSafeId<"folioCollabRoomToken">(),
     permissions,
@@ -310,12 +327,20 @@ export const recordFolioCollabContribution = async ({
 
 export const refreshFolioCollabToken = async ({
   tokenId,
+  sourceSessionExpiresAt,
   tx,
 }: {
   tokenId: SafeId<"folioCollabRoomToken">;
+  sourceSessionExpiresAt: Date | null;
   tx: Transaction;
 }) => {
-  const tokenExpiresAt = computeFolioCollabTokenExpiresAt();
+  const nextExpiry = computeFolioCollabTokenExpiresAt();
+  const tokenExpiresAt = sourceSessionExpiresAt
+    ? new Date(Math.min(nextExpiry.getTime(), sourceSessionExpiresAt.getTime()))
+    : nextExpiry;
+  if (tokenExpiresAt <= new Date()) {
+    return null;
+  }
   const refreshed = await tx
     .update(folioCollabRoomTokens)
     .set({ expiresAt: tokenExpiresAt })
@@ -399,9 +424,11 @@ export const authorizeFolioCollabRoom = async ({
   token,
   db = rootDb,
   createScopedDb = createRootScopedDb,
+  readSessionAuthority,
 }: {
   db?: Pick<typeof rootDb, "select">;
   createScopedDb?: typeof createRootScopedDb;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
   roomId: SafeId<"folioCollabRoom">;
   token: string;
 }): Promise<FolioCollabRoomAuthorizationResult> => {
@@ -420,6 +447,7 @@ export const authorizeFolioCollabRoom = async ({
       organizationRole: member.role,
       permissions: folioCollabRoomTokens.permissions,
       propertyId: folioCollabRooms.propertyId,
+      sourceSessionId: folioCollabRoomTokens.sourceSessionId,
       tokenId: folioCollabRoomTokens.id,
       tokenGeneration: folioCollabRoomTokens.generation,
       userId: folioCollabRoomTokens.userId,
@@ -464,9 +492,22 @@ export const authorizeFolioCollabRoom = async ({
     return { status: "missing" };
   }
 
+  const synthetic = isSyntheticPrincipal({ userId: row.userId });
+  const authority = synthetic
+    ? await readSessionAuthority({
+        sessionId: row.sourceSessionId,
+        userId: row.userId,
+      })
+    : null;
+  if (synthetic && !authority) {
+    return { status: "token-expired" };
+  }
+  const tokenExpiresAt = authority
+    ? new Date(Math.min(row.expiresAt.getTime(), authority.expiresAt.getTime()))
+    : row.expiresAt;
   const decision = decideFolioCollabRoomAuthorization({
     actualGeneration: row.generation,
-    expiresAt: row.expiresAt,
+    expiresAt: tokenExpiresAt,
     now: new Date(),
     organizationRole: row.organizationRole,
     tokenCanEdit: row.permissions.canEdit,
@@ -493,7 +534,8 @@ export const authorizeFolioCollabRoom = async ({
         userId: brandPersistedUserId(row.userId),
         workspaceIds: [row.workspaceId],
       }),
-      tokenExpiresAt: row.expiresAt,
+      tokenExpiresAt,
+      sourceSessionExpiresAt: authority?.expiresAt ?? null,
       tokenId: row.tokenId,
       userId: brandPersistedUserId(row.userId),
       userName: row.userName,

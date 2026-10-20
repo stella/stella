@@ -174,6 +174,11 @@ const RAW_ROUTES = {
     reason:
       "Authorized by a shared secret; inert unless the secret is configured.",
   },
+  "POST /synthetic/session": {
+    access: RAW_ROUTE_ACCESS.sessionless,
+    reason:
+      "Authorized by a dedicated credential; inert unless the credential is configured.",
+  },
   "POST /usage/hosted/webhook": {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason: "Authorized by an HMAC signature over the raw body.",
