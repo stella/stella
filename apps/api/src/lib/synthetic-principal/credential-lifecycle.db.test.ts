@@ -390,18 +390,19 @@ const setup = async () => {
       );
     },
   } satisfies Record<
-    Extract<
-      keyof typeof USER_SESSION_CREDENTIAL_ISSUERS,
-      | "session"
-      | "cookieCache"
-      | "cookie"
-      | "bearer"
-      | "collabRoom"
-      | "signedDownload"
-      | "oauth"
-      | "apiKey"
-      | "invitation"
-    >,
+    // Session resolution probes, then every credential issuer probed here.
+    | "cookie"
+    | "bearer"
+    | Extract<
+        keyof typeof USER_SESSION_CREDENTIAL_ISSUERS,
+        | "session"
+        | "cookieCache"
+        | "collabRoom"
+        | "signedDownload"
+        | "oauth"
+        | "apiKey"
+        | "invitation"
+      >,
     () => Promise<void>
   >;
   return { store, probes, source, testDb };
