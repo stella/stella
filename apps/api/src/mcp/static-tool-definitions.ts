@@ -651,7 +651,11 @@ export const invokeStaticMcpTool = async ({
     return { status: "input-authority-refused", denial: inputDenial };
   }
 
-  const admitsHere = context.admitToolInvocation !== undefined;
+  const isCapabilityExecutor =
+    definition.name === MCP_CAPABILITY_EXECUTORS.read ||
+    definition.name === MCP_CAPABILITY_EXECUTORS.write;
+  const admitsHere =
+    context.admitToolInvocation !== undefined && !isCapabilityExecutor;
   // One admission per tool call: work nested inside an admitted call shares it.
   const handlerContext = admitsHere ? withoutAdmission(context) : context;
 

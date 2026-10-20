@@ -333,7 +333,9 @@ export const uploadRemoteDocumentVersion = async ({
     });
   }
 
-  const downloaded = await dependencies.download({
+  const download =
+    context.testDependencies?.safeOutboundFetchBytes ?? dependencies.download;
+  const downloaded = await download({
     maxBytes: FILE_SIZE_LIMIT_BYTES.document,
     permit,
     timeoutMs: 60_000,

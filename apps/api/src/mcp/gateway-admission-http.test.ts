@@ -137,19 +137,19 @@ const transaction = asTestRaw<Transaction>({
     },
   },
   select: (selection: Record<string, unknown>) => {
-    const rows =
-      "cachedTools" in selection
-        ? [
-            {
-              allowedTools: null,
-              cachedTools: [connectorTool],
-              connectorId: connector.connectorId,
-              displayName: connector.displayName,
-              slug: connector.slug,
-              userConnectionId: connector.userConnectionId,
-            },
-          ]
-        : [];
+    const rows: Record<string, unknown>[] = [];
+    if ("cachedTools" in selection) {
+      rows.push({
+        allowedTools: null,
+        cachedTools: [connectorTool],
+        connectorId: connector.connectorId,
+        displayName: connector.displayName,
+        slug: connector.slug,
+        userConnectionId: connector.userConnectionId,
+      });
+    } else if ("id" in selection) {
+      rows.push({ id: ENTITY_ID });
+    }
     const builder = {
       from: () => builder,
       innerJoin: () => builder,
@@ -167,8 +167,17 @@ const safeDb: McpRequestContext["safeDb"] = async (callback) =>
   Result.ok(await callback(transaction));
 const scopedDb: McpRequestContext["scopedDb"] = async (callback) =>
   await callback(transaction);
+const createOperationDatabaseScope: NonNullable<
+  McpRequestContext["createOperationDatabaseScope"]
+> = () => ({
+  pinServerValidatedWorkspaceId: (workspaceId) => workspaceId === WORKSPACE_ID,
+  safeDb,
+  scopedDb,
+});
 
-const createContext = (): McpRequestContext =>
+const createContext = (
+  overrides: Partial<McpRequestContext> = {},
+): McpRequestContext =>
   asTestRaw<McpRequestContext>({
     accessibleWorkspaceIds: [WORKSPACE_ID],
     accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
@@ -183,12 +192,15 @@ const createContext = (): McpRequestContext =>
     ],
     memberRole: "owner",
     organizationId: toSafeId<"organization">("org_fixture"),
+    createOperationDatabaseScope,
     recordAuditEvent: async () => undefined,
+    request: new Request("https://api.example.test/mcp"),
     safeDb,
     scopedDb,
     thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     userEmail: "member@example.test",
     userId: toSafeId<"user">("user_fixture"),
+    ...overrides,
   });
 
 const errorCodeOf = (
@@ -288,15 +300,17 @@ const runFamily = async ({
 
 const runStaticTool = async ({
   args,
+  context = createContext(),
   mode,
   toolName,
 }: {
   args: Record<string, unknown>;
+  context?: McpRequestContext;
   mode: "documents" | "advanced";
   toolName: string;
 }) => {
   let admissions = 0;
-  await callMcpToolOverHttp({
+  const result = await callMcpToolOverHttp({
     admitAction: async ({ run }) => {
       admissions += 1;
       return Result.ok(
@@ -306,16 +320,17 @@ const runStaticTool = async ({
       );
     },
     args,
-    context: createContext(),
+    context,
     mode,
     toolName,
   });
-  return admissions;
+  return { admissions, result };
 };
 
 describe("gateway admission over HTTP", () => {
   test("a static upload and its nested capability work admit once", async () => {
-    const admissions = await runStaticTool({
+    let capabilityExecutions = 0;
+    const observed = await runStaticTool({
       args: {
         entity_id: ENTITY_ID,
         file: {
@@ -325,15 +340,33 @@ describe("gateway admission over HTTP", () => {
           mime_type: "application/octet-stream",
         },
       },
+      context: createContext({
+        testDependencies: {
+          safeOutboundFetchBytes: async () =>
+            await Promise.resolve(
+              Result.ok({
+                body: new Uint8Array([1]).buffer,
+                headers: new Headers(),
+                ok: true,
+                status: 200,
+              }),
+            ),
+          consumeInvokeCapabilityRateLimit: async () => {
+            capabilityExecutions += 1;
+            return { ok: true, retryAfterSeconds: 60 };
+          },
+        },
+      }),
       mode: "documents",
       toolName: DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName,
     });
 
-    expect(admissions).toBe(1);
+    expect(capabilityExecutions).toBe(1);
+    expect(observed.admissions).toBe(1);
   });
 
-  test("a direct capability executor call admits once", async () => {
-    const admissions = await runStaticTool({
+  test("a direct capability refusal happens before admission", async () => {
+    const observed = await runStaticTool({
       args: {
         capability: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
         input: buildDocumentVersionUploadReservationInput({
@@ -348,11 +381,44 @@ describe("gateway admission over HTTP", () => {
         }),
         validate_only: true,
       },
+      context: createContext({
+        credentialPermissions: { workspace: ["read"] },
+      }),
       mode: "advanced",
       toolName: MCP_CAPABILITY_EXECUTORS.write,
     });
 
-    expect(admissions).toBe(1);
+    expect(errorCodeOf(observed.result)).toBe("permission_denied");
+    expect(observed.admissions).toBe(0);
+  });
+
+  test("a permitted direct capability executor call admits once", async () => {
+    const observed = await runStaticTool({
+      args: {
+        capability: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
+        input: buildDocumentVersionUploadReservationInput({
+          entityId: ENTITY_ID,
+          file: {
+            mimeType: "application/octet-stream",
+            name: "agreement.docx",
+            sha256Hex: "a".repeat(64),
+            size: 1,
+          },
+          workspaceId: WORKSPACE_ID,
+        }),
+        validate_only: true,
+      },
+      context: createContext({
+        credentialPermissions: {
+          entity: ["update"],
+          workspace: ["read"],
+        },
+      }),
+      mode: "advanced",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
+    });
+
+    expect(observed.admissions).toBe(1);
   });
 
   test.each(["connector", "skill"] as const)(
