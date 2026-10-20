@@ -95,12 +95,17 @@ await runScriptWithErrorOutput(async () => {
     };
 
   if (reverse) {
-    const reversed = await withAggregateTransaction(
+    const outcomes = await withAggregateTransaction(
       rootDb,
       async (tx) =>
         await reverseRepublishedDecisionBatch(tx, limit, reconcile(tx)),
     );
+    const reversed = outcomes.filter(({ type }) => type === "reversed").length;
+    const refusedErased = outcomes.filter(
+      ({ type }) => type === "refused_erased",
+    ).length;
     console.info(`reversed=${String(reversed)}`);
+    console.info(`refused_erased=${String(refusedErased)}`);
     return;
   }
 

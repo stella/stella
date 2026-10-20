@@ -182,7 +182,7 @@ test("apply resolves the retired id and reverse restores identity ownership", as
           );
         },
       ),
-    ).toBe(1);
+    ).toEqual([{ type: "reversed", retiredId }]);
   });
   expect(await db.select().from(caseLawDecisionAliases)).toEqual([]);
   expect(

@@ -83,6 +83,10 @@ export type RepublishedDecisionCandidate = {
   duplicate: CandidateSide;
 };
 
+export type ReverseRepublishedDecisionOutcome =
+  | { type: "reversed"; retiredId: SafeId<"caseLawDecision"> }
+  | { type: "refused_erased"; retiredId: SafeId<"caseLawDecision"> };
+
 const isAdapterKey = (value: string): value is AdapterKey =>
   Object.values(ADAPTER_KEYS).some((candidate) => candidate === value);
 
@@ -357,7 +361,7 @@ export const reverseRepublishedDecisionBatch = async (
   tx: PlanTransaction,
   limit: number,
   reconcile: Reconcile,
-): Promise<number> => {
+): Promise<ReverseRepublishedDecisionOutcome[]> => {
   const rows = executedRows(
     await tx.execute(sql`
     WITH selected AS MATERIALIZED (
@@ -365,7 +369,8 @@ export const reverseRepublishedDecisionBatch = async (
              ds.adapter_key AS retired_adapter_key,
              d.created_at AS retired_created_at,
              cs.adapter_key AS canonical_adapter_key,
-             c.created_at AS canonical_created_at
+             c.created_at AS canonical_created_at,
+             c.redacted_at AS canonical_redacted_at
         FROM case_law_decision_aliases a
         JOIN case_law_decisions d ON d.id = a.retired_decision_id
         JOIN case_law_decisions c ON c.id = a.canonical_decision_id
@@ -380,7 +385,8 @@ export const reverseRepublishedDecisionBatch = async (
       UPDATE case_law_decision_source_identities identity
          SET decision_id = selected.retired_decision_id
         FROM selected
-       WHERE identity.decision_id = selected.canonical_decision_id
+       WHERE selected.canonical_redacted_at IS NULL
+         AND identity.decision_id = selected.canonical_decision_id
          AND (identity.source_id, identity.source_document_id) IN (
            SELECT moved.source_id, moved.source_document_id
              FROM case_law_decision_alias_moved_identities moved
@@ -388,11 +394,12 @@ export const reverseRepublishedDecisionBatch = async (
          )
       RETURNING selected.retired_decision_id
     ), restored_page AS (
-      SELECT count(*) AS restored_count FROM restored
+      SELECT DISTINCT retired_decision_id FROM restored
     ), deleted AS (
       DELETE FROM case_law_decision_aliases alias
        USING selected, restored_page
        WHERE alias.retired_decision_id = selected.retired_decision_id
+         AND restored_page.retired_decision_id = selected.retired_decision_id
       RETURNING selected.retired_decision_id AS "retiredId",
                 selected.canonical_decision_id AS "canonicalId",
                 selected.retired_adapter_key AS "retiredAdapterKey",
@@ -400,10 +407,21 @@ export const reverseRepublishedDecisionBatch = async (
                 selected.canonical_adapter_key AS "canonicalAdapterKey",
                 selected.canonical_created_at AS "canonicalCreatedAt"
     )
-    SELECT * FROM deleted ORDER BY "retiredId"
+    SELECT selected.retired_decision_id AS "retiredId",
+           selected.canonical_decision_id AS "canonicalId",
+           selected.retired_adapter_key AS "retiredAdapterKey",
+           selected.retired_created_at AS "retiredCreatedAt",
+           selected.canonical_adapter_key AS "canonicalAdapterKey",
+           selected.canonical_created_at AS "canonicalCreatedAt",
+           selected.canonical_redacted_at IS NOT NULL AS "refusedErased"
+      FROM selected
+      LEFT JOIN deleted
+        ON deleted."retiredId" = selected.retired_decision_id
+     ORDER BY selected.retired_decision_id
   `),
   );
   const reversed: RepublishedDecisionCandidate[] = [];
+  const outcomes: ReverseRepublishedDecisionOutcome[] = [];
   for (const value of rows) {
     if (
       !isRecord(value) ||
@@ -415,6 +433,10 @@ export const reverseRepublishedDecisionBatch = async (
       );
     }
     const retiredId = brandPersistedCaseLawDecisionId(value["retiredId"]);
+    if (value["refusedErased"] === true) {
+      outcomes.push({ type: "refused_erased", retiredId });
+      continue;
+    }
     const canonicalId = brandPersistedCaseLawDecisionId(value["canonicalId"]);
     const retired = side(
       {
@@ -433,9 +455,10 @@ export const reverseRepublishedDecisionBatch = async (
       "left",
     );
     reversed.push({ canonical, duplicate: retired });
+    outcomes.push({ type: "reversed", retiredId });
   }
   if (reversed.length > 0) {
     await reconcile(reversed, "reverse");
   }
-  return reversed.length;
+  return outcomes;
 };

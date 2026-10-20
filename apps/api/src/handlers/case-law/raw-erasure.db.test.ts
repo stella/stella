@@ -25,6 +25,7 @@ import { createSha256 } from "@stll/sha256/node";
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  caseLawDecisionAliases,
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
   caseLawIndexJobs,
@@ -71,7 +72,10 @@ import {
   RAW_SOURCE_FAMILY,
   rawDocumentPrefix,
 } from "@/api/lib/legal-search/raw-source-storage";
-import { applyRepublishedDecisionBatch } from "@/api/scripts/link-republished-decisions-plan";
+import {
+  applyRepublishedDecisionBatch,
+  reverseRepublishedDecisionBatch,
+} from "@/api/scripts/link-republished-decisions-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -302,12 +306,14 @@ test("erasing a linked decision removes raw objects under both original owners",
       id: canonicalId,
       sourceId: canonicalSource,
       sourceDocumentId: "raw-owner-court",
+      fulltext: "canonical retained payload",
     },
     {
       ...common,
       id: retiredId,
       sourceId: republisherSource,
       sourceDocumentId: "raw-owner-republisher",
+      fulltext: "retired retained payload",
     },
   ]);
   await db.insert(caseLawDecisionSourceIdentities).values([
@@ -354,6 +360,35 @@ test("erasing a linked decision removes raw objects under both original owners",
 
   expect(stored(canonicalKey)).toBe(false);
   expect(stored(retiredKey)).toBe(false);
+  expect(
+    await db
+      .select({ id: caseLawDecisions.id, fulltext: caseLawDecisions.fulltext })
+      .from(caseLawDecisions)
+      .where(sql`${caseLawDecisions.id} IN (${canonicalId}, ${retiredId})`),
+  ).toEqual(
+    expect.arrayContaining([
+      { id: canonicalId, fulltext: null },
+      { id: retiredId, fulltext: null },
+    ]),
+  );
+
+  const reverseOutcome = await db.transaction(
+    async (tx) =>
+      await reverseRepublishedDecisionBatch(tx, 10, async () => undefined),
+  );
+  expect(reverseOutcome).toEqual([{ type: "refused_erased", retiredId }]);
+  expect(await db.select().from(caseLawDecisionAliases)).toEqual([
+    expect.objectContaining({
+      canonicalDecisionId: canonicalId,
+      retiredDecisionId: retiredId,
+    }),
+  ]);
+  expect(
+    await db
+      .select({ decisionId: caseLawDecisionSourceIdentities.decisionId })
+      .from(caseLawDecisionSourceIdentities)
+      .where(eq(caseLawDecisionSourceIdentities.sourceId, republisherSource)),
+  ).toEqual([{ decisionId: canonicalId }]);
 });
 
 type LegacyDecision = {

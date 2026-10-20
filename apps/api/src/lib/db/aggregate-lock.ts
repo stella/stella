@@ -2161,6 +2161,28 @@ type DecisionCitationStatsLocksOptions = {
  */
 const lockedDecisionRowSchema = v.object({ id: v.string() });
 
+/** Lock every retained copy before a case-law erasure mutates any of them. */
+export const lockCaseLawDecisionErasureRows = async ({
+  tx,
+  decisionIds,
+}: {
+  tx: ExecuteTransaction;
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+}): Promise<void> => {
+  if (decisionIds.length === 0) {
+    return;
+  }
+  await tx.execute(sql`
+    SELECT id FROM case_law_decisions
+    WHERE id IN (${sql.join(
+      decisionIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+    ORDER BY id
+    FOR UPDATE
+  `);
+};
+
 /**
  * The citing decisions a reviewed-label run admits: the unredacted ones among
  * `decisionIds`. A write (`lock: true`) holds them FOR SHARE in id order until
