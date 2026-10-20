@@ -719,7 +719,41 @@ const nestedRelationSelectsOwnedColumns = ({
           });
     });
   };
-  return relationsSelectOwnedColumns(objectProperty(context, options, "with"));
+  // Every `with` that may take effect counts: an unresolved later spread does
+  // not prove an earlier owned selection was overridden.
+  return withCandidates(context, options).some(relationsSelectOwnedColumns);
+};
+
+const withCandidates = (
+  context: ScopeContext,
+  options: unknown,
+  seen = new Set<unknown>(),
+): AstNode[] => {
+  if (
+    !isAstNode(options) ||
+    options.type !== "ObjectExpression" ||
+    !Array.isArray(options.properties) ||
+    seen.has(options)
+  ) {
+    return [];
+  }
+  seen.add(options);
+  return options.properties.flatMap((property): AstNode[] => {
+    if (!isAstNode(property)) {
+      return [];
+    }
+    if (property.type === "SpreadElement") {
+      const spread = stableValue(context, property.argument);
+      return spread === null ? [] : withCandidates(context, spread, seen);
+    }
+    if (property.type !== "Property" || !isAstNode(property.value)) {
+      return [];
+    }
+    const key = property.computed
+      ? staticStringValue(property.key)
+      : getPropertyName(property.key);
+    return key === "with" ? [property.value] : [];
+  });
 };
 
 const patternReadsOwnedColumns = (
