@@ -155,7 +155,9 @@ pub fn open_accessibility_settings() -> Result<(), String> {
     opener::open(
       "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
     )
-    .map_err(|_| "activity accessibility settings could not be opened".to_string())
+    .map_err(crate::logging::with_cause_logged(
+      "activity accessibility settings could not be opened",
+    ))
   }
   #[cfg(not(target_os = "macos"))]
   Err("activity accessibility settings are unavailable".to_string())

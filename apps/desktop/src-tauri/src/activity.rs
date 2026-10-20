@@ -28,6 +28,7 @@ use crate::{
   keychain::{self, LocalDataKey, LocalDataKeyLookup},
   local_store::{self, StoreKey},
   local_window::ActivityCaller,
+  logging::with_cause_logged,
 };
 
 pub const CHANGED_EVENT: &str = "activity-timeline-changed";
@@ -509,7 +510,7 @@ fn store_root() -> Option<PathBuf> {
 
 pub fn parse_date(raw: &str) -> Result<NaiveDate, String> {
   NaiveDate::parse_from_str(raw, DATE_FORMAT)
-    .map_err(|_| "activity date is invalid".to_string())
+    .map_err(with_cause_logged("activity date is invalid"))
 }
 
 pub fn format_date(date: NaiveDate) -> String {
@@ -526,10 +527,10 @@ fn validate_draftable_range<T: TimeZone>(
   drafted: &[ActivityInterval],
 ) -> Result<ActivityInterval, String> {
   let start = DateTime::parse_from_rfc3339(start)
-    .map_err(|_| "invalid activity range".to_string())?
+    .map_err(with_cause_logged("invalid activity range"))?
     .with_timezone(&Utc);
   let end = DateTime::parse_from_rfc3339(end)
-    .map_err(|_| "invalid activity range".to_string())?
+    .map_err(with_cause_logged("invalid activity range"))?
     .with_timezone(&Utc);
   if start >= end
     || start.with_timezone(zone).date_naive() != date
@@ -1722,7 +1723,10 @@ impl ActivityManager {
     for range in pending.ranges.iter().flatten() {
       intervals.push(
         validate_draftable_range(zone, date, &range.start, &range.end, &drafted)
-          .map_err(|_| BatchReservationError::InvalidRange)?,
+          .map_err(crate::logging::replaced_logged(
+            "activity range cannot be drafted",
+            BatchReservationError::InvalidRange,
+          ))?,
       );
     }
     intervals.sort_by_key(|(start, _)| *start);
@@ -1862,10 +1866,10 @@ impl ActivityManager {
       .iter()
       .map(|marker| {
         let start = DateTime::parse_from_rfc3339(&marker.start)
-          .map_err(|_| "invalid drafted activity range".to_string())?
+          .map_err(with_cause_logged("invalid drafted activity range"))?
           .with_timezone(&Utc);
         let end = DateTime::parse_from_rfc3339(&marker.end)
-          .map_err(|_| "invalid drafted activity range".to_string())?
+          .map_err(with_cause_logged("invalid drafted activity range"))?
           .with_timezone(&Utc);
         Ok((start, end))
       })
@@ -1938,7 +1942,7 @@ impl ActivityManager {
       &self.other_account_store_root()?,
       namespace,
     )
-    .map_err(|_| "activity history could not be listed".to_string())
+    .map_err(with_cause_logged("activity history could not be listed"))
   }
 
   pub fn delete_other_account_history(
@@ -2348,7 +2352,7 @@ pub fn set_recording_from_tray(
     .ok_or_else(|| "activity timeline is unavailable".to_string())?;
   let mut manager = state
     .lock()
-    .map_err(|_| "activity timeline is unavailable".to_string())?;
+    .map_err(with_cause_logged("activity timeline is unavailable"))?;
   manager.require_account_binding(&binding)?;
   if gates
     .account_binding(DesktopFeature::ActivityTimeline)
@@ -2453,7 +2457,7 @@ pub fn unload_account(app: &AppHandle) {
 fn disable_feature(state: &ActivityAppState, now: DateTime<Utc>) -> Result<(), String> {
   state
     .lock()
-    .map_err(|_| "activity timeline is unavailable".to_string())?
+    .map_err(with_cause_logged("activity timeline is unavailable"))?
     .stop(now)
 }
 
