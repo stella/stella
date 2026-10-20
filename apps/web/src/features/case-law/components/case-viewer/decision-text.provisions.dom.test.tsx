@@ -384,7 +384,7 @@ describe("provision wording below decision paragraphs", () => {
 
 describe("compact provision cards", () => {
   const firstCard = (view: Awaited<ReturnType<typeof renderDecision>>) =>
-    view.container.querySelector('[data-slot="provision-card"]');
+    view.container.querySelector<HTMLElement>('[data-slot="provision-card"]');
 
   const withTarget = (
     patch: (
@@ -421,7 +421,7 @@ describe("compact provision cards", () => {
     const card =
       firstCard(view) ?? panic("Expected an expanded provision card");
     expect(card.getAttribute("aria-expanded")).toBe("false");
-    const open = within(card as HTMLElement).getByRole("button", {
+    const open = within(card).getByRole("button", {
       name: messages.statutes.openProvision,
     });
     // Enter on the nested button leaves the card as it was: the browser's own
