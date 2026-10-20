@@ -125,8 +125,12 @@ test("apply resolves the retired id and reverse restores identity ownership", as
       await applyRepublishedDecisionBatch(
         tx,
         candidates,
-        async (candidate, direction) => {
-          reconciled.push(`${direction}:${candidate.duplicate.id}`);
+        async (applied, direction) => {
+          reconciled.push(
+            ...applied.map(
+              (candidate) => `${direction}:${candidate.duplicate.id}`,
+            ),
+          );
         },
       ),
     ).toBe(1);
@@ -170,8 +174,12 @@ test("apply resolves the retired id and reverse restores identity ownership", as
       await reverseRepublishedDecisionBatch(
         tx,
         10,
-        async (candidate, direction) => {
-          reconciled.push(`${direction}:${candidate.duplicate.id}`);
+        async (reversed, direction) => {
+          reconciled.push(
+            ...reversed.map(
+              (candidate) => `${direction}:${candidate.duplicate.id}`,
+            ),
+          );
         },
       ),
     ).toBe(1);
@@ -425,10 +433,12 @@ test("reverse restores the projection desired state for every repaired pair", as
     await applyRepublishedDecisionBatch(
       tx,
       candidates,
-      async (candidate, direction) => {
+      async (applied, direction) => {
         await tx
           .insert(corpusIndexProjectionStates)
-          .values(desiredValues(candidate, direction))
+          .values(
+            applied.flatMap((candidate) => desiredValues(candidate, direction)),
+          )
           .onConflictDoUpdate(conflict);
       },
     );
@@ -453,10 +463,14 @@ test("reverse restores the projection desired state for every repaired pair", as
     await reverseRepublishedDecisionBatch(
       tx,
       10,
-      async (candidate, direction) => {
+      async (reversed, direction) => {
         await tx
           .insert(corpusIndexProjectionStates)
-          .values(desiredValues(candidate, direction))
+          .values(
+            reversed.flatMap((candidate) =>
+              desiredValues(candidate, direction),
+            ),
+          )
           .onConflictDoUpdate(conflict);
       },
     );

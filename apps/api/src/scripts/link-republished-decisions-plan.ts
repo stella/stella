@@ -279,9 +279,18 @@ export const selectRepublishedDecisionReport = async (
 };
 
 type Reconcile = (
-  candidate: RepublishedDecisionCandidate,
+  candidates: readonly RepublishedDecisionCandidate[],
   direction: "apply" | "reverse",
 ) => Promise<void>;
+
+const decisionIdArray = (
+  candidates: readonly RepublishedDecisionCandidate[],
+  candidateSide: "canonical" | "duplicate",
+): SQL =>
+  sql`ARRAY[${sql.join(
+    candidates.map((candidate) => sql`${candidate[candidateSide].id}`),
+    sql`, `,
+  )}]::uuid[]`;
 
 /** Apply one selected page atomically. No decision or identity row is inserted. */
 export const applyRepublishedDecisionBatch = async (
@@ -289,42 +298,58 @@ export const applyRepublishedDecisionBatch = async (
   candidates: readonly RepublishedDecisionCandidate[],
   reconcile: Reconcile,
 ): Promise<number> => {
-  let applied = 0;
-  for (const candidate of candidates) {
-    const identities = executedRows(
-      await tx.execute(sql`
-      UPDATE case_law_decision_source_identities
-         SET decision_id = ${candidate.canonical.id}
-       WHERE decision_id = ${candidate.duplicate.id}
-      RETURNING source_id AS "sourceId", source_document_id AS "sourceDocumentId"
-    `),
-    );
-    if (identities.length === 0) {
-      continue;
-    }
+  if (candidates.length === 0) {
+    return 0;
+  }
+  const rows = executedRows(
     await tx.execute(sql`
-      INSERT INTO case_law_decision_aliases (retired_decision_id, canonical_decision_id)
-      VALUES (${candidate.duplicate.id}, ${candidate.canonical.id})
-    `);
-    for (const identity of identities) {
-      if (
-        !isRecord(identity) ||
-        typeof identity["sourceId"] !== "string" ||
-        typeof identity["sourceDocumentId"] !== "string"
-      ) {
-        return panic("Republished-decision apply returned an invalid identity");
-      }
-      await tx.execute(sql`
+      WITH pairs AS MATERIALIZED (
+        SELECT retired_id, canonical_id
+          FROM unnest(
+            ${decisionIdArray(candidates, "duplicate")},
+            ${decisionIdArray(candidates, "canonical")}
+          ) AS pair(retired_id, canonical_id)
+      ), moved AS (
+        UPDATE case_law_decision_source_identities identity
+           SET decision_id = pair.canonical_id
+          FROM pairs pair
+         WHERE identity.decision_id = pair.retired_id
+        RETURNING pair.retired_id, pair.canonical_id,
+                  identity.source_id, identity.source_document_id
+      ), aliases AS (
+        INSERT INTO case_law_decision_aliases
+          (retired_decision_id, canonical_decision_id)
+        SELECT DISTINCT retired_id, canonical_id
+          FROM moved
+        RETURNING retired_decision_id
+      ), moved_identities AS (
         INSERT INTO case_law_decision_alias_moved_identities
           (retired_decision_id, source_id, source_document_id)
-        VALUES
-          (${candidate.duplicate.id}, ${identity["sourceId"]}, ${identity["sourceDocumentId"]})
-      `);
+        SELECT moved.retired_id, moved.source_id, moved.source_document_id
+          FROM moved
+          JOIN aliases ON aliases.retired_decision_id = moved.retired_id
+        RETURNING retired_decision_id
+      )
+      SELECT aliases.retired_decision_id AS "retiredId"
+        FROM aliases
+       WHERE (SELECT count(*) FROM moved_identities) >= 0
+       ORDER BY aliases.retired_decision_id
+    `),
+  );
+  const appliedIds = new Set<string>();
+  for (const row of rows) {
+    if (!isRecord(row) || typeof row["retiredId"] !== "string") {
+      return panic("Republished-decision apply returned an invalid row");
     }
-    await reconcile(candidate, "apply");
-    applied++;
+    appliedIds.add(row["retiredId"]);
   }
-  return applied;
+  const applied = candidates.filter(({ duplicate }) =>
+    appliedIds.has(duplicate.id),
+  );
+  if (applied.length > 0) {
+    await reconcile(applied, "apply");
+  }
+  return applied.length;
 };
 
 /** Undo aliases in a bounded page and restore identities to their stored owner. */
@@ -335,31 +360,55 @@ export const reverseRepublishedDecisionBatch = async (
 ): Promise<number> => {
   const rows = executedRows(
     await tx.execute(sql`
-    SELECT a.retired_decision_id AS "retiredId",
-           a.canonical_decision_id AS "canonicalId",
-           d.source_id AS "sourceId",
-           ds.adapter_key AS "retiredAdapterKey",
-           d.created_at AS "retiredCreatedAt",
-           cs.adapter_key AS "canonicalAdapterKey",
-           c.created_at AS "canonicalCreatedAt"
-      FROM case_law_decision_aliases a
-      JOIN case_law_decisions d ON d.id = a.retired_decision_id
-      JOIN case_law_decisions c ON c.id = a.canonical_decision_id
-      JOIN case_law_sources ds ON ds.id = d.source_id
-      JOIN case_law_sources cs ON cs.id = c.source_id
-     WHERE d.source_id <> c.source_id
-       AND EXISTS (SELECT 1 FROM case_law_decision_alias_moved_identities m
-                    WHERE m.retired_decision_id = a.retired_decision_id)
-     ORDER BY a.retired_decision_id
-     LIMIT ${limit}
+    WITH selected AS MATERIALIZED (
+      SELECT a.retired_decision_id, a.canonical_decision_id,
+             ds.adapter_key AS retired_adapter_key,
+             d.created_at AS retired_created_at,
+             cs.adapter_key AS canonical_adapter_key,
+             c.created_at AS canonical_created_at
+        FROM case_law_decision_aliases a
+        JOIN case_law_decisions d ON d.id = a.retired_decision_id
+        JOIN case_law_decisions c ON c.id = a.canonical_decision_id
+        JOIN case_law_sources ds ON ds.id = d.source_id
+        JOIN case_law_sources cs ON cs.id = c.source_id
+       WHERE d.source_id <> c.source_id
+         AND EXISTS (SELECT 1 FROM case_law_decision_alias_moved_identities m
+                      WHERE m.retired_decision_id = a.retired_decision_id)
+       ORDER BY a.retired_decision_id
+       LIMIT ${limit}
+    ), restored AS (
+      UPDATE case_law_decision_source_identities identity
+         SET decision_id = selected.retired_decision_id
+        FROM selected
+       WHERE identity.decision_id = selected.canonical_decision_id
+         AND (identity.source_id, identity.source_document_id) IN (
+           SELECT moved.source_id, moved.source_document_id
+             FROM case_law_decision_alias_moved_identities moved
+            WHERE moved.retired_decision_id = selected.retired_decision_id
+         )
+      RETURNING selected.retired_decision_id
+    ), restored_page AS (
+      SELECT count(*) AS restored_count FROM restored
+    ), deleted AS (
+      DELETE FROM case_law_decision_aliases alias
+       USING selected, restored_page
+       WHERE alias.retired_decision_id = selected.retired_decision_id
+      RETURNING selected.retired_decision_id AS "retiredId",
+                selected.canonical_decision_id AS "canonicalId",
+                selected.retired_adapter_key AS "retiredAdapterKey",
+                selected.retired_created_at AS "retiredCreatedAt",
+                selected.canonical_adapter_key AS "canonicalAdapterKey",
+                selected.canonical_created_at AS "canonicalCreatedAt"
+    )
+    SELECT * FROM deleted ORDER BY "retiredId"
   `),
   );
+  const reversed: RepublishedDecisionCandidate[] = [];
   for (const value of rows) {
     if (
       !isRecord(value) ||
       typeof value["retiredId"] !== "string" ||
-      typeof value["canonicalId"] !== "string" ||
-      typeof value["sourceId"] !== "string"
+      typeof value["canonicalId"] !== "string"
     ) {
       return panic(
         "Republished-decision reverse selection returned an invalid row",
@@ -383,20 +432,10 @@ export const reverseRepublishedDecisionBatch = async (
       },
       "left",
     );
-    await tx.execute(sql`
-      UPDATE case_law_decision_source_identities
-         SET decision_id = ${retiredId}
-       WHERE decision_id = ${canonicalId}
-         AND (source_id, source_document_id) IN (
-           SELECT source_id, source_document_id
-             FROM case_law_decision_alias_moved_identities
-            WHERE retired_decision_id = ${retiredId}
-         )
-    `);
-    await tx.execute(
-      sql`DELETE FROM case_law_decision_aliases WHERE retired_decision_id = ${retiredId}`,
-    );
-    await reconcile({ canonical, duplicate: retired }, "reverse");
+    reversed.push({ canonical, duplicate: retired });
   }
-  return rows.length;
+  if (reversed.length > 0) {
+    await reconcile(reversed, "reverse");
+  }
+  return reversed.length;
 };

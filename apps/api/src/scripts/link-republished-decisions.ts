@@ -60,7 +60,7 @@ await runScriptWithErrorOutput(async () => {
   const reconcile =
     (tx: Transaction) =>
     async (
-      candidate: RepublishedDecisionCandidate,
+      candidates: readonly RepublishedDecisionCandidate[],
       direction: "apply" | "reverse",
     ): Promise<void> => {
       const synchronize = async (
@@ -84,8 +84,14 @@ await runScriptWithErrorOutput(async () => {
           subject,
         });
       };
-      await synchronize(candidate.canonical.id, false);
-      await synchronize(candidate.duplicate.id, direction === "apply");
+      const reconciliations: Promise<void>[] = [];
+      for (const candidate of candidates) {
+        reconciliations.push(
+          synchronize(candidate.canonical.id, false),
+          synchronize(candidate.duplicate.id, direction === "apply"),
+        );
+      }
+      await Promise.all(reconciliations);
     };
 
   if (reverse) {

@@ -24,7 +24,7 @@ const stored = [{ decisionId: "canonical", identity: complete }];
 describe("cross-source ruling identity", () => {
   test("all registered source pairs converge on the same complete identity", async () => {
     await assertProperty(
-      "republished ruling identity converges across registered source pairs",
+      "all registered source pairs converge on the same complete identity",
       fc.property(
         fc.constantFrom(...listAdapterKeys()),
         fc.constantFrom(...listAdapterKeys()),
