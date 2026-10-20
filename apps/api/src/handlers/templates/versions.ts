@@ -3,6 +3,7 @@ import { and, desc, eq, lt } from "drizzle-orm";
 import { status } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateVersions } from "@/api/db/schema";
@@ -20,6 +21,7 @@ import {
   encodePaginationCursor,
 } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import {
   readStoredTemplateFile,
   STORED_TEMPLATE_FILE_COLUMNS,
@@ -154,6 +156,8 @@ export const listTemplateVersionsHandler = async ({
 // ── Get version ──────────────────────────────────────
 
 type GetVersionProps = {
+  userId: SafeId<"user">;
+  source: SignedDownloadSource;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: SafeId<"template">;
@@ -162,6 +166,8 @@ type GetVersionProps = {
 };
 
 export const getTemplateVersionHandler = async ({
+  userId,
+  source,
   scopedDb,
   organizationId,
   templateId,
@@ -198,10 +204,13 @@ export const getTemplateVersionHandler = async ({
     }
 
     const downloadUrl = await auditedPresignDownload({
+      readSessionAuthority: ownerSyntheticSessionAuthorityReader,
       tx,
       recordAuditEvent,
       resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
       resourceId: templateId,
+      userId,
+      source,
       s3Key,
       expiresInSeconds: PRESIGN_EXPIRES_IN,
       fileName: template.fileName,

@@ -56,6 +56,7 @@ import {
   installPgliteTimeEntryTimerSignals,
   installPgliteSanctionsMonitoringTriggers,
   installPgliteTreeParentGuards,
+  installPgliteSyntheticMembershipTrigger,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
 import {
@@ -799,6 +800,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteSyntheticMembershipTrigger(db);
   await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);

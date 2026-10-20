@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -34,7 +35,7 @@ const config = {
 
 export default createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, recordAuditEvent }) {
+  async function* ({ safeDb, session, params, user, recordAuditEvent }) {
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const [styleSet] = await tx
@@ -65,10 +66,13 @@ export default createSafeRootHandler(
         }
 
         const presignedUrl = await auditedPresignDownload({
+          readSessionAuthority: ownerSyntheticSessionAuthorityReader,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
           resourceId: styleSet.id,
+          userId: user.id,
+          source: { kind: "request", sessionId: session.id },
           s3Key,
           expiresInSeconds: STYLE_SET_DOWNLOAD_TTL_SECONDS,
           fileName: styleSet.fileName,

@@ -649,7 +649,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.8.0",
+      "version": "0.8.1",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -846,7 +846,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "5.1.0",
+      "version": "5.1.1",
       "bin": {
         "stella": "./dist/cli.js",
       },

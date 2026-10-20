@@ -255,6 +255,7 @@ const objectOptions = (
     dataClass: "customer",
     managedAIResidency: "eu",
     organizationId: null,
+    userId: null,
     orgAIConfig: null,
     outputSchema: fixture.schema,
     prompt: "Answer from the attached material.",
