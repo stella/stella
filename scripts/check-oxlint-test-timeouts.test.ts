@@ -8,7 +8,7 @@ import { repositoryCustomLintRunnerViolations } from "./check-custom-lint-test-r
 import { customLintTestTimeoutViolations as checkProductionTimeouts } from "./check-oxlint-test-timeouts.ts";
 
 const checkTimeouts = (
-  options: Parameters<typeof checkProductionTimeouts>[0],
+  options: Parameters<typeof checkProductionTimeouts>[0] = {},
 ) =>
   checkProductionTimeouts({
     ...options,
