@@ -659,12 +659,18 @@ export const invokeStaticMcpTool = async ({
   // One admission per tool call: work nested inside an admitted call shares it.
   const handlerContext = admitsHere ? withoutAdmission(context) : context;
 
-  const invoke = async (): Promise<McpToolResponse> => {
-    const earlyResponse = await beforeInvoke?.(scoped.args);
-    if (earlyResponse !== undefined && earlyResponse !== null) {
-      return earlyResponse;
-    }
+  // Confirmation and resource-access preflight answer before admission, so a
+  // refused or unconfirmed call never spends action budget.
+  const earlyResponse = await beforeInvoke?.(scoped.args);
+  if (earlyResponse !== undefined && earlyResponse !== null) {
+    return {
+      status: "invoked",
+      response: earlyResponse,
+      inputNotes: normalized.notes,
+    };
+  }
 
+  const invoke = async (): Promise<McpToolResponse> => {
     if (PUBLIC_MCP_TOOL_DEFINITION in definition) {
       const publicContext = createPublicMcpHandlerContext(context);
       if (publicContext.isErr()) {
