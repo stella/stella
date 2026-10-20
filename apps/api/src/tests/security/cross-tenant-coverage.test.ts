@@ -136,6 +136,10 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // workspace-scoped surface the A-vs-B RLS matrix can meaningfully isolate.
   sharepoint: WAIVER_REASON.noTenantReadSurface,
   smoke: WAIVER_REASON.noTenantReadSurface,
+  // Key-authenticated session creation writes only the fixed dedicated
+  // principal and organization; it accepts no tenant identity and exposes no
+  // tenant-scoped read surface.
+  synthetic: WAIVER_REASON.noTenantReadSurface,
   // Public corpus ingestion has no tenant data or tenant-facing read surface.
   "soft-law": WAIVER_REASON.noTenantReadSurface,
   uploads: WAIVER_REASON.noTenantReadSurface,

@@ -555,6 +555,7 @@ export const compactChatMessagesForModel = async ({
       const result = await Result.tryPromise({
         try: async () =>
           await generateTanStackTextForTask({
+            userId: admission.userId,
             dataClass: "customer",
             abortSignal,
             analytics: aiAnalytics,
@@ -628,6 +629,7 @@ export const compactModelMessagesForModel = async ({
       const result = await Result.tryPromise({
         try: async () =>
           await generateTanStackTextForTask({
+            userId: admission.userId,
             dataClass: "customer",
             abortSignal,
             analytics: aiAnalytics,

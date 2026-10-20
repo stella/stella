@@ -12,6 +12,7 @@ import {
   openCaseLawDecision,
   openReadCaseLawDecision,
 } from "@/components/chat/case-law-open";
+import { chatAppOrigins } from "@/components/chat/chat-app-origins";
 import { CitationReadFeedback } from "@/components/chat/chat-decision-citation-feedback";
 import {
   readyCitationMetadata,
@@ -246,14 +247,12 @@ export const ChatAnswerDecisionProvider = ({
   children: ReactNode;
 }) => {
   const storedSources = useExternalSourceStore((state) => state.sourcesByUrl);
+  const appOrigins = chatAppOrigins();
   const { uniqueExternalSources } = collectSourceChipEntries({
+    appOrigins,
     parts: message.parts,
   });
   const sources = [...uniqueExternalSources, ...Object.values(storedSources)];
-  const appOrigins = new Set([
-    new URL(env.VITE_PUBLIC_APP_URL).origin,
-    ...(typeof window === "undefined" ? [] : [window.location.origin]),
-  ]);
   const targets = chatAnswerDecisionTargets({
     markdownDocuments: chatAnswerMarkdownDocuments(message, isAwaitingUser),
     sources,

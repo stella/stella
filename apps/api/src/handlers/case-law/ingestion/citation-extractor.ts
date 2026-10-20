@@ -796,9 +796,9 @@ export const CUE_GATED_CITATION_PATTERNS = [
   },
   {
     id: "pl-uokik",
-    // Only evaluate the unbounded division lookbehind where a decision
-    // number can start; retrying it at every separator makes long runs
-    // quadratic.
+    // The leading capital check runs the unbounded division lookbehind only
+    // where a number can start: tried at every position of a whitespace run,
+    // it rescans the run each time.
     pattern: new RegExp(
       String.raw`(?=\p{Lu})(?<![${DECISION_DASH_CLASS_SOURCE}\p{L}\d])(?<!\b[IVX]+\s+)(?<caseNumber>${PL_UOKIK_CITED_DECISION_NUMBER_SOURCE})(?![${DECISION_DASH_CLASS_SOURCE}\p{L}\d/])`,
       "gu",

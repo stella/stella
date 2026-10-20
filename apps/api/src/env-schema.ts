@@ -237,6 +237,26 @@ export const envApiServerSchema = {
    * deployments only (see handlers/smoke/routes.ts).
    */
   SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
+  SYNTHETIC_SESSION_KEYS: v.optional(
+    v.pipe(
+      v.string(),
+      v.parseJson(),
+      v.array(
+        v.strictObject({
+          label: v.pipe(
+            v.string(),
+            v.minLength(1),
+            v.maxLength(64),
+            v.regex(/^[A-Za-z0-9_-]+$/u),
+          ),
+          sha256: v.pipe(v.string(), v.regex(/^[a-fA-F0-9]{64}$/u)),
+          notAfter: v.pipe(v.string(), v.isoTimestamp()),
+        }),
+      ),
+      v.minLength(1),
+      v.maxLength(2),
+    ),
+  ),
   SESSION_TOKEN_ROTATION_ENABLED: featureFlagSchema,
   SESSION_LIFETIME_CAP_ENABLED: featureFlagSchema,
   /**
