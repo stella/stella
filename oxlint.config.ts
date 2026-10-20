@@ -455,6 +455,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-untranslated-jsx-literal.fixture.tsx", [
     "no-untranslated-jsx-literal/no-untranslated-jsx-literal",
   ]),
+  fixtureRuleOverride("narrative-prose-component.fixture.tsx", [
+    "narrative-prose-component/require-prose",
+  ]),
   fixtureRuleOverride("bun-test-hygiene.fixture.ts", [
     "bun-test-hygiene/no-focused-tests",
     "bun-test-hygiene/no-disabled-tests",
@@ -1566,6 +1569,7 @@ const config = defineConfig({
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
     "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
+    "./.oxlint-plugins/narrative-prose-component.ts",
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
     "./.oxlint-plugins/no-raw-deployment-feature-read.ts",
@@ -1711,6 +1715,20 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      // Page-level narrative copy owns a readable measure. Reusable component
+      // internals and task-shaped surfaces are outside this narrow enrolment.
+      files: [
+        "apps/landing/src/components/ProductPage.astro",
+        "apps/landing/src/pages/security.astro",
+        "apps/landing/src/pages/support.astro",
+        "apps/web/src/routes/tools/-components/public-tools-index.tsx",
+        ".oxlint-plugins/__fixtures__/narrative-prose-component.fixture.tsx",
+      ],
+      rules: {
+        "narrative-prose-component/require-prose": "error",
+      },
+    },
     {
       files: [
         "apps/api/**/*.{ts,tsx,js,mjs}",
