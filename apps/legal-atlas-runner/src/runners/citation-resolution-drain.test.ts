@@ -28,6 +28,7 @@ import {
   type CitationResolutionDrainTiming,
   type CitationResolutionStep,
   runCitationResolutionDrain,
+  tryResolveCitationBatch,
 } from "./citation-resolution-drain";
 
 const TIMING = {
@@ -62,6 +63,31 @@ const DRAINED: CitationResolutionStep = {
   type: CITATION_RESOLUTION_STEP.DRAINED,
 };
 const BUSY: CitationResolutionStep = { type: CITATION_RESOLUTION_STEP.BUSY };
+
+test("an abort between citation items returns committed progress", async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  const outcome = await tryResolveCitationBatch({
+    limit: 3,
+    signal: controller.signal,
+    resolveBatch: async () => {
+      calls += 1;
+      if (calls === 1) {
+        controller.abort();
+      }
+      return {
+        ...counts({ scanned: 1, resolved: 1 }),
+        cursor: { citingDecisionId: "decision", citationId: "citation" },
+      };
+    },
+  });
+
+  expect(outcome).toEqual({
+    type: "aborted",
+    counts: counts({ scanned: 1, resolved: 1 }),
+  });
+  expect(calls).toBe(1);
+});
 
 type DrainEvent =
   | { type: "batch"; atMs: number }

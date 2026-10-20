@@ -383,6 +383,7 @@ type RunUnitOptions = {
   now?: () => Date;
   /** Instant unless a test needs the politeness pause to consume the budget. */
   sleep?: (ms: number) => Promise<void>;
+  signal?: AbortSignal | undefined;
 };
 
 const runUnitWith = async ({
@@ -394,6 +395,7 @@ const runUnitWith = async ({
   sliceIngestBudget,
   sliceRetries = new Map(),
   sourceId,
+  signal,
 }: RunUnitOptions) =>
   await runReconciliationWorkUnit({
     adapterKey: "engine-fixture",
@@ -406,7 +408,72 @@ const runUnitWith = async ({
     sleep,
     sliceIngestBudget,
     sliceRetries,
+    signal,
   });
+
+test("an aborted unit stops a pending publisher fetch without another request", async () => {
+  const sourceId = await seedSource();
+  const controller = new AbortController();
+  let fetches = 0;
+  const reconciliation: SourceReconciliation = {
+    ...stubReconciliation,
+    listSlicePage: async ({ signal }) => {
+      fetches += 1;
+      if (signal === undefined) {
+        return panic("reconciliation listing signal was not provided");
+      }
+      await new Promise<void>((_resolve, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => reject(new Error("Listing aborted")),
+          { once: true },
+        );
+      });
+      return panic("aborted listing fetch resolved");
+    },
+  };
+
+  const pending = runUnitWith({
+    sourceId,
+    reconciliation,
+    signal: controller.signal,
+  });
+  await Bun.sleep(10);
+  controller.abort();
+
+  expect(await pending).toEqual({ type: "aborted" });
+  expect(fetches).toBe(1);
+});
+
+test("an aborted reconciliation backoff sleep returns immediately", async () => {
+  const sourceId = await seedSource();
+  const controller = new AbortController();
+  let fetches = 0;
+  const sleepStarted = Promise.withResolvers<boolean>();
+  const reconciliation: SourceReconciliation = {
+    ...stubReconciliation,
+    listSlicePage: async () => {
+      fetches += 1;
+      return { items: [], totalPages: 2 };
+    },
+  };
+  const pending = runUnitWith({
+    sourceId,
+    reconciliation,
+    signal: controller.signal,
+    sleep: async () => {
+      sleepStarted.resolve(true);
+      await new Promise<void>(() => {
+        // Intentionally pending: the abort signal must end the raced wait.
+      });
+    },
+  });
+  await sleepStarted.promise;
+  controller.abort();
+
+  expect(await pending).toEqual({ type: "aborted" });
+  expect(fetches).toBe(1);
+});
 
 const runUnit = async (
   sourceId: SafeId<"caseLawSource">,

@@ -35,6 +35,27 @@ export type ListedSlice = {
   duplicate: number;
 };
 
+const sleepUntilDelayOrAbort = async (
+  sleep: (ms: number) => Promise<void>,
+  ms: number,
+  signal: AbortSignal | undefined,
+): Promise<void> => {
+  if (signal === undefined) {
+    await sleep(ms);
+    return;
+  }
+  await Promise.race([
+    sleep(ms),
+    new Promise<never>((_resolve, reject) => {
+      signal.addEventListener(
+        "abort",
+        () => reject(new Error("Reconciliation sleep aborted")),
+        { once: true },
+      );
+    }),
+  ]);
+};
+
 type ListReconciliationSliceOptions = {
   adapterKey: string;
   listSlicePage: SourceReconciliation["listSlicePage"];
@@ -44,6 +65,7 @@ type ListReconciliationSliceOptions = {
   /** One page request, wire time and any publisher-gate queueing together. */
   pageTimeoutMs: number;
   sleep: (ms: number) => Promise<void>;
+  signal?: AbortSignal | undefined;
 };
 
 /**
@@ -60,6 +82,7 @@ export const listReconciliationSlice = async ({
   pageTimeoutMs,
   slice,
   sleep,
+  signal,
 }: ListReconciliationSliceOptions): Promise<
   Result<ListedSlice, AdapterFetchError>
 > => {
@@ -70,13 +93,19 @@ export const listReconciliationSlice = async ({
     duplicate: 0,
   };
   for (let page = 0; ; page += 1) {
+    signal?.throwIfAborted();
     if (page > 0) {
-      await sleep(pageDelayMs);
+      await sleepUntilDelayOrAbort(sleep, pageDelayMs, signal);
+      signal?.throwIfAborted();
     }
+    const timeoutSignal = AbortSignal.timeout(pageTimeoutMs);
     const listed = await listSlicePage({
       slice,
       page,
-      signal: AbortSignal.timeout(pageTimeoutMs),
+      signal:
+        signal === undefined
+          ? timeoutSignal
+          : AbortSignal.any([signal, timeoutSignal]),
     });
     listing.listed += listed.items.length;
     for (const item of listed.items) {
