@@ -343,7 +343,7 @@ export type ReconciliationWorkUnitOptions = {
   signal?: AbortSignal | undefined;
 };
 
-const abortableSleep = async (
+export const abortableSleep = async (
   sleep: (ms: number) => Promise<void>,
   ms: number,
   signal: AbortSignal | undefined,
@@ -353,16 +353,14 @@ const abortableSleep = async (
     return;
   }
   signal.throwIfAborted();
-  await Promise.race([
-    sleep(ms),
-    new Promise<never>((_resolve, reject) => {
-      signal.addEventListener(
-        "abort",
-        () => reject(new Error("Reconciliation sleep aborted")),
-        { once: true },
-      );
-    }),
-  ]);
+  const abort = Promise.withResolvers<never>();
+  const onAbort = (): void => {
+    abort.reject(new Error("Reconciliation sleep aborted"));
+  };
+  signal.addEventListener("abort", onAbort, { once: true });
+  await Promise.race([sleep(ms), abort.promise]).finally(() => {
+    signal.removeEventListener("abort", onAbort);
+  });
 };
 
 const isSignalAborted = (signal: AbortSignal | undefined): boolean =>

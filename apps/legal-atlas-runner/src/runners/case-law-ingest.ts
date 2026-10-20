@@ -127,6 +127,7 @@ import {
   type RecomputeOutcome,
   nextRecomputeDelayMs,
 } from "./recompute-schedule";
+import { createSettlingDeadlineSignal } from "./settling-deadline";
 import {
   DEFERRED_DOCUMENT_DRAIN_TIMING,
   runDeferredDocumentDrain,
@@ -334,6 +335,7 @@ const RECONCILIATION_HARD_DEADLINE_MS =
   RECONCILIATION_LISTING_WORST_CASE_MS +
   RECONCILIATION_INGEST_BUDGET_MS +
   RECONCILIATION_UNIT_SETTLE_MS;
+const RECONCILIATION_ABORT_SETTLE_MARGIN_MS = RECONCILIATION_UNIT_SETTLE_MS;
 
 type Semaphore = {
   acquire: (signal?: AbortSignal) => Promise<void>;
@@ -1534,7 +1536,10 @@ export const runCaseLawIngest = async (
         runWorkUnit: async () => {
           const signal = AbortSignal.any([
             drainController.signal,
-            AbortSignal.timeout(RECONCILIATION_HARD_DEADLINE_MS),
+            createSettlingDeadlineSignal({
+              hardDeadlineMs: RECONCILIATION_HARD_DEADLINE_MS,
+              settleMarginMs: RECONCILIATION_ABORT_SETTLE_MARGIN_MS,
+            }),
           ]);
           const outcome = await runWithHardDeadline(
             "case-law-reconciliation",

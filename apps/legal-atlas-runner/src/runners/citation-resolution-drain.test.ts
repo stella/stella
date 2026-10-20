@@ -107,6 +107,30 @@ test("an abort between citation chunks returns committed progress", async () => 
   expect(limits).toEqual([25]);
 });
 
+test("a short citation chunk settles without another empty query", async () => {
+  const limits: number[] = [];
+  let calls = 0;
+  const outcome = await tryResolveCitationBatch({
+    limit: 100,
+    signal: new AbortController().signal,
+    resolveBatch: async (limit) => {
+      limits.push(limit);
+      calls += 1;
+      const scanned = calls === 1 ? limit : 10;
+      return {
+        ...counts({ scanned, resolved: scanned }),
+        cursor: { citingDecisionId: "decision", citationId: "citation" },
+      };
+    },
+  });
+
+  expect(outcome).toEqual({
+    type: "settled",
+    counts: counts({ scanned: 35, resolved: 35 }),
+  });
+  expect(limits).toEqual([25, 25]);
+});
+
 type DrainEvent =
   | { type: "batch"; atMs: number }
   | { type: "sleep"; ms: number };

@@ -102,14 +102,15 @@ export const tryResolveCitationBatch = async ({
     if (signal.aborted) {
       return { type: "aborted", counts };
     }
-    const batch = await resolveBatch(Math.min(remaining, CITATION_ABORT_CHUNK));
+    const chunkSize = Math.min(remaining, CITATION_ABORT_CHUNK);
+    const batch = await resolveBatch(chunkSize);
     if (batch === null) {
       return counts.scanned === 0
         ? { type: "busy" }
         : { type: "settled", counts };
     }
     addCitationCounts(counts, batch);
-    if (batch.scanned === 0) {
+    if (batch.scanned < chunkSize) {
       break;
     }
   }

@@ -5,6 +5,7 @@ import {
   beforeAll,
   beforeEach,
   expect,
+  spyOn,
   test,
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -37,6 +38,7 @@ import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/recon
 import {
   MAX_SLICE_INGEST_BUDGET,
   RECONCILIATION_INGEST_BUDGET_MS,
+  abortableSleep,
   runReconciliationWorkUnit,
 } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
@@ -475,6 +477,25 @@ test("an aborted reconciliation backoff sleep returns immediately", async () => 
 
   expect(await pending).toEqual({ type: "aborted" });
   expect(fetches).toBe(1);
+});
+
+test("completed reconciliation sleeps remove their aborted-signal listeners", async () => {
+  const controller = new AbortController();
+  const addListener = spyOn(controller.signal, "addEventListener");
+  const removeListener = spyOn(controller.signal, "removeEventListener");
+
+  for (let completed = 0; completed < 5; completed += 1) {
+    await abortableSleep(
+      async () => {
+        await Promise.resolve();
+      },
+      0,
+      controller.signal,
+    );
+  }
+
+  expect(addListener).toHaveBeenCalledTimes(5);
+  expect(removeListener).toHaveBeenCalledTimes(5);
 });
 
 const runUnit = async (

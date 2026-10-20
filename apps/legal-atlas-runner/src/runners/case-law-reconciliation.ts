@@ -139,11 +139,12 @@ const emptySummary = (): ReconciliationSweepSummary => ({
  * on; liveness is the daemon's own heartbeat.
  */
 const summaryIsEmpty = ({
+  aborted,
   errored,
   misconfigured,
   worked,
 }: ReconciliationSweepSummary): boolean =>
-  worked === 0 && errored === 0 && misconfigured === 0;
+  worked === 0 && aborted === 0 && errored === 0 && misconfigured === 0;
 
 const addCounts = (
   summary: ReconciliationSweepSummary,
