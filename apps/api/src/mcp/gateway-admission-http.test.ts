@@ -439,6 +439,44 @@ describe("gateway admission over HTTP", () => {
     expect(observed.admissions).toBe(0);
   });
 
+  test("a direct capability resource refusal spends no admission or limiter budget", async () => {
+    let limiterCalls = 0;
+    const observed = await runStaticTool({
+      args: {
+        capability: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
+        input: buildDocumentVersionUploadReservationInput({
+          entityId: INACCESSIBLE_ENTITY_ID,
+          file: {
+            mimeType: "application/octet-stream",
+            name: "agreement.docx",
+            sha256Hex: "a".repeat(64),
+            size: 1,
+          },
+          workspaceId: WORKSPACE_ID,
+        }),
+      },
+      context: createContext({
+        credentialPermissions: {
+          entity: ["update"],
+          workspace: ["read"],
+        },
+        scopedDb: inaccessibleResourceScopedDb,
+        testDependencies: {
+          consumeInvokeCapabilityRateLimit: async () => {
+            limiterCalls += 1;
+            return await Promise.resolve(asTestRaw({ ok: true }));
+          },
+        },
+      }),
+      mode: "advanced",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
+    });
+
+    expect(errorCodeOf(observed.result)).toBe("not_found");
+    expect(observed.admissions).toBe(0);
+    expect(limiterCalls).toBe(0);
+  });
+
   test("a permitted direct capability executor call admits once", async () => {
     const observed = await runStaticTool({
       args: {

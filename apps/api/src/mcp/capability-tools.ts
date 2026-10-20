@@ -2159,19 +2159,21 @@ const executeInvoke = async ({
     return permissionRefusal;
   }
 
+  // Resource access is preflight: a refusal spends no admission or limiter budget.
+  const referenceRefusal = await capabilityReferenceRefusal({
+    context,
+    config: endpoint.config,
+    body: validatedBody,
+    params: validatedParams,
+    query: validatedQuery,
+    entry,
+    confirm,
+  });
+  if (referenceRefusal !== null) {
+    return referenceRefusal;
+  }
+
   if (validateOnly) {
-    const referenceRefusal = await capabilityReferenceRefusal({
-      context,
-      config: endpoint.config,
-      body: validatedBody,
-      params: validatedParams,
-      query: validatedQuery,
-      entry,
-      confirm,
-    });
-    if (referenceRefusal !== null) {
-      return referenceRefusal;
-    }
     const validation = untypedStructuredEgressPlan({
       payload: { valid: true, capability: id },
       textFields: [],
@@ -2198,19 +2200,6 @@ const executeInvoke = async ({
     const rateLimitRefusal = await capabilityRateLimitRefusal(context, id);
     if (rateLimitRefusal !== null) {
       return rateLimitRefusal;
-    }
-
-    const referenceRefusal = await capabilityReferenceRefusal({
-      context,
-      config: endpoint.config,
-      body: validatedBody,
-      params: validatedParams,
-      query: validatedQuery,
-      entry,
-      confirm,
-    });
-    if (referenceRefusal !== null) {
-      return referenceRefusal;
     }
 
     const ctx = await synthesizeCapabilityContext({
