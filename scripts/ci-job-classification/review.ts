@@ -1,7 +1,7 @@
 import { TaggedError } from "better-result";
 
 import type { CLASSIFICATIONS } from "./classification-values";
-import type { JobShape } from "./yaml";
+import type { JobShape, ParsedDocument } from "./yaml";
 
 type PrivilegedJobOptions = {
   kind: (typeof CLASSIFICATIONS)[number] | undefined;
@@ -40,6 +40,17 @@ export const isPrivilegedJob = ({ kind, shape }: PrivilegedJobOptions) =>
   kind === "priority" ||
   hasPrivilege(shape.document) ||
   hasPrivilege(shape.job);
+
+type PrivilegedJobClosureOptions = PrivilegedJobOptions & {
+  reachableDocuments: Iterable<ParsedDocument>;
+};
+export const isPrivilegedJobClosure = ({
+  kind,
+  shape,
+  reachableDocuments,
+}: PrivilegedJobClosureOptions) =>
+  isPrivilegedJob({ kind, shape }) ||
+  [...reachableDocuments].some((document) => document.privileged);
 
 export class ReviewRequiredError extends TaggedError("ReviewRequiredError")<{
   message: string;

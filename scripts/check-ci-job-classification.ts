@@ -5,92 +5,70 @@ import path from "node:path";
 import {
   generateClassification,
   readClassificationInputs,
+  readClassificationInputsAtRevision,
 } from "./ci-job-classification/generate";
-import {
-  isPrivilegedJob,
-  ReviewRequiredError,
-} from "./ci-job-classification/review";
-import { AdmissionError, parseDocument } from "./ci-job-classification/yaml";
+import type { DerivedJob } from "./ci-job-classification/generate";
+import { ReviewRequiredError } from "./ci-job-classification/review";
+import { AdmissionError } from "./ci-job-classification/yaml";
 
-const gitShow = (root: string, revision: string, file: string) => {
-  const result = Bun.spawnSync(
-    ["git", "-C", root, "show", `${revision}:${file}`],
-    {
-      stdout: "pipe",
-      stderr: "pipe",
+type ClassificationInputs = ReturnType<typeof readClassificationInputs>;
+const generateWithJobs = (inputs: ClassificationInputs) => {
+  let jobs: ReadonlyMap<string, DerivedJob> | undefined;
+  const result = generateClassification({
+    ...inputs,
+    observeJobs: (derived) => {
+      jobs = derived;
     },
-  );
-  if (result.exitCode !== 0) {
-    throw new AdmissionError({
-      message:
-        new TextDecoder().decode(result.stderr).trim() ||
-        `Cannot read ${file} at ${revision}`,
-    });
+  });
+  if (!jobs) {
+    if (result.isErr()) {
+      throw result.error;
+    }
+    throw new AdmissionError({ message: "Derived jobs missing" });
   }
-  return new TextDecoder().decode(result.stdout);
+  return { jobs, result, workflowCount: inputs.reader.workflows().length };
 };
 
-const jobLocation = (key: string) => {
-  const separator = key.indexOf(":");
-  const slash = key.lastIndexOf("/");
-  return {
-    repository: key.slice(0, separator),
-    file: key.slice(separator + 1, slash),
-    id: key.slice(slash + 1),
-  };
-};
-
-const sensitiveChanges = (root: string, base: string) => {
-  const head = readClassificationInputs(root);
-  const baseDecisions = JSON.parse(
-    gitShow(root, base, ".github/ci-job-classification-decisions.json"),
-  ) as Record<
-    string,
-    { kind: "ordinary" | "support" | "priority"; reviewedDigest: string }
-  >;
-  return Object.entries(head.decisions).flatMap(([key, decision]) => {
-    const previous = baseDecisions[key];
-    if (previous?.reviewedDigest === decision.reviewedDigest) {
+const sensitiveChanges = (
+  head: ReturnType<typeof generateWithJobs>,
+  base: ReturnType<typeof generateWithJobs>,
+  baseDecisions: ClassificationInputs["decisions"],
+) =>
+  [...head.jobs.entries()].flatMap(([key, current]) => {
+    const previousDecision = baseDecisions[key];
+    if (previousDecision?.reviewedDigest === current.digest) {
       return [];
     }
-    const location = jobLocation(key);
-    const headParsed = parseDocument(
-      head.reader.read(location.repository, location.file),
-    );
-    if (headParsed.isErr()) {
-      throw headParsed.error;
-    }
-    const headJob = headParsed.value.jobs[location.id];
-    let basePrivileged = previous?.kind === "priority";
-    if (previous && location.repository === "candidate") {
-      const parsed = parseDocument(gitShow(root, base, location.file));
-      if (parsed.isErr()) {
-        throw parsed.error;
-      }
-      const job = parsed.value.jobs[location.id];
-      basePrivileged = job
-        ? isPrivilegedJob({ kind: previous.kind, shape: job.shape })
-        : basePrivileged;
-    }
-    return (headJob &&
-      isPrivilegedJob({ kind: decision.kind, shape: headJob.shape })) ||
-      basePrivileged
-      ? [key]
-      : [];
+    return current.privileged || base.jobs.get(key)?.privileged ? [key] : [];
   });
-};
 
 export const checkJobClassification = (root: string, base?: string) =>
   Result.try({
     try: () => {
-      const result = generateClassification(readClassificationInputs(root));
-      if (result.isErr()) {
-        throw result.error;
+      const head = generateWithJobs(readClassificationInputs(root));
+      const privilegedJobs = base
+        ? (() => {
+            const baseInputs = readClassificationInputsAtRevision(root, base);
+            const baseGeneration = generateWithJobs(baseInputs);
+            if (
+              baseGeneration.result.isErr() &&
+              !(baseGeneration.result.error instanceof ReviewRequiredError)
+            ) {
+              throw baseGeneration.result.error;
+            }
+            return sensitiveChanges(head, baseGeneration, baseInputs.decisions);
+          })()
+        : [];
+      if (head.result.isErr()) {
+        if (head.result.error instanceof ReviewRequiredError) {
+          throw new ReviewRequiredError({
+            message: head.result.error.message,
+            privilegedJobs,
+          });
+        }
+        throw head.result.error;
       }
-      return {
-        workflowCount: result.value.workflows.length,
-        privilegedJobs: base ? sensitiveChanges(root, base) : [],
-      };
+      return { workflowCount: head.workflowCount, privilegedJobs };
     },
     catch: (cause) =>
       cause instanceof ReviewRequiredError
@@ -103,21 +81,62 @@ export const checkJobClassification = (root: string, base?: string) =>
           }),
   });
 
+const gitMergeBase = (root: string) => {
+  const result = Bun.spawnSync(
+    ["git", "-C", root, "merge-base", "origin/main", "HEAD"],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (result.exitCode !== 0) {
+    throw new AdmissionError({
+      message:
+        new TextDecoder().decode(result.stderr).trim() ||
+        "Cannot determine merge-base of origin/main and HEAD",
+    });
+  }
+  return new TextDecoder().decode(result.stdout).trim();
+};
+
 const escapeAnnotation = (value: string) =>
   value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+
+type CliOptions = { root: string; base?: string };
+const parseCli = (args: string[]): CliOptions => {
+  if (args.length === 0) {
+    return { root: "." };
+  }
+  if (args.length === 1 && !args[0]?.startsWith("--")) {
+    return { root: args[0] ?? "." };
+  }
+  if (args.length === 2 && args[0] === "--base" && args[1]) {
+    return { root: ".", base: args[1] };
+  }
+  if (
+    args.length === 3 &&
+    !args[0]?.startsWith("--") &&
+    args[1] === "--base" &&
+    args[2]
+  ) {
+    return { root: args[0], base: args[2] };
+  }
+  throw new AdmissionError({
+    message:
+      "usage: bun scripts/check-ci-job-classification.ts [ROOT] [--base REF]",
+  });
+};
+
 if (import.meta.main) {
-  const args = Bun.argv.slice(2);
-  const root = args.at(0) ?? ".";
-  const base = args.at(1) === "--base" ? args.at(2) : undefined;
-  const result =
-    root.startsWith("--") || (args.length !== 1 && !(args.length === 3 && base))
-      ? Result.err(
-          new AdmissionError({
-            message:
-              "usage: bun scripts/check-ci-job-classification.ts [ROOT] [--base REF]",
-          }),
-        )
-      : checkJobClassification(path.resolve(root), base);
+  const cli = Result.try({
+    try: () => {
+      const options = parseCli(Bun.argv.slice(2));
+      const root = path.resolve(options.root);
+      return checkJobClassification(root, options.base ?? gitMergeBase(root));
+    },
+    catch: (cause) =>
+      new AdmissionError({
+        message: cause instanceof Error ? cause.message : "Invalid arguments",
+      }),
+  });
+  const result = cli.isOk() ? cli.value : cli;
   let privilegedJobs: string[] = [];
   if (result.isErr() && result.error instanceof ReviewRequiredError) {
     privilegedJobs = result.error.privilegedJobs;

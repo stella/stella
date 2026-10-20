@@ -15,6 +15,7 @@ export const CLASSIFICATION_EXCLUSIONS = {
 
 const DOCUMENT = v.strictObject({
   digest: v.string(),
+  privileged: v.boolean(),
   jobs: v.record(
     v.string(),
     v.strictObject({
@@ -214,6 +215,23 @@ end
 def digest(value)
   Digest::SHA256.hexdigest(JSON.generate(canon(value)))
 end
+def privileged(value)
+  case value
+  when String
+    value.match?(/secrets(?:\.|\[)|publish|deploy|release|self-hosted/i)
+  when Array
+    value.any? { |child| privileged(child) }
+  when Hash
+    value.any? do |key,child|
+      (key == 'publication-command' && child == true) ||
+        (key == 'secrets' && !child.nil?) ||
+        (key == 'permissions' && (child == 'write-all' || (child.is_a?(Hash) && child.value?('write')))) ||
+        privileged(child)
+    end
+  else
+    false
+  end
+end
 text = STDIN.read
 raise 'YAML source byte limit exceeded' if text.bytesize > MAX_SOURCE_BYTES
 tree = Psych.parse_stream(text)
@@ -261,7 +279,7 @@ if data.key?('runs')
 end
 add_action_dependencies(dependencies, ss, relocated_actions)
 shape['jobs'] = jobs.transform_values { |j| j['digest'] } if data.key?('jobs')
-STDOUT.write(JSON.generate({'digest'=>digest(shape),'jobs'=>jobs,'dependencies'=>dependencies,'relocatedActions'=>relocated_actions}))
+STDOUT.write(JSON.generate({'digest'=>digest(shape),'privileged'=>privileged(shape),'jobs'=>jobs,'dependencies'=>dependencies,'relocatedActions'=>relocated_actions}))
 `;
 
 export const parseDocument = (text: string) =>

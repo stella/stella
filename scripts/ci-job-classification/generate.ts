@@ -13,7 +13,7 @@ import {
   sameMetadataOrigin,
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
-import { isPrivilegedJob, ReviewRequiredError } from "./review";
+import { isPrivilegedJobClosure, ReviewRequiredError } from "./review";
 import { AdmissionError, parseDocument } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
@@ -23,6 +23,14 @@ const DECISIONS = v.record(
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
     reviewedDigest: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+  }),
+);
+const REVISION_DECISIONS = v.record(
+  v.string(),
+  v.strictObject({
+    kind: v.picklist(CLASSIFICATIONS),
+    qualifier: v.pipe(v.string(), v.minLength(1)),
+    reviewedDigest: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
   }),
 );
 const SNAPSHOTS = v.record(
@@ -73,6 +81,111 @@ export const readClassificationInputs = (root: string) => {
       const file = ["action.yml", "action.yaml"]
         .map((name) => `${directory}/${name}`)
         .find((candidatePath) => existsSync(path.resolve(root, candidatePath)));
+      if (!file) {
+        throw new AdmissionError({
+          message: `Local action metadata missing: ${directory}`,
+        });
+      }
+      return file;
+    },
+  };
+};
+
+const gitText = (root: string, args: string[]) => {
+  const result = Bun.spawnSync(["git", "-C", root, ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new AdmissionError({
+      message:
+        new TextDecoder().decode(result.stderr).trim() ||
+        `git ${args.join(" ")} failed`,
+    });
+  }
+  return new TextDecoder().decode(result.stdout);
+};
+
+export const readClassificationInputsAtRevision = (
+  root: string,
+  revision: string,
+) => {
+  const readCandidate = (file: string) =>
+    gitText(root, ["show", `${revision}:${file}`]);
+  const readGithubJson = (file: string): unknown =>
+    JSON.parse(readCandidate(`.github/${file}`));
+  const snapshots = v.parse(
+    SNAPSHOTS,
+    readGithubJson("ci-job-classification-sources.json"),
+  );
+  const reader: MetadataReader = {
+    workflows: () =>
+      gitText(root, [
+        "ls-tree",
+        "-r",
+        "--name-only",
+        revision,
+        "--",
+        ".github/workflows",
+      ])
+        .split("\n")
+        .filter((file) => /^\.github\/workflows\/.*\.ya?ml$/u.test(file))
+        .toSorted(),
+    read: (repository, file) => {
+      if (repository === "candidate") {
+        if (
+          path.isAbsolute(file) ||
+          file.split("/").some((part) => part === "..")
+        ) {
+          throw new AdmissionError({ message: "unsafe metadata path" });
+        }
+        return readCandidate(file);
+      }
+      const text = snapshots[repository]?.documents[file];
+      if (text === undefined) {
+        throw new AdmissionError({
+          message: `Pinned metadata missing: ${repository}:${file}`,
+        });
+      }
+      return text;
+    },
+  };
+  const revisionDecisions = v.parse(
+    REVISION_DECISIONS,
+    readGithubJson("ci-job-classification-decisions.json"),
+  );
+  return {
+    decisions: v.parse(
+      DECISIONS,
+      Object.fromEntries(
+        Object.entries(revisionDecisions).map(([key, decision]) => [
+          key,
+          {
+            ...decision,
+            reviewedDigest: decision.reviewedDigest ?? "0".repeat(64),
+          },
+        ]),
+      ),
+    ),
+    snapshots,
+    reader,
+    localActionPath: (directory: string) => {
+      const file = ["action.yml", "action.yaml"]
+        .map((name) => `${directory}/${name}`)
+        .find((candidatePath) => {
+          const result = Bun.spawnSync(
+            [
+              "git",
+              "-C",
+              root,
+              "cat-file",
+              "-e",
+              `${revision}:${candidatePath}`,
+            ],
+            { stdout: "ignore", stderr: "ignore" },
+          );
+          return result.exitCode === 0;
+        });
       if (!file) {
         throw new AdmissionError({
           message: `Local action metadata missing: ${directory}`,
@@ -169,19 +282,53 @@ const createDocumentDigest = ({
   return documentDigest;
 };
 
+export type DerivedJob = { digest: string; privileged: boolean };
 type ReviewJobsOptions = DocumentDigestOptions & {
   decisions: v.InferOutput<typeof DECISIONS>;
   documentDigest: (id: string) => string;
+  observeJobs?: (jobs: ReadonlyMap<string, DerivedJob>) => void;
+};
+type ReachableDocumentsOptions = DocumentDigestOptions & {
+  initialTargets: string[];
+};
+const reachableDocuments = ({
+  initialTargets,
+  nodes,
+  parsedDocuments,
+}: ReachableDocumentsOptions) => {
+  const documents: ParsedDocument[] = [];
+  const visited = new Set<string>();
+  const visit = (id: string) => {
+    if (visited.has(id)) {
+      return;
+    }
+    visited.add(id);
+    const node = nodes.get(id);
+    const parsed = parsedDocuments.get(id);
+    if (!node || node.type !== "metadata" || !parsed) {
+      return;
+    }
+    documents.push(parsed);
+    for (const target of Object.values(node.edges)) {
+      visit(target);
+    }
+  };
+  for (const target of initialTargets) {
+    visit(target);
+  }
+  return documents;
 };
 const reviewJobs = ({
   nodes,
   parsedDocuments,
   decisions,
   documentDigest,
+  observeJobs,
 }: ReviewJobsOptions) => {
   const entries: Record<string, unknown> = {};
   const privilegedJobs: string[] = [];
   const observedJobs = new Set<string>();
+  const derivedJobs = new Map<string, DerivedJob>();
   for (const node of nodes.values()) {
     if (node.type !== "metadata") {
       continue;
@@ -212,6 +359,20 @@ const reviewJobs = ({
           )
         : job.digest;
       const decision = decisions[key];
+      const targets = Object.keys(job.dependencies).flatMap((reference) => {
+        const target = node.edges[reference];
+        return target ? [target] : [];
+      });
+      const privileged = isPrivilegedJobClosure({
+        kind: decision?.kind,
+        shape: job.shape,
+        reachableDocuments: reachableDocuments({
+          initialTargets: targets,
+          nodes,
+          parsedDocuments,
+        }),
+      });
+      derivedJobs.set(key, { digest, privileged });
       if (!decision || decision.reviewedDigest !== digest) {
         entries[key] = {
           kind: decision?.kind ?? "<choose ordinary, support, or priority>",
@@ -219,7 +380,7 @@ const reviewJobs = ({
             decision?.qualifier ?? "<describe the reviewed classification>",
           reviewedDigest: digest,
         };
-        if (isPrivilegedJob({ kind: decision?.kind, shape: job.shape })) {
+        if (privileged) {
           privilegedJobs.push(key);
         }
       }
@@ -235,6 +396,7 @@ const reviewJobs = ({
         : [];
     });
   }
+  observeJobs?.(derivedJobs);
   const removed = Object.keys(decisions).filter(
     (key) => !observedJobs.has(key),
   );
@@ -256,12 +418,14 @@ type GenerateOptions = {
   snapshots: v.InferOutput<typeof SNAPSHOTS>;
   reader: MetadataReader;
   localActionPath: (directory: string) => string;
+  observeJobs?: (jobs: ReadonlyMap<string, DerivedJob>) => void;
 };
 export const generateClassification = ({
   decisions,
   snapshots,
   reader,
   localActionPath,
+  observeJobs,
 }: GenerateOptions) =>
   Result.try({
     try: () => {
@@ -367,7 +531,13 @@ export const generateClassification = ({
           }),
         }));
       const documentDigest = createDocumentDigest({ nodes, parsedDocuments });
-      reviewJobs({ nodes, parsedDocuments, decisions, documentDigest });
+      reviewJobs({
+        nodes,
+        parsedDocuments,
+        decisions,
+        documentDigest,
+        ...(observeJobs ? { observeJobs } : {}),
+      });
       const generated = {
         version: 1,
         mode: "public-metadata",
