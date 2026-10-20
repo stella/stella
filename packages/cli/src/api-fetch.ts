@@ -11,7 +11,7 @@ export const CLI_LOCAL_CLIENT_IDENTITY: string = localClientIdentity(
 );
 
 /** Fetch an API resource with the CLI identity while preserving caller headers. */
-export const apiFetch = (
+export const apiFetch = async (
   input: string | URL | Request,
   init?: RequestInit,
 ): Promise<Response> => {

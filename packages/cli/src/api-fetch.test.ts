@@ -13,7 +13,7 @@ afterEach(() => {
 test("every CLI API request carries the shared client identity", async () => {
   let observed: Headers | undefined;
   globalThis.fetch = Object.assign(
-    mock((_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    mock(async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       observed = new Headers(init?.headers);
       return Promise.resolve(new Response());
     }),
