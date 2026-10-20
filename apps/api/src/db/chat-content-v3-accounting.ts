@@ -48,7 +48,7 @@ const emptyCounts = () => ({
   dropped: { "bare-step-start": 0 },
 });
 
-export type LegacyChatAccountingCounts = ReturnType<typeof emptyCounts>;
+type LegacyChatAccountingCounts = ReturnType<typeof emptyCounts>;
 export type LegacyChatAccounting = {
   counts: LegacyChatAccountingCounts;
   unaccountedFields: string[];

@@ -7,7 +7,7 @@ type WriterKind<T> = T extends `tool-${string}`
   : T extends `data-${string}`
     ? "data-*"
     : T;
-export type LegacyV1WriterKind = WriterKind<LegacyV1WriterPart["type"]>;
+type LegacyV1WriterKind = WriterKind<LegacyV1WriterPart["type"]>;
 type Disposition = "convert" | "refuse" | "drop";
 
 // Conditional dispositions depend on the declared optional fields and values;
