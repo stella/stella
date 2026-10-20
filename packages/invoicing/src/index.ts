@@ -31,6 +31,7 @@ export {
   buildInvoiceLinesTable,
   buildInvoiceSummaryTable,
   buildIsdocFiles,
+  buildKsefFa3Files,
   buildLedes1998b,
   buildMoneyS3Xml,
   buildPohodaXml,
