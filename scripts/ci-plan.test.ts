@@ -6745,23 +6745,28 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
     testJobs: ["rest-web"],
     select: () => selectApiTestImpact({ changed: ["apps/web/src/page.tsx"] }),
   });
-  expect(web.matrix.shard).toEqual(["rest-web"]);
+  expect(web.type).toBe("run");
+  expect(web.type === "run" ? web.matrix.shard : []).toEqual(["rest-web"]);
   const queue = planCiApiTests({
     event: "merge_group",
     scopeUnknown: false,
     testJobs: ["rest-web"],
     select: () => ({ mode: "none", files: [], shards: 0 }),
   });
-  expect(queue.matrix.shard).toEqual(["rest-web"]);
+  expect(queue.type).toBe("run");
+  expect(queue.type === "run" ? queue.matrix.shard : []).toEqual(["rest-web"]);
   expect(
-    planCiApiTests({
-      event: "merge_group",
-      scopeUnknown: false,
-      testJobs: FULL_TEST_JOB_SHARDS,
-      select: () => {
-        throw new Error("Merge API files must not be narrowed");
-      },
-    }).matrix.shard,
+    (() => {
+      const plan = planCiApiTests({
+        event: "merge_group",
+        scopeUnknown: false,
+        testJobs: FULL_TEST_JOB_SHARDS,
+        select: () => {
+          throw new Error("Merge API files must not be narrowed");
+        },
+      });
+      return plan.type === "run" ? plan.matrix.shard : [];
+    })(),
   ).toEqual(["api-1", "api-2", "api-3", "rest-web"]);
   expect(workflow).toContain(
     `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
