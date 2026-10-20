@@ -338,6 +338,74 @@ describe("online migrations", () => {
     });
   });
 
+  test("reports a newest-set cutover while the final index has its legacy definition", async () => {
+    const cutover = FILTER_INDEX_CUTOVER;
+    const harness = createHarness({
+      newestAppliedMigration: cutover.introducedBy,
+      indexStates: {
+        [cutover.final.name]: [
+          {
+            isValid: true,
+            definitionBody: cutover.legacy.definitionBody,
+          },
+        ],
+        [cutover.staged.name]: [true],
+      },
+    });
+
+    expect(await reportOnlineMigrations(harness.pool)).toEqual({
+      newestAppliedMigration: cutover.introducedBy,
+      pending: [
+        {
+          kind: "cutover",
+          name: cutover.final.name,
+          introducedBy: cutover.introducedBy,
+        },
+      ],
+    });
+  });
+
+  test("rejects an unexpected final index definition during a newest-set cutover", async () => {
+    const cutover = FILTER_INDEX_CUTOVER;
+    const harness = createHarness({
+      newestAppliedMigration: cutover.introducedBy,
+      indexStates: {
+        [cutover.final.name]: [
+          {
+            isValid: true,
+            definitionBody:
+              "ON public.case_law_decisions USING btree (document_date)",
+          },
+        ],
+        [cutover.staged.name]: [true],
+      },
+    });
+
+    expect(
+      await rejectionOf(reportOnlineMigrations(harness.pool)),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        `Required migration index ${cutover.final.name} has an unexpected definition`,
+      ),
+    });
+  });
+
+  test("reports a completed cutover when the final index has its new definition", async () => {
+    const cutover = FILTER_INDEX_CUTOVER;
+    const harness = createHarness({
+      newestAppliedMigration: cutover.introducedBy,
+      indexStates: {
+        [cutover.final.name]: [true],
+        [cutover.staged.name]: [undefined],
+      },
+    });
+
+    expect(await reportOnlineMigrations(harness.pool)).toEqual({
+      newestAppliedMigration: cutover.introducedBy,
+      pending: [],
+    });
+  });
+
   test("reports newest-set retirement work and rejects an older leftover", async () => {
     const replacement = ONLINE_INDEX_REPLACEMENTS.at(0);
     if (!replacement) {

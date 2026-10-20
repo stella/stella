@@ -471,6 +471,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
 type OnlineIndexCutover = {
   introducedBy: string;
   final: IntroducedMigrationIndex;
+  legacy: RequiredMigrationIndex;
   staged: OnlineIndex;
 };
 
@@ -481,6 +482,13 @@ export const ONLINE_MIGRATION_INDEX_CUTOVERS: readonly OnlineIndexCutover[] = [
       definitionBody:
         "ON public.case_law_decisions USING btree (updated_at DESC, id DESC)",
       introducedBy: "20260801150000_document_processing_queue_nulls_first",
+      isUnique: false,
+      name: "case_law_decisions_updated_id_idx",
+      tableName: "case_law_decisions",
+    },
+    legacy: {
+      definitionBody:
+        "ON public.case_law_decisions USING btree (updated_at, id)",
       isUnique: false,
       name: "case_law_decisions_updated_id_idx",
       tableName: "case_law_decisions",
@@ -885,11 +893,10 @@ const processOnlineIndexCutoverAt = async ({
       return outcome;
     }
   } else {
-    await reportIndexReadiness({
+    await reportIndexCutoverReadiness({
       connection,
-      index: { ...cutover.final, introducedBy: cutover.introducedBy },
+      cutover,
       report: mode.report,
-      kind: "cutover",
     });
     const stagedState = await readIndexState(connection, cutover.staged);
     const stagedArtifacts = await readReindexArtifacts(
@@ -1402,6 +1409,60 @@ const reportIndexReadiness = async ({
         state.type === "missing"
           ? "index is missing"
           : "index is not ready or has reindex artifacts",
+    });
+  }
+};
+
+type ReportIndexCutoverReadinessOptions = {
+  connection: OnlineMigrationConnection;
+  cutover: OnlineIndexCutover;
+  report: OnlineMigrationStartupReport;
+};
+
+const reportIndexCutoverReadiness = async ({
+  connection,
+  cutover: { final, introducedBy, legacy },
+  report,
+}: ReportIndexCutoverReadinessOptions): Promise<void> => {
+  const state = await readIndexState(connection, final);
+  const finalHasExpectedDefinition =
+    state.type === "present" && hasExpectedIndexDefinition(final, state);
+  const finalHasLegacyDefinition =
+    state.type === "present" && hasExpectedIndexDefinition(legacy, state);
+  if (
+    state.type === "present" &&
+    !finalHasExpectedDefinition &&
+    !finalHasLegacyDefinition
+  ) {
+    assertIndexDefinition(final, state);
+  }
+
+  const artifacts = await readReindexArtifacts(connection, final);
+  for (const artifact of artifacts) {
+    assertIndexDefinition(final, artifact);
+    if (artifact.isValid) {
+      panic(
+        `Required migration index ${final.name} introduced by ${introducedBy} has a valid reindex artifact`,
+      );
+    }
+  }
+  if (
+    state.type === "missing" ||
+    finalHasLegacyDefinition ||
+    !state.isReady ||
+    !state.isValid ||
+    artifacts.length > 0
+  ) {
+    let reason = "index is not ready or has reindex artifacts";
+    if (state.type === "missing") {
+      reason = "index is missing";
+    } else if (finalHasLegacyDefinition) {
+      reason = "final index still has its legacy definition";
+    }
+    reportPendingStep({
+      report,
+      step: { kind: "cutover", name: final.name, introducedBy },
+      reason,
     });
   }
 };
