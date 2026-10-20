@@ -82,7 +82,7 @@ export const integrationStatus = ({
     }
     return {
       tone: "neutral",
-      labelKey: "settings.connections.notConnected",
+      labelKey: "common.notConnected",
     } as const satisfies IntegrationStatus;
   }
   if (connection.status === "needs_reauth") {
@@ -105,6 +105,6 @@ export const integrationStatus = ({
   }
   return {
     tone: "success",
-    labelKey: "settings.connections.connected",
+    labelKey: "common.connected",
   } as const satisfies IntegrationStatus;
 };

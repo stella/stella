@@ -23,6 +23,7 @@ import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
 import savedSecret from "@/api/handlers/chat/saved-secret";
 import sendMessage from "@/api/handlers/chat/send-message";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitConnector from "@/api/handlers/chat/submit-connector";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import tableChart from "@/api/handlers/chat/table-chart";
@@ -64,6 +65,11 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     body: submitSecret.config.body,
     params: submitSecret.config.params,
     permissions: submitSecret.config.permissions,
+  })
+  .post("/threads/:threadId/connectors/:toolCallId", submitConnector.handler, {
+    body: submitConnector.config.body,
+    params: submitConnector.config.params,
+    permissions: submitConnector.config.permissions,
   })
   .get("/threads/:threadId/saved-secret", savedSecret.handler, {
     params: savedSecret.config.params,

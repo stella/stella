@@ -34,6 +34,10 @@ export type NeedsApprovalPolicyKind = {
 export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "ask-user": CHAT_TOOL_POLICY_KIND.internal,
   request_secret: CHAT_TOOL_POLICY_KIND.internal,
+  // Asks the user to connect a connector; the card runs the ordinary connect
+  // flow and the server confirms the connection before answering.
+  connect_connector: CHAT_TOOL_POLICY_KIND.internal,
+  list_connectable_connectors: CHAT_TOOL_POLICY_KIND.internal,
   use_connector_secret: CHAT_TOOL_POLICY_KIND.external,
   // Chat-only presentation: its private attachment belongs to this chat turn.
   show_visual: CHAT_TOOL_POLICY_KIND.internal,
