@@ -87,8 +87,10 @@ export const republishedRulingCourtPredicate = (
     return nameMatches;
   }
   return sql`(
-    ${columns.courtId} = ${observed.courtId}
-    OR (${columns.courtId} IS NULL AND ${nameMatches})
+    (${columns.courtId} IS NOT NULL AND ${observed.courtId} IS NOT NULL
+      AND ${columns.courtId} = ${observed.courtId})
+    OR ((${columns.courtId} IS NULL OR ${observed.courtId} IS NULL)
+      AND ${nameMatches})
   )`;
 };
 

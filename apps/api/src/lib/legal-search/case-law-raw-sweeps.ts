@@ -316,24 +316,27 @@ export const sweepCaseLawRawDecision = async ({
     return { type: kept };
   }
 
-  const identitySources = await scopedDb(
+  const identityOwners = await scopedDb(
     async (tx) =>
       await tx
-        .select({ sourceId: caseLawDecisionSourceIdentities.sourceId })
+        .select({
+          decisionId: caseLawDecisionSourceIdentities.rawOwnerDecisionId,
+          sourceId: caseLawDecisionSourceIdentities.sourceId,
+        })
         .from(caseLawDecisionSourceIdentities)
         .where(eq(caseLawDecisionSourceIdentities.decisionId, decisionId)),
   );
-  const sourceIds = [
-    ...new Set([
-      owner.sourceId,
-      ...identitySources.map(({ sourceId }) => sourceId),
+  const rawOwners = new Map(
+    [owner, ...identityOwners].map((rawOwner) => [
+      `${rawOwner.decisionId}:${rawOwner.sourceId}`,
+      rawOwner,
     ]),
-  ];
+  );
   const erased = await Promise.all(
-    sourceIds.map(
-      async (sourceId) =>
+    [...rawOwners.values()].map(
+      async (rawOwner) =>
         await eraseRawDocument({
-          ...documentOwner({ decisionId, sourceId }),
+          ...documentOwner(rawOwner),
           signal,
         }),
     ),
@@ -344,7 +347,7 @@ export const sweepCaseLawRawDecision = async ({
   }
   const legacy = (
     await Promise.all(
-      sourceIds.map(
+      [...new Set([...rawOwners.values()].map(({ sourceId }) => sourceId))].map(
         async (sourceId) => await sourceHoldsLegacyRawObjects(sourceId, signal),
       ),
     )

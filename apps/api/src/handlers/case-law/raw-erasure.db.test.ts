@@ -64,12 +64,14 @@ import {
   enqueueCaseLawRawSweepTx,
   reconcileCaseLawRawSweeps,
 } from "@/api/lib/legal-search/case-law-raw-sweeps";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { decodeSourceRawEnvelopeObjects } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,
   rawDocumentPrefix,
 } from "@/api/lib/legal-search/raw-source-storage";
+import { applyRepublishedDecisionBatch } from "@/api/scripts/link-republished-decisions-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -270,6 +272,89 @@ const drainSweeps = async (): Promise<void> => {
     signal: signal(),
   });
 };
+
+test("erasing a linked decision removes raw objects under both original owners", async () => {
+  const canonicalSource = createSafeId<"caseLawSource">();
+  const republisherSource = createSafeId<"caseLawSource">();
+  const canonicalId = createSafeId<"caseLawDecision">();
+  const retiredId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawSources).values([
+    {
+      id: canonicalSource,
+      adapterKey: ADAPTER_KEYS.PL_TK,
+      name: "Raw owner court fixture",
+    },
+    {
+      id: republisherSource,
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
+      name: "Raw owner republisher fixture",
+    },
+  ]);
+  const common = {
+    country: "POL",
+    court: "Trybunał Konstytucyjny",
+    language: "pl",
+    caseNumber: "K 1/26",
+  };
+  await db.insert(caseLawDecisions).values([
+    {
+      ...common,
+      id: canonicalId,
+      sourceId: canonicalSource,
+      sourceDocumentId: "raw-owner-court",
+    },
+    {
+      ...common,
+      id: retiredId,
+      sourceId: republisherSource,
+      sourceDocumentId: "raw-owner-republisher",
+    },
+  ]);
+  await db.insert(caseLawDecisionSourceIdentities).values([
+    {
+      sourceId: canonicalSource,
+      sourceDocumentId: "raw-owner-court",
+      decisionId: canonicalId,
+      rawOwnerDecisionId: canonicalId,
+    },
+    {
+      sourceId: republisherSource,
+      sourceDocumentId: "raw-owner-republisher",
+      decisionId: retiredId,
+      rawOwnerDecisionId: retiredId,
+    },
+  ]);
+  const canonicalKey = `${prefixOf(canonicalSource, canonicalId)}payloads/canonical`;
+  const retiredKey = `${prefixOf(republisherSource, retiredId)}payloads/retired`;
+  fake.put(envBase.S3_BUCKET, canonicalKey, "canonical");
+  fake.put(envBase.S3_BUCKET, retiredKey, "retired");
+
+  await db.transaction(async (tx) => {
+    await applyRepublishedDecisionBatch(
+      tx,
+      [
+        {
+          canonical: {
+            adapterKey: ADAPTER_KEYS.PL_TK,
+            createdAt: new Date("2026-01-01"),
+            id: canonicalId,
+          },
+          duplicate: {
+            adapterKey: ADAPTER_KEYS.PL_COURTS,
+            createdAt: new Date("2026-01-02"),
+            id: retiredId,
+          },
+        },
+      ],
+      async () => undefined,
+    );
+  });
+  await redact(canonicalId);
+  await drainSweeps();
+
+  expect(stored(canonicalKey)).toBe(false);
+  expect(stored(retiredKey)).toBe(false);
+});
 
 type LegacyDecision = {
   decisionId: SafeId<"caseLawDecision">;
@@ -824,6 +909,7 @@ describe("the raw object census", () => {
       sourceId,
       sourceDocumentId: "reserved",
       decisionId: reserved,
+      rawOwnerDecisionId: reserved,
     });
     await observe({
       sourceId,

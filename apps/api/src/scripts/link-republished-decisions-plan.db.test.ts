@@ -1,5 +1,6 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -12,7 +13,7 @@ import {
   corpusIndexGenerations,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
@@ -74,18 +75,21 @@ beforeAll(
         sourceId: courtSource,
         sourceDocumentId: "court-1",
         decisionId: canonicalId,
+        rawOwnerDecisionId: canonicalId,
         sourceRawS3Key: "raw/court",
       },
       {
         sourceId: republisherSource,
         sourceDocumentId: "publisher-1",
         decisionId: retiredId,
+        rawOwnerDecisionId: retiredId,
         sourceRawS3Key: "raw/republisher",
       },
       {
         sourceId: republisherSource,
         sourceDocumentId: "publisher-already-canonical",
         decisionId: canonicalId,
+        rawOwnerDecisionId: canonicalId,
         sourceRawS3Key: "raw/already-canonical",
       },
     ]);
@@ -131,6 +135,29 @@ test("apply resolves the retired id and reverse restores identity ownership", as
   expect(new Set(identities.map(({ decisionId }) => decisionId))).toEqual(
     new Set([canonicalId]),
   );
+  expect(
+    identities
+      .map(({ sourceDocumentId, rawOwnerDecisionId }) => ({
+        sourceDocumentId,
+        rawOwnerDecisionId,
+      }))
+      .toSorted((a, b) =>
+        compareCodeUnit(a.sourceDocumentId, b.sourceDocumentId),
+      ),
+  ).toEqual([
+    {
+      sourceDocumentId: "court-1",
+      rawOwnerDecisionId: canonicalId,
+    },
+    {
+      sourceDocumentId: "publisher-1",
+      rawOwnerDecisionId: retiredId,
+    },
+    {
+      sourceDocumentId: "publisher-already-canonical",
+      rawOwnerDecisionId: canonicalId,
+    },
+  ]);
   const resolved = await db
     .select({ id: canonicalDecisionIdSql(caseLawDecisions.id) })
     .from(caseLawDecisions)
@@ -230,6 +257,74 @@ test("report counts missing dates and ambiguous matches from the corpus", async 
   expect(report.outcomes.separateAmbiguous).toBe(1);
 });
 
+test("court-name fallback links whichever UUID side has the court id", async () => {
+  await db.execute(
+    sql`ALTER TABLE case_law_decisions DROP CONSTRAINT case_law_decisions_court_id_by_country`,
+  );
+  const orientations = ["lower", "higher"] as const;
+  const expected = new Set<SafeId<"caseLawDecision">>();
+  for (const [index, courtIdSide] of orientations.entries()) {
+    const ids = [
+      createSafeId<"caseLawDecision">(),
+      createSafeId<"caseLawDecision">(),
+    ].toSorted(compareCodeUnit);
+    const lowerId = ids.at(0);
+    const higherId = ids.at(1);
+    if (lowerId === undefined || higherId === undefined) {
+      return panic("Court orientation fixture requires two decision ids");
+    }
+    expected.add(lowerId);
+    expected.add(higherId);
+    await db.insert(caseLawDecisions).values([
+      {
+        id: lowerId,
+        sourceId: courtSource,
+        sourceDocumentId: `court-orientation-${String(index)}`,
+        country: "POL",
+        court: "Sąd orientacyjny",
+        courtId: courtIdSide === "lower" ? `pl:orientation:${index}` : null,
+        language: "pl",
+        caseNumber: `O ${String(index + 1)}/26`,
+        docketFamilyKey: `o:${String(index + 1)}:26`,
+        decisionDate: "2026-02-03",
+        decisionType: "wyrok",
+      },
+      {
+        id: higherId,
+        sourceId: republisherSource,
+        sourceDocumentId: `republisher-orientation-${String(index)}`,
+        country: "POL",
+        court: "Sąd orientacyjny",
+        courtId: courtIdSide === "higher" ? `pl:orientation:${index}` : null,
+        language: "pl",
+        caseNumber: `O ${String(index + 1)}/26`,
+        docketFamilyKey: `o:${String(index + 1)}:26`,
+        decisionDate: "2026-02-03",
+        decisionType: "wyrok",
+      },
+    ]);
+  }
+
+  const candidates = await selectRepublishedDecisionCandidates(db, 100);
+  const linkedIds = new Set(
+    candidates.flatMap(({ canonical, duplicate }) => [
+      canonical.id,
+      duplicate.id,
+    ]),
+  );
+  for (const id of expected) {
+    expect(linkedIds.has(id)).toBe(true);
+  }
+  await db
+    .delete(caseLawDecisions)
+    .where(inArray(caseLawDecisions.id, [...expected]));
+  await db.execute(sql`
+    ALTER TABLE case_law_decisions
+      ADD CONSTRAINT case_law_decisions_court_id_by_country
+      CHECK ((country IN ('USA')) = (court_id IS NOT NULL)) NOT VALID
+  `);
+});
+
 test("reverse restores the projection desired state for every repaired pair", async () => {
   const secondCourtSource = createSafeId<"caseLawSource">();
   const secondCanonicalId = createSafeId<"caseLawDecision">();
@@ -269,11 +364,13 @@ test("reverse restores the projection desired state for every repaired pair", as
       sourceId: secondCourtSource,
       sourceDocumentId: "second-court",
       decisionId: secondCanonicalId,
+      rawOwnerDecisionId: secondCanonicalId,
     },
     {
       sourceId: republisherSource,
       sourceDocumentId: "second-republisher",
       decisionId: secondRetiredId,
+      rawOwnerDecisionId: secondRetiredId,
     },
   ]);
 
