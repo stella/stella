@@ -647,7 +647,7 @@ const PL_TK_PATTERN = new RegExp(
 // whitespace run: "I SK 12/20" is a Supreme Court docket, and its tail read
 // past a wide gap would key it as the Tribunal's.
 const PL_TK_BARE_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_TK_DISTINCTIVE_DOCKET_SOURCE})(?!\d)`,
+  String.raw`\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_TK_DISTINCTIVE_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
@@ -657,7 +657,7 @@ const PL_TK_BARE_PATTERN = new RegExp(
 // ("sygn. akt II    K 12/20" -> "K 12/20") would otherwise pass the cue
 // gate as a different, Tribunal docket.
 const PL_TK_CUED_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_TK_DOCKET_SOURCE})(?!\d)`,
+  String.raw`\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_TK_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
@@ -874,7 +874,7 @@ const PL_BARE_SYMBOL_PATTERN = new RegExp(
 // division, a ninth one ("IX SA/Wa") or one past a wide gap ("II      SA/Wa"),
 // rejects the match rather than leaving a docket with its division cut off.
 const PL_NSA_WSA_PATTERN = new RegExp(
-  String.raw`(?:${PL_SYGN_PREFIX})?(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE})(?!\d)`,
+  String.raw`(?:${PL_SYGN_PREFIX})?\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
@@ -891,7 +891,7 @@ const PL_NSA_SEATLESS_PATTERN = new RegExp(
 // "OPS 3/98". The lookbehind leaves a divided mark ("I OPS 3/22") to the
 // bare Polish pattern, so its tail is not read as a second citation.
 const PL_NSA_PRE_REFORM_RESOLUTION_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_ADMINISTRATIVE_PRE_REFORM_RESOLUTION_SOURCE})(?!\d)`,
+  String.raw`\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_ADMINISTRATIVE_PRE_REFORM_RESOLUTION_SOURCE})(?!\d)`,
   "gu",
 );
 
