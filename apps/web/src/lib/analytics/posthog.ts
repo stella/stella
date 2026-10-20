@@ -241,7 +241,7 @@ type ExceptionValueFields = {
 };
 
 /** Renders only structural fields that have already crossed their allowlist. */
-export const exceptionValue = ({
+const exceptionValue = ({
   type,
   code,
   status,

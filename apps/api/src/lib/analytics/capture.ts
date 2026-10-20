@@ -143,7 +143,7 @@ type ExceptionValueFields = {
 };
 
 /** Renders only structural fields that have already crossed their allowlist. */
-export const exceptionValue = ({
+const exceptionValue = ({
   className,
   code,
   status,
@@ -162,8 +162,10 @@ export const exceptionValue = ({
 
 const CLASS_TOKEN = /^[A-Za-z_$][A-Za-z0-9_$]{0,127}$/u;
 const CODE_TOKEN = /^[A-Za-z0-9_.:-]{1,64}$/u;
+// The checkout root differs per host (container, CI runner, laptop) and may
+// carry a user name, so only the repository-relative suffix is kept.
 const REPOSITORY_FRAME =
-  /^(?:(?:\/workspace\/stella|\/app)\/)?((?:apps|packages)\/[A-Za-z0-9_./-]+:\d+(?::\d+)?)$/u;
+  /(?:^|\/)((?:apps|packages)\/[A-Za-z0-9_./-]+:\d+(?::\d+)?)$/u;
 const REPOSITORY_FRAME_SUFFIX =
   /^(?:apps|packages)\/[A-Za-z0-9_./-]+:\d+(?::\d+)?$/u;
 

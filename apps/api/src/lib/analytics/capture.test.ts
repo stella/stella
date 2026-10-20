@@ -240,6 +240,7 @@ describe("captureError issue grouping", () => {
   test.each([
     "/workspace/stella/apps/api/src/lib/analytics/capture.ts:319:17",
     "/app/apps/api/src/lib/analytics/capture.ts:319:17",
+    "/home/runner/work/stella/stella/apps/api/src/lib/analytics/capture.ts:319:17",
   ])("keeps recognized absolute repository frames from %s", (location) => {
     captureError(errorAt("Error", location));
 
