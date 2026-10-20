@@ -228,11 +228,6 @@ export class Unreachable extends TaggedError("Unreachable")<{
 
 export const unreachable = (message: string): never => panic(message);
 
-export class ParseXmlError extends TaggedError("ParseXmlError")<{
-  message: string;
-  cause: unknown;
-}> {}
-
 export class ConfigurationError extends TaggedError("ConfigurationError")<{
   message: string;
   cause?: unknown;

@@ -14,11 +14,6 @@ export const PARSER_OUTPUT_BOUNDARIES = [
       "Environment validation provides configuration and never parser output values.",
   },
   {
-    path: "apps/api/src/lib/errors/tagged-errors.ts",
-    reason:
-      "Fetch error types control connection failure handling, not parser output values.",
-  },
-  {
     path: "apps/api/src/lib/observability/logger.ts",
     reason: "Structured logging is an output-independent side effect.",
   },

@@ -322,7 +322,11 @@ test("an output module also reachable without a boundary still needs a bump", ()
     );
     tree.set(
       LOGGER,
-      'import { hidden } from "../output-hidden-by-logger";\nexport const logger = { info: () => hidden };',
+      [
+        'import { helper } from "@/api/handlers/case-law/ingestion/parsers/shared-helper";',
+        'import { hidden } from "../output-hidden-by-logger";',
+        "export const logger = { info: () => helper() + hidden };",
+      ].join("\n"),
     );
     tree.set(
       "apps/api/src/lib/output-hidden-by-logger.ts",
