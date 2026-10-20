@@ -1,4 +1,4 @@
-import { Result, TaggedError, panic } from "better-result";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -71,10 +71,6 @@ const collectionFromUrl = (url: string): CzUohsCollection | undefined =>
     (collection) => url === `https://uohs.gov.cz/cs/${collection}.html`,
   );
 
-export class CzUohsUnknownCollectionError extends TaggedError(
-  "CzUohsUnknownCollectionError",
-)<{ message: string; odbor: readonly string[] }> {}
-
 const recordSchema = v.looseObject({
   typ: v.unknown(),
   iri: v.string(),
@@ -98,21 +94,19 @@ const listingSchema = v.looseObject({ rozhodnutí: v.array(recordSchema) });
 export const parseCzUohsListing = (payload: unknown): CzUohsRecord[] =>
   v.parse(listingSchema, payload).rozhodnutí;
 
+/**
+ * The collection a decision belongs to, or undefined when its departments do
+ * not name exactly one known collection. An unknown department is a new
+ * publisher category, not a reason to stop the walk: the decision is still
+ * stored, keeping its department URLs, with no collection.
+ */
 export const czUohsCollectionOf = (
   record: Pick<CzUohsRecord, "odbor">,
-): CzUohsCollection => {
+): CzUohsCollection | undefined => {
   const values = record.odbor
     .map(collectionFromUrl)
     .filter((value): value is CzUohsCollection => value !== undefined);
-  if (values.length !== 1) {
-    return panic(
-      new CzUohsUnknownCollectionError({
-        message: "ÚOHS decision has an unknown odbor",
-        odbor: record.odbor,
-      }).message,
-    );
-  }
-  return values.at(0) ?? panic("validated ÚOHS collection disappeared");
+  return values.length === 1 ? values.at(0) : undefined;
 };
 
 const publisherReadOptions = (
@@ -181,7 +175,6 @@ const pdfText = async (bytes: Uint8Array): Promise<string> => {
 
 export const buildCzUohsDecision = async (
   record: CzUohsRecord,
-  listingRetrievedAt: string,
   signal?: AbortSignal,
 ): Promise<IngestionResult> => {
   const collection = czUohsCollectionOf(record);
@@ -190,10 +183,7 @@ export const buildCzUohsDecision = async (
     string,
     { bytes: Uint8Array; contentType: string },
   ][] = [];
-  const provenanceEntries: [
-    string,
-    { url: string; retrievedAt: string; sha256: string },
-  ][] = [];
+  const provenanceEntries: [string, { url: string; sha256: string }][] = [];
   const documentFailures: {
     index: number;
     type: "fetch-failed" | "parse-failed";
@@ -247,7 +237,6 @@ export const buildCzUohsDecision = async (
       });
       continue;
     }
-    const documentRetrievedAt = Temporal.Now.instant().toString();
     const documentBytes = outcome.value;
     rawObjectEntries.push([
       part,
@@ -255,11 +244,7 @@ export const buildCzUohsDecision = async (
     ]);
     provenanceEntries.push([
       part,
-      {
-        url: documentUrl,
-        retrievedAt: documentRetrievedAt,
-        sha256: sha256Hex(documentBytes),
-      },
+      { url: documentUrl, sha256: sha256Hex(documentBytes) },
     ]);
     const extracted = await Result.tryPromise({
       try: async () => await pdfText(documentBytes),
@@ -280,15 +265,15 @@ export const buildCzUohsDecision = async (
   }
   const sourceRawObjects = Object.fromEntries(rawObjectEntries);
   const documentProvenance = Object.fromEntries(provenanceEntries);
+  // The export is one JSON-LD document for every decision; each decision
+  // keeps its own record, every key included. Provenance names where each
+  // stored part came from and its digest, never when it was read, so an
+  // unchanged decision keeps its fingerprint across reads.
   const rawRecord = JSON.stringify(record);
   const sourceRaw = encodeSourceRawEnvelope({
     listing: rawRecord,
     provenance: JSON.stringify({
-      listing: {
-        url: LISTING_URL,
-        retrievedAt: listingRetrievedAt,
-        sha256: sha256Hex(rawRecord),
-      },
+      listing: { url: LISTING_URL, sha256: sha256Hex(rawRecord) },
       documents: documentProvenance,
     }),
   });
@@ -301,9 +286,6 @@ export const buildCzUohsDecision = async (
     court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
     country: "CZE",
     language: "cs",
-    ...(record.datum_právní_moci === undefined
-      ? {}
-      : { decisionDate: record.datum_právní_moci.datum }),
     ...(record.typ_rozhodnutí.at(0) === undefined
       ? {}
       : { decisionType: record.typ_rozhodnutí[0] }),
@@ -326,7 +308,7 @@ export const buildCzUohsDecision = async (
       fileNumber: record.spisová_značka,
       instance: record.instance,
       department: record.odbor,
-      collection,
+      collection: collection ?? null,
       legalForceDate: record.datum_právní_moci ?? null,
       proceedingTypes: record.typ_řízení,
       decisionTypes: record.typ_rozhodnutí,
@@ -361,7 +343,6 @@ export const buildCzUohsDecision = async (
 
 type CzUohsListing = {
   records: CzUohsRecord[];
-  retrievedAt: string;
   snapshotId: string;
 };
 
@@ -418,7 +399,6 @@ const readListing = async (
     return rawResult;
   }
   const raw = rawResult.value;
-  const retrievedAt = Temporal.Now.instant().toString();
   return Result.try({
     try: () => ({
       records: parseCzUohsListing(JSON.parse(raw)).toSorted((left, right) => {
@@ -427,7 +407,6 @@ const readListing = async (
         }
         return left.iri < right.iri ? -1 : 1;
       }),
-      retrievedAt,
       snapshotId: sha256Hex(raw),
     }),
     catch: adapterCatch(ADAPTER_KEYS.CZ_UOHS, cursor),
@@ -469,16 +448,22 @@ export const czUohsAdapter = defineSourceAdapter({
   sourceFields: {
     status: "declared",
     fields: {
-      typ: { disposition: "stored", target: { type: "metadata", key: "typ" } },
-      iri: { disposition: "stored", target: { type: "metadata", key: "iri" } },
-      věc: { disposition: "stored", target: { type: "metadata", key: "věc" } },
+      typ: {
+        disposition: "stored",
+        target: { type: "metadata", key: "recordTypes" },
+      },
+      iri: { disposition: "stored", target: { type: "identity" } },
+      věc: {
+        disposition: "stored",
+        target: { type: "metadata", key: "subject" },
+      },
       číslo_jednací: {
         disposition: "stored",
-        target: { type: "metadata", key: "číslo_jednací" },
+        target: { type: "metadata", key: "referenceNumber" },
       },
       spisová_značka: {
         disposition: "stored",
-        target: { type: "metadata", key: "spisová_značka" },
+        target: { type: "metadata", key: "fileNumber" },
       },
       instance: {
         disposition: "stored",
@@ -486,27 +471,27 @@ export const czUohsAdapter = defineSourceAdapter({
       },
       odbor: {
         disposition: "stored",
-        target: { type: "metadata", key: "odbor" },
+        target: { type: "metadata", key: "department" },
       },
       datum_právní_moci: {
         disposition: "stored",
-        target: { type: "metadata", key: "datum_právní_moci" },
+        target: { type: "metadata", key: "legalForceDate" },
       },
       účastník: {
         disposition: "stored",
-        target: { type: "metadata", key: "účastník" },
+        target: { type: "metadata", key: "participants" },
       },
       typ_řízení: {
         disposition: "stored",
-        target: { type: "metadata", key: "typ_řízení" },
+        target: { type: "metadata", key: "proceedingTypes" },
       },
       typ_rozhodnutí: {
         disposition: "stored",
-        target: { type: "metadata", key: "typ_rozhodnutí" },
+        target: { type: "metadata", key: "decisionTypes" },
       },
       dokument: {
         disposition: "stored",
-        target: { type: "metadata", key: "dokument" },
+        target: { type: "metadata", key: "documents" },
       },
     },
     listSourceFields: ({ listing }) => {
@@ -537,9 +522,7 @@ export const czUohsAdapter = defineSourceAdapter({
     const selected = remaining.slice(0, PAGE_SIZE);
     const decisions: IngestionResult[] = [];
     for (const record of selected) {
-      decisions.push(
-        await buildCzUohsDecision(record, listing.value.retrievedAt, signal),
-      );
+      decisions.push(await buildCzUohsDecision(record, signal));
     }
     const lastId = selected.at(-1)?.iri ?? afterId;
     const reachedTip = selected.length < PAGE_SIZE;
@@ -596,7 +579,6 @@ export const czUohsAdapter = defineSourceAdapter({
             type: "built",
             decision: await buildCzUohsDecision(
               v.parse(recordSchema, payload),
-              Temporal.Now.instant().toString(),
               signal,
             ),
           }

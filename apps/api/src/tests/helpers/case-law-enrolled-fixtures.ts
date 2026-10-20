@@ -2744,7 +2744,6 @@ export const czUohsFixture = (): EnrolledAdapterFixture => ({
     const record = parseCzUohsListing(payload)[0];
     const decision = await buildCzUohsDecision(
       record ?? panic("the ÚOHS fixture lost its first record"),
-      "2026-10-19T00:00:00Z",
     );
     const objects = Object.fromEntries(
       Object.entries(decision.sourceRawObjects ?? {}).map(

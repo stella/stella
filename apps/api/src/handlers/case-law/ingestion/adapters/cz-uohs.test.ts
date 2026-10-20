@@ -41,8 +41,41 @@ describe("ÚOHS JSON-LD", () => {
       }),
     );
     expect(listed[1]!.datum_právní_moci).toBeUndefined();
-    expect(() => czUohsCollectionOf(listed[3]!)).toThrow(
-      "ÚOHS decision has an unknown odbor",
+    expect(czUohsCollectionOf(listed[3]!)).toBeUndefined();
+  });
+
+  test("keeps a decision from an unknown department with no collection", async () => {
+    globalThis.fetch = asFetchMock(
+      async () => new Response("unavailable", { status: 500 }),
+    );
+    const unknown = (await records())[3]!;
+    const decision = await buildCzUohsDecision(unknown);
+    expect(decision.sourceDocumentId).toBe(unknown.iri);
+    expect(decision.metadata["collection"]).toBeNull();
+    expect(decision.metadata["department"]).toEqual(unknown.odbor);
+  });
+
+  test("an unchanged decision keeps its fingerprint across reads", async () => {
+    const bytes = new Uint8Array(
+      await Bun.file(new URL("cz-uohs-decision.pdf", FIXTURES)).arrayBuffer(),
+    );
+    globalThis.fetch = asFetchMock(async () => new Response(bytes));
+    const record = (await records())[0]!;
+    const first = await buildCzUohsDecision(record);
+    const second = await buildCzUohsDecision(record);
+    expect(second.rawHash).toBe(first.rawHash);
+    expect(second.sourceRaw).toBe(first.sourceRaw);
+  });
+
+  test("the date of legal force is not the decision date", async () => {
+    globalThis.fetch = asFetchMock(
+      async () => new Response("unavailable", { status: 500 }),
+    );
+    const record = (await records())[0]!;
+    const decision = await buildCzUohsDecision(record);
+    expect(decision.decisionDate).toBeUndefined();
+    expect(decision.metadata["legalForceDate"]).toEqual(
+      record.datum_právní_moci,
     );
   });
 
@@ -61,10 +94,7 @@ describe("ÚOHS JSON-LD", () => {
       async () =>
         new Response(bytes, { headers: { "Content-Type": "application/pdf" } }),
     );
-    const decision = await buildCzUohsDecision(
-      (await records())[0]!,
-      "2026-10-19T00:00:00.000Z",
-    );
+    const decision = await buildCzUohsDecision((await records())[0]!);
     expect(decision.fulltext).toContain("Fiktivni rozhodnuti");
     expect(decision.sourceRawObjects?.["document"]?.bytes).toEqual(bytes);
     const raw = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
@@ -93,10 +123,7 @@ describe("ÚOHS JSON-LD", () => {
   test("keeps PDF bytes when text extraction fails", async () => {
     const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
     globalThis.fetch = asFetchMock(async () => new Response(bytes));
-    const decision = await buildCzUohsDecision(
-      (await records())[0]!,
-      "2026-10-19T00:00:00.000Z",
-    );
+    const decision = await buildCzUohsDecision((await records())[0]!);
     expect(decision.sourceRawObjects?.["document"]?.bytes).toEqual(bytes);
     expect(decision.metadata["documentExtraction"]).toEqual(
       expect.objectContaining({ type: "failed" }),
@@ -107,10 +134,7 @@ describe("ÚOHS JSON-LD", () => {
     globalThis.fetch = asFetchMock(
       async () => new Response("unavailable", { status: 500 }),
     );
-    const decision = await buildCzUohsDecision(
-      (await records())[0]!,
-      "2026-10-19T00:00:00.000Z",
-    );
+    const decision = await buildCzUohsDecision((await records())[0]!);
     expect(decision.textFields.summary).toEqual({
       type: "absent",
       reason: "parse_failed",
@@ -144,10 +168,7 @@ describe("ÚOHS JSON-LD", () => {
     globalThis.fetch = asFetchMock(
       async () => new Response(request++ === 0 ? invalid : valid),
     );
-    const decision = await buildCzUohsDecision(
-      record,
-      "2026-10-19T00:00:00.000Z",
-    );
+    const decision = await buildCzUohsDecision(record);
     expect(decision.fulltext).toContain("Fiktivni rozhodnuti");
     expect(Object.keys(decision.sourceRawObjects ?? {})).toEqual([
       "document",
