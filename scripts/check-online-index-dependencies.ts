@@ -94,7 +94,6 @@ export const checkOnlineIndexDependencySource = ({
     for (const index of indexes) {
       const target = onlineIndexColumnTarget(index.definitionBody);
       if (
-        target !== undefined &&
         (table === undefined || index.tableName === table) &&
         canonical(target.split(",")) === canonical(columns)
       ) {
