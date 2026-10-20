@@ -1,11 +1,13 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { cachedForRepository } from "./ci-repository-cache";
 import { GENERATORS } from "./generated-files";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const infrastructurePaths = new Set([
   ".github/workflows/ci.yml",
+  "scripts/ci-repository-cache.ts",
   "scripts/detect-service-suite-changes.ts",
   "scripts/detect-service-suite-changes.test.ts",
   "scripts/generated-files.ts",
@@ -27,6 +29,38 @@ const SUITES = {
   collab: { app: "collab" },
 } as const;
 type ServiceSuite = keyof typeof SUITES;
+
+// Own repository reads and parsing here so the four suite projections share
+// the same source inventory.
+const repositorySources = new Map<string, string>();
+const repositoryImports = new Map<
+  string,
+  ReturnType<Bun.Transpiler["scanImports"]>
+>();
+const repositoryGlobs = new Map<string, readonly string[]>();
+const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
+const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
+
+const sourceText = (root: string, file: string) =>
+  cachedForRepository(repositorySources, { root, key: file }, () =>
+    readFileSync(path.join(root, file), "utf-8"),
+  );
+
+const sourceImports = (root: string, file: string) =>
+  cachedForRepository(repositoryImports, { root, key: file }, () => {
+    const transpiler =
+      file.endsWith("tsx") || file.endsWith("jsx")
+        ? tsxTranspiler
+        : tsTranspiler;
+    return transpiler.scanImports(
+      sourceText(root, file).replace(/^#![^\n]*/u, ""),
+    );
+  });
+
+const globFiles = (root: string, pattern: string) =>
+  cachedForRepository(repositoryGlobs, { root, key: pattern }, () => [
+    ...new Bun.Glob(pattern).scanSync({ cwd: root }),
+  ]);
 
 const CORPUS_ENGINE_TEST_ALLOWLIST = new Map([
   [
@@ -64,7 +98,7 @@ const readRunner = (runners: unknown, script: string) => {
 // this module must not dereference a runner that a package edit removed.
 const loadSuites = (root: string) => {
   const manifest: unknown = JSON.parse(
-    readFileSync(path.join(root, "apps/api/package.json"), "utf-8"),
+    sourceText(root, "apps/api/package.json"),
   );
   const runners: unknown =
     typeof manifest === "object" && manifest !== null
@@ -212,7 +246,7 @@ const expandWorkspaceScopes = (packageScopes: Set<string>, root: string) => {
   const pendingPackages = [...packageScopes];
   for (const scope of pendingPackages) {
     const manifest: unknown = JSON.parse(
-      readFileSync(path.join(root, scope, "package.json"), "utf-8"),
+      sourceText(root, path.posix.join(scope, "package.json")),
     );
     if (typeof manifest !== "object" || manifest === null) {
       return `Invalid manifest: ${scope}`;
@@ -292,19 +326,17 @@ export const serviceSuiteDependencies = (
     ]);
     const testFiles = new Set<string>();
     for (const glob of testGlobs) {
-      for (const file of new Bun.Glob(glob).scanSync({ cwd: root })) {
+      for (const file of globFiles(root, glob)) {
         testFiles.add(file);
       }
     }
     for (const file of testFiles) {
-      const source = readFileSync(path.join(root, file), "utf-8");
+      const source = sourceText(root, file);
       if (selected.some(({ gate }) => gate !== "" && source.includes(gate))) {
         pending.push(file);
       }
     }
   }
-  const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
-  const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
   for (const file of pending) {
     if (dependencies.has(file)) {
       continue;
@@ -313,14 +345,7 @@ export const serviceSuiteDependencies = (
     if (!/\.[cm]?[jt]sx?$/u.test(file)) {
       continue;
     }
-    const source = readFileSync(path.join(root, file), "utf-8");
-    const transpiler =
-      file.endsWith("tsx") || file.endsWith("jsx")
-        ? tsxTranspiler
-        : tsTranspiler;
-    for (const { path: specifier } of transpiler.scanImports(
-      source.replace(/^#![^\n]*/u, ""),
-    )) {
+    for (const { path: specifier } of sourceImports(root, file)) {
       if (specifier.startsWith("@stll/")) {
         const name = workspacePackageName(specifier);
         const scope = `packages/${name}/`;
@@ -363,25 +388,32 @@ export const serviceSuiteDependencies = (
   }
   // Configuration and runner harnesses can change execution without an import.
   for (const app of apps) {
-    for (const file of new Bun.Glob(
+    for (const file of globFiles(
+      root,
       `apps/${app}/{package.json,bunfig.toml,tsconfig.json,scripts/**,src/tests/**}`,
-    ).scanSync({ cwd: root })) {
+    )) {
       dependencies.add(file);
     }
   }
   return { status: "complete" as const, dependencies, packageScopes };
 };
 
-const defaultGraphs = new Map<
-  ServiceSuite,
+const suiteGraphs = new Map<
+  string,
   ReturnType<typeof serviceSuiteDependencies>
 >();
+const suiteConfigurations = new Map<string, ReturnType<typeof loadSuites>>();
+
+const suiteConfiguration = (root: string) =>
+  cachedForRepository(suiteConfigurations, { root, key: root }, () =>
+    loadSuites(root),
+  );
 
 export const planServiceSuites = (
   files: readonly string[],
   root = repositoryRoot,
 ) => {
-  const configuration = loadSuites(root);
+  const configuration = suiteConfiguration(root);
   if (configuration.status === "unresolved") {
     console.error(configuration.message);
     return { postgres: true, corpus: true, valkey: true, collab: true };
@@ -390,13 +422,9 @@ export const planServiceSuites = (
     if (files.some((file) => directlyRequired(file, suite))) {
       return true;
     }
-    let graph = root === repositoryRoot ? defaultGraphs.get(suite) : undefined;
-    if (graph === undefined) {
-      graph = serviceSuiteDependencies(root, suite);
-      if (root === repositoryRoot) {
-        defaultGraphs.set(suite, graph);
-      }
-    }
+    const graph = cachedForRepository(suiteGraphs, { root, key: suite }, () =>
+      serviceSuiteDependencies(root, suite),
+    );
     let selected: boolean;
     switch (graph.status) {
       case "unresolved":
