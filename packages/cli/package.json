@@ -64,6 +64,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
+    "@stll/scripts": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:"
   },

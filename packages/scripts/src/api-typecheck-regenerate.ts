@@ -13,31 +13,23 @@ import {
 } from "./typecheck-cache-contract";
 
 export const API_TYPECHECK_REGENERATION_COMMANDS = [
-  [bunExecutable(), "--cwd=packages/cli", "run", "codegen:runtime"],
-  [bunExecutable(), "--cwd=apps/api", "run", "generate:capability-runtime"],
+  ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
+  ["bun", "--cwd=apps/api", "run", "generate:capability-runtime"],
   [
-    bunExecutable(),
+    "bun",
     "--cwd=apps/api",
     "run",
     "generate:typecheck-declarations",
     "--write-surface",
   ],
-  [
-    bunExecutable(),
-    "packages/scripts/src/api-typecheck-partition.ts",
-    "--write",
-  ],
-  [
-    bunExecutable(),
-    "packages/scripts/src/api-typecheck-partition.ts",
-    "--resolved",
-  ],
+  ["bun", "packages/scripts/src/api-typecheck-partition.ts", "--write"],
+  ["bun", "packages/scripts/src/api-typecheck-partition.ts", "--resolved"],
 ] as const;
 
 if (import.meta.main) {
   const root = path.resolve(import.meta.dirname, "../../..");
   for (const command of API_TYPECHECK_REGENERATION_COMMANDS) {
-    const result = Bun.spawnSync([...command], {
+    const result = Bun.spawnSync([bunExecutable(), ...command.slice(1)], {
       cwd: root,
       stdout: "inherit",
       stderr: "inherit",

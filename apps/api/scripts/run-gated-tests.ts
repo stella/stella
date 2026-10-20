@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import packageJson from "../package.json" with { type: "json" };

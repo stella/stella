@@ -1,7 +1,5 @@
 import * as v from "valibot";
 
-import { bunExecutable } from "@stll/scripts/src/bun-executable";
-
 export const SELFHOST_COMPOSE_PATH = "docker-compose.selfhost.yml";
 export const SELFHOST_ENV_EXAMPLE_PATH = "deploy/selfhost/.env.example";
 export const SELFHOST_ENV_PATH = "deploy/selfhost/.env";
@@ -57,7 +55,7 @@ export const SELFHOST_SERVICE_CONTRACT = {
   },
   [SELFHOST_SERVICE.documentProcessingWorker]: {
     type: "queue-worker",
-    command: [bunExecutable(), "/app/document-processing-worker.js"],
+    command: ["bun", "/app/document-processing-worker.js"],
     description: "Durable document-processing queue consumer",
     image: "application",
     readiness: "api-ready",
