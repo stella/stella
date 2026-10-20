@@ -153,3 +153,102 @@ test("every builder bundle is a release build", () => {
   );
   expect(runnerPackage.scripts.build).toContain(RELEASE_DEFINE);
 });
+
+// A package that loads its native binding by a path relative to its own module
+// (`createRequire(import.meta.url)("../index.cjs")`) resolves that path next to
+// the bundle once it is bundled or compiled, so the entrypoint crashes at start
+// with "Cannot find module ../index.cjs". The bundler follows a static import of
+// the loader, so only this relative shape is refused.
+const RELATIVE_NATIVE_LOADER =
+  /createRequire\(import\.meta\.url\)\(\s*["']\.\.\/index\.cjs["']\s*\)/u;
+const REPOSITORY_ROOT = nodePath.resolve(import.meta.dirname, "..");
+const SOURCE_ENTRY = /^apps\/\S+\.[cm]?tsx?$/u;
+
+const bundledEntrypoints = (): string[] => {
+  const image = logicalInstructions(stage("builder"))
+    .filter((instruction) => instruction.startsWith("RUN "))
+    .flatMap((instruction) =>
+      instruction
+        .split(/\bbun build\b/u)
+        .slice(1)
+        .flatMap((invocation) =>
+          (invocation.split("&&").at(0) ?? "")
+            .split(/\s+/u)
+            .filter((token) => SOURCE_ENTRY.test(token)),
+        ),
+    );
+  const runner = runnerPackage.scripts.build
+    .split("&&")
+    .filter((command) => /\bbun build\b/u.test(command))
+    .flatMap((command) =>
+      command
+        .split(/\s+/u)
+        .filter((token) => /\.[cm]?tsx?$/u.test(token))
+        .map((token) => nodePath.posix.join("apps/legal-atlas-runner", token)),
+    );
+  return [...new Set([...image, ...runner])].toSorted();
+};
+
+const entrypoints = bundledEntrypoints();
+
+// A scoped install may leave an app's third-party dependency absent. Those
+// imports stay external so the graph still builds; every @stll package keeps
+// resolving normally, so a missing one still fails the build.
+const UNINSTALLED_THIRD_PARTY_EXTERNAL: Bun.BunPlugin = {
+  name: "uninstalled-third-party-external",
+  setup: (build) => {
+    build.onResolve({ filter: /^[^./]/u }, ({ path, importer }) => {
+      if (path.startsWith("@stll/") || path.startsWith("@/")) {
+        return undefined;
+      }
+      try {
+        Bun.resolveSync(path, nodePath.dirname(importer));
+        return undefined;
+      } catch {
+        return { path, external: true };
+      }
+    });
+  },
+};
+
+test("the native-loader guard covers the server and the case-law runner", () => {
+  expect(entrypoints).toContain("apps/api/src/server.ts");
+  expect(entrypoints).toContain("apps/legal-atlas-runner/src/index.ts");
+});
+
+// One build over every entrypoint resolves the shared graph once: per-entry
+// builds repeat it dozens of times and starve the checks that share the pool.
+test("no bundled entrypoint reaches a package that loads its native binding by a relative path", async () => {
+  const result = await Bun.build({
+    entrypoints: entrypoints.map((entry) =>
+      nodePath.join(REPOSITORY_ROOT, entry),
+    ),
+    target: "bun",
+    metafile: true,
+    plugins: [UNINSTALLED_THIRD_PARTY_EXTERNAL],
+  });
+  expect(result.success).toBe(true);
+  const inputs = Object.entries(result.metafile?.inputs ?? {});
+  const relativeLoaders = new Set(
+    inputs
+      .map(([file]) => file)
+      .filter(
+        (file) =>
+          file.includes("node_modules/") &&
+          RELATIVE_NATIVE_LOADER.test(
+            readFileSync(nodePath.resolve(file), "utf-8"),
+          ),
+      ),
+  );
+  const offenders = inputs.flatMap(([file, input]) =>
+    file.includes("node_modules/")
+      ? []
+      : input.imports
+          .filter((imported) => relativeLoaders.has(imported.path))
+          .map(
+            (imported) =>
+              `${file} -> ${imported.path.replace(/^.*node_modules\//u, "")}`,
+          ),
+  );
+  expect(offenders).toEqual([]);
+}, 120_000);

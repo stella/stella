@@ -1009,6 +1009,9 @@
       "saved": "Į bylą {matter} išsaugota {count, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}"
     },
     "newestDecisions": "Naujausi sprendimai",
+    "noResults": {
+      "hint": "Išbandykite kitus žodžius, patobulinkite užklausą su DI arba užduokite klausimą pokalbyje."
+    },
     "notesFilter": {
       "ai": "DI",
       "human": "Žmonių"
@@ -1083,6 +1086,10 @@
         "medium": "Vidutinė",
         "short": "Trumpa"
       }
+    },
+    "rewritten": {
+      "line": "Tikslių atitikmenų <bdi>{original}</bdi> nėra; rodomi rezultatai pagal <bdi>{query}</bdi>",
+      "searchOriginal": "Ieškoti mano pradinių žodžių"
     },
     "sameCaseNumber": "{count, plural, one {# sprendimas turi} few {# sprendimai turi} many {# sprendimo turi} other {# sprendimų turi}} šį bylos numerį. Pasirinkite teismą.",
     "searchLabel": "Ieškoti teismų praktikoje",
@@ -2665,10 +2672,12 @@
     "api": {
       "badRequest": "Užklausos nepavyko užbaigti.",
       "caseLawCountryUnavailable": "Šios šalies teismų praktika nepasiekiama. Pasirinkite kitą šalį.",
+      "caseLawIdentityOnly": "Šioje šalyje galima tik tiksli sprendimų paieška ir jų skaitymas.",
       "caseLawSearchUnavailable": "Šios šalies teismų praktikos paieška nepasiekiama. Jos viešus teismų sprendimus vis tiek galite skaityti.",
       "conflict": "Užklausa nesuderinama su dabartine būsena.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "legislationCountryUnavailable": "Šios šalies teisės aktai nepasiekiami. Pasirinkite kitą šalį.",
+      "legislationIdentityOnly": "Šioje šalyje galima tik tiksli teisės aktų paieška ir jų skaitymas.",
       "legislationSearchUnavailable": "Šios šalies teisės aktų paieška nepasiekiama. Jos viešus teisės aktus vis tiek galite skaityti.",
       "notFound": "Nepavyko rasti prašomo objekto.",
       "payloadTooLarge": "Užklausa per didelė.",
@@ -2691,6 +2700,10 @@
       "aiConfigModelInvalid": "DI modelio konfigūracija netinkama. Patikrinkite pasirinktus modelius.",
       "aiConfigProviderInvalid": "DI teikėjo konfigūracija netinkama. Patikrinkite teikėjo nustatymus.",
       "aiConfigProviderValidationFailed": "DI teikėjas atmetė konfigūraciją. Patikrinkite API raktą ir modelį.",
+      "aiOutputInvalid": "DI atsakymas buvo netikėto formato. Bandykite dar kartą.",
+      "aiOutputModerated": "DI teikėjas moderavo išvestį. Performuluokite užklausą arba pasirinkite kitą modelį.",
+      "aiProviderTaskUnsupported": "Sukonfigūruotas DI teikėjas negali atlikti šios užduoties. Pasirinkite teikėją, kuris gali.",
+      "aiUnknown": "DI užklausa nepavyko. Bandykite dar kartą.",
       "clauseDirectivesInvalid": "Susietoje sąlygoje yra netinkamų direktyvų. Prieš pildydami šabloną, pataisykite sąlygą.",
       "clauseDirectivesInvalidDetails": "Sąlygoje {clauseName}, esančioje lauke {slotName}, yra netinkamų direktyvų. Atidarykite sąlygų redaktorių, pataisykite nurodytas pastraipas ir dar kartą užpildykite šabloną.",
       "clauseDirectivesOverrideInvalidDetails": "Sąlygos {clauseName} pakeistas tekstas lauke {slotName} turi netinkamų direktyvų. Pataisykite šio pildymo pakeistą tekstą ir bandykite dar kartą.",
@@ -4237,6 +4250,10 @@
     "archivedEmpty": "Nėra archyvuotų įrašų.",
     "archivedToast": "Atmintis suarchyvuota",
     "createdToast": "Įrašyta į atmintį",
+    "deleteConfirmation": "Norėdami patvirtinti, įveskite {confirmation}",
+    "deleteDescription": "Šis veiksmas visam laikui ištrins šią atmintį. Jo anuliuoti negalima.",
+    "deleteTitle": "Ištrinti atmintį?",
+    "deletedToast": "Atmintis ištrinta",
     "empty": "Atmintyje kol kas nieko nėra.",
     "kinds": {
       "decision": "Sprendimas",
@@ -5165,6 +5182,8 @@
     "outline": "Turinys",
     "outlineJumpLabel": "Pereiti prie nuostatos",
     "outlineJumpPlaceholder": "§ 10 arba pavadinimas",
+    "pendingChanges": "Būsimi pakeitimai",
+    "pendingChangesIncomplete": "Skelbėjo duomenys gali neapimti visų būsimų pakeitimų.",
     "provisionAskContextPrompt": "\n\nIštraukos, kuriose nuostata taikoma autoritetingiausiuose sprendimuose:\n{passages}\n\nNaudok teismų praktikos įrankius, kad perskaitytum bet kurį iš šių sprendimų visą arba rastum daugiau sprendimų, kuriuose nuostata cituojama.",
     "provisionAskPlaceholder": "Klauskite apie šią nuostatą",
     "provisionAskQuestionPrompt": "Dėl {subject}: {question}",
