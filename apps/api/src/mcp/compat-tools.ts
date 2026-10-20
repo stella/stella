@@ -16,6 +16,7 @@ import {
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
 import {
+  type AuthorizedWorkspaceIds,
   type AuthorizedWorkspaceReadError,
   authorizedWorkspaceIds,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
@@ -90,6 +91,38 @@ type CompatFetchPayload = {
 
 const PUBLIC_LAW_FEATURE = "FEATURE_PUBLIC_LAW";
 
+/**
+ * The one compat path into matter content: the workspace check and the
+ * content read share one scoped transaction, and any failure inside it,
+ * thrown or returned, comes back as an error Result for the internal
+ * failure envelope.
+ */
+const readAuthorizedMatterContent = async <T>(
+  context: McpRequestContext,
+  read: (
+    tx: Parameters<Parameters<McpRequestContext["scopedDb"]>[0]>[0],
+    workspaceIds: AuthorizedWorkspaceIds,
+  ) => Promise<T>,
+): Promise<Result<T, unknown>> =>
+  (
+    await Result.tryPromise({
+      try: async () =>
+        await context.scopedDb(
+          async (tx): Promise<Result<T, AuthorizedWorkspaceReadError>> => {
+            const workspaceIds = await authorizedWorkspaceIds(tx, {
+              organizationId: context.organizationId,
+              workspaceIds: context.accessibleWorkspaceIds,
+            });
+            if (workspaceIds.isErr()) {
+              return Result.err(workspaceIds.error);
+            }
+            return Result.ok(await read(tx, workspaceIds.value));
+          },
+        ),
+      catch: (cause) => cause,
+    })
+  ).andThen((inner) => inner);
+
 const getFetchableEntityMap = async ({
   context,
   entityIds,
@@ -103,22 +136,15 @@ const getFetchableEntityMap = async ({
 
   const safeEntityIds = entityIds.map(brandPersistedEntityId);
 
-  const loaded = await context.scopedDb(async (tx) => {
-    const workspaceIds = await authorizedWorkspaceIds(tx, {
-      organizationId: context.organizationId,
-      workspaceIds: context.accessibleWorkspaceIds,
-    });
-    if (workspaceIds.isErr()) {
-      return workspaceIds;
-    }
-    return Result.ok(
+  const loaded = await readAuthorizedMatterContent(
+    context,
+    async (tx, workspaceIds) =>
       await loadCurrentExtractedSources(tx, {
         entityIds: safeEntityIds,
         organizationId: context.organizationId,
-        workspaceIds: workspaceIds.value,
+        workspaceIds,
       }),
-    );
-  });
+  );
   if (loaded.isErr()) {
     return loaded;
   }
@@ -420,7 +446,7 @@ const searchMatterKnowledge = async ({
   context: McpRequestContext;
   cursor: string | undefined;
   query: string;
-}): Promise<Result<MatterSearchPage, AuthorizedWorkspaceReadError>> => {
+}): Promise<Result<MatterSearchPage, unknown>> => {
   const page = await (
     context.testDependencies?.getSearchReader ?? getSearchReader
   )(context.scopedDb).search({
@@ -582,22 +608,15 @@ const handleCompatFetchTool: McpToolHandler<
     return errorResult("Document content is unavailable");
   }
 
-  const loaded = await context.scopedDb(async (tx) => {
-    const workspaceIds = await authorizedWorkspaceIds(tx, {
-      organizationId: context.organizationId,
-      workspaceIds: context.accessibleWorkspaceIds,
-    });
-    if (workspaceIds.isErr()) {
-      return workspaceIds;
-    }
-    return Result.ok(
+  const loaded = await readAuthorizedMatterContent(
+    context,
+    async (tx, workspaceIds) =>
       await loadCurrentExtractedContents(tx, {
         entityIds: [entityId],
         organizationId: context.organizationId,
-        workspaceIds: workspaceIds.value,
+        workspaceIds,
       }),
-    );
-  });
+  );
   if (loaded.isErr()) {
     return internalFailureResult(loaded.error);
   }
