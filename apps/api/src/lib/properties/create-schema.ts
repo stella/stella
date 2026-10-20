@@ -1,4 +1,5 @@
 import { t } from "elysia";
+import type { Static } from "typebox";
 import { Value } from "typebox/value";
 
 import {
@@ -47,7 +48,7 @@ export const createPropertyBodySchema = t.Object({
   fallback: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 1000 }))),
 });
 
-export type CreatePropertyBody = typeof createPropertyBodySchema.static;
+export type CreatePropertyBody = Static<typeof createPropertyBodySchema>;
 
 const arrayOrEmpty = <T>(value: T[] | undefined): T[] => {
   if (value === undefined) {

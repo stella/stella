@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
+import type { Static } from "typebox";
 
 import {
   tDefaultVarchar,
@@ -20,7 +21,7 @@ export const searchHistoryScopeQuery = t.Object({
 });
 
 type SearchHistoryScopePrecondition = {
-  query: typeof searchHistoryScopeQuery.static;
+  query: Static<typeof searchHistoryScopeQuery>;
   userId: string;
   organizationId: string;
 };

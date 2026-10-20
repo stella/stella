@@ -155,214 +155,391 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .guard({
     validateAuth: true,
   })
-  .get("/", readWorkspaces.handler, {
-    permissions: readWorkspaces.config.permissions,
-  })
-  .get("/member-previews", listWorkspaceMemberPreviews.handler, {
-    permissions: listWorkspaceMemberPreviews.config.permissions,
-    query: listWorkspaceMemberPreviews.config.query,
-  })
-  .get("/navigation", readWorkspaceNavigation.handler, {
-    permissions: readWorkspaceNavigation.config.permissions,
-    query: readWorkspaceNavigation.config.query,
-  })
-  .put("/", createWorkspaces.handler, {
-    body: createWorkspaces.config.body,
-    permissions: createWorkspaces.config.permissions,
-  })
-  .get("/active", readActiveWorkspace.handler, {
-    permissions: readActiveWorkspace.config.permissions,
-  })
+  .get(
+    "/",
+    {
+      permissions: readWorkspaces.config.permissions,
+    },
+    readWorkspaces.handler,
+  )
+  .get(
+    "/member-previews",
+    {
+      permissions: listWorkspaceMemberPreviews.config.permissions,
+      query: listWorkspaceMemberPreviews.config.query,
+    },
+    listWorkspaceMemberPreviews.handler,
+  )
+  .get(
+    "/navigation",
+    {
+      permissions: readWorkspaceNavigation.config.permissions,
+      query: readWorkspaceNavigation.config.query,
+    },
+    readWorkspaceNavigation.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createWorkspaces.config.body,
+      permissions: createWorkspaces.config.permissions,
+    },
+    createWorkspaces.handler,
+  )
+  .get(
+    "/active",
+    {
+      permissions: readActiveWorkspace.config.permissions,
+    },
+    readActiveWorkspace.handler,
+  )
   .group(
     "/:workspaceId",
     {
       params: workspaceParams({}),
+      schema: "merge",
       validateWorkspaceAccess: true,
     },
     (app) =>
       app
-        .get("/", readWorkspace.handler, {
-          permissions: readWorkspace.config.permissions,
-        })
-        .get("/workflow", readWorkflow.handler, {
-          permissions: readWorkflow.config.permissions,
-        })
-        .post("/workflow/start", workflowStart.handler, {
-          body: workflowStart.config.body,
-          permissions: workflowStart.config.permissions,
-        })
-        .post("/workflow/target-count", workflowTargetCount.handler, {
-          body: workflowTargetCount.config.body,
-          permissions: workflowTargetCount.config.permissions,
-        })
-        .post("/cell-retry", cellRetry.handler, {
-          body: cellRetry.config.body,
-          permissions: cellRetry.config.permissions,
-        })
-        .post("/justifications/query", readJustifications.handler, {
-          body: readJustifications.config.body,
-          permissions: readJustifications.config.permissions,
-        })
-        .post("/bounding-boxes", generateBoundingBoxes.handler, {
-          body: generateBoundingBoxes.config.body,
-          permissions: generateBoundingBoxes.config.permissions,
-        })
-        .get("/infosoud/courts", infosoudCourts.handler, {
-          permissions: infosoudCourts.config.permissions,
-        })
-        .post("/infosoud/lookup", infosoudLookup.handler, {
-          body: infosoudLookup.config.body,
-          permissions: infosoudLookup.config.permissions,
-        })
-        .post("/infosoud/import-agenda", infosoudImportAgenda.handler, {
-          body: infosoudImportAgenda.config.body,
-          permissions: infosoudImportAgenda.config.permissions,
-        })
-        .get("/activity", readWorkspaceActivity.handler, {
-          permissions: readWorkspaceActivity.config.permissions,
-          query: readWorkspaceActivity.config.query,
-        })
-        .get("/overview", readOverview.handler, {
-          permissions: readOverview.config.permissions,
-          query: readOverview.config.query,
-        })
-        .get("/search-preview", readSearchPreview.handler, {
-          permissions: readSearchPreview.config.permissions,
-        })
-        .get("/correspondence/drops", listCorrespondenceDrops.handler, {
-          permissions: listCorrespondenceDrops.config.permissions,
-          query: listCorrespondenceDrops.config.query,
-        })
-        .get("/overview/activity", readOverviewActivity.handler, {
-          permissions: readOverviewActivity.config.permissions,
-          query: readOverviewActivity.config.query,
-        })
-        .get("/overview/activity/actors", readOverviewActivityActors.handler, {
-          permissions: readOverviewActivityActors.config.permissions,
-          query: readOverviewActivityActors.config.query,
-        })
-        .get("/overview/activity/export", exportOverviewActivity.handler, {
-          permissions: exportOverviewActivity.config.permissions,
-          query: exportOverviewActivity.config.query,
-        })
-        .post("/", updateWorkspace.handler, {
-          body: updateWorkspace.config.body,
-          permissions: updateWorkspace.config.permissions,
-        })
-        .post("/duplicate", duplicateWorkspace.handler, {
-          body: duplicateWorkspace.config.body,
-          permissions: duplicateWorkspace.config.permissions,
-        })
-        .post("/active", updateActiveWorkspace.handler, {
-          permissions: updateActiveWorkspace.config.permissions,
-        })
-        .delete("/", deleteWorkspace.handler, {
-          permissions: deleteWorkspace.config.permissions,
-        })
-        .post("/archive", archiveWorkspace.handler, {
-          permissions: archiveWorkspace.config.permissions,
-        })
+        .get(
+          "/",
+          {
+            permissions: readWorkspace.config.permissions,
+          },
+          readWorkspace.handler,
+        )
+        .get(
+          "/workflow",
+          {
+            permissions: readWorkflow.config.permissions,
+          },
+          readWorkflow.handler,
+        )
+        .post(
+          "/workflow/start",
+          {
+            body: workflowStart.config.body,
+            permissions: workflowStart.config.permissions,
+          },
+          workflowStart.handler,
+        )
+        .post(
+          "/workflow/target-count",
+          {
+            body: workflowTargetCount.config.body,
+            permissions: workflowTargetCount.config.permissions,
+          },
+          workflowTargetCount.handler,
+        )
+        .post(
+          "/cell-retry",
+          {
+            body: cellRetry.config.body,
+            permissions: cellRetry.config.permissions,
+          },
+          cellRetry.handler,
+        )
+        .post(
+          "/justifications/query",
+          {
+            body: readJustifications.config.body,
+            permissions: readJustifications.config.permissions,
+          },
+          readJustifications.handler,
+        )
+        .post(
+          "/bounding-boxes",
+          {
+            body: generateBoundingBoxes.config.body,
+            permissions: generateBoundingBoxes.config.permissions,
+          },
+          generateBoundingBoxes.handler,
+        )
+        .get(
+          "/infosoud/courts",
+          {
+            permissions: infosoudCourts.config.permissions,
+          },
+          infosoudCourts.handler,
+        )
+        .post(
+          "/infosoud/lookup",
+          {
+            body: infosoudLookup.config.body,
+            permissions: infosoudLookup.config.permissions,
+          },
+          infosoudLookup.handler,
+        )
+        .post(
+          "/infosoud/import-agenda",
+          {
+            body: infosoudImportAgenda.config.body,
+            permissions: infosoudImportAgenda.config.permissions,
+          },
+          infosoudImportAgenda.handler,
+        )
+        .get(
+          "/activity",
+          {
+            permissions: readWorkspaceActivity.config.permissions,
+            query: readWorkspaceActivity.config.query,
+          },
+          readWorkspaceActivity.handler,
+        )
+        .get(
+          "/overview",
+          {
+            permissions: readOverview.config.permissions,
+            query: readOverview.config.query,
+          },
+          readOverview.handler,
+        )
+        .get(
+          "/search-preview",
+          {
+            permissions: readSearchPreview.config.permissions,
+          },
+          readSearchPreview.handler,
+        )
+        .get(
+          "/correspondence/drops",
+          {
+            permissions: listCorrespondenceDrops.config.permissions,
+            query: listCorrespondenceDrops.config.query,
+          },
+          listCorrespondenceDrops.handler,
+        )
+        .get(
+          "/overview/activity",
+          {
+            permissions: readOverviewActivity.config.permissions,
+            query: readOverviewActivity.config.query,
+          },
+          readOverviewActivity.handler,
+        )
+        .get(
+          "/overview/activity/actors",
+          {
+            permissions: readOverviewActivityActors.config.permissions,
+            query: readOverviewActivityActors.config.query,
+          },
+          readOverviewActivityActors.handler,
+        )
+        .get(
+          "/overview/activity/export",
+          {
+            permissions: exportOverviewActivity.config.permissions,
+            query: exportOverviewActivity.config.query,
+          },
+          exportOverviewActivity.handler,
+        ),
+  )
+  .group(
+    "/:workspaceId",
+    {
+      params: workspaceParams({}),
+      schema: "merge",
+      validateWorkspaceAccess: true,
+    },
+    (app) =>
+      app
+        .post(
+          "/",
+          {
+            body: updateWorkspace.config.body,
+            permissions: updateWorkspace.config.permissions,
+          },
+          updateWorkspace.handler,
+        )
+        .post(
+          "/duplicate",
+          {
+            body: duplicateWorkspace.config.body,
+            permissions: duplicateWorkspace.config.permissions,
+          },
+          duplicateWorkspace.handler,
+        )
+        .post(
+          "/active",
+          {
+            permissions: updateActiveWorkspace.config.permissions,
+          },
+          updateActiveWorkspace.handler,
+        )
+        .delete(
+          "/",
+          {
+            permissions: deleteWorkspace.config.permissions,
+          },
+          deleteWorkspace.handler,
+        )
+        .post(
+          "/archive",
+          {
+            permissions: archiveWorkspace.config.permissions,
+          },
+          archiveWorkspace.handler,
+        )
         // Unarchive is mounted below, outside the active-only group.
-        .get("/contacts", readWorkspaceContacts.handler, {
-          permissions: readWorkspaceContacts.config.permissions,
-        })
-        .put("/contacts", createWorkspaceContact.handler, {
-          body: createWorkspaceContact.config.body,
-          permissions: createWorkspaceContact.config.permissions,
-        })
+        .get(
+          "/contacts",
+          {
+            permissions: readWorkspaceContacts.config.permissions,
+          },
+          readWorkspaceContacts.handler,
+        )
+        .put(
+          "/contacts",
+          {
+            body: createWorkspaceContact.config.body,
+            permissions: createWorkspaceContact.config.permissions,
+          },
+          createWorkspaceContact.handler,
+        )
         .delete(
           "/contacts/:workspaceContactId",
-          deleteWorkspaceContact.handler,
           {
             params: deleteWorkspaceContact.config.params,
             permissions: deleteWorkspaceContact.config.permissions,
           },
+          deleteWorkspaceContact.handler,
         )
-        .get("/anonymization-terms", readWorkspaceAnonymizationTerms.handler, {
-          permissions: readWorkspaceAnonymizationTerms.config.permissions,
-        })
+        .get(
+          "/anonymization-terms",
+          {
+            permissions: readWorkspaceAnonymizationTerms.config.permissions,
+          },
+          readWorkspaceAnonymizationTerms.handler,
+        )
         .put(
           "/anonymization-terms",
-          createWorkspaceAnonymizationTerms.handler,
           {
             body: createWorkspaceAnonymizationTerms.config.body,
             permissions: createWorkspaceAnonymizationTerms.config.permissions,
           },
+          createWorkspaceAnonymizationTerms.handler,
         )
         .delete(
           "/anonymization-terms/:entryId",
-          deleteWorkspaceAnonymizationTerm.handler,
           {
             params: deleteWorkspaceAnonymizationTerm.config.params,
             permissions: deleteWorkspaceAnonymizationTerm.config.permissions,
           },
+          deleteWorkspaceAnonymizationTerm.handler,
         )
         .get(
           "/anonymization-allowlist",
-          readWorkspaceAnonymizationAllowlist.handler,
           {
             permissions: readWorkspaceAnonymizationAllowlist.config.permissions,
             query: readWorkspaceAnonymizationAllowlist.config.query,
           },
+          readWorkspaceAnonymizationAllowlist.handler,
         )
         .put(
           "/anonymization-allowlist",
-          createWorkspaceAnonymizationAllowlistEntry.handler,
           {
             body: createWorkspaceAnonymizationAllowlistEntry.config.body,
             permissions:
               createWorkspaceAnonymizationAllowlistEntry.config.permissions,
           },
+          createWorkspaceAnonymizationAllowlistEntry.handler,
         )
         .delete(
           "/anonymization-allowlist/:entryId",
-          deleteWorkspaceAnonymizationAllowlistEntry.handler,
           {
             params: deleteWorkspaceAnonymizationAllowlistEntry.config.params,
             permissions:
               deleteWorkspaceAnonymizationAllowlistEntry.config.permissions,
           },
+          deleteWorkspaceAnonymizationAllowlistEntry.handler,
+        ),
+  )
+  .group(
+    "/:workspaceId",
+    {
+      params: workspaceParams({}),
+      schema: "merge",
+      validateWorkspaceAccess: true,
+    },
+    (app) =>
+      app
+        .get(
+          "/correspondence",
+          {
+            permissions: listCorrespondence.config.permissions,
+            query: listCorrespondence.config.query,
+          },
+          listCorrespondence.handler,
         )
-        .get("/correspondence", listCorrespondence.handler, {
-          permissions: listCorrespondence.config.permissions,
-          query: listCorrespondence.config.query,
-        })
-        .get("/correspondence/address", getMatterInboundAddress.handler, {
-          permissions: getMatterInboundAddress.config.permissions,
-        })
-        .post("/correspondence/address", createMatterInboundAddress.handler, {
-          permissions: createMatterInboundAddress.config.permissions,
-        })
-        .delete("/correspondence/address", deleteMatterInboundAddress.handler, {
-          permissions: deleteMatterInboundAddress.config.permissions,
-        })
-        .get("/correspondence/:correspondenceId", getCorrespondence.handler, {
-          permissions: getCorrespondence.config.permissions,
-          params: getCorrespondence.config.params,
-        })
+        .get(
+          "/correspondence/address",
+          {
+            permissions: getMatterInboundAddress.config.permissions,
+          },
+          getMatterInboundAddress.handler,
+        )
+        .post(
+          "/correspondence/address",
+          {
+            permissions: createMatterInboundAddress.config.permissions,
+          },
+          createMatterInboundAddress.handler,
+        )
+        .delete(
+          "/correspondence/address",
+          {
+            permissions: deleteMatterInboundAddress.config.permissions,
+          },
+          deleteMatterInboundAddress.handler,
+        )
+        .get(
+          "/correspondence/:correspondenceId",
+          {
+            permissions: getCorrespondence.config.permissions,
+            params: getCorrespondence.config.params,
+          },
+          getCorrespondence.handler,
+        )
         .patch(
           "/correspondence/:correspondenceId",
-          updateCorrespondence.handler,
           {
             permissions: updateCorrespondence.config.permissions,
             params: updateCorrespondence.config.params,
             body: updateCorrespondence.config.body,
           },
+          updateCorrespondence.handler,
         )
-        .get("/members", readWorkspaceMembers.handler, {
-          permissions: readWorkspaceMembers.config.permissions,
-        })
-        .put("/members", addWorkspaceMember.handler, {
-          body: addWorkspaceMember.config.body,
-          permissions: addWorkspaceMember.config.permissions,
-        })
-        .delete("/members/:userId", removeWorkspaceMember.handler, {
-          body: removeWorkspaceMember.config.body,
-          params: removeWorkspaceMember.config.params,
-          permissions: removeWorkspaceMember.config.permissions,
-        }),
+        .get(
+          "/members",
+          {
+            permissions: readWorkspaceMembers.config.permissions,
+          },
+          readWorkspaceMembers.handler,
+        )
+        .put(
+          "/members",
+          {
+            body: addWorkspaceMember.config.body,
+            permissions: addWorkspaceMember.config.permissions,
+          },
+          addWorkspaceMember.handler,
+        )
+        .delete(
+          "/members/:userId",
+          {
+            body: removeWorkspaceMember.config.body,
+            params: removeWorkspaceMember.config.params,
+            permissions: removeWorkspaceMember.config.permissions,
+          },
+          removeWorkspaceMember.handler,
+        ),
   )
-  .post("/:workspaceId/unarchive", unarchiveWorkspace.handler, {
-    permissions: unarchiveWorkspace.config.permissions,
-    validateWorkspaceAccessIncludingArchived: true,
-  });
+  .post(
+    "/:workspaceId/unarchive",
+    {
+      permissions: unarchiveWorkspace.config.permissions,
+      validateWorkspaceAccessIncludingArchived: true,
+    },
+    unarchiveWorkspace.handler,
+  );

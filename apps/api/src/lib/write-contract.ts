@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import { Kind } from "typebox";
 
 import { HandlerError } from "./errors/tagged-errors";
 import {
@@ -187,10 +186,10 @@ const contracts = new WeakMap<object, WriteContract>();
 
 // Elysia integer/number schemas transform a union of numeric strings and numbers.
 const isRevisionField = (schema: unknown): boolean => {
-  if (typeof schema !== "object" || schema === null || !(Kind in schema)) {
+  if (typeof schema !== "object" || schema === null || !("~kind" in schema)) {
     return false;
   }
-  switch (schema[Kind]) {
+  switch (schema["~kind"]) {
     case "String":
     case "Integer":
     case "Number":
@@ -209,10 +208,10 @@ const isRevisionField = (schema: unknown): boolean => {
 
 /** TypeBox unions require the token in every alternative; an intersection may supply it in one conjunct. */
 const requiresField = (schema: unknown, field: string): boolean => {
-  if (typeof schema !== "object" || schema === null || !(Kind in schema)) {
+  if (typeof schema !== "object" || schema === null || !("~kind" in schema)) {
     return false;
   }
-  switch (schema[Kind]) {
+  switch (schema["~kind"]) {
     case "Object": {
       if (
         !("type" in schema) ||
@@ -229,12 +228,12 @@ const requiresField = (schema: unknown, field: string): boolean => {
       const value: unknown = Object.entries(schema.properties)
         .find(([key]) => key === field)
         ?.at(1);
-      if (typeof value !== "object" || value === null || !(Kind in value)) {
+      if (typeof value !== "object" || value === null || !("~kind" in value)) {
         return false;
       }
       if (field === "expectedUpdatedAt") {
         return (
-          value[Kind] === "String" &&
+          value["~kind"] === "String" &&
           "format" in value &&
           value.format === "date-time"
         );

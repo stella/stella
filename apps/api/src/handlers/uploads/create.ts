@@ -60,7 +60,7 @@ const baseFileMetadataSchema = {
   // Lowercase hex, exactly 64 chars. The same format the legacy
   // entity upload stores at `fields.content.sha256Hex`, so we can
   // round-trip without re-encoding inside the migration.
-  sha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
+  sha256Hex: t.String({ pattern: "^[0-9a-f]{64}$" }),
 } as const;
 
 const skillPackFileMetadataSchema = {

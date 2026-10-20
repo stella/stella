@@ -33,7 +33,10 @@ const desktopRegistryRequestIdentityHeaders = {
 export const desktopRegistryRequestHeaders = t.Object(
   {
     ...desktopRegistryRequestIdentityHeaders,
-    "content-type": t.RegExp(/^application\/json(?:\s*;.*)?$/iu),
+    "content-type": t.String({
+      maxLength: 255,
+      pattern: "^application/json(?:\\s*;.*)?$",
+    }),
   },
   { additionalProperties: true },
 );

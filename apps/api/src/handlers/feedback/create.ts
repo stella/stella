@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "typebox";
 
 import {
   FEEDBACK_AREAS,
@@ -74,7 +75,7 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-type FeedbackBody = (typeof config)["body"]["static"];
+type FeedbackBody = Static<(typeof config)["body"]>;
 
 const toReportInput = (body: FeedbackBody): FeedbackReportInput => {
   const report: FeedbackReportInput = {

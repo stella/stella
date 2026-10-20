@@ -86,10 +86,10 @@ test("a pack the file scan rejects is refused and nothing is installed", async (
     ),
   );
 
-  if (!("code" in result)) {
+  if (!("~status" in result)) {
     throw new TypeError("expected the upload to be refused");
   }
-  expect(result.code).toBe(422);
+  expect(result.status).toBe(422);
   expect(result.response).toMatchObject({
     code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
   });
@@ -116,7 +116,7 @@ test("a pack with a binary asset is installed and the response lists the file le
     new File([bytes], `${name}.zip`, { type: "application/zip" }),
   );
 
-  if ("code" in result) {
+  if ("~status" in result) {
     throw new TypeError("expected the pack to be installed");
   }
   expect(result.skippedFiles).toEqual([
@@ -130,7 +130,7 @@ test("a clean pack is installed", async () => {
 
   const result = await upload(skillFile(name, "Follow the checklist."));
 
-  expect("code" in result).toBe(false);
+  expect("~status" in result).toBe(false);
   expect(await installedCount(name)).toBe(1);
 });
 
@@ -147,10 +147,10 @@ test("a skill that names a tool stella does not have is refused", async () => {
     ),
   );
 
-  if (!("code" in result)) {
+  if (!("~status" in result)) {
     throw new TypeError("expected the upload to be refused");
   }
-  expect(result.code).toBe(400);
+  expect(result.status).toBe(400);
   expect(JSON.stringify(result.response)).toContain("save_playbok");
   expect(await installedCount(name)).toBe(0);
 });

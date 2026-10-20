@@ -180,7 +180,7 @@ const getImportClockBody = async (fixture: HistoryFixture) => {
   );
   if (result instanceof ElysiaStatus) {
     return panic(
-      `Expected import clock success, received status ${result.code}`,
+      `Expected import clock success, received status ${result.status}`,
     );
   }
   return { clock: result, clientNow: result.issuedAt };
@@ -197,7 +197,7 @@ const readHistory = async (
     }),
   );
   if (result instanceof ElysiaStatus) {
-    return panic(`Expected history success, received status ${result.code}`);
+    return panic(`Expected history success, received status ${result.status}`);
   }
   return result;
 };
@@ -210,7 +210,7 @@ const recordQuery = async (fixture: HistoryFixture, query: string) => {
     }),
   );
   if (result instanceof ElysiaStatus) {
-    return panic(`Expected record success, received status ${result.code}`);
+    return panic(`Expected record success, received status ${result.status}`);
   }
   return result;
 };

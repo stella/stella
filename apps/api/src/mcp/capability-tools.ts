@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 import { ElysiaStatus } from "elysia";
-import { KindGuard, type TSchema } from "typebox";
-import { ValueErrorType } from "typebox/errors";
-import { Value, type ValueError } from "typebox/value";
+import { Type, type TSchema } from "typebox";
+import type { TLocalizedValidationError } from "typebox/error";
+import { Value } from "typebox/value";
 import * as v from "valibot";
 
 import {
@@ -493,7 +493,7 @@ type UnionDiscriminator = { key: string; literals: readonly string[] };
 const unionDiscriminator = (
   variants: readonly TSchema[],
 ): UnionDiscriminator | null => {
-  const objects = variants.filter((variant) => KindGuard.IsObject(variant));
+  const objects = variants.filter((variant) => Type.IsObject(variant));
   const first = objects.at(0);
   if (first === undefined || objects.length !== variants.length) {
     return null;
@@ -502,7 +502,7 @@ const unionDiscriminator = (
     const literals: string[] = [];
     const shared = objects.every((variant) => {
       const prop = variant.properties[key];
-      if (prop !== undefined && KindGuard.IsLiteral(prop)) {
+      if (prop !== undefined && Type.IsLiteral(prop)) {
         literals.push(JSON.stringify(prop.const));
         return true;
       }
@@ -526,11 +526,11 @@ const matchingVariant = (
   }
   const provided = value[discriminator.key];
   return variants.find((variant) => {
-    if (!KindGuard.IsObject(variant)) {
+    if (!Type.IsObject(variant)) {
       return false;
     }
     const prop = variant.properties[discriminator.key];
-    return KindGuard.IsLiteral(prop) && prop.const === provided;
+    return Type.IsLiteral(prop) && prop.const === provided;
   });
 };
 
@@ -545,18 +545,20 @@ const matchingVariant = (
  */
 const expandUnionError = (
   part: "body" | "params" | "query",
-  error: ValueError,
+  error: TLocalizedValidationError,
+  schema: TSchema,
+  value: unknown,
 ): McpValidationIssue[] => {
-  const unionDot = typeboxPathToDot(error.path);
-  if (!KindGuard.IsUnion(error.schema)) {
+  const unionDot = typeboxPathToDot(error.instancePath);
+  if (!Type.IsUnion(schema)) {
     return [{ path: prefixPartPath(part, unionDot), message: error.message }];
   }
-  const variants = error.schema.anyOf;
+  const variants = schema.anyOf;
   const discriminator = unionDiscriminator(variants);
   if (discriminator === null) {
     return [{ path: prefixPartPath(part, unionDot), message: error.message }];
   }
-  const variant = matchingVariant(variants, discriminator, error.value);
+  const variant = matchingVariant(variants, discriminator, value);
   // No variant matched: the discriminator is missing or not one of the literals.
   // Name it and its allowed values -- the single most useful thing to report.
   if (variant === undefined) {
@@ -568,8 +570,11 @@ const expandUnionError = (
     ];
   }
   // A variant matched: report that variant's own field-level errors.
-  const nested = [...Value.Errors(variant, error.value)].map((sub) => ({
-    path: prefixPartPath(part, joinDot(unionDot, typeboxPathToDot(sub.path))),
+  const nested = [...Value.Errors(variant, value)].map((sub) => ({
+    path: prefixPartPath(
+      part,
+      joinDot(unionDot, typeboxPathToDot(sub.instancePath)),
+    ),
     message: sub.message,
   }));
   if (nested.length > 0) {
@@ -582,16 +587,51 @@ const expandUnionError = (
 };
 
 /** Map one TypeBox validation error to one or more part-prefixed issues. */
+const jsonPointerSegments = (pointer: string): string[] =>
+  pointer
+    .replace(/^#?\//u, "")
+    .split("/")
+    .filter((segment) => segment.length > 0)
+    .map((segment) => segment.replaceAll("~1", "/").replaceAll("~0", "~"));
+
+const valueAtPointer = (root: unknown, pointer: string): unknown => {
+  let value = root;
+  for (const segment of jsonPointerSegments(pointer)) {
+    if (Array.isArray(value)) {
+      value = value.at(Number(segment));
+    } else if (isRecord(value)) {
+      value = value[segment];
+    } else {
+      return undefined;
+    }
+  }
+  return value;
+};
+
+/** Map one TypeBox validation error to one or more part-prefixed issues. */
 const errorToIssues = (
   part: "body" | "params" | "query",
-  error: ValueError,
+  rootSchema: TSchema,
+  rootValue: unknown,
+  error: TLocalizedValidationError,
 ): McpValidationIssue[] => {
-  if (error.type === ValueErrorType.Union) {
-    return expandUnionError(part, error);
+  if (error.keyword === "anyOf") {
+    const schema = valueAtPointer(
+      rootSchema,
+      error.schemaPath.replace(/\/anyOf$/u, ""),
+    );
+    if (Type.IsSchema(schema)) {
+      return expandUnionError(
+        part,
+        error,
+        schema,
+        valueAtPointer(rootValue, error.instancePath),
+      );
+    }
   }
   return [
     {
-      path: prefixPartPath(part, typeboxPathToDot(error.path)),
+      path: prefixPartPath(part, typeboxPathToDot(error.instancePath)),
       message: error.message,
     },
   ];
@@ -611,11 +651,7 @@ const schemaWithoutField = (
   schema: TSchema | undefined,
   field: string | undefined,
 ): TSchema | undefined => {
-  if (
-    schema === undefined ||
-    field === undefined ||
-    !KindGuard.IsObject(schema)
-  ) {
+  if (schema === undefined || field === undefined || !Type.IsObject(schema)) {
     return schema;
   }
   const properties: Record<string, TSchema> = {};
@@ -689,7 +725,7 @@ const validatePart = ({
     return { ok: true, value: cleaned };
   }
   const issues = [...Value.Errors(schema, cleaned)].flatMap((error) =>
-    errorToIssues(part, error),
+    errorToIssues(part, schema, cleaned, error),
   );
   return { ok: false, issues };
 };

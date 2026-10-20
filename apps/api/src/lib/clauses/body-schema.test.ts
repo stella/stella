@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { TypeCompiler } from "typebox/compiler";
+import { Compile } from "typebox/compile";
 
 import { CLAUSE_NUMBERING_LEVEL_LIMITS } from "@stll/api-contract";
 
@@ -8,7 +8,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { clauseBodySchema, clauseExpectedBodySchema } from "./body-schema";
 import { normalizeClauseBody } from "./types";
 
-const expectedBody = TypeCompiler.Compile(clauseExpectedBodySchema);
+const expectedBody = Compile(clauseExpectedBodySchema);
 
 test("preconditions accept paragraph extensions within the text bound", () => {
   const paragraph = {
@@ -32,7 +32,7 @@ test("preconditions enforce the paragraph count bound", () => {
   expect(expectedBody.Check([])).toBe(false);
 });
 
-const writtenBody = TypeCompiler.Compile(clauseBodySchema);
+const writtenBody = Compile(clauseBodySchema);
 
 test("clause numbering accepts every supported level and rejects invalid levels", () => {
   for (let ilvl = 0; ilvl <= 8; ilvl += 1) {

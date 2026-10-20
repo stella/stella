@@ -285,10 +285,10 @@ describe("reviewParties", () => {
 
       const result = await handler.handler(context);
 
-      if (!("code" in result)) {
+      if (!("~status" in result)) {
         throw new Error("Expected target-unavailable response");
       }
-      expect(result.code).toBe(404);
+      expect(result.status).toBe(404);
       expect(result.response).toMatchObject({
         message: "Document review target is no longer available",
       });
@@ -306,10 +306,10 @@ describe("reviewParties", () => {
 
       const result = await handler.handler(context);
 
-      if (!("code" in result)) {
+      if (!("~status" in result)) {
         throw new Error("Expected the provider failure to return a status");
       }
-      expect(result.code).toBe(status);
+      expect(result.status).toBe(status);
       expect(result.response).toMatchObject({ message });
       // A failed detection has nothing to cache: the row would answer every
       // later call for this version with a result no model produced.

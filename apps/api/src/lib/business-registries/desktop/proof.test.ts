@@ -291,8 +291,8 @@ describe.skipIf(!postgresEnabled)(
           request.headers.set("DPoP", invalid);
           const app = new Elysia().post(
             "/renew",
-            renewDesktopAccount.handler,
             renewDesktopAccount.config,
+            renewDesktopAccount.handler,
           );
           const response = await app.handle(request);
           expect(response.status).toBe(401);

@@ -197,10 +197,10 @@ describe("own-work permissions", () => {
       const result = await endpoint.handler(
         asTestRaw(contextForRole("external")),
       );
-      if (!("code" in result)) {
+      if (!("~status" in result)) {
         throw new Error(`${file} as external: expected a status response`);
       }
-      expect({ file, code: result.code, body: result.response }).toEqual({
+      expect({ file, code: result.status, body: result.response }).toEqual({
         file,
         code: 403,
         body: { code: "forbidden", message: "Forbidden" },

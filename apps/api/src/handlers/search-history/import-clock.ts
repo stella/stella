@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import { t } from "elysia";
 import { timingSafeEqual } from "node:crypto";
+import type { Static } from "typebox";
 
 import { Temporal } from "@stll/time";
 
@@ -69,7 +70,7 @@ const clockSignature = async (
   );
 
 type VerifySearchHistoryImportClockOptions = ImportClockOwner & {
-  clock: typeof searchHistoryImportClockSchema.static;
+  clock: Static<typeof searchHistoryImportClockSchema>;
   databaseNow: string;
 };
 export const verifySearchHistoryImportClock = async ({

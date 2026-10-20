@@ -3,7 +3,7 @@ import { Validator } from "elysia";
 import type { UnwrapSchema } from "elysia";
 import fc from "fast-check";
 import type { Static } from "typebox";
-import { TypeCompiler } from "typebox/compiler";
+import { Compile } from "typebox/compile";
 import { Value } from "typebox/value";
 import * as v from "valibot";
 
@@ -259,7 +259,7 @@ describe("case-law search response schema", () => {
   );
 
   test("HTTP court/year validation matches the canonical aggregate schema", () => {
-    const compiled = TypeCompiler.Compile(searchDecisionsSuccessResponseSchema);
+    const compiled = Compile(searchDecisionsSuccessResponseSchema);
     const matrixBucket = {
       court: "Nejvyšší soud",
       courtName: "Nejvyšší soud",
@@ -327,7 +327,7 @@ describe("case-law search response schema", () => {
   });
 
   test("HTTP court/year validation agrees with the canonical contract for generated values", () => {
-    const compiled = TypeCompiler.Compile(searchDecisionsSuccessResponseSchema);
+    const compiled = Compile(searchDecisionsSuccessResponseSchema);
     const count = fc.oneof(
       fc.integer({ min: 0, max: 10_000 }),
       fc.constant(-1),

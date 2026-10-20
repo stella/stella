@@ -15,7 +15,7 @@ test("accepts safe endpoint handlers with fresh projected options", async () => 
   expect(
     await lintSingleRule(
       "require-safe-route-handlers",
-      'app.get("/", endpoint.handler);\napp.post("/", endpoint.handler, { body: endpoint.config.body });',
+      'app.get("/", endpoint.handler);\napp.post("/", { body: endpoint.config.body }, endpoint.handler);',
     ),
   ).toEqual([]);
 });

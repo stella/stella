@@ -7,12 +7,12 @@
 //
 // Safe patterns:
 //   .get("/", readThing.handler)
-//   .post("/", createThing.handler, { body: createThing.config.body })
+//   .post("/", { body: createThing.config.body }, createThing.handler)
 //
 // Flagged:
 //   .get("/", async (ctx) => ...)
 //   .post("/", handler)
-//   .delete("/", rawHandler, { permissions: ... })
+//   .delete("/", { permissions: ... }, rawHandler)
 //
 // Protocol, public, streaming, and dev-only routes may disable the sibling
 // `require-safe-route-handlers` rule in oxlint.config.ts with a short

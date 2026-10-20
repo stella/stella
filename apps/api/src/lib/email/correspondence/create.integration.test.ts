@@ -97,7 +97,7 @@ type HandlerFailure = Extract<
 const expectSuccess = <T>(response: T | HandlerFailure): T => {
   expect(response).not.toBeInstanceOf(ElysiaStatus);
   if (response instanceof ElysiaStatus) {
-    throw new TypeError(`Expected success, received status ${response.code}`);
+    throw new TypeError(`Expected success, received status ${response.status}`);
   }
   return response;
 };

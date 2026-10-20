@@ -699,9 +699,9 @@ const decorateActionSizeRefusal = (
 const scopeRequestAsyncStores = (): void => {
   const isTenantAction = createTenantActionClassifier({
     routes: api.routes,
-    staticRoutes: api.router.static,
-    strictPath: api.config.strictPath,
-    aot: api.config.aot,
+    staticRoutes: {},
+    strictPath: undefined,
+    aot: false,
   });
   api.wrap(
     (handleRequest) => async (request: Request) =>

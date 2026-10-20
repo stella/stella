@@ -1,10 +1,10 @@
 import { t } from "elysia";
-import { FormatRegistry } from "typebox";
+import { Format } from "typebox/format";
 
 export const boundedString = (maxBytes: number) => {
   const format = `legislation-search-utf8-${maxBytes}`;
-  if (!FormatRegistry.Has(format)) {
-    FormatRegistry.Set(
+  if (!Format.Has(format)) {
+    Format.Set(
       format,
       (value) =>
         value.isWellFormed() && Buffer.byteLength(value, "utf-8") <= maxBytes,

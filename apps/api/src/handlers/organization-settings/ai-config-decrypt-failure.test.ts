@@ -83,10 +83,10 @@ describe("AI config handlers with an undecryptable stored config", () => {
       }),
     );
 
-    if (!("code" in result)) {
+    if (!("~status" in result)) {
       throw new Error("Expected the decrypt failure to return a status");
     }
-    expect(result.code).toBe(503);
+    expect(result.status).toBe(503);
     expect(result.response).toMatchObject({
       code: AI_CONFIG_UNREADABLE_ERROR_CODE,
     });
@@ -107,10 +107,10 @@ describe("AI config handlers with an undecryptable stored config", () => {
       }),
     );
 
-    if (!("code" in result)) {
+    if (!("~status" in result)) {
       throw new Error("Expected the decrypt failure to return a status");
     }
-    expect(result.code).toBe(503);
+    expect(result.status).toBe(503);
     expect(result.response).toMatchObject({
       code: AI_CONFIG_UNREADABLE_ERROR_CODE,
     });

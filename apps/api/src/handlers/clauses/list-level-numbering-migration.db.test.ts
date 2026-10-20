@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
-import { TypeCompiler } from "typebox/compiler";
+import { Compile } from "typebox/compile";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { clauses, clauseVariants, clauseVersions } from "@/api/db/schema";
@@ -37,7 +37,7 @@ const MIGRATION_FILE = nodePath.resolve(
   "../../../drizzle/20261015060100_clause_list_level_numbering/migration.sql",
 );
 
-const writtenBody = TypeCompiler.Compile(clauseBodySchema);
+const writtenBody = Compile(clauseBodySchema);
 
 const levelOnly = (ilvl: number) => ({ kind: "levelOnly", ilvl }) as const;
 

@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "typebox";
 
 import { entityContextId } from "@/api/db/entity-feature-policies";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -25,7 +26,7 @@ const listFoldersQuerySchema = t.Object({
   ),
   cursor: t.Optional(tPaginationCursor()),
 });
-type ListFoldersQuery = (typeof listFoldersQuerySchema)["static"];
+type ListFoldersQuery = Static<typeof listFoldersQuerySchema>;
 
 type ListFoldersHandlerProps = {
   safeDb: SafeDb;

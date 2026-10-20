@@ -1,4 +1,4 @@
-import { KindGuard, type TSchema, Type } from "typebox";
+import { Type, type TSchema } from "typebox";
 
 /**
  * The `format` markers Elysia stamps on the string branch of a coercing scalar
@@ -8,14 +8,12 @@ import { KindGuard, type TSchema, Type } from "typebox";
 const COERCION_STRING_FORMATS = new Set(["integer", "numeric", "boolean"]);
 
 const isCoercionStringBranch = (schema: TSchema): boolean =>
-  KindGuard.IsString(schema) &&
+  Type.IsString(schema) &&
   typeof schema.format === "string" &&
   COERCION_STRING_FORMATS.has(schema.format);
 
 const isCoercibleScalar = (schema: TSchema): boolean =>
-  KindGuard.IsNumber(schema) ||
-  KindGuard.IsInteger(schema) ||
-  KindGuard.IsBoolean(schema);
+  Type.IsNumber(schema) || Type.IsInteger(schema) || Type.IsBoolean(schema);
 
 /**
  * The scalar branch of an Elysia coercion union, or `null` for every other
@@ -30,7 +28,7 @@ const isCoercibleScalar = (schema: TSchema): boolean =>
  * coerces `"20"` to `20` against the scalar alone.
  */
 const coercionUnionScalar = (schema: TSchema): TSchema | null => {
-  if (!KindGuard.IsUnion(schema) || schema.anyOf.length !== 2) {
+  if (!Type.IsUnion(schema) || schema.anyOf.length !== 2) {
     return null;
   }
   const strings = schema.anyOf.filter(isCoercionStringBranch);
@@ -53,19 +51,19 @@ export const advertisedSchema = (schema: TSchema): TSchema => {
   if (scalar !== null) {
     // `t.Optional` marks the union node, never the branch inside it, so the
     // marker has to be carried across or a filter becomes required.
-    return KindGuard.IsOptional(schema) ? Type.Optional(scalar) : scalar;
+    return Type.IsOptional(schema) ? Type.Optional(scalar) : scalar;
   }
-  if (KindGuard.IsObject(schema)) {
+  if (Type.IsObject(schema)) {
     const properties: Record<string, TSchema> = {};
     for (const [key, property] of Object.entries(schema.properties)) {
       properties[key] = advertisedSchema(property);
     }
     return { ...schema, properties };
   }
-  if (KindGuard.IsArray(schema)) {
+  if (Type.IsArray(schema)) {
     return { ...schema, items: advertisedSchema(schema.items) };
   }
-  if (KindGuard.IsRecord(schema)) {
+  if (Type.IsRecord(schema)) {
     const patternProperties: Record<string, TSchema> = {};
     for (const [pattern, property] of Object.entries(
       schema.patternProperties,
@@ -74,10 +72,10 @@ export const advertisedSchema = (schema: TSchema): TSchema => {
     }
     return { ...schema, patternProperties };
   }
-  if (KindGuard.IsUnion(schema)) {
+  if (Type.IsUnion(schema)) {
     return { ...schema, anyOf: schema.anyOf.map(advertisedSchema) };
   }
-  if (KindGuard.IsIntersect(schema)) {
+  if (Type.IsIntersect(schema)) {
     return { ...schema, allOf: schema.allOf.map(advertisedSchema) };
   }
   return schema;

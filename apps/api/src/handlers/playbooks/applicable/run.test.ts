@@ -97,10 +97,10 @@ describe("auto-run playbooks handler", () => {
 
     const result = await runAutoRun();
 
-    if (!("code" in result)) {
+    if (!("~status" in result)) {
       throw new Error("Expected the failed start to return a status");
     }
-    expect(result.code).toBe(500);
+    expect(result.status).toBe(500);
     expect(result.response).toMatchObject({
       message: "Failed to start the review.",
     });

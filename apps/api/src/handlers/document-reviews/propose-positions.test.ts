@@ -101,10 +101,10 @@ describe("proposePositions", () => {
         }),
       );
 
-      if (!("code" in result)) {
+      if (!("~status" in result)) {
         throw new Error("Expected the provider failure to return a status");
       }
-      expect(result.code).toBe(status);
+      expect(result.status).toBe(status);
       expect(result.response).toMatchObject({ message });
     });
   }

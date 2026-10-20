@@ -312,9 +312,9 @@ export const devRoute = new Elysia({ prefix: "/dev" })
 // access is open; the guard answers 404 for any other caller of the module.
 export const devPublicRoute = new Elysia({ prefix: "/dev-public" })
   .guard({
-    beforeHandle: () => {
+    beforeHandle: ({ status }) => {
       if (!isLocalDevOpen()) {
-        return new Response("Not available", { status: 404 });
+        return status(404, "Not available");
       }
       return undefined;
     },
@@ -324,10 +324,10 @@ export const devPublicRoute = new Elysia({ prefix: "/dev-public" })
     {
       query: t.Object({ email: t.String() }),
     },
-    ({ query }) => {
+    ({ query, status }) => {
       const otp = readDevOtp(query.email);
       if (!otp) {
-        return new Response("No OTP", { status: 404 });
+        return status(404, "No OTP");
       }
       return { otp };
     },

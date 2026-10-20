@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
-import { KindGuard, type TSchema } from "typebox";
+import { Type, type TSchema } from "typebox";
 
 import type { UnavailableWorkspaceView } from "@stll/api-contract";
 
@@ -130,23 +130,23 @@ const projectViewSchema = (schema: TSchema): TSchema => {
       enum: schema["enum"].filter((value: unknown) => value !== "avt"),
     };
   }
-  if (KindGuard.IsUnion(schema)) {
+  if (Type.IsUnion(schema)) {
     return {
       ...schema,
       anyOf: schema.anyOf
         .filter(
           (branch) =>
-            !(KindGuard.IsLiteral(branch) && branch.const === "avt") &&
+            !(Type.IsLiteral(branch) && branch.const === "avt") &&
             !(
-              KindGuard.IsObject(branch) &&
-              KindGuard.IsLiteral(branch.properties["type"]) &&
+              Type.IsObject(branch) &&
+              Type.IsLiteral(branch.properties["type"]) &&
               branch.properties["type"].const === "avt"
             ),
         )
         .map(projectViewSchema),
     };
   }
-  if (KindGuard.IsObject(schema)) {
+  if (Type.IsObject(schema)) {
     return {
       ...schema,
       properties: Object.fromEntries(
@@ -157,10 +157,10 @@ const projectViewSchema = (schema: TSchema): TSchema => {
       ),
     };
   }
-  if (KindGuard.IsArray(schema)) {
+  if (Type.IsArray(schema)) {
     return { ...schema, items: projectViewSchema(schema.items) };
   }
-  if (KindGuard.IsIntersect(schema)) {
+  if (Type.IsIntersect(schema)) {
     return { ...schema, allOf: schema.allOf.map(projectViewSchema) };
   }
   return schema;

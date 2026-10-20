@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { OptionalKind } from "typebox";
 
 import { PERMISSIVE_ROUTE_SCHEMA_MARKER } from "@/api/lib/permissive-route-schema";
 
@@ -101,7 +100,7 @@ describe("token-route validation order guard", () => {
         if (bodySchema !== undefined) {
           // Body schemas must be root-optional so a body-less probe cannot
           // produce a framework validation error either.
-          expect(symbolPropertyOf(bodySchema, OptionalKind)).toBe("Optional");
+          expect(Reflect.get(bodySchema, "~optional")).toBe(true);
         }
       }
     },

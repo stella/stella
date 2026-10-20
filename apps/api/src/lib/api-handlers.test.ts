@@ -167,10 +167,10 @@ describe("createSafeRootHandler usage preflight", () => {
       );
       const result = await endpoint.handler(createContext(endpoint, safeDb));
       expect(bodyRan).toBe(false);
-      if (!("code" in result)) {
+      if (!("~status" in result)) {
         throw new TypeError("Expected static admission refusal");
       }
-      expect({ status: result.code, body: result.response }).toEqual({
+      expect({ status: result.status, body: result.response }).toEqual({
         status: 402,
         body: {
           code: "usage_limit_exceeded",
@@ -247,10 +247,10 @@ describe("createSafeRootHandler usage preflight", () => {
       const result = await endpoint.handler(createContext(endpoint, safeDb));
 
       expect(meteredHandlerCalled).toBe(false);
-      if (!("code" in result)) {
+      if (!("~status" in result)) {
         throw new Error("Expected usage preflight to return a status response");
       }
-      expect(result.code).toBe(500);
+      expect(result.status).toBe(500);
       expect(result.response).toEqual({
         code: "internal_server_error",
         message: "Internal server error",
@@ -412,13 +412,13 @@ describe("createSafeRootHandler member AI access", () => {
       }),
     );
     expect(bodyRan).toBe(false);
-    if (!("code" in result)) {
+    if (!("~status" in result)) {
       throw new HandlerError({
         message: "Expected an AI access response",
         status: 500,
       });
     }
-    expect(result.code).toBe(403);
+    expect(result.status).toBe(403);
     expect(result.response).toMatchObject({
       code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
     });
@@ -451,10 +451,10 @@ describe("createSafeRootHandler member AI access", () => {
       );
 
       expect(bodyRan).toBe(false);
-      if (!("code" in result)) {
+      if (!("~status" in result)) {
         throw new Error("expected a status response");
       }
-      expect({ status: result.code, body: result.response }).toEqual({
+      expect({ status: result.status, body: result.response }).toEqual({
         status: 403,
         body: {
           code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
@@ -516,10 +516,10 @@ describe("createSafeRootHandler permission gate", () => {
     );
 
     expect(bodyRan).toBe(false);
-    if (!("code" in result)) {
+    if (!("~status" in result)) {
       throw new Error("expected a status response");
     }
-    expect(result.code).toBe(403);
+    expect(result.status).toBe(403);
     expect(result.response).toEqual({
       code: "forbidden",
       message: "Forbidden",
@@ -593,10 +593,10 @@ describe("request.failed severity", () => {
       }),
     );
 
-    if (!("code" in response)) {
+    if (!("~status" in response)) {
       throw new Error("expected a status response");
     }
-    expect(response.code).toBe(400);
+    expect(response.status).toBe(400);
     expect(failures).toHaveLength(1);
     expect(failures[0]?.severityText).toBe("WARN");
     expect(failures[0]?.attributes?.["http.status_code"]).toBe(400);
@@ -609,10 +609,10 @@ describe("request.failed severity", () => {
       new HandlerError({ status: 400, message: "Invalid chat tool arguments" }),
     );
 
-    if (!("code" in response)) {
+    if (!("~status" in response)) {
       throw new Error("expected a status response");
     }
-    expect(response.code).toBe(400);
+    expect(response.status).toBe(400);
     expect(failures).toHaveLength(1);
     expect(failures[0]?.severityText).toBe("WARN");
     expect(failures[0]?.attributes?.["http.status_code"]).toBe(400);
@@ -630,10 +630,10 @@ describe("request.failed severity", () => {
       new DatabaseError({ message: "connection closed" }),
     );
 
-    if (!("code" in response)) {
+    if (!("~status" in response)) {
       throw new Error("expected a status response");
     }
-    expect(response.code).toBe(500);
+    expect(response.status).toBe(500);
     expect(failures).toHaveLength(1);
     expect(failures[0]?.severityText).toBe("ERROR");
     expect(failures[0]?.attributes?.["http.status_code"]).toBe(500);
@@ -764,10 +764,10 @@ describe("a mapped status survives the transport wrapper", () => {
       );
     });
 
-    if (!("code" in response)) {
+    if (!("~status" in response)) {
       throw new Error("expected a status response");
     }
-    expect(response.code).toBe(422);
+    expect(response.status).toBe(422);
     expect(response.response).toEqual({
       code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
       message: "File rejected by a security rule",
@@ -817,10 +817,10 @@ describe("a mapped status survives the transport wrapper", () => {
       return Result.ok({ value });
     });
 
-    if (!("code" in response)) {
+    if (!("~status" in response)) {
       throw new Error("expected a status response");
     }
-    expect(response.code).toBe(503);
+    expect(response.status).toBe(503);
     expect(response.response.message).toBe("Search is temporarily unavailable");
   });
 
@@ -830,10 +830,10 @@ describe("a mapped status survives the transport wrapper", () => {
       throw upstreamRefusal();
     });
 
-    if (!("code" in response)) {
+    if (!("~status" in response)) {
       throw new Error("expected a status response");
     }
-    expect(response.code).toBe(503);
+    expect(response.status).toBe(503);
   });
 
   test("an untyped failure is still graded a server fault", async () => {
@@ -847,10 +847,10 @@ describe("a mapped status survives the transport wrapper", () => {
       return Result.ok({ value });
     });
 
-    if (!("code" in response)) {
+    if (!("~status" in response)) {
       throw new Error("expected a status response");
     }
-    expect(response.code).toBe(500);
+    expect(response.status).toBe(500);
   });
 });
 
@@ -1105,10 +1105,10 @@ describe("provider failure HTTP response", () => {
         const response = await endpoint.handler(
           createContext(endpoint, safeDb),
         );
-        if (!("code" in response)) {
+        if (!("~status" in response)) {
           throw new TypeError("The fixture returns a status response");
         }
-        expect(response.code).toBe(502);
+        expect(response.status).toBe(502);
         expect(response.response).toMatchObject({
           message: PROVIDER_CALL_ERROR_MESSAGE,
         });
@@ -1155,7 +1155,7 @@ test("BYOK provider diagnostics cross HTTP as a top-level field without entering
   const safeDb: SafeDb = async <T>() =>
     Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
   const response = await endpoint.handler(createContext(endpoint, safeDb));
-  if (!("code" in response)) {
+  if (!("~status" in response)) {
     throw new TypeError("Expected error response");
   }
   expect(response.response).toMatchObject({

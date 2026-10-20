@@ -1,4 +1,4 @@
-import { KindGuard, Type } from "typebox";
+import { Type } from "typebox";
 
 import type { Transaction } from "@/api/db/root";
 import { isScopedFeatureEnabled } from "@/api/db/scoped-feature-access";
@@ -25,7 +25,7 @@ const projectTaskListInputSchemas = (
   schemas: AdvertisedSchemas,
 ): AdvertisedSchemas => {
   const body = schemas.body;
-  if (body === undefined || !KindGuard.IsObject(body)) {
+  if (body === undefined || !Type.IsObject(body)) {
     return schemas;
   }
   const excluded = new Set<string>(LIST_PLACEMENT_FIELDS);
@@ -33,9 +33,7 @@ const projectTaskListInputSchemas = (
     Object.entries(body.properties).filter(([name]) => !excluded.has(name)),
   );
   if (properties["listItemType"] !== undefined) {
-    properties["listItemType"] = KindGuard.IsOptional(
-      properties["listItemType"],
-    )
+    properties["listItemType"] = Type.IsOptional(properties["listItemType"])
       ? Type.Optional(Type.Literal("task"))
       : Type.Literal("task");
   }

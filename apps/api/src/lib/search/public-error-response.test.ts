@@ -185,10 +185,10 @@ test("bounded public handlers bound both returned status errors and resolved han
     },
   );
   const app = new Elysia()
-    .get("/legacy", legacy.handler, legacy.config)
-    .get("/returned", returned.handler, returned.config)
-    .get("/resolved", resolved.handler, resolved.config)
-    .get("/status-text", statusText.handler, statusText.config);
+    .get("/legacy", legacy.config, legacy.handler)
+    .get("/returned", returned.config, returned.handler)
+    .get("/resolved", resolved.config, resolved.handler)
+    .get("/status-text", statusText.config, statusText.handler);
   for (const [path, expectedStatus] of [
     ["/returned", 503],
     ["/resolved", 400],

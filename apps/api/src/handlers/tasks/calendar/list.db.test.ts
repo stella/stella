@@ -311,8 +311,8 @@ const defineCalendarRangeSuite = ({ label, connect }: CalendarSuiteDatabase) =>
           ids: result.tasks.map(({ taskId }) => taskId).toSorted(),
         };
       }
-      expect(result.code).toBe(400);
-      return { type: "rejected" as const, code: result.code };
+      expect(result.status).toBe(400);
+      return { type: "rejected" as const, code: result.status };
     };
 
     const dayBody = (propertyId: string): CalendarBody => ({

@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, eq, ilike, or, sql } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "typebox";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
@@ -34,7 +35,7 @@ const listSourcesQuerySchema = t.Object({
   ),
   cursor: t.Optional(tPaginationCursor()),
 });
-type ListSourcesQuery = (typeof listSourcesQuerySchema)["static"];
+type ListSourcesQuery = Static<typeof listSourcesQuerySchema>;
 
 type ListSourcesArgs = {
   safeDb: SafeDb;

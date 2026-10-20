@@ -104,7 +104,7 @@ const uploadEntityBodySchema = t.Object({
 
 const uploadGeneratedDocumentBodySchema = t.Object({
   ...uploadEntityBodySchema.properties,
-  contentSha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
+  contentSha256Hex: t.String({ pattern: "^[0-9a-f]{64}$" }),
   draftChatThreadId: t.Optional(tSafeId("chatThread")),
   messageId: tSafeId("chatMessage"),
   threadId: tSafeId("chatThread"),

@@ -1,6 +1,6 @@
 import type { JsonSchema } from "@valibot/to-json-schema";
 import { panic } from "better-result";
-import { Type, type SchemaOptions, type TSchema } from "typebox";
+import { Type, type TSchemaOptions, type TSchema } from "typebox";
 
 const TYPEBOX_STRUCTURE_KEYS = new Set([
   "type",
@@ -12,7 +12,7 @@ const TYPEBOX_STRUCTURE_KEYS = new Set([
   "items",
 ]);
 
-const unionOf = (schemas: TSchema[], options: SchemaOptions) => {
+const unionOf = (schemas: TSchema[], options: TSchemaOptions): TSchema => {
   const first = schemas.at(0);
   if (first === undefined) {
     return Type.Never(options);

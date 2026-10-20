@@ -950,7 +950,7 @@ if (!databaseUrl || !runPostgresTests) {
       const response: unknown = result.response;
       return {
         ok: false,
-        status: result.code,
+        status: result.status,
         ...(typeof response === "object" &&
         response !== null &&
         "code" in response &&

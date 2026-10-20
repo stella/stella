@@ -885,8 +885,8 @@ describe.skipIf(!enabled)(
             const before = await readKey(db, fixture.keyId);
             const app = new Elysia().post(
               "/renew",
-              renewDesktopAccount.handler,
               renewDesktopAccount.config,
+              renewDesktopAccount.handler,
             );
             const unsigned = () =>
               new Request("http://localhost/renew", {

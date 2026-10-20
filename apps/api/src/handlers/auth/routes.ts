@@ -1,4 +1,4 @@
-import Elysia from "elysia";
+import Elysia, { type HTTPHeaders } from "elysia";
 
 import { env } from "@/api/env";
 import { createAuthMetadataHeaders } from "@/api/handlers/auth/metadata";
@@ -21,7 +21,7 @@ const applyHeaders = ({
   set,
 }: {
   headers: Headers;
-  set: { headers: Record<string, string | number | boolean | undefined> };
+  set: { headers: HTTPHeaders };
 }) => {
   for (const [key, value] of headers) {
     set.headers[key] = value;

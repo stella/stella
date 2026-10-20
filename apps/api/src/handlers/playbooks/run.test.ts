@@ -129,11 +129,11 @@ describe("run playbook handler", () => {
     async (refusal) => {
       openPlaybookRunMock.mockResolvedValue(refusal);
       const result = await runColumnsProjection();
-      if (!("code" in result)) {
+      if (!("~status" in result)) {
         panic("Expected the playbook refusal status");
       }
       const { ok: _ok, status, ...details } = refusal;
-      expect(result.code).toBe(status);
+      expect(result.status).toBe(status);
       expect(result.response).toEqual(details);
       const mcp = mapHandlerResult({
         id: "playbooks.run",
@@ -159,10 +159,10 @@ describe("run playbook handler", () => {
 
     const result = await runColumnsProjection();
 
-    if (!("code" in result)) {
+    if (!("~status" in result)) {
       throw new Error("Expected the failed start to return a status");
     }
-    expect(result.code).toBe(500);
+    expect(result.status).toBe(500);
     expect(result.response).toMatchObject({
       message: "Failed to start the review.",
     });
@@ -182,10 +182,10 @@ describe("run playbook handler", () => {
     startWorkflowMock.mockResolvedValueOnce({ status: "started" });
 
     const failed = await runColumnsProjection();
-    if (!("code" in failed)) {
+    if (!("~status" in failed)) {
       throw new Error("Expected the failed start to return a status");
     }
-    expect(failed.code).toBe(500);
+    expect(failed.status).toBe(500);
 
     // Nothing is unwound on the failure path: the columns stay materialized
     // (`materializePlaybookRun` upserts by playbook source id) and the run rows

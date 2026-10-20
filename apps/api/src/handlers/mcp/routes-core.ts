@@ -1,4 +1,4 @@
-import Elysia, { type Context } from "elysia";
+import Elysia, { type Context, type HTTPHeaders } from "elysia";
 
 import {
   readAdvancedMetadata,
@@ -37,7 +37,7 @@ type HandleMcpHttpRequest = (
 ) => Response | Promise<Response>;
 
 type RouteSet = {
-  headers: Record<string, string | number | boolean | undefined>;
+  headers: HTTPHeaders;
   status?: number | string;
 };
 

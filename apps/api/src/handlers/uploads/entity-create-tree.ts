@@ -69,7 +69,7 @@ const treeFileSchema = t.Object({
     minimum: 0,
     maximum: FILE_SIZE_LIMIT_BYTES.document,
   }),
-  sha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
+  sha256Hex: t.String({ maxLength: 64, pattern: "^[0-9a-f]{64}$" }),
 });
 
 const bodySchema = t.Object({

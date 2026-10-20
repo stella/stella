@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
-import { Kind, OptionalKind } from "typebox";
 import type { TObject, TSchema } from "typebox";
 import { Value } from "typebox/value";
 
@@ -34,12 +33,12 @@ const MIN_MULTIPART_HANDLERS = 16;
 const isObjectSchema = (schema: unknown): schema is TObject =>
   typeof schema === "object" &&
   schema !== null &&
-  Kind in schema &&
-  schema[Kind] === "Object";
+  "~kind" in schema &&
+  schema["~kind"] === "Object";
 
 /** The schema's TypeBox kind, or `""` for a value carrying no kind symbol. */
 const kindOf = (schema: TSchema): string => {
-  const kind: unknown = schema[Kind];
+  const kind: unknown = schema["~kind"];
   return typeof kind === "string" ? kind : "";
 };
 
@@ -96,7 +95,7 @@ const isFreeTextField = (schema: TSchema): boolean => {
   );
 };
 
-const isOptional = (schema: TSchema): boolean => OptionalKind in schema;
+const isOptional = (schema: TSchema): boolean => "~optional" in schema;
 
 /**
  * Candidates for a required string-shaped field, offered in order. The field's

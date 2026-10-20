@@ -143,13 +143,13 @@ describe("case-law research permissions", () => {
     for (const [file, endpoint] of Object.entries(MUTATIONS)) {
       for (const role of DENIED_ROLES) {
         const result = await endpoint.handler(asTestRaw(contextForRole(role)));
-        if (!("code" in result)) {
+        if (!("~status" in result)) {
           throw new Error(`${file} as ${role}: expected a status response`);
         }
         expect({
           file,
           role,
-          code: result.code,
+          code: result.status,
           body: result.response,
         }).toEqual({
           file,
@@ -226,10 +226,10 @@ describe("an answer run is priced before it claims cells", () => {
         }),
       );
 
-      if (!("code" in result)) {
+      if (!("~status" in result)) {
         throw new Error("expected the pre-flight to return a status response");
       }
-      expect({ code: result.code, body: result.response }).toEqual({
+      expect({ code: result.status, body: result.response }).toEqual({
         code: 402,
         body: {
           code: "usage_limit_exceeded",

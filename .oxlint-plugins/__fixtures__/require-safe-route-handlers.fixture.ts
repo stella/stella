@@ -2,7 +2,7 @@
 
 declare const app: {
   get: (path: string, handler: unknown) => unknown;
-  post: (path: string, handler: unknown, options?: unknown) => unknown;
+  post: (path: string, options: unknown, handler: unknown) => unknown;
 };
 declare const rawHandler: unknown;
 declare const endpoint: { handler: unknown };
@@ -19,17 +19,17 @@ export const safeRoute = app.post("/safe", endpoint.handler);
 
 export const mutableConfigRoute = app.post(
   "/mutable-config",
-  endpointWithConfig.handler,
   // oxlint-disable-next-line require-safe-route-handlers/no-direct-handler-config -- fixture: Elysia must not receive the mutable endpoint config object
   endpointWithConfig.config,
+  endpointWithConfig.handler,
 );
 
 export const projectedConfigRoute = app.post(
   "/projected-config",
-  endpointWithConfig.handler,
   // expect-clean: require-safe-route-handlers/no-direct-handler-config
   {
     body: endpointWithConfig.config.body,
     permissions: endpointWithConfig.config.permissions,
   },
+  endpointWithConfig.handler,
 );

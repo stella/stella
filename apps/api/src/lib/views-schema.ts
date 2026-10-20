@@ -1,4 +1,5 @@
 import { t } from "elysia";
+import type { Static } from "typebox";
 import { Type } from "typebox";
 import * as v from "valibot";
 
@@ -419,7 +420,7 @@ export const tViewTemplatePropertySchema = t.Object(
   strictObjectOptions,
 );
 
-export type ViewTemplateProperty = typeof tViewTemplatePropertySchema.static;
+export type ViewTemplateProperty = Static<typeof tViewTemplatePropertySchema>;
 
 export const tCreateViewInputSchema = t.Object(
   {

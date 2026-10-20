@@ -1,4 +1,4 @@
-import Elysia from "elysia";
+import Elysia, { type HTTPHeaders } from "elysia";
 
 import {
   AGENT_AUTH_CLAIM_PATH,
@@ -17,9 +17,7 @@ import manifestHandler from "@/api/handlers/agent-auth/read-manifest";
 import agentTokenHandler from "@/api/handlers/agent-auth/token";
 import { authMacro } from "@/api/lib/auth";
 
-const applyManifestHeaders = (set: {
-  headers: Record<string, string | number | boolean | undefined>;
-}) => {
+const applyManifestHeaders = (set: { headers: HTTPHeaders }) => {
   for (const [key, value] of Object.entries(AGENT_AUTH_MANIFEST_HEADERS)) {
     set.headers[key] = value;
   }

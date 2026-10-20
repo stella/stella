@@ -57,7 +57,9 @@ test("organization removal clears only the departing member's presence and rejoi
     );
     expect(result).not.toBeInstanceOf(ElysiaStatus);
     if (result instanceof ElysiaStatus) {
-      return panic(`Expected presence success, received status ${result.code}`);
+      return panic(
+        `Expected presence success, received status ${result.status}`,
+      );
     }
     return result;
   };

@@ -666,7 +666,7 @@ test("doctrine filters report unavailable instead of an empty finding", async ()
   if ("items" in page) {
     throw new Error("Expected a doctrine availability refusal");
   }
-  expect(page.code).toBe(422);
+  expect(page.status).toBe(422);
   expect(page.response.message).toBe("Doctrine filtering is unavailable");
 });
 

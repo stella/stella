@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "typebox";
 
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 
@@ -345,7 +346,7 @@ const awaitHostedCheckoutSession = async ({
 
 type PrepareCheckoutStartOptions = {
   tx: Transaction;
-  body: typeof createHostedSetupBodySchema.static;
+  body: Static<typeof createHostedSetupBodySchema>;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
 };

@@ -37,10 +37,10 @@ import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-
 
 // The reviewed row plus the caller-generated id. The field set itself lives in
 // `contact-import-schema.ts`, shared with the validate handler.
-const importContactRowSchema = t.Composite([
+const importContactRowSchema = t.Composite(
   t.Object({ id: tSafeId("contact") }),
   contactImportCandidateSchema,
-]);
+);
 
 const importContactsBodySchema = t.Object({
   importRequestId: tSafeId("contactImportRequest"),

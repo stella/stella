@@ -37,17 +37,17 @@ const DRAFT_LIST_MAX_ITEMS = 200;
 const draftText = t.String({ maxLength: DRAFT_TEXT_MAX_CHARS });
 const optionalDraftText = t.Optional(draftText);
 
-const draftEmailSchema = t.Composite([
+const draftEmailSchema = t.Composite(
   t.Pick(contactEmailSchema, ["type", "isPrimary", "label"]),
   t.Object({ address: draftText }),
-]);
+);
 
-const draftPhoneSchema = t.Composite([
+const draftPhoneSchema = t.Composite(
   t.Pick(contactPhoneSchema, ["type", "isPrimary", "label"]),
   t.Object({ number: draftText }),
-]);
+);
 
-const draftAddressSchema = t.Composite([
+const draftAddressSchema = t.Composite(
   t.Pick(contactAddressSchema, ["type", "isPrimary", "label"]),
   t.Object({
     line1: draftText,
@@ -57,14 +57,14 @@ const draftAddressSchema = t.Composite([
     postalCode: optionalDraftText,
     country: optionalDraftText,
   }),
-]);
+);
 
 // Custom-field ids and labels are client-derived identifiers, not reviewed
 // content, so they keep the persisted bounds; only the value is a draft.
-const draftCustomFieldSchema = t.Composite([
+const draftCustomFieldSchema = t.Composite(
   t.Pick(contactCustomFieldSchema, ["id", "label"]),
   t.Object({ value: draftText }),
-]);
+);
 
 export const contactImportCandidateSchema = t.Object({
   type: createContactTypeSchema,

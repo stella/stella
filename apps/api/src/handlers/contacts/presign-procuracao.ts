@@ -21,7 +21,7 @@ const bodySchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 255 }),
   mimeType: t.String({ maxLength: 255 }),
   size: t.Integer({ minimum: 1, maximum: FILE_SIZE_LIMIT_BYTES.document }),
-  sha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
+  sha256Hex: t.String({ maxLength: 64, pattern: "^[0-9a-f]{64}$" }),
 });
 
 const config = {
