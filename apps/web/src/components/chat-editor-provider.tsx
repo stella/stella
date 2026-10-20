@@ -81,7 +81,8 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import type { TranslationKey } from "@/i18n/types";
-import { getAnalytics } from "@/lib/analytics/provider";
+import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
+import type { FollowupSurface } from "@/lib/analytics/types";
 import {
   areDraftDocsEqual,
   createChatDraftState,
@@ -105,6 +106,7 @@ const CHAT_MAX_FILE_BYTES = CHAT_CONTEXT_FILE_MAX_BYTES;
 // load-bearing.
 const CHAT_DRAFT_PERSIST_DEBOUNCE_MS = 250;
 const CHAT_DRAFT_PERSIST_MAX_WAIT_MS = 1500;
+const CHAT_PLACEHOLDER_CHANGED_META = "chatPlaceholderChanged";
 const EMPTY_ATTACHMENTS: ChatDraftAttachment[] = [];
 const EMPTY_SENT_MESSAGE_HISTORY: readonly string[] = [];
 const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
@@ -631,12 +633,14 @@ export const useChatComposerWiring = ({
 };
 
 export const useChatEditor = ({
+  followupAnalytics,
   onDraftStart,
   placeholder,
   sentMessageHistoryHtml,
   threadRef,
   suggestedFollowupPrompt,
 }: {
+  followupAnalytics?: { surface: FollowupSurface } | undefined;
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
   sentMessageHistoryHtml?: readonly string[] | undefined;
@@ -644,6 +648,7 @@ export const useChatEditor = ({
   suggestedFollowupPrompt?: string | undefined;
 }): ChatEditorController => {
   const t = useTranslations();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const defaultPlaceholder = t("chat.placeholder");
   const tabToAskText = suggestedFollowupPrompt
@@ -656,6 +661,19 @@ export const useChatEditor = ({
   const suggestedFollowupPromptRef = useRef(suggestedFollowupPrompt);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
   suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
+  // The editor's key handler is installed once; this reads the current
+  // surface when Tab accepts the suggestion.
+  const reportGhostAccepted = useLatestCallback(() => {
+    if (followupAnalytics === undefined) {
+      return;
+    }
+    analytics.captureFollowupSelected({
+      index: 0,
+      source: "generated",
+      surface: followupAnalytics.surface,
+      via: "ghost-tab",
+    });
+  });
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
   const confirmedCredentialSendRef = useRef(false);
   const fileIdCounterRef = useRef(0);
@@ -1108,6 +1126,7 @@ export const useChatEditor = ({
         const targetEditor = editorRef.current;
         if (suggestion && targetEditor?.isEmpty) {
           event.preventDefault();
+          reportGhostAccepted();
           targetEditor.commands.setContent(
             createChatComposerDocument(suggestion),
           );
@@ -1192,18 +1211,18 @@ export const useChatEditor = ({
     };
   }, [editor, extensionVersion, syncEditorPlugins]);
 
-  // The root attributes callback (aria-label) reads `placeholderRef` and
-  // ProseMirror only re-evaluates it when view props are re-applied or a
-  // transaction commits — with the options now identity-stable, neither
-  // happens on a placeholder change alone. Re-apply the view props exactly
-  // when the placeholder changes (suggestion arrival, locale switch) so
-  // assistive tech and role-based queries see the current label; this stays
-  // off the per-keystroke path entirely.
+  // Both the Placeholder decoration and root attributes callback read
+  // `placeholderRef` outside render. ProseMirror only re-evaluates them when a
+  // transaction commits, so suggestion arrival or a locale switch must
+  // explicitly repaint the view. This metadata-only transaction preserves the
+  // document, selection, focus, and undo history.
   useExternalSyncEffect(() => {
     if (!isUsableEditor(editor)) {
       return;
     }
-    editor.setOptions({});
+    editor.view.dispatch(
+      editor.state.tr.setMeta(CHAT_PLACEHOLDER_CHANGED_META, true),
+    );
   }, [editor, resolvedPlaceholder]);
 
   useExternalSyncEffect(() => {

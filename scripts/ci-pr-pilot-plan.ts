@@ -10,7 +10,9 @@ export const PILOT_FAST_ROOTS = [
   "ci-tests",
   "pr-heavy-gate",
   "code-quality-api",
+  "code-quality-api-cancel",
   "code-quality-web-rest",
+  "code-quality-web-rest-cancel",
   "query-perf",
   // Migration checks are cheap and gate on their own scope; PRs run them.
   "database-migrations-check",
