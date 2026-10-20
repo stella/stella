@@ -36,23 +36,27 @@ type SensitiveChangesOptions = {
   base: ReturnType<typeof generateWithJobs>;
   baseDecisions: ClassificationInputs["decisions"];
 };
-// A job is unchanged only when its shape and its whole reviewed decision
-// (kind, qualifier and digest) match the base; anything else is a change.
+// A job is unchanged only when it exists in both revisions with the same
+// shape and the same whole reviewed decision (kind, qualifier and digest);
+// a job removed from the head is a change too.
 const sensitiveChanges = ({
   head,
   headDecisions,
   base,
   baseDecisions,
 }: SensitiveChangesOptions) =>
-  [...head.jobs.entries()].flatMap(([key, current]) => {
+  [...new Set([...head.jobs.keys(), ...base.jobs.keys()])].flatMap((key) => {
+    const current = head.jobs.get(key);
+    const previous = base.jobs.get(key);
     const previousDecision = baseDecisions[key];
     if (
+      current !== undefined &&
       previousDecision?.reviewedDigest === current.digest &&
       deepEquals(previousDecision, headDecisions[key])
     ) {
       return [];
     }
-    return current.privileged || base.jobs.get(key)?.privileged ? [key] : [];
+    return current?.privileged || previous?.privileged ? [key] : [];
   });
 
 export const checkJobClassification = (root: string, base?: string) =>

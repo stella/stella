@@ -2263,6 +2263,7 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
       .trim();
     writeFileSync(decisionsPath, decide(ORDINARY));
     const output = path.join(root, "output");
+    const removedOutput = path.join(root, "removed-output");
     const result = Bun.spawnSync(
       [
         process.execPath,
@@ -2279,6 +2280,45 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
     );
     expect(result.exitCode).toBe(0);
     expect(readFileSync(output, "utf-8")).toBe(
+      "privileged_classification_change=true\n",
+    );
+
+    // Removing the privileged job and its decision is a sensitive change too.
+    writeFileSync(
+      path.join(root, ".github/workflows/ci.yml"),
+      "jobs: {other: {steps: []}}",
+    );
+    const other = parseDocument("jobs: {other: {steps: []}}");
+    const otherJob = other.isOk() ? other.value.jobs["other"] : undefined;
+    if (!otherJob) {
+      throw new AdmissionError({ message: "removal fixture parse failed" });
+    }
+    writeFileSync(
+      decisionsPath,
+      JSON.stringify({
+        "candidate:.github/workflows/ci.yml/other": {
+          kind: ORDINARY,
+          qualifier: "Reviewed",
+          reviewedDigest: otherJob.digest,
+        },
+      }),
+    );
+    const removed = Bun.spawnSync(
+      [
+        process.execPath,
+        path.join(repositoryRoot, "scripts/check-ci-job-classification.ts"),
+        root,
+        "--base",
+        base,
+      ],
+      {
+        env: { ...process.env, GITHUB_OUTPUT: removedOutput },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(removed.exitCode).toBe(0);
+    expect(readFileSync(removedOutput, "utf-8")).toBe(
       "privileged_classification_change=true\n",
     );
   } finally {
