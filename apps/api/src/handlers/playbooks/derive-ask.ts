@@ -154,7 +154,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
       serviceTier: "standard",
       system,
       prompt,
-      abortSignal: AbortSignal.timeout(DERIVE_ASK_TIMEOUT_MS),
+      deadlineMs: DERIVE_ASK_TIMEOUT_MS,
       outputSchema: deriveAskSchema,
     });
   } catch (error) {

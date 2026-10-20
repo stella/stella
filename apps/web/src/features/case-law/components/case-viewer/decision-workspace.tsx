@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
 import { READER_ANSWER_QUOTE_MAX_LENGTH } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
+import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
 import {
   decisionCaseName,
   visibleDecisionBlocks,
@@ -37,6 +38,7 @@ import type { SelectionAnchor } from "@/components/legal-reader/annotations/sele
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
+import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
 import Tooltip from "@/components/tooltip";
 import {
   AiHeadnotes,
@@ -53,6 +55,7 @@ import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis
 import type {
   AnalysisMarginItem,
   AnswerMarginItem,
+  ProvisionMarginItem,
 } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
   buildSectionMap,
@@ -180,10 +183,12 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const user = useMaybeAuthenticatedUser();
   return (
-    <DecisionWorkspaceContent
-      {...props}
-      key={`${user?.activeOrganizationId ?? "guest"}:${user?.id ?? "guest"}:${props.decisionId}`}
-    />
+    <WebReaderProvider>
+      <DecisionWorkspaceContent
+        {...props}
+        key={`${user?.activeOrganizationId ?? "guest"}:${user?.id ?? "guest"}:${props.decisionId}`}
+      />
+    </WebReaderProvider>
   );
 };
 
@@ -677,6 +682,17 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const visibleMarginItems = [
     ...(answerPlacement === "gutter" ? answerNotes : []),
     ...(hasAnalysis && showAiNotes ? marginItems : []),
+    ...(provisions.expandProvisions && answerPlacement === "gutter"
+      ? prepareDecisionProvisionCards({
+          blocks: visibleDecisionBlocks(ast, decision.caseNumberType),
+          provisionAnchors,
+        }).map(({ citations, id, startAnchorId }): ProvisionMarginItem => ({
+          citations,
+          id: `provision:${id}`,
+          kind: "provision",
+          startAnchorId,
+        }))
+      : []),
     ...exampleMarginItems,
     ...annotations.notes,
   ];
@@ -953,7 +969,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                     citationAnchors={citationAnchors}
                     decision={decision}
                     decisionId={decisionId}
-                    expandProvisions={provisions.expandProvisions}
+                    expandProvisions={
+                      provisions.expandProvisions &&
+                      answerPlacement === "inline"
+                    }
                     landingAnchorId={landingAnchorId}
                     onAnnotationActivate={activateMark}
                     notesByAnchorId={
