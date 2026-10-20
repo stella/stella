@@ -574,7 +574,7 @@
       "scope": "onboarding"
     },
     "name": "set_practice_jurisdictions",
-    "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {country_code, is_primary}; exactly one entry should be primary.",
+    "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {country_code, is_primary}; exactly one entry should be primary. Needs a person's approval in stella: MCP and CLI calls are refused, so describe the change for the user instead.",
     "inputSchema": {
       "type": "object",
       "required": ["jurisdictions"],
@@ -2688,7 +2688,7 @@
       "scope": "documents_write"
     },
     "name": "delete_document",
-    "description": "Delete a document and all its versions, or delete a single version when version_id is provided (the current version is promoted to the next latest; the only remaining version cannot be deleted). This is irreversible.",
+    "description": "Delete a document and all its versions, or delete a single version when version_id is provided (the current version is promoted to the next latest; the only remaining version cannot be deleted). This is irreversible. Needs a person's approval in stella: MCP and CLI calls are refused, so describe the change for the user instead.",
     "inputSchema": {
       "type": "object",
       "required": ["entity_id"],
@@ -2973,7 +2973,7 @@
       "scope": "matters_write"
     },
     "name": "delete_matter",
-    "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
+    "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible. Only a person can do this, in the matter's menu in the matters list, or its details panel, in the stella web app; agent calls are always refused.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id"],
@@ -5349,7 +5349,7 @@
       "scope": "admin_write"
     },
     "name": "add_matter_member",
-    "description": "Grant an organization member matter access.",
+    "description": "Grant an organization member matter access. Needs a person's approval in stella: MCP and CLI calls are refused, so describe the change for the user instead.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id", "user_id"],
@@ -5381,7 +5381,7 @@
       "scope": "admin_write"
     },
     "name": "remove_matter_member",
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it.",
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Needs a person's approval in stella: MCP and CLI calls are refused, so describe the change for the user instead.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id", "user_id"],
@@ -5418,7 +5418,7 @@
       "scope": "admin_write"
     },
     "name": "update_organization_settings",
-    "description": "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions.",
+    "description": "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions. Needs a person's approval in stella: MCP and CLI calls are refused, so describe the change for the user instead.",
     "inputSchema": {
       "type": "object",
       "required": [],
