@@ -91,6 +91,7 @@ describe("root route registrations", () => {
       "notificationsRoute",
       "operatorRoute",
       "smokeRoute",
+      "syntheticRoute",
       "timeApprovalQueueRoute",
       "timeTimersRoute",
       "wellKnownRoute",

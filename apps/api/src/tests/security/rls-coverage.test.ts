@@ -420,7 +420,7 @@ describe("policy coverage", () => {
     // Owner/admin targets have a dedicated policy assertion and no DELETE grant.
     "time_daily_targets",
     // AI memory is multi-scope (org OR user OR workspace in one table)
-    // and archive-only (no permissive DELETE). The generic workspace /
+    // with scoped permanent deletion. The generic workspace /
     // org loops can't express either shape; the dedicated test below
     // asserts its real policy boundaries.
     "ai_memories",
@@ -1006,7 +1006,7 @@ describe("policy coverage", () => {
     }
   });
 
-  test("ai_memories is multi-scope and archive-only (no permissive delete)", async () => {
+  test("ai_memories applies the same scope to reads and permanent deletion", async () => {
     const policies = await fetchStellaPolicies(testDb);
     const tablePolicies = policies.filter(
       (p) => p.table_name === "ai_memories",
@@ -1020,7 +1020,7 @@ describe("policy coverage", () => {
     expect(cmds).toContain("r");
     expect(cmds).toContain("a");
     expect(cmds).toContain("w");
-    for (const command of ["r", "a", "w"] as const) {
+    for (const command of ["r", "a", "w", "d"] as const) {
       const policy = tablePolicies.find((p) => p.command === command);
       expect(policy?.permissive).toBe(true);
       const expr = command === "a" ? policy?.check_expr : policy?.using_expr;
@@ -1033,14 +1033,10 @@ describe("policy coverage", () => {
       expect(expr).toContain("source_data_workspace_ids");
     }
 
-    // Archive-only: DELETE is locked by a single RESTRICTIVE `false`
-    // policy so a later permissive DELETE cannot silently unlock hard
-    // deletes (same durability guarantee as audit_logs).
+    const selectPolicy = tablePolicies.find((p) => p.command === "r");
     const deletePolicies = tablePolicies.filter((p) => p.command === "d");
     expect(deletePolicies).toHaveLength(1);
-    const deletePolicy = deletePolicies.at(0);
-    expect(deletePolicy?.permissive).toBe(false);
-    expect(deletePolicy?.using_expr).toBe("false");
+    expect(deletePolicies.at(0)?.using_expr).toBe(selectPolicy?.using_expr);
   });
 
   test("docx_suggestions carries the contributing-matter subset check", async () => {

@@ -26,7 +26,7 @@ env:
 jobs:
   workspace-replay:
     if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -147,7 +147,7 @@ jobs:
           retention-days: 14
 
   full-test-plan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -196,7 +196,7 @@ jobs:
 
   full-test:
     needs: full-test-plan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -257,7 +257,7 @@ jobs:
   # import-protection boundary and collect evidence for upgrades or upstream
   # performance fixes.
   web-build-profile:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -350,7 +350,7 @@ jobs:
   # changed", not "we broke something".
   postgres-suites:
     needs: full-test-plan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -416,7 +416,7 @@ jobs:
   # real REDIS_URL, run against the Valkey image the local stack pins.
   valkey-suites:
     needs: full-test-plan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -464,7 +464,7 @@ jobs:
   # changed, not a regression in our code. Isolated from the Postgres suites so
   # a flaky external endpoint cannot mask a real DB regression, and vice versa.
   smoke-suite:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -499,7 +499,7 @@ jobs:
   migration-exact-base-upgrade:
     needs: full-test-plan
     # Scheduled workflows run on main; dispatches rehearse main too.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -598,7 +598,7 @@ jobs:
       always() && (needs.migration-exact-base-upgrade.result == 'failure'
       || (github.event_name == 'schedule' && needs.migration-exact-base-upgrade.result == 'cancelled')
       || (github.event_name == 'workflow_dispatch' && inputs.dry-run-issue))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     # Serialize issue discovery and creation to avoid duplicate open issues.
     concurrency:

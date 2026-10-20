@@ -445,3 +445,69 @@ describe("a corpus scope chip", () => {
     expect(mentionAttrsToHref({ ...CORPUS_ATTRS, id: "case_law" })).toBeNull();
   });
 });
+
+describe("registry and connector scope chips", () => {
+  test.each([
+    {
+      attrs: {
+        id: "ares",
+        label: "ARES",
+        category: "registry",
+        kind: "registry",
+      },
+      href: "#stella-registry=ares",
+      expected: { type: "registry", registry: "ares", label: "ARES" },
+      glyph: { type: "registry" },
+    },
+    {
+      attrs: {
+        id: "legal-search",
+        label: "Legal Search",
+        category: "connector",
+        kind: "connector",
+      },
+      href: "#stella-connector=legal-search",
+      expected: {
+        type: "connector",
+        connector: "legal-search",
+        label: "Legal Search",
+      },
+      glyph: { type: "connector" },
+    },
+  ] as const)(
+    "the $attrs.category chip, the sent tag and the persisted href are one reference",
+    ({ attrs, href, expected, glyph }) => {
+      const reference: ChatReference = expected;
+      expect(referenceFromMentionAttrs(attrs)).toEqual(reference);
+      expect(mentionAttrsToHref(attrs)).toBe(href);
+      expect(referenceOf(referenceFromHref(href, attrs.label))).toEqual(
+        reference,
+      );
+      expect(resolveReferenceVisual(reference, PENDING_FACTS)).toEqual({
+        type: "chip",
+        glyph,
+        matter: { type: "none" },
+        label: attrs.label,
+      });
+    },
+  );
+
+  test("a slug that names no registry or connector does not look real", () => {
+    expect(referenceFromHref("#stella-registry=nope", "x")).toEqual({
+      type: "unresolved",
+    });
+    expect(referenceFromHref("#stella-connector=Bad Slug", "x")).toEqual({
+      type: "unresolved",
+    });
+    expect(
+      referenceFromMentionAttrs({
+        id: "nope",
+        label: "x",
+        category: "registry",
+      }),
+    ).toBeNull();
+    expect(
+      mentionAttrsToHref({ id: "-x", label: "x", category: "connector" }),
+    ).toBeNull();
+  });
+});

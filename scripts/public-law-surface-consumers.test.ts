@@ -56,6 +56,8 @@ const CONSUMERS = {
   "apps/web/src/components/chat/case-law-open.ts": "pages",
   "apps/web/src/components/chat/chat-decision-citation.tsx": "pages",
   "apps/web/src/features/statutes/statute-route-resolution.ts": "pages",
+  "apps/web/src/features/statutes/components/pending-statute-changes.logic.ts":
+    "pages",
   // Sitemaps.
   "apps/api/src/handlers/case-law/decisions/sitemap.ts": "sitemap",
   "apps/api/src/handlers/legislation/sitemap.ts": "sitemap",
@@ -96,6 +98,8 @@ const CONSUMERS = {
   "apps/web/src/routes/law/$country/statutes/index.tsx": "search",
   "apps/web/src/routes/law/-law-home/jurisdictions.ts": "search",
   "apps/web/src/features/case-law/components/top-bar-country.tsx": "search",
+  "apps/web/src/features/chat/hooks/use-global-chat-mention-registration.ts":
+    "search",
   // Tests and query-plan fixtures that mirror a surface's country filter.
   "apps/api/src/tests/query-plans/old-sitemap-refresh-fixture.ts": "sitemap",
   "apps/api/src/tests/query-plans/registry.ts": "search",

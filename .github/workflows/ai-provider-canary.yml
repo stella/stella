@@ -38,7 +38,7 @@ permissions: {}
 jobs:
   provider-canary:
     name: ${{ matrix.provider }} capability contract
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # A weekly run can spend 650 seconds on first attempts. One bounded retry
     # per transient failure can double that budget; leave room for backoff,
     # runner setup, and dependency installation.
@@ -125,7 +125,7 @@ jobs:
     name: Require selected provider coverage
     if: always()
     needs: provider-canary
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
