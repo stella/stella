@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
@@ -47,6 +48,7 @@ import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings
 import { organizationListOptions } from "@/lib/organization/queries";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 const ADMIN_SECTIONS = [
   {
@@ -143,7 +145,12 @@ const AdminTopBar = () => {
 const AdminSidebar = () => {
   const t = useTranslations();
   const user = useAuthenticatedUser();
-  const roleQuery = useChromeQuery(roleOptions);
+  const roleQuery = useChromeQuery(
+    resourceQueryOptions(roleOptions, {
+      resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization" },
+    }),
+  );
   const roleView = useQueryView(roleQuery);
   useQueryViewError(roleView);
   const role =

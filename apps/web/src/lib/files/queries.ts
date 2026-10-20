@@ -7,7 +7,10 @@ import type {
   EmailAttachmentDescriptor,
   EmailCitationBlock,
 } from "@stll/api-contract";
-import { DOCUMENT_PROPERTIES_RESULT_SCHEMA } from "@stll/api-contract";
+import {
+  DOCUMENT_PROPERTIES_RESULT_SCHEMA,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
@@ -27,6 +30,7 @@ import {
 import { fetchStorageArrayBuffer } from "@/lib/files/storage-fetch";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 type FileByFieldIdKey = FileMetadataQueryKey;
 
@@ -109,34 +113,44 @@ export const filesKeys = {
 type FileOptionsProps = QueryOptionsInput<FileByFieldIdKey>;
 
 export const fileOptions = (props: FileOptionsProps) =>
-  queryOptions({
-    queryKey: filesKeys.byFieldId(props),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .files({ workspaceId: props.workspaceId })
-        .url({ fieldId: props.fieldId })
-        .get({
-          query: { purpose: props.purpose ?? "display" },
-          fetch: { signal },
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: filesKeys.byFieldId(props),
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .files({ workspaceId: props.workspaceId })
+          .url({ fieldId: props.fieldId })
+          .get({
+            query: { purpose: props.purpose ?? "display" },
+            fetch: { signal },
+          });
+
+        const data = unwrapEden(response);
+
+        const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
+          signal,
+          purpose: props.purpose ?? "display",
         });
 
-      const data = unwrapEden(response);
-
-      const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
-        signal,
-        purpose: props.purpose ?? "display",
-      });
-
-      return {
-        fileId: data.fileId,
-        fileName: data.fileName,
-        mimeType: data.mimeType,
-        originalMimeType: data.originalMimeType,
-        buffer,
-      } satisfies FileData;
+        return {
+          fileId: data.fileId,
+          fileName: data.fileName,
+          mimeType: data.mimeType,
+          originalMimeType: data.originalMimeType,
+          buffer,
+        } satisfies FileData;
+      },
+      structuralSharing: shareFileData,
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
     },
-    structuralSharing: shareFileData,
-  });
+  );
 
 const withFileName =
   <T extends { fileName: string }>(fileName: string) =>
@@ -392,30 +406,40 @@ export const updateDocumentProperty = async ({
 };
 
 export const textFileOptions = (props: FileOptionsProps) =>
-  queryOptions({
-    queryKey: filesKeys.textByFieldId(props),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .files({ workspaceId: props.workspaceId })
-        .url({ fieldId: props.fieldId })
-        .get({
-          query: { purpose: "download" },
-          fetch: { signal },
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: filesKeys.textByFieldId(props),
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .files({ workspaceId: props.workspaceId })
+          .url({ fieldId: props.fieldId })
+          .get({
+            query: { purpose: "download" },
+            fetch: { signal },
+          });
+
+        const data = unwrapEden(response);
+
+        const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
+          signal,
+          purpose: "download",
         });
 
-      const data = unwrapEden(response);
-
-      const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
-        signal,
-        purpose: "download",
-      });
-
-      return {
-        fileId: data.fileId,
-        fileName: data.fileName,
-        mimeType: data.mimeType,
-        originalMimeType: data.originalMimeType,
-        text: new TextDecoder().decode(buffer),
-      } satisfies TextFileData;
+        return {
+          fileId: data.fileId,
+          fileName: data.fileName,
+          mimeType: data.mimeType,
+          originalMimeType: data.originalMimeType,
+          text: new TextDecoder().decode(buffer),
+        } satisfies TextFileData;
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
     },
-  });
+  );
