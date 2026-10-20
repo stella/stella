@@ -181,16 +181,42 @@ const passesRequest = (call: AstNode, request: string): boolean => {
   if (isIdentifierReference(options)) {
     return options.name === request;
   }
+  if (
+    options.type !== "ObjectExpression" ||
+    !Array.isArray(options.properties)
+  ) {
+    return false;
+  }
+  const properties: unknown[] = options.properties;
+  const spread = properties.findLastIndex(
+    (property) =>
+      isAstNode(property) &&
+      property.type === "SpreadElement" &&
+      isIdentifierReference(property.argument) &&
+      property.argument.name === request,
+  );
+  // Anything after the spread that may replace `headers` drops the
+  // capability declaration the request carries.
   return (
-    options.type === "ObjectExpression" &&
-    Array.isArray(options.properties) &&
-    options.properties.some(
-      (property: unknown) =>
-        isAstNode(property) &&
-        property.type === "SpreadElement" &&
-        isIdentifierReference(property.argument) &&
-        property.argument.name === request,
-    )
+    spread !== -1 &&
+    properties
+      .slice(spread + 1)
+      .every((property) => !mayReplaceHeaders(property))
+  );
+};
+
+const mayReplaceHeaders = (property: unknown): boolean => {
+  if (!isAstNode(property) || property.type !== "Property") {
+    return true;
+  }
+  if (property.computed === true) {
+    return true;
+  }
+  const key = property.key;
+  return (
+    !isAstNode(key) ||
+    (key.type === "Identifier" && key.name === "headers") ||
+    (key.type === "Literal" && key.value === "headers")
   );
 };
 

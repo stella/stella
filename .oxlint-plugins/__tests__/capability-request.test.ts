@@ -22,6 +22,22 @@ useCapabilityMutation({ capability: name, mutationFn: async (vars, request) => a
   ).toEqual([5, 6, 7, 9, 10, 11]);
 });
 
+test("rejects a forwarded request whose headers are replaced after the spread", async () => {
+  expect(
+    await lintSingleRule(
+      "capability-request",
+      `import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: {} }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, "headers": {} }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, ...extra }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, [key]: {} }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { headers: {}, ...request }));
+`,
+    ),
+  ).toEqual([3, 4, 5, 6]);
+});
+
 test("accepts forwarded requests and writes outside capability callbacks", async () => {
   expect(
     await lintSingleRule(
