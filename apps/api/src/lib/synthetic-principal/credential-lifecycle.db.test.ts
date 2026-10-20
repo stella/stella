@@ -7,10 +7,15 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { session } from "@/api/db/auth-schema";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  auditLogs,
   entities,
   entityVersions,
+  fields,
   properties,
   workspaceMembers,
   folioCollabRooms,
@@ -18,7 +23,9 @@ import {
   syntheticSessionControl,
   workspaces,
 } from "@/api/db/schema";
+import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { createAuditRecorder } from "@/api/lib/audit-log";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import { createReviewAccountPlugin } from "@/api/lib/auth/review-account-plugin";
@@ -28,6 +35,7 @@ import {
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import { createSafeId } from "@/api/lib/branded-types";
+import { readFileHandler } from "@/api/lib/files/read-file";
 import {
   authorizeFolioCollabRoom,
   issueFolioCollabToken,
@@ -131,6 +139,26 @@ const setup = async () => {
     content: { version: 1, type: "file" },
     tool: { version: 1, type: "manual-input" },
   });
+  const fieldId = createSafeId<"field">();
+  const fileId = createSafeId<"userFile">();
+  await testDb.insert(fields).values({
+    id: fieldId,
+    workspaceId,
+    propertyId,
+    entityVersionId: versionId,
+    content: {
+      version: 1,
+      type: "file",
+      id: fileId,
+      fileName: "document.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      sizeBytes: 1024,
+      encrypted: false,
+      sha256Hex: "a".repeat(64),
+      pdfFileId: null,
+    },
+  });
   const roomId = createSafeId<"folioCollabRoom">();
   await testDb.insert(folioCollabRooms).values({
     id: roomId,
@@ -145,28 +173,28 @@ const setup = async () => {
     seedState: "empty",
     workspaceId,
   });
-  const issued = await testDb.transaction(
-    async (tx) =>
-      await issueFolioCollabToken({
-        sourceSessionId: source.id,
-        readSessionAuthority: async (options) =>
-          await readSyntheticSessionAuthority(testDb, options),
-        generation: 0,
-        permissions: { canEdit: true },
-        roomId,
-        tx: asTestRaw(tx),
-        userId: brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
-        workspaceId,
-      }),
-  );
+  const readSessionAuthority = async (options: {
+    sessionId: string | null;
+    userId: string;
+    now?: Date;
+  }) => await readSyntheticSessionAuthority(testDb, options);
+  const issued = await issueFolioCollabToken({
+    sourceSessionId: source.id,
+    readSessionAuthority,
+    generation: 0,
+    permissions: { canEdit: true },
+    roomId,
+    tx: asTestRaw(testDb),
+    userId: brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
+    workspaceId,
+  });
   expect(issued.tokenExpiresAt).toEqual(source.expiresAt);
   const authorizeRoom = async () =>
     await authorizeFolioCollabRoom({
       roomId,
       token: issued.token,
       db: asTestRaw(testDb),
-      readSessionAuthority: async (options) =>
-        await readSyntheticSessionAuthority(testDb, options),
+      readSessionAuthority,
     });
   const authorized = await authorizeRoom();
   expect(authorized.status).toBe("authorized");
@@ -182,6 +210,58 @@ const setup = async () => {
       }),
   );
   expect(renewed?.tokenExpiresAt).toEqual(source.expiresAt);
+
+  const scopedDb = asTestRaw<ScopedDb>(
+    createScopedDb(
+      testDb,
+      [workspaceId],
+      brandPersistedOrganizationId(SYNTHETIC_PRINCIPAL.org.id),
+      brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
+    ),
+  );
+  const recordAuditEvent = createAuditRecorder({
+    organizationId: brandPersistedOrganizationId(SYNTHETIC_PRINCIPAL.org.id),
+    workspaceId,
+    userId: brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
+    request: new Request("https://api.example.test/files"),
+    server: null,
+  });
+  const download = async () => {
+    // PGlite has one connection, so read the owner-only authority before the
+    // handler opens its scoped-role transaction. PostgreSQL uses separate
+    // owner and scoped pools for the same two operations.
+    const authority = await readSessionAuthority({
+      sessionId: source.id,
+      userId: SYNTHETIC_PRINCIPAL.user.id,
+    });
+    return await readFileHandler({
+      userId: brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
+      sourceSessionId: source.id,
+      scopedDb,
+      fieldId,
+      organizationId: brandPersistedOrganizationId(SYNTHETIC_PRINCIPAL.org.id),
+      workspaceId,
+      purpose: "download",
+      recordAuditEvent,
+      readSessionAuthority: async () => authority,
+    });
+  };
+  const liveDownload = await download();
+  if (!("presignedUrl" in liveDownload)) {
+    panic("Missing dedicated session download");
+  }
+  expect(typeof liveDownload.presignedUrl).toBe("string");
+  expect(
+    Number(
+      new URL(liveDownload.presignedUrl).searchParams.get("X-Amz-Expires"),
+    ),
+  ).toBeLessThanOrEqual(60);
+  expect(
+    await testDb
+      .select({ resourceId: auditLogs.resourceId })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, entityId)),
+  ).toEqual([{ resourceId: entityId }]);
 
   const lifetime = createSessionLifetime({
     store: createDatabaseSessionLifetimeStore(asTestRaw(testDb), {
@@ -250,15 +330,22 @@ const setup = async () => {
     collabRoom: async () => {
       expect((await authorizeRoom()).status).not.toBe("authorized");
     },
+    signedDownload: async () => {
+      expect(await rejectionOf(download())).toMatchObject({
+        status: 403,
+        code: "account_access_unavailable",
+      });
+    },
     session: async () => {
       expect(await authorizeSyntheticSession(asTestRaw(testDb), source)).toBe(
         false,
       );
     },
     cookieCache: async () => {
-      expect(await authorizeSyntheticSession(asTestRaw(testDb), source)).toBe(
-        false,
-      );
+      const resolved = await auth.api.getSession({
+        headers: { cookie },
+      });
+      expect(resolved).toBeNull();
     },
     oauth: async () => {
       expect([401, 403]).toContain(
@@ -292,6 +379,7 @@ const setup = async () => {
       | "session"
       | "cookieCache"
       | "collabRoom"
+      | "signedDownload"
       | "oauth"
       | "apiKey"
       | "invitation"
@@ -319,8 +407,10 @@ for (const transition of ["revoked", "expired", "disabled"] as const) {
         .set({ status: "revoked" })
         .where(eq(syntheticSessionControl.id, SYNTHETIC_SESSION_CONTROL_ID));
     }
-    for (const probe of Object.values(probes)) {
-      await probe();
+    for (const [name, probe] of Object.entries(probes)) {
+      if (name !== "cookieCache" || transition !== "disabled") {
+        await probe();
+      }
     }
     for (const probe of Object.values(refusedCredentialIssuerProbes)) {
       await probe(syntheticCredentialPrincipal);

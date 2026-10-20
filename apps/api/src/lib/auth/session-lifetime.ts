@@ -25,7 +25,10 @@ import {
 export const SESSION_ABSOLUTE_AGE_MS = 90 * DAY_IN_MS;
 export const SESSION_IDLE_AGE_MS = 60 * 60 * 1000;
 export const SESSION_PRIOR_TOKEN_GRACE_MS = 60 * 1000;
-const cookieCacheVersion = "session-lifetime-v2";
+const cookieCacheVersion = (session: Pick<Session, "id">) =>
+  session.id.startsWith(SYNTHETIC_SESSION_PREFIX)
+    ? Bun.randomUUIDv7()
+    : "session-lifetime-v2";
 
 type SessionLifetimeDecision = {
   refreshMode: "fixed";

@@ -52,6 +52,11 @@ const AGENT_SKILL_ANCHOR_LOCK_MIGRATION_PATH = nodePath.join(
   "20260925230100_agent_skill_anchor_lock",
   "migration.sql",
 );
+const SYNTHETIC_SESSION_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261019070000_monitoring_session",
+  "migration.sql",
+);
 const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260911150000_statute_citation_counts",
@@ -330,6 +335,30 @@ export const installPgliteAgentSkillRevisionTrigger = async (
     db,
     migrationPath: AGENT_SKILL_ANCHOR_LOCK_MIGRATION_PATH,
   });
+};
+
+/** Install the dedicated principal membership trigger omitted by schema push. */
+export const installPgliteSyntheticMembershipTrigger = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    SYNTHETIC_SESSION_MIGRATION_PATH,
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION enforce_synthetic_membership") ||
+      source.startsWith(
+        "REVOKE ALL ON FUNCTION enforce_synthetic_membership",
+      ) ||
+      source.startsWith("CREATE TRIGGER member_synthetic_organization_check")
+    );
+  });
+  if (statements.length !== 3) {
+    panic("Expected the dedicated principal membership function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
 };
 
 const TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH = nodePath.join(

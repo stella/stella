@@ -2968,6 +2968,18 @@ const readOrganizationWorkspaces = async (
   return outcome.value.workspaces;
 };
 
+const hasSyntheticSessionAuthority = async (current: {
+  session: { id: string };
+  user: { id: string };
+}) => {
+  const sessionId = current.session.id;
+  const userId = brandPersistedUserId(current.user.id);
+  return (
+    !isSyntheticSessionPrincipal({ sessionId, principalId: userId }) ||
+    (await syntheticSessionAuthorityReader({ sessionId, userId })) !== null
+  );
+};
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -2994,16 +3006,7 @@ const resolveValidateAuth = async ({
     return { ok: false as const, statusCode: 401 as const };
   }
 
-  if (
-    isSyntheticSessionPrincipal({
-      sessionId: session.id,
-      principalId: user.id,
-    }) &&
-    (await syntheticSessionAuthorityReader({
-      sessionId: session.id,
-      userId: user.id,
-    })) === null
-  ) {
+  if (!(await hasSyntheticSessionAuthority({ session, user }))) {
     return { ok: false as const, statusCode: 401 as const };
   }
 

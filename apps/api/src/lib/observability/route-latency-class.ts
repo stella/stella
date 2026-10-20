@@ -12,6 +12,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "ALL /mcp-documents": "search",
   "ALL /mcp-law": "search",
   "ALL /mcp/advanced": "search",
+  "POST /synthetic/session": "crud",
   "DELETE /v1/billing-codes/:workspaceId/": "crud",
   "DELETE /v1/case/matter-links/:workspaceId/:linkId": "crud",
   "DELETE /v1/case/research/columns/:columnId": "crud",

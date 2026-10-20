@@ -292,10 +292,17 @@ describe("file URL grants", () => {
 
       const response = await readUrl(seeded.fieldId, purpose);
 
+      const requestedLifetime =
+        "presignedUrl" in response
+          ? Number(
+              new URL(response.presignedUrl).searchParams.get("X-Amz-Expires"),
+            )
+          : null;
       expect(response).toMatchObject({
         mimeType: deliveredMimeType,
         presignedUrl: expect.stringContaining(deliveredKey),
       });
+      expect(requestedLifetime).toBe(15 * 60);
       await expectOneContentRow(seeded.entityId, {
         action,
         metadata: {
