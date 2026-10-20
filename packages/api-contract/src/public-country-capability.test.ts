@@ -30,8 +30,9 @@ describe("public country availability contract", () => {
     expect(Object.keys(PUBLIC_COUNTRY_CAPABILITIES)).toEqual(
       CASE_LAW_JURISDICTIONS,
     );
-    expect(publicCountriesFor("caseLaw", "search")).toEqual(
-      PUBLIC_CASE_LAW_COUNTRIES,
+    // The serving list carries branded codes; compare the codes themselves.
+    expect(PUBLIC_CASE_LAW_COUNTRIES.join(",")).toBe(
+      publicCountriesFor("caseLaw", "search").join(","),
     );
     expect(PUBLIC_LEGISLATION_COUNTRIES).toEqual(
       publicCountriesFor("legislation", "search"),
