@@ -338,7 +338,7 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
               organizationId,
               workspaceIds,
             })
-          ).unwrap();
+          ).unwrap("The scoped workspace authorization read must succeed");
           return await loadCurrentExtractedContents(tx, {
             entityIds,
             organizationId,

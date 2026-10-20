@@ -1868,7 +1868,7 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
                 organizationId: context.organizationId,
                 workspaceIds: [currentDocument.workspaceId],
               })
-            ).unwrap();
+            ).unwrap("The scoped workspace authorization read must succeed");
             return await loadCurrentExtractedContents(tx, {
               entityIds: [entityId],
               organizationId: context.organizationId,

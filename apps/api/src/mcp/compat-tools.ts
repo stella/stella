@@ -15,7 +15,10 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
-import { authorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
+import {
+  type AuthorizedWorkspaceReadError,
+  authorizedWorkspaceIds,
+} from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
   COMPAT_FETCH_OUTPUT_SCHEMA,
   COMPAT_SEARCH_OUTPUT_SCHEMA,
@@ -105,7 +108,7 @@ const getFetchableEntityMap = async ({
         organizationId: context.organizationId,
         workspaceIds: context.accessibleWorkspaceIds,
       })
-    ).unwrap();
+    ).unwrap("The scoped workspace authorization read must succeed");
     return await loadCurrentExtractedSources(tx, {
       entityIds: safeEntityIds,
       organizationId: context.organizationId,
@@ -410,21 +413,23 @@ const searchMatterKnowledge = async ({
   context: McpRequestContext;
   cursor: string | undefined;
   query: string;
-}): Promise<MatterSearchPage> => {
-  const workspaceIds = await context.scopedDb(async (tx) =>
-    (
+}): Promise<Result<MatterSearchPage, AuthorizedWorkspaceReadError>> => {
+  const workspaceIdsResult = await context.scopedDb(
+    async (tx) =>
       await authorizedWorkspaceIds(tx, {
         organizationId: context.organizationId,
         workspaceIds: context.accessibleWorkspaceIds,
-      })
-    ).unwrap(),
+      }),
   );
+  if (workspaceIdsResult.isErr()) {
+    return workspaceIdsResult;
+  }
   const page = await (
     context.testDependencies?.getSearchReader ?? getSearchReader
   )(context.scopedDb).search({
     query,
     organizationId: context.organizationId,
-    workspaceIds,
+    workspaceIds: workspaceIdsResult.value,
     limit: normalizeTenantPageLimit(DEFAULT_COMPAT_SEARCH_LIMIT),
     ...(cursor === undefined ? {} : { cursor }),
   });
@@ -441,10 +446,10 @@ const searchMatterKnowledge = async ({
     entityIds: getCompatSearchEntityIds(hits),
   });
 
-  return {
+  return Result.ok({
     nextCursor: page.nextCursor,
     results: mapCompatSearchResults({ fetchableMap, hits }),
-  };
+  });
 };
 
 const handleCompatSearchTool: McpToolHandler<
@@ -471,14 +476,18 @@ const handleCompatSearchTool: McpToolHandler<
     return pageLimitResult;
   }
 
-  const matter =
+  const matterResult =
     position.matter === null
-      ? EXHAUSTED_MATTER_PAGE
+      ? Result.ok(EXHAUSTED_MATTER_PAGE)
       : await searchMatterKnowledge({
           context,
           cursor: position.matter,
           query,
         });
+  if (matterResult.isErr()) {
+    return errorResult(matterResult.error.message);
+  }
+  const matter = matterResult.value;
 
   if (!corpusEnabled) {
     return {
@@ -580,7 +589,7 @@ const handleCompatFetchTool: McpToolHandler<
           organizationId: context.organizationId,
           workspaceIds: context.accessibleWorkspaceIds,
         })
-      ).unwrap();
+      ).unwrap("The scoped workspace authorization read must succeed");
       return await loadCurrentExtractedContents(tx, {
         entityIds: [entityId],
         organizationId: context.organizationId,

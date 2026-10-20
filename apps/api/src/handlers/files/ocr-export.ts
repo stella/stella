@@ -47,7 +47,7 @@ export const readOcrExport = async ({
         organizationId,
         workspaceIds: [workspaceId],
       })
-    ).unwrap();
+    ).unwrap("The scoped workspace authorization read must succeed");
     return await loadCurrentOcrExport({
       authorizedWorkspaceIds: authorizedIds,
       db: tx,

@@ -584,6 +584,10 @@ const objectProperty = (
     }
     if (property.type === "SpreadElement") {
       const spreadValue = stableValue(context, property.argument);
+      if (spreadValue === null) {
+        result = null;
+        continue;
+      }
       const inherited = objectProperty(context, spreadValue, name);
       if (inherited !== null) {
         result = inherited;

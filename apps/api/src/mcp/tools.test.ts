@@ -835,6 +835,7 @@ type MockProcessingRunQueryInput = {
 };
 
 type MockMcpTransaction = {
+  selectDistinct: () => ReturnType<typeof createSelectBuilder>;
   query: {
     entities: {
       findFirst: (input?: MockEntityFindFirstInput) => Promise<{
@@ -1170,6 +1171,7 @@ const createScopedDb = (
             },
           },
           select: () => createSelectBuilder(rows),
+          selectDistinct: () => createSelectBuilder([{ id: WORKSPACE_ID }]),
         }),
     ),
   );

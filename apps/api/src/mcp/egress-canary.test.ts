@@ -229,7 +229,9 @@ const buildContext = ({
   tx?: unknown;
   workspaceIds?: readonly string[];
 } = {}): McpRequestContext => {
-  const { safeDb, scopedDb } = createScopedDbMock(tx);
+  const { safeDb, scopedDb } = createScopedDbMock(tx, {
+    authorizedWorkspaceIds: workspaceIds,
+  });
   return {
     accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
     accessibleWorkspaceIdSet: new Set(workspaceIds),

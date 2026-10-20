@@ -466,7 +466,7 @@ const runAiStep = async ({
               organizationId,
               workspaceIds: [run.workspaceId],
             })
-          ).unwrap(),
+          ).unwrap("The scoped workspace authorization read must succeed"),
         ),
         run.inputEntityIds,
       )
