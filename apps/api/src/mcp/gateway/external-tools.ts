@@ -32,6 +32,7 @@ import {
   MCP_INTERNAL_ERROR_HINT,
   serializeToolResult,
   structuredErrorResult,
+  toolDataResult,
 } from "@/api/mcp/tool-utils";
 
 const mcpStructuredErrorResult = (
@@ -216,7 +217,7 @@ export const callGatewayExternalMcpTool = async ({
         permit,
         resolved,
       });
-      return { status: "success", data: {} };
+      return toolDataResult({});
     });
     if (admittedResult !== undefined) {
       return admittedResult;
