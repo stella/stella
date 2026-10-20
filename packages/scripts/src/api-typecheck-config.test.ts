@@ -18,14 +18,23 @@ const generatedApiProjects = () =>
       const config = ts.readConfigFile(path.join(API_ROOT, name), (file) =>
         ts.sys.readFile(file),
       ).config;
-      const extended = Array.isArray(config.extends) ? config.extends : [];
-      const generated = extended.find((value: string) =>
+      const extended: readonly string[] = Array.isArray(config.extends)
+        ? config.extends.filter(
+            (value: unknown): value is string => typeof value === "string",
+          )
+        : [];
+      const generated = extended.find((value) =>
         value.startsWith(GENERATED_PREFIX),
       );
-      if (!generated) {
+      if (generated === undefined) {
         return undefined;
       }
       const required = extended.at(extended.indexOf(generated) - 1);
+      if (required === undefined) {
+        throw new Error(
+          `${name} extends ${generated} without a guard before it`,
+        );
+      }
       const guard = ts.readConfigFile(
         path.resolve(API_ROOT, required),
         (file) => ts.sys.readFile(file),
