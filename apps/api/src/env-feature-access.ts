@@ -1,8 +1,4 @@
-import {
-  DescribeParametersCommand,
-  GetParameterCommand,
-  SSMClient,
-} from "@aws-sdk/client-ssm";
+import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { panic } from "better-result";
 import * as v from "valibot";
 
@@ -118,18 +114,19 @@ export const startFeatureAccessGrantsRefresh = () => {
       logger.error("feature_access.refresh_failed");
     },
     source: {
+      // Without decryption the read returns the version without the value, so
+      // the task role needs GetParameter on this one parameter and no
+      // account-wide DescribeParameters.
       readVersion: async () => {
         const output = await client.send(
-          new DescribeParametersCommand({
-            ParameterFilters: [
-              { Key: "Name", Option: "Equals", Values: [parameterName] },
-            ],
-            MaxResults: 1,
+          new GetParameterCommand({
+            Name: parameterName,
+            WithDecryption: false,
           }),
         );
         return (
-          output.Parameters?.at(0)?.Version ??
-          panic("Feature access grant parameter metadata has no version")
+          output.Parameter?.Version ??
+          panic("Feature access grant parameter has no version")
         );
       },
       readValue: async () => {
