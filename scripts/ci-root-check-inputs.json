@@ -23,6 +23,11 @@
     "Tauri counterpart autofix tests": ["@stll/desktop"],
     "Lockfile release-age guard": ["**"],
     "Restore generated sources": ["**"],
+    "API test timeout guard": [
+      "apps/api/**/*.test.ts",
+      "scripts/api-test-timeout-guard.ts",
+      "scripts/api-test-timeout-guard.test.ts"
+    ],
     "Test oxlint plugins": [
       ".oxlint-plugins/**",
       "oxlint*.ts",
