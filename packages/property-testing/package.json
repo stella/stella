@@ -10,7 +10,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./preload": "./src/preload.ts",
-    "./rejection": "./src/rejection.ts"
+    "./rejection": "./src/rejection.ts",
+    "./response-order": "./src/response-order.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
