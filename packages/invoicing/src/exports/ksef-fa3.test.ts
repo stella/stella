@@ -13,10 +13,16 @@ import type { InvoiceExportRecord, InvoiceExportSeller } from "./record";
 // maps the imports to those copies, so validation never touches the network.
 const SCHEMAS = path.join(import.meta.dir, "fixtures", "ksef-fa3");
 const XMLLINT = Bun.which("xmllint");
+// CI must validate: a missing xmllint there would turn every schema check
+// into a silent pass. A developer machine without it skips them visibly.
+if (XMLLINT === null && Bun.env["CI"]) {
+  throw new Error("FA(3) schema validation needs xmllint on the CI runner");
+}
 
 /**
  * What xmllint reports against the FA(3) schema; nothing when the XML is
- * valid, or when xmllint is missing (the schema tests below say so).
+ * valid. Without xmllint (outside CI only) there is nothing to report and
+ * the schema tests below are skipped.
  */
 const schemaErrors = (xml: string): string => {
   if (XMLLINT === null) {
