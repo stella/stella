@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -135,7 +135,7 @@ type CitingDecisionsCursor = {
   decisionId: string;
 };
 
-const decodeCitingDecisionsCursor = (
+export const decodeCitingDecisionsCursor = (
   cursor: string,
 ): CitingDecisionsCursor | null => {
   const parts = decodePaginationCursor(cursor);
@@ -153,6 +153,15 @@ const decodeCitingDecisionsCursor = (
   }
   return { context, decisionDate, decisionId };
 };
+
+export const encodeCitingDecisionsCursor = (
+  cursor: CitingDecisionsCursor,
+): string =>
+  encodePaginationCursor([
+    cursor.context,
+    cursor.decisionDate,
+    cursor.decisionId,
+  ]);
 
 type CitingDecisionRowsOptions = {
   tx: CaseLawPublicReadTransaction;
@@ -289,6 +298,30 @@ const readCitingDecisionRows = async ({
   );
 };
 
+/** Target jurisdiction and citing-country admission are one scope decision. */
+const citingJurisdictionScope = (country: string) => {
+  if (country === "EU") {
+    return {
+      jurisdiction: "EU",
+      decisionCountryCondition: inArray(
+        publishedCaseLawDecisions.country,
+        PUBLIC_CASE_LAW_COUNTRIES,
+      ),
+    };
+  }
+  const jurisdiction = publicCaseLawCountry(country);
+  if (jurisdiction === null) {
+    return null;
+  }
+  return {
+    jurisdiction,
+    decisionCountryCondition: eq(
+      publishedCaseLawDecisions.country,
+      jurisdiction,
+    ),
+  };
+};
+
 type CitingDecisionsReadOptions = {
   caseLawDb: CaseLawPublicReadDb;
   courtRegistry: CourtRegistry;
@@ -303,6 +336,7 @@ export const listCitingDecisionsHandler = async (
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     surface: "search",
     parameter: "jurisdiction",
+    jurisdictionType: "provision",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;
@@ -310,10 +344,11 @@ export const listCitingDecisionsHandler = async (
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });
   }
-  const jurisdiction = publicCaseLawCountry(countryRead.country);
-  if (jurisdiction === null) {
+  const scope = citingJurisdictionScope(countryRead.country);
+  if (scope === null) {
     return status(404, { message: "Not Found" });
   }
+  const { jurisdiction, decisionCountryCondition } = scope;
   const work = workCondition(query);
 
   if (work === null) {
@@ -356,7 +391,7 @@ export const listCitingDecisionsHandler = async (
   }
   const conditions: SQL[] = [
     eq(caseLawProvisionCitations.jurisdiction, jurisdiction),
-    eq(publishedCaseLawDecisions.country, jurisdiction),
+    decisionCountryCondition,
     work,
     redistributableCaseLawSource,
   ];
