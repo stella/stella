@@ -457,7 +457,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "3dbe01cdb44b5859f44e55e043fd5c8631e934647583f30796073bf530fbb441"
+    "reviewedDigest": "306377a0306992b4b10d56d016f1c709828b34e9d622abf5105044bd5ca59ca1"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "ed941a2057a8223fdcf3d422fe1b60ea4d0a7b21cc60bdcc45b79a8f8162c274"
+    "reviewedDigest": "6c33a441236d4dde1f4465d761b763bb1938ac0ef46de1589f0936fa7bc217ef"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -917,11 +917,11 @@
   "candidate:.github/workflows/ci.yml/database-migrations-check": {
     "kind": "ordinary",
     "qualifier": "Checks migration safety rules and coverage; no publication or deployment.",
-    "reviewedDigest": "d62302b9370c1f7c1af93f41c8dabc903fcbc4d24380d2e1c73c10dac670dfc8"
+    "reviewedDigest": "61096099ae96f9500d278316640e66ac0fbe9b3af43f0c634e18033dd2151227"
   },
   "candidate:.github/workflows/ci.yml/database-migrations-apply-fresh": {
     "kind": "ordinary",
     "qualifier": "Applies migrations to disposable databases and verifies schema, history and API startup; no publication or deployment.",
-    "reviewedDigest": "a035db92e28a03fb7bfb311f5503f47ec91d31630152692dc51fbd5aabf60fcb"
+    "reviewedDigest": "4193e0806fe202c26849c2607af6b31d21f8d7c5027867bc5ae5b74b0fa7ee80"
   }
 }
