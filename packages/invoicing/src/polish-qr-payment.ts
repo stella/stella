@@ -1,13 +1,10 @@
 import { Result } from "better-result";
 
 import type { CentsAmount } from "@stll/money";
-import {
-  compact as compactNip,
-  validate as validateNip,
-} from "@stll/stdnum/pl/nip";
 import { stripUnicodeMarks } from "@stll/text-normalize";
 
 import { invalidInput, type InvoicingResult } from "./errors";
+import { parseNip } from "./nip";
 import { parsePaymentAccount } from "./payment-fields";
 import type { InvoiceDocumentType } from "./types";
 
@@ -38,15 +35,6 @@ const MIN_AMOUNT_DIGITS = 6;
 const DISALLOWED = /[^\w ,./\\\-@#&*ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/gu;
 const POLISH_LETTER = /^[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]$/u;
 
-/**
- * The NIP in a seller's tax ID, or null when it is not a valid Polish NIP
- * (a foreign VAT ID on a firm that banks in Poland, a typo).
- */
-export const polishNip = (taxId: string): string | null => {
-  const nip = compactNip(taxId);
-  return validateNip(nip).valid ? nip : null;
-};
-
 export const buildPolishQrPaymentPayload = ({
   documentType,
   iban,
@@ -69,8 +57,8 @@ export const buildPolishQrPaymentPayload = ({
   if (!account.value.iban.startsWith("PL")) {
     return invalidInput("Polish QR payment requires a Polish IBAN");
   }
-  const nip = compactNip(recipientNip);
-  if (!validateNip(nip).valid) {
+  const nip = parseNip(recipientNip);
+  if (nip === null) {
     return invalidInput("Polish QR payment requires a valid NIP");
   }
   const name = fieldText(recipientName, MAX_NAME_LENGTH);

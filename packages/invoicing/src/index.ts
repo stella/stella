@@ -1,5 +1,6 @@
 export { InvoicingInputError } from "./errors";
 export { normalizeIban, parseIban } from "./iban";
+export { parseNip } from "./nip";
 export {
   calculateDocumentTotals,
   createInvoiceDocument,
@@ -9,7 +10,6 @@ export {
 export { calculateLineNetAmount, VAT_TREATMENTS } from "./line-amount";
 export {
   buildPolishQrPaymentPayload,
-  polishNip,
   type PolishQrPaymentInput,
   type PolishQrPaymentResult,
 } from "./polish-qr-payment";

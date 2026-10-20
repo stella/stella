@@ -1024,7 +1024,6 @@
       "version": "0.1.0",
       "dependencies": {
         "@stll/money": "workspace:*",
-        "@stll/stdnum": "^2.3.2",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "lzma1": "catalog:",
