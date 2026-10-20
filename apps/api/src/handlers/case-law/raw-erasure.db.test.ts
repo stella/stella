@@ -399,11 +399,21 @@ test("erasing a linked decision removes raw objects under both original owners",
 });
 
 test("erasing a canonical decision skips an alias whose retired row is gone", async () => {
-  const { canonicalId, retiredId } = await seedLinkedPair();
+  const { canonicalId, canonicalSource, retiredId } = await seedLinkedPair();
+  const goneId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    id: goneId,
+    sourceId: canonicalSource,
+    country: "POL",
+    court: "Trybunał Konstytucyjny",
+    language: "pl",
+    caseNumber: "K 2/26",
+  });
   await db.insert(caseLawDecisionAliases).values({
-    retiredDecisionId: createSafeId<"caseLawDecision">(),
+    retiredDecisionId: goneId,
     canonicalDecisionId: canonicalId,
   });
+  await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, goneId));
 
   await redact(canonicalId);
 
