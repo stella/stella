@@ -136,8 +136,17 @@ pub async fn persist_session_store(
   #[cfg(unix)]
   {
     use std::os::unix::fs::PermissionsExt;
-    let _ =
-      fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o600)).await;
+    // The session store is owner-only; a store that cannot be restricted is
+    // not written, and its unrestricted temporary copy is removed.
+    if let Err(error) =
+      fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o600)).await
+    {
+      crate::logging::best_effort(
+        fs::remove_file(&temp_path).await,
+        "unrestricted session store temp file could not be removed",
+      );
+      return Err(format!("permission change failed: {error}"));
+    }
   }
 
   fs::rename(&temp_path, store_path)

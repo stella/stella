@@ -56,10 +56,9 @@ pub fn set_takeover_response(label: &str, approved: bool) {
   let mut guard = TAKEOVER_SENDERS.lock().unwrap_or_else(|e| e.into_inner());
   if let Some(ref mut map) = *guard
     && let Some(tx) = map.remove(label)
+    && tx.send(approved).is_err()
   {
-    if tx.send(approved).is_err() {
-      tracing::debug!("takeover answer had no waiter");
-    }
+    tracing::debug!("takeover answer had no waiter");
   }
 }
 

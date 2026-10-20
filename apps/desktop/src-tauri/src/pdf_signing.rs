@@ -274,10 +274,9 @@ fn cancel_dialog() {
     .lock()
     .unwrap_or_else(|e| e.into_inner())
     .take()
+    && bridge.choice.send(DialogChoice::Cancel).is_err()
   {
-    if bridge.choice.send(DialogChoice::Cancel).is_err() {
-      tracing::debug!("PDF signing dialog choice had no waiter");
-    }
+    tracing::debug!("PDF signing dialog choice had no waiter");
   }
 }
 

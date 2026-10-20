@@ -81,10 +81,10 @@ pub fn set_self_host_connect_response(approved: bool) {
   let mut guard = SELF_HOST_CONNECT_SENDER
     .lock()
     .unwrap_or_else(|e| e.into_inner());
-  if let Some(sender) = guard.take() {
-    if sender.send(approved).is_err() {
-      tracing::debug!("self-host connection answer had no waiter");
-    }
+  if let Some(sender) = guard.take()
+    && sender.send(approved).is_err()
+  {
+    tracing::debug!("self-host connection answer had no waiter");
   }
 }
 
@@ -853,10 +853,9 @@ pub(crate) async fn show_connection_confirmation(
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take()
+            && sender.send(()).is_err()
           {
-            if sender.send(()).is_err() {
-              tracing::debug!("self-host connection window close had no waiter");
-            }
+            tracing::debug!("self-host connection window close had no waiter");
           }
         }
       });

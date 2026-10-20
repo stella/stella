@@ -543,8 +543,10 @@ fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
       let tab = tab.to_string();
       tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        let _ =
-          handle.emit_to("main", "activate-tab", serde_json::json!({ "tab": tab }));
+        best_effort(
+          handle.emit_to("main", "activate-tab", serde_json::json!({ "tab": tab })),
+          "tab activation was not announced",
+        );
       });
     }
     Err(e) => {
