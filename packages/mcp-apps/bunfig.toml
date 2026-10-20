@@ -1,3 +1,5 @@
+preload = ["../../scripts/bun-version-guard.ts"]
+
 [install]
 auto = "disable"
 

@@ -1,3 +1,5 @@
+preload = ["../../scripts/bun-version-guard.ts"]
+
 [install]
 # Bun reads only the bunfig.toml of the directory it installs in, so this
 # lockfile does not inherit the root's 5-day release-age quarantine. Keep the

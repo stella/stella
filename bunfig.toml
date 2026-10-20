@@ -1,3 +1,5 @@
+preload = ["./scripts/bun-version-guard.ts"]
+
 [install]
 # Fail on a missing import instead of installing it at run time.
 auto = "disable"

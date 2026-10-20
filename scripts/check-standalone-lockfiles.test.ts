@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -461,6 +462,15 @@ describe("Bun under the repository's bunfig.toml files", () => {
       mkdirSync(path.join(root, dir), { recursive: true });
       writeFileSync(path.join(root, dir, "bunfig.toml"), content);
     }
+    mkdirSync(path.join(root, "scripts"), { recursive: true });
+    copyFileSync(
+      path.join(repoRoot, "scripts/bun-version-guard.ts"),
+      path.join(root, "scripts/bun-version-guard.ts"),
+    );
+    copyFileSync(
+      path.join(repoRoot, "package.json"),
+      path.join(root, "package.json"),
+    );
     mkdirSync(path.dirname(path.join(root, script)), { recursive: true });
     writeFileSync(
       path.join(root, script),
