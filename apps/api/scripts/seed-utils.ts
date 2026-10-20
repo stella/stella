@@ -223,6 +223,16 @@ export const seedId = <T extends SafeIdType = never>(
     formatSeedUuid(hashSha256Hex(seedIdHashInput(getSeedIdNamespace(), label))),
   );
 
+/**
+ * Id of a row every organization shares (the case-law corpus). Never
+ * namespaced: each locale firm's run must resolve the rows the primary run
+ * wrote.
+ */
+export const globalSeedId = <T extends SafeIdType = never>(
+  label: string,
+): SafeId<T> =>
+  toSafeId<T>(formatSeedUuid(hashSha256Hex(seedIdHashInput("", label))));
+
 /** Safe array access for seed data (panics on out-of-bounds). */
 export const at = <T>(arr: readonly T[], i: number): T => {
   const item = arr[i];
