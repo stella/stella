@@ -1,5 +1,6 @@
 ---
 "@stll/cli": minor
+"@stll/mcp-kit": patch
 ---
 
-Require the server-advertised supported CLI version, cache update metadata, and turn registry incompatibilities into actionable update errors.
+Require supported local client versions, identify CLI and MCP kit requests, cache CLI update metadata, and turn incompatibilities into actionable update errors.

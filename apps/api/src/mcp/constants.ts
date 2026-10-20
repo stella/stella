@@ -12,9 +12,10 @@ import {
   type McpOAuthScope,
   REQUEST_ID_HEADER,
 } from "@stll/api-contract";
+import { LOCAL_CLIENT_IDENTITY_HEADER } from "@stll/api-contract/local-client-identity";
 
 import { env } from "@/api/env";
-import { declareCliSupportBand } from "@/api/mcp/cli-support-band";
+import { LOCAL_CLIENT_SUPPORT } from "@/api/lib/local-client-support";
 import {
   getMcpResourceModeConfig,
   getMcpResourceScopes,
@@ -106,6 +107,7 @@ export const MCP_ALLOWED_HEADERS = [
   "Authorization",
   "Content-Type",
   "MCP-Protocol-Version",
+  LOCAL_CLIENT_IDENTITY_HEADER,
 ] as const;
 
 // Public protocol/revision contract advertised by protected-resource
@@ -126,15 +128,8 @@ export const STELLA_API_CONTRACT = {
 // published before `stella_contract` existed.
 export const STELLA_MCP_API_CONTRACT_VERSION = STELLA_API_CONTRACT.protocol;
 
-// Legacy package-version band. Freeze the ceiling at the transition CLI:
-// future CLIs negotiate `STELLA_API_CONTRACT` and never require another bump.
-const CLI_SUPPORT_BAND = declareCliSupportBand({
-  minimum: "5.2.0",
-  latest: "5.2.0",
-});
-
-export const STELLA_CLI_MINIMUM_VERSION = CLI_SUPPORT_BAND.minimum;
-export const STELLA_CLI_LATEST_VERSION = CLI_SUPPORT_BAND.latest;
+export const STELLA_CLI_MINIMUM_VERSION = LOCAL_CLIENT_SUPPORT.cli.minimum;
+export const STELLA_CLI_LATEST_VERSION = LOCAL_CLIENT_SUPPORT.cli.latest;
 export const STELLA_MCP_API_CONTRACT_HEADER = "x-stella-api-contract-version";
 export const STELLA_CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
 export const STELLA_CLI_LATEST_HEADER = "x-stella-cli-latest";

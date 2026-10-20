@@ -6,6 +6,7 @@ import {
   REQUEST_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
+import { LOCAL_CLIENT_IDENTITY_HEADER } from "@stll/api-contract/local-client-identity";
 import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { redisConnectionConfig } from "@stll/redis-config";
 
@@ -160,6 +161,7 @@ import {
 } from "@/api/lib/health/database-login-probe";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { clientTooOldError } from "@/api/lib/local-client-support";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
@@ -367,6 +369,14 @@ const api = new Elysia()
   .onRequest(({ request, set }) => {
     applyDiscoveryMetadataCachePolicy({ request, set });
   })
+  .onRequest(({ request, set }) => {
+    const error = clientTooOldError(request);
+    if (error) {
+      set.status = 426;
+      return error;
+    }
+    return undefined;
+  })
   .onRequest(async (context) => {
     const { request, set } = context;
 
@@ -441,6 +451,7 @@ const api = new Elysia()
         "Content-Type",
         "Authorization",
         "MCP-Protocol-Version",
+        LOCAL_CLIENT_IDENTITY_HEADER,
         FORMATTING_LOCALE_HEADER,
         SESSION_ID_HEADER,
         AUTH_SESSION_STARTUP_HEADER,

@@ -1410,7 +1410,6 @@ describe("handleMcpHttpRequest", () => {
       String(STELLA_MCP_API_CONTRACT_VERSION),
     );
     expect(response.headers.get("x-stella-cli-minimum")).toBe(
-      STELLA_CLI_LATEST_VERSION,
       STELLA_CLI_MINIMUM_VERSION,
     );
     expect(response.headers.get("x-stella-cli-latest")).toBe(

@@ -19,6 +19,7 @@ import {
   readHttpActionAdmissionRefusal,
   type CliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
+import { apiFetch } from "./api-fetch.js";
 import { CLI_LATEST_HEADER, CLI_MINIMUM_HEADER } from "./cli-version-nudge.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { MCP_HTTP_PATH } from "./mcp-constants.js";
@@ -158,7 +159,7 @@ const runMcpOperation = async <T>({
   let admission: CliActionAdmissionRefusal | undefined;
   let evidencePromise: Promise<ResponseEvidence | undefined> | undefined;
   const observedFetch: FetchLike = async (input, init) => {
-    const response = await fetch(input, init);
+    const response = await apiFetch(input, init);
     if (!response.ok) {
       const refusal = await readHttpActionAdmissionRefusal(response);
       if (refusal !== undefined) {
