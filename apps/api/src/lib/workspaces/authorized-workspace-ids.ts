@@ -24,6 +24,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 type AuthorizedWorkspaceReader = Pick<Transaction, "select" | "selectDistinct">;
 
+declare const authorizedWorkspaceIdsBrand: unique symbol;
+
 export type AuthorizedWorkspaceSet = {
   /** Every authorized workspace with its status, including `deleting`. */
   readonly workspaces: AccessibleWorkspace[];
@@ -31,10 +33,11 @@ export type AuthorizedWorkspaceSet = {
 
 /** Workspace ids produced only after the matter-access owner has checked them. */
 class AuthorizedWorkspaceIdList extends Array<SafeId<"workspace">> {
-  declare private readonly authorizedWorkspaceIds: true;
+  declare readonly [authorizedWorkspaceIdsBrand]: true;
 
   private constructor(ids: readonly SafeId<"workspace">[]) {
     super(...ids);
+    Object.freeze(this);
   }
 
   static override get [Symbol.species](): ArrayConstructor {
@@ -48,7 +51,9 @@ class AuthorizedWorkspaceIdList extends Array<SafeId<"workspace">> {
   }
 }
 
-export type AuthorizedWorkspaceIds = AuthorizedWorkspaceIdList;
+export type AuthorizedWorkspaceIds = readonly SafeId<"workspace">[] & {
+  readonly [authorizedWorkspaceIdsBrand]: true;
+};
 
 const mintAuthorizedWorkspaceIds = (
   ids: readonly SafeId<"workspace">[],

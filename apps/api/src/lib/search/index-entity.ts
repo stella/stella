@@ -276,30 +276,30 @@ const buildSearchDocument = async (
 
   const extractedContentRow = entity.extractedContent;
   // Search indexing is an organization-wide system projection.
-  const currentExtractedContent = (
-    await loadCurrentExtractedContentsForSearchIndex(
-      database,
-      "search-indexing",
-      {
-        entityIds: [entityId],
-        organizationId: workspace.organizationId,
-      },
-    )
-  ).at(0);
-  if (currentExtractedContent) {
-    language = isoToRegconfig(currentExtractedContent.language);
-    try {
+  try {
+    const currentExtractedContent = (
+      await loadCurrentExtractedContentsForSearchIndex(
+        database,
+        "search-indexing",
+        {
+          entityIds: [entityId],
+          organizationId: workspace.organizationId,
+        },
+      )
+    ).at(0);
+    if (currentExtractedContent) {
+      language = isoToRegconfig(currentExtractedContent.language);
       const plaintext = currentExtractedContent.text;
       if (plaintext) {
         fieldTexts.push(docxReviewMarkupToSearchText(plaintext));
       }
-    } catch (error) {
-      // Decryption fails when CONTENT_ENCRYPTION_KEY was
-      // added or rotated after this content was stored.
-      // Keep the last complete projection until re-extraction fixes it.
-      captureError(error, { entityId });
-      throw error;
     }
+  } catch (error) {
+    // Decryption fails when CONTENT_ENCRYPTION_KEY was
+    // added or rotated after this content was stored.
+    // Keep the last complete projection until re-extraction fixes it.
+    captureError(error, { entityId });
+    throw error;
   }
 
   return {

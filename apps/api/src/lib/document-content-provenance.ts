@@ -184,7 +184,7 @@ const loadCurrentExtractedContentsFromDatabase = async (
     organizationId,
     workspaceIds,
   }: Omit<LoadCurrentExtractedContentsOptions, "workspaceIds"> & {
-    workspaceIds: SafeId<"workspace">[] | null;
+    workspaceIds: readonly SafeId<"workspace">[] | null;
   },
 ) => {
   if (entityIds.length === 0 || workspaceIds?.length === 0) {

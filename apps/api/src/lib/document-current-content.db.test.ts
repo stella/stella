@@ -106,6 +106,17 @@ test("current content follows organization and matter scope", async () => {
   });
 });
 
+test("checked matter ids stay immutable", async () => {
+  await inMatter(async (tx) => {
+    const workspaceIds = await checkedWorkspaceIds(tx, [ids.wsA1]);
+    expect(() => {
+      // @ts-expect-error Checked matter ids expose no mutating methods.
+      workspaceIds.push(ids.wsA2);
+    }).toThrow(TypeError);
+    expect([...workspaceIds]).toEqual([ids.wsA1]);
+  });
+});
+
 test("the required matter list narrows an otherwise authorized transaction", async () => {
   await createDryScopedQuery(database)(
     [ids.wsA1, ids.wsA2],
