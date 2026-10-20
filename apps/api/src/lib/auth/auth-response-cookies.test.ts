@@ -17,7 +17,7 @@ import type { SessionLifetimeStore } from "@/api/lib/auth/session-lifetime";
 
 describe("session cookie forwarding", () => {
   test.each(["cookie", "bearer"] as const)(
-    "keeps native refresh credentials usable for %s requests",
+    "a %s client keeps working across a session rotation",
     async (credentialMode) => {
       let clock = new Date("2026-10-01T12:00:00.000Z");
       setSystemTime(clock);
@@ -29,21 +29,19 @@ describe("session cookie forwarding", () => {
           account: [],
           verification: [],
         };
-        const refreshedModes: string[] = [];
         const store = {
           observe: async ({ token }) =>
             database.session.find((current) => current.token === token) ?? null,
-          refresh: async ({ token, expiresAt, now, credentialMode: mode }) => {
+          refresh: async ({ token, expiresAt, now }) => {
             const current = database.session.find((row) => row.token === token);
             if (!current) {
               return null;
             }
-            refreshedModes.push(mode);
             const updated = {
               ...current,
               expiresAt,
               updatedAt: now,
-              token: mode === "bearer" ? token : "replacement-session-token",
+              token: "replacement-session-token",
             };
             database.session = [updated];
             return updated;
@@ -114,16 +112,24 @@ describe("session cookie forwarding", () => {
           new Request("http://localhost/", { headers: requestHeaders }),
         );
         expect(await response.text()).toBe("ready");
-        expect(refreshedModes).toEqual([credentialMode]);
-        expect(response.headers.get("set-auth-token")).toBeNull();
+        const rotatedBearer = response.headers.get("set-auth-token");
+        if (credentialMode === "bearer") {
+          expect(rotatedBearer).not.toBeNull();
+          expect(rotatedBearer?.split(".").at(0)).toBe(
+            "replacement-session-token",
+          );
+          expect(
+            response.headers.get("access-control-expose-headers") ?? "",
+          ).toContain("set-auth-token");
+        } else {
+          expect(rotatedBearer).toBeNull();
+        }
         const current =
           database.session.at(0) ?? panic("Refresh removed the session");
         expect(current.expiresAt.getTime()).toBeGreaterThan(
           clock.getTime() + 29 * 24 * 60 * 60 * 1000,
         );
-        expect(current.token === original.token).toBe(
-          credentialMode === "bearer",
-        );
+        expect(current.token).not.toBe(original.token);
         clock = new Date(clock.getTime() + 61_000);
         setSystemTime(clock);
         const refreshedCookie = response.headers
@@ -132,7 +138,11 @@ describe("session cookie forwarding", () => {
           .join("; ");
         const followupHeaders =
           credentialMode === "bearer"
-            ? requestHeaders
+            ? {
+                authorization: `Bearer ${
+                  rotatedBearer ?? panic("No rotated bearer token")
+                }`,
+              }
             : { cookie: refreshedCookie };
         const followup = await app.handle(
           new Request("http://localhost/", { headers: followupHeaders }),
@@ -223,15 +233,28 @@ describe("session cookie forwarding", () => {
     expect(response.headers.get("x-existing")).toBe("kept");
   });
 
-  test("leaves response headers unchanged when no auth cookie was issued", () => {
+  test("forwards a rotated bearer token and exposes its header", () => {
+    const headers: Record<string, string> = {
+      "set-cookie": "existing=kept; Path=/",
+      "access-control-expose-headers": "x-request-id",
+    };
+    forwardAuthResponseCookies(
+      headers,
+      new Headers({ "set-auth-token": "rotated.signature" }),
+    );
+    expect(headers).toEqual({
+      "set-cookie": "existing=kept; Path=/",
+      "set-auth-token": "rotated.signature",
+      "access-control-expose-headers": "x-request-id, set-auth-token",
+    });
+  });
+
+  test("leaves response headers unchanged when nothing was issued", () => {
     const headers = {
       "set-cookie": "existing=kept; Path=/",
       "x-existing": "kept",
     };
-    forwardAuthResponseCookies(
-      headers,
-      new Headers({ "set-auth-token": "unused-credential-header" }),
-    );
+    forwardAuthResponseCookies(headers, new Headers());
     expect(headers).toEqual({
       "set-cookie": "existing=kept; Path=/",
       "x-existing": "kept",

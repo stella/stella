@@ -469,6 +469,11 @@ async function seed() {
     );
     console.log("Created test session");
   }
+  // The stored dev token is reused across runs, so the session never rotates.
+  await db
+    .update(session)
+    .set({ token: SESSION_TOKEN, refreshMode: "fixed" })
+    .where(eq(session.id, SESSION_ID));
 
   // --- Playwright storage-state ---
   // better-auth uses signed cookies: the cookie value is

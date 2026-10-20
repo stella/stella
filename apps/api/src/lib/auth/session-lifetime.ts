@@ -11,7 +11,6 @@ import {
 import { parseSessionOutput, parseUserOutput } from "better-auth/db";
 import * as v from "valibot";
 
-import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { DAY_IN_MS } from "@stll/time";
 
 import { hashSessionToken } from "@/api/lib/auth/session-token";
@@ -19,7 +18,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 export const SESSION_ABSOLUTE_AGE_MS = 90 * DAY_IN_MS;
-export const SESSION_IDLE_AGE_MS = 60 * 60 * 1000;
 export const SESSION_PRIOR_TOKEN_GRACE_MS = 60 * 1000;
 const cookieCacheVersion = "session-lifetime-v2";
 
@@ -54,12 +52,10 @@ export const SESSION_LIFETIME_FIELDS = {
 type SessionObservation = {
   token: string;
   now: Date;
-  boundary: "startup" | "activity";
 };
 
 type SessionRefresh = {
   token: string;
-  credentialMode: "cookie" | "bearer";
   now: Date;
   expiresAt: Date;
 };
@@ -111,15 +107,7 @@ export const createSessionLifetime = ({
       memo = new Map();
       observations.set(ctx, memo);
     }
-    const result = store.observe({
-      token,
-      now: now(),
-      boundary:
-        ctx?.path === "/get-session" &&
-        ctx.getHeader?.(AUTH_SESSION_STARTUP_HEADER) === "1"
-          ? "startup"
-          : "activity",
-    });
+    const result = store.observe({ token, now: now() });
     memo?.set(token, result);
     return await result;
   };
@@ -197,12 +185,8 @@ export const createSessionLifetime = ({
       if (data.expiresAt) {
         forgetObservations();
         const ctx = tryGetCurrentAuthEndpointContext();
-        const authorization = ctx?.getHeader?.("authorization") ?? "";
         const refreshed = await store.refresh({
           token,
-          credentialMode: /^bearer\s/iu.test(authorization)
-            ? "bearer"
-            : "cookie",
           expiresAt: data.expiresAt,
           now: now(),
         });

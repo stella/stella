@@ -16,8 +16,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const configuredPolicy = {
   expiresIn: 7 * 24 * 60 * 60,
   updateAge: 24 * 60 * 60,
-  rotationEnabled: true,
-  capEnabled: true,
 };
 
 if (!databaseUrl || !runPostgresTests) {
@@ -64,13 +62,11 @@ if (!databaseUrl || !runPostgresTests) {
           );
           const results = await Promise.all([
             firstStore.refresh({
-              credentialMode: "cookie",
               token,
               now,
               expiresAt,
             }),
             secondStore.refresh({
-              credentialMode: "cookie",
               token,
               now,
               expiresAt,
@@ -111,7 +107,6 @@ if (!databaseUrl || !runPostgresTests) {
             configuredPolicy,
           );
           const refreshed = await store.refresh({
-            credentialMode: "cookie",
             token,
             now: initial.createdAt,
             expiresAt: new Date(initial.createdAt.getTime() + 7 * DAY_MS),
@@ -121,7 +116,6 @@ if (!databaseUrl || !runPostgresTests) {
           const later = await store.observe({
             token,
             now: new Date(initial.createdAt.getTime() + 60_001),
-            boundary: "activity",
           });
           expect(later?.id).toBe(initial.id);
           expect(later?.token).toBe(token);
