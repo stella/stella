@@ -734,7 +734,9 @@ const nestedRelationSelectsOwnedColumns = ({
       if (selection?.type === "Literal" && selection.value === false) {
         return false;
       }
-      return key === entry.table
+      // An unresolved relation name may be the owned one, so it is checked
+      // as the owned relation.
+      return key === null || key === entry.table
         ? relationSelectsOwnedColumns({ context, entry, value: selection })
         : nestedRelationSelectsOwnedColumns({
             context,
