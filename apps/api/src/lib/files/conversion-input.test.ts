@@ -3,7 +3,10 @@ import JSZip from "jszip";
 
 import { writeZipEntry } from "@stll/docx-utils";
 
-import { checkConversionInput } from "@/api/lib/files/conversion-input";
+import {
+  checkConversionInput,
+  REFERENCE_ALLOWLIST,
+} from "@/api/lib/files/conversion-input";
 import type { ConvertibleMime } from "@/api/lib/files/pdf-derivative-policy";
 import { legacyWordFile } from "@/api/tests/helpers/legacy-word-fixture";
 
@@ -14,6 +17,16 @@ const zip = async (path: string, value: string): Promise<Uint8Array> =>
       type: "arraybuffer",
     }),
   );
+
+const zipEntries = async (
+  entries: Readonly<Record<string, string>>,
+): Promise<Uint8Array> => {
+  const archive = new JSZip();
+  for (const [path, value] of Object.entries(entries)) {
+    writeZipEntry(archive, path, encode(value));
+  }
+  return new Uint8Array(await archive.generateAsync({ type: "arraybuffer" }));
+};
 
 const binaryField = (instruction: string): Uint8Array =>
   new Uint8Array([0x13, ...encode(instruction), 0x14]);
@@ -82,6 +95,370 @@ const fixtures = {
 } as const satisfies Record<string, Fixture>;
 
 describe("document conversion input", () => {
+  test("every listed reference has a conversion case", async () => {
+    const relationshipNamespaces = {
+      transitional:
+        "http://schemas.openxmlformats.org/package/2006/relationships",
+      strict: "http://purl.oclc.org/ooxml/package/relationships",
+    } as const;
+    const officeRelationshipNamespaces = {
+      transitional:
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+      strict: "http://purl.oclc.org/ooxml/officeDocument/relationships",
+    } as const;
+    const wordNamespaces = {
+      transitional:
+        "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+      strict: "http://purl.oclc.org/ooxml/wordprocessingml/main",
+    } as const;
+    const namespaceVariants = [
+      {
+        relationships: relationshipNamespaces.transitional,
+        officeRelationships: officeRelationshipNamespaces.transitional,
+        word: wordNamespaces.transitional,
+      },
+      {
+        relationships: relationshipNamespaces.strict,
+        officeRelationships: officeRelationshipNamespaces.strict,
+        word: wordNamespaces.strict,
+      },
+    ] as const;
+    const makeConversionCase = (
+      name: string,
+      mime: ConvertibleMime,
+      bytes: () => Promise<Uint8Array> | Uint8Array,
+    ): readonly [
+      string,
+      { mime: ConvertibleMime; bytes: () => Promise<Uint8Array> | Uint8Array },
+    ] => [name, { mime, bytes }];
+    const cases = new Map<
+      string,
+      { mime: ConvertibleMime; bytes: () => Promise<Uint8Array> | Uint8Array }
+    >([
+      [
+        "xhtml|*|{http://www.w3.org/2000/xmlns/}*",
+        {
+          mime: "application/xhtml+xml",
+          bytes: () =>
+            encode('<root xmlns:item="https://example.test/schema"/>'),
+        },
+      ],
+      [
+        "ooxml|*|{http://www.w3.org/2000/xmlns/}*",
+        {
+          mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          bytes: async () =>
+            zip(
+              "word/document.xml",
+              '<root xmlns:item="https://example.test/schema"/>',
+            ),
+        },
+      ],
+      [
+        "odf|*|{http://www.w3.org/2000/xmlns/}*",
+        {
+          mime: "application/vnd.oasis.opendocument.text",
+          bytes: async () =>
+            zip(
+              "content.xml",
+              '<root xmlns:item="https://example.test/schema"/>',
+            ),
+        },
+      ],
+      [
+        "html|*|xmlns",
+        {
+          mime: "text/html",
+          bytes: () =>
+            encode('<root xmlns="https://example.test/schema"></root>'),
+        },
+      ],
+      [
+        "html|*|xmlns:*",
+        {
+          mime: "text/html",
+          bytes: () =>
+            encode('<root xmlns:item="https://example.test/schema"></root>'),
+        },
+      ],
+      [
+        "html|a|href",
+        {
+          mime: "text/html",
+          bytes: () => encode('<a href="https://example.test/page">page</a>'),
+        },
+      ],
+      [
+        "html|area|href",
+        {
+          mime: "text/html",
+          bytes: () =>
+            encode('<map><area href="https://example.test/page"></map>'),
+        },
+      ],
+      [
+        "xhtml|{http://www.w3.org/1999/xhtml}a|href",
+        {
+          mime: "application/xhtml+xml",
+          bytes: () =>
+            encode(
+              '<h:a xmlns:h="http://www.w3.org/1999/xhtml" href="https://example.test/page"/>',
+            ),
+        },
+      ],
+      [
+        "xhtml|{http://www.w3.org/1999/xhtml}area|href",
+        {
+          mime: "application/xhtml+xml",
+          bytes: () =>
+            encode(
+              '<h:area xmlns:h="http://www.w3.org/1999/xhtml" href="https://example.test/page"/>',
+            ),
+        },
+      ],
+      [
+        "xhtml|a|href",
+        {
+          mime: "application/xhtml+xml",
+          bytes: () => encode('<a href="https://example.test/page"/>'),
+        },
+      ],
+      [
+        "xhtml|area|href",
+        {
+          mime: "application/xhtml+xml",
+          bytes: () => encode('<area href="https://example.test/page"/>'),
+        },
+      ],
+      ...namespaceVariants.flatMap(({ relationships, officeRelationships }) => [
+        makeConversionCase(
+          `ooxml|{${relationships}}Relationship|Target`,
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          async () =>
+            zip(
+              "word/_rels/document.xml.rels",
+              `<r:Relationship xmlns:r="${relationships}" Type="${officeRelationships}/hyperlink" Target="https://example.test/page"/>`,
+            ),
+        ),
+        makeConversionCase(
+          `ooxml|{${relationships}}Relationship|Type`,
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          async () =>
+            zip(
+              "word/_rels/document.xml.rels",
+              `<r:Relationship xmlns:r="${relationships}" Type="https://example.test/type"/>`,
+            ),
+        ),
+      ]),
+      [
+        "ooxml|Relationship|Target",
+        {
+          mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          bytes: async () =>
+            zip(
+              "word/_rels/document.xml.rels",
+              `<Relationship Type="${officeRelationshipNamespaces.transitional}/hyperlink" Target="https://example.test/page"/>`,
+            ),
+        },
+      ],
+      [
+        "ooxml|Relationship|Type",
+        {
+          mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          bytes: async () =>
+            zip(
+              "word/_rels/document.xml.rels",
+              '<Relationship Type="https://example.test/type"/>',
+            ),
+        },
+      ],
+      [
+        "odf|{urn:oasis:names:tc:opendocument:xmlns:text:1.0}a|{http://www.w3.org/1999/xlink}href",
+        {
+          mime: "application/vnd.oasis.opendocument.text",
+          bytes: async () =>
+            zip(
+              "content.xml",
+              '<text:a xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://example.test/page"/>',
+            ),
+        },
+      ],
+      [
+        "ooxml|*|uri",
+        {
+          mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          bytes: async () =>
+            zip(
+              "word/document.xml",
+              '<a:ext xmlns:a="urn:example" uri="https://example.test/extension"/>',
+            ),
+        },
+      ],
+      ...namespaceVariants.map(({ word, officeRelationships }) =>
+        makeConversionCase(
+          `ooxml|{${word}}hyperlink|{${officeRelationships}}id`,
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          async () =>
+            zip(
+              "word/document.xml",
+              `<w:hyperlink xmlns:w="${word}" xmlns:r="${officeRelationships}" r:id="https://example.test/page"/>`,
+            ),
+        ),
+      ),
+    ]);
+
+    expect(cases.size).toBe(REFERENCE_ALLOWLIST.length);
+    for (const entry of REFERENCE_ALLOWLIST) {
+      const name = `${entry.format}|${entry.element}|${entry.attribute}`;
+      const conversionCase = cases.get(name);
+      expect(conversionCase, name).toBeDefined();
+      if (conversionCase === undefined) {
+        continue;
+      }
+      const bytes = await conversionCase.bytes();
+      expect(
+        await checkConversionInput(conversionCase.mime, bytes),
+        name,
+      ).toEqual({
+        kind: "convert",
+      });
+      const withoutEntry = REFERENCE_ALLOWLIST.filter(
+        (candidate) => candidate !== entry,
+      );
+      const expectedElement = entry.element === "*" ? "root" : entry.element;
+      const expectedAttribute = entry.attribute.endsWith("*")
+        ? `${entry.attribute.slice(0, -1)}item`
+        : entry.attribute;
+      expect(
+        await checkConversionInput(conversionCase.mime, bytes, withoutEntry),
+        name,
+      ).toMatchObject({
+        kind: "refuse",
+        reason: {
+          kind: "unsupported_reference",
+          element:
+            entry.element === "*" && entry.attribute === "uri"
+              ? "{urn:example}ext"
+              : expectedElement,
+          attribute: expectedAttribute,
+        },
+      });
+    }
+  });
+
+  test("converts realistic documents", async () => {
+    const ooxmlDocument = async ({
+      name,
+      mime,
+      directory,
+      main,
+    }: {
+      name: string;
+      mime: ConvertibleMime;
+      directory: string;
+      main: string;
+    }): Promise<readonly [string, ConvertibleMime, Uint8Array]> => [
+      name,
+      mime,
+      await zipEntries({
+        [`${directory}/${main}`]:
+          '<a:document xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="a"><a:extLst><a:ext uri="{55555555-5555-5555-5555-555555555555}"/></a:extLst></a:document>',
+        [`${directory}/_rels/${main}.rels`]:
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="link" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.test/page" TargetMode="External"/></Relationships>',
+        [`${directory}/theme/theme1.xml`]:
+          '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Theme"/>',
+        [`${directory}/styles.xml`]:
+          '<a:styleSheet xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"/>',
+        "docProps/core.xml":
+          '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"><cp:category>case</cp:category></cp:coreProperties>',
+        "docProps/app.xml":
+          '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>stella</Application></Properties>',
+        "docProps/custom.xml":
+          '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"><property name="kind">document</property></Properties>',
+      }),
+    ];
+    const documents = [
+      [
+        "DOCX",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        await zipEntries({
+          "word/document.xml":
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" mc:Ignorable="a"><w:body><w:hyperlink r:id="link"><w:r><w:t>Page</w:t></w:r></w:hyperlink><a:extLst><a:ext uri="{11111111-1111-1111-1111-111111111111}"/></a:extLst></w:body></w:document>',
+          "word/_rels/document.xml.rels":
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="link" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.test/page" TargetMode="External"/></Relationships>',
+          "word/theme/theme1.xml":
+            '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Theme"><a:extLst><a:ext uri="{22222222-2222-2222-2222-222222222222}"/></a:extLst></a:theme>',
+          "word/styles.xml":
+            '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:styleId="Normal"/></w:styles>',
+          "docProps/core.xml":
+            '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"><cp:category>case</cp:category></cp:coreProperties>',
+          "docProps/app.xml":
+            '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>stella</Application></Properties>',
+          "docProps/custom.xml":
+            '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"><property name="kind">document</property></Properties>',
+        }),
+      ],
+      [
+        "Strict DOCX",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        await zipEntries({
+          "word/document.xml":
+            '<w:document xmlns:w="http://purl.oclc.org/ooxml/wordprocessingml/main" xmlns:r="http://purl.oclc.org/ooxml/officeDocument/relationships" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:a="http://purl.oclc.org/ooxml/drawingml/main" mc:Ignorable="a"><w:body><w:hyperlink r:id="link"><w:r><w:t>Page</w:t></w:r></w:hyperlink><a:extLst><a:ext uri="{33333333-3333-3333-3333-333333333333}"/></a:extLst></w:body></w:document>',
+          "word/_rels/document.xml.rels":
+            '<Relationships xmlns="http://purl.oclc.org/ooxml/package/relationships"><Relationship Id="link" Type="http://purl.oclc.org/ooxml/officeDocument/relationships/hyperlink" Target="https://example.test/page" TargetMode="External"/></Relationships>',
+          "word/theme/theme1.xml":
+            '<a:theme xmlns:a="http://purl.oclc.org/ooxml/drawingml/main" name="Theme"><a:extLst><a:ext uri="{44444444-4444-4444-4444-444444444444}"/></a:extLst></a:theme>',
+          "word/styles.xml":
+            '<w:styles xmlns:w="http://purl.oclc.org/ooxml/wordprocessingml/main"><w:style w:type="paragraph" w:styleId="Normal"/></w:styles>',
+          "docProps/core.xml":
+            '<cp:coreProperties xmlns:cp="http://purl.oclc.org/ooxml/package/metadata/core-properties"><cp:category>case</cp:category></cp:coreProperties>',
+          "docProps/app.xml":
+            '<Properties xmlns="http://purl.oclc.org/ooxml/officeDocument/extendedProperties"><Application>stella</Application></Properties>',
+          "docProps/custom.xml":
+            '<Properties xmlns="http://purl.oclc.org/ooxml/officeDocument/customProperties"><property name="kind">document</property></Properties>',
+        }),
+      ],
+      await ooxmlDocument({
+        name: "XLSX",
+        mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        directory: "xl",
+        main: "workbook.xml",
+      }),
+      await ooxmlDocument({
+        name: "PPTX",
+        mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        directory: "ppt",
+        main: "presentation.xml",
+      }),
+      [
+        "ODT",
+        "application/vnd.oasis.opendocument.text",
+        await zipEntries({
+          "content.xml":
+            '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:a="urn:example:extensions" mc:Ignorable="a"><office:body><text:a xlink:href="https://example.test/page">Page</text:a><a:extLst><a:ext uri="{66666666-6666-6666-6666-666666666666}"/></a:extLst></office:body></office:document-content>',
+          "styles.xml":
+            '<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:styles/></office:document-styles>',
+          "META-INF/theme.xml":
+            '<office:theme xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"/>',
+          "meta.xml":
+            '<office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:meta><office:core>core</office:core><office:app>stella</office:app><office:custom>document</office:custom></office:meta></office:document-meta>',
+        }),
+      ],
+      [
+        "HTML",
+        "text/html",
+        encode(
+          '<!doctype html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:a="urn:example:extensions" mc:Ignorable="a"><head><style>body { color: black; }</style><meta name="core" content="case"><meta name="app" content="stella"><meta name="custom" content="document"><a:theme><a:extLst><a:ext uri="{77777777-7777-7777-7777-777777777777}"></a:ext></a:extLst></a:theme></head><body><a href="https://example.test/page">Page</a></body></html>',
+        ),
+      ],
+    ] satisfies readonly (readonly [string, ConvertibleMime, Uint8Array])[];
+    for (const [name, mime, bytes] of documents) {
+      expect(await checkConversionInput(mime, bytes), name).toEqual({
+        kind: "convert",
+      });
+    }
+  });
+
   test("refuses an unrecognized OOXML reference attribute", async () => {
     const input = await zip(
       "word/document.xml",

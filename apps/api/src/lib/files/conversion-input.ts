@@ -37,7 +37,7 @@ type ReferenceRefusal = Extract<
 
 type InspectedMarkupFormat = "html" | "xhtml" | "ooxml" | "odf";
 
-const REFERENCE_ALLOWLIST = [
+export const REFERENCE_ALLOWLIST = [
   {
     format: "xhtml",
     element: "*",
@@ -54,6 +54,18 @@ const REFERENCE_ALLOWLIST = [
     format: "odf",
     element: "*",
     attribute: "{http://www.w3.org/2000/xmlns/}*",
+    reason: "namespace declaration",
+  },
+  {
+    format: "html",
+    element: "*",
+    attribute: "xmlns",
+    reason: "namespace declaration",
+  },
+  {
+    format: "html",
+    element: "*",
+    attribute: "xmlns:*",
     reason: "namespace declaration",
   },
   { format: "html", element: "a", attribute: "href", reason: "navigation" },
@@ -152,6 +164,13 @@ const REFERENCE_ALLOWLIST = [
     reason: "navigation",
   },
 ] as const satisfies readonly {
+  format: InspectedMarkupFormat;
+  element: string;
+  attribute: string;
+  reason: string;
+}[];
+
+export type ReferenceAllowlist = readonly {
   format: InspectedMarkupFormat;
   element: string;
   attribute: string;
@@ -464,13 +483,14 @@ const allowlistMatches = (
   format: InspectedMarkupFormat,
   element: string,
   attribute: string,
+  referenceAllowlist: ReferenceAllowlist,
 ): boolean =>
-  REFERENCE_ALLOWLIST.some(
+  referenceAllowlist.some(
     (entry) =>
       entry.format === format &&
       (entry.element === "*" || entry.element === element) &&
       (entry.attribute === attribute ||
-        (entry.attribute.endsWith("}*") &&
+        (entry.attribute.endsWith("*") &&
           attribute.startsWith(entry.attribute.slice(0, -1)))),
   );
 
@@ -481,6 +501,7 @@ const xmlCatchAllRefusal = (
   source: string,
   mime: ConvertibleMime,
   format: Exclude<InspectedMarkupFormat, "html">,
+  referenceAllowlist: ReferenceAllowlist,
 ): ReferenceRefusal | null => {
   const document = slimdom.parseXmlDocument(source);
   for (const element of xmlElements(document.documentElement)) {
@@ -491,7 +512,12 @@ const xmlCatchAllRefusal = (
         continue;
       }
       if (
-        allowlistMatches(format, elementName, attributeName) &&
+        allowlistMatches(
+          format,
+          elementName,
+          attributeName,
+          referenceAllowlist,
+        ) &&
         (format !== "ooxml" ||
           attribute.localName.toLowerCase() !== "target" ||
           HYPERLINK_RELATIONSHIP_TYPES.has(
@@ -514,6 +540,7 @@ const xmlCatchAllRefusal = (
 const htmlCatchAllRefusal = (
   bytes: Uint8Array,
   mime: ConvertibleMime,
+  referenceAllowlist: ReferenceAllowlist,
 ): ReferenceRefusal | null => {
   const $ = load(text(bytes));
   for (const node of $("*").toArray()) {
@@ -525,7 +552,7 @@ const htmlCatchAllRefusal = (
       const name = attribute.toLowerCase();
       if (
         valueHasExternalReference(value) &&
-        !allowlistMatches("html", element, name)
+        !allowlistMatches("html", element, name, referenceAllowlist)
       ) {
         return {
           kind: "unsupported_reference",
@@ -905,6 +932,7 @@ const archiveCatchAllRefusal = async (
   bytes: Uint8Array,
   mime: ConvertibleMime,
   format: "ooxml" | "odf",
+  referenceAllowlist: ReferenceAllowlist,
 ): Promise<ReferenceRefusal | null> => {
   const archive = await loadDocxArchive(bytes);
   const selectedPaths = Object.keys(archive.zip.files).filter((path) =>
@@ -919,7 +947,12 @@ const archiveCatchAllRefusal = async (
     if (part.kind !== "source") {
       continue;
     }
-    const refusal = xmlCatchAllRefusal(part.value, mime, format);
+    const refusal = xmlCatchAllRefusal(
+      part.value,
+      mime,
+      format,
+      referenceAllowlist,
+    );
     if (refusal !== null) {
       return refusal;
     }
@@ -1378,6 +1411,7 @@ const DETECTORS = {
 export const checkConversionInput = async (
   mime: ConvertibleMime,
   bytes: Uint8Array,
+  referenceAllowlist: ReferenceAllowlist = REFERENCE_ALLOWLIST,
 ): Promise<ConversionInputResult> => {
   if (mime === "application/vnd.ms-excel") {
     return {
@@ -1441,9 +1475,14 @@ export const checkConversionInput = async (
   }
   let catchAllRefusal: ReferenceRefusal | null = null;
   if (mime === "text/html") {
-    catchAllRefusal = htmlCatchAllRefusal(bytes, mime);
+    catchAllRefusal = htmlCatchAllRefusal(bytes, mime, referenceAllowlist);
   } else if (mime === "application/xhtml+xml") {
-    catchAllRefusal = xmlCatchAllRefusal(text(bytes), mime, "xhtml");
+    catchAllRefusal = xmlCatchAllRefusal(
+      text(bytes),
+      mime,
+      "xhtml",
+      referenceAllowlist,
+    );
   } else if (
     mime ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
@@ -1451,13 +1490,23 @@ export const checkConversionInput = async (
       "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
     mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   ) {
-    catchAllRefusal = await archiveCatchAllRefusal(bytes, mime, "ooxml");
+    catchAllRefusal = await archiveCatchAllRefusal(
+      bytes,
+      mime,
+      "ooxml",
+      referenceAllowlist,
+    );
   } else if (
     mime === "application/vnd.oasis.opendocument.presentation" ||
     mime === "application/vnd.oasis.opendocument.spreadsheet" ||
     mime === "application/vnd.oasis.opendocument.text"
   ) {
-    catchAllRefusal = await archiveCatchAllRefusal(bytes, mime, "odf");
+    catchAllRefusal = await archiveCatchAllRefusal(
+      bytes,
+      mime,
+      "odf",
+      referenceAllowlist,
+    );
   }
   return catchAllRefusal === null
     ? { kind: "convert" }
