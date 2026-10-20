@@ -21,6 +21,8 @@ type CaseLawCoverageYear =
       latestWalkError: string;
     };
 
+/** The longest walk error the public coverage response carries; longer ledger text is cut. */
+export const COVERAGE_WALK_ERROR_MAX_LENGTH = 2048;
 export type CaseLawKnownGaps =
   | {
       type: "reconciled";
@@ -191,7 +193,7 @@ export const readCaseLawCoverageYearsQuery = async (
       unlistedSlices: sql<number>`count(*) FILTER (WHERE ${caseLawCoverageSlices.reported} IS NULL)::integer`,
       latestWalkError: sql<
         string | null
-      >`(array_agg(${caseLawCoverageSlices.walkError} ORDER BY ${caseLawCoverageSlices.checkedAt} DESC) FILTER (WHERE ${caseLawCoverageSlices.walkError} IS NOT NULL))[1]`,
+      >`(array_agg(left(${caseLawCoverageSlices.walkError}, ${COVERAGE_WALK_ERROR_MAX_LENGTH}) ORDER BY ${caseLawCoverageSlices.checkedAt} DESC) FILTER (WHERE ${caseLawCoverageSlices.walkError} IS NOT NULL))[1]`,
     })
     .from(caseLawCoverageSlices)
     .where(inArray(caseLawCoverageSlices.sourceId, reconciledSourceIds))

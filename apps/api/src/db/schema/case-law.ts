@@ -1094,6 +1094,7 @@ export const caseLawDecisionIdentifiers = p.pgTable(
       sql`${t.value} <> '' AND ${t.normalizedValue} <> ''`,
     ),
     ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 
@@ -1293,7 +1294,6 @@ export const caseLawDecisionIdentifierBackfills = p.pgTable(
       sql`${t.phase} <> ${CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE} OR ${t.cursorId} IS NULL`,
     ),
     ...globalCaseLawPolicies(),
-    ...publicLawReaderPolicies(),
   ],
 );
 

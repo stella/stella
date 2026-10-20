@@ -21,7 +21,10 @@ import {
   CASE_LAW_COVERAGE_HEALTH,
   CASE_LAW_TOTAL_REPORTER,
 } from "@/api/handlers/case-law/decisions/coverage-health";
-import { CASE_LAW_COVERAGE_YEARS_PER_SOURCE_BOUND } from "@/api/handlers/case-law/decisions/coverage-years";
+import {
+  CASE_LAW_COVERAGE_YEARS_PER_SOURCE_BOUND,
+  COVERAGE_WALK_ERROR_MAX_LENGTH,
+} from "@/api/handlers/case-law/decisions/coverage-years";
 import type { listDecisionFacetsHandler } from "@/api/handlers/case-law/decisions/facets";
 import type {
   listLatestDecisionsHandler,
@@ -446,7 +449,9 @@ const countryCoverage = {
                       missing: t.Number(),
                       shortSlices: t.Number(),
                       unlistedSlices: t.Number(),
-                      latestWalkError: boundedString(2048),
+                      latestWalkError: boundedString(
+                        COVERAGE_WALK_ERROR_MAX_LENGTH,
+                      ),
                     },
                     { additionalProperties: false },
                   ),

@@ -26,6 +26,7 @@ import {
 import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import { CASE_LAW_COVERAGE_HEALTH } from "@/api/handlers/case-law/decisions/coverage-health";
 import {
+  COVERAGE_WALK_ERROR_MAX_LENGTH,
   readCaseLawCoverageYearsQuery,
   summarizeCaseLawCoverageYears,
 } from "@/api/handlers/case-law/decisions/coverage-years";
@@ -450,6 +451,41 @@ test(
         reason:
           "The source listing is not partitioned into calendar-date slices.",
       });
+    } finally {
+      await db
+        .delete(caseLawCoverageSlices)
+        .where(eq(caseLawCoverageSlices.sourceId, czSourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a walk error longer than the public bound is cut to it",
+  async () => {
+    const db = drizzle({ client });
+    await db.insert(caseLawCoverageSlices).values({
+      sourceId: czSourceId,
+      slice: "2022-03-04",
+      walkError: "x".repeat(COVERAGE_WALK_ERROR_MAX_LENGTH + 1),
+      checkedAt: new Date("2026-01-05T00:00:00.000Z"),
+    });
+
+    try {
+      const years = await readAsReader(
+        async (tx) =>
+          await readCaseLawCoverageYearsQuery(tx, [
+            { id: czSourceId, adapterKey: ADAPTER_KEYS.CZ_NS },
+          ]),
+      );
+      const gaps = years.get(String(czSourceId));
+      const year =
+        gaps?.type === "reconciled"
+          ? gaps.years.find((entry) => entry.year === 2022)
+          : undefined;
+      expect(
+        year?.type === "unlisted" ? year.latestWalkError.length : null,
+      ).toBe(COVERAGE_WALK_ERROR_MAX_LENGTH);
     } finally {
       await db
         .delete(caseLawCoverageSlices)
