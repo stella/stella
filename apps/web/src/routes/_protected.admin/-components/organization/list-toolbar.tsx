@@ -1,0 +1,104 @@
+import { useState } from "react";
+
+import { getRouteApi } from "@tanstack/react-router";
+import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
+
+import { SearchIcon } from "@stll/ui/icons";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@stll/ui/input-group";
+
+import { InviteMemberDialog } from "@/components/organization/invite-member-dialog";
+import { detached } from "@/lib/detached";
+import { optionalSearchStringSchema } from "@/lib/schema";
+
+const adminParentRoute = getRouteApi("/_protected/admin");
+const membersRoute = getRouteApi("/_protected/admin/members");
+
+/**
+ * One-shot marker for the value the debounced writer last pushed up, so the
+ * resync-during-render branch can tell that write's echo apart from external
+ * navigation. Wrapped in an object because `undefined` is itself a legitimate
+ * written value (a cleared field); `null` means "no unconsumed write".
+ */
+type WrittenMarker = { value: string | undefined } | null;
+
+/**
+ * Normalizes a raw debounced value the same way the route's search schema
+ * does (trim, empty -> undefined), by parsing it through that schema rather
+ * than re-implementing the transform. The marker must store this normalized
+ * form: the route re-validates `q` through the same schema on every
+ * navigation, so the URL echo of our own write comes back trimmed even when
+ * the raw input had leading/trailing whitespace.
+ */
+const normalizeQuery = (value: string): string | undefined =>
+  v.parse(optionalSearchStringSchema(), value);
+
+export const OrganizationListToolbar = () => {
+  const t = useTranslations();
+  // Search lives on the parent route so it survives sub-tab swaps;
+  // Navigate to the members page so editing search stays on the list.
+  const q = adminParentRoute.useSearch({ select: (s) => s.q ?? "" });
+  const navigate = membersRoute.useNavigate();
+  // Local controlled-input value keeps IME composition snappy and
+  // prevents flicker between keystrokes; the URL is the source of
+  // truth and gets the trimmed value via the debounced writer.
+  const [localQuery, setLocalQuery] = useState(q);
+  const [lastSeenUrlQuery, setLastSeenUrlQuery] = useState(q);
+  const [lastWrittenQuery, setLastWrittenQuery] = useState<WrittenMarker>(null);
+  const updateSearch = useDebouncedCallback((value: string) => {
+    // Marker must match what the route exposes after re-validating `q`
+    // through its search schema: trimmed, empty becomes undefined.
+    setLastWrittenQuery({ value: normalizeQuery(value) });
+    detached(
+      navigate({
+        to: "/admin/members",
+        search: (prev) => ({ ...prev, q: value || undefined }),
+      }),
+      "list-toolbar.navigate",
+    );
+  }, 300);
+
+  // Adjusting state during render: when the URL `q` changes to a value our
+  // local mirror has not seen, decide echo vs. external change. The echo of
+  // our own debounced write must NOT cancel or reset local state: the user
+  // may have resumed typing during the navigate round-trip, and a reset
+  // would drop those keystrokes plus their newly-scheduled debounced write.
+  // Only a genuinely external change (back/forward navigation, tab switches
+  // landing on a different `?q=`) replaces the input. The marker is
+  // consumed on every transition so a stale one cannot misclassify a later
+  // external change as an echo. `q` normalizes a missing param to "", so the
+  // marker's value gets the same normalization before comparing.
+  if (q !== lastSeenUrlQuery) {
+    setLastSeenUrlQuery(q);
+    if (lastWrittenQuery === null || (lastWrittenQuery.value ?? "") !== q) {
+      updateSearch.cancel();
+      setLocalQuery(q);
+    }
+    setLastWrittenQuery(null);
+  }
+
+  return (
+    <div className="border-border/60 flex items-center gap-2 border-b px-2 py-2">
+      <InputGroup className="max-w-sm flex-1">
+        <InputGroupInput
+          onChange={(e) => {
+            const val = e.target.value;
+            setLocalQuery(val);
+            updateSearch(val);
+          }}
+          placeholder={t("common.search")}
+          value={localQuery}
+        />
+        <InputGroupAddon>
+          <SearchIcon />
+        </InputGroupAddon>
+      </InputGroup>
+      <InviteMemberDialog />
+    </div>
+  );
+};

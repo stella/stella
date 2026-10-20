@@ -12,6 +12,31 @@
       "unknownDevice": "Neznáme zariadenie"
     }
   },
+  "admin": {
+    "ai": "AI",
+    "backToApp": "Späť do aplikácie",
+    "billingAndUsage": "Fakturácia a využitie",
+    "billingProfiles": "Fakturačné profily",
+    "deleteDescription": "Natrvalo vymažete túto organizáciu a jej údaje. Túto akciu nemožno vrátiť späť.",
+    "deleteOrganization": "Vymazať organizáciu",
+    "deleteRefusedSubscription": "Táto organizácia má predplatné, ktoré sa obnovuje. Najprv ho zrušte v sekcii Tarifa a využitie, potom organizáciu vymažte.",
+    "deleteTypeToConfirm": "Na potvrdenie zadajte {name}.",
+    "firmSetup": "Nastavenie kancelárie",
+    "general": "Všeobecné",
+    "leaveDescription": "Stratíte prístup k spisom a údajom tejto organizácie.",
+    "leaveOrganization": "Opustiť organizáciu",
+    "leaveRefusedOnlyOwner": "Ste jediný vlastník. Skôr než organizáciu opustíte, urobte vlastníkom iného člena.",
+    "modelsAndProviders": "Modely a poskytovatelia",
+    "noPlan": "Žiadna aktívna tarifa",
+    "organizationDeleted": "Organizácia bola vymazaná.",
+    "organizationId": "ID organizácie",
+    "organizationLeft": "Opustili ste organizáciu.",
+    "overviewDescription": "Spravujte organizáciu, ľudí a nástroje.",
+    "people": "Ľudia",
+    "planAndUsage": "Tarifa a využitie",
+    "title": "Správa organizácie",
+    "toolsDescription": "Zapnite alebo vypnite vstavané nástroje pre všetkých v tejto organizácii."
+  },
   "agentClaim": {
     "access": "Získa prístup",
     "accessReadSearch": "Prístup na čítanie a vyhľadávanie",
@@ -984,6 +1009,9 @@
       "saved": "Do spisu {matter} {count, plural, one {bolo uložené # rozhodnutie} few {boli uložené # rozhodnutia} other {bolo uložených # rozhodnutí}}"
     },
     "newestDecisions": "Najnovšie rozhodnutia",
+    "noResults": {
+      "hint": "Skúste iné slová, vylepšite dopyt pomocou AI alebo sa opýtajte v chate."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Ľudské"
@@ -1057,8 +1085,11 @@
         "short": "Krátky"
       }
     },
+    "rewritten": {
+      "line": "Pre <bdi>{original}</bdi> nič presne nezodpovedá; zobrazujeme výsledky pre <bdi>{query}</bdi>",
+      "searchOriginal": "Hľadať moje pôvodné slová"
+    },
     "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie}} túto spisovú značku. Vyberte súd.",
-    "searchAskPrompt": "{query} (judikatúra, {country})",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
     "searchUnavailable": {
@@ -1206,15 +1237,32 @@
     },
     "answerEdit": {
       "acceptFailed": "Úpravu sa nepodarilo uložiť. Skúste to znova.",
+      "aiKind": "Úprava na požiadanie",
       "ask": "Požiadať o úpravy",
+      "authorUnknown": "Neznámy autor",
+      "autolinkLabel": "Tento text sa automaticky zmení na odkaz. Pred odstránením odkazu zmeňte jeho označenie.",
+      "change": "Zmena {revision}",
+      "editedLabel": "Upravená odpoveď",
       "failed": "Úpravu sa nepodarilo pripraviť. Skúste to znova.",
+      "formatKind": "Formátovanie",
+      "heading": "Nadpis {level}",
+      "history": "História odpovede",
+      "historyEmpty": "Žiadne staršie verzie.",
       "instruction": "Opíšte úpravu",
       "instructionRequired": "Opíšte, ako upraviť vybraný text.",
       "invalidSelection": "Výber nemožno upraviť, vyberte súvislý text.",
+      "invalidUrl": "Zadajte platnú adresu HTTP alebo HTTPS.",
+      "linkAddress": "Adresa odkazu",
+      "orderedList": "Číslovaný zoznam",
       "proposal": "Navrhnutá úprava",
       "requesting": "Príprava úprav…",
+      "restoreRefreshFailed": "Odpoveď bola obnovená, ale nepodarilo sa ju obnoviť v zobrazení. Obnovte zobrazenie, aby sa načítala obnovená odpoveď.",
+      "revertKind": "Obnovená verzia",
       "stale": "Odpoveď sa zmenila. Vyberte text znova.",
-      "submit": "Požiadať o úpravu"
+      "submit": "Požiadať o úpravu",
+      "textStyle": "Štýl textu",
+      "unorderedList": "Zoznam s odrážkami",
+      "wholeBlockRequired": "Na zmenu štýlu vyberte celý odsek alebo zoznam."
     },
     "answerQuote": {
       "showInDecision": "Zobraziť v rozhodnutí",
@@ -1405,7 +1453,12 @@
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mention": {
       "category": {
-        "entities": "V tomto spise"
+        "entities": "V tomto spise",
+        "sources": "Zdroje"
+      },
+      "corpus": {
+        "caseLaw": "Judikatúra · {country}",
+        "legislation": "Právne predpisy · {country}"
       },
       "loadError": "Nepodarilo sa načítať položky"
     },
@@ -2616,10 +2669,12 @@
     "api": {
       "badRequest": "Požiadavku sa nepodarilo dokončiť.",
       "caseLawCountryUnavailable": "Judikatúra tejto krajiny nie je dostupná. Vyberte inú krajinu.",
+      "caseLawIdentityOnly": "Pre túto krajinu je dostupné iba presné vyhľadanie a čítanie rozhodnutí.",
       "caseLawSearchUnavailable": "Vyhľadávanie judikatúry tejto krajiny nie je dostupné. Jej verejné rozhodnutia si môžete naďalej čítať.",
       "conflict": "Požiadavka je v konflikte s aktuálnym stavom.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "legislationCountryUnavailable": "Právne predpisy tejto krajiny nie sú dostupné. Vyberte inú krajinu.",
+      "legislationIdentityOnly": "Pre túto krajinu je dostupné iba presné vyhľadanie a čítanie právnych predpisov.",
       "legislationSearchUnavailable": "Vyhľadávanie právnych predpisov tejto krajiny nie je dostupné. Jej verejné právne predpisy si môžete naďalej čítať.",
       "notFound": "Požadovanú položku sa nepodarilo nájsť.",
       "payloadTooLarge": "Požiadavka je príliš veľká.",
@@ -2642,6 +2697,10 @@
       "aiConfigModelInvalid": "Konfigurácia modelu AI je neplatná. Skontrolujte vybrané modely.",
       "aiConfigProviderInvalid": "Konfigurácia poskytovateľa AI je neplatná. Skontrolujte nastavenia poskytovateľa.",
       "aiConfigProviderValidationFailed": "Poskytovateľ AI konfiguráciu odmietol. Skontrolujte kľúč API a model.",
+      "aiOutputInvalid": "Odpoveď AI mala neočakávaný formát. Skúste to znova.",
+      "aiOutputModerated": "Poskytovateľ AI výstup zablokoval. Preformulujte požiadavku alebo vyberte iný model.",
+      "aiProviderTaskUnsupported": "Nastavený poskytovateľ AI túto úlohu nedokáže vykonať. Vyberte poskytovateľa, ktorý ju dokáže vykonať.",
+      "aiUnknown": "Požiadavka AI zlyhala. Skúste to znova.",
       "clauseDirectivesInvalid": "Prepojené ustanovenie obsahuje neplatné direktívy. Pred vyplnením vzoru ustanovenie opravte.",
       "clauseDirectivesInvalidDetails": "Ustanovenie {clauseName} na pozícii {slotName} obsahuje neplatné direktívy. Otvorte editor ustanovenia, opravte uvedené odseky a znova vyplňte vzor.",
       "clauseDirectivesOverrideInvalidDetails": "Prepísané ustanovenie {clauseName} na pozícii {slotName} obsahuje neplatné direktívy. Pred ďalším vyplnením opravte prepísané znenie v tomto vyplnení.",
@@ -4188,6 +4247,10 @@
     "archivedEmpty": "Žiadne archivované pamäte.",
     "archivedToast": "Pamäť bola archivovaná",
     "createdToast": "Uložené do pamäte",
+    "deleteConfirmation": "Na potvrdenie napíšte {confirmation}",
+    "deleteDescription": "Týmto túto pamäť natrvalo odstránite. Túto akciu nemožno vrátiť späť.",
+    "deleteTitle": "Odstrániť pamäť?",
+    "deletedToast": "Pamäť bola odstránená",
     "empty": "Zatiaľ žiadna pamäť.",
     "kinds": {
       "decision": "Rozhodnutie",
@@ -5116,6 +5179,8 @@
     "outline": "Obsah",
     "outlineJumpLabel": "Prejsť na ustanovenie",
     "outlineJumpPlaceholder": "§ 10 alebo názov",
+    "pendingChanges": "Nadchádzajúce novely",
+    "pendingChangesIncomplete": "Údaje vydavateľa nemusia zahŕňať všetky nadchádzajúce novely.",
     "provisionAskContextPrompt": "\n\nPasáže, ktoré toto ustanovenie aplikujú v najvplyvnejších rozhodnutiach:\n{passages}\n\nPomocou nástrojov pre judikatúru si môžeš prečítať ktorékoľvek z týchto rozhodnutí celé alebo vyhľadať ďalšie rozhodnutia, ktoré ustanovenie citujú.",
     "provisionAskPlaceholder": "Opýtajte sa na toto ustanovenie",
     "provisionAskQuestionPrompt": "K {subject}: {question}",
@@ -5133,7 +5198,6 @@
     "provisionTextUnavailable": "Text nie je pre toto znenie k dispozícii",
     "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
-    "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
     "showCitedPartOnly": "Zobraziť len citovanú časť",
@@ -6262,7 +6326,6 @@
         }
       },
       "atAGlance": "Prehľad",
-      "edited": "upravil(a)",
       "getStarted": "Začnite nahraním dokumentov alebo vytvorením prvého priečinka.",
       "matterDetails": "Detaily spisu",
       "membersCount": "{count, plural, one {# člen} few {# členovia} other {# členov}}",

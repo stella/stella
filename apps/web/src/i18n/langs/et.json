@@ -12,6 +12,31 @@
       "unknownDevice": "Tundmatu seade"
     }
   },
+  "admin": {
+    "ai": "AI",
+    "backToApp": "Tagasi rakendusse",
+    "billingAndUsage": "Arveldus ja kasutus",
+    "billingProfiles": "Arveldusprofiilid",
+    "deleteDescription": "Kustutage see organisatsioon ja selle andmed jäädavalt. Seda toimingut ei saa tagasi võtta.",
+    "deleteOrganization": "Kustuta organisatsioon",
+    "deleteRefusedSubscription": "Sellel organisatsioonil on uuenev tellimus. Tühistage see esmalt jaotises Pakett ja kasutus, seejärel kustutage organisatsioon.",
+    "deleteTypeToConfirm": "Kinnitamiseks sisestage {name}.",
+    "firmSetup": "Büroo seadistamine",
+    "general": "Üldine",
+    "leaveDescription": "Kaotate juurdepääsu selle organisatsiooni toimikutele ja andmetele.",
+    "leaveOrganization": "Lahku organisatsioonist",
+    "leaveRefusedOnlyOwner": "Olete ainus omanik. Enne lahkumist määrake omanikuks mõni teine liige.",
+    "modelsAndProviders": "Mudelid ja pakkujad",
+    "noPlan": "Aktiivne pakett puudub",
+    "organizationDeleted": "Organisatsioon on kustutatud.",
+    "organizationId": "Organisatsiooni ID",
+    "organizationLeft": "Olete organisatsioonist lahkunud.",
+    "overviewDescription": "Hallake oma organisatsiooni, inimesi ja tööriistu.",
+    "people": "Inimesed",
+    "planAndUsage": "Pakett ja kasutus",
+    "title": "Organisatsiooni haldus",
+    "toolsDescription": "Lubage või keelake sisseehitatud tööriistad kõigile selles organisatsioonis."
+  },
   "agentClaim": {
     "access": "Saadav juurdepääs",
     "accessReadSearch": "Lugemis- ja otsingujuurdepääs",
@@ -984,6 +1009,9 @@
       "saved": "{count, plural, one {# lahend} other {# lahendit}} salvestatud toimikusse {matter}"
     },
     "newestDecisions": "Uusimad lahendid",
+    "noResults": {
+      "hint": "Proovige teisi sõnu, parandage päringut tehisintellektiga või esitage küsimus vestluses."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Inimeste"
@@ -1057,8 +1085,11 @@
         "short": "Lühike"
       }
     },
+    "rewritten": {
+      "line": "Päringule <bdi>{original}</bdi> täpseid vasteid pole; kuvatakse tulemused päringule <bdi>{query}</bdi>",
+      "searchOriginal": "Otsi minu algseid sõnu"
+    },
     "sameCaseNumber": "{count, plural, one {# lahend kannab} other {# lahendit kannavad}} seda kohtuasja numbrit. Valige kohus.",
-    "searchAskPrompt": "{query} (kohtupraktika, {country})",
     "searchLabel": "Otsi kohtupraktikast",
     "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1206,15 +1237,32 @@
     },
     "answerEdit": {
       "acceptFailed": "Muudatust ei saanud salvestada. Proovige uuesti.",
+      "aiKind": "Soovitud muudatus",
       "ask": "Taotle muudatusi",
+      "authorUnknown": "Tundmatu autor",
+      "autolinkLabel": "Sellest tekstist saab automaatselt link. Muutke silti enne lingi eemaldamist.",
+      "change": "Muudatus {revision}",
+      "editedLabel": "Muudetud vastus",
       "failed": "Muudatust ei saanud ette valmistada. Proovige uuesti.",
+      "formatKind": "Vormindus",
+      "heading": "Pealkiri {level}",
+      "history": "Vastuse ajalugu",
+      "historyEmpty": "Varasemaid versioone pole.",
       "instruction": "Kirjeldage muudatust",
       "instructionRequired": "Kirjeldage, kuidas valitud teksti muuta.",
       "invalidSelection": "Seda valikut ei saa muuta. Valige järjestikune tekstilõik.",
+      "invalidUrl": "Sisestage kehtiv HTTP- või HTTPS-aadress.",
+      "linkAddress": "Lingi aadress",
+      "orderedList": "Nummerdatud loend",
       "proposal": "Soovitatud muudatus",
       "requesting": "Muudatuste ettevalmistamine…",
+      "restoreRefreshFailed": "Vastus taastati, kuid seda ei saanud värskendada. Värskendage, et taastatud vastus laadida.",
+      "revertKind": "Taastatud versioon",
       "stale": "See vastus on muutunud. Valige tekst uuesti.",
-      "submit": "Taotle muudatust"
+      "submit": "Taotle muudatust",
+      "textStyle": "Teksti stiil",
+      "unorderedList": "Täpploend",
+      "wholeBlockRequired": "Stiili muutmiseks valige terve lõik või loend."
     },
     "answerQuote": {
       "showInDecision": "Näita lahendis",
@@ -1405,7 +1453,12 @@
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {
       "category": {
-        "entities": "Selles toimikus"
+        "entities": "Selles toimikus",
+        "sources": "Allikad"
+      },
+      "corpus": {
+        "caseLaw": "Kohtupraktika · {country}",
+        "legislation": "Õigusaktid · {country}"
       },
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
@@ -2616,10 +2669,12 @@
     "api": {
       "badRequest": "Päringut ei saanud lõpule viia.",
       "caseLawCountryUnavailable": "Selle riigi kohtupraktika ei ole saadaval. Valige teine riik.",
+      "caseLawIdentityOnly": "Selle riigi puhul saab kohtulahendeid ainult täpse tunnuse alusel otsida ja lugeda.",
       "caseLawSearchUnavailable": "Selle riigi kohtupraktika otsing ei ole saadaval. Selle avalikke kohtulahendeid saate endiselt lugeda.",
       "conflict": "Päring on praeguse olekuga vastuolus.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "legislationCountryUnavailable": "Selle riigi õigusaktid ei ole saadaval. Valige teine riik.",
+      "legislationIdentityOnly": "Selle riigi puhul saab õigusakte ainult täpse tunnuse alusel otsida ja lugeda.",
       "legislationSearchUnavailable": "Selle riigi õigusaktide otsing ei ole saadaval. Selle avalikke õigusakte saate endiselt lugeda.",
       "notFound": "Soovitud üksust ei leitud.",
       "payloadTooLarge": "Päring on liiga suur.",
@@ -2642,6 +2697,10 @@
       "aiConfigModelInvalid": "AI-mudeli seadistus ei kehti. Kontrollige valitud mudeleid.",
       "aiConfigProviderInvalid": "AI-teenusepakkuja seadistus ei kehti. Kontrollige teenusepakkuja seadeid.",
       "aiConfigProviderValidationFailed": "AI-teenusepakkuja lükkas seadistuse tagasi. Kontrollige API-võtit ja mudelit.",
+      "aiOutputInvalid": "Tehisintellekti vastus oli ootamatus vormingus. Proovige uuesti.",
+      "aiOutputModerated": "Tehisintellekti teenusepakkuja modereeris väljundit. Sõnastage taotlus ümber või valige teine mudel.",
+      "aiProviderTaskUnsupported": "Seadistatud tehisintellekti teenusepakkuja ei saa seda ülesannet täita. Valige teenusepakkuja, kes saab.",
+      "aiUnknown": "Tehisintellekti taotlus nurjus. Proovige uuesti.",
       "clauseDirectivesInvalid": "Seotud klausel sisaldab vigaseid direktiive. Enne malli täitmist parandage klausel.",
       "clauseDirectivesInvalidDetails": "Klausel {clauseName} väljas {slotName} sisaldab vigaseid direktiive. Avage klausliredaktor, parandage nimetatud lõigud ja täitke mall uuesti.",
       "clauseDirectivesOverrideInvalidDetails": "Klausli {clauseName} asendustekst väljas {slotName} sisaldab vigaseid direktiive. Parandage selle täitmise asendustekst ja proovige uuesti.",
@@ -4188,6 +4247,10 @@
     "archivedEmpty": "Arhiveeritud mälu puudub.",
     "archivedToast": "Mälu arhiveeritud",
     "createdToast": "Mällu salvestatud",
+    "deleteConfirmation": "Kinnitamiseks sisestage {confirmation}",
+    "deleteDescription": "See kustutab selle mälu jäädavalt. Seda toimingut ei saa tagasi võtta.",
+    "deleteTitle": "Kas kustutada mälu?",
+    "deletedToast": "Mälu kustutatud",
     "empty": "Mälus pole veel midagi.",
     "kinds": {
       "decision": "Otsus",
@@ -5116,6 +5179,8 @@
     "outline": "Sisukord",
     "outlineJumpLabel": "Liigu sättele",
     "outlineJumpPlaceholder": "§ 10 või pealkiri",
+    "pendingChanges": "Eelseisvad muudatused",
+    "pendingChangesIncomplete": "Avaldaja andmed ei pruugi sisaldada kõiki eelseisvaid muudatusi.",
     "provisionAskContextPrompt": "\n\nSätet kohaldavad lõigud kõige autoriteetsemates lahendites:\n{passages}\n\nKasuta kohtupraktika tööriistu, et lugeda mõnda neist lahenditest tervikuna või leida teisi sätet viitavaid lahendeid.",
     "provisionAskPlaceholder": "Küsi selle sätte kohta",
     "provisionAskQuestionPrompt": "{subject} kohta: {question}",
@@ -5133,7 +5198,6 @@
     "provisionTextUnavailable": "Selle redaktsiooni tekst pole saadaval",
     "publisherWindowInconsistent": "Sellel kuupäeval kehtivat redaktsiooni ei saa kindlaks teha: väljaandja andmed on vastuolulised.",
     "resolvedAlias": "Tuvastatud kui {label}",
-    "searchAskPrompt": "{query} ({country} õigusaktid)",
     "searchLabel": "Otsi õigusaktidest",
     "searchPlaceholder": "Number, lühinimi või pealkiri, nt 89/2012 Sb.",
     "showCitedPartOnly": "Näita ainult viidatud osa",
@@ -6262,7 +6326,6 @@
         }
       },
       "atAGlance": "Ülevaade",
-      "edited": "muutis",
       "getStarted": "Alustage dokumentide üleslaadimisega või looge oma esimene kaust.",
       "matterDetails": "Toimiku detailid",
       "membersCount": "{count, plural, one {# liige} other {# liiget}}",

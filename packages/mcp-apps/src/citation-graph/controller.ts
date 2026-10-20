@@ -80,6 +80,8 @@ export const createGraphController = (bridge: GraphBridge) => {
       arguments: {
         decision_id: decisionId,
         direction: model.direction,
+        ...(model.doctrine === undefined ? {} : { doctrine: model.doctrine }),
+        ...(model.polarity === undefined ? {} : { polarity: model.polarity }),
         ...(page === undefined ? {} : { cursor: page.nextCursor }),
       },
     });
@@ -104,11 +106,11 @@ export const createGraphController = (bridge: GraphBridge) => {
     snapshot = { model: mergePage(model, parsed), request: { status: "idle" } };
     publish();
   };
-  const open = async (decisionId: string, appUrl: string | null) => {
+  const open = async (decisionId: string, readerUrl: string | null) => {
     if (snapshot.model === null || snapshot.request.status === "loading") {
       return;
     }
-    if (!bridge.supportsTools() && appUrl === null) {
+    if (!bridge.supportsTools() && readerUrl === null) {
       return;
     }
     const current = generation;
@@ -120,8 +122,8 @@ export const createGraphController = (bridge: GraphBridge) => {
       }
     };
     if (!bridge.supportsTools()) {
-      if (appUrl !== null) {
-        await bridge.openLink(appUrl, onError);
+      if (readerUrl !== null) {
+        await bridge.openLink(readerUrl, onError);
       }
       if (generation === current && snapshot.request.status === "loading") {
         snapshot = { model: snapshot.model, request: { status: "idle" } };
@@ -147,7 +149,7 @@ export const createGraphController = (bridge: GraphBridge) => {
       result.structuredContent,
     );
     const url = parsed.success
-      ? parseLegalCitationHttpUrl(parsed.output.metadata.appUrl)
+      ? parseLegalCitationHttpUrl(parsed.output.metadata.url)
       : null;
     if (
       !parsed.success ||

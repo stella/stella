@@ -41,7 +41,7 @@ test("signed-out statute search normalizes country and forwards filters through 
   });
   const response = await app.handle(
     new Request(
-      "http://localhost/law/statutes/search?query=n%C3%A1hrada&country=CZ&documentType=act&status=current&language=cs&dateFrom=2024-01-01&dateTo=2025-01-01&limit=20",
+      "http://localhost/law/statutes/search?query=n%C3%A1hrada&country=CZ&documentType=act&status=current&language=cs&dateFrom=2024-01-01&dateTo=2025-01-01&asOf=2027-01-01&limit=20",
     ),
   );
   expect(response.status).toBe(200);
@@ -55,6 +55,7 @@ test("signed-out statute search normalizes country and forwards filters through 
     language: "cs",
     dateFrom: "2024-01-01",
     dateTo: "2025-01-01",
+    asOf: "2027-01-01",
     limit: 20,
   });
   expect(calls.at(0)?.at(1)).toBe(legislationPublicReadDb);

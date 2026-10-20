@@ -1,5 +1,6 @@
 // parser-output-unchanged: registering desktop activity access leaves existing ingestion features and parsed records unchanged.
 // parser-output-unchanged: assigning the sample case handlers to list verification leaves parsed records unchanged.
+// parser-output-unchanged: registering AI memory access leaves ingestion features and parsed records unchanged.
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -7,7 +8,8 @@ import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import { defineFeatureRegistry } from "@/api/lib/feature-access/prerequisites";
 
 type FeatureDefinition = {
-  enrolment: "invitation" | "self-serve";
+  // parser-output-unchanged: enrolment kinds gate access only, never parsed decision output
+  enrolment: "invitation" | "self-serve" | "general-availability";
   deploymentFeature?: DeploymentFeatureFlag;
   prerequisites?: readonly string[];
   ownership?: {
@@ -31,6 +33,9 @@ type FeatureDefinition = {
 
 export type FeatureRegistry = Readonly<Record<string, FeatureDefinition>>;
 
+export const AI_MEMORY_FEATURE_ID = "ai-memory";
+export const REMEMBER_TOOL_NAME = "remember";
+
 export const LEGAL_LISTS_FEATURE_ID = "legal-lists";
 
 export const SELF_SERVE_FEATURE_IDS = ["time-billing"] as const;
@@ -38,6 +43,50 @@ export const LIST_VERIFICATION_FEATURE_ID = "list-verification";
 export const GENERATED_VIEWS_FEATURE_ID = "generated-views";
 
 export const FEATURE_REGISTRY = defineFeatureRegistry({
+  [AI_MEMORY_FEATURE_ID]: {
+    enrolment: "invitation",
+    deploymentFeature: "FEATURE_AI_MEMORY",
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/memories"],
+      tableSchemaFiles: [],
+      coreModules: [
+        "apps/api/src/lib/memory/persist-explicit-memory.ts",
+        "apps/api/src/handlers/chat/tools/remember-tool.ts",
+        "apps/api/src/handlers/chat/memory-context.ts",
+      ],
+      dispatchModules: [
+        {
+          type: "admitted",
+          module: "apps/api/src/handlers/chat/tools/chat-tools.ts",
+          admission: "isMcpDescriptorFeatureEnabled",
+        },
+        {
+          type: "admitted",
+          module: "apps/api/src/handlers/chat/chat-prompt.ts",
+          admission: "buildMemoryPromptParts",
+          specifier: "@/api/handlers/chat/memory-context",
+        },
+        {
+          type: "admitted",
+          module: "apps/api/src/lib/scheduler/tasks/memory-curator.ts",
+          admission: "isFeatureDeployed",
+          specifier: "@/api/lib/feature-access/deployment",
+        },
+        {
+          type: "admitted",
+          module: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
+          admission: "resolveFeatureAccess",
+          specifier: "@/api/lib/auth/feature-access/context",
+        },
+        {
+          type: "admitted",
+          module: "apps/api/src/lib/scheduler/jobs.ts",
+          admission: "isFeatureDeployed",
+          specifier: "@/api/lib/feature-access/deployment",
+        },
+      ],
+    },
+  },
   [LEGAL_LISTS_FEATURE_ID]: {
     enrolment: "invitation",
     deploymentFeature: "FEATURE_LEGAL_LISTS",
@@ -54,7 +103,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     enrolment: "invitation",
   },
   [GENERATED_VIEWS_FEATURE_ID]: {
-    enrolment: "invitation",
+    enrolment: "general-availability",
     deploymentFeature: "FEATURE_GENERATED_VIEWS",
     ownership: {
       handlerDirectories: [],
@@ -155,6 +204,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
 export type FeatureId = keyof typeof FEATURE_REGISTRY;
 
 export const CHAT_ONLY_FEATURE_TOOL_DEFINITIONS = [
+  { name: REMEMBER_TOOL_NAME, featureId: AI_MEMORY_FEATURE_ID },
   { name: VISUAL_PREVIEW_TOOL_NAME, featureId: GENERATED_VIEWS_FEATURE_ID },
 ] as const satisfies readonly { name: string; featureId: FeatureId }[];
 

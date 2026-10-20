@@ -139,7 +139,7 @@
     "hooks:uninstall": "lefthook uninstall",
     "postinstall": "bun run lint:ws && bun run generate",
     "dependencies:check": "DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies,unlisted",
-    "generate": "turbo run generate:route-tree generate:api-types generate:capability-runtime --filter=@stll/web --filter=@stll/api"
+    "generate": "turbo run generate:route-tree generate:messages generate:api-types generate:capability-runtime --filter=@stll/web --filter=@stll/api"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
@@ -148,7 +148,7 @@
     "@oxlint/plugins": "catalog:",
     "@shadcn/lint": "catalog:",
     "@stll/collation": "workspace:*",
-    "@stll/oxlint-config": "1.3.1",
+    "@stll/oxlint-config": "1.4.0",
     "@stll/portable-path": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/sha256": "workspace:^",
@@ -228,6 +228,8 @@
     "@oxlint/plugins": "1.87.0",
     "@shadcn/lint": "0.1.0",
     "@silurus/ooxml": "0.88.0",
+    "@stll/aho-corasick": "1.0.4",
+    "@stll/aho-corasick-wasm": "1.0.4",
     "@stll/anonymize": "3.0.7",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "3.0.7",
@@ -236,6 +238,8 @@
     "@stll/folio-core": "0.60.0",
     "@stll/folio-react": "0.28.0",
     "@stll/fuzzy-search": "1.1.5",
+    "@stll/regex-set": "1.0.5",
+    "@stll/regex-set-wasm": "1.0.5",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
@@ -329,7 +333,8 @@
     "@tanstack/ai-mistral@0.6.14": "patches/@tanstack%2Fai-mistral@0.6.14.patch",
     "@tanstack/ai-openrouter@0.21.1": "patches/@tanstack%2Fai-openrouter@0.21.1.patch",
     "@tanstack/ai-mcp@0.8.0": "patches/@tanstack%2Fai-mcp@0.8.0.patch",
-    "@libpdf/core@0.5.2": "patches/@libpdf%2Fcore@0.5.2.patch"
+    "@libpdf/core@0.5.2": "patches/@libpdf%2Fcore@0.5.2.patch",
+    "oxlint-tailwindcss@1.16.0": "patches/oxlint-tailwindcss@1.16.0.patch"
   },
   "trustedDependencies": [
     "lefthook"

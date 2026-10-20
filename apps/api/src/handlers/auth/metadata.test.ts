@@ -26,7 +26,9 @@ describe("OAuth authorization server metadata", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("Cache-Control")).toBe("public, max-age=300");
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, max-age=300, stale-while-revalidate=3600",
+    );
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(response.headers.get("Access-Control-Allow-Methods")).toBe(
       "GET, OPTIONS",

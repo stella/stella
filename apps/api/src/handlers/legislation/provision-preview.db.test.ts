@@ -214,7 +214,7 @@ describe("reading one provision preview", () => {
     if (!("blocks" in preview)) {
       throw new TypeError("Expected a public provision preview");
     }
-    expect(preview.appUrl).toBe(
+    expect(preview.url).toBe(
       "http://localhost:3000/law/cze/statutes/89-2012-sb/v/2020-01-01#par_898-odst_2",
     );
   });
