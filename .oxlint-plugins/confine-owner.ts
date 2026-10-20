@@ -702,12 +702,17 @@ const nestedRelationSelectsOwnedColumns = ({
   }
   seen.add(options);
   const relationsSelectOwnedColumns = (withValue: unknown): boolean => {
+    if (!isAstNode(withValue)) {
+      return false;
+    }
     const relations = stableValue(context, withValue);
+    // A relation selection the rule cannot see may name the owned relation;
+    // only an imported one is checked where it is defined.
     if (
       relations?.type !== "ObjectExpression" ||
       !Array.isArray(relations.properties)
     ) {
-      return false;
+      return !isImportedValue(context, withValue);
     }
     return relations.properties.some((property) => {
       // A spread inside `with` is followed when it resolves; an unresolved
