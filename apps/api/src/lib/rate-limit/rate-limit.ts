@@ -379,7 +379,15 @@ export const rateLimit = ({
   rateLimitHooks.add(beforeHandle);
   plugin.onBeforeHandle("plugin", beforeHandle);
 
-  plugin.onError("plugin", async ({ code, error, request, server, set }) => {
+  plugin.onError("plugin", async ({ error, request, server, set }) => {
+    const errorCode =
+      typeof error === "object" && error !== null
+        ? Reflect.get(error, "code")
+        : undefined;
+    const code =
+      typeof errorCode === "string" || typeof errorCode === "number"
+        ? errorCode
+        : "UNKNOWN";
     const state = requestState.get(request);
     if (state !== undefined) {
       switch (state.type) {

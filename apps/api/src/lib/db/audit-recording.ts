@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import type { MaybePromise } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import type {
@@ -128,7 +127,7 @@ export type AuditEvent =
 export type AuditRecorder = (
   tx: AuditTransaction,
   event: AuditEvent | AuditEvent[],
-) => MaybePromise<void>;
+) => void | Promise<void>;
 
 export type AsyncAuditRecorder = (
   ...args: Parameters<AuditRecorder>

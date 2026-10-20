@@ -28,7 +28,7 @@ const paragraphStyleSchema = t.Object({
   spaceAfterPt: paragraphSpacingSchema,
 });
 
-const numberedParagraphStyleSchema = t.Composite([
+const numberedParagraphStyleSchema = t.Composite(
   paragraphStyleSchema,
   t.Object({
     numberingFormat: t.UnionEnum([
@@ -43,7 +43,7 @@ const numberedParagraphStyleSchema = t.Composite([
     indentLeftPt: t.Number({ minimum: 0, maximum: 1440 }),
     hangingPt: t.Number({ minimum: 0, maximum: 1440 }),
   }),
-]);
+);
 
 export const styleSetEditorSettingsSchema = t.Object({
   body: t.Object({

@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import type { PreContext } from "elysia";
+import type { HTTPHeaders } from "elysia";
 import { timingSafeEqual } from "node:crypto";
 
 import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
@@ -233,7 +233,13 @@ export const createSecurityCanaryInterceptor =
     claimAlert,
     onTriggered,
   }: SecurityCanaryInterceptorOptions) =>
-  async ({ request, set }: PreContext) => {
+  async ({
+    request,
+    set,
+  }: {
+    request: Request;
+    set: { headers: HTTPHeaders; status?: number | string };
+  }) => {
     if (
       !matchesConfiguredCanary({
         authorizationHeader: request.headers.get("authorization"),

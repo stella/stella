@@ -124,10 +124,10 @@ export const avtLayoutVisibilityCondition = (
     : sql`${layout}->>'type' is distinct from 'avt'`;
 
 const projectViewSchema = (schema: TSchema): TSchema => {
-  if (Array.isArray(schema["enum"])) {
+  if (Type.IsEnum(schema)) {
     return {
       ...schema,
-      enum: schema["enum"].filter((value: unknown) => value !== "avt"),
+      enum: schema.enum.filter((value: unknown) => value !== "avt"),
     };
   }
   if (Type.IsUnion(schema)) {

@@ -450,8 +450,26 @@ const api = new Elysia()
       maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
     }),
   )
-  .onError((context) => answerRequestError(context))
-  .onAfterHandle(async (context) => await completeRequest(context))
+  .onError(({ error, request, route, set }) => {
+    const errorCode =
+      typeof error === "object" && error !== null
+        ? Reflect.get(error, "code")
+        : undefined;
+    return answerRequestError({
+      error,
+      set,
+      code:
+        typeof errorCode === "string" || typeof errorCode === "number"
+          ? errorCode
+          : "UNKNOWN",
+      request,
+      route,
+    });
+  })
+  .onAfterHandle(
+    async ({ request, responseValue, route, set }) =>
+      await completeRequest({ request, responseValue, route, set }),
+  )
   .use(authUiRoute)
   .use(authMetadataRoute)
   .use(

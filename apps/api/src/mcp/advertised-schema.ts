@@ -7,10 +7,13 @@ import { Type, type TSchema } from "typebox";
  */
 const COERCION_STRING_FORMATS = new Set(["integer", "numeric", "boolean"]);
 
-const isCoercionStringBranch = (schema: TSchema): boolean =>
-  Type.IsString(schema) &&
-  typeof schema.format === "string" &&
-  COERCION_STRING_FORMATS.has(schema.format);
+const isCoercionStringBranch = (schema: TSchema): boolean => {
+  if (!Type.IsString(schema)) {
+    return false;
+  }
+  const format = Reflect.get(schema, "format");
+  return typeof format === "string" && COERCION_STRING_FORMATS.has(format);
+};
 
 const isCoercibleScalar = (schema: TSchema): boolean =>
   Type.IsNumber(schema) || Type.IsInteger(schema) || Type.IsBoolean(schema);

@@ -17,11 +17,7 @@ const unionOf = (schemas: TSchema[], options: TSchemaOptions): TSchema => {
   if (first === undefined) {
     return Type.Never(options);
   }
-  let union = Type.Union([first], options);
-  for (const schema of schemas.slice(1)) {
-    union = Type.Union([union, schema], options);
-  }
-  return union;
+  return Type.Union(schemas, options);
 };
 
 /** Native TypeBox nodes for finite JSON schemas, including nested unions. */

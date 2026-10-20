@@ -1,4 +1,4 @@
-import type { Context } from "elysia";
+import type { HTTPHeaders } from "elysia";
 /**
  * The request lifecycle's failure and completion records, as the server's
  * `onError` and `onAfterHandle` hooks.
@@ -54,7 +54,7 @@ const getRequestPath = (request: Request): string =>
 // Stamp the per-request query count onto the outgoing response. Reads the
 // active counter store, so it is a no-op when the store was never started
 // (production, or a request that bypassed `onRequest`).
-const setDbQueryCountHeader = (set: Context["set"]) => {
+const setDbQueryCountHeader = (set: ResponseSet) => {
   if (!DB_QUERY_COUNTER_ENABLED) {
     return;
   }
@@ -117,9 +117,14 @@ const buildRequestLogDetails = ({
   return details;
 };
 
+type ResponseSet = {
+  headers: HTTPHeaders;
+  status?: number | string;
+};
+
 type RequestErrorContext = {
   error: unknown;
-  set: Context["set"];
+  set: ResponseSet;
   code: number | string;
   request: Request;
   route: string | undefined;
@@ -231,7 +236,7 @@ type RequestCompletionContext = {
   request: Request;
   responseValue: unknown;
   route: string | undefined;
-  set: Context["set"];
+  set: ResponseSet;
 };
 
 const finalResponseCompletion = new AsyncLocalStorage<{

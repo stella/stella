@@ -1,13 +1,7 @@
 import type { Err } from "better-result";
 import { panic, Result, UnhandledException } from "better-result";
-import type {
-  AnySchema,
-  Context,
-  ElysiaStatus,
-  InputSchema,
-  UnwrapRoute,
-} from "elysia";
-import { ElysiaStatus as ElysiaStatusValue, status, t } from "elysia";
+import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
+import { ElysiaStatus, status, t } from "elysia";
 import type { Static, TSchema } from "typebox";
 
 import type { ModelTask } from "@stll/ai-catalog";
@@ -455,11 +449,9 @@ export type HandlerConfig = InputSchema &
  * route-level schema cannot shadow the segment the workspace macro resolves the
  * tenant from. `workspaceParams()` produces the shape.
  */
-type WorkspaceHandlerConfigOf<TConfig> = TConfig extends HandlerConfig
-  ? Omit<TConfig, "params"> & { params?: WorkspaceParamsSchema }
-  : never;
-
-export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
+export type WorkspaceHandlerConfig = HandlerConfig & {
+  params?: WorkspaceParamsSchema;
+};
 
 /**
  * Factories without an organization-scoped caller run no account check, so
@@ -823,6 +815,12 @@ type SafeHandlerResult<TResult> =
   | TResult
   | SafeStatusResponse<HandlerErrorStatusCode>;
 
+/** Narrows framework status responses without exposing Elysia's private shape. */
+export const isElysiaStatus = (
+  value: unknown,
+): value is ElysiaStatus<number, unknown, number> =>
+  value instanceof ElysiaStatus;
+
 /**
  * The async-generator a safe handler runs: it may `yield*` intermediate
  * `Result.await(...)` failures (the `Err` yield) and finally returns a
@@ -882,8 +880,11 @@ function toSafeStatusResponse(
 
 type SafeHandlerLogContext = {
   request: Request;
-  route: string;
+  route?: string;
 };
+
+const requestRoute = (ctx: SafeHandlerLogContext): string =>
+  ctx.route ?? new URL(ctx.request.url).pathname;
 
 type ErrorStatusBuilder<TErrorStatus> = (
   statusCode: HandlerErrorStatusCode,
@@ -959,7 +960,7 @@ const runSafeHandlerInDeliveryScope = async <
 
       logAndCaptureSafeError({
         request: ctx.request,
-        route: ctx.route,
+        route: requestRoute(ctx),
         error: handlerError,
         statusCode,
         telemetry: safeErrorTelemetryDisposition(statusCode),
@@ -971,7 +972,7 @@ const runSafeHandlerInDeliveryScope = async <
     if (DatabaseError.is(error)) {
       logAndCaptureSafeError({
         request: ctx.request,
-        route: ctx.route,
+        route: requestRoute(ctx),
         error,
         statusCode: 500,
         telemetry: "capture",
@@ -986,7 +987,7 @@ const runSafeHandlerInDeliveryScope = async <
     if (DatabaseRlsError.is(error)) {
       logAndCaptureSafeError({
         request: ctx.request,
-        route: ctx.route,
+        route: requestRoute(ctx),
         error,
         statusCode: 400,
         // A denial is answered as a client outcome but reported as a fault:
@@ -1003,7 +1004,7 @@ const runSafeHandlerInDeliveryScope = async <
 
     logAndCaptureSafeError({
       request: ctx.request,
-      route: ctx.route,
+      route: requestRoute(ctx),
       error,
       statusCode: 500,
       telemetry: "capture",
@@ -1027,7 +1028,7 @@ const runSafeHandlerInDeliveryScope = async <
     if (handlerError !== null) {
       logAndCaptureSafeError({
         request: ctx.request,
-        route: ctx.route,
+        route: requestRoute(ctx),
         error: handlerError,
         statusCode: handlerError.status,
         telemetry: safeErrorTelemetryDisposition(handlerError.status),
@@ -1037,7 +1038,7 @@ const runSafeHandlerInDeliveryScope = async <
 
     logAndCaptureSafeError({
       request: ctx.request,
-      route: ctx.route,
+      route: requestRoute(ctx),
       error,
       statusCode: 500,
       telemetry: "capture",
@@ -1635,7 +1636,7 @@ export const resolveMeteringContext = ({
 
 type PreflightCtx = {
   request: Request;
-  route: string;
+  route?: string;
   safeDb: SafeDb;
 };
 
@@ -1702,7 +1703,7 @@ const runUsagePreflight = async ({
     // situation when it's our infrastructure that failed.
     logAndCaptureSafeError({
       request: ctx.request,
-      route: ctx.route,
+      route: requestRoute(ctx),
       error: checkResult.error,
       statusCode: 500,
       telemetry: "capture",
@@ -2091,10 +2092,7 @@ export const createSafeSessionHandler = <
  * parameter shape. Handlers declare their strict schema separately and
  * apply it after authorization via `validatePostAuth`.
  */
-export type TokenHandlerConfig = Omit<
-  InputSchema,
-  "body" | "query" | "params"
-> &
+export type TokenHandlerConfig = InputSchema &
   WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
@@ -2323,8 +2321,8 @@ export const createSafeUncheckedBoundedPublicHandler = <
       const response =
         // Projection is idempotent, so factory-built statuses pass through it
         // unchanged; handler-returned statuses are bounded the same way.
-        result instanceof ElysiaStatusValue && result.status >= 400
-          ? toSafePublicStatusResponse(
+        isElysiaStatus(result) && result.status >= 400
+          ? status(
               result.status,
               typeof result.response === "string"
                 ? truncateTextBytes(

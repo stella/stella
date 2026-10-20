@@ -12,11 +12,10 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { boundedString } from "@/api/lib/search/response-text-bounds";
 
-type DecisionHeadnoteSchemaByType = {
-  readonly [Type in DecisionHeadnotePreview["type"]]: TSchema & {
-    static: Extract<DecisionHeadnotePreview, { readonly type: Type }>;
-  };
-};
+type DecisionHeadnoteSchemaByType = Record<
+  DecisionHeadnotePreview["type"],
+  TSchema
+>;
 
 const DECISION_HEADNOTE_SCHEMAS = {
   [TEXT_FIELD_TYPE.ABSENT]: t.Object(

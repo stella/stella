@@ -155,10 +155,11 @@ export const validatePostAuth = <TStrict extends TSchema>(
   if (Value.Check(strictSchema, rawValue)) {
     return { ok: true, value: rawValue };
   }
-  const firstError = Value.Errors(strictSchema, rawValue).First();
+  const firstError = Value.Errors(strictSchema, rawValue).at(0);
   if (!firstError) {
     return { ok: false, message: "Invalid request" };
   }
-  const path = firstError.path === "" ? "value" : firstError.path;
+  const path =
+    firstError.instancePath === "" ? "value" : firstError.instancePath;
   return { ok: false, message: `${path}: ${firstError.message}` };
 };

@@ -1,10 +1,10 @@
-import { ElysiaStatus, StatusMap, type Context } from "elysia";
+import { ElysiaStatus, StatusMap } from "elysia";
 
 const DEFAULT_RESPONSE_STATUS = 200;
 
 type ResolveResponseStatusOptions = {
   response: unknown;
-  set: Context["set"];
+  set: { status?: number | string };
 };
 
 /**
@@ -38,7 +38,10 @@ export const resolveResponseStatus = ({
   }
 
   if (typeof selectedStatus === "string") {
-    return StatusMap[selectedStatus];
+    const mappedStatus = Reflect.get(StatusMap, selectedStatus);
+    if (typeof mappedStatus === "number") {
+      return mappedStatus;
+    }
   }
 
   return DEFAULT_RESPONSE_STATUS;

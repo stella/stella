@@ -25,11 +25,7 @@ const countedSearchTotalSchema = <TotalType extends CountedSearchTotalType>(
     { additionalProperties: false },
   );
 
-type SearchTotalSchemaByType = {
-  readonly [Type in SearchTotal["type"]]: TSchema & {
-    static: Extract<SearchTotal, { readonly type: Type }>;
-  };
-};
+type SearchTotalSchemaByType = Record<SearchTotal["type"], TSchema>;
 
 const SEARCH_TOTAL_SCHEMAS = {
   [SEARCH_TOTAL_TYPE.EXACT]: countedSearchTotalSchema(SEARCH_TOTAL_TYPE.EXACT),
