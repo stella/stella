@@ -226,6 +226,9 @@ export type CheckResult = {
   maxRssBytes: number | undefined;
 };
 
+/** A failed check's detail when it printed no failed test or error line. */
+export const exitCodeDetail = (exitCode: number) => `exit code ${exitCode}`;
+
 const launchedOutcome = (
   launched: Launched,
   check: PoolCheck,
@@ -238,7 +241,7 @@ const launchedOutcome = (
   }
   return launched.exitCode === 0
     ? { outcome: "success", detail: "passed" }
-    : { outcome: "failure", detail: `exit code ${launched.exitCode}` };
+    : { outcome: "failure", detail: exitCodeDetail(launched.exitCode) };
 };
 
 type RunChecksOptions = {

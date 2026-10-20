@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Se han resuelto todas las afirmaciones que requerían una valoración.</strong> {count, plural, one {La # determinación rutinaria no requiere revisión individual.} other {Las # determinaciones rutinarias no requieren revisión individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# afirmación requiere} other {# afirmaciones requieren}} su valoración</strong>: conflictos e interpretaciones cuestionadas. {routineCount, plural, one {La otra # es rutinaria y no requiere aprobación individual.} other {Las otras # son rutinarias y no requieren aprobación individual.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, cuestionada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, impugnada} other {}})",
+      "documentView": {
+        "label": "Vista del documento",
+        "original": "Original",
+        "reading": "Vista de lectura"
+      },
+      "notLocated": "{count, plural, one {# afirmación no se ha localizado en el original} other {# afirmaciones no se han localizado en el original}}",
       "selectClaim": "Seleccione una afirmación para examinar el registro.",
       "showQueue": "Mostrar cola",
       "stats": {
@@ -1009,6 +1015,9 @@
       "saved": "{count, plural, one {# resolución guardada} other {# resoluciones guardadas}} en {matter}"
     },
     "newestDecisions": "Resoluciones más recientes",
+    "noResults": {
+      "hint": "Pruebe otras palabras, mejore la consulta con IA o haga la pregunta en el chat."
+    },
     "notesFilter": {
       "ai": "IA",
       "human": "Humanas"
@@ -1081,6 +1090,10 @@
         "medium": "Medio",
         "short": "Corto"
       }
+    },
+    "rewritten": {
+      "line": "No hay coincidencias exactas para <bdi>{original}</bdi>; se muestran resultados para <bdi>{query}</bdi>",
+      "searchOriginal": "Buscar mis palabras originales"
     },
     "sameCaseNumber": "{count, plural, one {# resolución lleva} other {# resoluciones llevan}} este número de asunto. Elija el tribunal.",
     "searchLabel": "Buscar jurisprudencia",
@@ -4240,6 +4253,10 @@
     "archivedEmpty": "No hay recuerdos archivados.",
     "archivedToast": "Recuerdo archivado",
     "createdToast": "Guardado en la memoria",
+    "deleteConfirmation": "Escriba {confirmation} para confirmar",
+    "deleteDescription": "Esto elimina este recuerdo de forma permanente. Esta acción no se puede deshacer.",
+    "deleteTitle": "¿Eliminar el recuerdo?",
+    "deletedToast": "Recuerdo eliminado",
     "empty": "Aún no hay nada en la memoria.",
     "kinds": {
       "decision": "Decisión",
