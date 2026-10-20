@@ -250,6 +250,19 @@ export const czUohsDocumentAst = ({
   };
 };
 
+/** The decision's document, or the empty placeholder when no file yielded text. */
+const decisionDocumentAst = (
+  canonical: (CzUohsPdf & { url: string }) | undefined,
+  identity: Omit<CzUohsDocumentInput, "paragraphs" | "documentUrl">,
+) =>
+  canonical === undefined
+    ? EMPTY_AST
+    : czUohsDocumentAst({
+        ...identity,
+        paragraphs: canonical.paragraphs,
+        documentUrl: canonical.url,
+      });
+
 /** One recorded decision PDF as the adapter reads it, for evidence checks. */
 export const parseCzUohsDocumentPdf = async (
   bytes: Uint8Array,
@@ -336,7 +349,8 @@ export const buildCzUohsDecision = async (
     url: string;
   }[] = [];
   let documentReadOutcome: StoredReadOutcome | undefined;
-  let canonical: CzUohsPdf | undefined;
+  // The document the decision text is read from, with the URL it came from.
+  let canonical: (CzUohsPdf & { url: string }) | undefined;
   for (const [index, document] of record.dokument.entries()) {
     const part = index === 0 ? "document" : `document-${index}`;
     const documentUrl = document.url;
@@ -405,7 +419,7 @@ export const buildCzUohsDecision = async (
     } else {
       // The first successfully parsed document in publisher order is the
       // canonical decision text; every document is still retained below.
-      canonical ??= extracted.value;
+      canonical ??= { ...extracted.value, url: documentUrl };
     }
   }
   const sourceRawObjects = Object.fromEntries(rawObjectEntries);
@@ -423,6 +437,9 @@ export const buildCzUohsDecision = async (
     }),
   });
   const fulltext = canonical?.text;
+  // A link to the document points at the file the text was read from; the
+  // first listed file only when none of them yielded text.
+  const decisionDocumentUrl = canonical?.url ?? primaryDocumentUrl;
   const identifiers = czUohsDecisionIdentifiers(record);
   // The date comes from the decision's own text; a text without a letterhead
   // date is a source that publishes none. An unread document says neither.
@@ -445,9 +462,9 @@ export const buildCzUohsDecision = async (
       ? { isListingOnly: true }
       : {}),
     sourceUrl: record.iri,
-    ...(primaryDocumentUrl === undefined
+    ...(decisionDocumentUrl === undefined
       ? {}
-      : { documentUrl: primaryDocumentUrl }),
+      : { documentUrl: decisionDocumentUrl }),
     textFields: absentDecisionTextFields(
       documentFailures.length === 0 && record.dokument.length === 0
         ? TEXT_ABSENCE_REASON.NOT_PUBLISHED
@@ -488,18 +505,13 @@ export const buildCzUohsDecision = async (
         : { sourceRawObjects }),
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS],
-    documentAst:
-      canonical === undefined
-        ? EMPTY_AST
-        : czUohsDocumentAst({
-            paragraphs: canonical.paragraphs,
-            caseNumber: identifiers[0].value,
-            court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
-            decisionDate,
-            decisionType: record.typ_rozhodnutí.at(0),
-            sourceUrl: record.iri,
-            documentUrl: primaryDocumentUrl,
-          }),
+    documentAst: decisionDocumentAst(canonical, {
+      caseNumber: identifiers[0].value,
+      court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
+      decisionDate,
+      decisionType: record.typ_rozhodnutí.at(0),
+      sourceUrl: record.iri,
+    }),
     sourceRaw,
     ...(Object.keys(sourceRawObjects).length === 0 ? {} : { sourceRawObjects }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
