@@ -63,13 +63,15 @@ test("refuses to run when a generated knip entry is missing", () => {
     repoRoot: "/fixture",
     fileExists: () => false,
     runners: { report: skippedMode, write: skippedMode, check: skippedMode },
-    reportError: (message) => messages.push(message),
+    reportError: (message) => {
+      messages.push(message);
+    },
   });
 
   expect(status).toBe(1);
   expect(modeRuns).toBe(0);
   expect(messages).toEqual([
-    `KnipGeneratedEntriesMissingError: ${error?.message}`,
+    `KnipGeneratedEntriesMissingError: ${error?.message ?? ""}`,
   ]);
 });
 
