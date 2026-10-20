@@ -157,7 +157,6 @@ import {
 } from "@/api/lib/auth/review-account-plugin";
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
-import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   createSessionLifetime,
   SESSION_LIFETIME_FIELDS,
@@ -1874,7 +1873,6 @@ export const createAuth = (
       sessionLifetime.plugin,
       createAgentUserPlugin(),
       createReviewAccountUserPlugin(reviewConfig),
-      createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
         enabled: rateLimitEnabled,
