@@ -70,6 +70,7 @@ void mock.module("node:https", () => ({
 const CONNECTOR_NAME = "mcp__admission_fixture__read";
 const SKILL_NAME = "skill__admission_fixture";
 const ENTITY_ID = "00000000-0000-4000-8000-000000000010";
+const INACCESSIBLE_ENTITY_ID = "00000000-0000-4000-8000-000000000011";
 const WORKSPACE_ID = toSafeId<"workspace">(
   "00000000-0000-4000-8000-000000000001",
 );
@@ -167,6 +168,19 @@ const safeDb: McpRequestContext["safeDb"] = async (callback) =>
   Result.ok(await callback(transaction));
 const scopedDb: McpRequestContext["scopedDb"] = async (callback) =>
   await callback(transaction);
+const inaccessibleResourceTransaction = asTestRaw<Transaction>({
+  select: () => {
+    const builder = {
+      from: () => builder,
+      where: () => builder,
+      limit: async () => [],
+    };
+    return builder;
+  },
+});
+const inaccessibleResourceScopedDb: McpRequestContext["scopedDb"] = async (
+  callback,
+) => await callback(inaccessibleResourceTransaction);
 const createOperationDatabaseScope: NonNullable<
   McpRequestContext["createOperationDatabaseScope"]
 > = () => ({
@@ -328,6 +342,39 @@ const runStaticTool = async ({
 };
 
 describe("gateway admission over HTTP", () => {
+  test("a static resource refusal happens before admission", async () => {
+    const observed = await runStaticTool({
+      args: { task_id: INACCESSIBLE_ENTITY_ID },
+      context: createContext({ scopedDb: inaccessibleResourceScopedDb }),
+      mode: "advanced",
+      toolName: "list_tasks",
+    });
+
+    expect(errorCodeOf(observed.result)).toBe("not_found");
+    expect(observed.admissions).toBe(0);
+  });
+
+  test("a missing static write confirmation happens before admission", async () => {
+    const observed = await runStaticTool({
+      args: { entity_id: ENTITY_ID },
+      mode: "documents",
+      toolName: "delete_document",
+    });
+
+    expect(errorCodeOf(observed.result)).toBe("confirmation_required");
+    expect(observed.admissions).toBe(0);
+  });
+
+  test("a confirmed static write admits once", async () => {
+    const observed = await runStaticTool({
+      args: { confirm: true, entity_id: ENTITY_ID },
+      mode: "documents",
+      toolName: "delete_document",
+    });
+
+    expect(observed.admissions).toBe(1);
+  });
+
   test("a static upload and its nested capability work admit once", async () => {
     let capabilityExecutions = 0;
     const observed = await runStaticTool({
