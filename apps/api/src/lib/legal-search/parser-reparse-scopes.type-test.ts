@@ -1,9 +1,10 @@
 import {
   PARSER_REPARSE_FEATURES,
   PARSER_VERSION_SCOPES,
+  type ParserReparseFeature,
   type ParserReparseScope,
   type ParserVersionScopes,
-} from "./ingestion-constants";
+} from "./parser-reparse-scopes";
 
 type DeclaredScopes = typeof PARSER_VERSION_SCOPES;
 type DeclaredFeatures = typeof PARSER_REPARSE_FEATURES;
@@ -29,7 +30,7 @@ const registeredFeatures = {
     stored: true,
     backfilled: false,
   },
-} as const;
+} as const satisfies Record<string, ParserReparseFeature>;
 
 export const validAllScope = {
   source: {

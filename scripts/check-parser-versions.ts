@@ -378,12 +378,6 @@ class StaticTree {
           `${start}${properties.replace(/(:\s*)\d+\b/gu, "$1<VERSION>")}${end}`,
       );
     }
-    // Replay declarations govern queue selection, not parser output. Ignore
-    // them when deciding which adapters need a parser version bump.
-    source = source.replace(
-      /\n\/\*\*\n \* Stored parser decisions[\s\S]*?(?=\n\/\*\*\n \* Capacity bound)/u,
-      "",
-    );
     return source;
   }
 
