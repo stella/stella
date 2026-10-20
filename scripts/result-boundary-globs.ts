@@ -32,6 +32,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
   "apps/visual-preview/src/**/*.ts",
+  "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/lib/auth/**/*.ts",
   "apps/api/src/handlers/account-exports/**/*.ts",

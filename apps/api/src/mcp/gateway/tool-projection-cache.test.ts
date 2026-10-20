@@ -169,7 +169,7 @@ describe("tools/list projection cache", () => {
   test("any sequence of hidden sets is served exactly as a cold process would serve it", () => {
     const descriptor = fc.constantFrom(...REGISTERED_MCP_TOOL_NAMES);
     assertProperty(
-      "tools/list projection cache equals the uncached projection",
+      "any sequence of hidden sets is served exactly as a cold process would serve it",
       fc.property(
         fc.array(fc.uniqueArray(descriptor, { maxLength: 6 }), {
           minLength: 1,
