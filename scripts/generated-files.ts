@@ -116,6 +116,26 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "ci-job-classification",
+    outputKind: "committed",
+    outputs: [".github/ci-job-classification.json"],
+    // The reachable workflow and local action tree, the reviewed decisions and
+    // the pinned callee snapshots; a callee pin change needs its snapshot
+    // refreshed first, which `--write` refuses to guess.
+    inputs: [
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/ci-job-classification-decisions.json",
+      ".github/ci-job-classification-sources.json",
+      "scripts/check-ci-job-classification.ts",
+      "scripts/ci-job-classification/**",
+    ],
+    write: ["bun", "scripts/check-ci-job-classification.ts", "--write"],
+    check: ["bun", "scripts/check-ci-job-classification.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "case-law-publication-migration",
     outputKind: "committed",
     outputs: [

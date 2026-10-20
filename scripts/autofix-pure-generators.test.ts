@@ -39,6 +39,9 @@ const PURE_AUTOFIX = {
   // Parsers and AST repairs are pure (no clock, network or database on the
   // re-parse path); it fails rather than re-stamping an analysis.
   "case-law-fixture-reparse": "apps/api/scripts/reparse-case-law-fixtures.ts",
+  // `--write` parses committed workflows and actions and reads callees only
+  // from the committed snapshots; only the check verifies pinned metadata.
+  "ci-job-classification": "scripts/check-ci-job-classification.ts",
 } as const;
 
 const generator = (id: string) => {
