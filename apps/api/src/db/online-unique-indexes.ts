@@ -8,34 +8,39 @@ import {
 } from "../lib/db/migration-history";
 import type { OnlineIndexDeclaration } from "./online-ddl";
 
-const CONTACTS_ORG_ID_UNIQUE = "contacts_org_id_unique";
-const SESSION_PRIOR_TOKEN_HASH_IDX = "session_priorTokenHash_idx";
-const INVOICES_ID_WORKSPACE_UNIQUE = "invoices_id_workspace_unique";
-const LEGAL_LISTS_SAMPLE_WORKSPACE_UIDX = "legal_lists_sample_workspace_uidx";
-const ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX = "account_provider_account_id_uidx";
-const WORKSPACES_ID_ORG_UNQ = "workspaces_id_org_unq";
-const ENTITY_VERSIONS_ID_ENTITY_WS_UIDX = "entity_versions_id_entity_ws_uidx";
-const ENTITY_VERSIONS_ENTITY_NUMBER_UIDX = "entity_versions_entity_number_uidx";
-const CHAT_MESSAGES_ID_THREAD_UIDX = "chat_messages_id_thread_uidx";
-const TIME_ENTRIES_ONE_ACTIVE_TIMER_PER_USER_IDX =
+export const CONTACTS_ORG_ID_UNIQUE = "contacts_org_id_unique";
+export const SESSION_PRIOR_TOKEN_HASH_IDX = "session_priorTokenHash_idx";
+export const INVOICES_ID_WORKSPACE_UNIQUE = "invoices_id_workspace_unique";
+export const LEGAL_LISTS_SAMPLE_WORKSPACE_UIDX =
+  "legal_lists_sample_workspace_uidx";
+export const ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX =
+  "account_provider_account_id_uidx";
+export const WORKSPACES_ID_ORG_UNQ = "workspaces_id_org_unq";
+export const ENTITY_VERSIONS_ID_ENTITY_WS_UIDX =
+  "entity_versions_id_entity_ws_uidx";
+export const ENTITY_VERSIONS_ENTITY_NUMBER_UIDX =
+  "entity_versions_entity_number_uidx";
+export const CHAT_MESSAGES_ID_THREAD_UIDX = "chat_messages_id_thread_uidx";
+export const TIME_ENTRIES_ONE_ACTIVE_TIMER_PER_USER_IDX =
   "time_entries_one_active_timer_per_user_idx";
-const TIME_TIMERS_LEGACY_ENTRY_UIDX = "time_timers_legacy_entry_uidx";
+export const TIME_TIMERS_LEGACY_ENTRY_UIDX = "time_timers_legacy_entry_uidx";
 export const PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX =
   "playbook_definitions_org_starter_id_uidx";
-const TEMPLATES_ORG_PACK_TEMPLATE_UIDX = "templates_org_pack_template_uidx";
-const WORKSPACE_VIEWS_CORRESPONDENCE_UIDX =
+export const TEMPLATES_ORG_PACK_TEMPLATE_UIDX =
+  "templates_org_pack_template_uidx";
+export const WORKSPACE_VIEWS_CORRESPONDENCE_UIDX =
   "workspace_views_correspondence_uidx";
 export const CHAT_TURNS_ORG_RUN_ID_UIDX = "chat_turns_org_run_id_uidx";
-const LEGAL_READER_ANSWER_MESSAGES_ANSWER_SEQUENCE_IDX =
+export const LEGAL_READER_ANSWER_MESSAGES_ANSWER_SEQUENCE_IDX =
   "legal_reader_answer_messages_answer_sequence_idx";
 export const CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX =
   "case_law_ingestion_failures_source_record_uidx";
-const CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX =
+export const CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX =
   "correspondence_ws_source_entity_uidx";
 export const CASE_LAW_DECISIONS_SLUG_UIDX = "case_law_decisions_slug_uidx";
 export const ACCOUNT_CREDENTIAL_SINGLETON_UIDX =
   "account_credential_singleton_uidx";
-const PROPERTIES_WS_DOCUMENT_TYPE_CLASSIFIER_UNQ =
+export const PROPERTIES_WS_DOCUMENT_TYPE_CLASSIFIER_UNQ =
   "properties_ws_document_type_classifier_unq";
 export const USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX =
   "usage_events_org_idempotency_key_uidx";

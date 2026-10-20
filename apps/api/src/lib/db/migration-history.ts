@@ -4,7 +4,7 @@ import nodePath from "node:path";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import migrationAliasInventory from "./migration-alias-inventory.json";
+import migrationAliasInventory from "./migration-alias-inventory.json" with { type: "json" };
 
 // Migrations intentionally rewritten after they shipped in a release. A
 // database that applied the earlier version recorded its hash, and the

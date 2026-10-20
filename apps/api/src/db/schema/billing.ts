@@ -18,6 +18,11 @@ import { VAT_TREATMENTS } from "@stll/invoicing";
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+import {
+  INVOICES_ID_WORKSPACE_UNIQUE,
+  TIME_ENTRIES_ONE_ACTIVE_TIMER_PER_USER_IDX,
+  TIME_TIMERS_LEGACY_ENTRY_UIDX,
+} from "@/api/db/online-unique-indexes";
 import { timeEntryPolicies } from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -51,7 +56,7 @@ import { workspaces } from "./contacts";
 import { entities } from "./entities";
 
 export const ACTIVE_TIMER_INDEX_NAME =
-  "time_entries_one_active_timer_per_user_idx";
+  TIME_ENTRIES_ONE_ACTIVE_TIMER_PER_USER_IDX;
 
 const DAILY_TARGET_ADMIN_ROLES = ORGANIZATION_MANAGEMENT_ROLES.map((role) =>
   sql.raw(`'${role}'`),
@@ -418,7 +423,7 @@ export const timeTimers = p.pgTable(
     p.index("time_timers_workspace_idx").on(table.workspaceId),
     p.index("time_timers_legacy_entry_idx").on(table.legacyTimeEntryId),
     p
-      .uniqueIndex("time_timers_legacy_entry_uidx")
+      .uniqueIndex(TIME_TIMERS_LEGACY_ENTRY_UIDX)
       .on(table.legacyTimeEntryId)
       .where(sql`${table.legacyTimeEntryId} IS NOT NULL`),
     p.check(
@@ -1016,7 +1021,7 @@ export const invoices = p.pgTable(
         name: "invoices_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    p.unique("invoices_id_workspace_unique").on(table.id, table.workspaceId),
+    p.unique(INVOICES_ID_WORKSPACE_UNIQUE).on(table.id, table.workspaceId),
     p.foreignKey({
       columns: [table.originalInvoiceId, table.workspaceId],
       foreignColumns: [table.id, table.workspaceId],

@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import { timestamptz } from "@/api/db/columns";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+import { LEGAL_LISTS_SAMPLE_WORKSPACE_UIDX } from "@/api/db/online-unique-indexes";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 
 import {
@@ -172,7 +173,7 @@ export const legalLists = p.pgTable(
   (table) => [
     p.unique("legal_lists_id_ws_unq").on(table.id, table.workspaceId),
     p
-      .uniqueIndex("legal_lists_sample_workspace_uidx")
+      .uniqueIndex(LEGAL_LISTS_SAMPLE_WORKSPACE_UIDX)
       .on(table.workspaceId)
       .where(sql`${table.sampleCase} IS NOT NULL`),
     p.check(
