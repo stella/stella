@@ -50,6 +50,7 @@ import type {
   TemperaturePolicy,
 } from "@stll/ai-catalog";
 
+import { assertOfflineCheckPreload } from "../../../scripts/offline-check-startup";
 import {
   parseOpenRouterReasoningDefaults,
   parseUpstreamCapabilities,
@@ -518,5 +519,7 @@ const main = async (): Promise<void> => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   await main();
 }

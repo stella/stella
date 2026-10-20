@@ -4,6 +4,8 @@ import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { assertOfflineCheckPreload } from "./offline-check-startup";
+
 const DEFAULT_MANIFEST_PATH = path.join(
   import.meta.dir,
   "../apps/landing/src/data/changelog-release-dates.json",
@@ -209,5 +211,7 @@ const run = async () => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   await run();
 }

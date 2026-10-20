@@ -9,6 +9,7 @@ import {
   type SkillPackageFile,
 } from "@stll/skills/format";
 
+import { assertOfflineCheckPreload } from "../../../scripts/offline-check-startup";
 import { catalogueLicensesMatch, type CatalogueLicense } from "../src/schema";
 import {
   PinnedContentError,
@@ -209,6 +210,8 @@ export const validatePinnedSource = async (
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   const refresh = Bun.argv.includes("--refresh");
   const result = await Result.tryPromise({
     try: async () => {

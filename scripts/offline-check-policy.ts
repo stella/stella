@@ -206,6 +206,39 @@ export const offlineCheckViolations = (
   return violations;
 };
 
+export const offlineCheckStartupViolations = (
+  entries: readonly string[],
+): string[] => {
+  const violations: string[] = [];
+  for (const entry of new Set(entries)) {
+    const source = readFileSync(entry, "utf-8");
+    if (
+      !source.includes("offline-check-startup") ||
+      !source.includes("assertOfflineCheckPreload();")
+    ) {
+      violations.push(
+        `Offline check entry must assert the preload at startup: ${repoRelativePath(root, entry)}`,
+      );
+    }
+  }
+  return violations;
+};
+
+export const bunfigRuntimePreloadViolations = (
+  bunfigs: ReadonlyMap<string, string>,
+): string[] => {
+  const violations: string[] = [];
+  for (const [file, source] of bunfigs) {
+    const parsed: unknown = Bun.TOML.parse(source);
+    if (isRecord(parsed) && "preload" in parsed) {
+      violations.push(
+        `Tracked bunfig must not declare a top-level runtime preload: ${file}`,
+      );
+    }
+  }
+  return violations;
+};
+
 const importCapability = (file: string, capability: string) =>
   `${file}:${capability}`;
 
@@ -529,6 +562,31 @@ if (import.meta.main) {
     ),
   );
   const violations = offlineCheckViolations(checks, exceptions);
+  violations.push(
+    ...offlineCheckStartupViolations(
+      checks.flatMap((check) => (check.protected ? [check.entry] : [])),
+    ),
+  );
+  const trackedBunfigs = Bun.spawnSync(
+    ["git", "ls-files", "-z", "*bunfig.toml"],
+    { cwd: root },
+  );
+  if (trackedBunfigs.exitCode !== 0) {
+    throw new OfflineCheckPolicyError({
+      message: "Cannot enumerate tracked bunfig.toml files",
+    });
+  }
+  violations.push(
+    ...bunfigRuntimePreloadViolations(
+      new Map(
+        trackedBunfigs.stdout
+          .toString()
+          .split("\0")
+          .filter(Boolean)
+          .map((file) => [file, readFileSync(path.join(root, file), "utf-8")]),
+      ),
+    ),
+  );
   violations.push(
     ...offlineImportGraphViolations({
       entries: checks.flatMap((check) =>
