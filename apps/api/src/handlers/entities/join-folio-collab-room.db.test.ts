@@ -83,6 +83,7 @@ import type {
   TestDatabaseTransaction,
 } from "@/api/tests/security/test-utils";
 
+import { createCheckpointFolioCollabRoom } from "./checkpoint-folio-collab-room";
 import joinFolioCollabRoom, {
   createJoinFolioCollabRoom,
   decideFolioCollabSeedClaim,
@@ -356,11 +357,90 @@ test("a dedicated principal joins only while its dedicated session is live", asy
       Number(new URL(joined.seedDownloadUrl).searchParams.get("X-Amz-Expires")),
     ).toBeLessThanOrEqual(60);
 
-    await testDb
-      .delete(folioCollabRooms)
-      .where(eq(folioCollabRooms.workspaceId, workspaceId));
+    const authorization = await authorizeFolioCollabRoom({
+      readSessionAuthority: async (options) =>
+        await readSyntheticSessionAuthority(testDb, options),
+      roomId: joined.roomId,
+      token: joined.token,
+      db: asTestRaw(testDb),
+      createScopedDb: asTestRaw(() => scopedDb),
+    });
+    if (authorization.status !== "authorized") {
+      throw new Error("Dedicated room token was not authorized");
+    }
+    const seeded = new yjs.Doc();
+    createHiddenEditorState({
+      document: await parseDocx(sourceBytes),
+      collaboration: {
+        shouldSeed: true,
+        yXmlFragment: seeded.getXmlFragment("prosemirror"),
+      },
+      collaborationModules: { yjs, yProseMirror },
+    });
+    const snapshot = yjs.encodeStateAsUpdate(seeded);
+    seeded.destroy();
+    expect(
+      (
+        await acknowledgeFolioCollabSeed({
+          value: authorization.value,
+          snapshotSha256Hex: legacyHex(snapshot),
+        })
+      ).unwrap(),
+    ).toEqual({ status: "acknowledged" });
+    expect(
+      (
+        await storeFolioCollabSnapshot({
+          authority: { type: "participant", userId },
+          expectedGeneration: joined.generation,
+          expectedSnapshotRevision: 0,
+          snapshotBytes: snapshot,
+          value: authorization.value,
+        })
+      ).unwrap(),
+    ).toMatchObject({ status: "stored", snapshotRevision: 1 });
+    const checkpoint = async () => {
+      const authority = await readSyntheticSessionAuthority(testDb, {
+        sessionId: sourceSession.id,
+        userId,
+      });
+      const checkpointHandler = createCheckpointFolioCollabRoom(
+        async () => authority,
+      );
+      return await checkpointHandler.handler(
+        asTestRaw<Parameters<typeof checkpointHandler.handler>[0]>({
+          body: {
+            expectedGeneration: joined.generation,
+            expectedSnapshotRevision: 1,
+            roomId: joined.roomId,
+          },
+          safeDb: safeDbFromScoped(scopedDb),
+          session: {
+            id: sourceSession.id,
+            activeOrganizationId: organizationId,
+          },
+          user: { id: userId, email: SYNTHETIC_PRINCIPAL.user.email },
+          workspaceId,
+          memberRole: sessionMemberRole("owner"),
+          request: new Request("https://example.test/checkpoint"),
+          route:
+            "/v1/workspaces/:workspaceId/entities/checkpoint-folio-collab-room",
+          recordAuditEvent: noAudit,
+          createAuditRecorder: () => noAudit,
+        }),
+      );
+    };
+    const checkpointed = await checkpoint();
+    if (!("downloadUrl" in checkpointed)) {
+      throw new Error("Dedicated principal did not checkpoint the room");
+    }
+    expect(
+      Number(
+        new URL(checkpointed.downloadUrl).searchParams.get("X-Amz-Expires"),
+      ),
+    ).toBeLessThanOrEqual(60);
+
     await store.revokeSyntheticSessions();
-    const refused = await join();
+    const refused = await checkpoint();
     expect(refused).toMatchObject({
       code: 403,
       response: { code: "account_access_unavailable" },

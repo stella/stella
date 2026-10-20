@@ -29,6 +29,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import { createReviewAccountPlugin } from "@/api/lib/auth/review-account-plugin";
+import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   createSessionLifetime,
   SESSION_LIFETIME_FIELDS,
@@ -291,7 +292,10 @@ const setup = async () => {
         config: syntheticPrincipalAuthConfig,
         checkAccess: checkSyntheticPrincipalAccess,
         localPasswordEnabled: true,
+        authorizeSession: async (current) =>
+          await authorizeSyntheticSession(asTestRaw(testDb), current),
       }),
+      createSessionBearer(),
       organization(),
       apiKey(),
       oauthProvider({
@@ -347,6 +351,18 @@ const setup = async () => {
       });
       expect(resolved).toBeNull();
     },
+    cookie: async () => {
+      const resolved = await auth.api.getSession({
+        headers: { cookie: tokenCookie },
+      });
+      expect(resolved).toBeNull();
+    },
+    bearer: async () => {
+      const resolved = await auth.api.getSession({
+        headers: { authorization: `Bearer ${minted.cookieValue}` },
+      });
+      expect(resolved).toBeNull();
+    },
     oauth: async () => {
       expect([401, 403]).toContain(
         (await authPost("/oauth2/consent", { accept: true })).status,
@@ -378,6 +394,8 @@ const setup = async () => {
       keyof typeof USER_SESSION_CREDENTIAL_ISSUERS,
       | "session"
       | "cookieCache"
+      | "cookie"
+      | "bearer"
       | "collabRoom"
       | "signedDownload"
       | "oauth"
@@ -407,10 +425,8 @@ for (const transition of ["revoked", "expired", "disabled"] as const) {
         .set({ status: "revoked" })
         .where(eq(syntheticSessionControl.id, SYNTHETIC_SESSION_CONTROL_ID));
     }
-    for (const [name, probe] of Object.entries(probes)) {
-      if (name !== "cookieCache" || transition !== "disabled") {
-        await probe();
-      }
+    for (const probe of Object.values(probes)) {
+      await probe();
     }
     for (const probe of Object.values(refusedCredentialIssuerProbes)) {
       await probe(syntheticCredentialPrincipal);

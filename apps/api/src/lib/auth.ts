@@ -287,7 +287,10 @@ import {
   checkSyntheticPrincipalAccess,
   syntheticPrincipalAuthConfig,
 } from "@/api/lib/synthetic-principal/policy";
-import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
+import {
+  authorizeSyntheticSession,
+  readSyntheticSessionAuthority,
+} from "@/api/lib/synthetic-principal/session-authority";
 import { includes, isRecord } from "@/api/lib/type-guards";
 import {
   checkMemberAdmission,
@@ -1917,6 +1920,8 @@ export const createAuth = (
         config: syntheticPrincipalAuthConfig,
         localPasswordEnabled: true,
         checkAccess: checkSyntheticPrincipalAccess,
+        authorizeSession: async (session) =>
+          await authorizeSyntheticSession(rootDb, session),
       }),
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),

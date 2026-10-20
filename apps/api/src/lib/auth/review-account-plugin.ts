@@ -55,6 +55,10 @@ type ReviewAccountPluginOptions = {
   localPasswordEnabled: boolean;
   /** Per-account failure budget; absent when auth rate limits are off. */
   signInBudget?: SignInBudget | undefined;
+  authorizeSession?: (session: {
+    id: string;
+    userId: string;
+  }) => Promise<boolean>;
 };
 
 export const requireReviewAccountAccess = (
@@ -343,6 +347,7 @@ const createAccountTokenRedemptionHook = ({
   });
 
 export const createReviewAccountPlugin = ({
+  authorizeSession,
   config,
   checkAccess = checkReviewAccountAccess,
   id = "restricted-review-account",
@@ -537,7 +542,14 @@ export const createReviewAccountPlugin = ({
               operation: REVIEW_ACCOUNT_OPERATION.session,
               organizationId: resolved.session["activeOrganizationId"],
             });
-            if (Result.isOk(access)) {
+            if (
+              Result.isOk(access) &&
+              (!authorizeSession ||
+                (await authorizeSession({
+                  id: resolved.session.id,
+                  userId: resolved.session.userId,
+                })))
+            ) {
               return undefined;
             }
             ctx.context.session = null;
