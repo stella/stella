@@ -194,6 +194,20 @@ export const REFERENCE_ALLOWLIST = [
   {
     format: "ooxml",
     element:
+      "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}docVar",
+    attribute:
+      "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val",
+    reason: "document variable value; stored data, never loaded",
+  },
+  {
+    format: "ooxml",
+    element: "{http://purl.oclc.org/ooxml/wordprocessingml/main}docVar",
+    attribute: "{http://purl.oclc.org/ooxml/wordprocessingml/main}val",
+    reason: "document variable value; stored data, never loaded",
+  },
+  {
+    format: "ooxml",
+    element:
       "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}hyperlink",
     attribute:
       "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id",

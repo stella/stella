@@ -486,6 +486,17 @@ describe("document conversion input", () => {
             '<xs:import xmlns:xs="http://www.w3.org/2001/XMLSchema" namespace="https://example.test/schema"/>',
           ),
       ),
+      ...namespaceVariants.map(({ word }) =>
+        makeConversionCase(
+          `ooxml|{${word}}docVar|{${word}}val`,
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          async () =>
+            zip(
+              "word/settings.xml",
+              `<w:docVars xmlns:w="${word}"><w:docVar w:name="source" w:val="https://example.test/page"/></w:docVars>`,
+            ),
+        ),
+      ),
       ...namespaceVariants.map(({ word, officeRelationships }) =>
         makeConversionCase(
           `ooxml|{${word}}hyperlink|{${officeRelationships}}id`,
