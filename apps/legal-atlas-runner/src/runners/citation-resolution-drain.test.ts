@@ -64,19 +64,37 @@ const DRAINED: CitationResolutionStep = {
 };
 const BUSY: CitationResolutionStep = { type: CITATION_RESOLUTION_STEP.BUSY };
 
-test("an abort between citation items returns committed progress", async () => {
-  const controller = new AbortController();
-  let calls = 0;
+test("a citation batch without a signal stays one database batch", async () => {
+  const limits: number[] = [];
   const outcome = await tryResolveCitationBatch({
-    limit: 3,
-    signal: controller.signal,
-    resolveBatch: async () => {
-      calls += 1;
-      if (calls === 1) {
-        controller.abort();
-      }
+    limit: 100,
+    resolveBatch: async (limit) => {
+      limits.push(limit);
       return {
-        ...counts({ scanned: 1, resolved: 1 }),
+        ...counts({ scanned: limit, resolved: limit }),
+        cursor: { citingDecisionId: "decision", citationId: "citation" },
+      };
+    },
+  });
+
+  expect(outcome).toEqual({
+    type: "settled",
+    counts: counts({ scanned: 100, resolved: 100 }),
+  });
+  expect(limits).toEqual([100]);
+});
+
+test("an abort between citation chunks returns committed progress", async () => {
+  const controller = new AbortController();
+  const limits: number[] = [];
+  const outcome = await tryResolveCitationBatch({
+    limit: 100,
+    signal: controller.signal,
+    resolveBatch: async (limit) => {
+      limits.push(limit);
+      controller.abort();
+      return {
+        ...counts({ scanned: limit, resolved: limit }),
         cursor: { citingDecisionId: "decision", citationId: "citation" },
       };
     },
@@ -84,9 +102,9 @@ test("an abort between citation items returns committed progress", async () => {
 
   expect(outcome).toEqual({
     type: "aborted",
-    counts: counts({ scanned: 1, resolved: 1 }),
+    counts: counts({ scanned: 25, resolved: 25 }),
   });
-  expect(calls).toBe(1);
+  expect(limits).toEqual([25]);
 });
 
 type DrainEvent =

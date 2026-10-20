@@ -73,19 +73,36 @@ const addCitationCounts = (
   }
 };
 
-/** Resolve independently committed items so cancellation preserves progress. */
+/** Bounds work committed after cancellation to at most one chunk. */
+const CITATION_ABORT_CHUNK = 25;
+
+/** Resolve independently committed chunks so cancellation preserves progress. */
 export const tryResolveCitationBatch = async ({
   limit,
   resolveBatch,
   signal,
 }: TryResolveCitationBatchOptions): Promise<CitationBatchOutcome> => {
+  if (signal === undefined) {
+    const batch = await resolveBatch(limit);
+    if (batch === null) {
+      return { type: "busy" };
+    }
+    const counts = emptyCitationCounts();
+    addCitationCounts(counts, batch);
+    return { type: "settled", counts };
+  }
+
   const counts = emptyCitationCounts();
 
-  for (let index = 0; index < limit; index += 1) {
-    if (signal?.aborted === true) {
+  for (
+    let remaining = limit;
+    remaining > 0;
+    remaining -= CITATION_ABORT_CHUNK
+  ) {
+    if (signal.aborted) {
       return { type: "aborted", counts };
     }
-    const batch = await resolveBatch(1);
+    const batch = await resolveBatch(Math.min(remaining, CITATION_ABORT_CHUNK));
     if (batch === null) {
       return counts.scanned === 0
         ? { type: "busy" }
