@@ -1066,10 +1066,12 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   ) {
     return {
       ...step,
-      run: fields.run.replace(
-        "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
-        "bun test scripts/release-version-dispatch.test.ts\n",
-      ),
+      run: fields.run
+        .replace(
+          "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
+          "bun test scripts/release-version-dispatch.test.ts\n",
+        )
+        .replace("bash scripts/release-pending.test.sh\n", ""),
     };
   }
   if (

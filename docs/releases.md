@@ -242,11 +242,6 @@ Package versions come from `.changeset/*.md`, and two flows apply them:
   `chore: release v` and whose head branch lives in this repository, since that
   release applies the same entries; `workflow_dispatch` runs it anyway.
 
-Recognized release pull requests may change only versioning outputs: versions,
-changelogs, consumed changesets and release dates. Generated lockfile and CLI
-version changes pass only the guard's narrow checks. Other content fails release
-pull request recognition and CI.
-
 Both run the repository's `changeset:version` script, so neither can produce a
 different bump than the other.
 

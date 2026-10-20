@@ -7417,9 +7417,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           sparse-checkout: |
             scripts/check-main-merge-hold.sh
-            scripts/gh-retry.sh
             scripts/release-pull-requests.sh
-            scripts/check-release-pr-content.py
           sparse-checkout-cone-mode: false
 
       - name: Main merge hold
