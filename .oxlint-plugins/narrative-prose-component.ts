@@ -75,7 +75,7 @@ const isTaskShaped = (node: unknown): boolean => {
       const name = elementName(current);
       if (
         name !== null &&
-        (TASK_ANCESTORS.has(name) || /Editor$/u.test(name))
+        (TASK_ANCESTORS.has(name) || name.endsWith("Editor"))
       ) {
         return true;
       }
