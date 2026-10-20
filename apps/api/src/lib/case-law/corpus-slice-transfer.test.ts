@@ -160,10 +160,16 @@ test("all paged export reads share one repeatable-read snapshot", async () => {
     batchSize: 1,
   });
 
+  // Without the snapshot, the second decision page would no longer see the
+  // later decision that was deleted after the first page.
   const generation = manifestKey.replace(/\/manifest\.json$/u, "");
   expect(
-    new TextDecoder().decode(objects.get(`${generation}/citations.ndjson`)),
+    new TextDecoder().decode(objects.get(`${generation}/decisions.ndjson`)),
   ).toContain(laterId);
+  const published: unknown = JSON.parse(
+    new TextDecoder().decode(objects.get(manifestKey)),
+  );
+  expect(published).toMatchObject({ corpus: { memberCount: 2 } });
 });
 
 test("a failed export to a reused prefix leaves the earlier export intact", async () => {

@@ -1796,7 +1796,10 @@ export const putCorpusS3ObjectWithSignal = async ({
   );
 };
 
-/** Stream one object into the legal-corpus bucket, one flushed part per write. */
+/**
+ * Stream one object into the legal-corpus bucket. The client buffers writes
+ * into multipart parts of its own size; `close` uploads the remainder.
+ */
 export const openCorpusS3Writer = async ({
   key,
   mimeType,
@@ -1812,7 +1815,6 @@ export const openCorpusS3Writer = async ({
   return {
     write: async (bytes) => {
       await writer.write(bytes);
-      await writer.flush();
     },
     close: async () => {
       await writer.end();
