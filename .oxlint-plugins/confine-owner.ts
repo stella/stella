@@ -565,49 +565,67 @@ const stableValue = (
     : stableValue(context, stableInitializer(variable), seen);
 };
 
-const objectProperty = (
+type PropertyLookup =
+  | { kind: "absent" }
+  | { kind: "unknown" }
+  | { kind: "value"; node: AstNode };
+
+// Absent and unknown stay distinct through nested spreads: an unresolved
+// spread may override what came before it, an absent property cannot.
+const lookupObjectProperty = (
   context: ScopeContext,
   node: unknown,
   name: string,
-): AstNode | null => {
+): PropertyLookup => {
   if (
     !isAstNode(node) ||
     node.type !== "ObjectExpression" ||
     !Array.isArray(node.properties)
   ) {
-    return null;
+    return { kind: "unknown" };
   }
-  let result: AstNode | null = null;
+  let result: PropertyLookup = { kind: "absent" };
   for (const property of node.properties) {
     if (!isAstNode(property)) {
-      return null;
+      return { kind: "unknown" };
     }
     if (property.type === "SpreadElement") {
       const spreadValue = stableValue(context, property.argument);
       if (spreadValue === null) {
-        result = null;
+        result = { kind: "unknown" };
         continue;
       }
-      const inherited = objectProperty(context, spreadValue, name);
-      if (inherited !== null) {
+      const inherited = lookupObjectProperty(context, spreadValue, name);
+      if (inherited.kind !== "absent") {
         result = inherited;
       }
       continue;
     }
     if (property.type !== "Property") {
-      return null;
+      return { kind: "unknown" };
     }
     const key = property.computed
       ? staticStringValue(property.key)
       : getPropertyName(property.key);
     if (key === null) {
-      return null;
+      return { kind: "unknown" };
     }
     if (key === name) {
-      result = isAstNode(property.value) ? property.value : null;
+      result = isAstNode(property.value)
+        ? { kind: "value", node: property.value }
+        : { kind: "unknown" };
     }
   }
   return result;
+};
+
+const objectProperty = (
+  context: ScopeContext,
+  node: unknown,
+  name: string,
+): AstNode | null => {
+  const found = lookupObjectProperty(context, node, name);
+  return found.kind === "value" ? found.node : null;
 };
 
 const relationSelectsOwnedColumns = ({
