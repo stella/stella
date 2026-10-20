@@ -147,7 +147,7 @@ test("all paged export reads share one repeatable-read snapshot", async () => {
               return [];
             }
             transactionStatements.push(query);
-            if (query.includes("FROM case_law_decisions t")) {
+            if (query.includes("FROM case_law_published_decisions t")) {
               const row = decisionRows
                 .filter(({ id }) => snapshotIds.has(id))
                 .at(decisionPage);

@@ -127,7 +127,7 @@ const executeCorpusSliceExport = async ({
     const cursor = lastId === null ? "" : ` AND t.id > ${sqlString(lastId)}`;
     const page = parseRows(
       await database.execute<{ row: string }>(
-        `SELECT row_to_json(t)::text AS row FROM case_law_decisions t WHERE ${decisionPredicate}${cursor} ORDER BY t.id LIMIT ${batchSize}`,
+        `SELECT row_to_json(t)::text AS row FROM case_law_published_decisions t WHERE ${decisionPredicate}${cursor} ORDER BY t.id LIMIT ${batchSize}`,
       ),
     );
     if (page.length === 0) {
@@ -144,7 +144,7 @@ const executeCorpusSliceExport = async ({
       readRows(
         database,
         "citations",
-        `t.citing_decision_id = ANY(${sqlUuidArray(ids)}) AND t.cited_decision_id IN (SELECT d.id FROM case_law_decisions d WHERE ${slicePredicate(asOf, "d")})`,
+        `t.citing_decision_id = ANY(${sqlUuidArray(ids)}) AND t.cited_decision_id IN (SELECT d.id FROM case_law_published_decisions d WHERE ${slicePredicate(asOf, "d")})`,
         "t.citing_decision_id, t.id",
       ),
     ]);

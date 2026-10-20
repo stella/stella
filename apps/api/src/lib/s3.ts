@@ -1796,29 +1796,25 @@ export const putCorpusS3ObjectWithSignal = async ({
   );
 };
 
+/** Stream one object into the legal-corpus bucket, one flushed part per write. */
 export const openCorpusS3Writer = async ({
   key,
   mimeType,
-  signal,
 }: {
   key: string;
   mimeType: string;
-  signal: AbortSignal;
 }): Promise<{
   write: (bytes: Uint8Array) => Promise<void>;
   close: () => Promise<void>;
 }> => {
-  signal.throwIfAborted();
   await refreshStaleCorpusS3();
   const writer = getCorpusS3().file(key).writer({ type: mimeType });
   return {
     write: async (bytes) => {
-      signal.throwIfAborted();
       await writer.write(bytes);
       await writer.flush();
     },
     close: async () => {
-      signal.throwIfAborted();
       await writer.end();
     },
   };

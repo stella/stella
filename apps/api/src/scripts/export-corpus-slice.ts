@@ -36,11 +36,7 @@ await runScriptWithErrorOutput(async () => {
           signal: AbortSignal.timeout(300_000),
         }),
       openWriter: async (key, contentType) =>
-        await openCorpusS3Writer({
-          key,
-          mimeType: contentType,
-          signal: AbortSignal.timeout(300_000),
-        }),
+        await openCorpusS3Writer({ key, mimeType: contentType }),
     },
   });
 });
