@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   createPolitePublisherFetch,
@@ -1300,6 +1301,24 @@ describe("publisher scheduler", () => {
     expect(Result.isError(outcome) && outcome.error._tag).toBe(
       "publisher_request_aborted",
     );
+  });
+
+  test("a resource transport failure rejects with the original error", async () => {
+    const transportError = new TypeError("fetch failed");
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        if (input.url.pathname === "/robots.txt") {
+          return new Response(null, { status: 404 });
+        }
+        throw transportError;
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    expect(
+      await rejectionOf(request("https://publisher.example/resource")),
+    ).toBe(transportError);
   });
 
   test("a redirect body whose cancel never settles still ends at the caller deadline", async () => {

@@ -1031,6 +1031,9 @@ const walkPublisherRedirects = async <Target extends PublisherTarget>(
       ),
     );
     if (Result.isError(fetched)) {
+      if (!signal?.aborted) {
+        return await Promise.reject(fetched.error.cause);
+      }
       return Result.err(
         new PublisherRequestAbortedError({
           message: "Publisher request was aborted while fetching the resource",
