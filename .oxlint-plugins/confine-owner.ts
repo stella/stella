@@ -739,39 +739,58 @@ const nestedRelationSelectsOwnedColumns = ({
   };
   // Every `with` that may take effect counts: an unresolved later spread does
   // not prove an earlier owned selection was overridden.
-  return withCandidates(context, options).some(relationsSelectOwnedColumns);
+  const found = withCandidates(context, options);
+  return found.unknown || found.candidates.some(relationsSelectOwnedColumns);
 };
 
+// An unresolved spread or computed key may set `with` to anything, so it is
+// unknown and the read fails closed.
 const withCandidates = (
   context: ScopeContext,
   options: unknown,
   seen = new Set<unknown>(),
-): AstNode[] => {
+): { candidates: AstNode[]; unknown: boolean } => {
   if (
     !isAstNode(options) ||
     options.type !== "ObjectExpression" ||
     !Array.isArray(options.properties) ||
     seen.has(options)
   ) {
-    return [];
+    return { candidates: [], unknown: false };
   }
   seen.add(options);
-  return options.properties.flatMap((property): AstNode[] => {
+  const candidates: AstNode[] = [];
+  let unknown = false;
+  for (const property of options.properties) {
     if (!isAstNode(property)) {
-      return [];
+      unknown = true;
+      continue;
     }
     if (property.type === "SpreadElement") {
       const spread = stableValue(context, property.argument);
-      return spread === null ? [] : withCandidates(context, spread, seen);
+      if (spread?.type !== "ObjectExpression") {
+        unknown = true;
+        continue;
+      }
+      const inherited = withCandidates(context, spread, seen);
+      candidates.push(...inherited.candidates);
+      unknown ||= inherited.unknown;
+      continue;
     }
-    if (property.type !== "Property" || !isAstNode(property.value)) {
-      return [];
+    if (property.type !== "Property") {
+      unknown = true;
+      continue;
     }
     const key = property.computed
       ? staticStringValue(property.key)
       : getPropertyName(property.key);
-    return key === "with" ? [property.value] : [];
-  });
+    if (key === null) {
+      unknown = true;
+    } else if (key === "with" && isAstNode(property.value)) {
+      candidates.push(property.value);
+    }
+  }
+  return { candidates, unknown };
 };
 
 const patternReadsOwnedColumns = (
