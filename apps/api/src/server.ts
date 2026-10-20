@@ -140,6 +140,7 @@ import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
 } from "@/api/lib/browser-origin-guard";
+import { startCaseLawFreshnessMetricLoop } from "@/api/lib/case-law-freshness-metrics";
 import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-checks";
 import {
   clientAddressConfigurationWarning,
@@ -811,6 +812,7 @@ const startServer = async (): Promise<void> => {
   await initBuiltinReportTemplates();
 
   const closeManagedProviderChecks = await startManagedProviderChecks();
+  const closeCaseLawFreshnessMetrics = startCaseLawFreshnessMetricLoop();
   const backgroundWorkers = await initApiBackgroundWorkers(
     env.SCHEDULED_JOBS_MODE,
   );
@@ -866,7 +868,12 @@ const startServer = async (): Promise<void> => {
     shuttingDown = true;
     logger.info("api.shutdown_started", { signal });
     const outcome = await shutdownApiServices({
-      closeBackgroundWorkers: backgroundWorkers.close,
+      closeBackgroundWorkers: async () => {
+        await Promise.all([
+          backgroundWorkers.close(),
+          closeCaseLawFreshnessMetrics(),
+        ]);
+      },
       closeManagedProviderChecks,
       closeDatabaseLoginProbe,
       // Undefined when the signal beat scheduler registration; there is

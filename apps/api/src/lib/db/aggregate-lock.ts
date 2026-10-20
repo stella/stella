@@ -92,6 +92,51 @@ export const AGGREGATE_LOCKS = {
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
 
+type SessionAdvisoryConnection = {
+  unsafe: (query: string, params: unknown[]) => PromiseLike<unknown>;
+};
+
+/**
+ * The freshness reporter is process-level work, so its fence must survive the
+ * read transaction while the EMF records are written. The caller owns the
+ * reserved session; releasing it releases this lock.
+ */
+export const tryCaseLawFreshnessSessionLock = async (
+  connection: SessionAdvisoryConnection,
+): Promise<boolean> => {
+  const result = await connection.unsafe(
+    "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired",
+    ["caseLawFreshness", "singleton"],
+  );
+  if (!Array.isArray(result)) {
+    return panic("Case-law freshness session lock returned malformed rows");
+  }
+  const observation = result.find(isRecord);
+  if (typeof observation?.["acquired"] !== "boolean") {
+    return panic("Case-law freshness session lock returned malformed row");
+  }
+  return observation["acquired"];
+};
+
+export const readUnderCaseLawFreshnessSessionLock = async <T>({
+  connection,
+  database,
+  read,
+}: {
+  connection: SessionAdvisoryConnection;
+  database: {
+    transaction: <Result>(
+      read: (tx: Transaction) => Promise<Result>,
+    ) => Promise<Result>;
+  };
+  read: (tx: Transaction) => Promise<T>;
+}): Promise<{ status: "skipped" } | { status: "locked"; value: T }> => {
+  if (!(await tryCaseLawFreshnessSessionLock(connection))) {
+    return { status: "skipped" };
+  }
+  return { status: "locked", value: await database.transaction(read) };
+};
+
 type OrganizationFencedRepairBatchOptions = {
   connection: Pick<OnlineMigrationConnection, "query">;
   query: string;
