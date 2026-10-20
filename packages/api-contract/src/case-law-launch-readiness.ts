@@ -97,6 +97,21 @@ export const CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES =
     (country) => CASE_LAW_EXPLICIT_LAUNCHES[country] !== null,
   );
 
+const explicitLaunches = CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES.map((country) => {
+  const branded = v.safeParse(launchReadinessCountrySchema, country);
+  return branded.success
+    ? branded.output
+    : panic("An explicit case-law launch must name a browser country.");
+});
+
+/** Keeps the admitted country's literal type once more than one is admitted. */
+const isCountry =
+  <Country extends string>(country: Country) =>
+  (
+    candidate: PublicCaseLawCountry,
+  ): candidate is PublicCaseLawCountry & Country =>
+    candidate === country;
+
 /**
  * Countries admitted to case-law search, the API search surfaces and MCP.
  * Each needs exactly one of a serving receipt or an explicit launch.
@@ -104,28 +119,18 @@ export const CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES =
  */
 export const PUBLIC_CASE_LAW_COUNTRIES = ADMITTED_CASE_LAW_COUNTRIES.map(
   (country) => {
-    const receipt = servingReceipts.find((candidate) => candidate === country);
-    const explicit = CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES.some(
-      (candidate) => candidate === country,
-    );
-    if (receipt !== undefined && explicit) {
+    const receipt = servingReceipts.find(isCountry(country));
+    const explicit = explicitLaunches.find(isCountry(country));
+    if (receipt !== undefined && explicit !== undefined) {
       return panic(
         "A country with a case-law serving receipt cannot also be an explicit launch.",
       );
     }
-    if (receipt !== undefined) {
-      return receipt;
-    }
-    if (!explicit) {
-      return panic(
-        "An admitted public country needs a case-law serving receipt.",
-      );
-    }
-    const branded = v.safeParse(launchReadinessCountrySchema, country);
-    if (!branded.success) {
-      return panic("An explicit case-law launch must name a browser country.");
-    }
-    return branded.output;
+    return (
+      receipt ??
+      explicit ??
+      panic("An admitted public country needs a case-law serving receipt.")
+    );
   },
 );
 if (
