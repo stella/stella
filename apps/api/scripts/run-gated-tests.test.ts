@@ -226,7 +226,7 @@ test("template cloning refuses and names foreign connections", async () => {
     }),
   );
   expect(error).toBeInstanceOf(PostgresTemplateConnectionError);
-  expect(error.message).toContain(
+  expect(error instanceof Error ? error.message : "").toContain(
     "pid=42 application_name=psql client_addr=127.0.0.1",
   );
 });
@@ -273,7 +273,9 @@ const runWorkerFixture = async ({
     admin: fixture.admin,
     registerSignal: (handler) => {
       signalHandler = handler;
-      return () => fixture.calls.push("UNREGISTER");
+      return () => {
+        fixture.calls.push("UNREGISTER");
+      };
     },
     runWorker: () => {
       const exited = new Promise<number>((resolve) => {
@@ -286,7 +288,9 @@ const runWorkerFixture = async ({
         exited,
         exitCode,
         signalCode: null,
-        kill: (received) => fixture.calls.push(`KILL ${received}`),
+        kill: (received) => {
+          fixture.calls.push(`KILL ${String(received)}`);
+        },
       };
     },
     log: () => {},

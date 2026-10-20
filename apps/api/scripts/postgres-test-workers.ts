@@ -190,7 +190,8 @@ export const runPostgresWorkers = async ({
       {
         pid: Number(row.pid),
         application_name: String(row.application_name),
-        client_addr: row.client_addr === null ? null : String(row.client_addr),
+        client_addr:
+          typeof row.client_addr === "string" ? row.client_addr : null,
       },
     ];
   });
