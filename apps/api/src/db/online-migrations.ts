@@ -65,7 +65,7 @@ import type {
 } from "./online-migration-connection";
 import {
   onlineUniqueIndexDefinition,
-  ONLINE_UNIQUE_INDEX_NAMES,
+  EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
 } from "./online-unique-indexes";
 import {
   SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
@@ -228,7 +228,9 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_screening_events_org_cursor_idx",
     tableName: "sanctions_screening_events",
   },
-  onlineUniqueIndexDefinition(ONLINE_UNIQUE_INDEX_NAMES.CONTACTS_ORG_ID_UNIQUE),
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.CONTACTS_ORG_ID_UNIQUE,
+  ),
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "rate_entries_table_role_from_idx" ON public."rate_entries" USING btree ("rate_table_id", "role", "effective_from")',
@@ -240,7 +242,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "rate_entries",
   },
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.SESSION_PRIOR_TOKEN_HASH_IDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.SESSION_PRIOR_TOKEN_HASH_IDX,
   ),
   {
     createSql:
@@ -263,7 +265,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "time_entries",
   },
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.INVOICES_ID_WORKSPACE_UNIQUE,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.INVOICES_ID_WORKSPACE_UNIQUE,
   ),
   {
     createSql:
@@ -276,7 +278,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "invoices",
   },
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.LEGAL_LISTS_SAMPLE_WORKSPACE_UIDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.LEGAL_LISTS_SAMPLE_WORKSPACE_UIDX,
   ),
   {
     createSql:
@@ -332,7 +334,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "case_law_decisions",
   },
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX,
   ),
   {
     createSql:
@@ -354,18 +356,20 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "organization_settings_memory_extraction_queue_idx",
     tableName: "organization_settings",
   },
-  onlineUniqueIndexDefinition(ONLINE_UNIQUE_INDEX_NAMES.WORKSPACES_ID_ORG_UNQ),
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.ENTITY_VERSIONS_ID_ENTITY_WS_UIDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.WORKSPACES_ID_ORG_UNQ,
   ),
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.ENTITY_VERSIONS_ENTITY_NUMBER_UIDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.ENTITY_VERSIONS_ID_ENTITY_WS_UIDX,
   ),
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.CHAT_MESSAGES_ID_THREAD_UIDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.ENTITY_VERSIONS_ENTITY_NUMBER_UIDX,
   ),
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.TIME_ENTRIES_ONE_ACTIVE_TIMER_PER_USER_IDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.CHAT_MESSAGES_ID_THREAD_UIDX,
+  ),
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.TIME_ENTRIES_ONE_ACTIVE_TIMER_PER_USER_IDX,
   ),
   {
     createSql:
@@ -378,16 +382,16 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "time_timers",
   },
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.TIME_TIMERS_LEGACY_ENTRY_UIDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.TIME_TIMERS_LEGACY_ENTRY_UIDX,
   ),
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX,
   ),
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.TEMPLATES_ORG_PACK_TEMPLATE_UIDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.TEMPLATES_ORG_PACK_TEMPLATE_UIDX,
   ),
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.WORKSPACE_VIEWS_CORRESPONDENCE_UIDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.WORKSPACE_VIEWS_CORRESPONDENCE_UIDX,
   ),
   {
     createSql:
@@ -420,16 +424,16 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "legislation_documents",
   },
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.CHAT_TURNS_ORG_RUN_ID_UIDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.CHAT_TURNS_ORG_RUN_ID_UIDX,
   ),
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.LEGAL_READER_ANSWER_MESSAGES_ANSWER_SEQUENCE_IDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.LEGAL_READER_ANSWER_MESSAGES_ANSWER_SEQUENCE_IDX,
   ),
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
   ),
   onlineUniqueIndexDefinition(
-    ONLINE_UNIQUE_INDEX_NAMES.CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX,
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX,
   ),
   {
     createSql:

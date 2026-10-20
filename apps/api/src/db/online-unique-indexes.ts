@@ -2,7 +2,11 @@ import { panic } from "better-result";
 import { getColumns, getTableName } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
-import { REWRITTEN_MIGRATION_INDEXES } from "../lib/db/migration-history";
+import {
+  REWRITTEN_MIGRATION_INDEXES,
+  type IntroducedMigrationIndex,
+} from "../lib/db/migration-history";
+import type { OnlineIndexDeclaration } from "./online-ddl";
 
 const CONTACTS_ORG_ID_UNIQUE = "contacts_org_id_unique";
 const SESSION_PRIOR_TOKEN_HASH_IDX = "session_priorTokenHash_idx";
@@ -39,7 +43,7 @@ export const CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX =
 export const CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX =
   "case_law_decisions_source_case_lang_null_idx";
 
-export const ONLINE_UNIQUE_INDEX_NAMES = {
+export const EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES = {
   CONTACTS_ORG_ID_UNIQUE,
   SESSION_PRIOR_TOKEN_HASH_IDX,
   INVOICES_ID_WORKSPACE_UNIQUE,
@@ -58,6 +62,10 @@ export const ONLINE_UNIQUE_INDEX_NAMES = {
   LEGAL_READER_ANSWER_MESSAGES_ANSWER_SEQUENCE_IDX,
   CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
   CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX,
+} as const;
+
+export const ONLINE_UNIQUE_INDEX_NAMES = {
+  ...EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
   CASE_LAW_DECISIONS_SLUG_UIDX,
   ACCOUNT_CREDENTIAL_SINGLETON_UIDX,
   PROPERTIES_WS_DOCUMENT_TYPE_CLASSIFIER_UNQ,
@@ -66,10 +74,16 @@ export const ONLINE_UNIQUE_INDEX_NAMES = {
   CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX,
 } as const;
 
+export type ExecutableOnlineUniqueIndexName =
+  (typeof EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES)[keyof typeof EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES];
+
 export type OnlineUniqueIndexName =
   (typeof ONLINE_UNIQUE_INDEX_NAMES)[keyof typeof ONLINE_UNIQUE_INDEX_NAMES];
 
-export const ONLINE_UNIQUE_INDEXES = [
+export type ExecutableOnlineUniqueIndex = OnlineIndexDeclaration &
+  IntroducedMigrationIndex;
+
+export const EXECUTABLE_ONLINE_UNIQUE_INDEXES = [
   {
     createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "contacts_org_id_unique" ON public."contacts" USING btree ("organization_id", "id")',
@@ -244,13 +258,20 @@ export const ONLINE_UNIQUE_INDEXES = [
     name: CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX,
     tableName: "correspondence",
   },
-  ...REWRITTEN_MIGRATION_INDEXES.filter(({ isUnique }) => isUnique),
-];
+] as const satisfies readonly ExecutableOnlineUniqueIndex[];
+
+export const ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS: readonly IntroducedMigrationIndex[] =
+  [
+    ...EXECUTABLE_ONLINE_UNIQUE_INDEXES,
+    ...REWRITTEN_MIGRATION_INDEXES.filter(({ isUnique }) => isUnique),
+  ];
 
 // PostgreSQL infers a unique index from its column target and optional predicate.
 // Keep conflict targets attached to the same definition used by online validation.
-export const onlineUniqueIndexDefinition = (name: OnlineUniqueIndexName) => {
-  const index = ONLINE_UNIQUE_INDEXES.find(
+export const onlineUniqueIndexDefinition = (
+  name: ExecutableOnlineUniqueIndexName,
+): ExecutableOnlineUniqueIndex => {
+  const index = EXECUTABLE_ONLINE_UNIQUE_INDEXES.find(
     (candidate) => candidate.name === name,
   );
   if (index === undefined) {
@@ -298,7 +319,12 @@ export const onlineUniqueIndexTarget = (
   name: OnlineUniqueIndexName,
   table: PgTable,
 ) => {
-  const index = onlineUniqueIndexDefinition(name);
+  const index = ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS.find(
+    (candidate) => candidate.name === name,
+  );
+  if (index === undefined) {
+    return panic(`Unknown online unique index: ${name}`);
+  }
   if (getTableName(table) !== index.tableName) {
     return panic(
       `Online unique index ${name} does not belong to ${getTableName(table)}`,

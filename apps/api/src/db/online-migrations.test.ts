@@ -1,5 +1,5 @@
 import { SQL } from "bun";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import { defaultConfig } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -7,6 +7,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
 
 import { readOnlineIndexConfig } from "../env-online-index";
+import { REWRITTEN_MIGRATION_INDEXES } from "../lib/db/migration-history";
 import { BackfillHeldError } from "./backfill-runtime";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import {
@@ -14,6 +15,7 @@ import {
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
 import type { MigrationTimingRecord } from "./migration-timing";
+import type { OnlineIndexDeclaration } from "./online-ddl";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import type {
@@ -30,6 +32,12 @@ import {
   runOnlineMigrations as runOnlineMigrationsWithGate,
   type OnlineRepairOptions,
 } from "./online-migrations";
+import {
+  EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
+  ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
+  onlineUniqueIndexDefinition,
+  type ExecutableOnlineUniqueIndexName,
+} from "./online-unique-indexes";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
@@ -125,6 +133,26 @@ const CLEANUP_STALL_CONSTRAINTS = [
 ] as const;
 
 describe("online migrations", () => {
+  test("keeps executable and validation-only unique indexes in their roles", () => {
+    expectTypeOf(
+      onlineUniqueIndexDefinition(
+        EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.CONTACTS_ORG_ID_UNIQUE,
+      ),
+    ).toExtend<OnlineIndexDeclaration>();
+    expectTypeOf<"case_law_decisions_slug_uidx">().not.toExtend<ExecutableOnlineUniqueIndexName>();
+
+    const validationNames = new Set(
+      ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS.map(({ name }) => name),
+    );
+    const rewrittenUniqueNames = REWRITTEN_MIGRATION_INDEXES.filter(
+      ({ isUnique }) => isUnique,
+    ).map(({ name }) => name);
+    expect(rewrittenUniqueNames.length).toBeGreaterThan(0);
+    expect(
+      rewrittenUniqueNames.filter((name) => !validationNames.has(name)),
+    ).toEqual([]);
+  });
+
   const startupIndex = ONLINE_MIGRATION_INDEXES.find(
     ({ name }) => name === REPORT_EXPORT_INDEX,
   );
