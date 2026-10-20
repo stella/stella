@@ -86,8 +86,8 @@ const fields = (entries: [string, string | null | undefined][]): Field[] =>
   );
 
 /** One path per dark module run, so the SVG stays small and crisp. */
-export const qrSvg = (payload: string) => {
-  const qr = encode(payload, { border: 4, ecc: "M" });
+export const qrSvg = (payload: string, ecc: "L" | "M" = "M") => {
+  const qr = encode(payload, { border: 4, ecc });
   const runs: string[] = [];
   for (const [y, row] of qr.data.entries()) {
     let x = 0;
@@ -162,7 +162,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
       return Result.err(payment.error);
     }
     if (payment.value.status === "payable") {
-      qr = qrSvg(payment.value.payload);
+      qr = qrSvg(payment.value.payload, payment.value.errorCorrection);
     }
   }
 

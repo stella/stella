@@ -208,6 +208,7 @@ describe("invoice PDF", () => {
     expect(text).not.toContain("STALE-NUMBER");
     expect(buildInvoicePaymentPayload(draft)?.unwrap()).toEqual({
       status: "payable",
+      errorCorrection: "M",
       payload:
         "SPD*1.0*ACC:CZ3301000000000002970297*AM:555.55*CC:CZK*X-VS:0987654321*DT:20261014",
     });
@@ -218,6 +219,7 @@ describe("invoice QR payment", () => {
   test("matches canonical SPAYD account, amount, symbol, due date and message", () => {
     expect(buildInvoicePaymentPayload(options)?.unwrap()).toEqual({
       status: "payable",
+      errorCorrection: "M",
       payload:
         "SPD*1.0*ACC:CZ3301000000000002970297*AM:555.55*CC:CZK*X-VS:0987654321*DT:20261014*MSG:2026-001",
     });
@@ -241,6 +243,43 @@ describe("invoice QR payment", () => {
         seller: { ...slovak.seller, legalName: " " },
       })?.isErr(),
     ).toBe(true);
+  });
+
+  test("a Polish account gets the ZBP code, at error correction L", () => {
+    const polish = {
+      ...options,
+      invoice: { ...options.invoice, currency: "PLN" },
+      seller: {
+        ...options.seller,
+        legalName: "Kancelaria Nowak i Wspólnicy sp.k.",
+        vatId: "PL 526-000-12-46",
+        iban: "PL61 1090 1014 0000 0712 1981 2874",
+      },
+    } satisfies RenderInvoicePdfOptions;
+    expect(buildInvoicePaymentPayload(polish)?.unwrap()).toEqual({
+      status: "payable",
+      errorCorrection: "L",
+      payload:
+        "5260001246|PL|61109010140000071219812874|055555|Kancelaria Nowak i W|2026-001|||",
+    });
+    // Not PLN: the ZBP code carries domestic transfers only.
+    expect(
+      buildInvoicePaymentPayload({
+        ...polish,
+        invoice: { ...polish.invoice, currency: "EUR" },
+      })?.unwrap(),
+    ).toEqual({
+      status: "not_payable",
+      reason: "not_pln",
+      errorCorrection: "L",
+    });
+    // No NIP on the seller profile: no code.
+    expect(
+      buildInvoicePaymentPayload({
+        ...polish,
+        seller: { ...polish.seller, vatId: null },
+      }),
+    ).toBeNull();
   });
 
   test("skips QR for zero, negative, credit notes or missing IBAN", () => {
