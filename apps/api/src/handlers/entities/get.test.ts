@@ -239,7 +239,7 @@ describe("readEntityByIdHandler", () => {
     }
   });
 
-  test("keeps missing extraction unavailable and ignores JSON-null fields", async () => {
+  test("returns the designated source while extraction is pending and ignores JSON-null fields", async () => {
     findFirstMock.mockResolvedValue({
       kind: "document",
       name: "Pending Email",
@@ -281,7 +281,9 @@ describe("readEntityByIdHandler", () => {
 
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
-      expect(result.value.extractionFileFieldId).toBeNull();
+      expect(result.value.extractionFileFieldId).toBe(
+        toSafeId<"field">("field_email"),
+      );
       expect(result.value.processingFileFieldId).toBe(
         toSafeId<"field">("field_email"),
       );

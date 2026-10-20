@@ -1,5 +1,6 @@
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chooseExtractionSource } from "@/api/lib/extraction-source-owner";
 
 type ExtractedContentProvenance = {
   extractedAt: Date;
@@ -60,6 +61,20 @@ export const resolveCurrentExtractionFileField = <T extends FileFieldRow>({
     ? field
     : null;
 };
+
+/** Resolve the selected source even before the asynchronous extraction lands. */
+export const resolveDesignatedExtractionFileField = <T extends FileFieldRow>({
+  currentVersionId,
+  extracted,
+  fields,
+}: {
+  currentVersionId: SafeId<"entityVersion">;
+  extracted: ExtractedContentSourceProvenance | null | undefined;
+  fields: readonly T[];
+}): T | null =>
+  extracted
+    ? resolveCurrentExtractionFileField({ currentVersionId, extracted, fields })
+    : chooseExtractionSource(fields);
 
 /**
  * Resolve the current file that live processing or direct reads may use.

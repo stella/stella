@@ -6,6 +6,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
+  resolveDesignatedExtractionFileField,
   resolveCurrentExtractionFileField,
   resolveCurrentFileSourceField,
   selectCurrentExtractedContent,
@@ -110,11 +111,18 @@ export const readEntityByIdHandler = async function* ({
     currentVersionId: entity.currentVersion.id,
     fields: entity.currentVersion.fields,
   });
-  const extractionFileField = resolveCurrentExtractionFileField({
-    currentVersionId: entity.currentVersion.id,
-    extracted: currentExtracted,
-    fields: entity.currentVersion.fields,
-  });
+  const extractionFileField =
+    entity.extractedContent === null
+      ? resolveDesignatedExtractionFileField({
+          currentVersionId: entity.currentVersion.id,
+          extracted: null,
+          fields: entity.currentVersion.fields,
+        })
+      : resolveCurrentExtractionFileField({
+          currentVersionId: entity.currentVersion.id,
+          extracted: currentExtracted,
+          fields: entity.currentVersion.fields,
+        });
   const processingFileField = resolveCurrentFileSourceField({
     currentVersionId: entity.currentVersion.id,
     extracted: entity.extractedContent,
