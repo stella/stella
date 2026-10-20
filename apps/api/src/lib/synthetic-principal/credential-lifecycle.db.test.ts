@@ -228,9 +228,8 @@ const setup = async () => {
     server: null,
   });
   const download = async () => {
-    // PGlite has one connection, so read the owner-only authority before the
-    // handler opens its scoped-role transaction. PostgreSQL uses separate
-    // owner and scoped pools for the same two operations.
+    // Read the session authority first, then run the handler transaction:
+    // the test database serves one operation at a time.
     const authority = await readSessionAuthority({
       sessionId: source.id,
       userId: SYNTHETIC_PRINCIPAL.user.id,
