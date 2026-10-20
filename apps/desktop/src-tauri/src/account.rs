@@ -108,14 +108,6 @@ fn credential_fingerprint(key: &str) -> [u8; 32] {
   fingerprint
 }
 
-/// Account JSON can hold credentials, which serde repeats in its messages.
-fn json_error(message: &'static str) -> impl FnOnce(serde_json::Error) -> String {
-  move |error| {
-    crate::logging::log_json_error(&error, message);
-    message.to_string()
-  }
-}
-
 /// A rejected account whose saved link could not be removed: its key is never
 /// presented again, and the windows get the code they recognize.
 fn rejected_but_kept(key: &str) -> impl FnOnce(String) -> String + '_ {
@@ -223,7 +215,9 @@ impl PendingLinkedAccount {
       .cloned()
       .ok_or_else(|| "Invalid registry account".to_string())
       .and_then(|account| {
-        serde_json::from_value(account).map_err(json_error("Invalid registry account"))
+        serde_json::from_value(account).map_err(crate::logging::json_cause_logged(
+          "Invalid registry account",
+        ))
       })?;
     if !is_valid_linked_account(&account) {
       return Err("Invalid registry account".into());
@@ -233,8 +227,9 @@ impl PendingLinkedAccount {
       .cloned()
       .ok_or_else(|| "Invalid registry identity".to_string())
       .and_then(|identity| {
-        serde_json::from_value(identity)
-          .map_err(json_error("Invalid registry identity"))
+        serde_json::from_value(identity).map_err(crate::logging::json_cause_logged(
+          "Invalid registry identity",
+        ))
       })?;
     if identity.user_id.trim().is_empty() || identity.organization_id.trim().is_empty()
     {
@@ -301,8 +296,9 @@ impl AccountStore {
         let Some(value) = crate::keychain::get_account_connection().await? else {
           return Ok(None);
         };
-        let mut account: LinkedAccount = serde_json::from_str(&value)
-          .map_err(json_error("Desktop account connection is unreadable"))?;
+        let mut account: LinkedAccount = serde_json::from_str(&value).map_err(
+          crate::logging::json_cause_logged("Desktop account connection is unreadable"),
+        )?;
         account.device_key = crate::device_proof::required().await?;
         Ok(Some(account))
       }
@@ -340,8 +336,9 @@ impl AccountStore {
   async fn save(&mut self, account: LinkedAccount) -> Result<(), String> {
     match self {
       Self::Keychain => {
-        let value = serde_json::to_string(&account)
-          .map_err(json_error("Could not save desktop account"))?;
+        let value = serde_json::to_string(&account).map_err(
+          crate::logging::json_cause_logged("Could not save desktop account"),
+        )?;
         crate::keychain::store_account_connection(value).await?;
         crate::keychain::clear_account_expired().await
       }
@@ -391,8 +388,9 @@ impl AccountStore {
       Self::Keychain => crate::keychain::get_account_rotation()
         .await?
         .map(|value| {
-          serde_json::from_str(&value)
-            .map_err(json_error("Account rotation is unreadable"))
+          serde_json::from_str(&value).map_err(crate::logging::json_cause_logged(
+            "Account rotation is unreadable",
+          ))
         })
         .transpose(),
       #[cfg(test)]
@@ -415,8 +413,9 @@ impl AccountStore {
         crate::keychain::set_account_rotation(
           pending
             .map(|value| {
-              serde_json::to_string(&value)
-                .map_err(json_error("Could not stage account rotation"))
+              serde_json::to_string(&value).map_err(crate::logging::json_cause_logged(
+                "Could not stage account rotation",
+              ))
             })
             .transpose()?,
         )
@@ -545,9 +544,9 @@ impl RenewalTransport for HttpRenewal {
     .await
     {
       Ok(value) => serde_json::from_value(value).map_err(|error| {
-        RenewalFailure::Unavailable(json_error("Account renewal response is invalid")(
-          error,
-        ))
+        RenewalFailure::Unavailable(crate::logging::json_cause_logged(
+          "Account renewal response is invalid",
+        )(error))
       }),
       Err(message) if message == crate::registry::not_connected() => {
         Err(RenewalFailure::Rejected)

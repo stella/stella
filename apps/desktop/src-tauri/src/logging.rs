@@ -338,6 +338,27 @@ pub fn log_request_error(error: &reqwest::Error, what: &'static str) {
   );
 }
 
+/// [`with_cause_logged`] for a JSON error, logged as [`log_json_error`] does.
+pub fn json_cause_logged(
+  message: &'static str,
+) -> impl FnOnce(serde_json::Error) -> String {
+  move |error| {
+    log_json_error(&error, message);
+    message.to_string()
+  }
+}
+
+/// [`with_cause_logged`] for an HTTP error, logged as [`log_request_error`]
+/// does.
+pub fn request_cause_logged(
+  message: &'static str,
+) -> impl FnOnce(reqwest::Error) -> String {
+  move |error| {
+    log_request_error(&error, message);
+    message.to_string()
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

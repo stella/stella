@@ -5,22 +5,14 @@ use std::time::Duration;
 use crate::{
   account::AccountRequest,
   http_client::{DesktopHttpClient, HttpClientOptions},
-  logging::{log_json_error, log_request_error, replaced_logged},
+  logging::{
+    json_cause_logged, log_json_error, log_request_error, replaced_logged,
+    request_cause_logged,
+  },
 };
 
 const FAILURE: &str = "draft time entry request failed";
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
-
-fn failed_request(error: reqwest::Error) -> String {
-  log_request_error(&error, FAILURE);
-  FAILURE.to_string()
-}
-
-/// Responses name matters and carry entry narratives.
-fn failed_json(error: serde_json::Error) -> String {
-  log_json_error(&error, FAILURE);
-  FAILURE.to_string()
-}
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -92,18 +84,25 @@ fn client() -> Result<DesktopHttpClient, String> {
     redirect: reqwest::redirect::Policy::none(),
     timeout: Some(Duration::from_secs(15)),
   })
-  .map_err(failed_request)
+  .map_err(request_cause_logged(FAILURE))
 }
 
 async fn response_body(
   request: crate::http_client::DeviceProofRequest,
 ) -> Result<Vec<u8>, String> {
-  let mut response = request.send().await.map_err(failed_request)?;
+  let mut response = request
+    .send()
+    .await
+    .map_err(request_cause_logged(FAILURE))?;
   if !response.status().is_success() {
     return Err(FAILURE.to_string());
   }
   let mut body = Vec::new();
-  while let Some(chunk) = response.chunk().await.map_err(failed_request)? {
+  while let Some(chunk) = response
+    .chunk()
+    .await
+    .map_err(request_cause_logged(FAILURE))?
+  {
     if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
       return Err(FAILURE.to_string());
     }
@@ -128,7 +127,8 @@ pub async fn search_matters(
     None,
   )?)
   .await?;
-  let response: MattersResponse = serde_json::from_slice(&body).map_err(failed_json)?;
+  let response: MattersResponse =
+    serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))?;
   if response.matters.len() > 20
     || response.matters.iter().any(|matter| {
       matter.id.is_empty()
@@ -159,7 +159,7 @@ pub async fn candidates(
   )?)
   .await?;
   let result: CandidatesResponse =
-    serde_json::from_slice(&body).map_err(failed_json)?;
+    serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))?;
   if result.matters.len() > 100
     || result.matters.iter().any(|candidate| {
       candidate.matter.id.is_empty()
