@@ -205,7 +205,7 @@ export const DDL_FORMS = {
     scope: "alter-table",
     lockMode: "ACCESS EXCLUSIVE",
     pattern:
-      /^ADD (?:CONSTRAINT (?:"ID"|[A-Z_][A-Z0-9_$]*) )?(?:CHECK|PRIMARY KEY|UNIQUE|EXCLUDE)\b/u,
+      /^ADD (?:CONSTRAINT (?:"ID"|[A-Z_][A-Z0-9_$]*) )?(?:CHECK|PRIMARY KEY|UNIQUE|NOT NULL|EXCLUDE)\b/u,
   },
   // PG18 ALTER TABLE, DROP COLUMN.
   "drop-column": {
@@ -327,9 +327,8 @@ type CensusForm = {
   line: number;
   statementIndex: number;
   sql: string;
-  // The statement targets a table this migration created unconditionally
-  // earlier: no deployed code can reach it yet, so its lock blocks no one.
-  newRelation: boolean;
+  // Only explicitly self-contained work on a new table can avoid review.
+  newRelationExempt: boolean;
 };
 
 // Every guarded rule explicitly decides which classified operations it reviews.
@@ -418,36 +417,53 @@ const onRelationKey = (tokens: StatementTokens): string | undefined => {
   return readMigrationRelation(tokens, start)?.relation.key;
 };
 
-const invalidateTouchedCreatedRelations = (
-  tokens: StatementTokens,
-  createdRelations: Set<string>,
-) => {
-  const words = tokens.filter(({ kind }) => kind === "word");
-  const changesRelationIdentity = words.some(
-    ({ value }) =>
-      value === "rename" || value === "drop" || value === "replace",
-  );
-  if (!changesRelationIdentity) {
-    return;
+const isSelfContainedNewRelationOperation = (form: DdlForm, sql: string) => {
+  if (form === "create-index" || form === "create-index-concurrently") {
+    return true;
   }
-  const names = new Set(
-    tokens
-      .filter(({ kind }) => kind !== "punctuation")
-      .map(({ value }) => value),
-  );
-  for (const key of createdRelations) {
-    if (
-      names.values().some((name) => key.endsWith(`,${JSON.stringify(name)}]`))
-    ) {
-      createdRelations.delete(key);
-    }
+  if (form === "add-column") {
+    // Sequence functions reach another relation. PostgreSQL column defaults
+    // cannot otherwise contain subqueries; REFERENCES is classified as an FK.
+    return !/\b(?:NEXTVAL|CURRVAL|SETVAL|REFERENCES)\b|::\s*REGCLASS\b/u.test(
+      sql,
+    );
   }
+  if (form === "add-constraint") {
+    return /^ADD (?:CONSTRAINT (?:"ID"|[A-Z_][A-Z0-9_$]*) )?(?:CHECK|UNIQUE|PRIMARY KEY|NOT NULL)\b/u.test(
+      sql,
+    );
+  }
+  if (form === "alter-column") {
+    return /^ALTER (?:COLUMN )?(?:"ID"|[A-Z_][A-Z0-9_$]*) (?:SET (?:DEFAULT|NOT NULL)|DROP (?:DEFAULT|NOT NULL))\b/u.test(
+      sql,
+    );
+  }
+  return form === "comment" || form === "change-owner";
+};
+
+const changesRelationIdentity = (tokens: StatementTokens) => {
+  if (tokens.some(({ kind, value }) => kind === "word" && value === "rename")) {
+    return true;
+  }
+  if (tokens.at(0)?.value === "drop") {
+    return /^(?:table|foreign|view|materialized|sequence|index)$/u.test(
+      tokens.at(1)?.value ?? "",
+    );
+  }
+  return tokens.some(
+    ({ value }, index) =>
+      value === "drop" && tokens[index + 1]?.value === "column",
+  );
 };
 
 const censusSqlSource = (source: string, topLevel: boolean) => {
   const forms: CensusForm[] = [];
   const errors: string[] = [];
   const createdRelations = new Set<string>();
+  const statements = parseMigrationStatements(source);
+  const migrationChangesIdentity = statements.some((statement) =>
+    changesRelationIdentity(migrationStatementTokens(statement)),
+  );
   type ClassifyOptions = {
     sql: string;
     line: number;
@@ -480,12 +496,14 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
       line,
       statementIndex,
       sql: alter ? `ALTER TABLE census_target ${normalized}` : normalized,
-      newRelation: target !== undefined && createdRelations.has(target),
+      newRelationExempt:
+        !migrationChangesIdentity &&
+        target !== undefined &&
+        createdRelations.has(target) &&
+        isSelfContainedNewRelationOperation(form, normalized),
     });
   };
-  for (const [statementIndex, statement] of parseMigrationStatements(
-    source,
-  ).entries()) {
+  for (const [statementIndex, statement] of statements.entries()) {
     const tokens = migrationStatementTokens(statement);
     // A privilege name is not a statement, nor is ALTER in an ALTER FUNCTION option.
     if (
@@ -536,7 +554,6 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
               target: relation.relation.key,
             });
           }
-          invalidateTouchedCreatedRelations(sqlTokens, createdRelations);
         }
       } else {
         classify({
@@ -546,7 +563,6 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
           statementIndex,
           target: onRelationKey(sqlTokens),
         });
-        invalidateTouchedCreatedRelations(sqlTokens, createdRelations);
         const created = createdRelationKey(sqlTokens);
         if (
           topLevel &&
@@ -610,7 +626,7 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
         line: statement.line,
         statementIndex,
         sql: "EXECUTE unresolved_dynamic_sql",
-        newRelation: false,
+        newRelationExempt: false,
       });
     }
   }
@@ -699,7 +715,7 @@ export const checkMigrationLocks = ({
       line,
       statementIndex,
       sql,
-      newRelation,
+      newRelationExempt,
     } of census.forms) {
       counts.set(lockMode, (counts.get(lockMode) ?? 0) + 1);
       const key = `${migration}/${form}`;
@@ -708,7 +724,9 @@ export const checkMigrationLocks = ({
         remaining.set(key, historical - 1);
         continue;
       }
-      if (lockMode !== "ACCESS EXCLUSIVE" || newRelation) {
+      const requiresReview =
+        lockMode === "ACCESS EXCLUSIVE" || form === "add-foreign-key";
+      if (!requiresReview || newRelationExempt) {
         continue;
       }
       if (
@@ -731,7 +749,7 @@ export const checkMigrationLocks = ({
         continue;
       }
       errors.push(
-        `${file}:${line}: ACCESS EXCLUSIVE ${form} needs a reviewed safety acknowledgement or typed lock allowance with a reason`,
+        `${file}:${line}: ${lockMode} ${form} needs a reviewed safety acknowledgement or typed lock allowance with a reason`,
       );
     }
   }

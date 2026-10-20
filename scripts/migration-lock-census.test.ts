@@ -221,31 +221,58 @@ describe("migration lock census", () => {
     ).toContain("ACCESS EXCLUSIVE add-column needs");
   });
 
-  test("strong locks on a table created earlier in the migration need no review", () => {
-    const strong = [
-      'ALTER TABLE "probe" ENABLE ROW LEVEL SECURITY;',
-      'CREATE POLICY "probe_select" ON "probe" FOR SELECT USING (true);',
-    ].join("\n");
-    const errorsFor = (sql: string) =>
-      checkMigrationLocks({ sources: source(sql), baseline: [] }).errors;
-
-    expect(errorsFor(`CREATE TABLE "probe" (id uuid);\n${strong}`)).toEqual([]);
+  test.each([
+    'CREATE INDEX probe_id_idx ON "probe" (id);',
+    'CREATE UNIQUE INDEX probe_id_idx ON "probe" (id);',
+    'ALTER TABLE "probe" ADD COLUMN title text;',
+    'ALTER TABLE "probe" ADD COLUMN active boolean DEFAULT false;',
+    'ALTER TABLE "probe" ADD CONSTRAINT probe_check CHECK (id IS NOT NULL);',
+    'ALTER TABLE "probe" ADD CONSTRAINT probe_unique UNIQUE (id);',
+    'ALTER TABLE "probe" ADD CONSTRAINT probe_pk PRIMARY KEY (id);',
+    'ALTER TABLE "probe" ADD CONSTRAINT probe_nn NOT NULL id;',
+    'ALTER TABLE "probe" ALTER COLUMN id SET DEFAULT gen_random_uuid();',
+    'ALTER TABLE "probe" ALTER COLUMN id DROP DEFAULT;',
+    'ALTER TABLE "probe" ALTER COLUMN id SET NOT NULL;',
+    'ALTER TABLE "probe" ALTER COLUMN id DROP NOT NULL;',
+    "COMMENT ON TABLE \"probe\" IS 'temporary';",
+    'GRANT SELECT ON TABLE "probe" TO app;',
+    'ALTER TABLE "probe" OWNER TO app;',
+  ])("self-contained new-relation operation stays exempt: %s", (operation) => {
     expect(
-      errorsFor(`CREATE TABLE public.probe (id uuid);\n${strong}`),
+      checkMigrationLocks({
+        sources: source(`CREATE TABLE "probe" (id uuid);\n${operation}`),
+        baseline: [],
+      }).errors,
     ).toEqual([]);
-    expect(errorsFor(strong).join("\n")).toContain(
-      "ACCESS EXCLUSIVE row-level-security needs",
-    );
-    expect(
-      errorsFor(`CREATE TABLE IF NOT EXISTS "probe" (id uuid);\n${strong}`)
-        .length,
-    ).toBeGreaterThan(0);
-    expect(
-      errorsFor(`${strong}\nCREATE TABLE "probe" (id uuid);`).length,
-    ).toBeGreaterThan(0);
-    expect(
-      errorsFor(`CREATE TABLE "other" (id uuid);\n${strong}`).length,
-    ).toBeGreaterThan(0);
+  });
+
+  test("non-allowlisted work on a new relation still requires review", () => {
+    const errors = checkMigrationLocks({
+      sources: source(`CREATE TABLE probe(id uuid);
+ALTER TABLE probe ENABLE ROW LEVEL SECURITY;
+CREATE POLICY probe_select ON probe FOR SELECT USING (true);`),
+      baseline: [],
+    }).errors.join("\n");
+    expect(errors).toContain("ACCESS EXCLUSIVE row-level-security needs");
+    expect(errors).toContain("ACCESS EXCLUSIVE create-policy needs");
+  });
+
+  test("DROP COLUMN CASCADE on a new relation requires review", () => {
+    const errors = checkMigrationLocks({
+      sources: source(`CREATE TABLE scratch(id int);
+ALTER TABLE scratch DROP COLUMN id CASCADE;`),
+      baseline: [],
+    }).errors.join("\n");
+    expect(errors).toContain("ACCESS EXCLUSIVE drop-column needs");
+  });
+
+  test("a foreign key from a new relation to an existing relation requires review", () => {
+    const errors = checkMigrationLocks({
+      sources: source(`CREATE TABLE scratch(existing_id uuid);
+ALTER TABLE scratch ADD CONSTRAINT scratch_existing_fk FOREIGN KEY (existing_id) REFERENCES existing(id);`),
+      baseline: [],
+    }).errors.join("\n");
+    expect(errors).toContain("SHARE ROW EXCLUSIVE add-foreign-key needs");
   });
 
   test("conditional table creation does not make a later lock uncontended", () => {
@@ -271,6 +298,16 @@ ALTER TABLE scratch RENAME TO scratch_old;
 -- stella-migration-safety: reviewed rename-table-or-column - Move the existing table to the newly available relation name
 ALTER TABLE existing RENAME TO scratch;
 ALTER TABLE scratch ADD COLUMN title text;`;
+    expect(
+      checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+    ).toEqual([expect.stringContaining("ACCESS EXCLUSIVE add-column needs")]);
+  });
+
+  test("dropping any relation disables the exemption for the whole migration", () => {
+    const sql = `CREATE TABLE scratch(id int);
+ALTER TABLE scratch ADD COLUMN title text;
+-- stella-migration-safety: reviewed drop-object - Remove the unrelated retired table after its contract step
+DROP TABLE retired;`;
     expect(
       checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
     ).toEqual([expect.stringContaining("ACCESS EXCLUSIVE add-column needs")]);
