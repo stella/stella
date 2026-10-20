@@ -186,7 +186,10 @@ type SearchLegislationDependencies = {
 type ObserveLegislationStage = <T>(
   stage: Extract<RequestStage, "candidate_hydration" | "work_collapse_ranking">,
   operation: () => Promise<T> | T,
-  counts: (value: T) => { candidateCount?: number; resultCount?: number },
+  counts: (value: T | undefined) => {
+    candidateCount?: number;
+    resultCount?: number;
+  },
 ) => Promise<T>;
 
 const defaultSearchLegislationDependencies: SearchLegislationDependencies = {
@@ -727,7 +730,8 @@ export const rehydrateLegislationCandidates = async ({
         ),
       };
     },
-    ({ ranked }) => ({ resultCount: ranked.length }),
+    (value) =>
+      value === undefined ? {} : { resultCount: value.ranked.length },
   );
 };
 
@@ -1190,6 +1194,9 @@ const createIndexRecorder = ({
   emit: (scan: IndexScanTiming, outcome: RequestStageOutcome) => void;
 }) => {
   const scan: IndexScanTiming = { durationMs: 0, candidateCount: 0, rounds: 0 };
+  let rejectionAttribution:
+    | { type: "page_read" }
+    | { type: "ranking_callback" } = { type: "page_read" };
   let openedAt: number | undefined = now();
   const closeInterval = () => {
     if (openedAt !== undefined) {
@@ -1206,9 +1213,17 @@ const createIndexRecorder = ({
         openedAt = now();
       };
     },
+    recordRankingCallbackRejection: () => {
+      rejectionAttribution = { type: "ranking_callback" };
+    },
     settle: (outcome: RequestStageOutcome) => {
       closeInterval();
-      emit(scan, outcome);
+      emit(
+        scan,
+        outcome === "failed" && rejectionAttribution.type === "ranking_callback"
+          ? "completed"
+          : outcome,
+      );
     },
   };
 };
@@ -1219,13 +1234,38 @@ const settleIndexRead = async <T>(
   pending: Promise<T>,
   recorder: ReturnType<typeof createIndexRecorder>,
 ) => {
-  const outcome = pending.then(
-    (): RequestStageOutcome => "completed",
-    (_error: unknown): RequestStageOutcome => "failed",
+  const settlement = pending.then(
+    (value) => {
+      recorder.settle("completed");
+      return value;
+    },
+    (_error: unknown) => {
+      recorder.settle("failed");
+      return undefined;
+    },
   );
-  return await pending.finally(async () => {
-    recorder.settle(await outcome);
-  });
+  await settlement;
+  return await pending;
+};
+
+const attributeRankingCallbackRejection = async <T>(
+  pending: Promise<T>,
+  recorder: ReturnType<typeof createIndexRecorder>,
+) => {
+  await pending.then(
+    () => undefined,
+    (_error: unknown) => {
+      recorder.recordRankingCallbackRejection();
+      return undefined;
+    },
+  );
+  return await pending;
+};
+
+type ReadCorpusPhaseOptions = {
+  active: CorpusSearchPhase;
+  pageLimit: number;
+  cursor: SearchCursor | null;
 };
 
 const corpusIndexSearch = async ({
@@ -1264,12 +1304,11 @@ const corpusIndexSearch = async ({
             }),
         );
 
-  type ReadPhaseOptions = {
-    active: CorpusSearchPhase;
-    pageLimit: number;
-    cursor: SearchCursor | null;
-  };
-  const readPhase = async ({ active, pageLimit, cursor }: ReadPhaseOptions) => {
+  const readPhase = async ({
+    active,
+    pageLimit,
+    cursor,
+  }: ReadCorpusPhaseOptions) => {
     const query = buildCorpusIndexQuery(body, active.type);
     if (query === null) {
       return null;
@@ -1291,8 +1330,7 @@ const corpusIndexSearch = async ({
       query,
       limit: pageLimit,
       order: RELEVANCE_ORDER,
-      // A legislation hit is a whole statute version; the native endpoint
-      // would return its full stored text for each of up to 300 hits a round.
+      // Avoid returning full stored text for up to 300 whole-statute hits a round.
       scanTransport: SCORED_SCAN_TRANSPORT,
       parsedCursor: cursor,
       ...(active.type === "relaxed"
@@ -1311,7 +1349,7 @@ const corpusIndexSearch = async ({
         active.type === "strict" ? stableBlendUpperBound : (score) => score,
       rankCandidates: async (candidates, { selectAppliedCandidates }) => {
         const resumeIndexTiming = indexTiming.pause(candidates.length);
-        const ranked = await rehydrateLegislationCandidates({
+        const pendingRanking = rehydrateLegislationCandidates({
           hitDispositions,
           body,
           candidates,
@@ -1325,6 +1363,10 @@ const corpusIndexSearch = async ({
           observeStage,
           readCandidateRows: reads.readCandidateRows,
         });
+        const ranked = await attributeRankingCallbackRejection(
+          pendingRanking,
+          indexTiming,
+        );
         resumeIndexTiming();
         return ranked;
       },
@@ -1522,19 +1564,32 @@ const createSearchStageAccumulator = (
     counts,
   ) => {
     const startedAt = now();
-    const pending = Promise.resolve(operation());
+    const pending = Promise.resolve().then(operation);
     await pending.then(
-      () => undefined,
-      (_error: unknown) => failedStages.add(stage),
+      (value) => {
+        const count = counts(value);
+        const accumulated = valueFor(stage);
+        accumulated.durationMs += now() - startedAt;
+        accumulated.rounds += 1;
+        accumulated.candidateCount += count.candidateCount ?? 0;
+        accumulated.resultCount += count.resultCount ?? 0;
+        stages.set(stage, accumulated);
+        return undefined;
+      },
+      (_error: unknown) => {
+        failedStages.add(stage);
+        const count = counts(undefined);
+        const accumulated = valueFor(stage);
+        accumulated.durationMs += now() - startedAt;
+        accumulated.rounds += 1;
+        accumulated.candidateCount += count.candidateCount ?? 0;
+        accumulated.resultCount += count.resultCount ?? 0;
+        accumulated.outcome = "failed";
+        stages.set(stage, accumulated);
+        return undefined;
+      },
     );
     const value = await pending;
-    const count = counts(value);
-    const accumulated = valueFor(stage);
-    accumulated.durationMs += now() - startedAt;
-    accumulated.rounds += 1;
-    accumulated.candidateCount += count.candidateCount ?? 0;
-    accumulated.resultCount += count.resultCount ?? 0;
-    stages.set(stage, accumulated);
     return value;
   };
   const recordIndexScan = (
@@ -1557,9 +1612,6 @@ const createSearchStageAccumulator = (
       "candidate_hydration",
       "work_collapse_ranking",
     ] as const) {
-      if (failedStages.has(stage)) {
-        break;
-      }
       const accumulated = stages.get(stage);
       if (accumulated !== undefined) {
         emit({
@@ -1568,6 +1620,9 @@ const createSearchStageAccumulator = (
           counts: accumulated,
           outcome: accumulated.outcome,
         });
+      }
+      if (failedStages.has(stage)) {
+        break;
       }
     }
     stages.clear();

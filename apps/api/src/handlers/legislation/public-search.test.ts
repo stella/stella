@@ -65,7 +65,7 @@ const timingTransaction = drizzle(async () => ({
   rows: [],
 })) satisfies LegislationReadTransaction;
 
-type TimedSearchFailure = "none" | "hydration" | "index";
+type TimedSearchFailure = "none" | "hydration" | "index" | "ranking_sync";
 
 const runTimedSearch = async (
   stageTool?: string,
@@ -73,6 +73,7 @@ const runTimedSearch = async (
 ) => {
   let clock = 0;
   let databaseReads = 0;
+  let rankings = 0;
   const records: Parameters<
     NonNullable<
       NonNullable<Parameters<typeof searchLegislationHandler>[3]>["emitStage"]
@@ -104,6 +105,10 @@ const runTimedSearch = async (
             excludedGroups: new Set(),
             selectAppliedCandidates: () => {
               clock += 13;
+              rankings += 1;
+              if (failure === "ranking_sync" && rankings === 2) {
+                throw new Error("ranking failed synchronously");
+              }
               return timingCandidateIds.map((id, index) => ({
                 id,
                 score: 1 - index / 10,
@@ -124,6 +129,10 @@ const runTimedSearch = async (
             excludedGroups: new Set(),
             selectAppliedCandidates: () => {
               clock += 13;
+              rankings += 1;
+              if (failure === "ranking_sync" && rankings === 2) {
+                throw new Error("ranking failed synchronously");
+              }
               return timingCandidateIds.map((id, index) => ({
                 id,
                 score: 1 - index / 10,
@@ -245,7 +254,7 @@ test.each([
   },
 );
 
-test("a failed second-round hydration reports the accumulated index scan only", async () => {
+test("a failed second-round hydration is attributed after the completed index scan", async () => {
   const { operation, records } = await runTimedSearch(undefined, "hydration");
   expect(await rejectionOf(operation)).toEqual(
     expect.objectContaining({ message: "hydration failed" }),
@@ -256,6 +265,48 @@ test("a failed second-round hydration reports the accumulated index scan only", 
       durationMs: 12,
       rounds: 2,
       candidateCount: 6,
+      outcome: "completed",
+    }),
+    expect.objectContaining({
+      stage: "candidate_hydration",
+      durationMs: 14,
+      rounds: 2,
+      candidateCount: 6,
+      outcome: "failed",
+    }),
+  ]);
+});
+
+test("a synchronous stage failure is recorded and preserves the original rejection", async () => {
+  const { operation, records } = await runTimedSearch(
+    undefined,
+    "ranking_sync",
+  );
+  const error = await rejectionOf(operation);
+  expect(error).toEqual(
+    expect.objectContaining({ message: "ranking failed synchronously" }),
+  );
+  expect(records).toEqual([
+    expect.objectContaining({
+      stage: "index_scan",
+      durationMs: 12,
+      rounds: 2,
+      candidateCount: 6,
+      outcome: "completed",
+    }),
+    expect.objectContaining({
+      stage: "candidate_hydration",
+      durationMs: 14,
+      rounds: 2,
+      candidateCount: 6,
+      outcome: "completed",
+    }),
+    expect.objectContaining({
+      stage: "work_collapse_ranking",
+      durationMs: 26,
+      rounds: 2,
+      resultCount: 1,
+      outcome: "failed",
     }),
   ]);
 });
