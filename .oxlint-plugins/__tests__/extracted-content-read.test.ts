@@ -66,6 +66,8 @@ describe.serial("extracted document content ownership", () => {
       "db.delete(extractedContent);",
       "db.query.entities.findFirst({ with: { extractedContent: false } });",
       "const relations = { workspace: true }; db.query.entities.findFirst({ with: { ...relations } });",
+      'import { DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";',
+      "const exportRelations = { ...DETAIL_RELATIONS, timeEntries: { ...DETAIL_RELATIONS.timeEntries, columns: { userId: true } } }; db.query.invoices.findMany({ with: exportRelations });",
     ].join("\n");
     expect(await lintSingleRule("confine-owner", source, options)).toEqual([]);
   });

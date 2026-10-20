@@ -107,11 +107,14 @@ describe("OCR text export", () => {
         },
       );
       const response = await readOcrExport({
+        source: { kind: "request", sessionId: "fixture-session" },
+        readSessionAuthority: async () => null,
         fieldId,
         format: "searchable-pdf",
         organizationId,
         recordAuditEvent: async () => await Promise.resolve(),
         scopedDb,
+        userId,
         workspaceId,
       });
       // No stored PDF in the fake store: the export answers from metadata alone.
@@ -184,13 +187,15 @@ describe("OCR text export matter access", () => {
   });
 
   const read = async ({
-    userId,
+    memberId,
     workspaceIds,
   }: {
-    userId: typeof ids.userA1;
+    memberId: typeof ids.userA1;
     workspaceIds: (typeof ids.wsA1)[];
   }) =>
     await readOcrExport({
+      source: { kind: "request", sessionId: "fixture-session" },
+      readSessionAuthority: async () => null,
       fieldId: ids.fileFieldA1,
       format: "text",
       organizationId: ids.orgA,
@@ -199,15 +204,16 @@ describe("OCR text export matter access", () => {
         createMembershipScopedDb(markRlsDatabase(database), {
           organizationId: ids.orgA,
           serverValidatedWorkspaceIds: workspaceIds,
-          userId,
+          userId: memberId,
         }),
       ),
+      userId: memberId,
       workspaceId: ids.wsA1,
     });
 
   test("exports a readable matter and returns not found for an unreadable matter", async () => {
     const readable = await read({
-      userId: ids.userA1,
+      memberId: ids.userA1,
       workspaceIds: [ids.wsA1],
     });
     expect(readable).toBeInstanceOf(Response);
@@ -216,7 +222,7 @@ describe("OCR text export matter access", () => {
     }
 
     const unreadable = await read({
-      userId: ids.userA2,
+      memberId: ids.userA2,
       workspaceIds: [ids.wsA2],
     });
     expect(unreadable).toBeInstanceOf(ElysiaCustomStatusResponse);

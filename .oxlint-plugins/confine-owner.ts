@@ -62,6 +62,7 @@ import {
   isStringLiteral,
   memberPropertyName,
   resolveImport,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   repoRelativeFilename,
   type ScopeContext,
@@ -713,9 +714,10 @@ const nestedRelationSelectsOwnedColumns = ({
       // one could carry the owned relation, so it fails closed.
       if (isAstNode(property) && property.type === "SpreadElement") {
         const spread = stableValue(context, property.argument);
-        return spread?.type === "ObjectExpression"
-          ? relationsSelectOwnedColumns(spread)
-          : true;
+        if (spread?.type === "ObjectExpression") {
+          return relationsSelectOwnedColumns(spread);
+        }
+        return !isImportedValue(context, property.argument);
       }
       if (!isAstNode(property) || property.type !== "Property") {
         return false;
@@ -741,6 +743,16 @@ const nestedRelationSelectsOwnedColumns = ({
   // not prove an earlier owned selection was overridden.
   const found = withCandidates(context, options);
   return found.unknown || found.candidates.some(relationsSelectOwnedColumns);
+};
+
+// A value imported from another module is checked where it is defined; an
+// unresolved local (a parameter, a computed value) fails closed instead.
+const isImportedValue = (context: ScopeContext, value: unknown): boolean => {
+  let base = unwrapExpression(value);
+  while (base?.type === "MemberExpression") {
+    base = unwrapExpression(base.object);
+  }
+  return resolveImportedExpressionForEnforcement(context, base) !== null;
 };
 
 // An unresolved spread or computed key may set `with` to anything, so it is
@@ -769,7 +781,7 @@ const withCandidates = (
     if (property.type === "SpreadElement") {
       const spread = stableValue(context, property.argument);
       if (spread?.type !== "ObjectExpression") {
-        unknown = true;
+        unknown ||= !isImportedValue(context, property.argument);
         continue;
       }
       const inherited = withCandidates(context, spread, seen);
