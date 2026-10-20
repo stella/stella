@@ -94,9 +94,10 @@ test("shared cache callers declare their publication policy", async () => {
         ) {
           panic("Cache publication policies declare their kind");
         }
-        const expected = Object.entries(POLICIES)
-          .find(([path]) => path === file)
-          ?.at(1);
+        const expected =
+          Object.entries(POLICIES)
+            .find(([path]) => path === file)
+            ?.at(1) ?? panic(`${file} declares no cache publication policy`);
         expect(kind.initializer.text).toBe(expected);
         expect(constructors.get(node.expression.text)).toBe(expected);
         if (kind.initializer.text === "public-static") {
