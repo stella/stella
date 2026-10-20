@@ -1796,6 +1796,34 @@ export const putCorpusS3ObjectWithSignal = async ({
   );
 };
 
+export const openCorpusS3Writer = async ({
+  key,
+  mimeType,
+  signal,
+}: {
+  key: string;
+  mimeType: string;
+  signal: AbortSignal;
+}): Promise<{
+  write: (bytes: Uint8Array) => Promise<void>;
+  close: () => Promise<void>;
+}> => {
+  signal.throwIfAborted();
+  await refreshStaleCorpusS3();
+  const writer = getCorpusS3().file(key).writer({ type: mimeType });
+  return {
+    write: async (bytes) => {
+      signal.throwIfAborted();
+      writer.write(bytes);
+      await writer.flush();
+    },
+    close: async () => {
+      signal.throwIfAborted();
+      await writer.end();
+    },
+  };
+};
+
 /** Delete from the legal-corpus bucket with an abortable AWS SDK request. */
 export const deleteCorpusS3ObjectWithSignal = async (
   key: string,

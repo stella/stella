@@ -3,21 +3,20 @@ import type { Result } from "better-result";
 import { inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
   CORPUS_SLICE_CONFIG,
-  corpusSliceManifest,
+  type CorpusSliceManifest,
 } from "@/api/lib/case-law/corpus-slice";
 import {
-  buildCorpusSliceExport,
   type CorpusSliceImportResult,
   type CorpusSliceTransferError,
   type CorpusSliceTransferStorage,
   importStoredCorpusSlice,
-  writeCorpusSliceExport,
 } from "@/api/lib/case-law/corpus-slice-transfer";
 import type {
   CaseLawIngestionHandle,
@@ -93,11 +92,47 @@ export const exportCorpusSliceFromDatabase = async ({
   asOf,
   batchSize,
 }: ExportExecutionOptions): Promise<void> => {
-  const sourcesById = new Map<string, TransferRow>();
-  const decisions: TransferRow[] = [];
-  const supplements: TransferRow[] = [];
-  const citations: TransferRow[] = [];
+  const seenSourceIds = new Set<string>();
+  const objectKeys = new Set<string>();
+  const memberHasher = createSha256();
+  let memberCount = 0;
+  const cells = new Map<string, CorpusSliceManifest["cells"][number]>();
   const decisionPredicate = slicePredicate(asOf, "t");
+
+  const openShard = async (name: string) => {
+    const key = `${prefix.replace(/\/$/u, "")}/${name}.ndjson`;
+    const sink =
+      storage.openWriter === undefined
+        ? panic("corpus slice export storage requires a shard writer")
+        : await storage.openWriter(key, "application/x-ndjson");
+    const hasher = createSha256();
+    let rows = 0;
+    return {
+      append: async (page: readonly TransferRow[]) => {
+        if (page.length === 0) {
+          return;
+        }
+        const text = `${rows === 0 ? "" : "\n"}${page
+          .map((row) => JSON.stringify(row))
+          .join("\n")}`;
+        const bytes = new TextEncoder().encode(text);
+        hasher.update(bytes);
+        rows += page.length;
+        await sink.write(bytes);
+      },
+      finish: async () => {
+        await sink.close();
+        return { name, rows, sha256: hasher.digest("hex") };
+      },
+    };
+  };
+  const writers = {
+    sources: await openShard("sources"),
+    decisions: await openShard("decisions"),
+    supplements: await openShard("supplements"),
+    citations: await openShard("citations"),
+    objects: await openShard("objects"),
+  };
 
   const readDecisionPage = async (lastId: string | null): Promise<void> => {
     const cursor = lastId === null ? "" : ` AND t.id > ${sqlString(lastId)}`;
@@ -137,55 +172,100 @@ export const exportCorpusSliceFromDatabase = async ({
         "t.citing_decision_id, t.id",
       ),
     ]);
-    for (const source of pageSources) {
-      sourcesById.set(v.parse(v.string(), field(source, "id", "id")), source);
+    const newSources = pageSources.filter((source) => {
+      const id = v.parse(v.string(), field(source, "id", "id"));
+      if (seenSourceIds.has(id)) {
+        return false;
+      }
+      seenSourceIds.add(id);
+      return true;
+    });
+    await writers.sources.append(newSources);
+    await writers.decisions.append(page);
+    await writers.supplements.append(pageSupplements);
+    await writers.citations.append(pageCitations);
+    const sourceKeys = new Map(
+      pageSources.map((row) => [
+        v.parse(v.string(), field(row, "id", "id")),
+        v.parse(v.string(), field(row, "adapterKey", "adapter_key")),
+      ]),
+    );
+    for (const row of page) {
+      const id = v.parse(v.string(), field(row, "id", "id"));
+      memberHasher.update(`${memberCount === 0 ? "" : "\n"}${id}`);
+      memberCount += 1;
+      const sourceKey = v.parse(
+        v.string(),
+        sourceKeys.get(
+          v.parse(v.string(), field(row, "sourceId", "source_id")),
+        ),
+      );
+      const court = v.parse(v.string(), field(row, "court", "court"));
+      const decisionDate = v.parse(
+        v.nullable(v.string()),
+        field(row, "decisionDate", "decision_date"),
+      );
+      const year =
+        decisionDate === null
+          ? { type: "undated" as const }
+          : {
+              type: "year" as const,
+              year: Number.parseInt(decisionDate.slice(0, 4), 10),
+            };
+      const key = JSON.stringify([sourceKey, court, year]);
+      const existing = cells.get(key);
+      if (existing === undefined) {
+        cells.set(key, { sourceKey, court, year, count: 1 });
+      } else {
+        existing.count += 1;
+      }
     }
-    decisions.push(...page);
-    supplements.push(...pageSupplements);
-    citations.push(...pageCitations);
+    for (const row of [...page, ...pageSupplements]) {
+      for (const name of [
+        "sourceRawS3Key",
+        "textS3Key",
+        "normalizedS3Key",
+        "astS3Key",
+      ]) {
+        const snake = name.replaceAll(
+          /[A-Z]/gu,
+          (letter) => `_${letter.toLowerCase()}`,
+        );
+        const key = row[name] ?? row[snake];
+        if (typeof key === "string") {
+          objectKeys.add(key);
+        }
+      }
+    }
     await readDecisionPage(ids.at(-1) ?? panic("decision page was empty"));
   };
 
   await readDecisionPage(null);
-  const sources = [...sourcesById.values()].toSorted((left, right) => {
-    const leftId = v.parse(v.string(), field(left, "id", "id"));
-    const rightId = v.parse(v.string(), field(right, "id", "id"));
-    if (leftId === rightId) {
-      return 0;
-    }
-    return leftId < rightId ? -1 : 1;
-  });
-  const sourceKeys = new Map(
-    sources.map((row) => [
-      v.parse(v.string(), field(row, "id", "id")),
-      v.parse(v.string(), field(row, "adapterKey", "adapter_key")),
-    ]),
+  await writers.objects.append(
+    [...objectKeys].toSorted().map((key) => ({ key })),
   );
-  const censusRows = decisions.map((row) => ({
-    id: brandPersistedCaseLawDecisionId(
-      v.parse(v.string(), field(row, "id", "id")),
-    ),
-    sourceKey: v.parse(
-      v.string(),
-      sourceKeys.get(v.parse(v.string(), field(row, "sourceId", "source_id"))),
-    ),
-    court: v.parse(v.string(), field(row, "court", "court")),
-    decisionDate: v.parse(
-      v.nullable(v.string()),
-      field(row, "decisionDate", "decision_date"),
-    ),
-  }));
-  const manifest = corpusSliceManifest(censusRows, asOf);
-  await writeCorpusSliceExport(
-    prefix,
-    buildCorpusSliceExport({
-      manifest,
-      sources,
-      decisions,
-      supplements,
-      citations,
+  const shards = await Promise.all(
+    Object.values(writers).map(async (writer) => await writer.finish()),
+  );
+  const manifest: CorpusSliceManifest = {
+    version: 1,
+    asOf: asOf.toISOString(),
+    recentYears: CORPUS_SLICE_CONFIG.recentYears,
+    memberCount,
+    memberIdsSha256: memberHasher.digest("hex"),
+    cells: [...cells.values()].toSorted((left, right) => {
+      const leftKey = JSON.stringify(left);
+      const rightKey = JSON.stringify(right);
+      if (leftKey === rightKey) {
+        return 0;
+      }
+      return leftKey < rightKey ? -1 : 1;
     }),
-    storage,
+  };
+  await storage.write(
+    `${prefix.replace(/\/$/u, "")}/manifest.json`,
+    new TextEncoder().encode(JSON.stringify({ corpus: manifest, shards })),
+    "application/json",
   );
 };
 
@@ -335,6 +415,46 @@ const importStore = (
       return {
         removedIds: removed.map(({ id }) => id),
         projectionsEnqueued: ids.size + removed.length,
+      };
+    }),
+  reconcileDependents: async (
+    ids: ReadonlySet<unknown>,
+    supplements: readonly TransferRow[],
+    citations: readonly TransferRow[],
+  ) =>
+    await ingestionDatabase(async (tx) => {
+      const retained = [...ids].map((id) => v.parse(v.string(), id));
+      if (retained.length === 0) {
+        return { changed: 0, projectionsEnqueued: 0 };
+      }
+      const retainedSql = sqlUuidArray(retained);
+      const supplementRows = sqlString(JSON.stringify(supplements));
+      const citationRows = sqlString(JSON.stringify(citations));
+      const removedSupplements = rowsOf(
+        await tx.execute(
+          sql.raw(
+            `DELETE FROM case_law_decision_supplements current WHERE current.decision_id = ANY(${retainedSql}) AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::case_law_decision_supplements, ${supplementRows}::text::jsonb) desired WHERE desired.source_id = current.source_id AND desired.source_document_id = current.source_document_id) RETURNING 1`,
+          ),
+        ),
+      );
+      const removedCitations = rowsOf(
+        await tx.execute(
+          sql.raw(
+            `DELETE FROM case_law_citations current WHERE current.citing_decision_id = ANY(${retainedSql}) AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::case_law_citations, ${citationRows}::text::jsonb) desired WHERE desired.id = current.id) RETURNING 1`,
+          ),
+        ),
+      );
+      await reconcileProjectionSubjects({
+        tx,
+        subjects: retained.map((id) => ({
+          family: "case_law",
+          entityId: brandPersistedCaseLawDecisionId(id),
+        })),
+        reconcile: reconcileProjection,
+      });
+      return {
+        changed: removedSupplements.length + removedCitations.length,
+        projectionsEnqueued: retained.length,
       };
     }),
 });

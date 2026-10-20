@@ -16,6 +16,7 @@ import {
 } from "@/api/lib/case-law/corpus-slice";
 import type { CorpusSliceRow } from "@/api/lib/case-law/corpus-slice";
 import { corpusSliceCensus } from "@/api/lib/case-law/corpus-slice-census";
+import { corpusSliceCensusOutput } from "@/api/scripts/corpus-slice-census-output";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -198,6 +199,10 @@ describe("the corpus slice census", () => {
     expect(census).toMatchObject({
       verdict: "membership_mismatch",
       cells: [{ type: "complete" }, { type: "complete" }],
+    });
+    expect(corpusSliceCensusOutput(census)).toEqual({
+      json: expect.stringContaining('"verdict": "membership_mismatch"'),
+      exitCode: 1,
     });
     await db
       .delete(caseLawDecisions)

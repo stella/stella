@@ -2,9 +2,10 @@ import { Result, TaggedError } from "better-result";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
-import { parseCorpusSliceManifest } from "@/api/lib/case-law/corpus-slice";
 import { corpusSliceCensus } from "@/api/lib/case-law/corpus-slice-census";
+import { parseCorpusSliceTransferManifest } from "@/api/lib/case-law/corpus-slice-transfer";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
+import { corpusSliceCensusOutput } from "@/api/scripts/corpus-slice-census-output";
 
 class CorpusSliceCensusScriptError extends TaggedError(
   "CorpusSliceCensusScriptError",
@@ -39,14 +40,13 @@ await runScriptWithErrorOutput(async () => {
   if (Result.isError(json)) {
     throw json.error;
   }
-  const manifest = parseCorpusSliceManifest(json.value);
+  const manifest = parseCorpusSliceTransferManifest(json.value);
   if (Result.isError(manifest)) {
     throw manifest.error;
   }
   const { ingestionDb } = await openCaseLawReadOnlySession();
-  const census = await corpusSliceCensus(manifest.value, ingestionDb);
-  console.log(JSON.stringify(census.cells, null, 2));
-  if (census.verdict === "incomplete") {
-    process.exitCode = 1;
-  }
+  const census = await corpusSliceCensus(manifest.value.corpus, ingestionDb);
+  const output = corpusSliceCensusOutput(census);
+  console.log(output.json);
+  process.exitCode = output.exitCode;
 });

@@ -220,6 +220,13 @@ const verifyCorpusSliceShards = (
 export type CorpusSliceTransferStorage = {
   read: (key: string) => Promise<Uint8Array | null>;
   write: (key: string, bytes: Uint8Array, contentType: string) => Promise<void>;
+  openWriter?: (
+    key: string,
+    contentType: string,
+  ) => Promise<{
+    write: (bytes: Uint8Array) => Promise<void>;
+    close: () => Promise<void>;
+  }>;
 };
 
 const encoder = new TextEncoder();
@@ -265,6 +272,26 @@ const transferManifestSchema = v.strictObject({
   ),
 });
 
+export const parseCorpusSliceTransferManifest = (
+  value: unknown,
+): Result<CorpusSliceTransferManifest, CorpusSliceTransferError> => {
+  const parsed = v.safeParse(transferManifestSchema, value);
+  if (!parsed.success) {
+    return Result.err(
+      new CorpusSliceTransferError({
+        message: "corpus slice manifest is invalid",
+      }),
+    );
+  }
+  const corpus = parseCorpusSliceManifest(parsed.output.corpus);
+  if (Result.isError(corpus)) {
+    return Result.err(
+      new CorpusSliceTransferError({ message: corpus.error.message }),
+    );
+  }
+  return Result.ok({ corpus: corpus.value, shards: parsed.output.shards });
+};
+
 /** Loads every shard into an immutable verification set; callers verify before writing. */
 const readCorpusSliceExport = async (
   prefix: string,
@@ -284,21 +311,11 @@ const readCorpusSliceExport = async (
     );
   }
   const decoded: unknown = JSON.parse(decoder.decode(manifestBytes));
-  const parsed = v.safeParse(transferManifestSchema, decoded);
-  if (!parsed.success) {
-    return Result.err(
-      new CorpusSliceTransferError({
-        message: "corpus slice manifest is invalid",
-      }),
-    );
+  const parsed = parseCorpusSliceTransferManifest(decoded);
+  if (Result.isError(parsed)) {
+    return Result.err(parsed.error);
   }
-  const corpus = parseCorpusSliceManifest(parsed.output.corpus);
-  if (Result.isError(corpus)) {
-    return Result.err(
-      new CorpusSliceTransferError({ message: corpus.error.message }),
-    );
-  }
-  const manifest = { corpus: corpus.value, shards: parsed.output.shards };
+  const manifest = parsed.value;
   const shards: CorpusSliceShard[] = [];
   for (const expected of manifest.shards) {
     const bytes = await storage.read(
@@ -348,6 +365,11 @@ type ImportStore = {
     removedIds: readonly unknown[];
     projectionsEnqueued: number;
   }>;
+  reconcileDependents: (
+    ids: ReadonlySet<unknown>,
+    supplements: readonly CorpusSliceTransferRow[],
+    citations: readonly CorpusSliceTransferRow[],
+  ) => Promise<{ changed: number; projectionsEnqueued: number }>;
 };
 
 const IMPORT_BATCH_SIZE = 500;
@@ -400,6 +422,24 @@ export const importCorpusSlice = async (
     );
   }
   const ids = new Set(decisions.map((row) => row["id"]));
+  const memberIds = [...ids].map((id) => v.safeParse(v.string(), id));
+  if (
+    memberIds.some((id) => !id.success) ||
+    ids.size !== manifest.corpus.memberCount ||
+    sha256Hex(
+      memberIds
+        .flatMap((id) => (id.success ? [id.output] : []))
+        .toSorted()
+        .join("\n"),
+    ) !== manifest.corpus.memberIdsSha256
+  ) {
+    return Result.err(
+      new CorpusSliceTransferError({
+        message:
+          "decisions shard membership does not match the corpus manifest",
+      }),
+    );
+  }
   let changed = 0;
   let projectionsEnqueued = 0;
   for (const table of [
@@ -429,6 +469,20 @@ export const importCorpusSlice = async (
       projectionsEnqueued += batch.projectionsEnqueued;
     }
   }
+  const supplements = rows.get("supplements");
+  const citations = rows.get("citations");
+  if (supplements === undefined || citations === undefined) {
+    return Result.err(
+      new CorpusSliceTransferError({ message: "dependent shard is missing" }),
+    );
+  }
+  const reconciliation = await store.reconcileDependents(
+    ids,
+    supplements,
+    citations,
+  );
+  changed += reconciliation.changed;
+  projectionsEnqueued += reconciliation.projectionsEnqueued;
   const removal =
     await store.removeDecisionsExceptAndRecordProjectionDesiredState(ids);
   projectionsEnqueued += removal.projectionsEnqueued;
