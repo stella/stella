@@ -55,7 +55,6 @@ afterEach(() => {
 beforeAll(async () => {
   testDb = await getTestDb();
   store = createDatabaseSessionLifetimeStore(testDb, {
-    expiresIn: 30 * 24 * 60 * 60,
     updateAge: 24 * 60 * 60,
   });
 }, 120_000);
@@ -231,6 +230,29 @@ describe("session rollout policies", () => {
         now: new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_GRACE_MS + 1),
       }),
     ).toBeNull();
+  });
+
+  test("refreshes a capped session once per update interval", async () => {
+    const fixture = await insertSession({ ageMs: 80 * DAY_MS });
+    const first = await store.refresh({
+      token: fixture.token,
+      now: NOW,
+      expiresAt: REFRESH_EXPIRES_AT,
+    });
+    const rotated = first?.token ?? panic("First refresh did not rotate");
+    expect(rotated).not.toBe(fixture.token);
+    const second = await store.refresh({
+      token: rotated,
+      now: new Date(NOW.getTime() + 1000),
+      expiresAt: REFRESH_EXPIRES_AT,
+    });
+    expect(second?.token).toBe(rotated);
+    expect(
+      await store.observe({
+        token: fixture.token,
+        now: new Date(NOW.getTime() + 30_000),
+      }),
+    ).not.toBeNull();
   });
 
   test("preserves fixed sessions and their expiry", async () => {
@@ -460,7 +482,6 @@ const createHttpSession = async (cacheEnabled: boolean) => {
     logger: queryCountLogger,
   });
   const fixtureStore = createDatabaseSessionLifetimeStore(fixtureDb, {
-    expiresIn: 30 * 24 * 60 * 60,
     updateAge: 24 * 60 * 60,
   });
   const lifetime = createSessionLifetime({
@@ -683,6 +704,7 @@ describe("native authentication session responses", () => {
       .update(session)
       .set({
         createdAt,
+        updatedAt: new Date(fixture.clock.getTime() - 2 * DAY_MS),
         expiresAt: new Date(fixture.clock.getTime() + 28 * DAY_MS),
       })
       .where(eq(session.id, fixture.original.id));

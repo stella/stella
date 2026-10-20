@@ -249,6 +249,24 @@ describe("session cookie forwarding", () => {
     });
   });
 
+  test("forwards a rotated bearer token onto a Headers target", () => {
+    const headers = new Headers({
+      "access-control-expose-headers": "x-request-id",
+    });
+    headers.append("set-cookie", "existing=kept; Path=/");
+    const source = new Headers({ "set-auth-token": "rotated.signature" });
+    source.append("set-cookie", "session=new; HttpOnly; Path=/");
+    forwardAuthResponseCookies(headers, source);
+    expect(headers.get("set-auth-token")).toBe("rotated.signature");
+    expect(headers.get("access-control-expose-headers")).toBe(
+      "x-request-id, set-auth-token",
+    );
+    expect(headers.getSetCookie()).toEqual([
+      "existing=kept; Path=/",
+      "session=new; HttpOnly; Path=/",
+    ]);
+  });
+
   test("leaves response headers unchanged when nothing was issued", () => {
     const headers = {
       "set-cookie": "existing=kept; Path=/",

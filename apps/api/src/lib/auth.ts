@@ -1074,7 +1074,6 @@ export const createAuth = (
   });
   const sessionLifetime = createSessionLifetime({
     store: createDatabaseSessionLifetimeStore(rootDb, {
-      expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
     }),
   });

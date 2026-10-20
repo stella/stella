@@ -14,7 +14,6 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const configuredPolicy = {
-  expiresIn: 7 * 24 * 60 * 60,
   updateAge: 24 * 60 * 60,
 };
 
@@ -47,8 +46,8 @@ if (!databaseUrl || !runPostgresTests) {
             userId,
             token,
             refreshMode: "automatic",
-            createdAt: now,
-            updatedAt: now,
+            createdAt: new Date(now.getTime() - 2 * DAY_MS),
+            updatedAt: new Date(now.getTime() - 2 * DAY_MS),
             lastSeenAt: now,
             expiresAt: new Date(now.getTime() + DAY_MS),
           });

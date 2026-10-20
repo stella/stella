@@ -72,19 +72,31 @@ export const createAuthResponseCookiesPlugin = () =>
   );
 
 export const forwardAuthResponseCookies = (
-  target: Context["set"]["headers"],
+  target: Context["set"]["headers"] | Headers,
   source: Headers,
 ) => {
   const rotatedBearer = source.get(ROTATED_BEARER_HEADER);
   if (rotatedBearer !== null) {
-    target[ROTATED_BEARER_HEADER] = rotatedBearer;
-    target[EXPOSE_HEADERS] = withExposedHeader(
+    const exposed = withExposedHeader(
       headerValue(target, EXPOSE_HEADERS),
       ROTATED_BEARER_HEADER,
     );
+    if (target instanceof Headers) {
+      target.set(ROTATED_BEARER_HEADER, rotatedBearer);
+      target.set(EXPOSE_HEADERS, exposed);
+    } else {
+      target[ROTATED_BEARER_HEADER] = rotatedBearer;
+      target[EXPOSE_HEADERS] = exposed;
+    }
   }
   const cookies = source.getSetCookie();
   if (cookies.length === 0) {
+    return;
+  }
+  if (target instanceof Headers) {
+    for (const cookie of cookies) {
+      target.append("set-cookie", cookie);
+    }
     return;
   }
   const existing = target["set-cookie"];
