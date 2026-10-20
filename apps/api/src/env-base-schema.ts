@@ -122,6 +122,7 @@ const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
 
 export const envBaseServerSchema = {
   API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
+  API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME: v.optional(v.string()),
   STELLA_VERSION: v.optional(v.string()),
   STELLA_COMMIT_SHA: v.optional(v.string()),
   STELLA_WORKER_DIR: v.optional(v.string()),
