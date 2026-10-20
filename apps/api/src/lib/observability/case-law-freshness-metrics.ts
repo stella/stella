@@ -200,7 +200,7 @@ const runProductionTick = async (): Promise<void> => {
             result = locked.value;
             return true;
           },
-          read: () =>
+          read: async () =>
             Promise.resolve(
               result ??
                 panic("Case-law freshness report was not read under its lock"),
@@ -213,7 +213,7 @@ const runProductionTick = async (): Promise<void> => {
 
 export const startCaseLawFreshnessMetricLoop = (): (() => Promise<void>) => {
   if (isLocalTestRun()) {
-    return () => Promise.resolve();
+    return async () => Promise.resolve();
   }
   return startNonOverlappingInterval({
     intervalMs: REPORT_INTERVAL_MS,
