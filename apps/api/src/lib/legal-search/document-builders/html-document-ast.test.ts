@@ -105,6 +105,30 @@ describe("the HTML builder", () => {
     });
   });
 
+  test("keeps descriptive note links while converting marker links", () => {
+    const ast = build(`
+      <p>Body<a href="#fn1">1</a>. See <a href="#fn1">the explanation</a>.</p>
+      <aside id="fn1" role="doc-footnote">Explanation.</aside>`);
+    const [body, note] = ast.blocks;
+
+    expect(body?.plainText).toBe("Body1. See the explanation.");
+    expect(note?.anchorId).toBe("fn-1");
+    expect(body?.type === "paragraph" ? body.inlines : []).toEqual([
+      { type: "text", text: "Body" },
+      {
+        type: "superscript",
+        children: [{ type: "text", text: "1" }],
+      },
+      { type: "text", text: ". See " },
+      {
+        type: "link",
+        href: "#fn-1",
+        children: [{ type: "text", text: "the explanation" }],
+      },
+      { type: "text", text: "." },
+    ]);
+  });
+
   test("resolves a body section link to the emitted heading anchor", () => {
     const ast = build(
       `<p>See section <a href="#scope">2</a>.</p><h2 id="scope">2 Scope</h2>`,
@@ -117,7 +141,7 @@ describe("the HTML builder", () => {
     expect(heading?.anchorId).toBe("s-2");
     expect(body?.type === "paragraph" ? body.inlines : []).toContainEqual({
       type: "link",
-      href: `#${heading?.anchorId}`,
+      href: "#s-2",
       children: [{ type: "text", text: "2" }],
     });
   });
@@ -127,14 +151,13 @@ describe("the HTML builder", () => {
       <p>Body<a href="#fn1" id="ref1">1</a>.</p>
       <h2 id="scope">2 Scope</h2>
       <aside id="fn1" role="doc-footnote">See section <a href="#scope">2</a>. <a href="#ref1">Back</a></aside>`);
-    const heading = ast.blocks.find((block) => block.type === "heading");
     const note = ast.blocks.find(
       (block) => block.type === "paragraph" && block.note !== undefined,
     );
     expect(note?.plainText).toBe("See section 2.");
     expect(note?.type === "paragraph" ? note.inlines : []).toContainEqual({
       type: "link",
-      href: `#${heading?.anchorId}`,
+      href: "#s-2",
       children: [{ type: "text", text: "2" }],
     });
   });

@@ -104,8 +104,8 @@ const BLOCK_TAGS = new Set([
 const LIST_TAGS = new Set(["ul", "ol"]);
 const MAX_LIST_DEPTH = 4;
 
-/** A footnote mark as printed in a link: `3`, `[3]`, `(3)`, `*`. */
-const NOTE_MARK = /^[[(]?(\*{1,3}|\d{1,3})[\])]?$/u;
+/** A footnote mark as printed in a link: `3`, `[3]`, `(3)`, `*`, or `a`. */
+const NOTE_MARK = /^(?:([*†‡§a-z])|\[(\d{1,3})\]|\((\d{1,3})\)|(\d{1,3}))$/u;
 
 const isHeadingTag = (tag: string): tag is keyof typeof HEADING_LEVELS =>
   Object.hasOwn(HEADING_LEVELS, tag);
@@ -117,7 +117,7 @@ const isSkipped = (tag: string): boolean =>
   SKIPPED_TAGS.has(tag) || isExcludedHtmlTag(tag);
 
 const markOf = (text: string): string | null =>
-  NOTE_MARK.exec(text.trim())?.at(1) ?? null;
+  NOTE_MARK.exec(text.trim())?.slice(1).find(Boolean) ?? null;
 
 type Footnotes = {
   /** Footnote container to the mark the body printed for it. */
@@ -262,13 +262,15 @@ const BACKLINK_ROLES = new Set(["doc-backlink"]);
 
 const classifyFragmentLink = (
   evidence: FragmentLinkEvidence,
+  visibleText: string,
   footnotes: Footnotes,
   anchorByPublisherId: ReadonlyMap<string, string>,
 ): FragmentLinkResolution => {
   const fragment = fragmentOf(evidence.href);
   const note = footnotes.notes.get(fragment);
-  if (note !== undefined) {
-    return { type: "noteReference", mark: note.mark };
+  const visibleMark = markOf(visibleText);
+  if (note !== undefined && visibleMark !== null) {
+    return { type: "noteReference", mark: visibleMark };
   }
   if (
     evidence.note !== undefined &&
@@ -301,6 +303,7 @@ const resolveFragments = (
       if (evidence !== undefined) {
         const resolution = classifyFragmentLink(
           evidence,
+          plainTextOf(inline.children),
           options.footnotes,
           options.anchorByPublisherId,
         );
