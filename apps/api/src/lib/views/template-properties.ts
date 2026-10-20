@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import { eq } from "drizzle-orm";
 
@@ -20,6 +20,7 @@ import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
@@ -530,28 +531,30 @@ const recreateTemplateDependencies = async ({
       ];
     });
 
-    // Templates strip the workspace-specific Documents id, so an AI
-    // column whose only dependency pointed at Documents loses every
-    // edge in remap. Fall back to the target workspace's system file
-    // property so the new AI column has a source. Skip when the
-    // template explicitly declared no dependencies (static-prompt
-    // columns), so we don't force a spurious source on them.
-    if (
-      resolvedEdges.length === 0 &&
-      templateProperty.dependencies !== undefined &&
-      templateProperty.dependencies.length > 0 &&
-      templateProperty.tool.type === "ai-model" &&
-      systemFilePropertyId !== undefined &&
-      systemFilePropertyId !== propertyId
-    ) {
-      return [
-        {
-          workspaceId,
-          propertyId: brandPersistedPropertyId(propertyId),
-          dependsOnPropertyId: brandPersistedPropertyId(systemFilePropertyId),
-          condition: null,
-        },
-      ];
+    if (templateProperty.tool.type === "ai-model") {
+      const inputs = requireComputedColumnInputs({
+        candidates:
+          systemFilePropertyId === undefined
+            ? []
+            : [
+                {
+                  id: brandPersistedPropertyId(systemFilePropertyId),
+                  content: { type: "file" },
+                },
+              ],
+        inputs: resolvedEdges,
+      });
+      if (Result.isError(inputs)) {
+        // The caller already established the workspace system-file invariant.
+        // Failure here means the template remapping violated that invariant.
+        return panic(inputs.error.message);
+      }
+      return inputs.value.map(({ dependsOnPropertyId, condition }) => ({
+        workspaceId,
+        propertyId: brandPersistedPropertyId(propertyId),
+        dependsOnPropertyId,
+        condition,
+      }));
     }
 
     return resolvedEdges;

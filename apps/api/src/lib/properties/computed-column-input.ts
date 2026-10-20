@@ -27,7 +27,7 @@ export class AIColumnInputRequiredError extends TaggedError(
 
 type InputCandidate = {
   id: SafeId<"property">;
-  content: PropertyContent;
+  content: Pick<PropertyContent, "type">;
 };
 
 /**

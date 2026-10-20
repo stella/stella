@@ -4,6 +4,9 @@ const OWNED_PROPERTY_WRITERS = [
   "../../handlers/properties/create.ts",
   "../../handlers/properties/batch/create.ts",
   "../../handlers/properties/update.ts",
+  "../workflow/materialize-playbook-run.ts",
+  "../views/template-properties.ts",
+  "../../handlers/workspaces/duplicate.ts",
 ] as const;
 
 describe("computed column input owner census", () => {

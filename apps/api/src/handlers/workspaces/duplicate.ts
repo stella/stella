@@ -58,6 +58,7 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
@@ -443,6 +444,67 @@ const cleanupCopiedS3Keys = async ({
   }
 };
 
+type DuplicatedDependency = typeof propertyDependencies.$inferInsert;
+
+/** "Name (n)" when earlier copies exist, else the original name. */
+const duplicatedMatterName = (name: string, earlierCopies: number) =>
+  earlierCopies > 0 ? `${name} (${earlierCopies})` : name;
+/**
+ * Every duplicated computed column keeps an input: copied edges stay, and a column
+ * that arrives without one is wired by the computed-column input owner (or refused).
+ */
+const wireDuplicatedComputedInputs = ({
+  newProperties,
+  dependencies,
+  workspaceId,
+}: {
+  newProperties: readonly (typeof properties.$inferInsert)[];
+  dependencies: readonly DuplicatedDependency[];
+  workspaceId: DuplicatedDependency["workspaceId"];
+}): Result<DuplicatedDependency[], HandlerError> => {
+  const wired = [...dependencies];
+  const candidates = newProperties.flatMap((candidate) =>
+    candidate.id ? [{ id: candidate.id, content: candidate.content }] : [],
+  );
+  for (const property of newProperties) {
+    if (property.tool.type !== "ai-model") {
+      continue;
+    }
+    if (!property.id) {
+      panic("Duplicated property is missing its minted id");
+    }
+    const propertyId = property.id;
+    const existingInputs = wired.filter(
+      (dependency) => dependency.propertyId === propertyId,
+    );
+    const inputs = requireComputedColumnInputs({
+      candidates,
+      inputs: existingInputs,
+    });
+    if (Result.isError(inputs)) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          code: inputs.error.code,
+          message: inputs.error.message,
+        }),
+      );
+    }
+    if (existingInputs.length === 0) {
+      wired.push(
+        ...inputs.value.map(({ dependsOnPropertyId, condition }) => ({
+          id: createSafeId<"propertyDependency">(),
+          workspaceId,
+          propertyId,
+          dependsOnPropertyId,
+          condition,
+        })),
+      );
+    }
+  }
+  return Result.ok(wired);
+};
+
 export const createDuplicateWorkspace = (
   dependencies: DuplicateWorkspaceDependencies = defaultDuplicateWorkspaceDependencies,
 ) =>
@@ -681,10 +743,10 @@ export const createDuplicateWorkspace = (
           });
         }
 
-        const newName =
-          duplicatedNames.length > 0
-            ? `${snapshot.workspace.name} (${duplicatedNames.length})`
-            : snapshot.workspace.name;
+        const newName = duplicatedMatterName(
+          snapshot.workspace.name,
+          duplicatedNames.length,
+        );
         const pattern =
           settings?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN;
         const padding =
@@ -728,8 +790,9 @@ export const createDuplicateWorkspace = (
         }
 
         const propertyIdMap = new Map<string, SafeId<"property">>();
+        let newProperties: (typeof properties.$inferInsert)[] = [];
         if (snapshot.properties.length > 0) {
-          const newProperties = snapshot.properties.map((property) => {
+          newProperties = snapshot.properties.map((property) => {
             const id = createSafeId<"property">();
             propertyIdMap.set(property.id, id);
             return {
@@ -771,8 +834,17 @@ export const createDuplicateWorkspace = (
             };
           })
           .filter((dependency) => dependency !== null);
-        if (newDependencies.length > 0) {
-          await tx.insert(propertyDependencies).values(newDependencies);
+
+        const wiredDependencies = wireDuplicatedComputedInputs({
+          newProperties,
+          dependencies: newDependencies,
+          workspaceId: targetWorkspaceId,
+        });
+        if (Result.isError(wiredDependencies)) {
+          return Result.err(wiredDependencies.error);
+        }
+        if (wiredDependencies.value.length > 0) {
+          await tx.insert(propertyDependencies).values(wiredDependencies.value);
         }
 
         if (snapshot.views.length > 0) {
