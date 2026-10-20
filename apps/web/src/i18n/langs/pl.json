@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Wszystkie twierdzenia wymagające oceny zostały rozpatrzone.</strong> {count, plural, one {Pozostałe # rutynowe ustalenie nie wymaga indywidualnej weryfikacji.} few {Pozostałe # rutynowe ustalenia nie wymagają indywidualnej weryfikacji.} many {Pozostałych # rutynowych ustaleń nie trzeba weryfikować indywidualnie.} other {Pozostałego # rutynowego ustalenia nie trzeba weryfikować indywidualnie.}}",
       "attentionOpen": "<strong>{count, plural, one {# twierdzenie wymaga} few {# twierdzenia wymagają} many {# twierdzeń wymaga} other {# twierdzenia wymaga}} Twojej oceny</strong> — sprzeczności i sporne interpretacje. {routineCount, plural, one {Pozostałe # jest rutynowe i nie wymaga indywidualnego zatwierdzenia.} few {Pozostałe # są rutynowe i nie wymagają indywidualnego zatwierdzenia.} many {Pozostałych # jest rutynowych i nie wymaga indywidualnego zatwierdzenia.} other {Pozostałego # rutynowego ustalenia nie trzeba indywidualnie zatwierdzać.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporne} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} other {}})",
+      "documentView": {
+        "label": "Widok dokumentu",
+        "original": "Oryginał",
+        "reading": "Widok do czytania"
+      },
+      "notLocated": "{count, plural, one {Nie znaleziono # twierdzenia w oryginale} few {Nie znaleziono # twierdzeń w oryginale} many {Nie znaleziono # twierdzeń w oryginale} other {Nie znaleziono # twierdzenia w oryginale}}",
       "selectClaim": "Wybierz twierdzenie, aby przejrzeć powiązane wpisy.",
       "showQueue": "Pokaż kolejkę",
       "stats": {
@@ -1009,6 +1015,9 @@
       "saved": "Zapisano {count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczeń}} do sprawy {matter}"
     },
     "newestDecisions": "Najnowsze orzeczenia",
+    "noResults": {
+      "hint": "Spróbuj innych słów, popraw zapytanie za pomocą AI lub zadaj pytanie na czacie."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Ludzkie"
@@ -1081,6 +1090,10 @@
         "medium": "Średni",
         "short": "Krótki"
       }
+    },
+    "rewritten": {
+      "line": "Brak dokładnych wyników dla <bdi>{original}</bdi>; wyniki dla <bdi>{query}</bdi>",
+      "searchOriginal": "Szukaj moich oryginalnych słów"
     },
     "sameCaseNumber": "{count, plural, one {# orzeczenie ma} few {# orzeczenia mają} many {# orzeczeń ma} other {# orzeczenia ma}} tę sygnaturę. Wybierz sąd.",
     "searchLabel": "Szukaj w orzecznictwie",
@@ -4240,6 +4253,10 @@
     "archivedEmpty": "Brak zarchiwizowanych wspomnień.",
     "archivedToast": "Pamięć zarchiwizowana",
     "createdToast": "Zapisano w pamięci",
+    "deleteConfirmation": "Wpisz {confirmation}, aby potwierdzić",
+    "deleteDescription": "Spowoduje to trwałe usunięcie tej pamięci. Tej czynności nie można cofnąć.",
+    "deleteTitle": "Usunąć pamięć?",
+    "deletedToast": "Pamięć usunięta",
     "empty": "Nic jeszcze w pamięci.",
     "kinds": {
       "decision": "Decyzja",

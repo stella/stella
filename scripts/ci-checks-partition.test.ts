@@ -788,6 +788,46 @@ const withoutLocalVerification = (step: Step): Step => {
   return original;
 };
 
+// Steps that chose their base from the merge-group event now read the
+// planner's comparison base (the target branch for a merge group). Mapping the
+// merge-base form keeps every other field of those checks compared exactly.
+const TARGET_BASE_REWRITES = new Map([
+  [
+    `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}`,
+    `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+  ],
+  [
+    `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}`,
+    `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+  ],
+  [
+    `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}`,
+    `\${{ needs.ci-plan.outputs.target_base_sha || github.sha }}`,
+  ],
+  [
+    `\${{ github.event.merge_group.base_sha }}`,
+    `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
+  ],
+]);
+const withTargetBase = (step: Step): Step => {
+  const rewrite = (fields: unknown) =>
+    fields !== null && typeof fields === "object"
+      ? Object.fromEntries(
+          Object.entries(fields).map(([key, value]) => [
+            key,
+            typeof value === "string"
+              ? (TARGET_BASE_REWRITES.get(value) ?? value)
+              : value,
+          ]),
+        )
+      : fields;
+  return {
+    ...step,
+    ...(step["env"] === undefined ? {} : { env: rewrite(step["env"]) }),
+    ...(step["with"] === undefined ? {} : { with: rewrite(step["with"]) }),
+  };
+};
+
 // Checks that ran as background steps keep their ids in the check pool.
 const formerBackgroundIds: Record<string, string> = {
   "Test capability shard merge and package parity": "capability_parity",
@@ -800,6 +840,7 @@ const formerBackgroundIds: Record<string, string> = {
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
+    .map(withTargetBase)
     .map(withoutLocalVerification)
     .map(documentationScope)
     .map(withoutContinuation)
@@ -856,6 +897,14 @@ const expectScope = ({ current, base }: ScopeOptions) => {
     isDeepStrictEqual(originalScope["needs"], ["ci-plan", "generated-sources"])
   ) {
     originalScope["needs"] = "ci-plan";
+  }
+  // Jobs were pinned to ubuntu-24.04, the image ubuntu-latest resolved to, so
+  // a merge base that still names the floating label runs the same image.
+  if (
+    originalScope["runs-on"] === "ubuntu-latest" &&
+    scope["runs-on"] === "ubuntu-24.04"
+  ) {
+    originalScope["runs-on"] = "ubuntu-24.04";
   }
   const originalEnvironment =
     originalScope["env"] === undefined
@@ -987,6 +1036,31 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  // The classification check derives its manifest instead of reading a
+  // committed one, and exposes its sensitive-change output by step id.
+  if (
+    step.name === "Check workflow job classifications" &&
+    step["id"] === undefined
+  ) {
+    return { ...step, id: "job-classification" };
+  }
+  if (step.name === "Checkout workflow classification tooling") {
+    const checkout = v.parse(
+      v.looseObject({ "sparse-checkout": v.string() }),
+      step["with"],
+    );
+    return {
+      ...step,
+      with: {
+        ...checkout,
+        "fetch-depth": 0,
+        "sparse-checkout": checkout["sparse-checkout"].replace(
+          ".github/ci-job-classification.json\n",
+          "",
+        ),
+      },
+    };
+  }
   if (
     step.name === "Test oxlint plugins" &&
     fields.run ===
@@ -1052,7 +1126,7 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     "bun test scripts/check-oxlint-rule-coverage.test.ts\nbun scripts/check-oxlint-rule-coverage.ts\n",
   );
   expect(coverage.env).toEqual({
-    BASE_SHA: `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}`,
+    BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
   });
   return Object.assign(step, { run: "bun run check:docs-sources" });
 });

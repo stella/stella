@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Všechna tvrzení vyžadující úsudek byla vyřízena.</strong> {count, plural, one {Zbývající # rutinní závěr nevyžaduje samostatnou kontrolu.} few {Zbývající # rutinní závěry nevyžadují samostatnou kontrolu.} other {Zbývajících # rutinních závěrů nevyžaduje samostatnou kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrzení vyžaduje} few {# tvrzení vyžadují} other {# tvrzení vyžaduje}} váš úsudek</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.} few {Zbývající # tvrzení jsou rutinní a nevyžadují samostatné schválení.} other {Zbývajících # tvrzení je rutinních a nevyžaduje samostatné schválení.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} other {}})",
+      "documentView": {
+        "label": "Zobrazení dokumentu",
+        "original": "Originál",
+        "reading": "Text ke čtení"
+      },
+      "notLocated": "{count, plural, one {# tvrzení se v originálu nepodařilo najít} few {# tvrzení se v originálu nepodařilo najít} other {# tvrzení se v originálu nepodařilo najít}}",
       "selectClaim": "Vyberte tvrzení a prohlédněte si související záznamy.",
       "showQueue": "Zobrazit frontu",
       "stats": {
@@ -1009,6 +1015,9 @@
       "saved": "Do spisu {matter} {count, plural, one {bylo uloženo # rozhodnutí} few {byla uložena # rozhodnutí} other {bylo uloženo # rozhodnutí}}"
     },
     "newestDecisions": "Nejnovější rozhodnutí",
+    "noResults": {
+      "hint": "Zkuste jiná slova, vylepšete dotaz pomocí AI, nebo se zeptejte v chatu."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Lidské"
@@ -1081,6 +1090,10 @@
         "medium": "Střední",
         "short": "Krátký"
       }
+    },
+    "rewritten": {
+      "line": "Pro <bdi>{original}</bdi> nic přesně neodpovídá; zobrazujeme výsledky pro <bdi>{query}</bdi>",
+      "searchOriginal": "Hledat moje původní slova"
     },
     "sameCaseNumber": "{count, plural, one {# rozhodnutí nese} few {# rozhodnutí nesou} other {# rozhodnutí nese}} tuto spisovou značku. Vyberte soud.",
     "searchLabel": "Hledat v judikatuře",
@@ -4240,6 +4253,10 @@
     "archivedEmpty": "Žádné archivované paměti.",
     "archivedToast": "Paměť byla archivována",
     "createdToast": "Uloženo do paměti",
+    "deleteConfirmation": "Pro potvrzení napište {confirmation}",
+    "deleteDescription": "Tímto tuto paměť trvale odstraníte. Tuto akci nelze vrátit zpět.",
+    "deleteTitle": "Smazat paměť?",
+    "deletedToast": "Paměť byla smazána",
     "empty": "Zatím žádná paměť.",
     "kinds": {
       "decision": "Rozhodnutí",
