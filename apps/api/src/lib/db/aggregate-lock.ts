@@ -101,7 +101,7 @@ type SessionAdvisoryConnection = {
  * read transaction while the EMF records are written. The caller owns the
  * reserved session; releasing it releases this lock.
  */
-export const tryCaseLawFreshnessSessionLock = async (
+const tryCaseLawFreshnessSessionLock = async (
   connection: SessionAdvisoryConnection,
 ): Promise<boolean> => {
   const result = await connection.unsafe(

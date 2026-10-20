@@ -140,7 +140,6 @@ import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
 } from "@/api/lib/browser-origin-guard";
-import { startCaseLawFreshnessMetricLoop } from "@/api/lib/case-law-freshness-metrics";
 import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-checks";
 import {
   clientAddressConfigurationWarning,
@@ -164,6 +163,7 @@ import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
+import { startCaseLawFreshnessMetricLoop } from "@/api/lib/observability/case-law-freshness-metrics";
 import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
 import { logger } from "@/api/lib/observability/logger";
 import {

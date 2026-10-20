@@ -10,7 +10,6 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
-import { readCaseLawFreshnessReportTx } from "@/api/lib/case-law-freshness-metrics";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -19,6 +18,7 @@ import {
   ADAPTER_KEYS,
   IMPORT_SOURCE_KEYS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import { readCaseLawFreshnessReportTx } from "@/api/lib/observability/case-law-freshness-metrics";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 

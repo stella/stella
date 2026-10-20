@@ -4,7 +4,7 @@ import "@/api/tests/setup-env";
 import {
   emitCaseLawFreshnessReport,
   runCaseLawFreshnessMetricTick,
-} from "@/api/lib/case-law-freshness-metrics";
+} from "@/api/lib/observability/case-law-freshness-metrics";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -91,7 +91,7 @@ test("two loop instances sharing the advisory lock emit once", async () => {
         held = true;
         return true;
       },
-      read: async () => report,
+      read: () => Promise.resolve(report),
     });
   };
 

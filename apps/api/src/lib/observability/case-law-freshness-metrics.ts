@@ -8,13 +8,14 @@ import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import { readUnderCaseLawFreshnessSessionLock } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCorpusIndexProjectionConvergenceTx } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   buildCaseLawOldestUnpublishedAgeMetric,
   buildCaseLawProjectionBacklogMetric,
@@ -29,6 +30,10 @@ const REPORT_INTERVAL_MS = 5 * 60 * 1000;
 const STATEMENT_TIMEOUT_MS = 10_000;
 const LOCK_TIMEOUT_MS = 1000;
 const SCHEDULED_SOURCE_KEYS = Object.values(ADAPTER_KEYS);
+const FRESHNESS_METRICS_SINK = failureSink({
+  event: "case_law.freshness_metrics",
+  expected: [],
+});
 
 type CaseLawFreshnessReport = {
   backlogItems: number;
@@ -151,9 +156,11 @@ const runProductionTick = async (): Promise<void> => {
             result = locked.value;
             return true;
           },
-          read: async () =>
-            result ??
-            panic("Case-law freshness report was not read under its lock"),
+          read: () =>
+            Promise.resolve(
+              result ??
+                panic("Case-law freshness report was not read under its lock"),
+            ),
         });
       },
     );
@@ -162,12 +169,16 @@ const runProductionTick = async (): Promise<void> => {
 
 export const startCaseLawFreshnessMetricLoop = (): (() => Promise<void>) => {
   if (isLocalTestRun()) {
-    return async () => await Promise.resolve();
+    return () => Promise.resolve();
   }
   return startNonOverlappingInterval({
     intervalMs: REPORT_INTERVAL_MS,
-    onError: (error) =>
-      captureError(error, { source: "case-law-freshness-metrics" }),
+    onError: (error) => {
+      observeFailure(error, {
+        sink: FRESHNESS_METRICS_SINK,
+        ctx: { source: "case-law-freshness-metrics" },
+      });
+    },
     run: runProductionTick,
   });
 };
