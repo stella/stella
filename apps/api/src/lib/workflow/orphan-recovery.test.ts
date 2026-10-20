@@ -42,15 +42,20 @@ describe("pendingCellRecovery", () => {
         now,
       ),
     ).toEqual({ type: "retry", attempt: 1, delayMs: 1000 });
-    for (const cell of [
-      { ownerRunId: "old", deadlineAt: null, attempt: 1 as const },
-      { ownerRunId: null, deadlineAt: null, attempt: null },
-    ]) {
-      expect(pendingCellRecovery(cell, "current", now)).toEqual({
-        type: "error",
-        retry: "manual",
-      });
-    }
+    expect(
+      pendingCellRecovery(
+        { ownerRunId: null, deadlineAt: null, attempt: null },
+        "current",
+        now,
+      ),
+    ).toEqual({ type: "retry", attempt: 1, delayMs: 1000 });
+    expect(
+      pendingCellRecovery(
+        { ownerRunId: "old", deadlineAt: null, attempt: 1 },
+        "current",
+        now,
+      ),
+    ).toEqual({ type: "error", retry: "manual" });
   });
 });
 

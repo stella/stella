@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { pendingCellRecovery } from "@/api/lib/workflow/orphan-recovery";
+import { reconcilePendingCells } from "@/api/lib/workflow/orphan-recovery";
 
 const fault = fc.constantFrom(
   "batch-throws",
@@ -21,48 +21,49 @@ const claimedCell = fc.record({
   deadlinePassed: fc.boolean(),
 });
 
-test("workflow pending cells reach a terminal fixed point", () => {
-  assertProperty(
+test("scheduled workflow reconciliation drives claimed cells to a terminal fixed point", async () => {
+  await assertProperty(
     "workflow pending cells reach a terminal fixed point",
-    fc.property(
+    fc.asyncProperty(
       fc.array(claimedCell, { minLength: 1, maxLength: 100 }),
-      (cells) => {
+      async (cells) => {
         const now = new Date("2026-01-01T00:00:00.000Z");
-        const terminal = cells.map((cell, index) => {
-          const ownerRunId = cell.ownerIsCurrent ? "current" : `old-${index}`;
-          const first = pendingCellRecovery(
-            {
-              ownerRunId,
-              deadlineAt: new Date(
-                now.getTime() + (cell.deadlinePassed ? -1 : 1),
-              ),
-              attempt: cell.attempt,
-            },
-            "current",
+        const pending = cells.map((cell, index) => ({
+          id: String(index).padStart(3, "0"),
+          workspaceId: `workspace-${index % 3}`,
+          ownerRunId: cell.ownerIsCurrent ? "current" : `old-${index}`,
+          deadlineAt: new Date(now.getTime() + (cell.deadlinePassed ? -1 : 1)),
+          attempt: cell.attempt,
+          state: "pending" as "pending" | "owned" | "error",
+        }));
+        const run = async () =>
+          await reconcilePendingCells({
             now,
-          );
-          if (first.type === "leave-owned") {
-            expect(cell.deadlinePassed).toBe(false);
-            return "owned" as const;
-          }
-          if (first.type === "error") {
-            return "error" as const;
-          }
-
-          // The automatic retry owns attempt 1. A worker loss, omitted/null
-          // answer, throw, or superseding run can strand it again; the next
-          // reconciliation must therefore terminate rather than loop.
-          const afterRetry = pendingCellRecovery(
-            {
-              ownerRunId: `retry-${index}`,
-              deadlineAt: new Date(now.getTime() - 1),
-              attempt: first.attempt,
+            pageSize: 7,
+            selectPage: async (cursor, limit) =>
+              pending
+                .filter(
+                  ({ id, state }) =>
+                    state === "pending" && (cursor === null || id > cursor),
+                )
+                .slice(0, limit),
+            currentRunId: async () => "current",
+            retry: async (cell) => {
+              cell.ownerRunId = `retry-${cell.id}`;
+              cell.deadlineAt = new Date(now.getTime() - 1);
+              cell.attempt = 1;
             },
-            "current",
-            now,
-          );
-          expect(afterRetry).toEqual({ type: "error", retry: "manual" });
-          return "error" as const;
+            error: async (cell) => {
+              cell.state = "error";
+            },
+          });
+        await run();
+        await run();
+        const terminal = pending.map((cell) => {
+          if (cell.ownerRunId === "current" && cell.deadlineAt > now) {
+            cell.state = "owned";
+          }
+          return cell.state;
         });
 
         // Quiescence permits only a live, unexpired owner or a terminal cell.
