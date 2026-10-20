@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { compareCodeUnit } from "@stll/collation";
 
 import type { ScreenAction } from "@/lib/capabilities/screen-actions";
 import {
@@ -51,9 +52,11 @@ describe("screen model", () => {
       ),
     );
 
-    expect([...params].toSorted()).toEqual(
-      Object.keys(ROUTE_PARAM_DISPOSITIONS).toSorted(),
-    );
+    expect(
+      [...params]
+        .filter((name) => name !== undefined)
+        .toSorted(compareCodeUnit),
+    ).toEqual(Object.keys(ROUTE_PARAM_DISPOSITIONS).toSorted(compareCodeUnit));
   });
 
   test("route parameters that name resources become resources", () => {
@@ -76,11 +79,13 @@ describe("screen model", () => {
     });
   });
 
-  test("a malformed identifier is not a resource", () => {
+  // Identifier formats belong to the API boundary that owns them; the screen
+  // model drops only values the resource contract rejects.
+  test("an identifier the resource contract rejects is not a resource", () => {
     const model = deriveScreenModel({
       routeId: "/_protected/workspaces/$workspaceId",
-      pathname: "/workspaces/not-an-id",
-      params: { workspaceId: "not-an-id" },
+      pathname: "/workspaces/%ED%A0%80",
+      params: { workspaceId: "\uD800" },
       search: {},
       actions: [],
     });
