@@ -108,16 +108,10 @@ fn credential_fingerprint(key: &str) -> [u8; 32] {
   fingerprint
 }
 
-/// Account JSON can hold credentials, which serde repeats in its messages:
-/// only the error's category and position reach the log.
+/// Account JSON can hold credentials, which serde repeats in its messages.
 fn json_error(message: &'static str) -> impl FnOnce(serde_json::Error) -> String {
   move |error| {
-    tracing::warn!(
-      category = ?error.classify(),
-      line = error.line(),
-      column = error.column(),
-      "{message}"
-    );
+    crate::logging::log_json_error(&error, message);
     message.to_string()
   }
 }
