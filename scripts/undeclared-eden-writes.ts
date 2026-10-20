@@ -133,13 +133,8 @@ const isCapabilityCallback = (fn: ts.Node): boolean => {
   );
 };
 
-const nearestFunction = (node: ts.Node): ts.Node | null => {
-  let current: ts.Node | undefined = node.parent;
-  while (current !== undefined && !isFunctionLike(current)) {
-    current = current.parent;
-  }
-  return current ?? null;
-};
+const nearestFunction = (node: ts.Node): ts.Node | null =>
+  ts.findAncestor(node.parent, isFunctionLike) ?? null;
 
 export const countUndeclaredEdenWrites = (
   content: string,
