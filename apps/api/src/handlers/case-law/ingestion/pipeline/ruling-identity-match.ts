@@ -83,7 +83,7 @@ export const republishedRulingCourtPredicate = (
         : (observed.court ?? sql``),
     ),
   );
-  if (!observed.courtId) {
+  if (observed.courtId === undefined || observed.courtId === null) {
     return nameMatches;
   }
   return sql`(

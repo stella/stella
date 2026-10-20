@@ -276,11 +276,10 @@ test("court-name fallback links whichever UUID side has the court id", async () 
       createSafeId<"caseLawDecision">(),
       createSafeId<"caseLawDecision">(),
     ].toSorted(compareCodeUnit);
-    const lowerId = ids.at(0);
-    const higherId = ids.at(1);
-    if (lowerId === undefined || higherId === undefined) {
-      return panic("Court orientation fixture requires two decision ids");
-    }
+    const lowerId =
+      ids.at(0) ?? panic("Court orientation fixture requires two decision ids");
+    const higherId =
+      ids.at(1) ?? panic("Court orientation fixture requires two decision ids");
     expected.add(lowerId);
     expected.add(higherId);
     await db.insert(caseLawDecisions).values([

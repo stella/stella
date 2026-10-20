@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { compareCodeUnit } from "@stll/collation";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 /**
  * Link exact republished rulings already stored as separate decisions.
@@ -138,7 +139,9 @@ await runScriptWithErrorOutput(async () => {
   );
   console.info("outcome separate_ambiguous", before.outcomes.separateAmbiguous);
   if (dryRun) {
-    for (const [source, count] of [...before.bySource].toSorted()) {
+    for (const [source, count] of [...before.bySource].toSorted(
+      ([left], [right]) => compareCodeUnit(left, right),
+    )) {
       console.info(
         `source ${source} before=${String(count)} after=${String(count)}`,
       );
