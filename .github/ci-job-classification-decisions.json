@@ -682,22 +682,22 @@
   "candidate:.github/workflows/publish-npm.yml/release-trigger": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "790308b2741c9dce7b44e5dada7eaf249b9105ec58dfb4c27f9739ea2f41f55b"
+    "reviewedDigest": "526643fad983dd8ebb71cfd3355cfcbba05457b1bf327f895bb235cae7f287c4"
   },
   "candidate:.github/workflows/publish-npm.yml/pack": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "9be5d6b74ef5fc65f188ff6cce83a9fdf70f4d46b362d69ef051e8ebfea29742"
+    "reviewedDigest": "886425c77a767cd42fdbf189123106c42db2ab6f99eea25db3f1a9fa72e5497c"
   },
   "candidate:.github/workflows/publish-npm.yml/release": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "3efaeeae813fb428e020d93f9dc364314bde33ac93af21142dac36b8e0e5c088"
+    "reviewedDigest": "b1ac92e427f8e92b9dcf3296ad041c24eda3954d4f1dfbcb3468b297c10b4ca5"
   },
   "candidate:.github/workflows/publish-npm.yml/verify-npm": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "854b78561348739d0d6ed0458a3a6b48bfbb8724208e3a2b585ba36b280bfb57"
+    "reviewedDigest": "5b4224cc48623441061a7b63ff47bd64a54d9f64e27535abb927e958ca4ec505"
   },
   "candidate:.github/workflows/publish-product-media.yml/publish": {
     "kind": "priority",
