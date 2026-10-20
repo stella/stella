@@ -21,12 +21,17 @@ import {
   processDecision,
   recordSourceIdentityRaw,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision";
-import { findRepublishedRulingTx } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
+import {
+  findRepublishedRulingTx,
+  observeDecision,
+  resolveDecisionIdentityTx,
+} from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { STATED_ECLI_IDENTITY } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -49,9 +54,9 @@ const complete = {
 const stored = [{ decisionId: "canonical", identity: complete }];
 
 describe("cross-source ruling identity", () => {
-  test("all registered source pairs converge on the same complete identity", async () => {
-    await assertProperty(
-      "republished ruling identity converges across registered source pairs",
+  test("all registered source pairs converge on the same complete identity", () => {
+    assertProperty(
+      "all registered source pairs converge on the same complete identity",
       fc.property(
         fc.constantFrom(...listAdapterKeys()),
         fc.constantFrom(...listAdapterKeys()),
@@ -324,6 +329,55 @@ describe("cross-source ruling identity lookup", () => {
         sourceRawS3Key: "raw/second/updated",
       },
     ]);
+  });
+
+  test("an ECLI conflict never takes the republished-link path", async () => {
+    const sourceId = sourceAt(0);
+    const otherSourceId = sourceAt(1);
+    const caseNumber = "ECLI CONFLICT 1/26";
+    const ecli = "ECLI:PL:NSA:2026:CONFLICT";
+    const input = plainTextIngestionResult({
+      ...observed,
+      caseNumber,
+      ecli,
+      sourceDocumentId: "ecli-conflict-incoming",
+      rawHash: "ecli-conflict-incoming",
+    });
+    const values = [
+      { sourceId, sourceDocumentId: "ecli-conflict-a" },
+      { sourceId, sourceDocumentId: "ecli-conflict-b" },
+      { sourceId: otherSourceId, sourceDocumentId: "republication" },
+    ].map(({ sourceId: rowSourceId, sourceDocumentId }) => ({
+      id: createSafeId<"caseLawDecision">(),
+      sourceId: rowSourceId,
+      sourceDocumentId,
+      country: input.country,
+      court: input.court,
+      language: input.language,
+      caseNumber,
+      docketFamilyKey: docketFamilyKeyOf(caseNumber, input.country),
+      decisionDate: input.decisionDate,
+      decisionType: input.decisionType,
+      ecli,
+    }));
+    await db.insert(caseLawDecisions).values(values);
+
+    const identity = await db.transaction(async (tx) => {
+      const observedDecision = observeDecision({ input, sourceId });
+      return await resolveDecisionIdentityTx(asTestRaw<Transaction>(tx), {
+        ...observedDecision,
+        sourceId,
+        statedEcliIdentity: STATED_ECLI_IDENTITY.DECISION,
+        proposedDecisionId: createSafeId<"caseLawDecision">(),
+      });
+    });
+
+    expect(identity.existing).toBeUndefined();
+    expect(identity.ecliIdentity).toEqual({
+      type: "ambiguous",
+      sourceDocumentId: input.sourceDocumentId,
+    });
+    expect(identity.republished).toBeUndefined();
   });
 
   test("republished ruling ingestion persists cross-source identity invariants", async () => {

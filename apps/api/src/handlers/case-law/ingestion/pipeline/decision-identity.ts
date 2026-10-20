@@ -782,7 +782,8 @@ const resolveRepublishedIdentityTx = async (
   }
   if (
     sameSource.existing !== undefined ||
-    sameSource.claimedDecisionId !== undefined
+    sameSource.claimedDecisionId !== undefined ||
+    sameSource.ecliIdentity.type === "ambiguous"
   ) {
     return { existing: sameSource.existing, republished: undefined };
   }
