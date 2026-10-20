@@ -525,6 +525,27 @@ test("an owner-level marker does not exempt another modified parser dependency",
   ]);
 });
 
+test("an owner-level marker does not exempt another deleted parser dependency", () => {
+  const { base, head } = deletedWorkspaceDependency(
+    "// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\n",
+  );
+  head.delete(`${PARSERS}shared-helper.ts`);
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining(`${PARSERS}shared-helper.ts`),
+  ]);
+});
+
+test("an owner-level marker does not exempt a removed package the parser no longer imports", () => {
+  const { base, head, parser } = deletedWorkspaceDependency();
+  head.set(
+    parser,
+    '// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\nimport { helper } from "./shared-helper";\nexport const parseA = () => helper();\n',
+  );
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("packages/dependency/src/index.ts"),
+  ]);
+});
+
 test("deleted modules containing only reexports need no parser version bump", () => {
   for (const source of [
     'export { helper } from "./shared-helper";\n',
