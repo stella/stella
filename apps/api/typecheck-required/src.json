@@ -1,0 +1,6 @@
+{
+  "files": [
+    "../.cache/typecheck-declarations/src.json is missing; run bun --filter @stll/api generate:typecheck-declarations"
+  ],
+  "include": []
+}

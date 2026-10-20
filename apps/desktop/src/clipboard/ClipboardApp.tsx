@@ -2710,7 +2710,7 @@ const ClipboardApp = () => {
                 ) : (
                   <div
                     aria-label={t("timeline")}
-                    className="absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
+                    className="clipboard-timeline absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
                     onPointerMove={handleRailPointerMove}
                     onWheel={handleRailWheel}
                     ref={attachTimelineRail}
