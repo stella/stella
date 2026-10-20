@@ -147,6 +147,34 @@ export const REFERENCE_ALLOWLIST = [
   {
     format: "ooxml",
     element:
+      "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}compatSetting",
+    attribute:
+      "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}uri",
+    reason: "compatibility schema identifier",
+  },
+  {
+    format: "ooxml",
+    element:
+      "{http://schemas.openxmlformats.org/officeDocument/2006/customXml}schemaRef",
+    attribute:
+      "{http://schemas.openxmlformats.org/officeDocument/2006/customXml}uri",
+    reason: "custom XML schema identifier",
+  },
+  {
+    format: "ooxml",
+    element: "{http://purl.oclc.org/ooxml/officeDocument/customXml}schemaRef",
+    attribute: "{http://purl.oclc.org/ooxml/officeDocument/customXml}uri",
+    reason: "custom XML schema identifier",
+  },
+  {
+    format: "ooxml",
+    element: "{http://purl.oclc.org/ooxml/wordprocessingml/main}compatSetting",
+    attribute: "{http://purl.oclc.org/ooxml/wordprocessingml/main}uri",
+    reason: "compatibility schema identifier",
+  },
+  {
+    format: "ooxml",
+    element:
       "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}hyperlink",
     attribute:
       "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id",
@@ -183,7 +211,22 @@ const isSchemeCharacter = (character: string): boolean =>
   character === "-" ||
   character === ".";
 
-const isLocalReference = (value: string): boolean => {
+const FETCHABLE_SCHEMES = [
+  { scheme: "http", reason: "web resource" },
+  { scheme: "https", reason: "web resource" },
+  { scheme: "ftp", reason: "file transfer resource" },
+  { scheme: "file", reason: "filesystem resource" },
+  { scheme: "smb", reason: "network share resource" },
+  { scheme: "mhtml", reason: "web archive resource" },
+  { scheme: "jar", reason: "archive resource" },
+] as const satisfies readonly { scheme: string; reason: string }[];
+
+type FetchableScheme = (typeof FETCHABLE_SCHEMES)[number]["scheme"];
+const FETCHABLE_SCHEME_NAMES: ReadonlySet<string> = new Set<FetchableScheme>(
+  FETCHABLE_SCHEMES.map(({ scheme }) => scheme),
+);
+
+const isExternalReference = (value: string): boolean => {
   let normalized = "";
   for (const character of value) {
     const code = character.codePointAt(0) ?? 0;
@@ -197,22 +240,26 @@ const isLocalReference = (value: string): boolean => {
     normalized.startsWith("data:") ||
     normalized.startsWith("cid:")
   ) {
-    return true;
+    return false;
   }
   if (normalized.startsWith("//") || normalized.startsWith("\\\\")) {
-    return false;
+    return true;
   }
   const colon = normalized.indexOf(":");
   const first = normalized.charAt(0);
   if (colon <= 0 || first < "a" || first > "z") {
-    return true;
+    return false;
   }
   for (let index = 1; index < colon; index++) {
     if (!isSchemeCharacter(normalized[index] ?? "")) {
-      return true;
+      return false;
     }
   }
-  return false;
+  const scheme = normalized.slice(0, colon);
+  return (
+    normalized.slice(colon + 1).startsWith("//") ||
+    FETCHABLE_SCHEME_NAMES.has(scheme)
+  );
 };
 
 const normalizeCss = (source: string): string | null => {
@@ -324,7 +371,7 @@ const cssHasExternalReference = (source: string): boolean => {
     if (end === valueAt || (quoted && end >= lower.length)) {
       return true;
     }
-    if (!isLocalReference(normalized.slice(valueAt, end))) {
+    if (isExternalReference(normalized.slice(valueAt, end))) {
       return true;
     }
     cursor = end + 1;
@@ -364,9 +411,8 @@ const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
         if (
           value
             .split(",")
-            .some(
-              (candidate) =>
-                !isLocalReference(candidate.trim().split(/\s/u)[0] ?? ""),
+            .some((candidate) =>
+              isExternalReference(candidate.trim().split(/\s/u)[0] ?? ""),
             )
         ) {
           return true;
@@ -397,7 +443,7 @@ const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
         (key === "href" && name !== "a" && name !== "area") ||
         ((key === "href" || key === ["xlink", "href"].join(":")) &&
           isForeignContentLoader);
-      if (reference && !isLocalReference(value)) {
+      if (reference && isExternalReference(value)) {
         return true;
       }
     }
@@ -490,7 +536,26 @@ const allowlistMatches = (
   );
 
 const valueHasExternalReference = (value: string): boolean =>
-  !isLocalReference(value) || cssHasExternalReference(value);
+  isExternalReference(value) || cssHasExternalReference(value);
+
+const QNAME_ATTRIBUTES = [
+  {
+    namespace: "http://www.w3.org/2001/XMLSchema-instance",
+    localName: "type",
+    reason: "schema type name",
+  },
+] as const satisfies readonly {
+  namespace: string;
+  localName: string;
+  reason: string;
+}[];
+
+const isQNameAttribute = (attribute: slimdom.Attr): boolean =>
+  QNAME_ATTRIBUTES.some(
+    ({ namespace, localName }) =>
+      attribute.namespaceURI === namespace &&
+      attribute.localName.toLowerCase() === localName,
+  );
 
 const xmlCatchAllRefusal = (
   source: string,
@@ -502,6 +567,9 @@ const xmlCatchAllRefusal = (
   for (const element of xmlElements(document.documentElement)) {
     const elementName = xmlQualifiedName(element);
     for (const attribute of element.attributes) {
+      if (isQNameAttribute(attribute)) {
+        continue;
+      }
       const attributeName = xmlQualifiedName(attribute);
       if (!valueHasExternalReference(attribute.value)) {
         continue;
@@ -609,7 +677,7 @@ const relationshipHasExternalReference = (source: string): boolean => {
     }
     if (
       targetMode?.toLowerCase() === "external" ||
-      (target !== null && !isLocalReference(target))
+      (target !== null && isExternalReference(target))
     ) {
       return true;
     }
@@ -646,16 +714,15 @@ const xhtmlHasExternalReference = (bytes: Uint8Array): boolean => {
         xmlNameMatches(attribute, XML_NAMESPACES.none, "formaction") ||
         (xmlNameMatches(attribute, XML_NAMESPACES.none, "href") &&
           !isNavigation);
-      if (isReference && !isLocalReference(attribute.value)) {
+      if (isReference && isExternalReference(attribute.value)) {
         return true;
       }
       if (
         xmlNameMatches(attribute, XML_NAMESPACES.none, "srcset") &&
         attribute.value
           .split(",")
-          .some(
-            (candidate) =>
-              !isLocalReference(candidate.trim().split(/\s/u)[0] ?? ""),
+          .some((candidate) =>
+            isExternalReference(candidate.trim().split(/\s/u)[0] ?? ""),
           )
       ) {
         return true;
@@ -679,7 +746,7 @@ const xhtmlHasExternalReference = (bytes: Uint8Array): boolean => {
       [...element.attributes].some(
         (attribute) =>
           xmlNameMatches(attribute, XML_NAMESPACES.none, "href") &&
-          !isLocalReference(attribute.value),
+          isExternalReference(attribute.value),
       )
     ) {
       return true;
@@ -753,19 +820,45 @@ const SAFE_FIELD_KEYWORDS: ReadonlySet<string> = new Set<SafeFieldKeyword>(
   SAFE_FIELD_KEYWORD_VALUES,
 );
 
-const unsupportedFieldType = (value: string): string | null => {
-  const tokens = value.trim().split(/\s+/u);
+type FieldInstruction = {
+  keyword: string | undefined;
+  arguments: readonly string[];
+};
+
+const parseFieldInstruction = (value: string): FieldInstruction => {
+  const tokens = [
+    ...value.matchAll(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+/gu),
+  ].map(([token]) => token.replace(/^["']|["']$/gu, ""));
   while (tokens.at(0)?.startsWith("\\") === true) {
     tokens.shift();
+    if (tokens.at(0)?.startsWith("\\") === false) {
+      tokens.shift();
+    }
   }
-  const keyword = tokens.at(0)?.toUpperCase();
+  const keyword = tokens.shift()?.toUpperCase();
+  const resourceArguments: string[] = [];
+  for (let index = 0; index < tokens.length; index++) {
+    if (tokens[index]?.startsWith("\\") === true) {
+      if (tokens[index + 1]?.startsWith("\\") === false) {
+        index++;
+      }
+      continue;
+    }
+    resourceArguments.push(tokens[index] ?? "");
+  }
+  return { keyword, arguments: resourceArguments };
+};
+
+const unsupportedFieldType = (value: string): string | null => {
+  const { keyword, arguments: resourceArguments } =
+    parseFieldInstruction(value);
   if (keyword === undefined || !SAFE_FIELD_KEYWORDS.has(keyword)) {
     return keyword ?? "UNKNOWN";
   }
   if (
     keyword !== "HYPERLINK" &&
-    tokens.some((token) =>
-      valueHasExternalReference(token.replace(/^["']|["',)]$/gu, "")),
+    resourceArguments.some((argument) =>
+      isExternalReference(argument.replace(/^["']|["',)]$/gu, "")),
     )
   ) {
     return keyword;
@@ -998,7 +1091,7 @@ const odfHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
           continue;
         }
         const href = xmlAttribute(element, XML_NAMESPACES.xlink, "href");
-        if (href !== null && !isLocalReference(href)) {
+        if (href !== null && isExternalReference(href)) {
           return true;
         }
       }

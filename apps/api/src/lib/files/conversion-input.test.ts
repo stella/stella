@@ -31,6 +31,35 @@ const zipEntries = async (
 const binaryField = (instruction: string): Uint8Array =>
   new Uint8Array([0x13, ...encode(instruction), 0x14]);
 
+const fixtureMime = (path: string): ConvertibleMime | null => {
+  const extension = path.slice(path.lastIndexOf(".")).toLowerCase();
+  switch (extension) {
+    case ".docx":
+      return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    case ".xlsx":
+      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    case ".pptx":
+      return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    case ".odt":
+      return "application/vnd.oasis.opendocument.text";
+    case ".rtf":
+      return "application/rtf";
+    case ".doc":
+      return "application/msword";
+    default:
+      return null;
+  }
+};
+
+const DELIBERATE_FIXTURE_REFUSALS: Readonly<Record<string, string>> = {
+  "apps/api/src/lib/docx/fixtures/spa-template-with-placeholders.docx":
+    "contains unfinished template fields",
+  "apps/api/src/lib/docx/fixtures/spa-template.docx":
+    "contains unfinished template fields",
+  "apps/api/src/lib/docx/fixtures/test-template.docx":
+    "contains an external document resource",
+};
+
 type Fixture = {
   mime: ConvertibleMime;
   remote: Uint8Array;
@@ -294,6 +323,31 @@ describe("document conversion input", () => {
             ),
         },
       ],
+      ...namespaceVariants.map(({ word }) =>
+        makeConversionCase(
+          `ooxml|{${word}}compatSetting|{${word}}uri`,
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          async () =>
+            zip(
+              "word/settings.xml",
+              `<w:compatSetting xmlns:w="${word}" w:uri="https://example.test/schema"/>`,
+            ),
+        ),
+      ),
+      ...[
+        "http://schemas.openxmlformats.org/officeDocument/2006/customXml",
+        "http://purl.oclc.org/ooxml/officeDocument/customXml",
+      ].map((namespace) =>
+        makeConversionCase(
+          `ooxml|{${namespace}}schemaRef|{${namespace}}uri`,
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          async () =>
+            zip(
+              "customXml/itemProps.xml",
+              `<c:schemaRef xmlns:c="${namespace}" c:uri="https://example.test/schema"/>`,
+            ),
+        ),
+      ),
       ...namespaceVariants.map(({ word, officeRelationships }) =>
         makeConversionCase(
           `ooxml|{${word}}hyperlink|{${officeRelationships}}id`,
@@ -370,7 +424,7 @@ describe("document conversion input", () => {
         [`${directory}/styles.xml`]:
           '<a:styleSheet xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"/>',
         "docProps/core.xml":
-          '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"><cp:category>case</cp:category></cp:coreProperties>',
+          '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><cp:category>case</cp:category><dcterms:created xsi:type="dcterms:W3CDTF">2026-10-20T00:00:00Z</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">2026-10-20T00:00:00Z</dcterms:modified></cp:coreProperties>',
         "docProps/app.xml":
           '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>stella</Application></Properties>',
         "docProps/custom.xml":
@@ -383,7 +437,7 @@ describe("document conversion input", () => {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         await zipEntries({
           "word/document.xml":
-            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" mc:Ignorable="a"><w:body><w:hyperlink r:id="link"><w:r><w:t>Page</w:t></w:r></w:hyperlink><a:extLst><a:ext uri="{11111111-1111-1111-1111-111111111111}"/></a:extLst></w:body></w:document>',
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" mc:Ignorable="a"><w:body><w:hyperlink r:id="link"><w:r><w:t>Page</w:t></w:r></w:hyperlink><w:fldSimple w:instr=\'TIME \\@ "HH:mm"\'><w:r><w:t>12:00</w:t></w:r></w:fldSimple><a:extLst><a:ext uri="{11111111-1111-1111-1111-111111111111}"/></a:extLst></w:body></w:document>',
           "word/_rels/document.xml.rels":
             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="link" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.test/page" TargetMode="External"/></Relationships>',
           "word/theme/theme1.xml":
@@ -391,7 +445,7 @@ describe("document conversion input", () => {
           "word/styles.xml":
             '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:styleId="Normal"/></w:styles>',
           "docProps/core.xml":
-            '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"><cp:category>case</cp:category></cp:coreProperties>',
+            '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><cp:category>case</cp:category><dcterms:created xsi:type="dcterms:W3CDTF">2026-10-20T00:00:00Z</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">2026-10-20T00:00:00Z</dcterms:modified></cp:coreProperties>',
           "docProps/app.xml":
             '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>stella</Application></Properties>',
           "docProps/custom.xml":
@@ -451,12 +505,64 @@ describe("document conversion input", () => {
           '<!doctype html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:a="urn:example:extensions" mc:Ignorable="a"><head><style>body { color: black; }</style><meta name="core" content="case"><meta name="app" content="stella"><meta name="custom" content="document"><a:theme><a:extLst><a:ext uri="{77777777-7777-7777-7777-777777777777}"></a:ext></a:extLst></a:theme></head><body><a href="https://example.test/page">Page</a></body></html>',
         ),
       ],
+      [
+        "RTF",
+        "application/rtf",
+        encode('{\\rtf1{\\field{\\*\\fldinst TIME \\@ "HH:mm"}}}'),
+      ],
     ] satisfies readonly (readonly [string, ConvertibleMime, Uint8Array])[];
     for (const [name, mime, bytes] of documents) {
       expect(await checkConversionInput(mime, bytes), name).toEqual({
         kind: "convert",
       });
     }
+  });
+
+  test("converts the repository document corpus", async () => {
+    const root = new URL("../../../../../", import.meta.url).pathname;
+    const paths: string[] = [];
+    for (const directory of ["apps", "packages"]) {
+      const glob = new Bun.Glob(`**/*.{docx,xlsx,pptx,odt,rtf,doc}`);
+      for await (const path of glob.scan({
+        cwd: `${root}${directory}`,
+        onlyFiles: true,
+      })) {
+        paths.push(`${directory}/${path}`);
+      }
+    }
+    paths.sort();
+    expect(paths.length).toBeGreaterThan(0);
+    for (const path of paths) {
+      const mime = fixtureMime(path);
+      expect(mime, path).not.toBeNull();
+      if (mime === null) {
+        continue;
+      }
+      const result = await checkConversionInput(
+        mime,
+        new Uint8Array(await Bun.file(`${root}${path}`).arrayBuffer()),
+      );
+      const refusalReason = DELIBERATE_FIXTURE_REFUSALS[path];
+      if (refusalReason !== undefined) {
+        expect(refusalReason.length, path).toBeGreaterThan(0);
+        expect(result.kind, path).toBe("refuse");
+        continue;
+      }
+      expect(result, path).toEqual({ kind: "convert" });
+    }
+  });
+
+  test("converts field formatting switches", async () => {
+    const input = await zip(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:fldSimple w:instr=\'TIME \\@ "file:HH:mm"\'/></w:document>',
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({ kind: "convert" });
   });
 
   test("refuses an unrecognized OOXML reference attribute", async () => {
