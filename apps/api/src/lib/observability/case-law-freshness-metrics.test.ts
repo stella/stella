@@ -22,7 +22,9 @@ const report = {
 
 test("emits one owned EMF record per metric with only its bounded dimension", () => {
   const records: Record<string, unknown>[] = [];
-  setMetricLineSinkForTesting((line) => records.push(JSON.parse(line)));
+  setMetricLineSinkForTesting((line) => {
+    records.push(JSON.parse(line));
+  });
   emitCaseLawFreshnessReport(report);
 
   expect(records).toHaveLength(4);
@@ -76,7 +78,9 @@ test("emits one owned EMF record per metric with only its bounded dimension", ()
 
 test("two loop instances sharing the advisory lock emit once", async () => {
   const lines: string[] = [];
-  setMetricLineSinkForTesting((line) => lines.push(line));
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
   let held = false;
   const openSession = async (
     work: (session: {

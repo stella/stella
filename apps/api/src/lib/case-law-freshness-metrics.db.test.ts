@@ -135,9 +135,7 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
-  if (client !== undefined) {
-    await client.close();
-  }
+  await client.close();
 });
 
 test("counts pending projections and reports only enabled scheduled-source freshness", async () => {

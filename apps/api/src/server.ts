@@ -218,7 +218,11 @@ import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
-import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
+import {
+  isLocalDevOpen,
+  isLocalTestRun,
+  runtimeMode,
+} from "@/api/runtime-mode";
 import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
 import {
   API_SHUTDOWN_OUTCOME,
@@ -812,7 +816,10 @@ const startServer = async (): Promise<void> => {
   await initBuiltinReportTemplates();
 
   const closeManagedProviderChecks = await startManagedProviderChecks();
-  const closeCaseLawFreshnessMetrics = startCaseLawFreshnessMetricLoop();
+  // Local test runs boot the API without a reporter.
+  const closeCaseLawFreshnessMetrics = isLocalTestRun()
+    ? undefined
+    : startCaseLawFreshnessMetricLoop();
   const backgroundWorkers = await initApiBackgroundWorkers(
     env.SCHEDULED_JOBS_MODE,
   );
@@ -871,7 +878,7 @@ const startServer = async (): Promise<void> => {
       closeBackgroundWorkers: async () => {
         await Promise.all([
           backgroundWorkers.close(),
-          closeCaseLawFreshnessMetrics(),
+          closeCaseLawFreshnessMetrics?.(),
         ]);
       },
       closeManagedProviderChecks,

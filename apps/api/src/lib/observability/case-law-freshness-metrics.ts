@@ -24,7 +24,6 @@ import {
   writeMetricLine,
 } from "@/api/lib/observability/request-metrics";
 import { isRecord } from "@/api/lib/type-guards";
-import { isLocalTestRun } from "@/api/runtime-mode";
 
 const REPORT_INTERVAL_MS = 5 * 60 * 1000;
 const STATEMENT_TIMEOUT_MS = 10_000;
@@ -209,11 +208,8 @@ const runProductionTick = async (): Promise<void> => {
   });
 };
 
-export const startCaseLawFreshnessMetricLoop = (): (() => Promise<void>) => {
-  if (isLocalTestRun()) {
-    return async () => Promise.resolve();
-  }
-  return startNonOverlappingInterval({
+export const startCaseLawFreshnessMetricLoop = (): (() => Promise<void>) =>
+  startNonOverlappingInterval({
     intervalMs: REPORT_INTERVAL_MS,
     onError: (error) => {
       observeFailure(error, {
@@ -223,4 +219,3 @@ export const startCaseLawFreshnessMetricLoop = (): (() => Promise<void>) => {
     },
     run: runProductionTick,
   });
-};
