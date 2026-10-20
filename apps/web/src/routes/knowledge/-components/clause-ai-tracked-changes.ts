@@ -202,7 +202,7 @@ export const bodyKey = (body: readonly ClauseParagraph[]): string =>
     .map((p) =>
       p.isDirective
         ? `D:${p.directiveKind ?? ""}:${p.directiveExpression ?? ""}`
-        : `P:${p.style ?? ""}:${p.level ?? ""}:${p.listKind ?? ""}:${p.listLevel ?? ""}:${(
+        : `P:${p.style ?? ""}:${p.level ?? ""}:${p.listKind ?? ""}:${p.numbering?.ilvl ?? ""}:${(
             p.runs ?? [{ text: p.text }]
           )
             .map((r) => `${r.bold ? "b" : ""}${r.italic ? "i" : ""}|${r.text}`)
@@ -267,7 +267,7 @@ export const hasAlignedClauseStructure = (
       paragraph.style === rewrittenParagraph.style &&
       paragraph.level === rewrittenParagraph.level &&
       paragraph.listKind === rewrittenParagraph.listKind &&
-      paragraph.listLevel === rewrittenParagraph.listLevel
+      paragraph.numbering?.ilvl === rewrittenParagraph.numbering?.ilvl
     );
   });
 

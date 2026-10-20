@@ -255,7 +255,7 @@ export const citationSummaryOutput = (
 ) => {
   const citedByCount = totalOf(digest.summary.incoming);
   const top = rankCitingDecisions(digest.topCiting.items).map((decision) => {
-    const appUrl = appUrlOf(decision);
+    const url = appUrlOf(decision);
     return {
       caseNumber: decision.caseNumber,
       court: decision.court,
@@ -263,7 +263,7 @@ export const citationSummaryOutput = (
       ...(decision.decisionDate === null
         ? {}
         : { date: decision.decisionDate }),
-      ...(appUrl === null ? {} : { url: appUrl }),
+      ...(url === null ? {} : { url }),
     };
   });
 
@@ -320,11 +320,11 @@ export const citationSummaryOutput = (
     }
     const key = `decision:${String(row.decision.id)}`;
     if (!cited.has(key)) {
-      const appUrl = appUrlOf(row.decision);
+      const url = appUrlOf(row.decision);
       cited.set(key, {
         caseNumber: row.decision.caseNumber,
         decisionId: String(row.decision.id),
-        ...(appUrl === null ? {} : { url: appUrl }),
+        ...(url === null ? {} : { url }),
       });
     }
   }

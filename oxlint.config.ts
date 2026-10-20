@@ -187,6 +187,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
     "require-json-import-attribute/require-json-import-attribute",
   ]),
+  fixtureRuleOverride("no-raw-eden-telemetry.fixture.ts", [
+    "no-raw-eden-telemetry/no-raw-eden-telemetry",
+  ]),
+  fixtureRuleOverride("no-unsafe-controller-editor-access.fixture.ts", [
+    "no-unsafe-controller-editor-access/no-unsafe-controller-editor-access",
+  ]),
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
     "drizzle/enforce-update-with-where",
@@ -525,6 +531,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("require-complete-compaction-generation.fixture.ts", [
     "require-complete-compaction-generation/require-complete-compaction-generation",
+  ]),
+  fixtureRuleOverride("no-model-timeout-abort-signal.fixture.ts", [
+    "no-model-timeout-abort-signal/no-model-timeout-abort-signal",
   ]),
   fixtureRuleOverride("require-safe-route-handlers.fixture.ts", [
     "require-safe-route-handlers/no-direct-handler-config",
@@ -1145,11 +1154,13 @@ const config = defineConfig({
     "eslint/grouped-accessor-pairs": "off",
     "no-restricted-imports": ["error", { paths: [noZodImport] }],
     "no-bare-error/no-bare-error": "error",
+    "no-raw-eden-telemetry/no-raw-eden-telemetry": "error",
     "no-minted-auth-provider-id/no-minted-auth-provider-id": "error",
     "ai-output-strict-schema/ai-output-strict-schema": "error",
     "decision-shaped-output-schema/decision-shaped-output-schema": "error",
     "require-complete-compaction-generation/require-complete-compaction-generation":
       "error",
+    "no-model-timeout-abort-signal/no-model-timeout-abort-signal": "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "provider-call-error-message/provider-call-error-message": "error",
@@ -1174,6 +1185,8 @@ const config = defineConfig({
     "no-direct-property-table-write/no-direct-property-table-write": "error",
     "no-direct-entity-insert/no-direct-entity-insert": "error",
     "no-direct-field-write/no-direct-field-write": "error",
+    "no-direct-folio-snapshot-retirement/no-direct-folio-snapshot-retirement":
+      "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
       "error",
     "no-unvalidated-clause-write/no-unvalidated-clause-write": "error",
@@ -1449,6 +1462,7 @@ const config = defineConfig({
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
+    "./.oxlint-plugins/confine-online-ddl.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "./.oxlint-plugins/no-raw-sha256.ts",
     "./.oxlint-plugins/no-hand-rolled-concurrency.ts",
@@ -1566,10 +1580,13 @@ const config = defineConfig({
     "./.oxlint-plugins/require-escape-like.ts",
     "./.oxlint-plugins/sql-perf.ts",
     "./.oxlint-plugins/no-bare-error.ts",
+    "./.oxlint-plugins/no-raw-eden-telemetry.ts",
+    "./.oxlint-plugins/no-unsafe-controller-editor-access.ts",
     "./.oxlint-plugins/no-minted-auth-provider-id.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
     "./.oxlint-plugins/decision-shaped-output-schema.ts",
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
+    "./.oxlint-plugins/no-model-timeout-abort-signal.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-worker-database-login-posture.ts",
@@ -1584,6 +1601,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-field-write.ts",
     "./.oxlint-plugins/no-chat-table-write.ts",
     "./.oxlint-plugins/fill-diagnostics.ts",
+    "./.oxlint-plugins/no-direct-folio-snapshot-retirement.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
@@ -1627,6 +1645,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
+    "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
@@ -1699,6 +1718,17 @@ const config = defineConfig({
       },
     },
     {
+      // Tests, fixtures and the owner are skipped inside the rule; SQL
+      // migration files are not JavaScript, so oxlint never reads them.
+      files: [
+        "apps/api/src/**/*.{ts,tsx,js,mjs}",
+        ".oxlint-plugins/__fixtures__/confine-online-ddl.fixture.ts",
+      ],
+      rules: {
+        "confine-online-ddl/confine-online-ddl": "error",
+      },
+    },
+    {
       files: [
         "packages/scripts/src/dev-*.ts",
         "packages/scripts/src/agent-session.ts",
@@ -1728,7 +1758,18 @@ const config = defineConfig({
       files: ["apps/api/src/**/*.ts"],
       rules: {
         "gdp-ts/no-define-proof": "error",
-        "gdp-ts/no-proof-assertion": "error",
+        "gdp-ts/no-proof-assertion": [
+          "error",
+          {
+            proofImports: [
+              "(^|/)proofs(/|$)",
+              "(^|/)workspaces/matter-access-proof(?:\\.ts)?$",
+            ],
+          },
+        ],
+        "gdp-ts/no-matter-proof-forgery": "error",
+        "gdp-ts/no-matter-proof-kind-outside-owner": "error",
+        "gdp-ts/no-matter-access-context-escape": "error",
       },
     },
     {
@@ -2502,6 +2543,14 @@ const config = defineConfig({
             ignorePrimitives: { string: true, boolean: true },
           },
         ],
+      },
+    },
+    {
+      // Controller instances can outlive their editor during unmount.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-unsafe-controller-editor-access/no-unsafe-controller-editor-access":
+          "error",
       },
     },
     {
@@ -4090,9 +4139,6 @@ const config = defineConfig({
         "apps/web/src/**/template-preview.tsx",
         "apps/web/src/**/template-preview-view.tsx",
         "apps/web/src/**/page-citation.tsx",
-        // Generated message types: UI copy may legitimately contain words
-        // like "right-click"; these strings are never class names.
-        "apps/web/src/i18n/langs/messages.gen.ts",
       ],
       rules: { "no-physical-properties/no-physical-properties": "off" },
     },
@@ -4264,6 +4310,7 @@ const config = defineConfig({
               // The test network guard refuses to install while the process
               // routes fetch through a remote proxy from the environment.
               "packages/test-kit/src/network.ts",
+              "packages/test-kit/src/regenerate.ts",
               // The web server entrypoint reads its listen address from Bun's
               // environment before any app module loads; the web app's env
               // contract is the Vite build, not this process.
@@ -5276,9 +5323,11 @@ const config = defineConfig({
       files: [
         "**/*.test.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
         "**/*.spec.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+        ".oxlint-plugins/__fixtures__/no-shared-checkout-mutation.fixture.ts",
       ],
       rules: {
         "no-direct-test-state/no-direct-test-state": "error",
+        "no-shared-checkout-mutation/no-shared-checkout-mutation": "error",
       },
     },
     {

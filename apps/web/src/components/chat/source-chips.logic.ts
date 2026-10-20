@@ -4,6 +4,7 @@ import {
   parseCaseLawDecisionPath,
 } from "@stll/api-contract/case-law-decision-route";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
+import { unwrapUntrustedContentFence } from "@stll/api-contract/untrusted-content-fence";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
 import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
@@ -30,7 +31,9 @@ type ParsedJsonContainer = Record<string, unknown> | unknown[];
 const parseJsonLikeString = (
   value: string,
 ): ParsedJsonContainer | undefined => {
-  const trimmed = value.trim();
+  // External connector results arrive fenced as untrusted data; the payload
+  // between the delimiters is what may carry JSON.
+  const trimmed = (unwrapUntrustedContentFence(value) ?? value).trim();
   if (
     trimmed.length === 0 ||
     trimmed.length > 2_000_000 ||
@@ -298,13 +301,11 @@ export const collectExternalSources = (
     return;
   }
 
-  const appUrl = getStringField(value, ["appUrl"]);
   const publisherUrl = getStringField(value, ["source_url", "sourceUrl"]);
   const url = getStringField(value, [
     "url",
     "source_url",
     "sourceUrl",
-    "appUrl",
     "pdfUrl",
     "rtfUrl",
     "registryUrl",
@@ -313,7 +314,6 @@ export const collectExternalSources = (
     const safeUrl = sanitizeHref(url);
     if (safeUrl) {
       sources.push({
-        appUrl: appUrl !== undefined ? sanitizeHref(appUrl) : undefined,
         sourceUrl:
           publisherUrl !== undefined && isHttpUrl(publisherUrl)
             ? sanitizeHref(publisherUrl)
@@ -360,7 +360,6 @@ export const dedupeExternalSources = (
       source.url,
       existing
         ? {
-            appUrl: source.appUrl ?? existing.appUrl,
             sourceUrl: source.sourceUrl ?? existing.sourceUrl,
             businessRegistry:
               source.businessRegistry ?? existing.businessRegistry,
@@ -437,7 +436,6 @@ export const collectSourceChipEntries = ({
       externalSources.push({
         ...source,
         caseLawDecision: mcpToolInfo ? undefined : source.caseLawDecision,
-        appUrl: mcpToolInfo ? undefined : source.appUrl,
         sourceUrl: mcpToolInfo ? undefined : source.sourceUrl,
         connectorSlug: source.connectorSlug ?? mcpToolInfo?.connectorSlug,
         sourceToolName: source.sourceToolName ?? mcpToolInfo?.sourceToolName,

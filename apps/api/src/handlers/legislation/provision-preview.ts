@@ -118,7 +118,7 @@ export const readProvisionPreviewHandler = async ({
 
   return {
     ...projectProvisionPreview(preview),
-    appUrl: buildLegislationDocumentAppUrl({
+    url: buildLegislationDocumentAppUrl({
       country: version.country,
       documentId: version.id,
       eli: version.eli,

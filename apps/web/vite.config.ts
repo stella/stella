@@ -15,7 +15,9 @@ import {
   type PluginOption,
 } from "vite";
 
+import stllAhoCorasickWasm from "@stll/aho-corasick-wasm/vite";
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
+import stllRegexSetWasm from "@stll/regex-set-wasm/vite";
 import {
   REACT_COMPILER_OPTIONS,
   REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE,
@@ -315,6 +317,8 @@ export default defineConfig(({ mode, command }) => {
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
   const devApiProxyTarget = process.env["DEV_API_PROXY_TARGET"];
   const plugins: PluginOption[] = [
+    stllAhoCorasickWasm(),
+    stllRegexSetWasm(),
     logCapPlugin(),
     ensurePluginOption(
       devtools({ consolePiping: { enabled: false } }),
@@ -640,6 +644,17 @@ export default defineConfig(({ mode, command }) => {
     },
     resolve: {
       tsconfigPaths: true,
+      alias: [
+        {
+          // tldts' module build exports its public-suffix label table as a
+          // 67 KB string constant from a separate module. Rolldown inlines
+          // imported constants into conditions, so the table was copied into
+          // the chunk once per lookup site. The prebuilt single-module build
+          // keeps the table a local binding that is emitted once.
+          find: /^tldts$/u,
+          replacement: "tldts/dist/index.esm.min.js",
+        },
+      ],
       dedupe: [
         "react",
         "react-dom",

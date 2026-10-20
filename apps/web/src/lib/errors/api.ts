@@ -5,6 +5,7 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  AI_FAILURE_CODES,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
@@ -13,7 +14,7 @@ import {
   parseApiErrorValue,
   parseApiValidationIssues,
 } from "@stll/api-contract";
-import type { ApiValidationIssue } from "@stll/api-contract";
+import type { AIFailureCode, ApiValidationIssue } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
@@ -154,11 +155,13 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
 
 const PUBLIC_COUNTRY_ERROR_KEYS = {
   caseLaw: {
+    identity_public: "errors.api.caseLawIdentityOnly",
     pending_public: "errors.api.caseLawCountryUnavailable",
     withdrawn: "errors.api.caseLawCountryUnavailable",
     pages_public: "errors.api.caseLawSearchUnavailable",
   },
   legislation: {
+    identity_public: "errors.api.legislationIdentityOnly",
     pending_public: "errors.api.legislationCountryUnavailable",
     withdrawn: "errors.api.legislationCountryUnavailable",
     pages_public: "errors.api.legislationSearchUnavailable",
@@ -180,7 +183,32 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
     "errors.apiCodes.verificationDailyLimitReached",
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
+const AI_FAILURE_ERROR_KEYS = {
+  [AI_FAILURE_CODES.quota_exhausted]: "chat.sendErrorQuotaExhausted",
+  [AI_FAILURE_CODES.provider_billing]: "chat.sendErrorProviderBilling",
+  [AI_FAILURE_CODES.provider_credentials_rejected]:
+    "chat.sendErrorProviderCredentialsRejected",
+  [AI_FAILURE_CODES.model_unavailable]: "chat.sendErrorModelUnavailable",
+  [AI_FAILURE_CODES.provider_unavailable]: "chat.sendErrorProviderUnavailable",
+  [AI_FAILURE_CODES.provider_stream_incomplete]:
+    "chat.sendErrorStreamIncomplete",
+  [AI_FAILURE_CODES.output_incomplete]: "chat.sendErrorStreamIncomplete",
+  [AI_FAILURE_CODES.output_moderated]: "errors.apiCodes.aiOutputModerated",
+  [AI_FAILURE_CODES.output_invalid]: "errors.apiCodes.aiOutputInvalid",
+  [AI_FAILURE_CODES.deadline_exceeded]: "chat.sendErrorTimedOut",
+  [AI_FAILURE_CODES.loop_detected]: "chat.sendErrorLoopDetected",
+  [AI_FAILURE_CODES.empty_completion]: "chat.sendErrorEmptyCompletion",
+  [AI_FAILURE_CODES.unknown]: "errors.apiCodes.aiUnknown",
+  [AI_FAILURE_CODES.role_not_configured]: "capabilityActions.aiMissing",
+  [AI_FAILURE_CODES.own_key_required]: "capabilityActions.aiMissing",
+  [AI_FAILURE_CODES.provider_task_unsupported]:
+    "errors.apiCodes.aiProviderTaskUnsupported",
+  [AI_FAILURE_CODES.managed_provider_unavailable]:
+    "capabilityActions.aiMissing",
+} as const satisfies Record<AIFailureCode, TranslationKey>;
+
 const CODE_ERROR_KEYS = {
+  ...AI_FAILURE_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",

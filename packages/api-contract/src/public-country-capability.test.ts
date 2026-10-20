@@ -36,6 +36,10 @@ describe("public country availability contract", () => {
     expect(PUBLIC_LEGISLATION_COUNTRIES).toEqual(
       publicCountriesFor("legislation", "search"),
     );
+    expect(PUBLIC_COUNTRY_CAPABILITIES.EU).toEqual({
+      caseLaw: "identity_public",
+      legislation: "pending_public",
+    });
     expect(PUBLIC_COUNTRY_CAPABILITIES.CZE.caseLaw).toBe("admitted");
     expect(PUBLIC_COUNTRY_CAPABILITIES.SVK).toEqual({
       caseLaw: "pages_public",
@@ -62,9 +66,33 @@ describe("public country availability contract", () => {
     }
   });
 
+  test("EU case law is open only for exact identity reads", () => {
+    expect(publicCountriesFor("caseLaw", "identity")).toContain("EU");
+    expect(publicCountriesFor("caseLaw", "pages")).not.toContain("EU");
+    expect(publicCountriesFor("caseLaw", "search")).not.toContain("EU");
+    for (const surface of ["identity", "pages", "search"] as const) {
+      const response = publicCountryUnavailable("EU", {
+        domain: "caseLaw",
+        surface,
+      });
+      if (surface === "identity") {
+        expect(response).toBeNull();
+      } else {
+        expect(response).toMatchObject({ reason: "identity_public" });
+      }
+      expect(
+        publicCountryUnavailable("EU", {
+          domain: "legislation",
+          surface,
+        }),
+      ).toMatchObject({ reason: "pending_public" });
+    }
+  });
+
   test("each domain answers from its own capability for every country and state pair", () => {
     const states = [
       "admitted",
+      "identity_public",
       "pages_public",
       "pending_public",
       "withdrawn",
@@ -77,7 +105,7 @@ describe("public country availability contract", () => {
             [country]: { caseLaw, legislation },
           };
           for (const domain of PUBLIC_LAW_DOMAINS) {
-            for (const surface of ["pages", "search"] as const) {
+            for (const surface of ["identity", "pages", "search"] as const) {
               const expected = capabilities[country][domain];
               const response = publicCountryUnavailableIn({
                 capabilities,
@@ -147,28 +175,13 @@ describe("public country availability contract", () => {
             " ".repeat(spaces) +
             (lower ? country.toLowerCase() : country) +
             " ".repeat(spaces);
-          expect(
-            publicCountryUnavailable(input, {
-              domain: "caseLaw",
-              surface: "search",
-            }),
-          ).toEqual(
-            publicCountryUnavailable(country, {
-              domain: "caseLaw",
-              surface: "search",
-            }),
-          );
-          expect(
-            publicCountryUnavailable(input, {
-              domain: "caseLaw",
-              surface: "pages",
-            }),
-          ).toEqual(
-            publicCountryUnavailable(country, {
-              domain: "caseLaw",
-              surface: "pages",
-            }),
-          );
+          for (const domain of PUBLIC_LAW_DOMAINS) {
+            for (const surface of ["identity", "pages", "search"] as const) {
+              expect(
+                publicCountryUnavailable(input, { domain, surface }),
+              ).toEqual(publicCountryUnavailable(country, { domain, surface }));
+            }
+          }
         },
       ),
     );
