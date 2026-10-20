@@ -312,12 +312,26 @@ export const redactCaseLawDecision = async ({
   Result<RedactCaseLawDecisionOutcome, DatabaseError>
 > => {
   const fenced = await scopedDb(async (tx): Promise<RedactionFence> => {
-    const aliases = await tx
-      .select({ id: caseLawDecisionAliases.retiredDecisionId })
-      .from(caseLawDecisionAliases)
-      .where(eq(caseLawDecisionAliases.canonicalDecisionId, decisionId));
-    const decisionIds = [decisionId, ...aliases.map(({ id }) => id)].toSorted();
-    await lockCaseLawDecisionErasureRows({ tx, decisionIds });
+    await lockCaseLawDecisionErasureRows({ tx, decisionIds: [decisionId] });
+    const lockRetiredAliases = async (
+      lockedIds: ReadonlySet<SafeId<"caseLawDecision">>,
+    ): Promise<ReadonlySet<SafeId<"caseLawDecision">>> => {
+      const aliases = await tx
+        .select({ id: caseLawDecisionAliases.retiredDecisionId })
+        .from(caseLawDecisionAliases)
+        .where(eq(caseLawDecisionAliases.canonicalDecisionId, decisionId));
+      const discovered = aliases
+        .map(({ id }) => id)
+        .filter((id) => !lockedIds.has(id))
+        .toSorted();
+      if (discovered.length === 0) {
+        return lockedIds;
+      }
+      await lockCaseLawDecisionErasureRows({ tx, decisionIds: discovered });
+      return await lockRetiredAliases(new Set([...lockedIds, ...discovered]));
+    };
+    const lockedIds = await lockRetiredAliases(new Set([decisionId]));
+    const decisionIds = [...lockedIds].toSorted();
     const decisions = await tx
       .select({
         id: caseLawDecisions.id,

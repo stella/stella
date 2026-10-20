@@ -3,6 +3,7 @@ import { type SQL, sql } from "drizzle-orm";
 
 import { republishedRulingCourtPredicate } from "@/api/handlers/case-law/ingestion/pipeline/ruling-identity-match";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockCaseLawDecisionErasureRows } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   ADAPTER_KEYS,
@@ -311,6 +312,12 @@ export const applyRepublishedDecisionBatch = async (
   if (candidates.length === 0) {
     return [];
   }
+  await lockCaseLawDecisionErasureRows({
+    tx,
+    decisionIds: candidates
+      .flatMap(({ canonical, duplicate }) => [canonical.id, duplicate.id])
+      .toSorted(),
+  });
   const rows = executedRows(
     await tx.execute(sql`
       WITH requested AS MATERIALIZED (
