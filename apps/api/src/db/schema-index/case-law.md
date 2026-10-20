@@ -228,52 +228,52 @@ case_law_decision_identifiers.declared_at       timestamptz  null              c
 case_law_decision_identifiers.created_at        timestamptz  default,not null  case-law.ts:1071
 ```
 
-## case_law_judges · `caseLawJudges` · case-law.ts:1108 · rls
+## case_law_judges · `caseLawJudges` · case-law.ts:1109 · rls
 
 Judges of a court, as that court publishes them.
 
 ```text
-case_law_judges.id                     pUuid        pk,not null       case-law.ts:1111
-case_law_judges.country                varchar      not null          case-law.ts:1112
-case_law_judges.court                  varchar      not null          case-law.ts:1113
-case_law_judges.full_name              varchar      not null          case-law.ts:1114
-case_law_judges.name_key               varchar      not null          case-law.ts:1115
-case_law_judges.term_start             date         null              case-law.ts:1116
-case_law_judges.term_end               date         null              case-law.ts:1117
-case_law_judges.external_refs          jsonb        default,not null  case-law.ts:1118
-case_law_judges.portrait_s3_key        varchar      null              case-law.ts:1122
-case_law_judges.portrait_source        text         null              case-law.ts:1123
-case_law_judges.portrait_attribution   varchar      null              case-law.ts:1124
-case_law_judges.portrait_content_type  varchar      null              case-law.ts:1125
-case_law_judges.created_at             timestamptz  default,not null  case-law.ts:1126
-case_law_judges.updated_at             timestamptz  default,not null  case-law.ts:1127
+case_law_judges.id                     pUuid        pk,not null       case-law.ts:1112
+case_law_judges.country                varchar      not null          case-law.ts:1113
+case_law_judges.court                  varchar      not null          case-law.ts:1114
+case_law_judges.full_name              varchar      not null          case-law.ts:1115
+case_law_judges.name_key               varchar      not null          case-law.ts:1116
+case_law_judges.term_start             date         null              case-law.ts:1117
+case_law_judges.term_end               date         null              case-law.ts:1118
+case_law_judges.external_refs          jsonb        default,not null  case-law.ts:1119
+case_law_judges.portrait_s3_key        varchar      null              case-law.ts:1123
+case_law_judges.portrait_source        text         null              case-law.ts:1124
+case_law_judges.portrait_attribution   varchar      null              case-law.ts:1125
+case_law_judges.portrait_content_type  varchar      null              case-law.ts:1126
+case_law_judges.created_at             timestamptz  default,not null  case-law.ts:1127
+case_law_judges.updated_at             timestamptz  default,not null  case-law.ts:1128
 ```
 
-## case_law_decision_judges · `caseLawDecisionJudges` · case-law.ts:1167 · rls
+## case_law_decision_judges · `caseLawDecisionJudges` · case-law.ts:1168 · rls
 
 The judges a decision names, in the roles its publisher states.
 
 ```text
-case_law_decision_judges.decision_id      safeUuid  not null  case-law.ts:1170
-case_law_decision_judges.judge_id         safeUuid  null      case-law.ts:1171
-case_law_decision_judges.name_as_printed  varchar   not null  case-law.ts:1172
-case_law_decision_judges.name_key         varchar   not null  case-law.ts:1173
-case_law_decision_judges.role             text      not null  case-law.ts:1174
-case_law_decision_judges.position         smallint  not null  case-law.ts:1175
+case_law_decision_judges.decision_id      safeUuid  not null  case-law.ts:1171
+case_law_decision_judges.judge_id         safeUuid  null      case-law.ts:1172
+case_law_decision_judges.name_as_printed  varchar   not null  case-law.ts:1173
+case_law_decision_judges.name_key         varchar   not null  case-law.ts:1174
+case_law_decision_judges.role             text      not null  case-law.ts:1175
+case_law_decision_judges.position         smallint  not null  case-law.ts:1176
 ```
 
-## case_law_decision_identifier_backfills · `caseLawDecisionIdentifierBackfills` · case-law.ts:1250 · rls
+## case_law_decision_identifier_backfills · `caseLawDecisionIdentifierBackfills` · case-law.ts:1251 · rls
 
 Durable progress and completion receipt for the typed-identifier rollout.
 
 ```text
-case_law_decision_identifier_backfills.version            varchar      pk,not null       case-law.ts:1253
-case_law_decision_identifier_backfills.phase              text         default,not null  case-law.ts:1254
-case_law_decision_identifier_backfills.cursor_id          uuid         null              case-law.ts:1258
-case_law_decision_identifier_backfills.decisions_scanned  bigint       default,not null  case-law.ts:1259
-case_law_decision_identifier_backfills.citations_scanned  bigint       default,not null  case-law.ts:1263
-case_law_decision_identifier_backfills.completed_at       timestamptz  null              case-law.ts:1267
-case_law_decision_identifier_backfills.updated_at         timestamptz  default,not null  case-law.ts:1268
+case_law_decision_identifier_backfills.version            varchar      pk,not null       case-law.ts:1254
+case_law_decision_identifier_backfills.phase              text         default,not null  case-law.ts:1255
+case_law_decision_identifier_backfills.cursor_id          uuid         null              case-law.ts:1259
+case_law_decision_identifier_backfills.decisions_scanned  bigint       default,not null  case-law.ts:1260
+case_law_decision_identifier_backfills.citations_scanned  bigint       default,not null  case-law.ts:1264
+case_law_decision_identifier_backfills.completed_at       timestamptz  null              case-law.ts:1268
+case_law_decision_identifier_backfills.updated_at         timestamptz  default,not null  case-law.ts:1269
 ```
 
 ## case_law_decision_source_identities · `caseLawDecisionSourceIdentities` · case-law.ts:1307 · rls
