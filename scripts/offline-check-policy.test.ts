@@ -22,6 +22,8 @@ import {
   offlineCheckViolations,
   parseOfflineImportAllowances,
   parseOfflineCheckExceptions,
+  protectedOfflineCheckCallerViolations,
+  trackedOfflineCheckCallerSources,
   usesOfflineCheckPreload,
 } from "./offline-check-policy";
 
@@ -59,6 +61,56 @@ test("new check invocations cannot bypass the offline preload in nested shell or
   );
   expect(protectedChecks).toHaveLength(1);
   expect(offlineCheckViolations(protectedChecks, [])).toEqual([]);
+});
+
+test("protected caller census covers manifests, turbo commands, workflows, and test spawns", () => {
+  const entry = path.join(root, "scripts/protected-check.ts");
+  const badCommand = "bun scripts/protected-check.ts --check";
+  const goodCommand =
+    "bun --preload ./scripts/offline-network-preload.ts scripts/protected-check.ts --check";
+  const violations = protectedOfflineCheckCallerViolations(
+    [entry],
+    [
+      {
+        file: "package.json",
+        source: JSON.stringify({
+          scripts: { bad: badCommand, good: goodCommand },
+        }),
+        type: "package",
+      },
+      {
+        file: "turbo.json",
+        source: JSON.stringify({ tasks: { check: { command: badCommand } } }),
+        type: "turbo",
+      },
+      {
+        file: ".github/workflows/check.yml",
+        source: Bun.YAML.stringify({
+          jobs: { check: { steps: [{ run: badCommand }] } },
+        }),
+        type: "workflow",
+      },
+      {
+        file: "scripts/check.test.ts",
+        source: `Bun.spawn([process.execPath, "scripts/protected-check.ts", "--check"]);`,
+        type: "test",
+      },
+    ],
+  );
+  expect(violations).toHaveLength(4);
+  expect(violations).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("package.json:1"),
+      expect.stringContaining("turbo.json:1"),
+      expect.stringContaining(".github/workflows/check.yml:1"),
+      expect.stringContaining("scripts/check.test.ts:1"),
+    ]),
+  );
+  for (const violation of violations) {
+    expect(violation).toContain(
+      "add `--preload ./scripts/offline-network-preload.ts` before the entry",
+    );
+  }
 });
 
 test("the preload must precede the Bun entry and package-script arguments", () => {
@@ -168,6 +220,12 @@ test("committed check invocations and catalog generator transports are exhaustiv
   expect(
     offlineCheckStartupViolations(
       checks.flatMap((check) => (check.protected ? [check.entry] : [])),
+    ),
+  ).toEqual([]);
+  expect(
+    protectedOfflineCheckCallerViolations(
+      checks.flatMap((check) => (check.protected ? [check.entry] : [])),
+      trackedOfflineCheckCallerSources(),
     ),
   ).toEqual([]);
   const sourceRoot = path.join(root, "packages/scripts/src");
