@@ -131,7 +131,7 @@ test("the policy check invokes classification after a successful install", () =>
   const check = policy.findIndex(
     (step) =>
       step.run ===
-      "trap 'rm -rf .workflow-tooling' EXIT\nbun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling --base \"$RATCHET_BASE_REF\"\n",
+      "trap 'rm -rf .workflow-tooling' EXIT\nbun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling\n",
   );
   expect(install).toBeGreaterThanOrEqual(0);
   expect(check).toBeGreaterThan(install);
