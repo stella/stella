@@ -500,6 +500,7 @@ const receiptSelector = (
         panic(`Invalid flaky-test quarantine id: ${entry.id}`);
       return (name) => name === expected;
     }
+    case "guard-rollout":
     case "no-llms-txt":
     case "release-age-exclusion":
     case "release-age-exception":
