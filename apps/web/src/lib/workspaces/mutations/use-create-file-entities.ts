@@ -330,14 +330,13 @@ const uploadPreparedFileEntity = async ({
       abortUpload(workspaceId, uploadId),
       "use-create-file-entities.abort-upload",
     );
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new ClientOperationError({
-      action: "upload-file-to-s3",
-      message: "S3 upload network error",
-      cause: error,
-    });
+    throw error instanceof Error
+      ? error
+      : new ClientOperationError({
+          action: "upload-file-to-s3",
+          message: "S3 upload network error",
+          cause: error,
+        });
   }
   if (!putResponse.ok) {
     const detail = await putResponse.text().catch(() => "");
@@ -374,7 +373,9 @@ const uploadPreparedFileEntity = async ({
     attachResponseForRetry(error, finalize.response);
     if (finalize.response.status === 503) {
       await abortUpload(workspaceId, uploadId);
-      throw new TerminalUploadError({ message: error.message, cause: error });
+      return await Promise.reject(
+        new TerminalUploadError({ message: error.message, cause: error }),
+      );
     }
     // Finalize owns the pending row once called. 422s are terminal
     // rejections, 409/5xx may still be in-flight or retryable.

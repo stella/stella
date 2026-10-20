@@ -34,6 +34,8 @@ import {
   type WorkAdmission,
   WorkRefusal,
 } from "@/api/lib/load/work-admission";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { OBJECT_READ_TIMEOUT_MS, readS3ArrayBuffer } from "@/api/lib/s3";
 import { normalizeMimeType } from "@/api/lib/search/extractable-mime-types";
 import { PPTX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
@@ -47,6 +49,11 @@ type OfficeEvidenceSource = {
   mimeType: string;
   sha256Hex: string;
 };
+
+const OFFICE_EVIDENCE_ADMISSION_FAILURE = failureSink({
+  event: "office_evidence.admission_failed",
+  expected: [],
+});
 
 type OfficeEvidenceScope = {
   organizationId: SafeId<"organization">;
@@ -582,7 +589,10 @@ export const loadOfficeEvidence = async ({
   });
   if (Result.isError(admitted)) {
     if (!WorkRefusal.is(admitted.error)) {
-      captureError(admitted.error, { operation: "office-evidence-admission" });
+      observeFailure(admitted.error, {
+        sink: OFFICE_EVIDENCE_ADMISSION_FAILURE,
+        ctx: { operation: "office-evidence-admission" },
+      });
     }
     return await abandonRefusedOfficeEvidence({
       claimToken: claim.claimToken,

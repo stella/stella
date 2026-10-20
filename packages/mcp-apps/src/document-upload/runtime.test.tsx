@@ -161,7 +161,9 @@ class UploadFlowHost extends App {
     this.events.addEventListener(event, listener);
   }
 
-  override async callServerTool(input: Parameters<App["callServerTool"]>[0]) {
+  override async callServerTool(
+    input: Parameters<App["callServerTool"]>[0],
+  ): Promise<Awaited<ReturnType<App["callServerTool"]>>> {
     this.toolCalls.push(input);
     const capability = input.arguments?.["capability"];
     this.timeline.push(String(capability));
