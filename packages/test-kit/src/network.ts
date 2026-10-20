@@ -8,6 +8,8 @@ import tls from "node:tls";
  * depend on the internet, a third-party API or DNS fails at once with the
  * host it tried to reach, instead of passing or hanging depending on the
  * network of the machine that runs it.
+ * Inherited proxy settings are the sandbox's choice, not the test's, so the
+ * guard hides them while installed rather than treating them as test access.
  *
  * Covered: `fetch`, `node:net` sockets (and everything built on them:
  * `node:tls`, Postgres and Redis clients) and `Bun.connect`.
@@ -124,8 +126,6 @@ const refuseProxyHref = (
       );
 };
 
-// Bun's native fetch follows these without going through the guarded socket
-// factories, so a remote one makes the guard refuse to install.
 const PROXY_ENVIRONMENT_KEYS = [
   "HTTP_PROXY",
   "HTTPS_PROXY",
@@ -134,6 +134,32 @@ const PROXY_ENVIRONMENT_KEYS = [
   "https_proxy",
   "all_proxy",
 ] as const;
+
+const neutralizeProxyEnvironment = (
+  environment: Readonly<Record<string, string | undefined>>,
+): (() => void) => {
+  const targets = new Set([environment, process.env]);
+  const originals = [...targets].flatMap((target) =>
+    PROXY_ENVIRONMENT_KEYS.map((key) => ({
+      key,
+      present: Object.hasOwn(target, key),
+      target,
+      value: target[key],
+    })),
+  );
+  for (const { key, target } of originals) {
+    Reflect.deleteProperty(target, key);
+  }
+  return () => {
+    for (const { key, present, target, value } of originals) {
+      if (present) {
+        Reflect.set(target, key, value);
+      } else {
+        Reflect.deleteProperty(target, key);
+      }
+    }
+  };
+};
 
 // 303, and 301/302 after a POST, continue as a GET without the body.
 // The fetch standard rewrites to a bodyless GET only for these; a GET or HEAD
@@ -340,14 +366,7 @@ export const installNetworkGuard = ({
     allowed.has(host.toLowerCase())
       ? undefined
       : new NetworkAccessError(host, via);
-  for (const key of PROXY_ENVIRONMENT_KEYS) {
-    const error = refuseProxyHref(environment[key], key, (url) =>
-      refusal(url.hostname, key),
-    );
-    if (error !== undefined) {
-      throw error;
-    }
-  }
+  const restoreProxyEnvironment = neutralizeProxyEnvironment(environment);
   const refuseSocket =
     (via: string): Refusal =>
     (args) =>
@@ -357,6 +376,7 @@ export const installNetworkGuard = ({
   // Bun's module-level factories open sockets without going through
   // Socket.prototype.connect, so each entry point is guarded on its own.
   const restores = [
+    restoreProxyEnvironment,
     guardFetch((url) => refusal(url.hostname, "fetch")),
     guardMethod(
       net.Socket.prototype,

@@ -170,7 +170,7 @@ const extractFieldValues = async ({
     system: `${SYSTEM_PROMPT}\nToday is ${formatDateInTimeZone({ timezone })}.`,
     prompt: buildPrompt(targets, sources),
     outputSchema: prefillOutputSchema,
-    abortSignal: AbortSignal.timeout(PREFILL_TIMEOUT_MS),
+    deadlineMs: PREFILL_TIMEOUT_MS,
     serviceTier: "standard",
   });
   return mapPrefillResults(targets, fields);

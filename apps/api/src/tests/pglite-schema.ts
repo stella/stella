@@ -361,6 +361,19 @@ export const installPgliteSyntheticMembershipTrigger = async (
   }
 };
 
+export const installPgliteAiMemoryActiveUserGuard = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  await installPgliteMigration({
+    db,
+    migrationPath: nodePath.join(
+      DRIZZLE_DIR,
+      "20261018050200_ai_memory_active_user_guard",
+      "migration.sql",
+    ),
+  });
+};
+
 const TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261004003000_tree_parent_cycle_guard",

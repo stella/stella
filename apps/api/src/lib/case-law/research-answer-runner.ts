@@ -497,7 +497,7 @@ const answerDecision = async (
           retrieved: text.retrieved,
         }),
         outputSchema: buildResearchAnswersSchema(generativeQuestions),
-        abortSignal: AbortSignal.timeout(ANSWER_TIMEOUT_MS),
+        deadlineMs: ANSWER_TIMEOUT_MS,
       });
       return { modelId, output };
     },

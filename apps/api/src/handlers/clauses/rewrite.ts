@@ -186,7 +186,7 @@ const rewriteClause = createSafeRootHandler(
             }),
             outputSchema: rewriteOutputSchema,
             serviceTier: "standard",
-            abortSignal: AbortSignal.timeout(REWRITE_TIMEOUT_MS),
+            deadlineMs: REWRITE_TIMEOUT_MS,
           }),
         catch: (cause) => {
           aiAnalytics.captureError(cause);

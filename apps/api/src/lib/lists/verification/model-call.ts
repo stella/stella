@@ -164,10 +164,8 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
           tenantWorkspaceIds: [deps.workspaceId],
           system,
           messages,
-          abortSignal: AbortSignal.any([
-            deps.abortSignal,
-            AbortSignal.timeout(CALL_TIMEOUT_MS),
-          ]),
+          abortSignal: deps.abortSignal,
+          deadlineMs: CALL_TIMEOUT_MS,
           outputSchema,
         }),
       );

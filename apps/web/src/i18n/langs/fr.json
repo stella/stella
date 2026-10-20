@@ -1009,6 +1009,9 @@
       "saved": "{count, plural, one {# décision enregistrée} other {# décisions enregistrées}} dans {matter}"
     },
     "newestDecisions": "Décisions les plus récentes",
+    "noResults": {
+      "hint": "Essayez d'autres mots, améliorez la requête avec l'IA ou posez la question dans la conversation."
+    },
     "notesFilter": {
       "ai": "IA",
       "human": "Humaines"
@@ -1081,6 +1084,10 @@
         "medium": "Moyen",
         "short": "Court"
       }
+    },
+    "rewritten": {
+      "line": "Aucune correspondance exacte pour <bdi>{original}</bdi> ; résultats pour <bdi>{query}</bdi>",
+      "searchOriginal": "Rechercher mes mots d'origine"
     },
     "sameCaseNumber": "{count, plural, one {# décision porte} other {# décisions portent}} ce numéro d'affaire. Choisissez la juridiction.",
     "searchLabel": "Rechercher dans la jurisprudence",
@@ -2690,6 +2697,10 @@
       "aiConfigModelInvalid": "La configuration du modèle d’IA est invalide. Vérifiez les modèles sélectionnés.",
       "aiConfigProviderInvalid": "La configuration du fournisseur d’IA est invalide. Vérifiez les paramètres du fournisseur.",
       "aiConfigProviderValidationFailed": "Le fournisseur d’IA a refusé la configuration. Vérifiez la clé API et le modèle.",
+      "aiOutputInvalid": "La réponse de l’IA avait un format inattendu. Réessayez.",
+      "aiOutputModerated": "Le fournisseur d’IA a modéré la réponse. Reformulez la demande ou choisissez un autre modèle.",
+      "aiProviderTaskUnsupported": "Le fournisseur d’IA configuré ne peut pas effectuer cette tâche. Choisissez-en un qui le peut.",
+      "aiUnknown": "La requête d’IA a échoué. Réessayez.",
       "clauseDirectivesInvalid": "Une clause liée contient des directives non valides. Corrigez la clause avant de remplir le modèle.",
       "clauseDirectivesInvalidDetails": "La clause {clauseName} dans le champ {slotName} contient des directives non valides. Ouvrez l’éditeur de clauses, corrigez les paragraphes indiqués et remplissez à nouveau le modèle.",
       "clauseDirectivesOverrideInvalidDetails": "Le texte de remplacement de la clause {clauseName} dans le champ {slotName} contient des directives non valides. Corrigez ce texte pour ce remplissage avant de réessayer.",
@@ -4236,6 +4247,10 @@
     "archivedEmpty": "Aucune mémoire archivée.",
     "archivedToast": "Mémoire archivée",
     "createdToast": "Enregistré dans la mémoire",
+    "deleteConfirmation": "Saisissez {confirmation} pour confirmer",
+    "deleteDescription": "Cette mémoire sera supprimée définitivement. Cette action est irréversible.",
+    "deleteTitle": "Supprimer la mémoire ?",
+    "deletedToast": "Mémoire supprimée",
     "empty": "Encore rien en mémoire.",
     "kinds": {
       "decision": "Décision",
@@ -5164,6 +5179,8 @@
     "outline": "Sommaire",
     "outlineJumpLabel": "Aller à une disposition",
     "outlineJumpPlaceholder": "§ 10 ou un intitulé",
+    "pendingChanges": "Modifications à venir",
+    "pendingChangesIncomplete": "Les données de l’éditeur peuvent ne pas inclure toutes les modifications à venir.",
     "provisionAskContextPrompt": "\n\nPassages appliquant la disposition dans les décisions les plus autorisées :\n{passages}\n\nUtilise les outils de jurisprudence pour lire l’une de ces décisions en entier ou pour trouver d’autres décisions citant la disposition.",
     "provisionAskPlaceholder": "Poser une question sur cette disposition",
     "provisionAskQuestionPrompt": "À propos de {subject} : {question}",

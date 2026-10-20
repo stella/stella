@@ -23,6 +23,7 @@ type GenerateBBoxDataProps = {
   fieldContent: string;
   justificationText: string;
   abortSignal: AbortSignal;
+  deadlineMs: number;
   justificationId: string;
   organizationId: SafeId<"organization">;
   admission: ModelDispatchAdmission;
@@ -41,6 +42,7 @@ export const generateBBoxData = async ({
   fieldContent,
   justificationText,
   abortSignal,
+  deadlineMs,
   justificationId,
   organizationId,
   admission,
@@ -116,6 +118,7 @@ export const generateBBoxData = async ({
         ],
         outputSchema: bboxOutputSchema,
         abortSignal,
+        deadlineMs,
       });
 
       return result.boxes;

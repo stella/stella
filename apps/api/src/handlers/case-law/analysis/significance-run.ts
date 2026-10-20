@@ -182,7 +182,7 @@ export const refreshSignificance = async ({
       system: significanceSystemPrompt(language),
       prompt: significanceUserMessage(facts),
       outputSchema: significanceOutputSchema,
-      abortSignal: AbortSignal.timeout(60_000),
+      deadlineMs: 60_000,
     });
 
     // The document layers are carried over untouched: this run read the
