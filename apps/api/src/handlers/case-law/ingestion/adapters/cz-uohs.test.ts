@@ -52,7 +52,9 @@ describe("ÚOHS JSON-LD", () => {
     const decision = await buildCzUohsDecision(unknown);
     expect(decision.sourceDocumentId).toBe(unknown.iri);
     expect(decision.metadata["collection"]).toBeNull();
-    expect(decision.metadata["department"]).toEqual(unknown.odbor);
+    expect(JSON.stringify(decision.metadata["department"])).toBe(
+      JSON.stringify(unknown.odbor),
+    );
   });
 
   test("an unchanged decision keeps its fingerprint across reads", async () => {
@@ -74,8 +76,8 @@ describe("ÚOHS JSON-LD", () => {
     const record = (await records())[0]!;
     const decision = await buildCzUohsDecision(record);
     expect(decision.decisionDate).toBeUndefined();
-    expect(decision.metadata["legalForceDate"]).toEqual(
-      record.datum_právní_moci,
+    expect(JSON.stringify(decision.metadata["legalForceDate"])).toBe(
+      JSON.stringify(record.datum_právní_moci),
     );
   });
 
