@@ -12,24 +12,48 @@ export const sharepointRoute = new Elysia({ prefix: "/sharepoint" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/oauth/callback", sharepointOAuthCallback.handler, {
-    permissions: sharepointOAuthCallback.config.permissions,
-    query: sharepointOAuthCallback.config.query,
-  })
-  .put("/enablement", setSharepointEnablement.handler, {
-    body: setSharepointEnablement.config.body,
-    permissions: setSharepointEnablement.config.permissions,
-  })
-  .post("/connect", connectSharepoint.handler, {
-    permissions: connectSharepoint.config.permissions,
-  })
-  .get("/connection", sharepointConnectionStatus.handler, {
-    permissions: sharepointConnectionStatus.config.permissions,
-  })
-  .delete("/connection", disconnectSharepoint.handler, {
-    permissions: disconnectSharepoint.config.permissions,
-  })
-  .get("/drive/root", listSharepointDriveRoot.handler, {
-    permissions: listSharepointDriveRoot.config.permissions,
-    query: listSharepointDriveRoot.config.query,
-  });
+  .get(
+    "/oauth/callback",
+    {
+      permissions: sharepointOAuthCallback.config.permissions,
+      query: sharepointOAuthCallback.config.query,
+    },
+    sharepointOAuthCallback.handler,
+  )
+  .put(
+    "/enablement",
+    {
+      body: setSharepointEnablement.config.body,
+      permissions: setSharepointEnablement.config.permissions,
+    },
+    setSharepointEnablement.handler,
+  )
+  .post(
+    "/connect",
+    {
+      permissions: connectSharepoint.config.permissions,
+    },
+    connectSharepoint.handler,
+  )
+  .get(
+    "/connection",
+    {
+      permissions: sharepointConnectionStatus.config.permissions,
+    },
+    sharepointConnectionStatus.handler,
+  )
+  .delete(
+    "/connection",
+    {
+      permissions: disconnectSharepoint.config.permissions,
+    },
+    disconnectSharepoint.handler,
+  )
+  .get(
+    "/drive/root",
+    {
+      permissions: listSharepointDriveRoot.config.permissions,
+      query: listSharepointDriveRoot.config.query,
+    },
+    listSharepointDriveRoot.handler,
+  );

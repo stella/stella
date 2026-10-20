@@ -132,8 +132,8 @@ if (!databaseUrl || !enabled) {
         });
         const app = new Elysia().get(
           "/case/decisions/:decisionId",
-          definition.handler,
           { params: definition.config.params },
+          definition.handler,
         );
         const response = await app.handle(
           new Request(`http://localhost/case/decisions/${decisionId}`),

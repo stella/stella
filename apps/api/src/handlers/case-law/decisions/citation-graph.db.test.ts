@@ -1,8 +1,8 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { Value } from "typebox/value";
 
 import {
   caseLawCitations,

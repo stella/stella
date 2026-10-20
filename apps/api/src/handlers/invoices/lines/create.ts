@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull, ne } from "drizzle-orm";
-import { type Static, t } from "elysia";
+import { t } from "elysia";
+import type { Static } from "typebox";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { InvoiceTotals } from "@stll/invoicing";

@@ -1,8 +1,8 @@
-import type { Static } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { Result } from "better-result";
 import { t } from "elysia";
+import type { Static } from "typebox";
+import { Value } from "typebox/value";
 
 import { TIME_ENTRY_SOURCE } from "@stll/api-contract";
 

@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import { Value } from "typebox/value";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";

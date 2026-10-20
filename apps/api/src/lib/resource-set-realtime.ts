@@ -1,4 +1,4 @@
-import { ElysiaCustomStatusResponse } from "elysia";
+import { ElysiaStatus } from "elysia";
 
 import type { ResourceType } from "@stll/api-contract";
 
@@ -59,8 +59,8 @@ export const noResourceSetUpdates = (reason: string): NoResourceSetUpdates => ({
 
 /** A handler result counts as a committed success unless it is an error status. */
 export const isSuccessfulHandlerResult = (result: unknown): boolean => {
-  if (result instanceof ElysiaCustomStatusResponse) {
-    return result.code < 400;
+  if (result instanceof ElysiaStatus) {
+    return result.status < 400;
   }
   if (result instanceof Response) {
     return result.ok;

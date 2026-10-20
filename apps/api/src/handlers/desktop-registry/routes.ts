@@ -14,19 +14,31 @@ import {
 export const desktopRegistryRoute = new Elysia({
   prefix: DESKTOP_REGISTRY_ROUTE_PREFIX,
 })
-  .post("/renew", renew.handler, {
-    body: renew.config.body,
-    response: renew.config.response,
-  })
-  .post(DESKTOP_REGISTRY_REQUEST_ROUTE, request.handler, {
-    body: request.config.body,
-    headers: desktopRegistryRequestHeaders,
-  })
-  .post("/redeem-link", redeemLink.handler, { body: redeemLink.config.body })
+  .post(
+    "/renew",
+    {
+      body: renew.config.body,
+      response: renew.config.response,
+    },
+    renew.handler,
+  )
+  .post(
+    DESKTOP_REGISTRY_REQUEST_ROUTE,
+    {
+      body: request.config.body,
+      headers: desktopRegistryRequestHeaders,
+    },
+    request.handler,
+  )
+  .post("/redeem-link", { body: redeemLink.config.body }, redeemLink.handler)
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .post("/grant", grant.handler, {
-    body: grant.config.body,
-    permissions: grant.config.permissions,
-  });
+  .post(
+    "/grant",
+    {
+      body: grant.config.body,
+      permissions: grant.config.permissions,
+    },
+    grant.handler,
+  );

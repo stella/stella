@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import { Value } from "typebox/value";
 
 import { playbookVerdictToolSchema } from "@/api/db/schema-validators";
 import type { PlaybookVerdictTool } from "@/api/db/schema-validators";

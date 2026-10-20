@@ -3,7 +3,7 @@ import type { Context } from "elysia";
 
 export const createAuthResponseCookiesPlugin = () =>
   new Elysia({ name: "auth-response-cookies" }).onAfterHandle(
-    { as: "global" },
+    "global",
     ({ responseValue, set }) => {
       if (!(responseValue instanceof Response)) {
         return undefined;

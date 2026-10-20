@@ -58,179 +58,327 @@ export const templatesRoute = new Elysia({
     validateAuth: true,
   })
   // ── Existing transient endpoints ───────────────────
-  .get("/lookup-formats", listLookupFormats.handler, {
-    query: listLookupFormats.config.query,
-    permissions: listLookupFormats.config.permissions,
-  })
-  .post("/lookup-formats", createLookupFormat.handler, {
-    body: createLookupFormat.config.body,
-    permissions: createLookupFormat.config.permissions,
-  })
-  .delete("/lookup-formats/:formatId", deleteLookupFormat.handler, {
-    params: deleteLookupFormat.config.params,
-    permissions: deleteLookupFormat.config.permissions,
-  })
-  .post("/lookup-formats/default", setDefaultLookupFormat.handler, {
-    body: setDefaultLookupFormat.config.body,
-    permissions: setDefaultLookupFormat.config.permissions,
-  })
-  .post("/lookup-formats/my-default", setMyDefaultLookupFormat.handler, {
-    body: setMyDefaultLookupFormat.config.body,
-    permissions: setMyDefaultLookupFormat.config.permissions,
-  })
-  .post("/discover", discoverTemplate.handler, {
-    body: discoverTemplate.config.body,
-    permissions: discoverTemplate.config.permissions,
-  })
-  .post("/fill", fillTemplate.handler, {
-    body: fillTemplate.config.body,
-    permissions: fillTemplate.config.permissions,
-    query: fillTemplate.config.query,
-  })
-  .post("/lookup-preview", lookupPreview.handler, {
-    body: lookupPreview.config.body,
-    permissions: lookupPreview.config.permissions,
-  })
-  .post("/prepare", prepareTemplate.handler, {
-    body: prepareTemplate.config.body,
-    permissions: prepareTemplate.config.permissions,
-  })
-  .post("/suggest-fields", suggestFields.handler, {
-    body: suggestFields.config.body,
-    permissions: suggestFields.config.permissions,
-  })
+  .get(
+    "/lookup-formats",
+    {
+      query: listLookupFormats.config.query,
+      permissions: listLookupFormats.config.permissions,
+    },
+    listLookupFormats.handler,
+  )
+  .post(
+    "/lookup-formats",
+    {
+      body: createLookupFormat.config.body,
+      permissions: createLookupFormat.config.permissions,
+    },
+    createLookupFormat.handler,
+  )
+  .delete(
+    "/lookup-formats/:formatId",
+    {
+      params: deleteLookupFormat.config.params,
+      permissions: deleteLookupFormat.config.permissions,
+    },
+    deleteLookupFormat.handler,
+  )
+  .post(
+    "/lookup-formats/default",
+    {
+      body: setDefaultLookupFormat.config.body,
+      permissions: setDefaultLookupFormat.config.permissions,
+    },
+    setDefaultLookupFormat.handler,
+  )
+  .post(
+    "/lookup-formats/my-default",
+    {
+      body: setMyDefaultLookupFormat.config.body,
+      permissions: setMyDefaultLookupFormat.config.permissions,
+    },
+    setMyDefaultLookupFormat.handler,
+  )
+  .post(
+    "/discover",
+    {
+      body: discoverTemplate.config.body,
+      permissions: discoverTemplate.config.permissions,
+    },
+    discoverTemplate.handler,
+  )
+  .post(
+    "/fill",
+    {
+      body: fillTemplate.config.body,
+      permissions: fillTemplate.config.permissions,
+      query: fillTemplate.config.query,
+    },
+    fillTemplate.handler,
+  )
+  .post(
+    "/lookup-preview",
+    {
+      body: lookupPreview.config.body,
+      permissions: lookupPreview.config.permissions,
+    },
+    lookupPreview.handler,
+  )
+  .post(
+    "/prepare",
+    {
+      body: prepareTemplate.config.body,
+      permissions: prepareTemplate.config.permissions,
+    },
+    prepareTemplate.handler,
+  )
+  .post(
+    "/suggest-fields",
+    {
+      body: suggestFields.config.body,
+      permissions: suggestFields.config.permissions,
+    },
+    suggestFields.handler,
+  )
   // Static catalog of data-binding (source, field) options; placed among the
   // transient GET endpoints, before `/:templateId` so the literal path wins.
-  .get("/binding-catalog", getBindingCatalog.handler, {
-    permissions: getBindingCatalog.config.permissions,
-  })
+  .get(
+    "/binding-catalog",
+    {
+      permissions: getBindingCatalog.config.permissions,
+    },
+    getBindingCatalog.handler,
+  )
   // ── CRUD endpoints ─────────────────────────────────
-  .get("/", listTemplates.handler, {
-    permissions: listTemplates.config.permissions,
-    query: listTemplates.config.query,
-  })
-  .put("/", createTemplate.handler, {
-    body: createTemplate.config.body,
-    permissions: createTemplate.config.permissions,
-  })
-  .put("/blank", createBlankTemplate.handler, {
-    body: createBlankTemplate.config.body,
-    permissions: createBlankTemplate.config.permissions,
-  })
-  .put("/styles", createTemplateFromStyles.handler, {
-    body: createTemplateFromStyles.config.body,
-    permissions: createTemplateFromStyles.config.permissions,
-  })
-  .put("/style-set", createTemplateFromStyleSet.handler, {
-    body: createTemplateFromStyleSet.config.body,
-    permissions: createTemplateFromStyleSet.config.permissions,
-  })
-  .get("/:templateId/preview", previewTemplate.handler, {
-    params: previewTemplate.config.params,
-    permissions: previewTemplate.config.permissions,
-  })
-  .get("/:templateId/check", checkTemplate.handler, {
-    params: checkTemplate.config.params,
-    permissions: checkTemplate.config.permissions,
-  })
-  .post("/:templateId/decide-conditions", decideTemplateConditions.handler, {
-    body: decideTemplateConditions.config.body,
-    params: decideTemplateConditions.config.params,
-    permissions: decideTemplateConditions.config.permissions,
-  })
-  .post("/:templateId/fill-preview", fillTemplatePreview.handler, {
-    body: fillTemplatePreview.config.body,
-    params: fillTemplatePreview.config.params,
-    permissions: fillTemplatePreview.config.permissions,
-  })
-  .post("/:templateId/fill", fillTemplateById.handler, {
-    body: fillTemplateById.config.body,
-    params: fillTemplateById.config.params,
-    permissions: fillTemplateById.config.permissions,
-    query: fillTemplateById.config.query,
-  })
-  .post("/:templateId/fill-to/:workspaceId", fillTemplateToWorkspace.handler, {
-    body: fillTemplateToWorkspace.config.body,
-    params: fillTemplateToWorkspace.config.params,
-    permissions: fillTemplateToWorkspace.config.permissions,
-    validateWorkspaceAccess: true,
-  })
-  .post("/:templateId/prefill", prefillTemplate.handler, {
-    body: prefillTemplate.config.body,
-    params: prefillTemplate.config.params,
-    permissions: prefillTemplate.config.permissions,
-  })
-  .get("/:templateId", getTemplate.handler, {
-    params: getTemplate.config.params,
-    permissions: getTemplate.config.permissions,
-  })
-  .get("/:templateId/clause-slots", getTemplateClauseSlots.handler, {
-    params: getTemplateClauseSlots.config.params,
-    permissions: getTemplateClauseSlots.config.permissions,
-  })
-  .post("/:templateId", updateTemplate.handler, {
-    body: updateTemplate.config.body,
-    params: updateTemplate.config.params,
-    permissions: updateTemplate.config.permissions,
-  })
-  .post("/:templateId/document", saveTemplateDocument.handler, {
-    body: saveTemplateDocument.config.body,
-    params: saveTemplateDocument.config.params,
-    permissions: saveTemplateDocument.config.permissions,
-  })
-  .delete("/:templateId", deleteTemplate.handler, {
-    params: deleteTemplate.config.params,
-    permissions: deleteTemplate.config.permissions,
-  })
+  .get(
+    "/",
+    {
+      permissions: listTemplates.config.permissions,
+      query: listTemplates.config.query,
+    },
+    listTemplates.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createTemplate.config.body,
+      permissions: createTemplate.config.permissions,
+    },
+    createTemplate.handler,
+  )
+  .put(
+    "/blank",
+    {
+      body: createBlankTemplate.config.body,
+      permissions: createBlankTemplate.config.permissions,
+    },
+    createBlankTemplate.handler,
+  )
+  .put(
+    "/styles",
+    {
+      body: createTemplateFromStyles.config.body,
+      permissions: createTemplateFromStyles.config.permissions,
+    },
+    createTemplateFromStyles.handler,
+  )
+  .put(
+    "/style-set",
+    {
+      body: createTemplateFromStyleSet.config.body,
+      permissions: createTemplateFromStyleSet.config.permissions,
+    },
+    createTemplateFromStyleSet.handler,
+  )
+  .get(
+    "/:templateId/preview",
+    {
+      params: previewTemplate.config.params,
+      permissions: previewTemplate.config.permissions,
+    },
+    previewTemplate.handler,
+  )
+  .get(
+    "/:templateId/check",
+    {
+      params: checkTemplate.config.params,
+      permissions: checkTemplate.config.permissions,
+    },
+    checkTemplate.handler,
+  )
+  .post(
+    "/:templateId/decide-conditions",
+    {
+      body: decideTemplateConditions.config.body,
+      params: decideTemplateConditions.config.params,
+      permissions: decideTemplateConditions.config.permissions,
+    },
+    decideTemplateConditions.handler,
+  )
+  .post(
+    "/:templateId/fill-preview",
+    {
+      body: fillTemplatePreview.config.body,
+      params: fillTemplatePreview.config.params,
+      permissions: fillTemplatePreview.config.permissions,
+    },
+    fillTemplatePreview.handler,
+  )
+  .post(
+    "/:templateId/fill",
+    {
+      body: fillTemplateById.config.body,
+      params: fillTemplateById.config.params,
+      permissions: fillTemplateById.config.permissions,
+      query: fillTemplateById.config.query,
+    },
+    fillTemplateById.handler,
+  )
+  .post(
+    "/:templateId/fill-to/:workspaceId",
+    {
+      body: fillTemplateToWorkspace.config.body,
+      params: fillTemplateToWorkspace.config.params,
+      permissions: fillTemplateToWorkspace.config.permissions,
+      validateWorkspaceAccess: true,
+    },
+    fillTemplateToWorkspace.handler,
+  )
+  .post(
+    "/:templateId/prefill",
+    {
+      body: prefillTemplate.config.body,
+      params: prefillTemplate.config.params,
+      permissions: prefillTemplate.config.permissions,
+    },
+    prefillTemplate.handler,
+  )
+  .get(
+    "/:templateId",
+    {
+      params: getTemplate.config.params,
+      permissions: getTemplate.config.permissions,
+    },
+    getTemplate.handler,
+  )
+  .get(
+    "/:templateId/clause-slots",
+    {
+      params: getTemplateClauseSlots.config.params,
+      permissions: getTemplateClauseSlots.config.permissions,
+    },
+    getTemplateClauseSlots.handler,
+  )
+  .post(
+    "/:templateId",
+    {
+      body: updateTemplate.config.body,
+      params: updateTemplate.config.params,
+      permissions: updateTemplate.config.permissions,
+    },
+    updateTemplate.handler,
+  )
+  .post(
+    "/:templateId/document",
+    {
+      body: saveTemplateDocument.config.body,
+      params: saveTemplateDocument.config.params,
+      permissions: saveTemplateDocument.config.permissions,
+    },
+    saveTemplateDocument.handler,
+  )
+  .delete(
+    "/:templateId",
+    {
+      params: deleteTemplate.config.params,
+      permissions: deleteTemplate.config.permissions,
+    },
+    deleteTemplate.handler,
+  )
   // ── Versions ──────────────────────────────────────
-  .get("/:templateId/versions", listTemplateVersions.handler, {
-    params: listTemplateVersions.config.params,
-    permissions: listTemplateVersions.config.permissions,
-    query: listTemplateVersions.config.query,
-  })
-  .get("/:templateId/versions/:versionId", getTemplateVersion.handler, {
-    params: getTemplateVersion.config.params,
-    permissions: getTemplateVersion.config.permissions,
-  })
-  .get("/:templateId/versions/:versionId/diff", templateVersionDiff.handler, {
-    params: templateVersionDiff.config.params,
-    permissions: templateVersionDiff.config.permissions,
-  })
+  .get(
+    "/:templateId/versions",
+    {
+      params: listTemplateVersions.config.params,
+      permissions: listTemplateVersions.config.permissions,
+      query: listTemplateVersions.config.query,
+    },
+    listTemplateVersions.handler,
+  )
+  .get(
+    "/:templateId/versions/:versionId",
+    {
+      params: getTemplateVersion.config.params,
+      permissions: getTemplateVersion.config.permissions,
+    },
+    getTemplateVersion.handler,
+  )
+  .get(
+    "/:templateId/versions/:versionId/diff",
+    {
+      params: templateVersionDiff.config.params,
+      permissions: templateVersionDiff.config.permissions,
+    },
+    templateVersionDiff.handler,
+  )
   .post(
     "/:templateId/versions/:versionId/summarize",
-    templateVersionSummarize.handler,
     {
       params: templateVersionSummarize.config.params,
       permissions: templateVersionSummarize.config.permissions,
     },
+    templateVersionSummarize.handler,
   )
   // ── Clause linking ──────────────────────────────────
-  .get("/:templateId/clauses", listTemplateClauses.handler, {
-    params: listTemplateClauses.config.params,
-    permissions: listTemplateClauses.config.permissions,
-  })
-  .put("/:templateId/clauses", linkTemplateClause.handler, {
-    body: linkTemplateClause.config.body,
-    params: linkTemplateClause.config.params,
-    permissions: linkTemplateClause.config.permissions,
-  })
-  .patch("/:templateId/clauses/:linkId", updateTemplateClauseSlot.handler, {
-    body: updateTemplateClauseSlot.config.body,
-    params: updateTemplateClauseSlot.config.params,
-    permissions: updateTemplateClauseSlot.config.permissions,
-  })
-  .delete("/:templateId/clauses/:linkId", unlinkTemplateClause.handler, {
-    params: unlinkTemplateClause.config.params,
-    permissions: unlinkTemplateClause.config.permissions,
-  })
-  .post("/:templateId/clauses/sync", syncAllTemplateClauses.handler, {
-    params: syncAllTemplateClauses.config.params,
-    permissions: syncAllTemplateClauses.config.permissions,
-  })
-  .post("/:templateId/clauses/:linkId/sync", syncTemplateClause.handler, {
-    params: syncTemplateClause.config.params,
-    permissions: syncTemplateClause.config.permissions,
-  });
+  .get(
+    "/:templateId/clauses",
+    {
+      params: listTemplateClauses.config.params,
+      permissions: listTemplateClauses.config.permissions,
+    },
+    listTemplateClauses.handler,
+  )
+  .put(
+    "/:templateId/clauses",
+    {
+      body: linkTemplateClause.config.body,
+      params: linkTemplateClause.config.params,
+      permissions: linkTemplateClause.config.permissions,
+    },
+    linkTemplateClause.handler,
+  )
+  .patch(
+    "/:templateId/clauses/:linkId",
+    {
+      body: updateTemplateClauseSlot.config.body,
+      params: updateTemplateClauseSlot.config.params,
+      permissions: updateTemplateClauseSlot.config.permissions,
+    },
+    updateTemplateClauseSlot.handler,
+  )
+  .delete(
+    "/:templateId/clauses/:linkId",
+    {
+      params: unlinkTemplateClause.config.params,
+      permissions: unlinkTemplateClause.config.permissions,
+    },
+    unlinkTemplateClause.handler,
+  )
+  .post(
+    "/:templateId/clauses/sync",
+    {
+      params: syncAllTemplateClauses.config.params,
+      permissions: syncAllTemplateClauses.config.permissions,
+    },
+    syncAllTemplateClauses.handler,
+  )
+  .post(
+    "/:templateId/clauses/:linkId/sync",
+    {
+      params: syncTemplateClause.config.params,
+      permissions: syncTemplateClause.config.permissions,
+    },
+    syncTemplateClause.handler,
+  );
 
 // ── Template Categories ────────────────────────────
 
@@ -240,19 +388,35 @@ export const templateCategoriesRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listTemplateCategories.handler, {
-    permissions: listTemplateCategories.config.permissions,
-  })
-  .put("/", createTemplateCategory.handler, {
-    body: createTemplateCategory.config.body,
-    permissions: createTemplateCategory.config.permissions,
-  })
-  .post("/:categoryId", updateTemplateCategory.handler, {
-    body: updateTemplateCategory.config.body,
-    params: updateTemplateCategory.config.params,
-    permissions: updateTemplateCategory.config.permissions,
-  })
-  .delete("/:categoryId", deleteTemplateCategory.handler, {
-    params: deleteTemplateCategory.config.params,
-    permissions: deleteTemplateCategory.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      permissions: listTemplateCategories.config.permissions,
+    },
+    listTemplateCategories.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createTemplateCategory.config.body,
+      permissions: createTemplateCategory.config.permissions,
+    },
+    createTemplateCategory.handler,
+  )
+  .post(
+    "/:categoryId",
+    {
+      body: updateTemplateCategory.config.body,
+      params: updateTemplateCategory.config.params,
+      permissions: updateTemplateCategory.config.permissions,
+    },
+    updateTemplateCategory.handler,
+  )
+  .delete(
+    "/:categoryId",
+    {
+      params: deleteTemplateCategory.config.params,
+      permissions: deleteTemplateCategory.config.permissions,
+    },
+    deleteTemplateCategory.handler,
+  );

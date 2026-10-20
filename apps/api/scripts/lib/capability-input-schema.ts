@@ -1,5 +1,5 @@
-import { KindGuard } from "@sinclair/typebox";
 import { panic } from "better-result";
+import { KindGuard } from "typebox";
 
 import { isRecord } from "../../src/lib/type-guards";
 import { advertisedSchema } from "../../src/mcp/advertised-schema";

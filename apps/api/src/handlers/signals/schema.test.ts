@@ -8,11 +8,11 @@ describe("listSignalsQuerySchema", () => {
     let received: unknown;
     const app = new Elysia().get(
       "/signals",
+      { query: listSignalsQuerySchema },
       ({ query }) => {
         received = query;
         return "ok";
       },
-      { query: listSignalsQuerySchema },
     );
 
     const response = await app.handle(

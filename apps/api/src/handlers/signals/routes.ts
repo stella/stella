@@ -14,39 +14,71 @@ export const signalsRoute = new Elysia({ prefix: "/signals" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listSignals.handler, {
-    query: listSignals.config.query,
-    permissions: listSignals.config.permissions,
-  })
-  .get("/count", countInbox.handler, {
-    query: countInbox.config.query,
-    permissions: countInbox.config.permissions,
-  })
-  .post("/requests", createRequest.handler, {
-    body: createRequest.config.body,
-    permissions: createRequest.config.permissions,
-  })
-  .get("/:signalId", getSignal.handler, {
-    params: getSignal.config.params,
-    permissions: getSignal.config.permissions,
-  })
-  .post("/:signalId/snoozes", snoozeSignal.handler, {
-    params: snoozeSignal.config.params,
-    body: snoozeSignal.config.body,
-    permissions: snoozeSignal.config.permissions,
-  })
-  .post("/:signalId/dismissals", dismissSignal.handler, {
-    params: dismissSignal.config.params,
-    body: dismissSignal.config.body,
-    permissions: dismissSignal.config.permissions,
-  })
-  .post("/:signalId/assignments", assignSignal.handler, {
-    params: assignSignal.config.params,
-    body: assignSignal.config.body,
-    permissions: assignSignal.config.permissions,
-  })
-  .post("/:signalId/acceptances", acceptSignal.handler, {
-    params: acceptSignal.config.params,
-    body: acceptSignal.config.body,
-    permissions: acceptSignal.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      query: listSignals.config.query,
+      permissions: listSignals.config.permissions,
+    },
+    listSignals.handler,
+  )
+  .get(
+    "/count",
+    {
+      query: countInbox.config.query,
+      permissions: countInbox.config.permissions,
+    },
+    countInbox.handler,
+  )
+  .post(
+    "/requests",
+    {
+      body: createRequest.config.body,
+      permissions: createRequest.config.permissions,
+    },
+    createRequest.handler,
+  )
+  .get(
+    "/:signalId",
+    {
+      params: getSignal.config.params,
+      permissions: getSignal.config.permissions,
+    },
+    getSignal.handler,
+  )
+  .post(
+    "/:signalId/snoozes",
+    {
+      params: snoozeSignal.config.params,
+      body: snoozeSignal.config.body,
+      permissions: snoozeSignal.config.permissions,
+    },
+    snoozeSignal.handler,
+  )
+  .post(
+    "/:signalId/dismissals",
+    {
+      params: dismissSignal.config.params,
+      body: dismissSignal.config.body,
+      permissions: dismissSignal.config.permissions,
+    },
+    dismissSignal.handler,
+  )
+  .post(
+    "/:signalId/assignments",
+    {
+      params: assignSignal.config.params,
+      body: assignSignal.config.body,
+      permissions: assignSignal.config.permissions,
+    },
+    assignSignal.handler,
+  )
+  .post(
+    "/:signalId/acceptances",
+    {
+      params: acceptSignal.config.params,
+      body: acceptSignal.config.body,
+      permissions: acceptSignal.config.permissions,
+    },
+    acceptSignal.handler,
+  );

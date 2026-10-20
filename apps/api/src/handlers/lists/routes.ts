@@ -34,88 +34,160 @@ export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
   .use(createListVerificationRoutes())
-  .get("/", readLists.handler, {
-    permissions: readLists.config.permissions,
-    query: readLists.config.query,
-  })
-  .put("/", createList.handler, {
-    body: createList.config.body,
-    permissions: createList.config.permissions,
-  })
-  .patch("/", updateList.handler, {
-    body: updateList.config.body,
-    permissions: updateList.config.permissions,
-  })
-  .post("/sections", createSection.handler, {
-    body: createSection.config.body,
-    permissions: createSection.config.permissions,
-  })
-  .post("/columns", createColumn.handler, {
-    body: createColumn.config.body,
-    permissions: createColumn.config.permissions,
-  })
-  .post("/generations", createGeneration.handler, {
-    body: createGeneration.config.body,
-    permissions: createGeneration.config.permissions,
-  })
-  .post("/generation-candidates", submitGenerationCandidates.handler, {
-    body: submitGenerationCandidates.config.body,
-    permissions: submitGenerationCandidates.config.permissions,
-  })
-  .post("/generation-candidates/accept", acceptGenerationCandidate.handler, {
-    body: acceptGenerationCandidate.config.body,
-    permissions: acceptGenerationCandidate.config.permissions,
-  })
-  .post("/generation-candidates/reject", rejectGenerationCandidate.handler, {
-    body: rejectGenerationCandidate.config.body,
-    permissions: rejectGenerationCandidate.config.permissions,
-  })
-  .post("/item-sources", createItemSource.handler, {
-    body: createItemSource.config.body,
-    permissions: createItemSource.config.permissions,
-  })
-  .post("/item-comments", createItemComment.handler, {
-    body: createItemComment.config.body,
-    permissions: createItemComment.config.permissions,
-  })
-  .post("/item-reviews", reviewItem.handler, {
-    body: reviewItem.config.body,
-    permissions: reviewItem.config.permissions,
-  })
-  .patch("/items", updateItem.handler, {
-    body: updateItem.config.body,
-    permissions: updateItem.config.permissions,
-  })
+  .get(
+    "/",
+    {
+      permissions: readLists.config.permissions,
+      query: readLists.config.query,
+    },
+    readLists.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createList.config.body,
+      permissions: createList.config.permissions,
+    },
+    createList.handler,
+  )
+  .patch(
+    "/",
+    {
+      body: updateList.config.body,
+      permissions: updateList.config.permissions,
+    },
+    updateList.handler,
+  )
+  .post(
+    "/sections",
+    {
+      body: createSection.config.body,
+      permissions: createSection.config.permissions,
+    },
+    createSection.handler,
+  )
+  .post(
+    "/columns",
+    {
+      body: createColumn.config.body,
+      permissions: createColumn.config.permissions,
+    },
+    createColumn.handler,
+  )
+  .post(
+    "/generations",
+    {
+      body: createGeneration.config.body,
+      permissions: createGeneration.config.permissions,
+    },
+    createGeneration.handler,
+  )
+  .post(
+    "/generation-candidates",
+    {
+      body: submitGenerationCandidates.config.body,
+      permissions: submitGenerationCandidates.config.permissions,
+    },
+    submitGenerationCandidates.handler,
+  )
+  .post(
+    "/generation-candidates/accept",
+    {
+      body: acceptGenerationCandidate.config.body,
+      permissions: acceptGenerationCandidate.config.permissions,
+    },
+    acceptGenerationCandidate.handler,
+  )
+  .post(
+    "/generation-candidates/reject",
+    {
+      body: rejectGenerationCandidate.config.body,
+      permissions: rejectGenerationCandidate.config.permissions,
+    },
+    rejectGenerationCandidate.handler,
+  )
+  .post(
+    "/item-sources",
+    {
+      body: createItemSource.config.body,
+      permissions: createItemSource.config.permissions,
+    },
+    createItemSource.handler,
+  )
+  .post(
+    "/item-comments",
+    {
+      body: createItemComment.config.body,
+      permissions: createItemComment.config.permissions,
+    },
+    createItemComment.handler,
+  )
+  .post(
+    "/item-reviews",
+    {
+      body: reviewItem.config.body,
+      permissions: reviewItem.config.permissions,
+    },
+    reviewItem.handler,
+  )
+  .patch(
+    "/items",
+    {
+      body: updateItem.config.body,
+      permissions: updateItem.config.permissions,
+    },
+    updateItem.handler,
+  )
   .get(
     "/:listId/generations/:runId/candidates",
-    readGenerationCandidates.handler,
     {
       params: readGenerationCandidates.config.params,
       permissions: readGenerationCandidates.config.permissions,
       query: readGenerationCandidates.config.query,
     },
+    readGenerationCandidates.handler,
   )
-  .get("/:listId/generations", readGenerations.handler, {
-    params: readGenerations.config.params,
-    permissions: readGenerations.config.permissions,
-    query: readGenerations.config.query,
-  })
-  .get("/:listId", readListById.handler, {
-    params: readListById.config.params,
-    permissions: readListById.config.permissions,
-  })
-  .get("/:listId/items", readListItems.handler, {
-    params: readListItems.config.params,
-    permissions: readListItems.config.permissions,
-    query: readListItems.config.query,
-  })
-  .get("/:listId/items/:itemEntityId/activity", readItemActivity.handler, {
-    params: readItemActivity.config.params,
-    permissions: readItemActivity.config.permissions,
-    query: readItemActivity.config.query,
-  })
-  .get("/:listId/items/:itemEntityId/sources", readItemSources.handler, {
-    params: readItemSources.config.params,
-    permissions: readItemSources.config.permissions,
-    query: readItemSources.config.query,
-  });
+  .get(
+    "/:listId/generations",
+    {
+      params: readGenerations.config.params,
+      permissions: readGenerations.config.permissions,
+      query: readGenerations.config.query,
+    },
+    readGenerations.handler,
+  )
+  .get(
+    "/:listId",
+    {
+      params: readListById.config.params,
+      permissions: readListById.config.permissions,
+    },
+    readListById.handler,
+  )
+  .get(
+    "/:listId/items",
+    {
+      params: readListItems.config.params,
+      permissions: readListItems.config.permissions,
+      query: readListItems.config.query,
+    },
+    readListItems.handler,
+  )
+  .get(
+    "/:listId/items/:itemEntityId/activity",
+    {
+      params: readItemActivity.config.params,
+      permissions: readItemActivity.config.permissions,
+      query: readItemActivity.config.query,
+    },
+    readItemActivity.handler,
+  )
+  .get(
+    "/:listId/items/:itemEntityId/sources",
+    {
+      params: readItemSources.config.params,
+      permissions: readItemSources.config.permissions,
+      query: readItemSources.config.query,
+    },
+    readItemSources.handler,
+  );

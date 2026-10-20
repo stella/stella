@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
+import { Value } from "typebox/value";
 import * as v from "valibot";
 
 import type {

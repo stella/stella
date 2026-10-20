@@ -22,12 +22,20 @@ const responseWithStatusText = safeHandlerResponseSchemasWithStatusText(
 );
 
 const app = new Elysia()
-  .get("/invalid", () => status(400, { message: "Invalid request" }), {
-    response,
-  })
-  .get("/unauthorized", () => status(401), {
-    response: responseWithStatusText,
-  });
+  .get(
+    "/invalid",
+    {
+      response,
+    },
+    () => status(400, { message: "Invalid request" }),
+  )
+  .get(
+    "/unauthorized",
+    {
+      response: responseWithStatusText,
+    },
+    () => status(401),
+  );
 
 describe("safe handler response schemas", () => {
   test("keep the success schema when a route overrides an error status", () => {
@@ -60,12 +68,20 @@ test("standard success schemas share the same typed error responses", async () =
     typeof success
   >();
   const standardApp = new Elysia()
-    .get("/success", () => ({ reported: true as const }), {
-      response: standardResponses,
-    })
-    .get("/refused", () => status(401, { message: "Connect account" }), {
-      response: standardResponses,
-    });
+    .get(
+      "/success",
+      {
+        response: standardResponses,
+      },
+      () => ({ reported: true as const }),
+    )
+    .get(
+      "/refused",
+      {
+        response: standardResponses,
+      },
+      () => status(401, { message: "Connect account" }),
+    );
   const accepted = await standardApp.handle(
     new Request("https://example.test/success"),
   );

@@ -1,8 +1,8 @@
-import { Value } from "@sinclair/typebox/value";
 import { makeSignature } from "better-auth/crypto";
 import { RedisClient } from "bun";
 import { describe, expect, setSystemTime, spyOn, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { Value } from "typebox/value";
 
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";

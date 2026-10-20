@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
-import type { Static } from "elysia";
 import { t } from "elysia";
+import type { Static } from "typebox";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 

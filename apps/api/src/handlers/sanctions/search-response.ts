@@ -1,6 +1,5 @@
-import type { TSchema } from "@sinclair/typebox";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static, TSchema } from "typebox";
 
 import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
 import { SANCTIONS_MATCH_LIMIT } from "@/api/lib/lists/sanctions/screening-service";

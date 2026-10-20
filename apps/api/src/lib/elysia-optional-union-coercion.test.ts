@@ -12,14 +12,10 @@ import { Elysia, t } from "elysia";
 
 const absentField = async (schema: ReturnType<typeof t.Object>) => {
   let received: unknown = Symbol("unset");
-  const app = new Elysia().get(
-    "/p",
-    ({ query }) => {
-      received = (query as { field?: unknown }).field;
-      return "ok";
-    },
-    { query: schema },
-  );
+  const app = new Elysia().get("/p", { query: schema }, ({ query }) => {
+    received = (query as { field?: unknown }).field;
+    return "ok";
+  });
   const res = await app.handle(new Request("http://localhost/p"));
   expect(res.status).toBe(200);
   return received;

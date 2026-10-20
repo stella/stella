@@ -1,8 +1,8 @@
-import { Value } from "@sinclair/typebox/value";
 import { toolDefinition } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { Value } from "typebox/value";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";

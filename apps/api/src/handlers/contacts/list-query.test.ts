@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import { Value } from "typebox/value";
 
 import { CONTACT_CURSOR_MAX_LENGTH } from "@/api/handlers/contacts/list-query";
 import { tPaginationCursor } from "@/api/lib/custom-schema";

@@ -9,7 +9,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import { Temporal } from "@stll/time";
 
@@ -292,7 +292,7 @@ type AdminStopCtx = Parameters<typeof adminStopTimer.handler>[0];
 
 /** The failure status of a handler result, or null when it succeeded. */
 const statusOf = (result: unknown): number | null =>
-  result instanceof ElysiaCustomStatusResponse ? Number(result.code) : null;
+  result instanceof ElysiaStatus ? Number(result.status) : null;
 
 // ── Per-entry operations ───────────────────────────────
 

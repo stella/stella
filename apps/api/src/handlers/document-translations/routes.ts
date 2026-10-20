@@ -27,17 +27,29 @@ export const documentTranslationsRoute = new Elysia({
     }),
   )
   .guard({ validateWorkspaceAccess: true })
-  .post("/prepare", prepareDocumentTranslation.handler, {
-    body: prepareDocumentTranslation.config.body,
-    params: prepareDocumentTranslation.config.params,
-    permissions: prepareDocumentTranslation.config.permissions,
-  })
-  .post("/runs", createDocumentTranslationRun.handler, {
-    body: createDocumentTranslationRun.config.body,
-    params: createDocumentTranslationRun.config.params,
-    permissions: createDocumentTranslationRun.config.permissions,
-  })
-  .get("/runs/:runId", readDocumentTranslationRun.handler, {
-    params: readDocumentTranslationRun.config.params,
-    permissions: readDocumentTranslationRun.config.permissions,
-  });
+  .post(
+    "/prepare",
+    {
+      body: prepareDocumentTranslation.config.body,
+      params: prepareDocumentTranslation.config.params,
+      permissions: prepareDocumentTranslation.config.permissions,
+    },
+    prepareDocumentTranslation.handler,
+  )
+  .post(
+    "/runs",
+    {
+      body: createDocumentTranslationRun.config.body,
+      params: createDocumentTranslationRun.config.params,
+      permissions: createDocumentTranslationRun.config.permissions,
+    },
+    createDocumentTranslationRun.handler,
+  )
+  .get(
+    "/runs/:runId",
+    {
+      params: readDocumentTranslationRun.config.params,
+      permissions: readDocumentTranslationRun.config.permissions,
+    },
+    readDocumentTranslationRun.handler,
+  );

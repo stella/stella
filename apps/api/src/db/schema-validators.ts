@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import {
   ENTITY_KINDS,
@@ -88,7 +88,7 @@ const personType = t.Literal("person");
  */
 export const currencyCodeSchema = (description?: string) =>
   t
-    .Transform(
+    .Codec(
       t.String({
         minLength: 3,
         maxLength: 3,

@@ -1,7 +1,7 @@
-import { OptionalKind } from "@sinclair/typebox";
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { OptionalKind } from "typebox";
 
 import { PERMISSIVE_ROUTE_SCHEMA_MARKER } from "@/api/lib/permissive-route-schema";
 

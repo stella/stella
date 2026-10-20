@@ -3493,28 +3493,48 @@ const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
   const status = createDesktopTimeEntryBatchStatusEndpoint(authorize);
   const single = createDesktopTimeEntryEndpoint(authorize);
   const app = new Elysia()
-    .put("/registry", registry.handler, { body: registry.config.body })
-    .get("/features", feature.handler, { response: feature.config.response })
-    .get("/candidates", candidates.handler, {
-      response: candidates.config.response,
-    })
-    .get("/matters", matters.handler, {
-      query: matters.config.query,
-      response: matters.config.response,
-    })
-    .put("/batch", batch.handler, {
-      body: batch.config.body,
-      response: batch.config.response,
-    })
-    .put("/status", status.handler, {
-      body: status.config.body,
-      response: status.config.response,
-    })
-    .put("/single/:workspaceId", single.handler, {
-      params: single.config.params,
-      body: single.config.body,
-      response: single.config.response,
-    });
+    .put("/registry", { body: registry.config.body }, registry.handler)
+    .get("/features", { response: feature.config.response }, feature.handler)
+    .get(
+      "/candidates",
+      {
+        response: candidates.config.response,
+      },
+      candidates.handler,
+    )
+    .get(
+      "/matters",
+      {
+        query: matters.config.query,
+        response: matters.config.response,
+      },
+      matters.handler,
+    )
+    .put(
+      "/batch",
+      {
+        body: batch.config.body,
+        response: batch.config.response,
+      },
+      batch.handler,
+    )
+    .put(
+      "/status",
+      {
+        body: status.config.body,
+        response: status.config.response,
+      },
+      status.handler,
+    )
+    .put(
+      "/single/:workspaceId",
+      {
+        params: single.config.params,
+        body: single.config.body,
+        response: single.config.response,
+      },
+      single.handler,
+    );
   const credential =
     tenant === "a" ? desktopCredentials.a : desktopCredentials.b;
   return await app.handle(await credential.signRequest(request));

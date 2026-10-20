@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,

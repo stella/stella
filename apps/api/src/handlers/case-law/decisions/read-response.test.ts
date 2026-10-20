@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import { Value } from "typebox/value";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";

@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, expectTypeOf, test } from "bun:test";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
+import { Value } from "typebox/value";
 
 import {
   DECISION_HEADNOTE_TRUNCATION_MARK,

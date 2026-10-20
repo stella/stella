@@ -23,19 +23,35 @@ export const billingCodesRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .get("/", readBillingCodes.handler, {
-    permissions: readBillingCodes.config.permissions,
-    query: readBillingCodes.config.query,
-  })
-  .put("/", createBillingCode.handler, {
-    body: createBillingCode.config.body,
-    permissions: createBillingCode.config.permissions,
-  })
-  .patch("/", updateBillingCode.handler, {
-    body: updateBillingCode.config.body,
-    permissions: updateBillingCode.config.permissions,
-  })
-  .delete("/", deleteBillingCode.handler, {
-    body: deleteBillingCode.config.body,
-    permissions: deleteBillingCode.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      permissions: readBillingCodes.config.permissions,
+      query: readBillingCodes.config.query,
+    },
+    readBillingCodes.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createBillingCode.config.body,
+      permissions: createBillingCode.config.permissions,
+    },
+    createBillingCode.handler,
+  )
+  .patch(
+    "/",
+    {
+      body: updateBillingCode.config.body,
+      permissions: updateBillingCode.config.permissions,
+    },
+    updateBillingCode.handler,
+  )
+  .delete(
+    "/",
+    {
+      body: deleteBillingCode.config.body,
+      permissions: deleteBillingCode.config.permissions,
+    },
+    deleteBillingCode.handler,
+  );

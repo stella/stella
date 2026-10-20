@@ -7,7 +7,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -145,9 +145,9 @@ const withAccess = async <T>(
 };
 
 const expectNotFound = (result: unknown) => {
-  expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-  if (result instanceof ElysiaCustomStatusResponse) {
-    expect(result.code).toBe(404);
+  expect(result).toBeInstanceOf(ElysiaStatus);
+  if (result instanceof ElysiaStatus) {
+    expect(result.status).toBe(404);
     expect(result.response).toEqual({ message: "Not found" });
   }
 };
@@ -292,7 +292,7 @@ describe("AVT views follow the current access grant", () => {
             body: { id: newViewId, name: "View", layout: layout("avt") },
           }),
         ),
-      ).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+      ).not.toBeInstanceOf(ElysiaStatus);
       const templateName = createSafeId<"workspaceViewTemplate">();
       const template = await createViewTemplate.handler(
         createTestHandlerContext<
@@ -302,8 +302,8 @@ describe("AVT views follow the current access grant", () => {
           body: { name: templateName, layout: layout("avt") },
         }),
       );
-      expect(template).not.toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (!(template instanceof ElysiaCustomStatusResponse)) {
+      expect(template).not.toBeInstanceOf(ElysiaStatus);
+      if (!(template instanceof ElysiaStatus)) {
         seededTemplateIds.push(template.id);
         expect(
           await deleteViewTemplate.handler(
@@ -314,7 +314,7 @@ describe("AVT views follow the current access grant", () => {
               params: { workspaceId: ids.wsA1, templateId: template.id },
             }),
           ),
-        ).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+        ).not.toBeInstanceOf(ElysiaStatus);
       }
       const tableExport = await exportTableView.handler(
         createTestHandlerContext<Parameters<typeof exportTableView.handler>[0]>(
@@ -325,9 +325,9 @@ describe("AVT views follow the current access grant", () => {
           },
         ),
       );
-      expect(tableExport).toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (tableExport instanceof ElysiaCustomStatusResponse) {
-        expect(tableExport.code).toBe(400);
+      expect(tableExport).toBeInstanceOf(ElysiaStatus);
+      if (tableExport instanceof ElysiaStatus) {
+        expect(tableExport.status).toBe(400);
       }
       const id = createSafeId<"workspaceView">();
       seededIds.push(id);
@@ -337,7 +337,7 @@ describe("AVT views follow the current access grant", () => {
           body: { id, name: "View", layout: layout("avt") },
         }),
       );
-      expect(created).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+      expect(created).not.toBeInstanceOf(ElysiaStatus);
       const renamed = await updateView.handler(
         createTestHandlerContext<Parameters<typeof updateView.handler>[0]>({
           ...context(),
@@ -353,7 +353,7 @@ describe("AVT views follow the current access grant", () => {
           body: { targetType: "filesystem" },
         }),
       );
-      expect(converted).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+      expect(converted).not.toBeInstanceOf(ElysiaStatus);
       const stored = await testDb.query.workspaceViews.findFirst({
         where: { id: { eq: id } },
       });
@@ -568,7 +568,7 @@ test("granted AVT targets support rename, conversion and dedicated controls", as
         body: { name: "Granted view" },
       }),
     );
-    expect(renamed).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+    expect(renamed).not.toBeInstanceOf(ElysiaStatus);
     const converted = await convertView.handler(
       createTestHandlerContext<Parameters<typeof convertView.handler>[0]>({
         ...context(),
@@ -576,7 +576,7 @@ test("granted AVT targets support rename, conversion and dedicated controls", as
         body: { targetType: "filesystem" },
       }),
     );
-    expect(converted).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+    expect(converted).not.toBeInstanceOf(ElysiaStatus);
     expect(
       await convertView.handler(
         createTestHandlerContext<Parameters<typeof convertView.handler>[0]>({
@@ -585,7 +585,7 @@ test("granted AVT targets support rename, conversion and dedicated controls", as
           body: { targetType: "avt" },
         }),
       ),
-    ).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+    ).not.toBeInstanceOf(ElysiaStatus);
     const report = await exportReport.handler(
       createTestHandlerContext<Parameters<typeof exportReport.handler>[0]>({
         ...context(),
@@ -597,9 +597,9 @@ test("granted AVT targets support rename, conversion and dedicated controls", as
         },
       }),
     );
-    expect(report).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (report instanceof ElysiaCustomStatusResponse) {
-      expect(report.code).toBe(400);
+    expect(report).toBeInstanceOf(ElysiaStatus);
+    if (report instanceof ElysiaStatus) {
+      expect(report.status).toBe(400);
     }
     const viewIds = (
       await testDb
@@ -614,7 +614,7 @@ test("granted AVT targets support rename, conversion and dedicated controls", as
           body: { viewIds },
         }),
       ),
-    ).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+    ).not.toBeInstanceOf(ElysiaStatus);
     expect(
       await deleteView.handler(
         createTestHandlerContext<Parameters<typeof deleteView.handler>[0]>({
@@ -622,7 +622,7 @@ test("granted AVT targets support rename, conversion and dedicated controls", as
           params: { workspaceId: ids.wsA1, viewId },
         }),
       ),
-    ).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+    ).not.toBeInstanceOf(ElysiaStatus);
   });
 });
 
@@ -648,8 +648,8 @@ test.each(["unavailable", "colleague", "available"] as const)(
           >({ ...context(), query: {} }),
         ),
     );
-    expect(result).not.toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (!(result instanceof ElysiaCustomStatusResponse)) {
+    expect(result).not.toBeInstanceOf(ElysiaStatus);
+    if (!(result instanceof ElysiaStatus)) {
       expect(
         result.items.find((row) => row.id === ids.wsA1)?.defaultViewId,
       ).toBe(status === "available" ? viewId : ordinaryId);

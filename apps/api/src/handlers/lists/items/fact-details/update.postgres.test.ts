@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { Value } from "typebox/value";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 

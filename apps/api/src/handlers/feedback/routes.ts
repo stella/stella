@@ -31,6 +31,10 @@ import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard
 
 export const feedbackPublicRoute = new Elysia({ prefix: "/public" }).post(
   "/feedback",
+  {
+    body: t.String({ maxLength: MAX_RAW_FEEDBACK_BODY_CHARS }),
+    parse: "text",
+  },
   async ({ body, request, server }) => {
     // The route schema requires `body` to be a string at runtime; a non-string
     // here means the schema was bypassed by a future refactor.
@@ -45,10 +49,6 @@ export const feedbackPublicRoute = new Elysia({ prefix: "/public" }).post(
       }),
     });
   },
-  {
-    body: t.String({ maxLength: MAX_RAW_FEEDBACK_BODY_CHARS }),
-    parse: "text",
-  },
 );
 
 export const feedbackRoute = new Elysia({ prefix: "/v1/feedback" })
@@ -56,7 +56,11 @@ export const feedbackRoute = new Elysia({ prefix: "/v1/feedback" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .post("/", createFeedbackReport.handler, {
-    body: createFeedbackReport.config.body,
-    permissions: createFeedbackReport.config.permissions,
-  });
+  .post(
+    "/",
+    {
+      body: createFeedbackReport.config.body,
+      permissions: createFeedbackReport.config.permissions,
+    },
+    createFeedbackReport.handler,
+  );

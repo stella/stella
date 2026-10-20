@@ -2023,6 +2023,7 @@ test("stored web discovery, description and effective fill declarations agree fo
     const scopedDb = stubScopedDb(clauseBody, "clause-web-discovery");
     const app = new Elysia().post(
       "/templates/discover",
+      { body: discoverEndpoint.config.body },
       async ({ body, request }) =>
         await discoverEndpoint.handler(
           createTestHandlerContext<
@@ -2037,7 +2038,6 @@ test("stored web discovery, description and effective fill declarations agree fo
             route: "/templates/discover",
           }),
         ),
-      { body: discoverEndpoint.config.body },
     );
     const form = new FormData();
     form.set(

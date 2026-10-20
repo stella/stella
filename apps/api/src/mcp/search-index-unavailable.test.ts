@@ -1,6 +1,6 @@
 import { panic, Result, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia";
+import { ElysiaStatus } from "elysia";
 import { readdirSync, readFileSync } from "node:fs";
 
 import { env } from "@/api/env";
@@ -329,11 +329,11 @@ describe("search_index_unavailable", () => {
 
       expect(requested).toEqual([]);
       for (const outcome of outcomes) {
-        expect(outcome).toBeInstanceOf(ElysiaCustomStatusResponse);
+        expect(outcome).toBeInstanceOf(ElysiaStatus);
         expect(outcome).toMatchObject({
           code: thrown.status,
           response: {
-            code: thrown.code,
+            code: thrown.status,
             message: thrown.message,
             hint: thrown.hint,
             retryable: thrown.retryable,
@@ -383,8 +383,8 @@ describe("search_index_unavailable", () => {
     const refusal = searchIndexUnavailableError(new Error("refused"));
     const response = mapHandlerResult({
       id: "legislation.search",
-      result: new ElysiaCustomStatusResponse(503, {
-        code: refusal.code,
+      result: new ElysiaStatus(503, {
+        code: refusal.status,
         message: refusal.message,
         hint: refusal.hint,
         retryable: refusal.retryable,

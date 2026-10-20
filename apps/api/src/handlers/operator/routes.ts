@@ -10,17 +10,25 @@ export const createOperatorRoute = (options: OperatorRegistrationsOptions) => {
   const registrations = createOperatorRegistrations(options);
   return new Elysia({ prefix: "/operator" }).get(
     "/registrations",
-    registrations.handler,
     {
       query: registrations.config.query,
     },
+    registrations.handler,
   );
 };
 
 export const operatorRoute = new Elysia({ prefix: "/operator" })
-  .get("/activity", operatorActivity.handler, {
-    query: operatorActivity.config.query,
-  })
-  .get("/registrations", operatorRegistrations.handler, {
-    query: operatorRegistrations.config.query,
-  });
+  .get(
+    "/activity",
+    {
+      query: operatorActivity.config.query,
+    },
+    operatorActivity.handler,
+  )
+  .get(
+    "/registrations",
+    {
+      query: operatorRegistrations.config.query,
+    },
+    operatorRegistrations.handler,
+  );

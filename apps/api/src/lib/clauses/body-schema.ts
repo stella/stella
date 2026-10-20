@@ -1,4 +1,5 @@
-import { type Static, t } from "elysia";
+import { t } from "elysia";
+import type { Static } from "typebox";
 
 import {
   BLOCK_DIRECTIVE_KINDS,

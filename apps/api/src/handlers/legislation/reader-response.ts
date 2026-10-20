@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 import * as v from "valibot";
 
 import {
@@ -223,7 +223,7 @@ export const statuteReaderSuccessResponseSchema = t.Object(
     ]),
     // The reader deliberately returns the complete official document AST/text.
     documentAst: t
-      .Transform(t.Unknown())
+      .Codec(t.Unknown())
       .Decode((value) =>
         v.parse(
           v.nullable(v.union([documentAstSchema, emptyAstSchema])),

@@ -5,15 +5,15 @@
 // imported aliases, namespace access, computed literal access, and const
 // aliases. Removing the custom rule makes these directives unused.
 
+import { t, t as ElysiaTypes } from "elysia";
+import * as Elysia from "elysia";
 import {
   type TSchema,
   Type,
   Type as TypeAlias,
   Unsafe as unsafeAlias,
-} from "@sinclair/typebox";
-import * as TypeBox from "@sinclair/typebox";
-import { t, t as ElysiaTypes } from "elysia";
-import * as Elysia from "elysia";
+} from "typebox";
+import * as TypeBox from "typebox";
 
 declare const runtimeSchema: TSchema;
 

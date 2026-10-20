@@ -17,43 +17,79 @@ export const documentReviewsRoute = new Elysia({
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
-  .get("/sources", listDocumentReviewSources.handler, {
-    query: listDocumentReviewSources.config.query,
-    permissions: listDocumentReviewSources.config.permissions,
-  })
-  .post("/positions", proposePositions.handler, {
-    body: proposePositions.config.body,
-    permissions: proposePositions.config.permissions,
-  })
-  .post("/positions/stream", proposePositionsStream.handler, {
-    body: proposePositionsStream.config.body,
-    permissions: proposePositionsStream.config.permissions,
-  })
-  .post("/parties", reviewParties.handler, {
-    body: reviewParties.config.body,
-    permissions: reviewParties.config.permissions,
-  })
-  .post("/runs", createDocumentReviewRun.handler, {
-    body: createDocumentReviewRun.config.body,
-    params: createDocumentReviewRun.config.params,
-    permissions: createDocumentReviewRun.config.permissions,
-  })
-  .get("/runs", listDocumentReviewRuns.handler, {
-    params: listDocumentReviewRuns.config.params,
-    permissions: listDocumentReviewRuns.config.permissions,
-    query: listDocumentReviewRuns.config.query,
-  })
-  .get("/runs/:runId", readDocumentReviewRun.handler, {
-    params: readDocumentReviewRun.config.params,
-    permissions: readDocumentReviewRun.config.permissions,
-  })
-  .get("/runs/:runId/export", exportDocumentReviewRun.handler, {
-    params: exportDocumentReviewRun.config.params,
-    permissions: exportDocumentReviewRun.config.permissions,
-    query: exportDocumentReviewRun.config.query,
-  })
-  .patch("/findings/:findingId", decideDocumentReviewFinding.handler, {
-    body: decideDocumentReviewFinding.config.body,
-    params: decideDocumentReviewFinding.config.params,
-    permissions: decideDocumentReviewFinding.config.permissions,
-  });
+  .get(
+    "/sources",
+    {
+      query: listDocumentReviewSources.config.query,
+      permissions: listDocumentReviewSources.config.permissions,
+    },
+    listDocumentReviewSources.handler,
+  )
+  .post(
+    "/positions",
+    {
+      body: proposePositions.config.body,
+      permissions: proposePositions.config.permissions,
+    },
+    proposePositions.handler,
+  )
+  .post(
+    "/positions/stream",
+    {
+      body: proposePositionsStream.config.body,
+      permissions: proposePositionsStream.config.permissions,
+    },
+    proposePositionsStream.handler,
+  )
+  .post(
+    "/parties",
+    {
+      body: reviewParties.config.body,
+      permissions: reviewParties.config.permissions,
+    },
+    reviewParties.handler,
+  )
+  .post(
+    "/runs",
+    {
+      body: createDocumentReviewRun.config.body,
+      params: createDocumentReviewRun.config.params,
+      permissions: createDocumentReviewRun.config.permissions,
+    },
+    createDocumentReviewRun.handler,
+  )
+  .get(
+    "/runs",
+    {
+      params: listDocumentReviewRuns.config.params,
+      permissions: listDocumentReviewRuns.config.permissions,
+      query: listDocumentReviewRuns.config.query,
+    },
+    listDocumentReviewRuns.handler,
+  )
+  .get(
+    "/runs/:runId",
+    {
+      params: readDocumentReviewRun.config.params,
+      permissions: readDocumentReviewRun.config.permissions,
+    },
+    readDocumentReviewRun.handler,
+  )
+  .get(
+    "/runs/:runId/export",
+    {
+      params: exportDocumentReviewRun.config.params,
+      permissions: exportDocumentReviewRun.config.permissions,
+      query: exportDocumentReviewRun.config.query,
+    },
+    exportDocumentReviewRun.handler,
+  )
+  .patch(
+    "/findings/:findingId",
+    {
+      body: decideDocumentReviewFinding.config.body,
+      params: decideDocumentReviewFinding.config.params,
+      permissions: decideDocumentReviewFinding.config.permissions,
+    },
+    decideDocumentReviewFinding.handler,
+  );

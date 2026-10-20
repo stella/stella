@@ -198,6 +198,7 @@ export const createMcpRoute = ({
     )
     .all(
       MCP_ADVANCED_HTTP_PATH,
+      { parse: "none" },
       declareAggregateMutation(
         async ({
           request,
@@ -221,7 +222,6 @@ export const createMcpRoute = ({
             "MCP transport dispatches to capability handlers that own their aggregate mutations; the transport itself owns no aggregate state.",
         },
       ),
-      { parse: "none" },
     )
     .all(
       MCP_HTTP_PATH,
@@ -243,6 +243,7 @@ export const createMcpRoute = ({
     )
     .all(
       MCP_DOCUMENTS_HTTP_PATH,
+      { parse: "none" },
       async ({ request, server, set }) =>
         await handleMcpTransportRoute({
           options: {
@@ -255,10 +256,10 @@ export const createMcpRoute = ({
           request,
           set,
         }),
-      { parse: "none" },
     )
     .all(
       MCP_ANONYMIZED_HTTP_PATH,
+      { parse: "none" },
       async ({ request, server, set }) =>
         await handleMcpTransportRoute({
           options: {
@@ -271,10 +272,10 @@ export const createMcpRoute = ({
           request,
           set,
         }),
-      { parse: "none" },
     )
     .all(
       MCP_LAW_HTTP_PATH,
+      { parse: "none" },
       async ({ request, server, set }) =>
         await handleMcpTransportRoute({
           options: {
@@ -287,7 +288,6 @@ export const createMcpRoute = ({
           request,
           set,
         }),
-      { parse: "none" },
     );
 };
 

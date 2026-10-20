@@ -1,6 +1,6 @@
-import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { t } from "elysia";
+import { Type } from "typebox";
 
 import {
   chatMessageAcceptedEditSchema,

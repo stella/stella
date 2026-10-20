@@ -129,12 +129,20 @@ const buildApp = () =>
     .get("/v1/contacts/search", () => {
       throw pgFailover();
     })
-    .post("/v1/signals/requests", () => "ok", {
-      body: t.Object({ name: t.String() }),
-    })
-    .get("/v1/auth/capabilities", () => driftedBody(), {
-      response: t.Object({ ok: t.String() }),
-    });
+    .post(
+      "/v1/signals/requests",
+      {
+        body: t.Object({ name: t.String() }),
+      },
+      () => "ok",
+    )
+    .get(
+      "/v1/auth/capabilities",
+      {
+        response: t.Object({ ok: t.String() }),
+      },
+      () => driftedBody(),
+    );
 
 type LifecycleCase = {
   readonly name: string;

@@ -49,27 +49,35 @@ export const createPublicKnowledgeRoute = (
       return undefined;
     })
     .get("/template-packs", listPacks.handler)
-    .get("/template-packs/:packId", readPack.handler, {
-      params: readPack.config.params,
-    })
+    .get(
+      "/template-packs/:packId",
+      {
+        params: readPack.config.params,
+      },
+      readPack.handler,
+    )
     .get(
       "/template-packs/:packId/templates/:templateId",
-      readTemplate.handler,
       {
         params: readTemplate.config.params,
       },
+      readTemplate.handler,
     )
     .get(
       "/template-packs/:packId/templates/:templateId/preview",
-      readTemplatePreview.handler,
       {
         params: readTemplatePreview.config.params,
       },
+      readTemplatePreview.handler,
     )
     .get("/playbook-starters", listStarters.handler)
-    .get("/playbook-starters/:id", readStarter.handler, {
-      params: readStarter.config.params,
-    });
+    .get(
+      "/playbook-starters/:id",
+      {
+        params: readStarter.config.params,
+      },
+      readStarter.handler,
+    );
 };
 
 export const publicKnowledgeRoute = createPublicKnowledgeRoute(

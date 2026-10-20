@@ -36,9 +36,13 @@ const summary = {
 
 const createApp = (options: Parameters<typeof createOperatorActivity>[0]) => {
   const activity = createOperatorActivity(options);
-  return new Elysia().get("/operator/activity", activity.handler, {
-    query: activity.config.query,
-  });
+  return new Elysia().get(
+    "/operator/activity",
+    {
+      query: activity.config.query,
+    },
+    activity.handler,
+  );
 };
 
 const request = (query: string, headers?: Record<string, string>) =>

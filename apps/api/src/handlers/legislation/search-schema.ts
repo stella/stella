@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { LEGISLATION_SEARCH_MATCH_TYPES } from "@stll/api-contract/search";

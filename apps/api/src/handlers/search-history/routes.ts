@@ -12,30 +12,54 @@ export const searchHistoryRoute = new Elysia({ prefix: "/search-history" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listSearchHistory.handler, {
-    query: listSearchHistory.config.query,
-    permissions: listSearchHistory.config.permissions,
-  })
-  .post("/", upsertSearchHistory.handler, {
-    body: upsertSearchHistory.config.body,
-    query: upsertSearchHistory.config.query,
-    permissions: upsertSearchHistory.config.permissions,
-  })
-  .get("/import-clock", importClock.handler, {
-    query: importClock.config.query,
-    permissions: importClock.config.permissions,
-  })
-  .post("/import", importSearchHistory.handler, {
-    body: importSearchHistory.config.body,
-    query: importSearchHistory.config.query,
-    permissions: importSearchHistory.config.permissions,
-  })
-  .delete("/", clearSearchHistory.handler, {
-    query: clearSearchHistory.config.query,
-    permissions: clearSearchHistory.config.permissions,
-  })
-  .delete("/:entryId", deleteSearchHistoryEntry.handler, {
-    params: deleteSearchHistoryEntry.config.params,
-    query: deleteSearchHistoryEntry.config.query,
-    permissions: deleteSearchHistoryEntry.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      query: listSearchHistory.config.query,
+      permissions: listSearchHistory.config.permissions,
+    },
+    listSearchHistory.handler,
+  )
+  .post(
+    "/",
+    {
+      body: upsertSearchHistory.config.body,
+      query: upsertSearchHistory.config.query,
+      permissions: upsertSearchHistory.config.permissions,
+    },
+    upsertSearchHistory.handler,
+  )
+  .get(
+    "/import-clock",
+    {
+      query: importClock.config.query,
+      permissions: importClock.config.permissions,
+    },
+    importClock.handler,
+  )
+  .post(
+    "/import",
+    {
+      body: importSearchHistory.config.body,
+      query: importSearchHistory.config.query,
+      permissions: importSearchHistory.config.permissions,
+    },
+    importSearchHistory.handler,
+  )
+  .delete(
+    "/",
+    {
+      query: clearSearchHistory.config.query,
+      permissions: clearSearchHistory.config.permissions,
+    },
+    clearSearchHistory.handler,
+  )
+  .delete(
+    "/:entryId",
+    {
+      params: deleteSearchHistoryEntry.config.params,
+      query: deleteSearchHistoryEntry.config.query,
+      permissions: deleteSearchHistoryEntry.config.permissions,
+    },
+    deleteSearchHistoryEntry.handler,
+  );

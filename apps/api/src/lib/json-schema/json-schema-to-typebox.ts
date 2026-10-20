@@ -1,6 +1,6 @@
-import { Type, type SchemaOptions, type TSchema } from "@sinclair/typebox";
 import type { JsonSchema } from "@valibot/to-json-schema";
 import { panic } from "better-result";
+import { Type, type SchemaOptions, type TSchema } from "typebox";
 
 const TYPEBOX_STRUCTURE_KEYS = new Set([
   "type",

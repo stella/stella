@@ -95,7 +95,7 @@ const { listStaticMcpToolDefinitions } =
   await import("@/api/mcp/static-tool-definitions");
 const { listMcpResources, readMcpResource } =
   await import("@/api/mcp/resources");
-const { ElysiaCustomStatusResponse } = await import("elysia");
+const { ElysiaStatus } = await import("elysia");
 const { readCapabilityCatalog } =
   await import("@stll/cli/capability-catalog-data");
 const { parseCatalog } = await import("@/api/mcp/capability-tools");
@@ -946,7 +946,7 @@ describe("list verification access grants across MCP tools", () => {
           runs: [],
         });
       } else {
-        expect(errorEnvelope(result).code).toBe("not_found");
+        expect(errorEnvelope(result).status).toBe("not_found");
         expect(errorEnvelope(result).message).toContain("not found");
         expect(errorEnvelope(result).message).not.toBe("Not found");
       }
@@ -991,7 +991,7 @@ describe("capability handler refusal metadata", () => {
           hint: "Correct the request and call again.",
           retryable: false,
         });
-        expect(MCP_ERROR_CODES).toContain(projected.code);
+        expect(MCP_ERROR_CODES).toContain(projected.status);
         expect(projected.issues).toContainEqual(issue);
         expect(projected.hint).toBe("Correct the request and call again.");
         expect(projected.retryable).toBe(false);
@@ -1055,7 +1055,7 @@ describe("capability handler refusal metadata", () => {
       hint: "Keep the existing content.type in properties.update, or use properties.create to add a custom property with another type.",
       retryable: false,
     });
-    expect(error.code).not.toBe(FILE_PROPERTY_TYPE_IMMUTABLE_CODE);
+    expect(error.status).not.toBe(FILE_PROPERTY_TYPE_IMMUTABLE_CODE);
     expect(error.issues).toEqual([
       {
         path: "",
@@ -1095,7 +1095,7 @@ describe("capability handler refusal metadata", () => {
           mappedError(
             mapHandlerResult({
               id: "properties.update",
-              result: new ElysiaCustomStatusResponse(status, {
+              result: new ElysiaStatus(status, {
                 code: "handler_specific_code",
                 message: "A corrective action is required",
                 hint: "Correct the matter and invoke the capability again.",
@@ -1134,7 +1134,7 @@ describe("capability handler refusal metadata", () => {
     const error = mappedError(
       mapHandlerResult({
         id: "properties.update",
-        result: new ElysiaCustomStatusResponse(422, {
+        result: new ElysiaStatus(422, {
           message: "Invalid input",
           hint: { raw: "private details" },
           retryable: "false",
@@ -1300,7 +1300,7 @@ describe("documents.compare capability contract", () => {
     });
 
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     const issues = asTestRaw<{ path: string }[]>(error.issues);
     expect(
       issues.some(({ path }) => path === "body.selection.targetVersionIds"),
@@ -1422,7 +1422,7 @@ describe("describe_capability", () => {
       capability: "time-entries.creat",
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("not_found");
+    expect(error.status).toBe("not_found");
     expect(error.hint).toContain("time-entries.create");
   });
 });
@@ -1435,7 +1435,7 @@ describe("capability executor gates", () => {
       capability: "time-entries.creat",
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("not_found");
+    expect(error.status).toBe("not_found");
     expect(error.hint).toContain("time-entries.create");
     // A mistyped capability is a caller error: the gate rejects it without
     // spending an exception event.
@@ -1455,7 +1455,7 @@ describe("capability executor gates", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("feature_disabled");
+    expect(error.status).toBe("feature_disabled");
     expect(error.message).toContain("test-only waiver");
   });
 
@@ -1468,7 +1468,7 @@ describe("capability executor gates", () => {
       context: createContext({ grantedScopes: ["stella:read"] }),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("missing_scope");
+    expect(error.status).toBe("missing_scope");
     expect(error.message).toContain("stella:knowledge_write");
     expect(analytics.exceptions()).toEqual([]);
   });
@@ -1481,7 +1481,7 @@ describe("capability executor gates", () => {
       }),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("missing_scope");
+    expect(error.status).toBe("missing_scope");
     expect(error.message).toContain("stella:templates");
     expect(error.hint).toContain(
       "--scopes stella:read,stella:documents_write,stella:templates",
@@ -1542,7 +1542,7 @@ describe("capability executor gates", () => {
     });
     const payload = parseToolPayload(result);
     if (typeof payload === "object" && payload !== null && "error" in payload) {
-      return asTestRaw<{ error: { code: string } }>(payload).error.code;
+      return asTestRaw<{ error: { code: string } }>(payload).error.status;
     }
     return "ok";
   };
@@ -1576,7 +1576,7 @@ describe("capability executor gates", () => {
       input: { params: { categoryId: "a1111111-1111-4111-8111-111111111111" } },
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("confirmation_required");
+    expect(error.status).toBe("confirmation_required");
   });
 
   describe("sessions without a person to confirm (agent runs)", () => {
@@ -1605,7 +1605,7 @@ describe("capability executor gates", () => {
           input: {},
           confirm: true,
         });
-        expect({ capability, code: errorEnvelope(result).code }).toEqual({
+        expect({ capability, code: errorEnvelope(result).status }).toEqual({
           capability,
           code: "permission_denied",
         });
@@ -1666,7 +1666,7 @@ describe("capability executor gates", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     const issues = asTestRaw<{ path: string }[]>(error.issues);
     expect(issues.some((i) => i.path === "query.status")).toBe(true);
   });
@@ -1704,7 +1704,7 @@ describe("capability executor names the container matterId", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     return asTestRaw<{ path: string; message: string }[]>(error.issues ?? []);
   };
 
@@ -1788,7 +1788,7 @@ describe("discriminated-union input validation names the field", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     return asTestRaw<{ path: string; message: string }[]>(error.issues ?? []);
   };
 
@@ -1844,7 +1844,7 @@ describe("capability executor workspace resolution", () => {
       },
       context: createContext(),
     });
-    expect(errorEnvelope(result).code).toBe("not_found");
+    expect(errorEnvelope(result).status).toBe("not_found");
   });
 
   test("archived workspace on a READ capability -> not_found (REST parity)", async () => {
@@ -1865,7 +1865,7 @@ describe("capability executor workspace resolution", () => {
         },
       }),
     });
-    expect(errorEnvelope(result).code).toBe("not_found");
+    expect(errorEnvelope(result).status).toBe("not_found");
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
     expect(pinnedWorkspaceIds).toEqual([]);
   });
@@ -1884,7 +1884,7 @@ describe("capability executor workspace resolution", () => {
         archivedWorkspaceIds: ["ws_arch"],
       }),
     });
-    expect(errorEnvelope(result).code).toBe("not_found");
+    expect(errorEnvelope(result).status).toBe("not_found");
   });
 
   test("pins an active workspace only after capability access validation", async () => {
@@ -2092,7 +2092,7 @@ describe("capability executor execution", () => {
       args,
       context,
     });
-    expect(errorEnvelope(unconfirmed).code).toBe("confirmation_required");
+    expect(errorEnvelope(unconfirmed).status).toBe("confirmation_required");
     expect(findCategory).not.toHaveBeenCalled();
     expect(deleteRow).not.toHaveBeenCalled();
     expect(auditRows).not.toHaveBeenCalled();
@@ -2121,7 +2121,7 @@ describe("capability executor execution", () => {
       },
       context: createContext({ memberRole: "intern" }),
     });
-    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(errorEnvelope(result).status).toBe("permission_denied");
   });
 });
 
@@ -2172,7 +2172,7 @@ describe("capability executor upload purpose gate", () => {
       context: createContext({ grantedScopes: ["stella:matters_write"] }),
     });
     const envelope = errorEnvelope(result);
-    expect(envelope.code).toBe("missing_scope");
+    expect(envelope.status).toBe("missing_scope");
     expect(envelope.message).toContain("stella:skills");
   });
 
@@ -2202,7 +2202,7 @@ describe("capability executor upload purpose gate", () => {
       });
 
     const refused = errorEnvelope(await invoke(["stella:matters_write"]));
-    expect(refused.code).toBe("missing_scope");
+    expect(refused.status).toBe("missing_scope");
     expect(refused.message).toContain("stella:documents_write");
     expect(
       parseToolPayload<{ valid: boolean }>(
@@ -2227,7 +2227,7 @@ describe("capability executor upload purpose gate", () => {
       }),
     });
     const envelope = errorEnvelope(result);
-    expect(envelope.code).toBe("missing_scope");
+    expect(envelope.status).toBe("missing_scope");
     expect(envelope.message).toContain("stella:skills");
   });
 
@@ -2247,7 +2247,7 @@ describe("capability executor upload purpose gate", () => {
       });
 
     const refused = errorEnvelope(await invoke(["stella:matters_write"]));
-    expect(refused.code).toBe("missing_scope");
+    expect(refused.status).toBe("missing_scope");
     expect(refused.message).toContain("stella:documents_write");
     expect(
       parseToolPayload<{ valid: boolean }>(
@@ -2273,7 +2273,7 @@ describe("capability executor upload purpose gate", () => {
         memberRole: "intern",
       }),
     });
-    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(errorEnvelope(result).status).toBe("permission_denied");
   });
 
   test("a purpose the credential set does not cover -> permission_denied", async () => {
@@ -2288,7 +2288,7 @@ describe("capability executor upload purpose gate", () => {
         grantedScopes: ["stella:matters_write", "stella:skills"],
       }),
     });
-    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(errorEnvelope(result).status).toBe("permission_denied");
   });
 
   test("a credential set covering the purpose admits the same call", async () => {
@@ -2323,7 +2323,7 @@ describe("capability executor upload purpose gate", () => {
         scopedDb: storedPurposeDb("agent_skill"),
       }),
     });
-    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(errorEnvelope(result).status).toBe("permission_denied");
   });
 
   test("abort spends it too, though it stays on the domain scope", async () => {
@@ -2341,7 +2341,7 @@ describe("capability executor upload purpose gate", () => {
         scopedDb: storedPurposeDb("entity_create"),
       }),
     });
-    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(errorEnvelope(result).status).toBe("permission_denied");
   });
 
   test("every uploads capability is covered by the purpose gate", () => {
@@ -2371,7 +2371,7 @@ describe("capability executor credential permission set", () => {
         credentialPermissions: { workspace: ["read"] },
       }),
     });
-    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(errorEnvelope(result).status).toBe("permission_denied");
   });
 
   test("an action the credential set omits on a resource it names -> permission_denied", async () => {
@@ -2384,7 +2384,7 @@ describe("capability executor credential permission set", () => {
         credentialPermissions: { clause: ["delete"] },
       }),
     });
-    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(errorEnvelope(result).status).toBe("permission_denied");
   });
 
   test("validate_only reports the same refusal as execution would", async () => {
@@ -2398,7 +2398,7 @@ describe("capability executor credential permission set", () => {
         credentialPermissions: { workspace: ["read"] },
       }),
     });
-    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(errorEnvelope(result).status).toBe("permission_denied");
   });
 
   test("a refused call consumes no rate-limit budget", async () => {
@@ -2427,7 +2427,7 @@ describe("case-law ingestion status admin gate (fix-2)", () => {
       args: { capability: "case-law.ingestion.get" },
       context: createContext({ memberRole: "member" }),
     });
-    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(errorEnvelope(result).status).toBe("permission_denied");
   });
 });
 
@@ -2442,7 +2442,7 @@ describe("capability executor validate_only permission preflight", () => {
       args: { capability: "case-law.ingestion.get", validate_only: true },
       context: createContext({ memberRole: "member" }),
     });
-    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(errorEnvelope(result).status).toBe("permission_denied");
     // Preflight only: the handler never executed.
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -2523,7 +2523,7 @@ describe("capability executor rate limit (fix-3)", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("rate_limited");
+    expect(error.status).toBe("rate_limited");
     expect(error.hint).toContain("60 seconds");
     // Refused before the handler ran: the org-settings loader was not consulted.
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
@@ -2606,7 +2606,7 @@ describe("capability executor archived-workspace gate (fix-4)", () => {
       },
       context: archivedCtx(),
     });
-    expect(errorEnvelope(result).code).toBe("not_found");
+    expect(errorEnvelope(result).status).toBe("not_found");
   });
 });
 
@@ -2626,7 +2626,7 @@ describe("capability executor validate_only ordering (fix-5)", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
 
@@ -2658,7 +2658,7 @@ describe("capability executor file-response gate (fix-6)", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("feature_disabled");
+    expect(error.status).toBe("feature_disabled");
     expect(error.message).toContain("file or stream");
     // Refused before dispatch: no handler ran.
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
@@ -2675,7 +2675,7 @@ describe("capability executor file-response gate (fix-6)", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("feature_disabled");
+    expect(error.status).toBe("feature_disabled");
     expect(error.message).toContain("file or stream");
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -2685,7 +2685,7 @@ describe("capability executor file-response gate (fix-6)", () => {
       id: "x.y",
       result: new Response("file bytes"),
     });
-    expect(mappedError(mapped).code).toBe("feature_disabled");
+    expect(mappedError(mapped).status).toBe("feature_disabled");
   });
 
   test("(layer b) mapHandlerResult refuses every binary payload shape", () => {
@@ -2701,7 +2701,7 @@ describe("capability executor file-response gate (fix-6)", () => {
         id: "x.y",
         result: value,
       });
-      expect(mappedError(mapped).code, label).toBe("feature_disabled");
+      expect(mappedError(mapped).status, label).toBe("feature_disabled");
     }
   });
 
@@ -2750,7 +2750,7 @@ describe("capability executor file-response gate (fix-6)", () => {
         const result = runWithRequestId("req_refusal", () =>
           mapHandlerResult({
             id: "documents.verifications.start",
-            result: new ElysiaCustomStatusResponse(429, refusal),
+            result: new ElysiaStatus(429, refusal),
           }),
         );
         expect(mappedError(result)).toMatchObject({
@@ -2767,7 +2767,7 @@ describe("capability executor file-response gate (fix-6)", () => {
       const result = runWithRequestId("req_refusal", () =>
         mapHandlerResult({
           id: "x.y",
-          result: new ElysiaCustomStatusResponse(refusal.status, {
+          result: new ElysiaStatus(refusal.status, {
             code,
             message: refusal.message,
             hint,
@@ -2789,9 +2789,9 @@ describe("capability executor file-response gate (fix-6)", () => {
   test("(layer b) mapHandlerResult maps a status response onto the envelope", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(404, { message: "Gone" }),
+      result: new ElysiaStatus(404, { message: "Gone" }),
     });
-    expect(mappedError(mapped).code).toBe("not_found");
+    expect(mappedError(mapped).status).toBe("not_found");
   });
 });
 
@@ -2807,7 +2807,7 @@ describe("capability executor file-input gate", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("feature_disabled");
+    expect(error.status).toBe("feature_disabled");
     expect(error.hint).toContain("Call the create_template MCP tool directly");
     expect(error.hint).not.toContain("Use templates.create instead");
   });
@@ -2828,7 +2828,7 @@ describe("capability executor file-input gate", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("feature_disabled");
+    expect(error.status).toBe("feature_disabled");
     expect(error.message).toContain("requires a file in `file`");
     expect(error.hint).toContain("uploads.create");
     expect(error.hint).toContain("uploads.update");
@@ -2847,7 +2847,7 @@ describe("capability executor file-input gate", () => {
       },
       context: createContext(),
     });
-    expect(errorEnvelope(result).code).toBe("feature_disabled");
+    expect(errorEnvelope(result).status).toBe("feature_disabled");
   });
 
   test("an OPTIONAL file field leaves the capability invocable in its JSON modes", async () => {
@@ -2886,7 +2886,7 @@ describe("capability executor file-input gate", () => {
       context: createContext({ grantedScopes: ["stella:templates"] }),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     expect(error.message).toContain("cannot take `file`");
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -2999,7 +2999,7 @@ describe("capability executor argument shape validation", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     const issues = asTestRaw<{ path: string }[]>(error.issues);
     expect(issues.some((i) => i.path === "validate_only")).toBe(true);
     // Refused before any dispatch: the org-settings loader never ran.
@@ -3012,7 +3012,7 @@ describe("capability executor argument shape validation", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     const issues = asTestRaw<{ path: string }[]>(error.issues);
     expect(issues.some((i) => i.path === "confirm")).toBe(true);
   });
@@ -3023,7 +3023,7 @@ describe("capability executor argument shape validation", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     const issues = asTestRaw<{ path: string }[]>(error.issues);
     expect(issues.some((i) => i.path === "input")).toBe(true);
   });
@@ -3037,7 +3037,7 @@ describe("capability executor argument shape validation", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     const issues = asTestRaw<{ path: string }[]>(error.issues);
     expect(issues.some((i) => i.path === "input.body")).toBe(true);
     expect(issues.some((i) => i.path === "input.params")).toBe(true);
@@ -3049,7 +3049,7 @@ describe("capability executor argument shape validation", () => {
     expect(parseToolPayload<{ limit: number }>(list).limit).toBe(5);
     // Ordinary strings remain untouched: a numeric capability id is invalid.
     const described = await call("describe_capability", { capability: 42 });
-    expect(errorEnvelope(described).code).toBe("validation_error");
+    expect(errorEnvelope(described).status).toBe("validation_error");
   });
 
   test("an input part sent at the top level -> validation_error naming it", async () => {
@@ -3060,7 +3060,7 @@ describe("capability executor argument shape validation", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     const issues = asTestRaw<{ path: string; message: string }[]>(error.issues);
     expect(issues.find((i) => i.path === "query")?.message).toContain(
       "Unknown parameter: query",
@@ -3078,7 +3078,7 @@ describe("capability executor argument shape validation", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     const issues = asTestRaw<{ path: string; message: string }[]>(error.issues);
     expect(issues.find((i) => i.path === "input.queries")?.message).toContain(
       "body, params, query",
@@ -3097,7 +3097,7 @@ describe("capability executor argument shape validation", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     const issues = asTestRaw<{ path: string; message: string }[]>(error.issues);
     expect(issues.map((i) => i.path).toSorted()).toEqual([
       "body",
@@ -3153,7 +3153,7 @@ describe("capability executor enforces the advertised input schema", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     const issues = asTestRaw<{ path: string }[]>(error.issues);
     expect(issues.some((i) => i.path === "query.limit")).toBe(true);
   });
@@ -3278,7 +3278,7 @@ describe("capability executor deployment feature gate", () => {
       context: createContext(),
     });
     const error = errorEnvelope(result);
-    expect(error.code).toBe("feature_disabled");
+    expect(error.status).toBe("feature_disabled");
     expect(error.message).toContain("not enabled on this deployment");
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -3293,7 +3293,7 @@ describe("capability executor deployment feature gate", () => {
       },
       context: createContext(),
     });
-    expect(errorEnvelope(result).code).toBe("feature_disabled");
+    expect(errorEnvelope(result).status).toBe("feature_disabled");
   });
 
   test("describe_capability refuses a gated-off entry (no schema leak)", async () => {
@@ -3301,7 +3301,7 @@ describe("capability executor deployment feature gate", () => {
     const result = await call("describe_capability", {
       capability: "time-entries.csv.export",
     });
-    expect(errorEnvelope(result).code).toBe("feature_disabled");
+    expect(errorEnvelope(result).status).toBe("feature_disabled");
   });
 
   test("list_capabilities does not advertise gated-off entries", async () => {
@@ -3388,44 +3388,44 @@ describe("status-to-envelope mapping", () => {
   test("a handler 409 maps to conflict, preserving the handler's message", () => {
     const mapped = mapHandlerResult({
       id: "case-law.matter-links.create",
-      result: new ElysiaCustomStatusResponse(409, {
+      result: new ElysiaStatus(409, {
         message: "Decision already linked to this matter",
       }),
     });
     const error = mappedError(mapped);
-    expect(error.code).toBe("conflict");
+    expect(error.status).toBe("conflict");
     expect(error.message).toBe("Decision already linked to this matter");
   });
 
   test("a handler 422 maps to validation_error, preserving the message", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(422, {
+      result: new ElysiaStatus(422, {
         message: "dateFrom must precede dateTo",
       }),
     });
     const error = mappedError(mapped);
-    expect(error.code).toBe("validation_error");
+    expect(error.status).toBe("validation_error");
     expect(error.message).toBe("dateFrom must precede dateTo");
   });
 
   test("a handler 401 maps to permission_denied", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(401, { message: "Unauthorized" }),
+      result: new ElysiaStatus(401, { message: "Unauthorized" }),
     });
-    expect(mappedError(mapped).code).toBe("permission_denied");
+    expect(mappedError(mapped).status).toBe("permission_denied");
   });
 
   test("a 5xx stays internal_error with a generic message (no leak)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(502, {
+      result: new ElysiaStatus(502, {
         message: "upstream gotenberg at 10.0.3.7 refused",
       }),
     });
     const error = mappedError(mapped);
-    expect(error.code).toBe("internal_error");
+    expect(error.status).toBe("internal_error");
     expect(error.message).not.toContain("10.0.3.7");
   });
 });
@@ -3507,12 +3507,12 @@ describe("feature access discovery guard: real capability catalog", () => {
           args: { capability: id },
           context,
         });
-        expect(errorEnvelope(described).code, id).toBe("not_found");
+        expect(errorEnvelope(described).status, id).toBe("not_found");
         const invoked = await handleCapabilityCall({
           args: { capability: id, validate_only: true },
           context,
         });
-        expect(errorEnvelope(invoked).code, id).toBe("not_found");
+        expect(errorEnvelope(invoked).status, id).toBe("not_found");
       }
       expect(loadOrgSettingsMock).not.toHaveBeenCalled();
       const typo = await handleMcpToolCall({
@@ -3863,7 +3863,7 @@ describe("capability executor access isolation", () => {
         toolName,
       });
       const error = errorEnvelope(result);
-      expect(error.code, entry.id).toBe("validation_error");
+      expect(error.status, entry.id).toBe("validation_error");
       expect(error.hint, entry.id).toContain(
         MCP_CAPABILITY_EXECUTORS[entry.access],
       );
@@ -3894,7 +3894,7 @@ describe("capability executor access isolation", () => {
     const result = await call("invoke_capability", {
       capability: "matters.list",
     });
-    expect(errorEnvelope(result).code).toBe("unknown_tool");
+    expect(errorEnvelope(result).status).toBe("unknown_tool");
   });
 
   test("read executor rejects write-only confirmation arguments", async () => {
@@ -3902,7 +3902,7 @@ describe("capability executor access isolation", () => {
       capability: "matters.list",
       confirm: true,
     });
-    expect(errorEnvelope(result).code).toBe("validation_error");
+    expect(errorEnvelope(result).status).toBe("validation_error");
   });
 });
 
@@ -4205,7 +4205,7 @@ describe("personal search history capabilities", () => {
           },
           context: createContext(database),
         });
-        expect(errorEnvelope(result).code).toBe("conflict");
+        expect(errorEnvelope(result).status).toBe("conflict");
         expect(database.getCallCount()).toBe(0);
       }
     },
@@ -4230,7 +4230,7 @@ describe("personal search history capabilities", () => {
         },
         context: createContext(database),
       });
-      expect(errorEnvelope(result).code).toBe("validation_error");
+      expect(errorEnvelope(result).status).toBe("validation_error");
       expect(database.getCallCount()).toBe(0);
     }
   });
@@ -4253,9 +4253,9 @@ describe("personal search history capabilities", () => {
         args: { capability, input, confirm: true },
         context: createContext({ grantedScopes: ["stella:read"] }),
       });
-      expect(errorEnvelope(readOnlyResult).code).toBe("missing_scope");
+      expect(errorEnvelope(readOnlyResult).status).toBe("missing_scope");
       expect(
-        errorEnvelope(await callCapability({ capability, input })).code,
+        errorEnvelope(await callCapability({ capability, input })).status,
       ).toBe("confirmation_required");
     }
   });
@@ -4269,6 +4269,6 @@ describe("personal search history capabilities", () => {
       },
       confirm: true,
     });
-    expect(errorEnvelope(result).code).toBe("validation_error");
+    expect(errorEnvelope(result).status).toBe("validation_error");
   });
 });

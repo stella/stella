@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { status } from "elysia";
-import type { ElysiaCustomStatusResponse } from "elysia/error";
+import type { ElysiaStatus } from "elysia";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type {
@@ -51,7 +51,7 @@ export default createSafeHandler(
     recordAuditEvent,
     scopedDb,
     workspaceId,
-  }): SafeHandlerGenerator<Response | ElysiaCustomStatusResponse<404>> {
+  }): SafeHandlerGenerator<Response | ElysiaStatus<404>> {
     const rows = yield* Result.await(
       Result.tryPromise(
         async () => await fileFieldQuery(scopedDb, fieldId, workspaceId),

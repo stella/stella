@@ -1,7 +1,7 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { t } from "elysia";
+import { Value } from "typebox/value";
 
 import { VIEW_LAYOUT_TYPES } from "@stll/api-contract";
 

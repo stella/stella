@@ -16,16 +16,24 @@ export const playbookRunsRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .post("/:playbookId/run", runPlaybook.handler, {
-    body: runPlaybook.config.body,
-    params: runPlaybook.config.params,
-    permissions: runPlaybook.config.permissions,
-  })
+  .post(
+    "/:playbookId/run",
+    {
+      body: runPlaybook.config.body,
+      params: runPlaybook.config.params,
+      permissions: runPlaybook.config.permissions,
+    },
+    runPlaybook.handler,
+  )
   // Auto-run: materialize every applicable playbook over the files table in one
   // pass (each still gated to its document-type subset). Workspace-scoped, so it
   // lives here alongside the single run rather than the org-scoped definition
   // CRUD in `routes.ts`.
-  .post("/auto-run", autoRunPlaybooks.handler, {
-    params: autoRunPlaybooks.config.params,
-    permissions: autoRunPlaybooks.config.permissions,
-  });
+  .post(
+    "/auto-run",
+    {
+      params: autoRunPlaybooks.config.params,
+      permissions: autoRunPlaybooks.config.permissions,
+    },
+    autoRunPlaybooks.handler,
+  );

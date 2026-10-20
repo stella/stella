@@ -12,7 +12,7 @@ import {
   unwrapExpression,
 } from "./utils.ts";
 
-const TYPEBOX_MODULES = new Set(["@sinclair/typebox", "typebox"]);
+const TYPEBOX_MODULES = new Set(["typebox", "typebox"]);
 const ELYSIA_MODULE = "elysia";
 
 type SchemaBinding =

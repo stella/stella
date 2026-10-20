@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
 import { isDeepStrictEqual } from "node:util";
+import type { Static } from "typebox";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";

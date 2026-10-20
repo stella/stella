@@ -3,7 +3,7 @@ import { panic, Result } from "better-result";
 import { and, eq, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { isClauseSlotName } from "@stll/template-conditions";
 

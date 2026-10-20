@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { propertyContentSchema } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";

@@ -8,7 +8,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 
@@ -198,9 +198,9 @@ const expectOneContentRow = async (
 };
 
 const expectStatus = (response: unknown, code: number) => {
-  expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-  if (response instanceof ElysiaCustomStatusResponse) {
-    expect(response.code).toBe(code);
+  expect(response).toBeInstanceOf(ElysiaStatus);
+  if (response instanceof ElysiaStatus) {
+    expect(response.status).toBe(code);
   }
 };
 

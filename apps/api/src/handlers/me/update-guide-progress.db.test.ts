@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import {
   afterAll,
   beforeAll,
@@ -9,6 +8,7 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { Value } from "typebox/value";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";

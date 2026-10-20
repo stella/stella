@@ -1,6 +1,6 @@
 import { S3Client as AwsS3Client } from "@aws-sdk/client-s3";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -169,9 +169,9 @@ describe("template version download", () => {
       recordAuditEvent,
     });
 
-    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (result instanceof ElysiaCustomStatusResponse) {
-      expect(result.code).toBe(404);
+    expect(result).toBeInstanceOf(ElysiaStatus);
+    if (result instanceof ElysiaStatus) {
+      expect(result.status).toBe(404);
       expect(result.response).toEqual({ message: "Template not found" });
     }
     expect(getTransactionCount()).toBe(1);
@@ -193,9 +193,9 @@ describe("template version download", () => {
       recordAuditEvent,
     });
 
-    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (result instanceof ElysiaCustomStatusResponse) {
-      expect(result.code).toBe(404);
+    expect(result).toBeInstanceOf(ElysiaStatus);
+    if (result instanceof ElysiaStatus) {
+      expect(result.status).toBe(404);
       expect(result.response).toEqual({ message: "Version not found" });
     }
     expect(getTransactionCount()).toBe(1);

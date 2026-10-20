@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";

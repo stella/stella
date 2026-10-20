@@ -17,34 +17,62 @@ export const propertiesRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .put("/", createProperty.handler, {
-    body: createProperty.config.body,
-    permissions: createProperty.config.permissions,
-  })
-  .put("/batch", createPropertiesBatch.handler, {
-    body: createPropertiesBatch.config.body,
-    permissions: createPropertiesBatch.config.permissions,
-  })
-  .post("/preview", previewProperty.handler, {
-    body: previewProperty.config.body,
-    permissions: previewProperty.config.permissions,
-  })
-  .post("/suggest-prompt", suggestPromptProperty.handler, {
-    body: suggestPromptProperty.config.body,
-    permissions: suggestPromptProperty.config.permissions,
-  })
-  .get("/", readProperties.handler, {
-    permissions: readProperties.config.permissions,
-  })
+  .put(
+    "/",
+    {
+      body: createProperty.config.body,
+      permissions: createProperty.config.permissions,
+    },
+    createProperty.handler,
+  )
+  .put(
+    "/batch",
+    {
+      body: createPropertiesBatch.config.body,
+      permissions: createPropertiesBatch.config.permissions,
+    },
+    createPropertiesBatch.handler,
+  )
+  .post(
+    "/preview",
+    {
+      body: previewProperty.config.body,
+      permissions: previewProperty.config.permissions,
+    },
+    previewProperty.handler,
+  )
+  .post(
+    "/suggest-prompt",
+    {
+      body: suggestPromptProperty.config.body,
+      permissions: suggestPromptProperty.config.permissions,
+    },
+    suggestPromptProperty.handler,
+  )
+  .get(
+    "/",
+    {
+      permissions: readProperties.config.permissions,
+    },
+    readProperties.handler,
+  )
   .group("/property/:propertyId", (app) =>
     app
-      .post("/", updateProperty.handler, {
-        body: updateProperty.config.body,
-        params: updateProperty.config.params,
-        permissions: updateProperty.config.permissions,
-      })
-      .delete("/", deleteProperty.handler, {
-        params: deleteProperty.config.params,
-        permissions: deleteProperty.config.permissions,
-      }),
+      .post(
+        "/",
+        {
+          body: updateProperty.config.body,
+          params: updateProperty.config.params,
+          permissions: updateProperty.config.permissions,
+        },
+        updateProperty.handler,
+      )
+      .delete(
+        "/",
+        {
+          params: deleteProperty.config.params,
+          permissions: deleteProperty.config.permissions,
+        },
+        deleteProperty.handler,
+      ),
   );

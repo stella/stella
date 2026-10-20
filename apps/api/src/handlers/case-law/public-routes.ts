@@ -500,93 +500,159 @@ export const publicCaseLawRoute = new Elysia({
       isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
     ),
   )
-  .get("/coverage", readCaseLawCoverage.handler, {
-    response: readCaseLawCoverage.config.response,
-  })
-  .get("/decisions", listDecisions.handler, {
-    query: listDecisions.config.query,
-    response: listDecisions.config.response,
-  })
-  .get("/decisions/facets", listDecisionFacets.handler, {
-    query: listDecisionFacets.config.query,
-    response: listDecisionFacets.config.response,
-  })
-  .get("/decisions/status", readCaseLawCorpusStatus.handler, {
-    query: readCaseLawCorpusStatus.config.query,
-    response: readCaseLawCorpusStatus.config.response,
-  })
-  .get("/decisions/latest", listLatestDecisions.handler, {
-    query: listLatestDecisions.config.query,
-    response: listLatestDecisions.config.response,
-  })
-  .get("/decisions/by-slug/:slug", readDecisionBySlug.handler, {
-    params: readDecisionBySlug.config.params,
-    query: readDecisionBySlug.config.query,
-    response: readDecisionBySlug.config.response,
-    beforeHandle: ({ query }) =>
-      rejectInvalidCursor(query.citationsCursor, decodeDecisionCitationCursor),
-  })
-  .get("/decisions/:decisionId", readDecision.handler, {
-    params: readDecision.config.params,
-    query: readDecision.config.query,
-    response: readDecision.config.response,
-    beforeHandle: ({ query }) =>
-      rejectInvalidCursor(query.citationsCursor, decodeDecisionCitationCursor),
-  })
-  .get("/decisions/:decisionId/citations", listDecisionCitations.handler, {
-    params: listDecisionCitations.config.params,
-    query: listDecisionCitations.config.query,
-    response: listDecisionCitations.config.response,
-    beforeHandle: ({ query }) =>
-      rejectInvalidCursor(query.cursor, (cursor) =>
-        decodeCitationCursor(cursor, query),
-      ),
-  })
+  .get(
+    "/coverage",
+    {
+      response: readCaseLawCoverage.config.response,
+    },
+    readCaseLawCoverage.handler,
+  )
+  .get(
+    "/decisions",
+    {
+      query: listDecisions.config.query,
+      response: listDecisions.config.response,
+    },
+    listDecisions.handler,
+  )
+  .get(
+    "/decisions/facets",
+    {
+      query: listDecisionFacets.config.query,
+      response: listDecisionFacets.config.response,
+    },
+    listDecisionFacets.handler,
+  )
+  .get(
+    "/decisions/status",
+    {
+      query: readCaseLawCorpusStatus.config.query,
+      response: readCaseLawCorpusStatus.config.response,
+    },
+    readCaseLawCorpusStatus.handler,
+  )
+  .get(
+    "/decisions/latest",
+    {
+      query: listLatestDecisions.config.query,
+      response: listLatestDecisions.config.response,
+    },
+    listLatestDecisions.handler,
+  )
+  .get(
+    "/decisions/by-slug/:slug",
+    {
+      params: readDecisionBySlug.config.params,
+      query: readDecisionBySlug.config.query,
+      response: readDecisionBySlug.config.response,
+      beforeHandle: ({ query }) =>
+        rejectInvalidCursor(
+          query.citationsCursor,
+          decodeDecisionCitationCursor,
+        ),
+    },
+    readDecisionBySlug.handler,
+  )
+  .get(
+    "/decisions/:decisionId",
+    {
+      params: readDecision.config.params,
+      query: readDecision.config.query,
+      response: readDecision.config.response,
+      beforeHandle: ({ query }) =>
+        rejectInvalidCursor(
+          query.citationsCursor,
+          decodeDecisionCitationCursor,
+        ),
+    },
+    readDecision.handler,
+  )
+  .get(
+    "/decisions/:decisionId/citations",
+    {
+      params: listDecisionCitations.config.params,
+      query: listDecisionCitations.config.query,
+      response: listDecisionCitations.config.response,
+      beforeHandle: ({ query }) =>
+        rejectInvalidCursor(query.cursor, (cursor) =>
+          decodeCitationCursor(cursor, query),
+        ),
+    },
+    listDecisionCitations.handler,
+  )
   .get(
     "/decisions/:decisionId/citations/summary",
-    summarizeDecisionCitations.handler,
     {
       params: summarizeDecisionCitations.config.params,
       response: summarizeDecisionCitations.config.response,
     },
+    summarizeDecisionCitations.handler,
   )
   .get(
     "/decisions/:decisionId/citations/leading",
-    listLeadingCitations.handler,
     {
       params: listLeadingCitations.config.params,
       query: listLeadingCitations.config.query,
       response: listLeadingCitations.config.response,
     },
+    listLeadingCitations.handler,
   )
-  .get("/decisions/:decisionId/provisions", listDecisionProvisions.handler, {
-    params: listDecisionProvisions.config.params,
-    query: listDecisionProvisions.config.query,
-    response: listDecisionProvisions.config.response,
-    beforeHandle: ({ query }) =>
-      rejectInvalidCursor(query.cursor, decodeProvisionCursor),
-  })
-  .get("/judges/:judgeId/portrait", readJudgePortrait.handler, {
-    params: readJudgePortrait.config.params,
-  })
-  .get("/provisions/citing-decisions", listCitingDecisions.handler, {
-    query: listCitingDecisions.config.query,
-    response: listCitingDecisions.config.response,
-    beforeHandle: ({ query }) =>
-      rejectInvalidCursor(query.cursor, decodeCitingDecisionsCursor),
-  })
-  .get("/provisions/citation-counts", readStatuteCitationCounts.handler, {
-    query: readStatuteCitationCounts.config.query,
-    response: readStatuteCitationCounts.config.response,
-  })
-  .post("/decisions/search", searchDecisions.handler, {
-    body: searchDecisions.config.body,
-    response: searchDecisions.config.response,
-  })
-  .get("/sitemap/shards", listSitemapShards.handler, {
-    response: listSitemapShards.config.response,
-  })
-  .get("/sitemap/decisions/shard", listSitemapShardDecisions.handler, {
-    query: listSitemapShardDecisions.config.query,
-    response: listSitemapShardDecisions.config.response,
-  });
+  .get(
+    "/decisions/:decisionId/provisions",
+    {
+      params: listDecisionProvisions.config.params,
+      query: listDecisionProvisions.config.query,
+      response: listDecisionProvisions.config.response,
+      beforeHandle: ({ query }) =>
+        rejectInvalidCursor(query.cursor, decodeProvisionCursor),
+    },
+    listDecisionProvisions.handler,
+  )
+  .get(
+    "/judges/:judgeId/portrait",
+    {
+      params: readJudgePortrait.config.params,
+    },
+    readJudgePortrait.handler,
+  )
+  .get(
+    "/provisions/citing-decisions",
+    {
+      query: listCitingDecisions.config.query,
+      response: listCitingDecisions.config.response,
+      beforeHandle: ({ query }) =>
+        rejectInvalidCursor(query.cursor, decodeCitingDecisionsCursor),
+    },
+    listCitingDecisions.handler,
+  )
+  .get(
+    "/provisions/citation-counts",
+    {
+      query: readStatuteCitationCounts.config.query,
+      response: readStatuteCitationCounts.config.response,
+    },
+    readStatuteCitationCounts.handler,
+  )
+  .post(
+    "/decisions/search",
+    {
+      body: searchDecisions.config.body,
+      response: searchDecisions.config.response,
+    },
+    searchDecisions.handler,
+  )
+  .get(
+    "/sitemap/shards",
+    {
+      response: listSitemapShards.config.response,
+    },
+    listSitemapShards.handler,
+  )
+  .get(
+    "/sitemap/decisions/shard",
+    {
+      query: listSitemapShardDecisions.config.query,
+      response: listSitemapShardDecisions.config.response,
+    },
+    listSitemapShardDecisions.handler,
+  );

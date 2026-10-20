@@ -42,54 +42,58 @@ export const createDesktopEditSessionsRoute = (
   })
     .post(
       "/desktop-edit-handoffs/redeem",
+      {
+        body: redeemDesktopEditHandoffBodySchema,
+      },
       async ({ body, request, server }) =>
         await redeemDesktopEditHandoffHandler(
           { body, request, server },
           dependencies,
         ),
-      {
-        body: redeemDesktopEditHandoffBodySchema,
-      },
     )
     .post(
       "/desktop-edit-handoffs/:handoffId/opened",
+      {
+        body: acknowledgeDesktopEditHandoffOpenedBodySchema,
+        params: acknowledgeDesktopEditHandoffOpenedParamsSchema,
+      },
       async ({ body, params, request }) =>
         await acknowledgeDesktopEditHandoffOpenedHandler({
           body,
           params,
           request,
         }),
-      {
-        body: acknowledgeDesktopEditHandoffOpenedBodySchema,
-        params: acknowledgeDesktopEditHandoffOpenedParamsSchema,
-      },
     )
     .get(
       "/desktop-edit-sessions/:sessionId/status",
+      {
+        headers: statusDesktopEditSessionHeadersSchema,
+        params: statusDesktopEditSessionParamsSchema,
+      },
       async ({ headers, params }) =>
         await statusDesktopEditSessionHandler({
           headers,
           sessionId: params.sessionId,
         }),
-      {
-        headers: statusDesktopEditSessionHeadersSchema,
-        params: statusDesktopEditSessionParamsSchema,
-      },
     )
     .get(
       "/desktop-edit-sessions/:sessionId/events",
+      {
+        headers: desktopEditSessionEventsHeadersSchema,
+        params: desktopEditSessionEventsParamsSchema,
+      },
       async ({ headers, params }) =>
         await desktopEditSessionEventsHandler({
           headers,
           sessionId: params.sessionId,
         }),
-      {
-        headers: desktopEditSessionEventsHeadersSchema,
-        params: desktopEditSessionEventsParamsSchema,
-      },
     )
     .post(
       "/desktop-edit-sessions/:sessionId/checkpoint",
+      {
+        body: checkpointDesktopEditSessionBodySchema,
+        params: checkpointDesktopEditSessionParamsSchema,
+      },
       async ({ body, params, request, server }) =>
         await checkpointDesktopEditSessionHandler({
           body,
@@ -97,13 +101,13 @@ export const createDesktopEditSessionsRoute = (
           request,
           server,
         }),
-      {
-        body: checkpointDesktopEditSessionBodySchema,
-        params: checkpointDesktopEditSessionParamsSchema,
-      },
     )
     .post(
       "/desktop-edit-sessions/:sessionId/finalize",
+      {
+        body: finalizeDesktopEditSessionBodySchema,
+        params: finalizeDesktopEditSessionParamsSchema,
+      },
       async ({ body, params, request, server }) =>
         await finalizeDesktopEditSessionHandler({
           body,
@@ -111,13 +115,13 @@ export const createDesktopEditSessionsRoute = (
           request,
           server,
         }),
-      {
-        body: finalizeDesktopEditSessionBodySchema,
-        params: finalizeDesktopEditSessionParamsSchema,
-      },
     )
     .post(
       "/desktop-edit-sessions/:sessionId/respond-takeover",
+      {
+        body: respondDesktopEditTakeoverBodySchema,
+        params: respondDesktopEditTakeoverParamsSchema,
+      },
       async ({ body, params, request, server }) =>
         await respondDesktopEditTakeoverHandler({
           body,
@@ -125,10 +129,6 @@ export const createDesktopEditSessionsRoute = (
           request,
           server,
         }),
-      {
-        body: respondDesktopEditTakeoverBodySchema,
-        params: respondDesktopEditTakeoverParamsSchema,
-      },
     );
 
 export const desktopEditSessionsRoute = createDesktopEditSessionsRoute();

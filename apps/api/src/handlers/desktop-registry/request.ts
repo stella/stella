@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import type {
   DesktopRegistryConfig,

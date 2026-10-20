@@ -89,11 +89,13 @@ describe("parseMultipartForm", () => {
 
 describe("multipartFormParser plugin", () => {
   test("a t.String() field carrying JSON reaches the handler as a string", async () => {
-    const app = new Elysia()
-      .use(multipartFormParser)
-      .post("/fill", ({ body }) => body.values, {
+    const app = new Elysia().use(multipartFormParser).post(
+      "/fill",
+      {
         body: t.Object({ file: t.File(), values: t.String() }),
-      });
+      },
+      ({ body }) => body.values,
+    );
 
     const response = await app.handle(
       new Request("http://localhost/fill", {
@@ -110,11 +112,13 @@ describe("multipartFormParser plugin", () => {
   });
 
   test("t.Files() still receives every uploaded file", async () => {
-    const app = new Elysia()
-      .use(multipartFormParser)
-      .post("/upload", ({ body }) => String(body.files.length), {
+    const app = new Elysia().use(multipartFormParser).post(
+      "/upload",
+      {
         body: t.Object({ files: t.Files() }),
-      });
+      },
+      ({ body }) => String(body.files.length),
+    );
 
     const response = await app.handle(
       new Request("http://localhost/upload", {
@@ -131,11 +135,13 @@ describe("multipartFormParser plugin", () => {
   });
 
   test("t.Files() still accepts a single uploaded file", async () => {
-    const app = new Elysia()
-      .use(multipartFormParser)
-      .post("/upload", ({ body }) => String(body.files.length), {
+    const app = new Elysia().use(multipartFormParser).post(
+      "/upload",
+      {
         body: t.Object({ files: t.Files() }),
-      });
+      },
+      ({ body }) => String(body.files.length),
+    );
 
     const response = await app.handle(
       new Request("http://localhost/upload", {
@@ -149,11 +155,13 @@ describe("multipartFormParser plugin", () => {
   });
 
   test("a route that declares parse: none keeps its unread request body", async () => {
-    const app = new Elysia()
-      .use(multipartFormParser)
-      .all("/raw", async ({ request }) => await request.text(), {
+    const app = new Elysia().use(multipartFormParser).all(
+      "/raw",
+      {
         parse: "none",
-      });
+      },
+      async ({ request }) => await request.text(),
+    );
 
     const response = await app.handle(
       new Request("http://localhost/raw", {
@@ -168,12 +176,14 @@ describe("multipartFormParser plugin", () => {
   });
 
   test("a route that declares parse: text still gets the raw body string", async () => {
-    const app = new Elysia()
-      .use(multipartFormParser)
-      .post("/webhook", ({ body }) => body, {
+    const app = new Elysia().use(multipartFormParser).post(
+      "/webhook",
+      {
         body: t.String(),
         parse: "text",
-      });
+      },
+      ({ body }) => body,
+    );
 
     const response = await app.handle(
       new Request("http://localhost/webhook", {

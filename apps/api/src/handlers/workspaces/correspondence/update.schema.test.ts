@@ -5,9 +5,13 @@ import { CORRESPONDENCE_HANDLING_STATES } from "@stll/api-contract/correspondenc
 
 import updateCorrespondence from "./update";
 
-const app = new Elysia().patch("/correspondence", ({ body }) => body, {
-  body: updateCorrespondence.config.body,
-});
+const app = new Elysia().patch(
+  "/correspondence",
+  {
+    body: updateCorrespondence.config.body,
+  },
+  ({ body }) => body,
+);
 
 describe("correspondence handling HTTP schema", () => {
   test("assignment-only requests leave handling state absent", async () => {

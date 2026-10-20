@@ -1,6 +1,6 @@
-import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
+import { Type } from "typebox";
 import * as v from "valibot";
 
 import {

@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import { Value } from "typebox/value";
 
 import { assertProperty } from "@stll/property-testing";
 

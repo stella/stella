@@ -1,6 +1,6 @@
-import { Type } from "@sinclair/typebox";
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
+import { Type } from "typebox";
 
 import {
   DESKTOP_ACTIVITY_REVIEW_LIMIT,

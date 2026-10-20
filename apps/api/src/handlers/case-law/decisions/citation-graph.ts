@@ -3,7 +3,7 @@ import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias, unionAll } from "drizzle-orm/pg-core";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import {
   CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT as CITATION_SUMMARY_SCAN_LIMIT,

@@ -1,5 +1,5 @@
-import type { TSchema } from "@sinclair/typebox";
 import { t } from "elysia";
+import type { TSchema } from "typebox";
 
 import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 import type { SignalView } from "@stll/api-contract/signals";

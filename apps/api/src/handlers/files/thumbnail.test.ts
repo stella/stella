@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -82,9 +82,9 @@ const recordingAudit = () => {
 };
 
 const expectStatus = (response: unknown, code: number) => {
-  expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-  if (response instanceof ElysiaCustomStatusResponse) {
-    expect(response.code).toBe(code);
+  expect(response).toBeInstanceOf(ElysiaStatus);
+  if (response instanceof ElysiaStatus) {
+    expect(response.status).toBe(code);
   }
 };
 

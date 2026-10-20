@@ -28,7 +28,7 @@
 // while `[first, ...xs.map(f)]` types as the variadic tuple `[X, ...X[]]`.
 //
 // The callee is `<ns>.Union` / `<ns>.UnionEnum` where `<ns>` resolves to
-// `t` from `elysia` or `Type` (or the namespace) from `@sinclair/typebox`.
+// `t` from `elysia` or `Type` (or the namespace) from `typebox`.
 // Destructured `Union(...)` calls are outside this check.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
@@ -156,7 +156,7 @@ export default eslintCompatPlugin({
               isImportedFrom({
                 context,
                 node: callee.object,
-                modules: ["@sinclair/typebox"],
+                modules: ["typebox"],
                 names: TYPEBOX_NAMESPACES,
               });
             if (!isTypeBuilder) {

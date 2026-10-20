@@ -10,21 +10,45 @@ import storeFolioCollabSnapshotHandler from "@/api/handlers/folio-collab/snapsho
 export const folioCollabRoute = new Elysia({
   prefix: "/folio-collab-rooms",
 })
-  .post("/authorize", authorizeFolioCollabRoomHandler.handler, {
-    body: authorizeFolioCollabRoomHandler.config.body,
-  })
-  .post("/refresh-token", refreshFolioCollabToken.handler, {
-    body: refreshFolioCollabToken.config.body,
-  })
-  .post("/heartbeat", heartbeatFolioCollabRoom.handler, {
-    body: heartbeatFolioCollabRoom.config.body,
-  })
-  .post("/snapshot/load", loadFolioCollabSnapshotHandler.handler, {
-    body: loadFolioCollabSnapshotHandler.config.body,
-  })
-  .post("/snapshot/seed", acknowledgeFolioCollabSeed.handler, {
-    body: acknowledgeFolioCollabSeed.config.body,
-  })
-  .post("/snapshot/store", storeFolioCollabSnapshotHandler.handler, {
-    body: storeFolioCollabSnapshotHandler.config.body,
-  });
+  .post(
+    "/authorize",
+    {
+      body: authorizeFolioCollabRoomHandler.config.body,
+    },
+    authorizeFolioCollabRoomHandler.handler,
+  )
+  .post(
+    "/refresh-token",
+    {
+      body: refreshFolioCollabToken.config.body,
+    },
+    refreshFolioCollabToken.handler,
+  )
+  .post(
+    "/heartbeat",
+    {
+      body: heartbeatFolioCollabRoom.config.body,
+    },
+    heartbeatFolioCollabRoom.handler,
+  )
+  .post(
+    "/snapshot/load",
+    {
+      body: loadFolioCollabSnapshotHandler.config.body,
+    },
+    loadFolioCollabSnapshotHandler.handler,
+  )
+  .post(
+    "/snapshot/seed",
+    {
+      body: acknowledgeFolioCollabSeed.config.body,
+    },
+    acknowledgeFolioCollabSeed.handler,
+  )
+  .post(
+    "/snapshot/store",
+    {
+      body: storeFolioCollabSnapshotHandler.config.body,
+    },
+    storeFolioCollabSnapshotHandler.handler,
+  );

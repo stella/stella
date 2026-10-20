@@ -189,18 +189,30 @@ const exercise = async ({
   const candidateEndpoint =
     createDesktopMatterCandidatesEndpoint(authorizeAccount);
   const endpointApp = new Elysia({ normalize: false })
-    .get("/v1/desktop/matter-candidates", candidateEndpoint.handler, {
-      response: candidateEndpoint.config.response,
-    })
-    .put("/v1/desktop/time-entries/:workspaceId", create.handler, {
-      body: create.config.body,
-      params: create.config.params,
-      response: create.config.response,
-    })
-    .get("/v1/desktop/matters", matters.handler, {
-      query: matters.config.query,
-      response: matters.config.response,
-    });
+    .get(
+      "/v1/desktop/matter-candidates",
+      {
+        response: candidateEndpoint.config.response,
+      },
+      candidateEndpoint.handler,
+    )
+    .put(
+      "/v1/desktop/time-entries/:workspaceId",
+      {
+        body: create.config.body,
+        params: create.config.params,
+        response: create.config.response,
+      },
+      create.handler,
+    )
+    .get(
+      "/v1/desktop/matters",
+      {
+        query: matters.config.query,
+        response: matters.config.response,
+      },
+      matters.handler,
+    );
   const app = new Elysia().use(endpointApp);
   testState.setConfig("FEATURE_TIME_BILLING", true);
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {

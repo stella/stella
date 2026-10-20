@@ -1,4 +1,4 @@
-import { KindGuard, type TSchema, Type } from "@sinclair/typebox";
+import { KindGuard, type TSchema, Type } from "typebox";
 
 /**
  * The `format` markers Elysia stamps on the string branch of a coercing scalar

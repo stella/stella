@@ -31,11 +31,11 @@ const storedValue = async (payload: unknown): Promise<unknown> => {
   let received: unknown = null;
   const app = new Elysia().post(
     "/value",
+    { body: t.Object({ value: fieldContentSchema }) },
     ({ body: { value } }) => {
       received = value;
       return "ok";
     },
-    { body: t.Object({ value: fieldContentSchema }) },
   );
   const response = await app.handle(
     new Request("http://localhost/value", {

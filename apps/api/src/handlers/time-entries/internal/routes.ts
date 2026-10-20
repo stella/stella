@@ -21,7 +21,11 @@ export const internalTimeEntriesRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .post("/", createInternalTimeEntry.handler, {
-    permissions: createInternalTimeEntry.config.permissions,
-    body: createInternalTimeEntry.config.body,
-  });
+  .post(
+    "/",
+    {
+      permissions: createInternalTimeEntry.config.permissions,
+      body: createInternalTimeEntry.config.body,
+    },
+    createInternalTimeEntry.handler,
+  );

@@ -1,7 +1,7 @@
 import { Result, panic } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";

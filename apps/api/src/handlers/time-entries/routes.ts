@@ -34,64 +34,124 @@ export const timeEntriesRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .get("/", readTimeEntries.handler, {
-    permissions: readTimeEntries.config.permissions,
-    query: readTimeEntries.config.query,
-  })
-  .get("/summary", readTimeEntrySummary.handler, {
-    permissions: readTimeEntrySummary.config.permissions,
-    query: readTimeEntrySummary.config.query,
-  })
-  .get("/suggestions", listTimeSuggestions.handler, {
-    permissions: listTimeSuggestions.config.permissions,
-    query: listTimeSuggestions.config.query,
-  })
-  .post("/suggestions/decisions", createTimeSuggestionDecision.handler, {
-    body: createTimeSuggestionDecision.config.body,
-    permissions: createTimeSuggestionDecision.config.permissions,
-  })
-  .get("/:id", readTimeEntryById.handler, {
-    params: readTimeEntryById.config.params,
-    permissions: readTimeEntryById.config.permissions,
-  })
-  .put("/", createTimeEntry.handler, {
-    body: createTimeEntry.config.body,
-    permissions: createTimeEntry.config.permissions,
-  })
-  .patch("/", updateTimeEntryById.handler, {
-    body: updateTimeEntryById.config.body,
-    permissions: updateTimeEntryById.config.permissions,
-  })
-  .delete("/", deleteTimeEntryById.handler, {
-    body: deleteTimeEntryById.config.body,
-    permissions: deleteTimeEntryById.config.permissions,
-  })
-  .post("/batch", batchUpdate.handler, {
-    body: batchUpdate.config.body,
-    permissions: batchUpdate.config.permissions,
-  })
-  .delete("/batch", batchDelete.handler, {
-    body: batchDelete.config.body,
-    permissions: batchDelete.config.permissions,
-  })
-  .post("/split", splitEntry.handler, {
-    body: splitEntry.config.body,
-    permissions: splitEntry.config.permissions,
-  })
-  .get("/export/csv", exportCsv.handler, {
-    permissions: exportCsv.config.permissions,
-    query: exportCsv.config.query,
-  })
-  .get("/export/ledes", exportLedes.handler, {
-    permissions: exportLedes.config.permissions,
-    query: exportLedes.config.query,
-  })
-  .get("/export/pdf", exportPdf.handler, {
-    permissions: exportPdf.config.permissions,
-    query: exportPdf.config.query,
-  })
-  .post("/polish-narrative", polishTimeEntryNarrative.handler, {
-    body: polishTimeEntryNarrative.config.body,
-    permissions: polishTimeEntryNarrative.config.permissions,
-    requiresUsage: polishTimeEntryNarrative.config.requiresUsage,
-  });
+  .get(
+    "/",
+    {
+      permissions: readTimeEntries.config.permissions,
+      query: readTimeEntries.config.query,
+    },
+    readTimeEntries.handler,
+  )
+  .get(
+    "/summary",
+    {
+      permissions: readTimeEntrySummary.config.permissions,
+      query: readTimeEntrySummary.config.query,
+    },
+    readTimeEntrySummary.handler,
+  )
+  .get(
+    "/suggestions",
+    {
+      permissions: listTimeSuggestions.config.permissions,
+      query: listTimeSuggestions.config.query,
+    },
+    listTimeSuggestions.handler,
+  )
+  .post(
+    "/suggestions/decisions",
+    {
+      body: createTimeSuggestionDecision.config.body,
+      permissions: createTimeSuggestionDecision.config.permissions,
+    },
+    createTimeSuggestionDecision.handler,
+  )
+  .get(
+    "/:id",
+    {
+      params: readTimeEntryById.config.params,
+      permissions: readTimeEntryById.config.permissions,
+    },
+    readTimeEntryById.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createTimeEntry.config.body,
+      permissions: createTimeEntry.config.permissions,
+    },
+    createTimeEntry.handler,
+  )
+  .patch(
+    "/",
+    {
+      body: updateTimeEntryById.config.body,
+      permissions: updateTimeEntryById.config.permissions,
+    },
+    updateTimeEntryById.handler,
+  )
+  .delete(
+    "/",
+    {
+      body: deleteTimeEntryById.config.body,
+      permissions: deleteTimeEntryById.config.permissions,
+    },
+    deleteTimeEntryById.handler,
+  )
+  .post(
+    "/batch",
+    {
+      body: batchUpdate.config.body,
+      permissions: batchUpdate.config.permissions,
+    },
+    batchUpdate.handler,
+  )
+  .delete(
+    "/batch",
+    {
+      body: batchDelete.config.body,
+      permissions: batchDelete.config.permissions,
+    },
+    batchDelete.handler,
+  )
+  .post(
+    "/split",
+    {
+      body: splitEntry.config.body,
+      permissions: splitEntry.config.permissions,
+    },
+    splitEntry.handler,
+  )
+  .get(
+    "/export/csv",
+    {
+      permissions: exportCsv.config.permissions,
+      query: exportCsv.config.query,
+    },
+    exportCsv.handler,
+  )
+  .get(
+    "/export/ledes",
+    {
+      permissions: exportLedes.config.permissions,
+      query: exportLedes.config.query,
+    },
+    exportLedes.handler,
+  )
+  .get(
+    "/export/pdf",
+    {
+      permissions: exportPdf.config.permissions,
+      query: exportPdf.config.query,
+    },
+    exportPdf.handler,
+  )
+  .post(
+    "/polish-narrative",
+    {
+      body: polishTimeEntryNarrative.config.body,
+      permissions: polishTimeEntryNarrative.config.permissions,
+      requiresUsage: polishTimeEntryNarrative.config.requiresUsage,
+    },
+    polishTimeEntryNarrative.handler,
+  );

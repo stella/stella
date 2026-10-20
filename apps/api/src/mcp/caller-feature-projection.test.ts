@@ -249,7 +249,7 @@ for (const transport of [
             if (featureAccessSnapshot === undefined) {
               panic("Missing feature access snapshot in HTTP fixture");
             }
-            const app = new Elysia().resolve(() => ({
+            const app = new Elysia().derive(() => ({
               workspaceId: toSafeId<"workspace">(matterId),
               user: synthesized.user,
               session: synthesized.session,
@@ -273,19 +273,19 @@ for (const transport of [
               capability === "lists.items.sources.list"
                 ? app.get(
                     "/lists/:workspaceId/:listId/items/:itemEntityId/sources",
-                    readSources.handler,
                     {
                       params: readSources.config.params,
                       query: readSources.config.query,
                     },
+                    readSources.handler,
                   )
                 : app.get(
                     "/lists/:workspaceId/:listId/items",
-                    readItems.handler,
                     {
                       params: readItems.config.params,
                       query: readItems.config.query,
                     },
+                    readItems.handler,
                   );
             const url = `http://localhost/lists/${matterId}/${listId}/items${
               capability === "lists.items.sources.list"

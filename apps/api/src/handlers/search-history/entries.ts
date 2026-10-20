@@ -1,8 +1,8 @@
-import type { Static } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "typebox";
+import { Value } from "typebox/value";
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";

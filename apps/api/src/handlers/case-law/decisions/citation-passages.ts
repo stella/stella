@@ -15,7 +15,7 @@
  */
 import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia";
+import { ElysiaStatus } from "elysia";
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
@@ -347,7 +347,7 @@ export type ReadDecisionCitationsOptions = {
 };
 
 const statusCodeOf = (result: { code: number | string }): number =>
-  typeof result.code === "number" ? result.code : 500;
+  typeof result.status === "number" ? result.status : 500;
 
 /**
  * One page of a decision's citations, each with the paragraph that made it.
@@ -380,7 +380,7 @@ export const readGatedDecisionCitations = async ({
         },
         subject,
       });
-      if (page instanceof ElysiaCustomStatusResponse) {
+      if (page instanceof ElysiaStatus) {
         const statusCode = statusCodeOf(page);
         if (statusCode === 422) {
           return { type: "doctrine_unavailable" as const };

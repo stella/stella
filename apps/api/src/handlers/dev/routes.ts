@@ -128,16 +128,16 @@ export const devRoute = new Elysia({ prefix: "/dev" })
   })
   .get(
     "/seed-firm-knowledge",
+    {
+      query: t.Object({
+        jobId: t.String({ minLength: 1, maxLength: 128 }),
+      }),
+    },
     (ctx) => {
       const job = firmKnowledgeJobs.getOwned(ctx.query.jobId, ctx.user.id);
       return job
         ? getFirmKnowledgeJobResponse(job)
         : { jobId: ctx.query.jobId, ...IDLE_SEED_STATUS };
-    },
-    {
-      query: t.Object({
-        jobId: t.String({ minLength: 1, maxLength: 128 }),
-      }),
     },
   )
   // Uploads through this same API under a short-lived job session pinned to
@@ -145,6 +145,25 @@ export const devRoute = new Elysia({ prefix: "/dev" })
   // upload path to get derivatives and extraction.
   .post(
     "/seed-firm-knowledge",
+    {
+      body: t.Optional(
+        t.Object({
+          incompleteMatterMode: t.Optional(
+            t.Union([
+              t.Literal(INCOMPLETE_MATTER_MODE.skip),
+              t.Literal(INCOMPLETE_MATTER_MODE.replace),
+            ]),
+          ),
+          matters: t.Optional(
+            t.Integer({ minimum: 1, maximum: MAX_FIRM_KNOWLEDGE_MATTERS }),
+          ),
+          organizationId: t.Optional(
+            t.String({ minLength: 1, maxLength: 128 }),
+          ),
+          selectionSeed: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
+        }),
+      ),
+    },
     async (ctx) => {
       const apiOrigin = getDevApiOrigin(ctx.server?.port);
       const userId = ctx.user.id;
@@ -235,25 +254,6 @@ export const devRoute = new Elysia({ prefix: "/dev" })
 
       return getFirmKnowledgeJobResponse(job);
     },
-    {
-      body: t.Optional(
-        t.Object({
-          incompleteMatterMode: t.Optional(
-            t.Union([
-              t.Literal(INCOMPLETE_MATTER_MODE.skip),
-              t.Literal(INCOMPLETE_MATTER_MODE.replace),
-            ]),
-          ),
-          matters: t.Optional(
-            t.Integer({ minimum: 1, maximum: MAX_FIRM_KNOWLEDGE_MATTERS }),
-          ),
-          organizationId: t.Optional(
-            t.String({ minLength: 1, maxLength: 128 }),
-          ),
-          selectionSeed: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
-        }),
-      ),
-    },
   )
   .post("/clean", async (ctx) => {
     const orgId = ctx.session.activeOrganizationId;
@@ -321,14 +321,14 @@ export const devPublicRoute = new Elysia({ prefix: "/dev-public" })
   })
   .get(
     "/last-otp",
+    {
+      query: t.Object({ email: t.String() }),
+    },
     ({ query }) => {
       const otp = readDevOtp(query.email);
       if (!otp) {
         return new Response("No OTP", { status: 404 });
       }
       return { otp };
-    },
-    {
-      query: t.Object({ email: t.String() }),
     },
   );

@@ -11,14 +11,26 @@ export const templateRecipesRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listTemplateRecipes.handler, {
-    permissions: listTemplateRecipes.config.permissions,
-  })
-  .put("/", createTemplateRecipe.handler, {
-    body: createTemplateRecipe.config.body,
-    permissions: createTemplateRecipe.config.permissions,
-  })
-  .delete("/:recipeId", deleteTemplateRecipe.handler, {
-    params: deleteTemplateRecipe.config.params,
-    permissions: deleteTemplateRecipe.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      permissions: listTemplateRecipes.config.permissions,
+    },
+    listTemplateRecipes.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createTemplateRecipe.config.body,
+      permissions: createTemplateRecipe.config.permissions,
+    },
+    createTemplateRecipe.handler,
+  )
+  .delete(
+    "/:recipeId",
+    {
+      params: deleteTemplateRecipe.config.params,
+      permissions: deleteTemplateRecipe.config.permissions,
+    },
+    deleteTemplateRecipe.handler,
+  );

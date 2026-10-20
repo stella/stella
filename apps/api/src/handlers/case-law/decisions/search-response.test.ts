@@ -1,7 +1,7 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
-import type { Static } from "elysia";
 import fc from "fast-check";
+import type { Static } from "typebox";
+import { Value } from "typebox/value";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_TYPE_KIND_OTHER } from "@stll/api-contract/case-law-decision-types";

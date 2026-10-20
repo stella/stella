@@ -1,4 +1,4 @@
-import { ElysiaCustomStatusResponse } from "elysia";
+import { ElysiaStatus } from "elysia";
 
 import { truncateTextBytes } from "@/api/lib/search/response-text-bounds";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
@@ -72,7 +72,7 @@ const project = (value: unknown, schema: unknown): unknown => {
  * and so do primitives, including branded ones such as `SafeId`.
  */
 type DeepMutable<T> =
-  T extends ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status>
+  T extends ElysiaStatus<infer _Code, infer _Body, infer _Status>
     ? T
     : T extends Response | string | number | boolean | bigint | null | undefined
       ? T
@@ -88,8 +88,7 @@ export const projectResponseText = <T>(
   schema: unknown,
 ): DeepMutable<T> => {
   const projected =
-    response instanceof ElysiaCustomStatusResponse ||
-    response instanceof Response
+    response instanceof ElysiaStatus || response instanceof Response
       ? response
       : project(structuredClone(response), schema);
   // SAFETY: a status response or Response passes through and DeepMutable maps

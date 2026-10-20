@@ -59,18 +59,34 @@ export const notificationsRoute = new Elysia({
       return sseResponse(stream);
     },
   )
-  .get("/", listNotifications.handler, {
-    query: listNotifications.config.query,
-    permissions: listNotifications.config.permissions,
-  })
-  .post("/read-all", markAllNotificationsRead.handler, {
-    permissions: markAllNotificationsRead.config.permissions,
-  })
-  .post("/announcements", publishAnnouncement.handler, {
-    body: publishAnnouncement.config.body,
-    permissions: publishAnnouncement.config.permissions,
-  })
-  .patch("/:notificationId/read", markNotificationRead.handler, {
-    params: markNotificationRead.config.params,
-    permissions: markNotificationRead.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      query: listNotifications.config.query,
+      permissions: listNotifications.config.permissions,
+    },
+    listNotifications.handler,
+  )
+  .post(
+    "/read-all",
+    {
+      permissions: markAllNotificationsRead.config.permissions,
+    },
+    markAllNotificationsRead.handler,
+  )
+  .post(
+    "/announcements",
+    {
+      body: publishAnnouncement.config.body,
+      permissions: publishAnnouncement.config.permissions,
+    },
+    publishAnnouncement.handler,
+  )
+  .patch(
+    "/:notificationId/read",
+    {
+      params: markNotificationRead.config.params,
+      permissions: markNotificationRead.config.permissions,
+    },
+    markNotificationRead.handler,
+  );

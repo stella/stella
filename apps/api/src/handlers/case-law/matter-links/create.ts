@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { linkDecisionsToMatter } from "@/api/handlers/case-law/matter-links/link-writes";

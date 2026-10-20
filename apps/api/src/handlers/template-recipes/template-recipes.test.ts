@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -126,9 +126,9 @@ describe("create recipe handler validation", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (result instanceof ElysiaCustomStatusResponse) {
-      expect(result.code).toBe(400);
+    expect(result).toBeInstanceOf(ElysiaStatus);
+    if (result instanceof ElysiaStatus) {
+      expect(result.status).toBe(400);
       expect(result.response.message).toContain("Invalid recipe definition");
     }
   });
@@ -148,9 +148,9 @@ describe("create recipe handler validation", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (result instanceof ElysiaCustomStatusResponse) {
-      expect(result.code).toBe(400);
+    expect(result).toBeInstanceOf(ElysiaStatus);
+    if (result instanceof ElysiaStatus) {
+      expect(result.status).toBe(400);
       expect(result.response.message).toContain("path");
     }
   });

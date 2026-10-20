@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import type { SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";

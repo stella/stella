@@ -8,7 +8,7 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import { user } from "@/api/db/auth-schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -99,9 +99,9 @@ describe("verification creation requires complete AI admission", () => {
             },
           }),
         );
-        expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-        if (result instanceof ElysiaCustomStatusResponse) {
-          expect(result.code).toBe(expectedStatus);
+        expect(result).toBeInstanceOf(ElysiaStatus);
+        if (result instanceof ElysiaStatus) {
+          expect(result.status).toBe(expectedStatus);
           if (expectedCode !== undefined) {
             expect(result.response).toHaveProperty("code", expectedCode);
           }

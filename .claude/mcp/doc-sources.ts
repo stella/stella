@@ -318,7 +318,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@resvg/resvg-js",
   "@shadcn/lint",
   "@silurus/ooxml",
-  "@sinclair/typebox",
+  "typebox",
   "@stricli/core",
   "@t3-oss/env-core",
   "@tailwindcss/vite",

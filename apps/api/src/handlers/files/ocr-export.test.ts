@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -88,9 +88,9 @@ describe("OCR text export", () => {
       workspaceId,
     });
 
-    expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (response instanceof ElysiaCustomStatusResponse) {
-      expect(response.code).toBe(404);
+    expect(response).toBeInstanceOf(ElysiaStatus);
+    if (response instanceof ElysiaStatus) {
+      expect(response.status).toBe(404);
     }
     expect(audited).toBe(false);
   });

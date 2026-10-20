@@ -379,72 +379,116 @@ export const publicLegislationRoute = new Elysia({
       isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
     ),
   )
-  .get("/statutes", listStatutes.handler, {
-    query: listStatutes.config.query,
-    response: listStatutes.config.response,
-  })
-  .get("/statutes/search", searchPublicStatutes.handler, {
-    query: searchPublicStatutes.config.query,
-    response: searchPublicStatutes.config.response,
-  })
+  .get(
+    "/statutes",
+    {
+      query: listStatutes.config.query,
+      response: listStatutes.config.response,
+    },
+    listStatutes.handler,
+  )
+  .get(
+    "/statutes/search",
+    {
+      query: searchPublicStatutes.config.query,
+      response: searchPublicStatutes.config.response,
+    },
+    searchPublicStatutes.handler,
+  )
   // Ahead of `/statutes/:documentId` for the same reason as `by-eli` below.
-  .get("/statutes/shelf", readLegislationShelf.handler, {
-    query: readLegislationShelf.config.query,
-    response: readLegislationShelf.config.response,
-  })
+  .get(
+    "/statutes/shelf",
+    {
+      query: readLegislationShelf.config.query,
+      response: readLegislationShelf.config.response,
+    },
+    readLegislationShelf.handler,
+  )
   // Ahead of `/statutes/:documentId` for the same reason as `by-eli` below.
-  .get("/statutes/facets", readLegislationFacets.handler, {
-    query: readLegislationFacets.config.query,
-    response: readLegislationFacets.config.response,
-  })
+  .get(
+    "/statutes/facets",
+    {
+      query: readLegislationFacets.config.query,
+      response: readLegislationFacets.config.response,
+    },
+    readLegislationFacets.handler,
+  )
   // Ahead of `/statutes/:documentId`, or the literal segment would be read as
   // a document id and rejected by the UUID schema.
-  .get("/statutes/by-eli", readStatuteByEli.handler, {
-    query: readStatuteByEli.config.query,
-    response: readStatuteByEli.config.response,
-  })
-  .post("/statutes/resolve", resolveStatutes.handler, {
-    body: resolveStatutes.config.body,
-    response: resolveStatutes.config.response,
-  })
+  .get(
+    "/statutes/by-eli",
+    {
+      query: readStatuteByEli.config.query,
+      response: readStatuteByEli.config.response,
+    },
+    readStatuteByEli.handler,
+  )
+  .post(
+    "/statutes/resolve",
+    {
+      body: resolveStatutes.config.body,
+      response: resolveStatutes.config.response,
+    },
+    resolveStatutes.handler,
+  )
   // Ahead of `/statutes/:documentId` for the same reason: `by-slug` is a
   // literal segment, not a document id.
-  .get("/statutes/by-slug/:slug", readStatuteBySlug.handler, {
-    params: readStatuteBySlug.config.params,
-    query: readStatuteBySlug.config.query,
-    response: readStatuteBySlug.config.response,
-  })
-  .get("/statutes/:documentId", readStatute.handler, {
-    params: readStatute.config.params,
-    response: readStatute.config.response,
-  })
-  .get("/statutes/:documentId/versions", listStatuteVersions.handler, {
-    params: listStatuteVersions.config.params,
-    query: listStatuteVersions.config.query,
-    response: listStatuteVersions.config.response,
-  })
+  .get(
+    "/statutes/by-slug/:slug",
+    {
+      params: readStatuteBySlug.config.params,
+      query: readStatuteBySlug.config.query,
+      response: readStatuteBySlug.config.response,
+    },
+    readStatuteBySlug.handler,
+  )
+  .get(
+    "/statutes/:documentId",
+    {
+      params: readStatute.config.params,
+      response: readStatute.config.response,
+    },
+    readStatute.handler,
+  )
+  .get(
+    "/statutes/:documentId/versions",
+    {
+      params: listStatuteVersions.config.params,
+      query: listStatuteVersions.config.query,
+      response: listStatuteVersions.config.response,
+    },
+    listStatuteVersions.handler,
+  )
   .get(
     "/statutes/:documentId/provisions/:anchor/preview",
-    readProvisionPreview.handler,
     {
       params: readProvisionPreview.config.params,
       query: readProvisionPreview.config.query,
       response: readProvisionPreview.config.response,
     },
+    readProvisionPreview.handler,
   )
   .get(
     "/statutes/:documentId/provisions/:anchor/history",
-    readProvisionHistory.handler,
     {
       params: readProvisionHistory.config.params,
       query: readProvisionHistory.config.query,
       response: readProvisionHistory.config.response,
     },
+    readProvisionHistory.handler,
   )
-  .get("/sitemap/shards", listStatuteSitemapShards.handler, {
-    response: listStatuteSitemapShards.config.response,
-  })
-  .get("/sitemap/statutes/shard", listStatuteSitemapStatutes.handler, {
-    query: listStatuteSitemapStatutes.config.query,
-    response: listStatuteSitemapStatutes.config.response,
-  });
+  .get(
+    "/sitemap/shards",
+    {
+      response: listStatuteSitemapShards.config.response,
+    },
+    listStatuteSitemapShards.handler,
+  )
+  .get(
+    "/sitemap/statutes/shard",
+    {
+      query: listStatuteSitemapStatutes.config.query,
+      response: listStatuteSitemapStatutes.config.response,
+    },
+    listStatuteSitemapStatutes.handler,
+  );

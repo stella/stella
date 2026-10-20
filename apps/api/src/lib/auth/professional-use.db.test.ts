@@ -224,7 +224,7 @@ describe("professional-use acceptance", () => {
 
   const signedInProduct = new Elysia()
     .use(authMacro)
-    .get("/product", () => ({ served: true }), { validateAuth: true });
+    .get("/product", { validateAuth: true }, () => ({ served: true }));
 
   const readProduct = async (person: HumanBrowser) =>
     await signedInProduct.handle(

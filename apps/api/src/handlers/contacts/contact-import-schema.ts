@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import type { CONTACT_IMPORT_TAX_ID_SCHEMES } from "@stll/api-contract";
 

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -141,7 +141,7 @@ if (!databaseUrl || !runPostgres) {
             }),
           );
         const before = await read();
-        if (before instanceof ElysiaCustomStatusResponse) {
+        if (before instanceof ElysiaStatus) {
           panic("Fixture list must be readable");
         }
         expect(before.columns.map((column) => column.propertyId)).toEqual(
@@ -214,18 +214,16 @@ if (!databaseUrl || !runPostgres) {
         }
         const results = await Promise.all(pending);
         expect(
-          results.filter(
-            (result) => !(result instanceof ElysiaCustomStatusResponse),
-          ),
+          results.filter((result) => !(result instanceof ElysiaStatus)),
         ).toHaveLength(1);
         const refused = results.filter(
-          (result) => result instanceof ElysiaCustomStatusResponse,
+          (result) => result instanceof ElysiaStatus,
         );
         expect(refused).toHaveLength(workers.length - 1);
         // Only the admitted column is audited; refusals record nothing.
         expect(auditedOperations).toEqual(["column_added"]);
         for (const refusal of refused) {
-          expect(refusal.code).toBe(400);
+          expect(refusal.status).toBe(400);
           expect(refusal.response).toHaveProperty(
             "code",
             LIST_COLUMN_LIMIT_ERROR_CODE,
@@ -238,7 +236,7 @@ if (!databaseUrl || !runPostgres) {
           ),
         ).toBe(LIMITS.legalListColumnsPerList);
         const after = await read();
-        if (after instanceof ElysiaCustomStatusResponse) {
+        if (after instanceof ElysiaStatus) {
           panic("At-cap list must be readable");
         }
         expect(after.columns).toHaveLength(LIMITS.legalListColumnsPerList);
@@ -248,9 +246,9 @@ if (!databaseUrl || !runPostgres) {
             .map((column) => column.propertyId),
         ).toEqual(initial);
         const admitted = results.find(
-          (result) => !(result instanceof ElysiaCustomStatusResponse),
+          (result) => !(result instanceof ElysiaStatus),
         );
-        if (!admitted || admitted instanceof ElysiaCustomStatusResponse) {
+        if (!admitted || admitted instanceof ElysiaStatus) {
           panic("One column must be admitted");
         }
         expect(after.columns.at(-1)?.id).toBe(admitted.id);
@@ -265,9 +263,9 @@ if (!databaseUrl || !runPostgres) {
           position: LIMITS.legalListColumnsPerList,
         });
         const overflow = await read();
-        expect(overflow).toBeInstanceOf(ElysiaCustomStatusResponse);
-        if (overflow instanceof ElysiaCustomStatusResponse) {
-          expect(overflow.code).toBe(409);
+        expect(overflow).toBeInstanceOf(ElysiaStatus);
+        if (overflow instanceof ElysiaStatus) {
+          expect(overflow.status).toBe(409);
           expect(overflow.response).toHaveProperty(
             "code",
             LIST_COLUMN_OVERFLOW_ERROR_CODE,

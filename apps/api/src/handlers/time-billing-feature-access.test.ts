@@ -272,12 +272,12 @@ describe("time billing admission census", () => {
           )
           .post(
             "/",
+            {
+              body: t.Object({ required: t.String() }),
+            },
             () => {
               executions += 1;
               return "served";
-            },
-            {
-              body: t.Object({ required: t.String() }),
             },
           );
         const send = async (body: string) =>

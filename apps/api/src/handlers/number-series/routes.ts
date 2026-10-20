@@ -22,33 +22,61 @@ export const numberSeriesRoute = new Elysia({ prefix: "/number-series" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listNumberSeries.handler, {
-    permissions: listNumberSeries.config.permissions,
-    query: listNumberSeries.config.query,
-  })
-  .post("/", createNumberSeries.handler, {
-    permissions: createNumberSeries.config.permissions,
-    body: createNumberSeries.config.body,
-  })
-  .get("/:numberSeriesId", getNumberSeries.handler, {
-    permissions: getNumberSeries.config.permissions,
-    params: getNumberSeries.config.params,
-  })
-  .get("/:numberSeriesId/preview", previewNumberSeries.handler, {
-    permissions: previewNumberSeries.config.permissions,
-    params: previewNumberSeries.config.params,
-    query: previewNumberSeries.config.query,
-  })
-  .patch("/:numberSeriesId", updateNumberSeries.handler, {
-    permissions: updateNumberSeries.config.permissions,
-    params: updateNumberSeries.config.params,
-    body: updateNumberSeries.config.body,
-  })
-  .post("/:numberSeriesId/default", updateNumberSeriesDefault.handler, {
-    permissions: updateNumberSeriesDefault.config.permissions,
-    params: updateNumberSeriesDefault.config.params,
-  })
-  .post("/:numberSeriesId/archive", archiveNumberSeries.handler, {
-    permissions: archiveNumberSeries.config.permissions,
-    params: archiveNumberSeries.config.params,
-  });
+  .get(
+    "/",
+    {
+      permissions: listNumberSeries.config.permissions,
+      query: listNumberSeries.config.query,
+    },
+    listNumberSeries.handler,
+  )
+  .post(
+    "/",
+    {
+      permissions: createNumberSeries.config.permissions,
+      body: createNumberSeries.config.body,
+    },
+    createNumberSeries.handler,
+  )
+  .get(
+    "/:numberSeriesId",
+    {
+      permissions: getNumberSeries.config.permissions,
+      params: getNumberSeries.config.params,
+    },
+    getNumberSeries.handler,
+  )
+  .get(
+    "/:numberSeriesId/preview",
+    {
+      permissions: previewNumberSeries.config.permissions,
+      params: previewNumberSeries.config.params,
+      query: previewNumberSeries.config.query,
+    },
+    previewNumberSeries.handler,
+  )
+  .patch(
+    "/:numberSeriesId",
+    {
+      permissions: updateNumberSeries.config.permissions,
+      params: updateNumberSeries.config.params,
+      body: updateNumberSeries.config.body,
+    },
+    updateNumberSeries.handler,
+  )
+  .post(
+    "/:numberSeriesId/default",
+    {
+      permissions: updateNumberSeriesDefault.config.permissions,
+      params: updateNumberSeriesDefault.config.params,
+    },
+    updateNumberSeriesDefault.handler,
+  )
+  .post(
+    "/:numberSeriesId/archive",
+    {
+      permissions: archiveNumberSeries.config.permissions,
+      params: archiveNumberSeries.config.params,
+    },
+    archiveNumberSeries.handler,
+  );

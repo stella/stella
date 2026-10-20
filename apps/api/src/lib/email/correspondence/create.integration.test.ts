@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 import { readFileSync } from "node:fs";
 
 import type {
@@ -95,8 +95,8 @@ type HandlerFailure = Extract<
 >;
 
 const expectSuccess = <T>(response: T | HandlerFailure): T => {
-  expect(response).not.toBeInstanceOf(ElysiaCustomStatusResponse);
-  if (response instanceof ElysiaCustomStatusResponse) {
+  expect(response).not.toBeInstanceOf(ElysiaStatus);
+  if (response instanceof ElysiaStatus) {
     throw new TypeError(`Expected success, received status ${response.code}`);
   }
   return response;

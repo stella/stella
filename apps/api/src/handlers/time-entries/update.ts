@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { BILLING_STATUS } from "@stll/api-contract";
 

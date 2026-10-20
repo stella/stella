@@ -231,12 +231,12 @@ export const createLegalResolveRoute = ({
         )
         .get(
           LEGAL_RESOLVE_RESOURCE_ROUTES.decision.path,
-          decisionHandler.handler,
           {
             params: decisionHandler.config.params,
             query: decisionHandler.config.query,
             response: decisionHandler.config.response,
           },
+          decisionHandler.handler,
         ),
     )
     .group("", (app) =>
@@ -251,11 +251,15 @@ export const createLegalResolveRoute = ({
             },
           ),
         )
-        .get(LEGAL_RESOLVE_RESOURCE_ROUTES.law.path, lawHandler.handler, {
-          params: lawHandler.config.params,
-          query: lawHandler.config.query,
-          response: lawHandler.config.response,
-        }),
+        .get(
+          LEGAL_RESOLVE_RESOURCE_ROUTES.law.path,
+          {
+            params: lawHandler.config.params,
+            query: lawHandler.config.query,
+            response: lawHandler.config.response,
+          },
+          lawHandler.handler,
+        ),
     );
 };
 

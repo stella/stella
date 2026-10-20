@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { transactionAbortError } from "@/api/db/safe-db";

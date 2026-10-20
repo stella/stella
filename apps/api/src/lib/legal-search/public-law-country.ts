@@ -15,8 +15,8 @@
  * answer is built here, status included, so no handler spells its status.
  */
 
-import type { TSchema, TUnion } from "@sinclair/typebox";
 import { status, t } from "elysia";
+import type { TSchema, TUnion } from "typebox";
 
 import type { CountryAlpha3 } from "@stll/agent-input";
 import {

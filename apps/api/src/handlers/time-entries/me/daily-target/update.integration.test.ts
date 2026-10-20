@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import {
   afterAll,
@@ -9,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import { Value } from "typebox/value";
 
 import { user as authUser, member } from "@/api/db/auth-schema";
 import { timeDailyTargets, featureEnrolments } from "@/api/db/schema";

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,

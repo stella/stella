@@ -17,13 +17,21 @@ const authenticatedCatalogueRoute = new Elysia({ prefix: "/catalogue" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listCatalogue.handler, {
-    permissions: listCatalogue.config.permissions,
-  })
-  .post("/install-skill", installBundledSkill.handler, {
-    body: installBundledSkill.config.body,
-    permissions: installBundledSkill.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      permissions: listCatalogue.config.permissions,
+    },
+    listCatalogue.handler,
+  )
+  .post(
+    "/install-skill",
+    {
+      body: installBundledSkill.config.body,
+      permissions: installBundledSkill.config.permissions,
+    },
+    installBundledSkill.handler,
+  );
 
 export const catalogueRoute = new Elysia()
   .use(sessionCatalogueRoute)

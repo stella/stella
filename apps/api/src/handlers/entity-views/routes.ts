@@ -12,25 +12,45 @@ export const entityViewsRoute = new Elysia({ prefix: "/entity-views" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", list.handler, { permissions: list.config.permissions })
-  .put("/", create.handler, {
-    body: create.config.body,
-    permissions: create.config.permissions,
-  })
-  .patch("/:viewId", update.handler, {
-    params: update.config.params,
-    body: update.config.body,
-    permissions: update.config.permissions,
-  })
-  .delete("/:viewId", remove.handler, {
-    params: remove.config.params,
-    permissions: remove.config.permissions,
-  })
-  .post("/reorder", reorder.handler, {
-    body: reorder.config.body,
-    permissions: reorder.config.permissions,
-  })
-  .post("/query-window", listRows.handler, {
-    body: listRows.config.body,
-    permissions: listRows.config.permissions,
-  });
+  .get("/", { permissions: list.config.permissions }, list.handler)
+  .put(
+    "/",
+    {
+      body: create.config.body,
+      permissions: create.config.permissions,
+    },
+    create.handler,
+  )
+  .patch(
+    "/:viewId",
+    {
+      params: update.config.params,
+      body: update.config.body,
+      permissions: update.config.permissions,
+    },
+    update.handler,
+  )
+  .delete(
+    "/:viewId",
+    {
+      params: remove.config.params,
+      permissions: remove.config.permissions,
+    },
+    remove.handler,
+  )
+  .post(
+    "/reorder",
+    {
+      body: reorder.config.body,
+      permissions: reorder.config.permissions,
+    },
+    reorder.handler,
+  )
+  .post(
+    "/query-window",
+    {
+      body: listRows.config.body,
+      permissions: listRows.config.permissions,
+    },
+    listRows.handler,
+  );

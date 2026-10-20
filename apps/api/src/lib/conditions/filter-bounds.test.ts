@@ -10,11 +10,11 @@
  * endpoint cannot land unbounded.
  */
 
-import type { TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import type { TSchema } from "typebox";
+import { Value } from "typebox/value";
 import * as v from "valibot";
 
 import { VIEW_FILTERS_MAX } from "@stll/api-contract";

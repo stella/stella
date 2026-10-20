@@ -33,66 +33,122 @@ export const invoicesRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .get("/", readInvoices.handler, {
-    permissions: readInvoices.config.permissions,
-    query: readInvoices.config.query,
-  })
-  .get("/prefill", prefillInvoice.handler, {
-    permissions: prefillInvoice.config.permissions,
-    query: prefillInvoice.config.query,
-  })
-  .post("/export", exportInvoices.handler, {
-    body: exportInvoices.config.body,
-    params: exportInvoices.config.params,
-    permissions: exportInvoices.config.permissions,
-  })
-  .get("/:invoiceId", readInvoiceById.handler, {
-    params: readInvoiceById.config.params,
-    permissions: readInvoiceById.config.permissions,
-  })
-  .put("/", createInvoice.handler, {
-    body: createInvoice.config.body,
-    permissions: createInvoice.config.permissions,
-  })
-  .patch("/:invoiceId", updateInvoice.handler, {
-    body: updateInvoice.config.body,
-    params: updateInvoice.config.params,
-    permissions: updateInvoice.config.permissions,
-  })
-  .post("/:invoiceId/transition", transitionInvoice.handler, {
-    body: transitionInvoice.config.body,
-    params: transitionInvoice.config.params,
-    permissions: transitionInvoice.config.permissions,
-  })
-  .delete("/:invoiceId", deleteInvoice.handler, {
-    params: deleteInvoice.config.params,
-    permissions: deleteInvoice.config.permissions,
-  })
-  .post("/:invoiceId/entries", addEntries.handler, {
-    body: addEntries.config.body,
-    params: addEntries.config.params,
-    permissions: addEntries.config.permissions,
-  })
-  .delete("/:invoiceId/entries", removeEntries.handler, {
-    body: removeEntries.config.body,
-    params: removeEntries.config.params,
-    permissions: removeEntries.config.permissions,
-  })
-  .post("/:invoiceId/lines", createInvoiceLine.handler, {
-    body: createInvoiceLine.config.body,
-    params: createInvoiceLine.config.params,
-    permissions: createInvoiceLine.config.permissions,
-  })
-  .patch("/:invoiceId/lines/:lineId", updateInvoiceLine.handler, {
-    body: updateInvoiceLine.config.body,
-    params: updateInvoiceLine.config.params,
-    permissions: updateInvoiceLine.config.permissions,
-  })
-  .delete("/:invoiceId/lines/:lineId", deleteInvoiceLine.handler, {
-    params: deleteInvoiceLine.config.params,
-    permissions: deleteInvoiceLine.config.permissions,
-  })
-  .post("/:invoiceId/pdf", exportInvoicePdf.handler, {
-    params: exportInvoicePdf.config.params,
-    permissions: exportInvoicePdf.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      permissions: readInvoices.config.permissions,
+      query: readInvoices.config.query,
+    },
+    readInvoices.handler,
+  )
+  .get(
+    "/prefill",
+    {
+      permissions: prefillInvoice.config.permissions,
+      query: prefillInvoice.config.query,
+    },
+    prefillInvoice.handler,
+  )
+  .post(
+    "/export",
+    {
+      body: exportInvoices.config.body,
+      params: exportInvoices.config.params,
+      permissions: exportInvoices.config.permissions,
+    },
+    exportInvoices.handler,
+  )
+  .get(
+    "/:invoiceId",
+    {
+      params: readInvoiceById.config.params,
+      permissions: readInvoiceById.config.permissions,
+    },
+    readInvoiceById.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createInvoice.config.body,
+      permissions: createInvoice.config.permissions,
+    },
+    createInvoice.handler,
+  )
+  .patch(
+    "/:invoiceId",
+    {
+      body: updateInvoice.config.body,
+      params: updateInvoice.config.params,
+      permissions: updateInvoice.config.permissions,
+    },
+    updateInvoice.handler,
+  )
+  .post(
+    "/:invoiceId/transition",
+    {
+      body: transitionInvoice.config.body,
+      params: transitionInvoice.config.params,
+      permissions: transitionInvoice.config.permissions,
+    },
+    transitionInvoice.handler,
+  )
+  .delete(
+    "/:invoiceId",
+    {
+      params: deleteInvoice.config.params,
+      permissions: deleteInvoice.config.permissions,
+    },
+    deleteInvoice.handler,
+  )
+  .post(
+    "/:invoiceId/entries",
+    {
+      body: addEntries.config.body,
+      params: addEntries.config.params,
+      permissions: addEntries.config.permissions,
+    },
+    addEntries.handler,
+  )
+  .delete(
+    "/:invoiceId/entries",
+    {
+      body: removeEntries.config.body,
+      params: removeEntries.config.params,
+      permissions: removeEntries.config.permissions,
+    },
+    removeEntries.handler,
+  )
+  .post(
+    "/:invoiceId/lines",
+    {
+      body: createInvoiceLine.config.body,
+      params: createInvoiceLine.config.params,
+      permissions: createInvoiceLine.config.permissions,
+    },
+    createInvoiceLine.handler,
+  )
+  .patch(
+    "/:invoiceId/lines/:lineId",
+    {
+      body: updateInvoiceLine.config.body,
+      params: updateInvoiceLine.config.params,
+      permissions: updateInvoiceLine.config.permissions,
+    },
+    updateInvoiceLine.handler,
+  )
+  .delete(
+    "/:invoiceId/lines/:lineId",
+    {
+      params: deleteInvoiceLine.config.params,
+      permissions: deleteInvoiceLine.config.permissions,
+    },
+    deleteInvoiceLine.handler,
+  )
+  .post(
+    "/:invoiceId/pdf",
+    {
+      params: exportInvoicePdf.config.params,
+      permissions: exportInvoicePdf.config.permissions,
+    },
+    exportInvoicePdf.handler,
+  );

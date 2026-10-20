@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import { t, type Context, type Static } from "elysia";
+import { t, type Context } from "elysia";
+import type { Static } from "typebox";
 
 import {
   ACCOUNT_ACCESS,

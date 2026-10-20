@@ -47,33 +47,69 @@ export const usageRoute = new Elysia({ prefix: USAGE_PATH })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/entitlement", getEntitlement.handler, {
-    permissions: getEntitlement.config.permissions,
-  })
-  .get("/access", getAccess.handler, {
-    permissions: getAccess.config.permissions,
-  })
-  .get("/lane", getLane.handler, {
-    permissions: getLane.config.permissions,
-  })
-  .get("/policies", listPolicies.handler, {
-    permissions: listPolicies.config.permissions,
-  })
-  .get("/assignments", listSeatAssignments.handler, {
-    permissions: listSeatAssignments.config.permissions,
-  })
-  .post("/assignments", assignSeat.handler, {
-    body: assignSeat.config.body,
-    permissions: assignSeat.config.permissions,
-  })
-  .delete("/assignments", unassignSeat.handler, {
-    body: unassignSeat.config.body,
-    permissions: unassignSeat.config.permissions,
-  })
-  .post("/hosted/setup", createHostedSetup.handler, {
-    body: createHostedSetup.config.body,
-    permissions: createHostedSetup.config.permissions,
-  })
-  .post("/hosted/management", createHostedManagement.handler, {
-    permissions: createHostedManagement.config.permissions,
-  });
+  .get(
+    "/entitlement",
+    {
+      permissions: getEntitlement.config.permissions,
+    },
+    getEntitlement.handler,
+  )
+  .get(
+    "/access",
+    {
+      permissions: getAccess.config.permissions,
+    },
+    getAccess.handler,
+  )
+  .get(
+    "/lane",
+    {
+      permissions: getLane.config.permissions,
+    },
+    getLane.handler,
+  )
+  .get(
+    "/policies",
+    {
+      permissions: listPolicies.config.permissions,
+    },
+    listPolicies.handler,
+  )
+  .get(
+    "/assignments",
+    {
+      permissions: listSeatAssignments.config.permissions,
+    },
+    listSeatAssignments.handler,
+  )
+  .post(
+    "/assignments",
+    {
+      body: assignSeat.config.body,
+      permissions: assignSeat.config.permissions,
+    },
+    assignSeat.handler,
+  )
+  .delete(
+    "/assignments",
+    {
+      body: unassignSeat.config.body,
+      permissions: unassignSeat.config.permissions,
+    },
+    unassignSeat.handler,
+  )
+  .post(
+    "/hosted/setup",
+    {
+      body: createHostedSetup.config.body,
+      permissions: createHostedSetup.config.permissions,
+    },
+    createHostedSetup.handler,
+  )
+  .post(
+    "/hosted/management",
+    {
+      permissions: createHostedManagement.config.permissions,
+    },
+    createHostedManagement.handler,
+  );

@@ -1,4 +1,5 @@
-import { type Static, t } from "elysia";
+import { t } from "elysia";
+import type { Static } from "typebox";
 /**
  * Legal-vocabulary alternatives for a case-law search: per word the reader
  * typed, the words the jurisdiction's statutes and courts use for the same

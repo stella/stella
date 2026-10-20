@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import {
   CASE_LAW_RESEARCH_COLUMN_OPTIONS_MAX,

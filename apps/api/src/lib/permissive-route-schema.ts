@@ -1,8 +1,7 @@
-import type { TOptional, TSchema, TUnsafe } from "@sinclair/typebox";
-import { Type } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
-import type { Static } from "elysia";
 import { t } from "elysia";
+import type { Static, TOptional, TSchema, TUnsafe } from "typebox";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 
 /**
  * Route schemas for self-authorizing (token) routes.

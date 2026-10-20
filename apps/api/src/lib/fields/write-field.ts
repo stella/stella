@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";

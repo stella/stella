@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { envBase } from "@/api/env-base";
@@ -105,9 +105,9 @@ describe("stamped DOCX download", () => {
 
     // The stored bytes were read: the request reached the stamp step.
     expect(fake.requests.some(({ method }) => method === "GET")).toBe(true);
-    expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (response instanceof ElysiaCustomStatusResponse) {
-      expect(response.code).toBe(422);
+    expect(response).toBeInstanceOf(ElysiaStatus);
+    if (response instanceof ElysiaStatus) {
+      expect(response.status).toBe(422);
     }
     expect(events).toEqual([]);
     // The unreadable archive is the stored upload's own condition: a warning

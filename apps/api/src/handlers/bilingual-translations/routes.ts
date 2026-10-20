@@ -11,17 +11,29 @@ export const bilingualTranslationsRoute = new Elysia({
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
-  .post("/prepare", prepareBilingualTranslation.handler, {
-    body: prepareBilingualTranslation.config.body,
-    params: prepareBilingualTranslation.config.params,
-    permissions: prepareBilingualTranslation.config.permissions,
-  })
-  .post("/runs", createBilingualRun.handler, {
-    body: createBilingualRun.config.body,
-    params: createBilingualRun.config.params,
-    permissions: createBilingualRun.config.permissions,
-  })
-  .get("/runs/:runId", readBilingualRun.handler, {
-    params: readBilingualRun.config.params,
-    permissions: readBilingualRun.config.permissions,
-  });
+  .post(
+    "/prepare",
+    {
+      body: prepareBilingualTranslation.config.body,
+      params: prepareBilingualTranslation.config.params,
+      permissions: prepareBilingualTranslation.config.permissions,
+    },
+    prepareBilingualTranslation.handler,
+  )
+  .post(
+    "/runs",
+    {
+      body: createBilingualRun.config.body,
+      params: createBilingualRun.config.params,
+      permissions: createBilingualRun.config.permissions,
+    },
+    createBilingualRun.handler,
+  )
+  .get(
+    "/runs/:runId",
+    {
+      params: readBilingualRun.config.params,
+      permissions: readBilingualRun.config.permissions,
+    },
+    readBilingualRun.handler,
+  );

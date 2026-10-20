@@ -6,7 +6,7 @@ test("reports named namespace and destructured unsafe aliases", async () => {
   expect(
     await lintSingleRule(
       "no-unreviewed-typebox-unsafe",
-      'import { Type as T, Unsafe as raw } from "@sinclair/typebox";\nimport * as schema from "typebox";\nconst { Type: { Unsafe: nested } } = schema;\nT.Unsafe({});\nraw({});\nnested({});',
+      'import { Type as T, Unsafe as raw } from "typebox";\nimport * as schema from "typebox";\nconst { Type: { Unsafe: nested } } = schema;\nT.Unsafe({});\nraw({});\nnested({});',
       {},
     ),
   ).toEqual([4, 5, 6]);
@@ -26,7 +26,7 @@ test("allows ordinary builders and lexical shadows", async () => {
   expect(
     await lintSingleRule(
       "no-unreviewed-typebox-unsafe",
-      'import { Type } from "@sinclair/typebox";\nType.String();\nfunction local(Type) { return Type.Unsafe({}); }',
+      'import { Type } from "typebox";\nType.String();\nfunction local(Type) { return Type.Unsafe({}); }',
       {},
     ),
   ).toEqual([]);
@@ -36,7 +36,7 @@ test("allows an exact reviewed top level adapter", async () => {
   expect(
     await lintSingleRule(
       "no-unreviewed-typebox-unsafe",
-      'import { Type } from "@sinclair/typebox";\nexport const adapter = Type.Unsafe({});',
+      'import { Type } from "typebox";\nexport const adapter = Type.Unsafe({});',
       {
         sourcePath: "apps/api/src/lib/schema-adapter.ts",
         ruleOptions: {
@@ -57,7 +57,7 @@ test("rejects a same named adapter outside its reviewed owner", async () => {
   expect(
     await lintSingleRule(
       "no-unreviewed-typebox-unsafe",
-      'import { Type } from "@sinclair/typebox";\nexport const adapter = Type.Unsafe({});',
+      'import { Type } from "typebox";\nexport const adapter = Type.Unsafe({});',
       {
         sourcePath: "apps/api/src/other/schema-adapter.ts",
         ruleOptions: {
@@ -78,7 +78,7 @@ test("rejects nested adapters and reports unused reviews", async () => {
   expect(
     await lintSingleRule(
       "no-unreviewed-typebox-unsafe",
-      'import { Type } from "@sinclair/typebox";\nfunction wrap() { const adapter = Type.Unsafe({}); }',
+      'import { Type } from "typebox";\nfunction wrap() { const adapter = Type.Unsafe({}); }',
       {
         sourcePath: "apps/api/src/lib/schema-adapter.ts",
         ruleOptions: {
@@ -120,7 +120,7 @@ test("consumes each reviewed adapter approval only once", async () => {
   expect(
     await lintSingleRule(
       "no-unreviewed-typebox-unsafe",
-      'import { Type } from "@sinclair/typebox";\nconst adapter = [Type.Unsafe({}), Type.Unsafe({})];',
+      'import { Type } from "typebox";\nconst adapter = [Type.Unsafe({}), Type.Unsafe({})];',
       {
         sourcePath: "apps/api/src/lib/schema-adapter.ts",
         ruleOptions: {

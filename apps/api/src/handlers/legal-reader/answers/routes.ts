@@ -21,30 +21,54 @@ export const readerAnswersRoute = new Elysia({ prefix: "/answers" })
   .use(permissionMacro)
   .guard({ validateAuth: true })
   .onBeforeHandle(({ set }) => preventPublicCaching(set))
-  .get("/", listReaderAnswers.handler, {
-    query: listReaderAnswers.config.query,
-    permissions: listReaderAnswers.config.permissions,
-  })
-  .post("/", createReaderAnswer.handler, {
-    body: createReaderAnswer.config.body,
-    permissions: createReaderAnswer.config.permissions,
-  })
-  .post("/:answerId/messages", followUpReaderAnswer.handler, {
-    params: followUpReaderAnswer.config.params,
-    body: followUpReaderAnswer.config.body,
-    permissions: followUpReaderAnswer.config.permissions,
-  })
-  .post("/:answerId/regenerate", regenerateReaderAnswer.handler, {
-    params: regenerateReaderAnswer.config.params,
-    body: regenerateReaderAnswer.config.body,
-    permissions: regenerateReaderAnswer.config.permissions,
-  })
-  .patch("/:answerId", updateReaderAnswer.handler, {
-    params: updateReaderAnswer.config.params,
-    body: updateReaderAnswer.config.body,
-    permissions: updateReaderAnswer.config.permissions,
-  })
-  .delete("/:answerId", deleteReaderAnswer.handler, {
-    params: deleteReaderAnswer.config.params,
-    permissions: deleteReaderAnswer.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      query: listReaderAnswers.config.query,
+      permissions: listReaderAnswers.config.permissions,
+    },
+    listReaderAnswers.handler,
+  )
+  .post(
+    "/",
+    {
+      body: createReaderAnswer.config.body,
+      permissions: createReaderAnswer.config.permissions,
+    },
+    createReaderAnswer.handler,
+  )
+  .post(
+    "/:answerId/messages",
+    {
+      params: followUpReaderAnswer.config.params,
+      body: followUpReaderAnswer.config.body,
+      permissions: followUpReaderAnswer.config.permissions,
+    },
+    followUpReaderAnswer.handler,
+  )
+  .post(
+    "/:answerId/regenerate",
+    {
+      params: regenerateReaderAnswer.config.params,
+      body: regenerateReaderAnswer.config.body,
+      permissions: regenerateReaderAnswer.config.permissions,
+    },
+    regenerateReaderAnswer.handler,
+  )
+  .patch(
+    "/:answerId",
+    {
+      params: updateReaderAnswer.config.params,
+      body: updateReaderAnswer.config.body,
+      permissions: updateReaderAnswer.config.permissions,
+    },
+    updateReaderAnswer.handler,
+  )
+  .delete(
+    "/:answerId",
+    {
+      params: deleteReaderAnswer.config.params,
+      permissions: deleteReaderAnswer.config.permissions,
+    },
+    deleteReaderAnswer.handler,
+  );

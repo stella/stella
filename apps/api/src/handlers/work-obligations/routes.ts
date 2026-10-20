@@ -18,17 +18,29 @@ export const workObligationsRoute = new Elysia({
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
-  .patch("/:entityId", updateWorkObligation.handler, {
-    params: updateWorkObligation.config.params,
-    body: updateWorkObligation.config.body,
-    permissions: updateWorkObligation.config.permissions,
-  })
-  .post("/:entityId/acknowledge", acknowledgeWorkObligation.handler, {
-    params: acknowledgeWorkObligation.config.params,
-    permissions: acknowledgeWorkObligation.config.permissions,
-  })
-  .post("/:entityId/transition", transitionWorkObligation.handler, {
-    params: transitionWorkObligation.config.params,
-    body: transitionWorkObligation.config.body,
-    permissions: transitionWorkObligation.config.permissions,
-  });
+  .patch(
+    "/:entityId",
+    {
+      params: updateWorkObligation.config.params,
+      body: updateWorkObligation.config.body,
+      permissions: updateWorkObligation.config.permissions,
+    },
+    updateWorkObligation.handler,
+  )
+  .post(
+    "/:entityId/acknowledge",
+    {
+      params: acknowledgeWorkObligation.config.params,
+      permissions: acknowledgeWorkObligation.config.permissions,
+    },
+    acknowledgeWorkObligation.handler,
+  )
+  .post(
+    "/:entityId/transition",
+    {
+      params: transitionWorkObligation.config.params,
+      body: transitionWorkObligation.config.body,
+      permissions: transitionWorkObligation.config.permissions,
+    },
+    transitionWorkObligation.handler,
+  );

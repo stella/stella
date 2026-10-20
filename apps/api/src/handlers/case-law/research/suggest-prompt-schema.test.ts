@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import { Value } from "typebox/value";
 
 import { CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX } from "@stll/api-contract";
 

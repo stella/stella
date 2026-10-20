@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import { Value } from "typebox/value";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import { resolveDefaultOverrideModels } from "@stll/ai-catalog/model-defaults-ledger";

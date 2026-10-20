@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
@@ -691,9 +691,9 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
           body: {},
         }),
       );
-      expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (result instanceof ElysiaCustomStatusResponse) {
-        expect(result.code).toBe(404);
+      expect(result).toBeInstanceOf(ElysiaStatus);
+      if (result instanceof ElysiaStatus) {
+        expect(result.status).toBe(404);
       }
     });
   }, 120_000);

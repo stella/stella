@@ -71,7 +71,7 @@ const createFixture = async (
               }),
       }),
     )
-    .post("/search", () => "ok", { body: t.Object({ name: t.String() }) });
+    .post("/search", { body: t.Object({ name: t.String() }) }, () => "ok");
   return { app, context, counts, options };
 };
 

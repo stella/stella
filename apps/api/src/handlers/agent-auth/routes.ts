@@ -38,23 +38,35 @@ export const agentAuthRoute = new Elysia()
     return "";
   })
   .get(AGENT_AUTH_MANIFEST_PATH, manifestHandler.handler)
-  .post(AGENT_AUTH_IDENTITY_PATH, agentIdentityHandler.handler, {
-    body: agentIdentityHandler.config.body,
-  })
-  .post(AGENT_AUTH_CLAIM_PATH, agentClaimHandler.handler, {
-    body: agentClaimHandler.config.body,
-  })
-  .post(AGENT_AUTH_TOKEN_PATH, agentTokenHandler.handler, {
-    body: agentTokenHandler.config.body,
-  })
+  .post(
+    AGENT_AUTH_IDENTITY_PATH,
+    {
+      body: agentIdentityHandler.config.body,
+    },
+    agentIdentityHandler.handler,
+  )
+  .post(
+    AGENT_AUTH_CLAIM_PATH,
+    {
+      body: agentClaimHandler.config.body,
+    },
+    agentClaimHandler.handler,
+  )
+  .post(
+    AGENT_AUTH_TOKEN_PATH,
+    {
+      body: agentTokenHandler.config.body,
+    },
+    agentTokenHandler.handler,
+  )
   .post(
     AGENT_AUTH_EVENTS_PATH,
+    { body: agentEventsHandler.config.body },
     async (ctx) => {
       // RFC 8935: a SET receiver acknowledges with 202 Accepted.
       ctx.set.status = 202;
       return await agentEventsHandler.handler(ctx);
     },
-    { body: agentEventsHandler.config.body },
   );
 
 /**
@@ -65,7 +77,11 @@ export const agentAuthRoute = new Elysia()
 export const agentAuthConfirmRoute = new Elysia()
   .use(authMacro)
   .guard({ validateAuth: true })
-  .post(AGENT_AUTH_CONFIRM_PATH, agentConfirmHandler.handler, {
-    body: agentConfirmHandler.config.body,
-    permissions: agentConfirmHandler.config.permissions,
-  });
+  .post(
+    AGENT_AUTH_CONFIRM_PATH,
+    {
+      body: agentConfirmHandler.config.body,
+      permissions: agentConfirmHandler.config.permissions,
+    },
+    agentConfirmHandler.handler,
+  );

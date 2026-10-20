@@ -1,5 +1,5 @@
-import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
+import { Type } from "typebox";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {

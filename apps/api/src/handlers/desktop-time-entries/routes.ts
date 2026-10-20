@@ -13,23 +13,43 @@ export const desktopTimeEntriesRoute = new Elysia({
   prefix: "/v1/desktop",
 })
   .use(rateLimit(createStandardApiRateLimitOptions()))
-  .get("/matter-candidates", candidates.handler, {
-    response: candidates.config.response,
-  })
-  .put("/time-entries/batch", batch.handler, {
-    body: batch.config.body,
-    response: batch.config.response,
-  })
-  .put("/time-entries/batch/status", batchStatus.handler, {
-    body: batchStatus.config.body,
-    response: batchStatus.config.response,
-  })
-  .get("/matters", matters.handler, {
-    query: matters.config.query,
-    response: matters.config.response,
-  })
-  .put("/time-entries/:workspaceId", create.handler, {
-    params: create.config.params,
-    body: create.config.body,
-    response: create.config.response,
-  });
+  .get(
+    "/matter-candidates",
+    {
+      response: candidates.config.response,
+    },
+    candidates.handler,
+  )
+  .put(
+    "/time-entries/batch",
+    {
+      body: batch.config.body,
+      response: batch.config.response,
+    },
+    batch.handler,
+  )
+  .put(
+    "/time-entries/batch/status",
+    {
+      body: batchStatus.config.body,
+      response: batchStatus.config.response,
+    },
+    batchStatus.handler,
+  )
+  .get(
+    "/matters",
+    {
+      query: matters.config.query,
+      response: matters.config.response,
+    },
+    matters.handler,
+  )
+  .put(
+    "/time-entries/:workspaceId",
+    {
+      params: create.config.params,
+      body: create.config.body,
+      response: create.config.response,
+    },
+    create.handler,
+  );

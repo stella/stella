@@ -31,51 +31,91 @@ export const apiKeysRoute = new Elysia({ prefix: "/api-keys" })
   .guard({
     validateAuth: true,
   })
-  .get("/personal", listPersonalKeys.handler, {
-    query: listPersonalKeys.config.query,
-    permissions: listPersonalKeys.config.permissions,
-  })
-  .post("/personal", createPersonalKey.handler, {
-    body: createPersonalKey.config.body,
-    permissions: createPersonalKey.config.permissions,
-  })
-  .post("/personal/rotate", rotatePersonalKey.handler, {
-    body: rotatePersonalKey.config.body,
-    permissions: rotatePersonalKey.config.permissions,
-  })
-  .post("/personal/revoke", revokePersonalKey.handler, {
-    body: revokePersonalKey.config.body,
-    permissions: revokePersonalKey.config.permissions,
-  })
-  .get("/personal/organization", listOrganizationPersonalKeys.handler, {
-    query: listOrganizationPersonalKeys.config.query,
-    permissions: listOrganizationPersonalKeys.config.permissions,
-  })
+  .get(
+    "/personal",
+    {
+      query: listPersonalKeys.config.query,
+      permissions: listPersonalKeys.config.permissions,
+    },
+    listPersonalKeys.handler,
+  )
+  .post(
+    "/personal",
+    {
+      body: createPersonalKey.config.body,
+      permissions: createPersonalKey.config.permissions,
+    },
+    createPersonalKey.handler,
+  )
+  .post(
+    "/personal/rotate",
+    {
+      body: rotatePersonalKey.config.body,
+      permissions: rotatePersonalKey.config.permissions,
+    },
+    rotatePersonalKey.handler,
+  )
+  .post(
+    "/personal/revoke",
+    {
+      body: revokePersonalKey.config.body,
+      permissions: revokePersonalKey.config.permissions,
+    },
+    revokePersonalKey.handler,
+  )
+  .get(
+    "/personal/organization",
+    {
+      query: listOrganizationPersonalKeys.config.query,
+      permissions: listOrganizationPersonalKeys.config.permissions,
+    },
+    listOrganizationPersonalKeys.handler,
+  )
   .post(
     "/personal/organization/revoke",
-    revokeOrganizationPersonalKey.handler,
     {
       body: revokeOrganizationPersonalKey.config.body,
       permissions: revokeOrganizationPersonalKey.config.permissions,
     },
+    revokeOrganizationPersonalKey.handler,
   )
-  .post("/personal/policy", updatePersonalKeyPolicy.handler, {
-    body: updatePersonalKeyPolicy.config.body,
-    permissions: updatePersonalKeyPolicy.config.permissions,
-  })
-  .get("/", listMachineApiKeys.handler, {
-    query: listMachineApiKeys.config.query,
-    permissions: listMachineApiKeys.config.permissions,
-  })
-  .post("/", createMachineApiKey.handler, {
-    body: createMachineApiKey.config.body,
-    permissions: createMachineApiKey.config.permissions,
-  })
-  .post("/rotate", rotateMachineApiKey.handler, {
-    body: rotateMachineApiKey.config.body,
-    permissions: rotateMachineApiKey.config.permissions,
-  })
-  .post("/revoke", revokeMachineApiKey.handler, {
-    body: revokeMachineApiKey.config.body,
-    permissions: revokeMachineApiKey.config.permissions,
-  });
+  .post(
+    "/personal/policy",
+    {
+      body: updatePersonalKeyPolicy.config.body,
+      permissions: updatePersonalKeyPolicy.config.permissions,
+    },
+    updatePersonalKeyPolicy.handler,
+  )
+  .get(
+    "/",
+    {
+      query: listMachineApiKeys.config.query,
+      permissions: listMachineApiKeys.config.permissions,
+    },
+    listMachineApiKeys.handler,
+  )
+  .post(
+    "/",
+    {
+      body: createMachineApiKey.config.body,
+      permissions: createMachineApiKey.config.permissions,
+    },
+    createMachineApiKey.handler,
+  )
+  .post(
+    "/rotate",
+    {
+      body: rotateMachineApiKey.config.body,
+      permissions: rotateMachineApiKey.config.permissions,
+    },
+    rotateMachineApiKey.handler,
+  )
+  .post(
+    "/revoke",
+    {
+      body: revokeMachineApiKey.config.body,
+      permissions: revokeMachineApiKey.config.permissions,
+    },
+    revokeMachineApiKey.handler,
+  );

@@ -412,6 +412,7 @@ test.each([
     );
     const app = new Elysia().get(
       "/query-fixture",
+      { query: conditionalQuerySchema },
       async ({ query, request, set }) =>
         endpoint.handler(
           createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
@@ -431,7 +432,6 @@ test.each([
             scopedDb: database.scopedDb,
           }),
         ),
-      { query: conditionalQuerySchema },
     );
     const selected = await app.handle(
       new Request("http://localhost/query-fixture?mode=feature"),

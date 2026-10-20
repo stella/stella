@@ -26,32 +26,36 @@ export const createPdfSigningSessionsRoute = (
     prefix: STELLA_API_VERSION_PREFIX,
   })
     .use(rateLimit(createStandardApiRateLimitOptions()))
-    .post("/pdf-signing-handoffs/redeem", redeemPdfSigningHandoff.handler, {
-      body: redeemPdfSigningHandoff.config.body,
-    })
+    .post(
+      "/pdf-signing-handoffs/redeem",
+      {
+        body: redeemPdfSigningHandoff.config.body,
+      },
+      redeemPdfSigningHandoff.handler,
+    )
     .post(
       "/pdf-signing-sessions/:sessionId/certificate",
-      submitPdfSigningCertificate.handler,
       {
         body: submitPdfSigningCertificate.config.body,
         params: submitPdfSigningCertificate.config.params,
       },
+      submitPdfSigningCertificate.handler,
     )
     .post(
       "/pdf-signing-sessions/:sessionId/signature",
-      submitPdfSigningSignature.handler,
       {
         body: submitPdfSigningSignature.config.body,
         params: submitPdfSigningSignature.config.params,
       },
+      submitPdfSigningSignature.handler,
     )
     .post(
       "/pdf-signing-sessions/:sessionId/cancel",
-      cancelPdfSigningSessionFromDesktop.handler,
       {
         body: cancelPdfSigningSessionFromDesktop.config.body,
         params: cancelPdfSigningSessionFromDesktop.config.params,
       },
+      cancelPdfSigningSessionFromDesktop.handler,
     );
 };
 

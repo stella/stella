@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { READER_ANNOTATION_MAX_SPANS } from "@stll/api-contract/legal-reader-annotations";
 

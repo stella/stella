@@ -939,8 +939,8 @@ describe("RedisRateLimitContext", () => {
     const context = new TrackingRateLimitContext();
     const app = createTrackingRateLimitedApp({ context, max: 2 }).post(
       "/",
-      () => "ok",
       { body: t.Object({ name: t.String() }) },
+      () => "ok",
     );
 
     const malformed = await app.handle(
@@ -1008,9 +1008,13 @@ describe("RedisRateLimitContext", () => {
           max: 3,
         }),
       )
-      .post("/known", () => "ok", {
-        body: t.Object({ name: t.String() }),
-      });
+      .post(
+        "/known",
+        {
+          body: t.Object({ name: t.String() }),
+        },
+        () => "ok",
+      );
 
     const malformed = await app.handle(
       new Request("http://localhost/known", {
@@ -1064,9 +1068,13 @@ describe("RedisRateLimitContext", () => {
           max: 1,
         }),
       )
-      .post("/known", () => "ok", {
-        body: t.Object({ name: t.String() }),
-      });
+      .post(
+        "/known",
+        {
+          body: t.Object({ name: t.String() }),
+        },
+        () => "ok",
+      );
 
     const first = await app.handle(
       new Request("http://localhost/known", {

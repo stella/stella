@@ -1,5 +1,3 @@
-import type { TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import {
   afterAll,
   afterEach,
@@ -12,6 +10,8 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import type { TSchema } from "typebox";
+import { Value } from "typebox/value";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 

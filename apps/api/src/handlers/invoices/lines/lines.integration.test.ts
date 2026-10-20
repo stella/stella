@@ -996,11 +996,11 @@ const parseUpdateBody = async (
   let parsed: unknown = null;
   const app = new Elysia().patch(
     "/line",
+    { body: updateInvoiceLine.config.body },
     ({ body: received }) => {
       parsed = received;
       return "ok";
     },
-    { body: updateInvoiceLine.config.body },
   );
   const response = await app.handle(
     new Request("http://localhost/line", {

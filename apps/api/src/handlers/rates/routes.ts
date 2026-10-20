@@ -31,56 +31,104 @@ export const ratesRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .get("/arrangement", readBillingArrangement.handler, {
-    permissions: readBillingArrangement.config.permissions,
-  })
-  .put("/arrangement", setBillingArrangement.handler, {
-    permissions: setBillingArrangement.config.permissions,
-    body: setBillingArrangement.config.body,
-  })
-  .get("/summary", readMatterBillingSummary.handler, {
-    permissions: readMatterBillingSummary.config.permissions,
-  })
+  .get(
+    "/arrangement",
+    {
+      permissions: readBillingArrangement.config.permissions,
+    },
+    readBillingArrangement.handler,
+  )
+  .put(
+    "/arrangement",
+    {
+      permissions: setBillingArrangement.config.permissions,
+      body: setBillingArrangement.config.body,
+    },
+    setBillingArrangement.handler,
+  )
+  .get(
+    "/summary",
+    {
+      permissions: readMatterBillingSummary.config.permissions,
+    },
+    readMatterBillingSummary.handler,
+  )
   // Rate tables
-  .get("/", readRateTables.handler, {
-    permissions: readRateTables.config.permissions,
-    query: readRateTables.config.query,
-  })
-  .put("/", createRateTable.handler, {
-    body: createRateTable.config.body,
-    permissions: createRateTable.config.permissions,
-  })
-  .patch("/", updateRateTable.handler, {
-    body: updateRateTable.config.body,
-    permissions: updateRateTable.config.permissions,
-  })
-  .delete("/", deleteRateTable.handler, {
-    body: deleteRateTable.config.body,
-    permissions: deleteRateTable.config.permissions,
-  })
+  .get(
+    "/",
+    {
+      permissions: readRateTables.config.permissions,
+      query: readRateTables.config.query,
+    },
+    readRateTables.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createRateTable.config.body,
+      permissions: createRateTable.config.permissions,
+    },
+    createRateTable.handler,
+  )
+  .patch(
+    "/",
+    {
+      body: updateRateTable.config.body,
+      permissions: updateRateTable.config.permissions,
+    },
+    updateRateTable.handler,
+  )
+  .delete(
+    "/",
+    {
+      body: deleteRateTable.config.body,
+      permissions: deleteRateTable.config.permissions,
+    },
+    deleteRateTable.handler,
+  )
   // Rate resolution
-  .get("/resolve", resolveRate.handler, {
-    permissions: resolveRate.config.permissions,
-    query: resolveRate.config.query,
-  })
+  .get(
+    "/resolve",
+    {
+      permissions: resolveRate.config.permissions,
+      query: resolveRate.config.query,
+    },
+    resolveRate.handler,
+  )
   // Rate entries
-  .get("/:rateTableId/entries", readRateEntries.handler, {
-    params: readRateEntries.config.params,
-    permissions: readRateEntries.config.permissions,
-    query: readRateEntries.config.query,
-  })
-  .put("/:rateTableId/entries", createRateEntry.handler, {
-    body: createRateEntry.config.body,
-    params: createRateEntry.config.params,
-    permissions: createRateEntry.config.permissions,
-  })
-  .patch("/:rateTableId/entries", updateRateEntry.handler, {
-    body: updateRateEntry.config.body,
-    params: updateRateEntry.config.params,
-    permissions: updateRateEntry.config.permissions,
-  })
-  .delete("/:rateTableId/entries", deleteRateEntry.handler, {
-    body: deleteRateEntry.config.body,
-    params: deleteRateEntry.config.params,
-    permissions: deleteRateEntry.config.permissions,
-  });
+  .get(
+    "/:rateTableId/entries",
+    {
+      params: readRateEntries.config.params,
+      permissions: readRateEntries.config.permissions,
+      query: readRateEntries.config.query,
+    },
+    readRateEntries.handler,
+  )
+  .put(
+    "/:rateTableId/entries",
+    {
+      body: createRateEntry.config.body,
+      params: createRateEntry.config.params,
+      permissions: createRateEntry.config.permissions,
+    },
+    createRateEntry.handler,
+  )
+  .patch(
+    "/:rateTableId/entries",
+    {
+      body: updateRateEntry.config.body,
+      params: updateRateEntry.config.params,
+      permissions: updateRateEntry.config.permissions,
+    },
+    updateRateEntry.handler,
+  )
+  .delete(
+    "/:rateTableId/entries",
+    {
+      body: deleteRateEntry.config.body,
+      params: deleteRateEntry.config.params,
+      permissions: deleteRateEntry.config.permissions,
+    },
+    deleteRateEntry.handler,
+  );

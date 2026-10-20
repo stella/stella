@@ -30,24 +30,44 @@ export const memoriesRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listMemories.handler, {
-    query: listMemories.config.query,
-    permissions: listMemories.config.permissions,
-  })
-  .post("/", createMemory.handler, {
-    body: createMemory.config.body,
-    permissions: createMemory.config.permissions,
-  })
-  .post("/firm", createFirmMemory.handler, {
-    body: createFirmMemory.config.body,
-    permissions: createFirmMemory.config.permissions,
-  })
-  .patch("/:memoryId", updateMemory.handler, {
-    body: updateMemory.config.body,
-    params: updateMemory.config.params,
-    permissions: updateMemory.config.permissions,
-  })
-  .delete("/:memoryId", deleteMemory.handler, {
-    params: deleteMemory.config.params,
-    permissions: deleteMemory.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      query: listMemories.config.query,
+      permissions: listMemories.config.permissions,
+    },
+    listMemories.handler,
+  )
+  .post(
+    "/",
+    {
+      body: createMemory.config.body,
+      permissions: createMemory.config.permissions,
+    },
+    createMemory.handler,
+  )
+  .post(
+    "/firm",
+    {
+      body: createFirmMemory.config.body,
+      permissions: createFirmMemory.config.permissions,
+    },
+    createFirmMemory.handler,
+  )
+  .patch(
+    "/:memoryId",
+    {
+      body: updateMemory.config.body,
+      params: updateMemory.config.params,
+      permissions: updateMemory.config.permissions,
+    },
+    updateMemory.handler,
+  )
+  .delete(
+    "/:memoryId",
+    {
+      params: deleteMemory.config.params,
+      permissions: deleteMemory.config.permissions,
+    },
+    deleteMemory.handler,
+  );

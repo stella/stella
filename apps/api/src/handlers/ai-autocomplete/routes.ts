@@ -29,7 +29,11 @@ export const aiAutocompleteRoute = new Elysia({
       return new Response("Not available", { status: 404 });
     },
   })
-  .post("/stream", autocompleteStream.handler, {
-    body: autocompleteStream.config.body,
-    permissions: autocompleteStream.config.permissions,
-  });
+  .post(
+    "/stream",
+    {
+      body: autocompleteStream.config.body,
+      permissions: autocompleteStream.config.permissions,
+    },
+    autocompleteStream.handler,
+  );

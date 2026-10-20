@@ -1,8 +1,14 @@
-import type { Static, TSchema } from "@sinclair/typebox";
 import type { Err } from "better-result";
 import { panic, Result, UnhandledException } from "better-result";
-import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
-import { ElysiaCustomStatusResponse, status, t } from "elysia";
+import type {
+  AnySchema,
+  Context,
+  ElysiaStatus,
+  InputSchema,
+  UnwrapRoute,
+} from "elysia";
+import { ElysiaStatus as ElysiaStatusValue, status, t } from "elysia";
+import type { Static, TSchema } from "typebox";
 
 import type { ModelTask } from "@stll/ai-catalog";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
@@ -27,7 +33,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
-import type { StatusResponse } from "@/api/lib/elysia-contract";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
@@ -800,7 +805,7 @@ export const safePublicHandlerResponseSchemasWithStatusText = <
 // Eden sees distinct error codes instead of a single widened response.
 type SafeStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
   TStatusCode extends HandlerErrorStatusCode
-    ? StatusResponse<TStatusCode, SafeErrorBody>
+    ? ElysiaStatus<TStatusCode, SafeErrorBody>
     : never;
 
 /**
@@ -2187,7 +2192,7 @@ export const isPublicReadBudgetHandler = (handler: unknown): boolean =>
 
 type SafePublicStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
   TStatusCode extends HandlerErrorStatusCode
-    ? StatusResponse<
+    ? ElysiaStatus<
         TStatusCode,
         string | ReturnType<typeof projectPublicErrorBody>
       >
@@ -2248,7 +2253,7 @@ const toBoundedPublicErrorStatus = (
 
 /** What a handler answers with a 200: its result minus statuses and raw bodies. */
 type SuccessPayload<TResult> = TResult extends
-  | StatusResponse<infer _Code, infer _Body>
+  | ElysiaStatus<infer _Code, infer _Body>
   | Response
   ? never
   : TResult;
@@ -2318,9 +2323,9 @@ export const createSafeUncheckedBoundedPublicHandler = <
       const response =
         // Projection is idempotent, so factory-built statuses pass through it
         // unchanged; handler-returned statuses are bounded the same way.
-        result instanceof ElysiaCustomStatusResponse && result.code >= 400
+        result instanceof ElysiaStatusValue && result.status >= 400
           ? toSafePublicStatusResponse(
-              result.code,
+              result.status,
               typeof result.response === "string"
                 ? truncateTextBytes(
                     result.response,

@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
+import { Value } from "typebox/value";
 
 import {
   DESKTOP_REGISTRY_REQUEST_PATH,

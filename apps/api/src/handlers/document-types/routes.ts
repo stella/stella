@@ -13,23 +13,43 @@ export const documentTypesRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listDocumentTypes.handler, {
-    permissions: listDocumentTypes.config.permissions,
-  })
-  .post("/", createDocumentType.handler, {
-    body: createDocumentType.config.body,
-    permissions: createDocumentType.config.permissions,
-  })
-  .post("/reorder", reorderDocumentTypes.handler, {
-    body: reorderDocumentTypes.config.body,
-    permissions: reorderDocumentTypes.config.permissions,
-  })
-  .patch("/:documentTypeId", updateDocumentType.handler, {
-    body: updateDocumentType.config.body,
-    params: updateDocumentType.config.params,
-    permissions: updateDocumentType.config.permissions,
-  })
-  .delete("/:documentTypeId", deleteDocumentType.handler, {
-    params: deleteDocumentType.config.params,
-    permissions: deleteDocumentType.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      permissions: listDocumentTypes.config.permissions,
+    },
+    listDocumentTypes.handler,
+  )
+  .post(
+    "/",
+    {
+      body: createDocumentType.config.body,
+      permissions: createDocumentType.config.permissions,
+    },
+    createDocumentType.handler,
+  )
+  .post(
+    "/reorder",
+    {
+      body: reorderDocumentTypes.config.body,
+      permissions: reorderDocumentTypes.config.permissions,
+    },
+    reorderDocumentTypes.handler,
+  )
+  .patch(
+    "/:documentTypeId",
+    {
+      body: updateDocumentType.config.body,
+      params: updateDocumentType.config.params,
+      permissions: updateDocumentType.config.permissions,
+    },
+    updateDocumentType.handler,
+  )
+  .delete(
+    "/:documentTypeId",
+    {
+      params: deleteDocumentType.config.params,
+      permissions: deleteDocumentType.config.permissions,
+    },
+    deleteDocumentType.handler,
+  );

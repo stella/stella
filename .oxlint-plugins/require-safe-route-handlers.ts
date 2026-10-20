@@ -88,7 +88,9 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const routeOptions = node.arguments[2];
+            // Elysia 2 route order: (path, options, handler).
+            const routeOptions =
+              node.arguments.length >= 3 ? node.arguments[1] : undefined;
             if (!isDirectHandlerConfig(routeOptions)) {
               return;
             }
@@ -129,7 +131,11 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const routeHandler = node.arguments[1];
+            // Elysia 2 route order: (path, options, handler) or (path, handler).
+            const routeHandler =
+              node.arguments.length >= 3
+                ? node.arguments[2]
+                : node.arguments[1];
 
             if (
               routeHandler === undefined ||

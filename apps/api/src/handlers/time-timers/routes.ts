@@ -28,42 +28,78 @@ export const timeTimersRoute = new Elysia({ prefix: "/v1/time-timers" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", list.handler, {
-    query: list.config.query,
-    permissions: list.config.permissions,
-  })
-  .get("/admin", adminList.handler, {
-    query: adminList.config.query,
-    permissions: adminList.config.permissions,
-  })
-  .post("/admin/:id/stop", adminStop.handler, {
-    params: adminStop.config.params,
-    body: adminStop.config.body,
-    permissions: adminStop.config.permissions,
-  })
-  .post("/start", start.handler, {
-    body: start.config.body,
-    permissions: start.config.permissions,
-  })
-  .post("/:id/pause", pause.handler, {
-    params: pause.config.params,
-    permissions: pause.config.permissions,
-  })
-  .post("/:id/resume", resume.handler, {
-    params: resume.config.params,
-    permissions: resume.config.permissions,
-  })
-  .patch("/:id", update.handler, {
-    params: update.config.params,
-    body: update.config.body,
-    permissions: update.config.permissions,
-  })
-  .post("/:id/confirm", confirm.handler, {
-    params: confirm.config.params,
-    body: confirm.config.body,
-    permissions: confirm.config.permissions,
-  })
-  .delete("/:id", discard.handler, {
-    params: discard.config.params,
-    permissions: discard.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      query: list.config.query,
+      permissions: list.config.permissions,
+    },
+    list.handler,
+  )
+  .get(
+    "/admin",
+    {
+      query: adminList.config.query,
+      permissions: adminList.config.permissions,
+    },
+    adminList.handler,
+  )
+  .post(
+    "/admin/:id/stop",
+    {
+      params: adminStop.config.params,
+      body: adminStop.config.body,
+      permissions: adminStop.config.permissions,
+    },
+    adminStop.handler,
+  )
+  .post(
+    "/start",
+    {
+      body: start.config.body,
+      permissions: start.config.permissions,
+    },
+    start.handler,
+  )
+  .post(
+    "/:id/pause",
+    {
+      params: pause.config.params,
+      permissions: pause.config.permissions,
+    },
+    pause.handler,
+  )
+  .post(
+    "/:id/resume",
+    {
+      params: resume.config.params,
+      permissions: resume.config.permissions,
+    },
+    resume.handler,
+  )
+  .patch(
+    "/:id",
+    {
+      params: update.config.params,
+      body: update.config.body,
+      permissions: update.config.permissions,
+    },
+    update.handler,
+  )
+  .post(
+    "/:id/confirm",
+    {
+      params: confirm.config.params,
+      body: confirm.config.body,
+      permissions: confirm.config.permissions,
+    },
+    confirm.handler,
+  )
+  .delete(
+    "/:id",
+    {
+      params: discard.config.params,
+      permissions: discard.config.permissions,
+    },
+    discard.handler,
+  );

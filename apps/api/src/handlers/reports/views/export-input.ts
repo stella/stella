@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { t } from "elysia";
+import { Value } from "typebox/value";
 
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import type { ValidatedServiceInput } from "@/api/lib/rate-limit/service-classification";

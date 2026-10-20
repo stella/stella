@@ -200,11 +200,15 @@ const app = () => {
     read: async (subject) => await echoSubject(subject),
   });
   return new Elysia()
-    .get("/d/:decisionId", byId.handler, { params: byId.config.params })
-    .get("/s/:slug", bySlug.handler, {
-      params: bySlug.config.params,
-      query: bySlug.config.query,
-    });
+    .get("/d/:decisionId", { params: byId.config.params }, byId.handler)
+    .get(
+      "/s/:slug",
+      {
+        params: bySlug.config.params,
+        query: bySlug.config.query,
+      },
+      bySlug.handler,
+    );
 };
 
 const get = async (path: string) => {

@@ -19,15 +19,27 @@ const app = new Elysia()
     set.status = answer.status;
     return elysiaErrorBody(answer);
   })
-  .post("/typed-body", () => "ok", {
-    body: t.Object({ name: t.String() }),
-  })
-  .post("/bounded-body", () => "ok", {
-    body: t.Object({ name: t.String({ minLength: 1, maxLength: 8 }) }),
-  })
-  .get("/typed-response", () => driftedBody(), {
-    response: t.Object({ ok: t.String() }),
-  })
+  .post(
+    "/typed-body",
+    {
+      body: t.Object({ name: t.String() }),
+    },
+    () => "ok",
+  )
+  .post(
+    "/bounded-body",
+    {
+      body: t.Object({ name: t.String({ minLength: 1, maxLength: 8 }) }),
+    },
+    () => "ok",
+  )
+  .get(
+    "/typed-response",
+    {
+      response: t.Object({ ok: t.String() }),
+    },
+    () => driftedBody(),
+  )
   .get("/throws", () => {
     throw new Error("boom");
   });

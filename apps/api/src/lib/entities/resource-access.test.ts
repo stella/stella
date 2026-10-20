@@ -1,6 +1,6 @@
-import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
+import { Type } from "typebox";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";

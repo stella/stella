@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { COUNTRY_INPUT_MAX_CHARS } from "@stll/agent-input";
 import {

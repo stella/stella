@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { currencyMinorUnitDigits } from "@stll/money";
 

@@ -1,10 +1,10 @@
-// @api-test-heavy-db: retains a full-size 20,000-entry sanctions corpus.
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { Worker } from "node:worker_threads";
+// @api-test-heavy-db: retains a full-size 20,000-entry sanctions corpus.
+import { Value } from "typebox/value";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";

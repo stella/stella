@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 export const dateOfBirthSchema = t.Union([
   t.Object(

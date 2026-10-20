@@ -1,8 +1,8 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { Value } from "typebox/value";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";

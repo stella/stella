@@ -52,9 +52,13 @@ const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
         scopedDb,
       }),
   });
-  const app = new Elysia().get(DESKTOP_FEATURE_ACCESS_PATH, endpoint.handler, {
-    response: endpoint.config.response,
-  });
+  const app = new Elysia().get(
+    DESKTOP_FEATURE_ACCESS_PATH,
+    {
+      response: endpoint.config.response,
+    },
+    endpoint.handler,
+  );
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "activity-timeline": [
       {

@@ -9,8 +9,12 @@ export const documentsRoute = new Elysia({
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
-  .post("/document/:documentId/compare", compareDocumentVersions.handler, {
-    body: compareDocumentVersions.config.body,
-    params: compareDocumentVersions.config.params,
-    permissions: compareDocumentVersions.config.permissions,
-  });
+  .post(
+    "/document/:documentId/compare",
+    {
+      body: compareDocumentVersions.config.body,
+      params: compareDocumentVersions.config.params,
+      permissions: compareDocumentVersions.config.permissions,
+    },
+    compareDocumentVersions.handler,
+  );

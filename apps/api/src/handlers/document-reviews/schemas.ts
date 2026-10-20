@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 

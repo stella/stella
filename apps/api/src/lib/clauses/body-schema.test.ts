@@ -1,5 +1,5 @@
-import { TypeCompiler } from "@sinclair/typebox/compiler";
 import { expect, test } from "bun:test";
+import { TypeCompiler } from "typebox/compiler";
 
 import { CLAUSE_NUMBERING_LEVEL_LIMITS } from "@stll/api-contract";
 

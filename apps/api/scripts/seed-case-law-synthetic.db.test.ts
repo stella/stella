@@ -9,7 +9,7 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
@@ -132,8 +132,8 @@ const searchPage = async (cursor: string | null) => {
     caseLawDb,
     observer: "unobserved",
   });
-  if (response instanceof ElysiaCustomStatusResponse) {
-    return panic(`Search answered ${String(response.code)}`);
+  if (response instanceof ElysiaStatus) {
+    return panic(`Search answered ${String(response.status)}`);
   }
   return response;
 };

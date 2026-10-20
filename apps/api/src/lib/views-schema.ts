@@ -1,5 +1,5 @@
-import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
+import { Type } from "typebox";
 import * as v from "valibot";
 
 import {

@@ -97,9 +97,9 @@ describe("tenant route classification", () => {
   test("derives upgrade dispatch from the same static and dynamic websocket registry", async () => {
     for (const aot of [true, false]) {
       const app = new Elysia({ aot })
-        .get("/socket", () => "tenant", tenantHooks)
+        .get("/socket", tenantHooks, () => "tenant")
         .route("WS", "/socket", () => "exempt")
-        .get("/live/:id", () => "tenant", tenantHooks)
+        .get("/live/:id", tenantHooks, () => "tenant")
         .route("WS", "/live/:id", () => "exempt");
       const classify = createTenantActionClassifier({
         routes: app.routes,
@@ -129,10 +129,10 @@ describe("tenant route classification", () => {
       if (reverse) {
         app
           .post("/same/", () => "exempt")
-          .all("/same", () => "tenant", tenantHooks);
+          .all("/same", tenantHooks, () => "tenant");
       } else {
         app
-          .all("/same", () => "tenant", tenantHooks)
+          .all("/same", tenantHooks, () => "tenant")
           .post("/same/", () => "exempt");
       }
       const classify = createTenantActionClassifier({

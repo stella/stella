@@ -1,5 +1,5 @@
 import { status, t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ENTITY_KINDS } from "@/api/db/schema";

@@ -12,24 +12,44 @@ export const flowsRoute = new Elysia({ prefix: "/flows" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listFlowDefinitions.handler, {
-    permissions: listFlowDefinitions.config.permissions,
-    query: listFlowDefinitions.config.query,
-  })
-  .post("/", createFlowDefinition.handler, {
-    body: createFlowDefinition.config.body,
-    permissions: createFlowDefinition.config.permissions,
-  })
-  .get("/:flowId", getFlowDefinition.handler, {
-    params: getFlowDefinition.config.params,
-    permissions: getFlowDefinition.config.permissions,
-  })
-  .put("/:flowId", updateFlowDefinition.handler, {
-    body: updateFlowDefinition.config.body,
-    params: updateFlowDefinition.config.params,
-    permissions: updateFlowDefinition.config.permissions,
-  })
-  .delete("/:flowId", deleteFlowDefinition.handler, {
-    params: deleteFlowDefinition.config.params,
-    permissions: deleteFlowDefinition.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      permissions: listFlowDefinitions.config.permissions,
+      query: listFlowDefinitions.config.query,
+    },
+    listFlowDefinitions.handler,
+  )
+  .post(
+    "/",
+    {
+      body: createFlowDefinition.config.body,
+      permissions: createFlowDefinition.config.permissions,
+    },
+    createFlowDefinition.handler,
+  )
+  .get(
+    "/:flowId",
+    {
+      params: getFlowDefinition.config.params,
+      permissions: getFlowDefinition.config.permissions,
+    },
+    getFlowDefinition.handler,
+  )
+  .put(
+    "/:flowId",
+    {
+      body: updateFlowDefinition.config.body,
+      params: updateFlowDefinition.config.params,
+      permissions: updateFlowDefinition.config.permissions,
+    },
+    updateFlowDefinition.handler,
+  )
+  .delete(
+    "/:flowId",
+    {
+      params: deleteFlowDefinition.config.params,
+      permissions: deleteFlowDefinition.config.permissions,
+    },
+    deleteFlowDefinition.handler,
+  );

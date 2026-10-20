@@ -22,19 +22,31 @@ const authenticatedCaseLawRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/decisions/:decisionId/analysis", generateDecisionAnalysis.handler, {
-    params: generateDecisionAnalysis.config.params,
-    query: generateDecisionAnalysis.config.query,
-    permissions: generateDecisionAnalysis.config.permissions,
-  })
-  .post("/decisions/search/refine", refineCaseLawSearch.handler, {
-    body: refineCaseLawSearch.config.body,
-    permissions: refineCaseLawSearch.config.permissions,
-  })
-  .post("/decisions/search/expand", expandCaseLawSearch.handler, {
-    body: expandCaseLawSearch.config.body,
-    permissions: expandCaseLawSearch.config.permissions,
-  });
+  .get(
+    "/decisions/:decisionId/analysis",
+    {
+      params: generateDecisionAnalysis.config.params,
+      query: generateDecisionAnalysis.config.query,
+      permissions: generateDecisionAnalysis.config.permissions,
+    },
+    generateDecisionAnalysis.handler,
+  )
+  .post(
+    "/decisions/search/refine",
+    {
+      body: refineCaseLawSearch.config.body,
+      permissions: refineCaseLawSearch.config.permissions,
+    },
+    refineCaseLawSearch.handler,
+  )
+  .post(
+    "/decisions/search/expand",
+    {
+      body: expandCaseLawSearch.config.body,
+      permissions: expandCaseLawSearch.config.permissions,
+    },
+    expandCaseLawSearch.handler,
+  );
 
 /**
  * Workspace-scoped routes: requires workspace access.
@@ -46,21 +58,37 @@ const caseLawMatterLinksRoute = new Elysia({
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
-  .get("/", listMatterLinks.handler, {
-    permissions: listMatterLinks.config.permissions,
-  })
-  .post("/", createMatterLink.handler, {
-    body: createMatterLink.config.body,
-    permissions: createMatterLink.config.permissions,
-  })
-  .post("/batch", createMatterLinksBatch.handler, {
-    body: createMatterLinksBatch.config.body,
-    permissions: createMatterLinksBatch.config.permissions,
-  })
-  .delete("/:linkId", deleteMatterLink.handler, {
-    params: deleteMatterLink.config.params,
-    permissions: deleteMatterLink.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      permissions: listMatterLinks.config.permissions,
+    },
+    listMatterLinks.handler,
+  )
+  .post(
+    "/",
+    {
+      body: createMatterLink.config.body,
+      permissions: createMatterLink.config.permissions,
+    },
+    createMatterLink.handler,
+  )
+  .post(
+    "/batch",
+    {
+      body: createMatterLinksBatch.config.body,
+      permissions: createMatterLinksBatch.config.permissions,
+    },
+    createMatterLinksBatch.handler,
+  )
+  .delete(
+    "/:linkId",
+    {
+      params: deleteMatterLink.config.params,
+      permissions: deleteMatterLink.config.permissions,
+    },
+    deleteMatterLink.handler,
+  );
 
 /**
  * Admin routes: authenticated. Ingestion observability for operators. The
@@ -74,9 +102,13 @@ const caseLawAdminRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/ingestion/status", getCaseLawIngestionStatus.handler, {
-    permissions: getCaseLawIngestionStatus.config.permissions,
-  });
+  .get(
+    "/ingestion/status",
+    {
+      permissions: getCaseLawIngestionStatus.config.permissions,
+    },
+    getCaseLawIngestionStatus.handler,
+  );
 
 export const caseLawRoute = new Elysia()
   .use(publicCaseLawRoute)

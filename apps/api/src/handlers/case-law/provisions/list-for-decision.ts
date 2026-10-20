@@ -3,7 +3,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { SelectResultFields } from "drizzle-orm/query-builders/select.types";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 import * as v from "valibot";
 
 import { provisionLinkCapability } from "@stll/api-contract/provision-link-capability";

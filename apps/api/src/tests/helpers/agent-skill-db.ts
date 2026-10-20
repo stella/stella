@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { desc, eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import type { roles } from "@stll/permissions";
 
@@ -64,7 +64,7 @@ type HandlerFailure = { code: number; message: string };
 
 /** The status and message of a handler result, or null when it succeeded. */
 export const handlerFailure = (result: unknown): HandlerFailure | null => {
-  if (!(result instanceof ElysiaCustomStatusResponse)) {
+  if (!(result instanceof ElysiaStatus)) {
     return null;
   }
   const response: unknown = result.response;
@@ -75,7 +75,7 @@ export const handlerFailure = (result: unknown): HandlerFailure | null => {
     typeof response.message === "string"
       ? response.message
       : "";
-  return { code: Number(result.code), message };
+  return { code: Number(result.status), message };
 };
 
 type InsertTestSkillOptions = {

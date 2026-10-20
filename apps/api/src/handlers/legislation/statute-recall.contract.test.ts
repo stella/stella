@@ -1,9 +1,9 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 import Elysia from "elysia";
+import { Value } from "typebox/value";
 import * as v from "valibot";
 
 import { normalizeEli } from "@stll/agent-input";
@@ -452,11 +452,11 @@ describe.skipIf(!runEngineTests)(
         );
         const app = new Elysia().get(
           "/law/statutes/search",
-          definition.handler,
           {
             query: definition.config.query,
             response: definition.config.response,
           },
+          definition.handler,
         );
         const url = new URL("http://localhost/law/statutes/search");
         url.searchParams.set("query", protectedRelaxedQuery.query);
@@ -516,11 +516,11 @@ describe.skipIf(!runEngineTests)(
         );
         const app = new Elysia().get(
           "/law/statutes/search",
-          definition.handler,
           {
             query: definition.config.query,
             response: definition.config.response,
           },
+          definition.handler,
         );
         const rows = [];
         for (const fixture of fixtureQueries) {

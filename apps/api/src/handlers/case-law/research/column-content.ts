@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
+import { Value } from "typebox/value";
 
 import { aiExtractablePropertyContentSchema } from "@/api/db/schema-validators";
 import type { CaseLawResearchColumnContent } from "@/api/lib/case-law/research-answers";

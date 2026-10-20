@@ -8,14 +8,22 @@ export const auditLogsRoute = new Elysia({ prefix: "/audit-logs" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", readAuditLogs.handler, {
-    // Compliance readers need organization-wide visibility;
-    // this is intentionally scoped by auditLog.read rather
-    // than workspace membership.
-    permissions: readAuditLogs.config.permissions,
-    query: readAuditLogs.config.query,
-  })
-  .get("/export", exportAuditLogs.handler, {
-    permissions: exportAuditLogs.config.permissions,
-    query: exportAuditLogs.config.query,
-  });
+  .get(
+    "/",
+    {
+      // Compliance readers need organization-wide visibility;
+      // this is intentionally scoped by auditLog.read rather
+      // than workspace membership.
+      permissions: readAuditLogs.config.permissions,
+      query: readAuditLogs.config.query,
+    },
+    readAuditLogs.handler,
+  )
+  .get(
+    "/export",
+    {
+      permissions: exportAuditLogs.config.permissions,
+      query: exportAuditLogs.config.query,
+    },
+    exportAuditLogs.handler,
+  );

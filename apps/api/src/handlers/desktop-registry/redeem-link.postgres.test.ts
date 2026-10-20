@@ -117,9 +117,13 @@ describe.skipIf(
               expectedOrganizationId: organizationId,
             };
             const route = createDesktopLinkRedeemHandler();
-            const app = new Elysia().post("/redeem-link", route.handler, {
-              body: route.config.body,
-            });
+            const app = new Elysia().post(
+              "/redeem-link",
+              {
+                body: route.config.body,
+              },
+              route.handler,
+            );
             const headers = new Headers({
               "content-type": "application/json",
               [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(

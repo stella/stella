@@ -1,9 +1,9 @@
-import type { TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import Elysia, { status, t } from "elysia";
 import fc from "fast-check";
+import type { TSchema } from "typebox";
+import { Value } from "typebox/value";
 
 import {
   PUBLIC_COUNTRIES,

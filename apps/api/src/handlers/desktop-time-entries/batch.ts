@@ -1,6 +1,6 @@
-import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
+import { Type } from "typebox";
 
 import { TIME_ENTRY_SOURCE } from "@stll/api-contract";
 import {

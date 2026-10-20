@@ -587,7 +587,7 @@ describe("Dependabot dependency groups", () => {
           if (
             dependency === "elysia" ||
             dependency.startsWith("@elysia/") ||
-            dependency.startsWith("@elysiajs/")
+            dependency.startsWith("@elysia/")
           ) {
             installedElysiaPackages.add(dependency);
           }

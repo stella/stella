@@ -218,27 +218,51 @@ export const searchRoute = new Elysia({ prefix: "/search" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .post("/", searchEndpoint.handler, {
-    body: searchEndpoint.config.body,
-    permissions: searchEndpoint.config.permissions,
-  })
-  .post("/facets", searchFacetsEndpoint.handler, {
-    body: searchFacetsEndpoint.config.body,
-    permissions: searchFacetsEndpoint.config.permissions,
-  })
-  .post("/preview", searchPreviewEndpoint.handler, {
-    body: searchPreviewEndpoint.config.body,
-    permissions: searchPreviewEndpoint.config.permissions,
-  })
-  .post("/refine", refineSearchEndpoint.handler, {
-    body: refineSearchEndpoint.config.body,
-    permissions: refineSearchEndpoint.config.permissions,
-  })
-  .post("/summary", summarizeSearchEndpoint.handler, {
-    body: summarizeSearchEndpoint.config.body,
-    permissions: summarizeSearchEndpoint.config.permissions,
-  })
-  .post("/summary/chat", searchSummaryChatEndpoint.handler, {
-    body: searchSummaryChatEndpoint.config.body,
-    permissions: searchSummaryChatEndpoint.config.permissions,
-  });
+  .post(
+    "/",
+    {
+      body: searchEndpoint.config.body,
+      permissions: searchEndpoint.config.permissions,
+    },
+    searchEndpoint.handler,
+  )
+  .post(
+    "/facets",
+    {
+      body: searchFacetsEndpoint.config.body,
+      permissions: searchFacetsEndpoint.config.permissions,
+    },
+    searchFacetsEndpoint.handler,
+  )
+  .post(
+    "/preview",
+    {
+      body: searchPreviewEndpoint.config.body,
+      permissions: searchPreviewEndpoint.config.permissions,
+    },
+    searchPreviewEndpoint.handler,
+  )
+  .post(
+    "/refine",
+    {
+      body: refineSearchEndpoint.config.body,
+      permissions: refineSearchEndpoint.config.permissions,
+    },
+    refineSearchEndpoint.handler,
+  )
+  .post(
+    "/summary",
+    {
+      body: summarizeSearchEndpoint.config.body,
+      permissions: summarizeSearchEndpoint.config.permissions,
+    },
+    summarizeSearchEndpoint.handler,
+  )
+  .post(
+    "/summary/chat",
+    {
+      body: searchSummaryChatEndpoint.config.body,
+      permissions: searchSummaryChatEndpoint.config.permissions,
+    },
+    searchSummaryChatEndpoint.handler,
+  );

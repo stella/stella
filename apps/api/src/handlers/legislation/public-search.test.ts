@@ -27,10 +27,14 @@ const result = {
 const testSearchRoute = (search: typeof searchLegislationHandler) => {
   const definition = createPublicStatuteSearch(search);
   expect(isSafePublicHandler(definition.handler)).toBe(true);
-  return new Elysia().get("/law/statutes/search", definition.handler, {
-    query: definition.config.query,
-    response: definition.config.response,
-  });
+  return new Elysia().get(
+    "/law/statutes/search",
+    {
+      query: definition.config.query,
+      response: definition.config.response,
+    },
+    definition.handler,
+  );
 };
 
 test("signed-out statute search normalizes country and forwards filters through the public read boundary", async () => {

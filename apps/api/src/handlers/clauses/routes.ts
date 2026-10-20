@@ -31,22 +31,38 @@ export const clauseCategoriesRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listClauseCategories.handler, {
-    permissions: listClauseCategories.config.permissions,
-  })
-  .put("/", createClauseCategory.handler, {
-    body: createClauseCategory.config.body,
-    permissions: createClauseCategory.config.permissions,
-  })
-  .post("/:categoryId", updateClauseCategory.handler, {
-    body: updateClauseCategory.config.body,
-    params: updateClauseCategory.config.params,
-    permissions: updateClauseCategory.config.permissions,
-  })
-  .delete("/:categoryId", deleteClauseCategory.handler, {
-    params: deleteClauseCategory.config.params,
-    permissions: deleteClauseCategory.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      permissions: listClauseCategories.config.permissions,
+    },
+    listClauseCategories.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createClauseCategory.config.body,
+      permissions: createClauseCategory.config.permissions,
+    },
+    createClauseCategory.handler,
+  )
+  .post(
+    "/:categoryId",
+    {
+      body: updateClauseCategory.config.body,
+      params: updateClauseCategory.config.params,
+      permissions: updateClauseCategory.config.permissions,
+    },
+    updateClauseCategory.handler,
+  )
+  .delete(
+    "/:categoryId",
+    {
+      params: deleteClauseCategory.config.params,
+      permissions: deleteClauseCategory.config.permissions,
+    },
+    deleteClauseCategory.handler,
+  );
 
 // ── Clauses ─────────────────────────────────────────
 
@@ -56,92 +72,156 @@ export const clausesRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listClauses.handler, {
-    permissions: listClauses.config.permissions,
-    query: listClauses.config.query,
-  })
-  .put("/", createClause.handler, {
-    body: createClause.config.body,
-    permissions: createClause.config.permissions,
-  })
-  .get("/export", exportClauses.handler, {
-    permissions: exportClauses.config.permissions,
-    query: exportClauses.config.query,
-  })
+  .get(
+    "/",
+    {
+      permissions: listClauses.config.permissions,
+      query: listClauses.config.query,
+    },
+    listClauses.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createClause.config.body,
+      permissions: createClause.config.permissions,
+    },
+    createClause.handler,
+  )
+  .get(
+    "/export",
+    {
+      permissions: exportClauses.config.permissions,
+      query: exportClauses.config.query,
+    },
+    exportClauses.handler,
+  )
   // Deprecated compatibility alias for clients using the original JSON import.
-  .put("/import", importClauses.handler, {
-    body: importClauses.config.body,
-    permissions: importClauses.config.permissions,
-  })
-  .post("/import", importClauses.handler, {
-    body: importClauses.config.body,
-    permissions: importClauses.config.permissions,
-  })
+  .put(
+    "/import",
+    {
+      body: importClauses.config.body,
+      permissions: importClauses.config.permissions,
+    },
+    importClauses.handler,
+  )
+  .post(
+    "/import",
+    {
+      body: importClauses.config.body,
+      permissions: importClauses.config.permissions,
+    },
+    importClauses.handler,
+  )
   // AI assist: revise a clause body's prose in place (stateless; static path
   // registered before /:clauseId so it isn't captured as an id).
-  .post("/ai-rewrite", rewriteClause.handler, {
-    body: rewriteClause.config.body,
-    permissions: rewriteClause.config.permissions,
-  })
+  .post(
+    "/ai-rewrite",
+    {
+      body: rewriteClause.config.body,
+      permissions: rewriteClause.config.permissions,
+    },
+    rewriteClause.handler,
+  )
   // Live fill preview: resolve a template's linked clause slots to plain text.
-  .get("/template-slot-preview/:templateId", getTemplateClausePreview.handler, {
-    params: getTemplateClausePreview.config.params,
-    permissions: getTemplateClausePreview.config.permissions,
-  })
-  .get("/:clauseId", getClause.handler, {
-    params: getClause.config.params,
-    permissions: getClause.config.permissions,
-  })
-  .post("/:clauseId", updateClause.handler, {
-    body: updateClause.config.body,
-    params: updateClause.config.params,
-    permissions: updateClause.config.permissions,
-  })
-  .delete("/:clauseId", deleteClause.handler, {
-    params: deleteClause.config.params,
-    permissions: deleteClause.config.permissions,
-  })
+  .get(
+    "/template-slot-preview/:templateId",
+    {
+      params: getTemplateClausePreview.config.params,
+      permissions: getTemplateClausePreview.config.permissions,
+    },
+    getTemplateClausePreview.handler,
+  )
+  .get(
+    "/:clauseId",
+    {
+      params: getClause.config.params,
+      permissions: getClause.config.permissions,
+    },
+    getClause.handler,
+  )
+  .post(
+    "/:clauseId",
+    {
+      body: updateClause.config.body,
+      params: updateClause.config.params,
+      permissions: updateClause.config.permissions,
+    },
+    updateClause.handler,
+  )
+  .delete(
+    "/:clauseId",
+    {
+      params: deleteClause.config.params,
+      permissions: deleteClause.config.permissions,
+    },
+    deleteClause.handler,
+  )
   // ── Versions ───────────────────────────────────
-  .get("/:clauseId/versions/:versionId", getClauseVersion.handler, {
-    params: getClauseVersion.config.params,
-    permissions: getClauseVersion.config.permissions,
-  })
-  .get("/:clauseId/versions/:versionId/diff", clauseVersionDiff.handler, {
-    params: clauseVersionDiff.config.params,
-    permissions: clauseVersionDiff.config.permissions,
-  })
+  .get(
+    "/:clauseId/versions/:versionId",
+    {
+      params: getClauseVersion.config.params,
+      permissions: getClauseVersion.config.permissions,
+    },
+    getClauseVersion.handler,
+  )
+  .get(
+    "/:clauseId/versions/:versionId/diff",
+    {
+      params: clauseVersionDiff.config.params,
+      permissions: clauseVersionDiff.config.permissions,
+    },
+    clauseVersionDiff.handler,
+  )
   .post(
     "/:clauseId/versions/:versionId/summarize",
-    clauseVersionSummarize.handler,
     {
       params: clauseVersionSummarize.config.params,
       permissions: clauseVersionSummarize.config.permissions,
     },
+    clauseVersionSummarize.handler,
   )
   .post(
     "/:clauseId/versions/:versionId/restore",
-    restoreClauseVersion.handler,
     {
       params: restoreClauseVersion.config.params,
       permissions: restoreClauseVersion.config.permissions,
     },
+    restoreClauseVersion.handler,
   )
   // ── Variants ────────────────────────────────────
-  .get("/:clauseId/variants", listVariants.handler, {
-    params: listVariants.config.params,
-    permissions: listVariants.config.permissions,
-  })
-  .put("/:clauseId/variants", createVariant.handler, {
-    body: createVariant.config.body,
-    params: createVariant.config.params,
-    permissions: createVariant.config.permissions,
-  })
-  .post("/:clauseId/variants/:variantId", updateVariant.handler, {
-    body: updateVariant.config.body,
-    params: updateVariant.config.params,
-    permissions: updateVariant.config.permissions,
-  })
-  .delete("/:clauseId/variants/:variantId", deleteVariant.handler, {
-    params: deleteVariant.config.params,
-    permissions: deleteVariant.config.permissions,
-  });
+  .get(
+    "/:clauseId/variants",
+    {
+      params: listVariants.config.params,
+      permissions: listVariants.config.permissions,
+    },
+    listVariants.handler,
+  )
+  .put(
+    "/:clauseId/variants",
+    {
+      body: createVariant.config.body,
+      params: createVariant.config.params,
+      permissions: createVariant.config.permissions,
+    },
+    createVariant.handler,
+  )
+  .post(
+    "/:clauseId/variants/:variantId",
+    {
+      body: updateVariant.config.body,
+      params: updateVariant.config.params,
+      permissions: updateVariant.config.permissions,
+    },
+    updateVariant.handler,
+  )
+  .delete(
+    "/:clauseId/variants/:variantId",
+    {
+      params: deleteVariant.config.params,
+      permissions: deleteVariant.config.permissions,
+    },
+    deleteVariant.handler,
+  );

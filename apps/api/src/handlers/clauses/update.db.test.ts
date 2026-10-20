@@ -217,6 +217,7 @@ describe("clause body preconditions", () => {
       })
       .post(
         "/clause",
+        { body: updateClause.config.body },
         async ({ body, set }) => {
           const result = await Result.gen(() =>
             updateClauseHandler({
@@ -235,7 +236,6 @@ describe("clause body preconditions", () => {
           }
           return result.value;
         },
-        { body: updateClause.config.body },
       );
     const readResponse = await app.handle(
       new Request("http://localhost/clause"),

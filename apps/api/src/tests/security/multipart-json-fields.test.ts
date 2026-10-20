@@ -1,8 +1,8 @@
-import { Kind, OptionalKind } from "@sinclair/typebox";
-import type { TObject, TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
+import { Kind, OptionalKind } from "typebox";
+import type { TObject, TSchema } from "typebox";
+import { Value } from "typebox/value";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
@@ -232,7 +232,7 @@ const postForm = async (
 ): Promise<ProbeOutcome> => {
   const app = new Elysia()
     .use(multipartFormParser)
-    .post("/probe", () => "ok", { body });
+    .post("/probe", { body }, () => "ok");
   const response = await app.handle(
     new Request("http://localhost/probe", { method: "POST", body: form }),
   );

@@ -20,59 +20,103 @@ export const playbooksRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listPlaybookDefinitions.handler, {
-    permissions: listPlaybookDefinitions.config.permissions,
-    query: listPlaybookDefinitions.config.query,
-  })
-  .post("/", createPlaybookDefinition.handler, {
-    body: createPlaybookDefinition.config.body,
-    permissions: createPlaybookDefinition.config.permissions,
-  })
+  .get(
+    "/",
+    {
+      permissions: listPlaybookDefinitions.config.permissions,
+      query: listPlaybookDefinitions.config.query,
+    },
+    listPlaybookDefinitions.handler,
+  )
+  .post(
+    "/",
+    {
+      body: createPlaybookDefinition.config.body,
+      permissions: createPlaybookDefinition.config.permissions,
+    },
+    createPlaybookDefinition.handler,
+  )
   // Registered ahead of the `:playbookId` param routes so static paths are
   // never swallowed by the dynamic segment.
-  .get("/starters", listStarterPlaybooks.handler, {
-    permissions: listStarterPlaybooks.config.permissions,
-  })
-  .get("/recent", listRecentPlaybooks.handler, {
-    permissions: listRecentPlaybooks.config.permissions,
-    query: listRecentPlaybooks.config.query,
-  })
-  .post("/from-starter", createPlaybookFromStarter.handler, {
-    body: createPlaybookFromStarter.config.body,
-    permissions: createPlaybookFromStarter.config.permissions,
-  })
-  .post("/from-run", createPlaybookFromRun.handler, {
-    body: createPlaybookFromRun.config.body,
-    permissions: createPlaybookFromRun.config.permissions,
-  })
-  .get("/:playbookId", getPlaybookDefinition.handler, {
-    params: getPlaybookDefinition.config.params,
-    permissions: getPlaybookDefinition.config.permissions,
-  })
-  .put("/:playbookId", updatePlaybookDefinition.handler, {
-    body: updatePlaybookDefinition.config.body,
-    params: updatePlaybookDefinition.config.params,
-    permissions: updatePlaybookDefinition.config.permissions,
-  })
-  .delete("/:playbookId", deletePlaybookDefinition.handler, {
-    params: deletePlaybookDefinition.config.params,
-    permissions: deletePlaybookDefinition.config.permissions,
-  })
-  .post("/:playbookId/approve", approvePlaybookDefinition.handler, {
-    body: approvePlaybookDefinition.config.body,
-    params: approvePlaybookDefinition.config.params,
-    permissions: approvePlaybookDefinition.config.permissions,
-  })
-  .get("/:playbookId/versions", listPlaybookVersions.handler, {
-    params: listPlaybookVersions.config.params,
-    query: listPlaybookVersions.config.query,
-    permissions: listPlaybookVersions.config.permissions,
-  })
+  .get(
+    "/starters",
+    {
+      permissions: listStarterPlaybooks.config.permissions,
+    },
+    listStarterPlaybooks.handler,
+  )
+  .get(
+    "/recent",
+    {
+      permissions: listRecentPlaybooks.config.permissions,
+      query: listRecentPlaybooks.config.query,
+    },
+    listRecentPlaybooks.handler,
+  )
+  .post(
+    "/from-starter",
+    {
+      body: createPlaybookFromStarter.config.body,
+      permissions: createPlaybookFromStarter.config.permissions,
+    },
+    createPlaybookFromStarter.handler,
+  )
+  .post(
+    "/from-run",
+    {
+      body: createPlaybookFromRun.config.body,
+      permissions: createPlaybookFromRun.config.permissions,
+    },
+    createPlaybookFromRun.handler,
+  )
+  .get(
+    "/:playbookId",
+    {
+      params: getPlaybookDefinition.config.params,
+      permissions: getPlaybookDefinition.config.permissions,
+    },
+    getPlaybookDefinition.handler,
+  )
+  .put(
+    "/:playbookId",
+    {
+      body: updatePlaybookDefinition.config.body,
+      params: updatePlaybookDefinition.config.params,
+      permissions: updatePlaybookDefinition.config.permissions,
+    },
+    updatePlaybookDefinition.handler,
+  )
+  .delete(
+    "/:playbookId",
+    {
+      params: deletePlaybookDefinition.config.params,
+      permissions: deletePlaybookDefinition.config.permissions,
+    },
+    deletePlaybookDefinition.handler,
+  )
+  .post(
+    "/:playbookId/approve",
+    {
+      body: approvePlaybookDefinition.config.body,
+      params: approvePlaybookDefinition.config.params,
+      permissions: approvePlaybookDefinition.config.permissions,
+    },
+    approvePlaybookDefinition.handler,
+  )
+  .get(
+    "/:playbookId/versions",
+    {
+      params: listPlaybookVersions.config.params,
+      query: listPlaybookVersions.config.query,
+      permissions: listPlaybookVersions.config.permissions,
+    },
+    listPlaybookVersions.handler,
+  )
   .post(
     "/:playbookId/versions/:version/restore",
-    restorePlaybookVersion.handler,
     {
       params: restorePlaybookVersion.config.params,
       permissions: restorePlaybookVersion.config.permissions,
     },
+    restorePlaybookVersion.handler,
   );

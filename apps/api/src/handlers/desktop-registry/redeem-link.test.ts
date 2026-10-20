@@ -150,9 +150,13 @@ const createRedemptionFixture = async (
     },
   } satisfies RedemptionServices;
   const route = createDesktopLinkRedeemHandler(services);
-  const app = new Elysia().post("/redeem-link", route.handler, {
-    body: route.config.body,
-  });
+  const app = new Elysia().post(
+    "/redeem-link",
+    {
+      body: route.config.body,
+    },
+    route.handler,
+  );
   const body = {
     correlationId: "90123344-5566-7788-9900-aabbccddeeff",
     verifier: "a".repeat(64),

@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { Value } from "typebox/value";
 
 import { parseTimeZoneId, Temporal } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";

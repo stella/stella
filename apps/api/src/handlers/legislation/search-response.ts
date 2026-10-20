@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import {
   LEGISLATION_SEARCH_MATCH_TYPES,

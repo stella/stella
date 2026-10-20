@@ -1,6 +1,6 @@
-import type { TProperties, TSchema } from "@sinclair/typebox";
-import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
+import type { TProperties, TSchema } from "typebox";
+import { Type } from "typebox";
 
 import {
   CURRENCY_CODE_LENGTH,

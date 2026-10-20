@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { LAW_YEAR_BOUNDS } from "@stll/api-contract/law-year";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";

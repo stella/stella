@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import {
   afterAll,
   afterEach,
@@ -9,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { inArray } from "drizzle-orm";
+import { Value } from "typebox/value";
 
 import { member, user } from "@/api/db/auth-schema";
 import { workspaceMembers } from "@/api/db/schema";

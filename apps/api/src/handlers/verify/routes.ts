@@ -16,15 +16,15 @@ export const verifyAuthRoute = new Elysia({ prefix: "/verify" })
   .guard({ validateAuth: true })
   .get(
     "/:code",
+    {
+      params: t.Object({
+        code: t.String({ pattern: VERIFICATION_CODE_PATTERN }),
+      }),
+    },
     async (ctx) =>
       await resolveVerificationCodeAuth(
         ctx.params.code,
         ctx.session.activeOrganizationId,
         ctx.scopedDb,
       ),
-    {
-      params: t.Object({
-        code: t.String({ pattern: VERIFICATION_CODE_PATTERN }),
-      }),
-    },
   );

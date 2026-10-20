@@ -86,4 +86,4 @@ export const createPublicCorpusRateLimitComposition = ({
         createPublicCorpusGlobalRateLimitOptions("sitemap", createRedisBinding),
       ),
     )
-    .as("scoped");
+    .as("plugin");

@@ -143,7 +143,7 @@ const approvedAdapter = (
 describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
   test("permits only the reviewed TypeBox call", async () => {
     const source = [
-      'import { Type } from "@sinclair/typebox";',
+      'import { Type } from "typebox";',
       "export const reviewed = () => Type.Unsafe(runtimeSchema);",
       "",
     ].join("\n");
@@ -159,8 +159,8 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
 
   test("tracks destructured aliases from imports without trusting shadows", async () => {
     const source = [
-      'import { Type, Unsafe as importedUnsafe } from "@sinclair/typebox";',
-      'import * as TypeBox from "@sinclair/typebox";',
+      'import { Type, Unsafe as importedUnsafe } from "typebox";',
+      'import * as TypeBox from "typebox";',
       'import * as Elysia from "elysia";',
       "const { Unsafe } = Type;",
       "Unsafe(runtimeSchema);",
@@ -191,7 +191,7 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
 
   test("does not let an approved outer adapter hide a nested Unsafe call last", async () => {
     const source = [
-      'import { Type } from "@sinclair/typebox";',
+      'import { Type } from "typebox";',
       "export const reviewed = () => [",
       "  Type.Unsafe(runtimeSchema),",
       "  (() => Type.Unsafe(runtimeSchema))(),",
@@ -210,7 +210,7 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
 
   test("does not let an approved outer adapter hide a nested Unsafe call first", async () => {
     const source = [
-      'import { Type } from "@sinclair/typebox";',
+      'import { Type } from "typebox";',
       "export const reviewed = () => [",
       "  (() => Type.Unsafe(runtimeSchema))(),",
       "  Type.Unsafe(runtimeSchema),",
@@ -229,7 +229,7 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
 
   test("rejects the sole Unsafe call in an anonymous child callback", async () => {
     const source = [
-      'import { Type } from "@sinclair/typebox";',
+      'import { Type } from "typebox";',
       "export const reviewed = () => (() => Type.Unsafe(runtimeSchema))();",
       "",
     ].join("\n");
@@ -245,7 +245,7 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
 
   test("keeps unreviewed bindings and unmatched approvals rejected", async () => {
     const source = [
-      'import { Type } from "@sinclair/typebox";',
+      'import { Type } from "typebox";',
       "export const reviewed = () => Type.Unsafe(runtimeSchema);",
       "export const unreviewed = () => Type.Unsafe(runtimeSchema);",
       "",
@@ -286,17 +286,17 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
       [
         "a renamed binding",
         [
-          'import { Type } from "@sinclair/typebox";',
+          'import { Type } from "typebox";',
           "export const renamed = () => Type.Unsafe(runtimeSchema);",
           "",
         ].join("\n"),
         [1, 2],
       ],
-      ["a removed binding", 'import { Type } from "@sinclair/typebox";\n', [1]],
+      ["a removed binding", 'import { Type } from "typebox";\n', [1]],
       [
         "a TypeBox builder replacing Unsafe",
         [
-          'import { Type } from "@sinclair/typebox";',
+          'import { Type } from "typebox";',
           "export const reviewed = () => Type.String();",
           "",
         ].join("\n"),
@@ -322,7 +322,7 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
 
   test("rejects duplicate approvals instead of choosing one", async () => {
     const source = [
-      'import { Type } from "@sinclair/typebox";',
+      'import { Type } from "typebox";',
       "export const reviewed = () => Type.Unsafe(runtimeSchema);",
       "",
     ].join("\n");
@@ -344,7 +344,7 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
       try: async () =>
         await lint({
           approvedAdapters: [approvedAdapter("reviewed", "")],
-          source: 'import { Type } from "@sinclair/typebox";\n',
+          source: 'import { Type } from "typebox";\n',
           sourceName: "approved.ts",
         }),
       catch: (cause) => cause,
@@ -363,7 +363,7 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
 
   test("does not let a whitespace-only adapter reason grant an exemption", async () => {
     const source = [
-      'import { Type } from "@sinclair/typebox";',
+      'import { Type } from "typebox";',
       "export const reviewed = () => Type.Unsafe(runtimeSchema);",
       "",
     ].join("\n");
@@ -379,7 +379,7 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
 
   test("continues to reject an extra direct Unsafe call for an approved binding", async () => {
     const source = [
-      'import { Type } from "@sinclair/typebox";',
+      'import { Type } from "typebox";',
       "export const reviewed = () => [",
       "  Type.Unsafe(firstRuntimeSchema),",
       "  Type.Unsafe(secondRuntimeSchema),",
@@ -408,7 +408,7 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
 
   test("resets applicable approval consumption between files", async () => {
     const source = [
-      'import { Type } from "@sinclair/typebox";',
+      'import { Type } from "typebox";',
       "export const reviewed = () => Type.Unsafe(runtimeSchema);",
       "",
     ].join("\n");

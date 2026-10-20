@@ -1,4 +1,4 @@
-import { KindGuard, Type } from "@sinclair/typebox";
+import { KindGuard, Type } from "typebox";
 
 import type { Transaction } from "@/api/db/root";
 import { isScopedFeatureEnabled } from "@/api/db/scoped-feature-access";

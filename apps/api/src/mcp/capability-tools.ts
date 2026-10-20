@@ -1,8 +1,8 @@
-import { KindGuard, type TSchema } from "@sinclair/typebox";
-import { ValueErrorType } from "@sinclair/typebox/errors";
-import { Value, type ValueError } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
-import { ElysiaCustomStatusResponse } from "elysia";
+import { ElysiaStatus } from "elysia";
+import { KindGuard, type TSchema } from "typebox";
+import { ValueErrorType } from "typebox/errors";
+import { Value, type ValueError } from "typebox/value";
 import * as v from "valibot";
 
 import {
@@ -2221,8 +2221,8 @@ export const mapHandlerResult = ({
   id: string;
   result: unknown;
 }): McpToolResponse => {
-  if (result instanceof ElysiaCustomStatusResponse) {
-    const statusCode = typeof result.code === "number" ? result.code : 500;
+  if (result instanceof ElysiaStatus) {
+    const statusCode = typeof result.status === "number" ? result.status : 500;
     return mapStatusResponse(statusCode, result.response);
   }
   if (isBinaryPayload(result)) {

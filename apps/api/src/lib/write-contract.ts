@@ -1,5 +1,5 @@
-import { Kind } from "@sinclair/typebox";
 import { panic } from "better-result";
+import { Kind } from "typebox";
 
 import { HandlerError } from "./errors/tagged-errors";
 import {

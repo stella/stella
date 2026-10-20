@@ -11,7 +11,11 @@ export const documentReviewPassagesRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .post("/passages", readDocumentReviewPassages.handler, {
-    body: readDocumentReviewPassages.config.body,
-    permissions: readDocumentReviewPassages.config.permissions,
-  });
+  .post(
+    "/passages",
+    {
+      body: readDocumentReviewPassages.config.body,
+      permissions: readDocumentReviewPassages.config.permissions,
+    },
+    readDocumentReviewPassages.handler,
+  );

@@ -20,40 +20,76 @@ export const createListVerificationRoutes = (
     .use(workspaceAccessMacro)
     .use(permissionMacro)
     .guard({ validateWorkspaceAccess: true })
-    .patch("/item-sources", verifyItemSource.handler, {
-      body: verifyItemSource.config.body,
-      permissions: verifyItemSource.config.permissions,
-    })
-    .put("/item-fact-details", updateFactDetails.handler, {
-      body: updateFactDetails.config.body,
-      permissions: updateFactDetails.config.permissions,
-    })
-    .post("/claim-reviews", createClaimReview.handler, {
-      body: createClaimReview.config.body,
-      permissions: createClaimReview.config.permissions,
-    })
-    .post("/claim-reviews/bulk", createBulkClaimReviews.handler, {
-      body: createBulkClaimReviews.config.body,
-      permissions: createBulkClaimReviews.config.permissions,
-    })
-    .post("/sample-case", createSampleCase.handler, {
-      body: createSampleCase.config.body,
-      permissions: createSampleCase.config.permissions,
-    })
-    .post("/verifications", createVerification.handler, {
-      body: createVerification.config.body,
-      permissions: createVerification.config.permissions,
-    })
-    .post("/verifications/latest", readLatestVerifications.handler, {
-      body: readLatestVerifications.config.body,
-      permissions: readLatestVerifications.config.permissions,
-    })
-    .get("/verifications", readVerifications.handler, {
-      params: readVerifications.config.params,
-      permissions: readVerifications.config.permissions,
-      query: readVerifications.config.query,
-    })
-    .get("/verifications/:runId", readVerification.handler, {
-      params: readVerification.config.params,
-      permissions: readVerification.config.permissions,
-    });
+    .patch(
+      "/item-sources",
+      {
+        body: verifyItemSource.config.body,
+        permissions: verifyItemSource.config.permissions,
+      },
+      verifyItemSource.handler,
+    )
+    .put(
+      "/item-fact-details",
+      {
+        body: updateFactDetails.config.body,
+        permissions: updateFactDetails.config.permissions,
+      },
+      updateFactDetails.handler,
+    )
+    .post(
+      "/claim-reviews",
+      {
+        body: createClaimReview.config.body,
+        permissions: createClaimReview.config.permissions,
+      },
+      createClaimReview.handler,
+    )
+    .post(
+      "/claim-reviews/bulk",
+      {
+        body: createBulkClaimReviews.config.body,
+        permissions: createBulkClaimReviews.config.permissions,
+      },
+      createBulkClaimReviews.handler,
+    )
+    .post(
+      "/sample-case",
+      {
+        body: createSampleCase.config.body,
+        permissions: createSampleCase.config.permissions,
+      },
+      createSampleCase.handler,
+    )
+    .post(
+      "/verifications",
+      {
+        body: createVerification.config.body,
+        permissions: createVerification.config.permissions,
+      },
+      createVerification.handler,
+    )
+    .post(
+      "/verifications/latest",
+      {
+        body: readLatestVerifications.config.body,
+        permissions: readLatestVerifications.config.permissions,
+      },
+      readLatestVerifications.handler,
+    )
+    .get(
+      "/verifications",
+      {
+        params: readVerifications.config.params,
+        permissions: readVerifications.config.permissions,
+        query: readVerifications.config.query,
+      },
+      readVerifications.handler,
+    )
+    .get(
+      "/verifications/:runId",
+      {
+        params: readVerification.config.params,
+        permissions: readVerification.config.permissions,
+      },
+      readVerification.handler,
+    );

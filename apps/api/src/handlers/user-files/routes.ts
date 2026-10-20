@@ -9,15 +9,27 @@ export const userFilesRoute = new Elysia({ prefix: "/user-files" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/:fileId/visual", readUserFileVisual.handler, {
-    params: readUserFileVisual.config.params,
-    permissions: readUserFileVisual.config.permissions,
-  })
-  .get("/:fileId/content", readUserFileContent.handler, {
-    params: readUserFileContent.config.params,
-    permissions: readUserFileContent.config.permissions,
-  })
-  .get("/:fileId/thumbnail", readUserFileThumbnail.handler, {
-    params: readUserFileThumbnail.config.params,
-    permissions: readUserFileThumbnail.config.permissions,
-  });
+  .get(
+    "/:fileId/visual",
+    {
+      params: readUserFileVisual.config.params,
+      permissions: readUserFileVisual.config.permissions,
+    },
+    readUserFileVisual.handler,
+  )
+  .get(
+    "/:fileId/content",
+    {
+      params: readUserFileContent.config.params,
+      permissions: readUserFileContent.config.permissions,
+    },
+    readUserFileContent.handler,
+  )
+  .get(
+    "/:fileId/thumbnail",
+    {
+      params: readUserFileThumbnail.config.params,
+      permissions: readUserFileThumbnail.config.permissions,
+    },
+    readUserFileThumbnail.handler,
+  );

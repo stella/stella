@@ -25,39 +25,47 @@ export const docxSuggestionsRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .put("/entity/:entityId", createDocxSuggestions.handler, {
-    body: createDocxSuggestions.config.body,
-    params: createDocxSuggestions.config.params,
-    permissions: createDocxSuggestions.config.permissions,
-  })
-  .get("/entity/:entityId", listDocxSuggestions.handler, {
-    params: listDocxSuggestions.config.params,
-    query: listDocxSuggestions.config.query,
-    permissions: listDocxSuggestions.config.permissions,
-  })
+  .put(
+    "/entity/:entityId",
+    {
+      body: createDocxSuggestions.config.body,
+      params: createDocxSuggestions.config.params,
+      permissions: createDocxSuggestions.config.permissions,
+    },
+    createDocxSuggestions.handler,
+  )
+  .get(
+    "/entity/:entityId",
+    {
+      params: listDocxSuggestions.config.params,
+      query: listDocxSuggestions.config.query,
+      permissions: listDocxSuggestions.config.permissions,
+    },
+    listDocxSuggestions.handler,
+  )
   .patch(
     "/entity/:entityId/reject-pending",
-    rejectPendingDocxSuggestions.handler,
     {
       body: rejectPendingDocxSuggestions.config.body,
       params: rejectPendingDocxSuggestions.config.params,
       permissions: rejectPendingDocxSuggestions.config.permissions,
     },
+    rejectPendingDocxSuggestions.handler,
   )
   .patch(
     "/entity/:entityId/suggestion/:suggestionId/resolve",
-    resolveDocxSuggestion.handler,
     {
       body: resolveDocxSuggestion.config.body,
       params: resolveDocxSuggestion.config.params,
       permissions: resolveDocxSuggestion.config.permissions,
     },
+    resolveDocxSuggestion.handler,
   )
   .patch(
     "/entity/:entityId/suggestion/:suggestionId/revert",
-    revertDocxSuggestion.handler,
     {
       params: revertDocxSuggestion.config.params,
       permissions: revertDocxSuggestion.config.permissions,
     },
+    revertDocxSuggestion.handler,
   );

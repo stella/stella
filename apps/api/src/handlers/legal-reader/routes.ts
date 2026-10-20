@@ -16,21 +16,37 @@ export const legalReaderRoute = new Elysia({ prefix: "/reader" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/annotations", listReaderAnnotations.handler, {
-    query: listReaderAnnotations.config.query,
-    permissions: listReaderAnnotations.config.permissions,
-  })
-  .post("/annotations", createReaderAnnotation.handler, {
-    body: createReaderAnnotation.config.body,
-    permissions: createReaderAnnotation.config.permissions,
-  })
-  .patch("/annotations/:annotationId", updateReaderAnnotation.handler, {
-    body: updateReaderAnnotation.config.body,
-    params: updateReaderAnnotation.config.params,
-    permissions: updateReaderAnnotation.config.permissions,
-  })
+  .get(
+    "/annotations",
+    {
+      query: listReaderAnnotations.config.query,
+      permissions: listReaderAnnotations.config.permissions,
+    },
+    listReaderAnnotations.handler,
+  )
+  .post(
+    "/annotations",
+    {
+      body: createReaderAnnotation.config.body,
+      permissions: createReaderAnnotation.config.permissions,
+    },
+    createReaderAnnotation.handler,
+  )
+  .patch(
+    "/annotations/:annotationId",
+    {
+      body: updateReaderAnnotation.config.body,
+      params: updateReaderAnnotation.config.params,
+      permissions: updateReaderAnnotation.config.permissions,
+    },
+    updateReaderAnnotation.handler,
+  )
   .use(readerAnswersRoute)
-  .delete("/annotations/:annotationId", deleteReaderAnnotation.handler, {
-    params: deleteReaderAnnotation.config.params,
-    permissions: deleteReaderAnnotation.config.permissions,
-  });
+  .delete(
+    "/annotations/:annotationId",
+    {
+      params: deleteReaderAnnotation.config.params,
+      permissions: deleteReaderAnnotation.config.permissions,
+    },
+    deleteReaderAnnotation.handler,
+  );

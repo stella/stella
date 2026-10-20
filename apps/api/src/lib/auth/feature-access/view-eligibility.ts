@@ -1,5 +1,5 @@
-import { KindGuard, type TSchema } from "@sinclair/typebox";
 import { and, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
+import { KindGuard, type TSchema } from "typebox";
 
 import type { UnavailableWorkspaceView } from "@stll/api-contract";
 

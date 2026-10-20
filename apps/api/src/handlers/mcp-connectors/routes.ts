@@ -19,59 +19,103 @@ const authenticatedMcpConnectorsRoute = new Elysia({ prefix: "/mcp" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/oauth/callback", mcpOAuthCallback.handler, {
-    permissions: mcpOAuthCallback.config.permissions,
-    query: mcpOAuthCallback.config.query,
-  })
-  .get("/connectors", listMcpConnectors.handler, {
-    permissions: listMcpConnectors.config.permissions,
-  })
-  .post("/connectors", createMcpConnector.handler, {
-    body: createMcpConnector.config.body,
-    permissions: createMcpConnector.config.permissions,
-  })
-  .post("/connectors/probe", probeMcpConnector.handler, {
-    body: probeMcpConnector.config.body,
-    permissions: probeMcpConnector.config.permissions,
-  })
-  .post("/connectors/:slug/connect", connectMcpConnector.handler, {
-    params: connectMcpConnector.config.params,
-    permissions: connectMcpConnector.config.permissions,
-  })
+  .get(
+    "/oauth/callback",
+    {
+      permissions: mcpOAuthCallback.config.permissions,
+      query: mcpOAuthCallback.config.query,
+    },
+    mcpOAuthCallback.handler,
+  )
+  .get(
+    "/connectors",
+    {
+      permissions: listMcpConnectors.config.permissions,
+    },
+    listMcpConnectors.handler,
+  )
+  .post(
+    "/connectors",
+    {
+      body: createMcpConnector.config.body,
+      permissions: createMcpConnector.config.permissions,
+    },
+    createMcpConnector.handler,
+  )
+  .post(
+    "/connectors/probe",
+    {
+      body: probeMcpConnector.config.body,
+      permissions: probeMcpConnector.config.permissions,
+    },
+    probeMcpConnector.handler,
+  )
+  .post(
+    "/connectors/:slug/connect",
+    {
+      params: connectMcpConnector.config.params,
+      permissions: connectMcpConnector.config.permissions,
+    },
+    connectMcpConnector.handler,
+  )
   .post(
     "/connectors/:slug/approve-authorization",
-    approveMcpAuthorization.handler,
     {
       params: approveMcpAuthorization.config.params,
       body: approveMcpAuthorization.config.body,
       permissions: approveMcpAuthorization.config.permissions,
     },
+    approveMcpAuthorization.handler,
   )
-  .delete("/connectors/:slug", deleteMcpConnector.handler, {
-    params: deleteMcpConnector.config.params,
-    permissions: deleteMcpConnector.config.permissions,
-  })
-  .get("/connections", listMcpConnections.handler, {
-    permissions: listMcpConnections.config.permissions,
-  })
-  .post("/connections", createMcpConnection.handler, {
-    body: createMcpConnection.config.body,
-    permissions: createMcpConnection.config.permissions,
-  })
-  .patch("/connections/:connectionId", updateMcpConnection.handler, {
-    body: updateMcpConnection.config.body,
-    params: updateMcpConnection.config.params,
-    permissions: updateMcpConnection.config.permissions,
-  })
-  .delete("/connections/:connectionId", deleteMcpConnection.handler, {
-    params: deleteMcpConnection.config.params,
-    permissions: deleteMcpConnection.config.permissions,
-  })
-  .patch("/native-tools/:slug", updateNativeTool.handler, {
-    body: updateNativeTool.config.body,
-    params: updateNativeTool.config.params,
-    permissions: updateNativeTool.config.permissions,
-  });
+  .delete(
+    "/connectors/:slug",
+    {
+      params: deleteMcpConnector.config.params,
+      permissions: deleteMcpConnector.config.permissions,
+    },
+    deleteMcpConnector.handler,
+  )
+  .get(
+    "/connections",
+    {
+      permissions: listMcpConnections.config.permissions,
+    },
+    listMcpConnections.handler,
+  )
+  .post(
+    "/connections",
+    {
+      body: createMcpConnection.config.body,
+      permissions: createMcpConnection.config.permissions,
+    },
+    createMcpConnection.handler,
+  )
+  .patch(
+    "/connections/:connectionId",
+    {
+      body: updateMcpConnection.config.body,
+      params: updateMcpConnection.config.params,
+      permissions: updateMcpConnection.config.permissions,
+    },
+    updateMcpConnection.handler,
+  )
+  .delete(
+    "/connections/:connectionId",
+    {
+      params: deleteMcpConnection.config.params,
+      permissions: deleteMcpConnection.config.permissions,
+    },
+    deleteMcpConnection.handler,
+  )
+  .patch(
+    "/native-tools/:slug",
+    {
+      body: updateNativeTool.config.body,
+      params: updateNativeTool.config.params,
+      permissions: updateNativeTool.config.permissions,
+    },
+    updateNativeTool.handler,
+  );
 
 export const mcpConnectorsRoute = new Elysia()
   .use(mcpOAuthClientMetadataRoute)

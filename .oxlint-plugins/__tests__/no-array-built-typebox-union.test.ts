@@ -13,7 +13,7 @@ describe("no-array-built-typebox-union", () => {
       await lint(
         [
           'import { t } from "elysia";',
-          'import { Type } from "@sinclair/typebox";',
+          'import { Type } from "typebox";',
           "const a = t.Union(VALUES.map((value) => t.Literal(value)));",
           "const b = t.UnionEnum(Object.values(STATUS));",
           "const c = t.UnionEnum(VALUES.filter((value) => value !== 'x'));",
@@ -31,7 +31,7 @@ describe("no-array-built-typebox-union", () => {
       await lint(
         [
           'import { t as schema } from "elysia";',
-          'import * as TB from "@sinclair/typebox";',
+          'import * as TB from "typebox";',
           "const a = schema.Union(VALUES.map((v) => schema.Literal(v)));",
           "const b = TB.Union(VALUES.map((v) => TB.Literal(v)));",
           "const c = local.Union(VALUES.map((v) => local.Literal(v)));",

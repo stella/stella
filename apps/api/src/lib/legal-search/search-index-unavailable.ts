@@ -1,4 +1,4 @@
-import { ElysiaCustomStatusResponse, status } from "elysia";
+import { ElysiaStatus, status } from "elysia";
 
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -39,8 +39,8 @@ export const searchIndexUnavailableError = (cause: unknown): HandlerError =>
  * arrives in, or the 503 envelope a search handler returns.
  */
 export const isSearchIndexUnavailable = (error: unknown): boolean =>
-  resolveHandlerError(error)?.code === SEARCH_INDEX_UNAVAILABLE_CODE ||
-  (error instanceof ElysiaCustomStatusResponse &&
+  resolveHandlerError(error)?.status === SEARCH_INDEX_UNAVAILABLE_CODE ||
+  (error instanceof ElysiaStatus &&
     isRecord(error.response) &&
     error.response["code"] === SEARCH_INDEX_UNAVAILABLE_CODE);
 

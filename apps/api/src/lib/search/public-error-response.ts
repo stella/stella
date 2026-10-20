@@ -1,5 +1,5 @@
-import type { Static } from "@sinclair/typebox";
 import { t } from "elysia";
+import type { Static } from "typebox";
 
 import { LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES } from "@stll/api-contract/legislation-expression";
 import {

@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { type Static, t } from "elysia";
+import { t } from "elysia";
+import type { Static } from "typebox";
 
 import { SECTION_UNITS } from "@stll/legal-atlas/provision-citation-profile";
 

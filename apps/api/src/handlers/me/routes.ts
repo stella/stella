@@ -24,16 +24,28 @@ export const meRoute = new Elysia({ prefix: "/me" })
   .use(sessionAuthMacro)
   .guard({ validateSession: true })
   .get("/oauth-connections", listOAuthConnections.handler)
-  .patch("/guide-progress", updateGuideProgress.handler, {
-    body: updateGuideProgress.config.body,
-  })
+  .patch(
+    "/guide-progress",
+    {
+      body: updateGuideProgress.config.body,
+    },
+    updateGuideProgress.handler,
+  )
   .get("/professional-use", readProfessionalUse.handler)
-  .post("/professional-use", acceptProfessionalUse.handler, {
-    body: acceptProfessionalUse.config.body,
-  })
-  .delete("/oauth-connections/:consentId", disconnectOAuthConnection.handler, {
-    params: disconnectOAuthConnection.config.params,
-  })
+  .post(
+    "/professional-use",
+    {
+      body: acceptProfessionalUse.config.body,
+    },
+    acceptProfessionalUse.handler,
+  )
+  .delete(
+    "/oauth-connections/:consentId",
+    {
+      params: disconnectOAuthConnection.config.params,
+    },
+    disconnectOAuthConnection.handler,
+  )
   .group("/delete", (app) =>
     app
       .get("/pending-tasks", deleteAccountPendingTasks.handler)
@@ -53,9 +65,13 @@ export const meRoute = new Elysia({ prefix: "/me" })
         }),
       )
       .post("/send-otp", deleteAccountSendOtp.handler)
-      .post("/verify", deleteAccountVerify.handler, {
-        body: deleteAccountVerify.config.body,
-      }),
+      .post(
+        "/verify",
+        {
+          body: deleteAccountVerify.config.body,
+        },
+        deleteAccountVerify.handler,
+      ),
   )
   .group("/two-factor", (app) =>
     app

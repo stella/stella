@@ -15,26 +15,46 @@ export const reportsRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .get("/", listReportExports.handler, {
-    params: listReportExports.config.params,
-    permissions: listReportExports.config.permissions,
-    query: listReportExports.config.query,
-  })
-  .get("/templates", listReportTemplates.handler, {
-    params: listReportTemplates.config.params,
-    permissions: listReportTemplates.config.permissions,
-  })
-  .post("/templates/clone-builtin", cloneBuiltinReportTemplate.handler, {
-    body: cloneBuiltinReportTemplate.config.body,
-    params: cloneBuiltinReportTemplate.config.params,
-    permissions: cloneBuiltinReportTemplate.config.permissions,
-  })
-  .post("/export", exportViewReport.handler, {
-    body: exportViewReport.config.body,
-    params: exportViewReport.config.params,
-    permissions: exportViewReport.config.permissions,
-  })
-  .get("/:exportId", readReportExport.handler, {
-    params: readReportExport.config.params,
-    permissions: readReportExport.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      params: listReportExports.config.params,
+      permissions: listReportExports.config.permissions,
+      query: listReportExports.config.query,
+    },
+    listReportExports.handler,
+  )
+  .get(
+    "/templates",
+    {
+      params: listReportTemplates.config.params,
+      permissions: listReportTemplates.config.permissions,
+    },
+    listReportTemplates.handler,
+  )
+  .post(
+    "/templates/clone-builtin",
+    {
+      body: cloneBuiltinReportTemplate.config.body,
+      params: cloneBuiltinReportTemplate.config.params,
+      permissions: cloneBuiltinReportTemplate.config.permissions,
+    },
+    cloneBuiltinReportTemplate.handler,
+  )
+  .post(
+    "/export",
+    {
+      body: exportViewReport.config.body,
+      params: exportViewReport.config.params,
+      permissions: exportViewReport.config.permissions,
+    },
+    exportViewReport.handler,
+  )
+  .get(
+    "/:exportId",
+    {
+      params: readReportExport.config.params,
+      permissions: readReportExport.config.permissions,
+    },
+    readReportExport.handler,
+  );

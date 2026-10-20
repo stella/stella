@@ -375,86 +375,114 @@ export const filesRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .get("/url/:fieldId", readFileEndpoint.handler, {
-    params: readFileEndpoint.config.params,
-    permissions: readFileEndpoint.config.permissions,
-    query: readFileEndpoint.config.query,
-  })
-  .get("/email-html/:fieldId", readEmailHtmlPreviewEndpoint.handler, {
-    params: readEmailHtmlPreviewEndpoint.config.params,
-    permissions: readEmailHtmlPreviewEndpoint.config.permissions,
-  })
+  .get(
+    "/url/:fieldId",
+    {
+      params: readFileEndpoint.config.params,
+      permissions: readFileEndpoint.config.permissions,
+      query: readFileEndpoint.config.query,
+    },
+    readFileEndpoint.handler,
+  )
+  .get(
+    "/email-html/:fieldId",
+    {
+      params: readEmailHtmlPreviewEndpoint.config.params,
+      permissions: readEmailHtmlPreviewEndpoint.config.permissions,
+    },
+    readEmailHtmlPreviewEndpoint.handler,
+  )
   .get(
     "/office-citation/:entityId/:fieldId/:blockId",
-    officeCitationEndpoint.handler,
     {
       params: officeCitationEndpoint.config.params,
       permissions: officeCitationEndpoint.config.permissions,
     },
+    officeCitationEndpoint.handler,
   )
-  .get("/print-pdf/:fieldId", printPdfEndpoint.handler, {
-    params: printPdfEndpoint.config.params,
-    permissions: printPdfEndpoint.config.permissions,
-  })
-  .get("/stamped/:fieldId", stampedDownloadEndpoint.handler, {
-    params: stampedDownloadEndpoint.config.params,
-    permissions: stampedDownloadEndpoint.config.permissions,
-    query: stampedDownloadEndpoint.config.query,
-  })
-  .get("/ocr-export/:fieldId", ocrExportEndpoint.handler, {
-    params: ocrExportEndpoint.config.params,
-    permissions: ocrExportEndpoint.config.permissions,
-    query: ocrExportEndpoint.config.query,
-    response: ocrExportEndpoint.config.response,
-  });
+  .get(
+    "/print-pdf/:fieldId",
+    {
+      params: printPdfEndpoint.config.params,
+      permissions: printPdfEndpoint.config.permissions,
+    },
+    printPdfEndpoint.handler,
+  )
+  .get(
+    "/stamped/:fieldId",
+    {
+      params: stampedDownloadEndpoint.config.params,
+      permissions: stampedDownloadEndpoint.config.permissions,
+      query: stampedDownloadEndpoint.config.query,
+    },
+    stampedDownloadEndpoint.handler,
+  )
+  .get(
+    "/ocr-export/:fieldId",
+    {
+      params: ocrExportEndpoint.config.params,
+      permissions: ocrExportEndpoint.config.permissions,
+      query: ocrExportEndpoint.config.query,
+      response: ocrExportEndpoint.config.response,
+    },
+    ocrExportEndpoint.handler,
+  );
 
 // These UI-only endpoints intentionally stay outside the exported Eden
 // contract. Elysia still registers them with the same guards and macros above.
 filesRoute.get(
   "/document-properties/:fieldId",
-  readDocumentPropertiesEndpoint.handler,
   {
     params: readDocumentPropertiesEndpoint.config.params,
     permissions: readDocumentPropertiesEndpoint.config.permissions,
   },
+  readDocumentPropertiesEndpoint.handler,
 );
 
 filesRoute.patch(
   "/document-properties/:fieldId",
-  updateDocumentPropertiesEndpoint.handler,
   {
     body: updateDocumentPropertiesEndpoint.config.body,
     params: updateDocumentPropertiesEndpoint.config.params,
     permissions: updateDocumentPropertiesEndpoint.config.permissions,
   },
+  updateDocumentPropertiesEndpoint.handler,
 );
 
-filesRoute.get("/scrubbed/:fieldId", scrubbedDownloadEndpoint.handler, {
-  params: scrubbedDownloadEndpoint.config.params,
-  permissions: scrubbedDownloadEndpoint.config.permissions,
-});
+filesRoute.get(
+  "/scrubbed/:fieldId",
+  {
+    params: scrubbedDownloadEndpoint.config.params,
+    permissions: scrubbedDownloadEndpoint.config.permissions,
+  },
+  scrubbedDownloadEndpoint.handler,
+);
 
-filesRoute.get("/thumbnail/:fieldId", readFileThumbnailEndpoint.handler, {
-  params: readFileThumbnailEndpoint.config.params,
-  permissions: readFileThumbnailEndpoint.config.permissions,
-});
+filesRoute.get(
+  "/thumbnail/:fieldId",
+  {
+    params: readFileThumbnailEndpoint.config.params,
+    permissions: readFileThumbnailEndpoint.config.permissions,
+  },
+  readFileThumbnailEndpoint.handler,
+);
 
 filesRoute.get(
   "/email-attachment/:fieldId/:attachmentId",
-  emailAttachmentEndpoint.handler,
   {
     params: emailAttachmentEndpoint.config.params,
     permissions: emailAttachmentEndpoint.config.permissions,
     query: emailAttachmentEndpoint.config.query,
   },
+  emailAttachmentEndpoint.handler,
 );
 
 filesRoute.post(
   "/email-attachment/:fieldId/:attachmentId/save",
-  saveEmailAttachmentEndpoint.handler,
   {
     body: saveEmailAttachmentEndpoint.config.body,
     params: saveEmailAttachmentEndpoint.config.params,
     permissions: saveEmailAttachmentEndpoint.config.permissions,
   },
+  saveEmailAttachmentEndpoint.handler,
 );

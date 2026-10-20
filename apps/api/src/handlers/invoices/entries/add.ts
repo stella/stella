@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { type Static, t } from "elysia";
+import { t } from "elysia";
+import type { Static } from "typebox";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 

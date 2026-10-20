@@ -1,7 +1,7 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
+import { Value } from "typebox/value";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 

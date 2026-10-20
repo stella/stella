@@ -88,7 +88,7 @@ export const multipartFormParser = new Elysia({
   name: "multipart-form-parser",
 })
   .parser("none", () => null)
-  .onParse({ as: "global" }, async ({ request, contentType }) =>
+  .onParse("global", async ({ request, contentType }) =>
     contentType.startsWith("multipart/form-data")
       ? parseMultipartForm(await readForm(request))
       : undefined,

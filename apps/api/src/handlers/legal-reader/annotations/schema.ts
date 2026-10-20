@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import {
   READER_ANNOTATION_BODY_MAX_LENGTH,

@@ -22,11 +22,19 @@ export const myTimeEntriesRoute = new Elysia({ prefix: "/v1/time-entries/me" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listMyTimeEntries.handler, {
-    permissions: listMyTimeEntries.config.permissions,
-    query: listMyTimeEntries.config.query,
-  })
-  .put("/daily-target", updateDailyTarget.handler, {
-    permissions: updateDailyTarget.config.permissions,
-    body: updateDailyTarget.config.body,
-  });
+  .get(
+    "/",
+    {
+      permissions: listMyTimeEntries.config.permissions,
+      query: listMyTimeEntries.config.query,
+    },
+    listMyTimeEntries.handler,
+  )
+  .put(
+    "/daily-target",
+    {
+      permissions: updateDailyTarget.config.permissions,
+      body: updateDailyTarget.config.body,
+    },
+    updateDailyTarget.handler,
+  );

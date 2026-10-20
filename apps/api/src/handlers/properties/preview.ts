@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { matchError, Result } from "better-result";
 import { t } from "elysia";
+import { Value } from "typebox/value";
 
 import { propertyContentSchema } from "@/api/db/schema-validators";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";

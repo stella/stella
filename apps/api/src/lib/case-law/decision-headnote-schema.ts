@@ -1,6 +1,6 @@
-import { Type } from "@sinclair/typebox";
-import type { TSchema } from "@sinclair/typebox";
 import { t } from "elysia";
+import { Type } from "typebox";
+import type { TSchema } from "typebox";
 
 import {
   DECISION_HEADNOTE_KEYWORDS,

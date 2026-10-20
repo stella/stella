@@ -18,41 +18,47 @@ const UNAUTHENTICATED_ROUTES = [
     path: "/protected",
     app: new Elysia()
       .use(sessionAuthMacro)
-      .get("/protected", () => ({ ok: true }), { validateSession: true }),
+      .get("/protected", { validateSession: true }, () => ({ ok: true })),
   },
   {
     name: "validateAuth",
     path: "/protected",
     app: new Elysia()
       .use(authMacro)
-      .get("/protected", () => ({ ok: true }), { validateAuth: true }),
+      .get("/protected", { validateAuth: true }, () => ({ ok: true })),
   },
   {
     name: "permissions",
     path: "/protected",
-    app: new Elysia()
-      .use(permissionMacro)
-      .get("/protected", () => ({ ok: true }), {
+    app: new Elysia().use(permissionMacro).get(
+      "/protected",
+      {
         permissions: { workspace: ["read"] },
-      }),
+      },
+      () => ({ ok: true }),
+    ),
   },
   {
     name: "validateWorkspaceAccess",
     path: `/workspaces/${WORKSPACE_ID}`,
-    app: new Elysia()
-      .use(workspaceAccessMacro)
-      .get("/workspaces/:workspaceId", () => ({ ok: true }), {
+    app: new Elysia().use(workspaceAccessMacro).get(
+      "/workspaces/:workspaceId",
+      {
         validateWorkspaceAccess: true,
-      }),
+      },
+      () => ({ ok: true }),
+    ),
   },
   {
     name: "validateWorkspaceAccessIncludingArchived",
     path: `/workspaces/${WORKSPACE_ID}`,
-    app: new Elysia()
-      .use(workspaceAccessMacro)
-      .get("/workspaces/:workspaceId", () => ({ ok: true }), {
+    app: new Elysia().use(workspaceAccessMacro).get(
+      "/workspaces/:workspaceId",
+      {
         validateWorkspaceAccessIncludingArchived: true,
-      }),
+      },
+      () => ({ ok: true }),
+    ),
   },
 ];
 

@@ -22,8 +22,12 @@ export const memberTimeTargetsRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .put("/:userId/daily-target", updateDailyTarget.handler, {
-    permissions: updateDailyTarget.config.permissions,
-    params: updateDailyTarget.config.params,
-    body: updateDailyTarget.config.body,
-  });
+  .put(
+    "/:userId/daily-target",
+    {
+      permissions: updateDailyTarget.config.permissions,
+      params: updateDailyTarget.config.params,
+      body: updateDailyTarget.config.body,
+    },
+    updateDailyTarget.handler,
+  );

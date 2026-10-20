@@ -22,11 +22,13 @@ describe("deploymentFeatureGate", () => {
   });
 
   test("answers 404, not a validation error, for a malformed request", async () => {
-    const app = new Elysia()
-      .use(deploymentFeatureGate(() => false))
-      .get("/feature", () => ({ ok: true }), {
+    const app = new Elysia().use(deploymentFeatureGate(() => false)).get(
+      "/feature",
+      {
         query: t.Object({ q: t.String({ minLength: 1 }) }),
-      });
+      },
+      () => ({ ok: true }),
+    );
 
     const response = await app.handle(request());
 

@@ -9,7 +9,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -117,7 +117,7 @@ const acquireClock = async (fixture: HistoryFixture) => {
       identity(fixture),
     ),
   );
-  if (result instanceof ElysiaCustomStatusResponse) {
+  if (result instanceof ElysiaStatus) {
     return panic(
       `Expected import clock success, received status ${result.code}`,
     );
@@ -143,7 +143,7 @@ const readHistory = async (fixture: HistoryFixture) => {
       ...identity(fixture),
     }),
   );
-  if (result instanceof ElysiaCustomStatusResponse) {
+  if (result instanceof ElysiaStatus) {
     return panic(`Expected history success, received status ${result.code}`);
   }
   return result;
@@ -156,7 +156,7 @@ const recordQuery = async (fixture: HistoryFixture, query: string) => {
       body: { kind: "search", query },
     }),
   );
-  if (result instanceof ElysiaCustomStatusResponse) {
+  if (result instanceof ElysiaStatus) {
     return panic(`Expected record success, received status ${result.code}`);
   }
   return result;
@@ -582,9 +582,9 @@ describe("search history import clock integration", () => {
           },
         }),
       );
-      expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (response instanceof ElysiaCustomStatusResponse) {
-        expect(response.code).toBe(400);
+      expect(response).toBeInstanceOf(ElysiaStatus);
+      if (response instanceof ElysiaStatus) {
+        expect(response.status).toBe(400);
       }
       await expectNoImportWrites(fixture);
     });
@@ -617,9 +617,9 @@ describe("search history import clock integration", () => {
             },
           ),
         );
-        expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-        if (response instanceof ElysiaCustomStatusResponse) {
-          expect(response.code).toBe(400);
+        expect(response).toBeInstanceOf(ElysiaStatus);
+        if (response instanceof ElysiaStatus) {
+          expect(response.status).toBe(400);
         }
         await expectNoImportWrites(fixture);
       });
@@ -644,9 +644,9 @@ describe("search history import clock integration", () => {
           },
         }),
       );
-      expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (response instanceof ElysiaCustomStatusResponse) {
-        expect(response.code).toBe(400);
+      expect(response).toBeInstanceOf(ElysiaStatus);
+      if (response instanceof ElysiaStatus) {
+        expect(response.status).toBe(400);
       }
       await expectNoImportWrites(fixture);
     });

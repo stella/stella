@@ -1,5 +1,5 @@
-import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
+import { Type } from "typebox";
 
 // Verifies detection of recursive-schema serializer failures for a route body
 // containing `t.Recursive` wrapped in `Type.Unsafe`.
@@ -16,7 +16,11 @@ export const buildRecursiveFixtureApp = async () => {
     ),
   );
 
-  return new Elysia().post(SELF_TEST_ROUTE, () => "ok", {
-    body: t.Object({ filters: t.Array(recursiveNode) }),
-  });
+  return new Elysia().post(
+    SELF_TEST_ROUTE,
+    {
+      body: t.Object({ filters: t.Array(recursiveNode) }),
+    },
+    () => "ok",
+  );
 };

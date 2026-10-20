@@ -1,5 +1,5 @@
-import type { TSchema } from "@sinclair/typebox";
 import { t } from "elysia";
+import type { TSchema } from "typebox";
 
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 

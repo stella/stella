@@ -5,8 +5,8 @@ import {
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
-import type { Static } from "elysia";
 import { t } from "elysia";
+import type { Static } from "typebox";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {

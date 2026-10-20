@@ -20,43 +20,83 @@ export const tasksRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .put("/", createTask.handler, {
-    body: createTask.config.body,
-    permissions: createTask.config.permissions,
-  })
-  .patch("/", updateTask.handler, {
-    body: updateTask.config.body,
-    permissions: updateTask.config.permissions,
-  })
-  .post("/calendar", calendarTasks.handler, {
-    body: calendarTasks.config.body,
-    permissions: calendarTasks.config.permissions,
-  })
-  .get("/:taskId", readTaskById.handler, {
-    params: readTaskById.config.params,
-    permissions: readTaskById.config.permissions,
-  })
-  .post("/assignees", addAssignee.handler, {
-    body: addAssignee.config.body,
-    permissions: addAssignee.config.permissions,
-  })
-  .delete("/assignees", removeAssignee.handler, {
-    body: removeAssignee.config.body,
-    permissions: removeAssignee.config.permissions,
-  })
-  .post("/assignees/move", moveAssignee.handler, {
-    body: moveAssignee.config.body,
-    permissions: moveAssignee.config.permissions,
-  })
-  .post("/links", createEntityLink.handler, {
-    body: createEntityLink.config.body,
-    permissions: createEntityLink.config.permissions,
-  })
-  .delete("/links", deleteEntityLink.handler, {
-    body: deleteEntityLink.config.body,
-    permissions: deleteEntityLink.config.permissions,
-  })
-  .get("/:taskId/links", listEntityLinks.handler, {
-    params: listEntityLinks.config.params,
-    permissions: listEntityLinks.config.permissions,
-  });
+  .put(
+    "/",
+    {
+      body: createTask.config.body,
+      permissions: createTask.config.permissions,
+    },
+    createTask.handler,
+  )
+  .patch(
+    "/",
+    {
+      body: updateTask.config.body,
+      permissions: updateTask.config.permissions,
+    },
+    updateTask.handler,
+  )
+  .post(
+    "/calendar",
+    {
+      body: calendarTasks.config.body,
+      permissions: calendarTasks.config.permissions,
+    },
+    calendarTasks.handler,
+  )
+  .get(
+    "/:taskId",
+    {
+      params: readTaskById.config.params,
+      permissions: readTaskById.config.permissions,
+    },
+    readTaskById.handler,
+  )
+  .post(
+    "/assignees",
+    {
+      body: addAssignee.config.body,
+      permissions: addAssignee.config.permissions,
+    },
+    addAssignee.handler,
+  )
+  .delete(
+    "/assignees",
+    {
+      body: removeAssignee.config.body,
+      permissions: removeAssignee.config.permissions,
+    },
+    removeAssignee.handler,
+  )
+  .post(
+    "/assignees/move",
+    {
+      body: moveAssignee.config.body,
+      permissions: moveAssignee.config.permissions,
+    },
+    moveAssignee.handler,
+  )
+  .post(
+    "/links",
+    {
+      body: createEntityLink.config.body,
+      permissions: createEntityLink.config.permissions,
+    },
+    createEntityLink.handler,
+  )
+  .delete(
+    "/links",
+    {
+      body: deleteEntityLink.config.body,
+      permissions: deleteEntityLink.config.permissions,
+    },
+    deleteEntityLink.handler,
+  )
+  .get(
+    "/:taskId/links",
+    {
+      params: listEntityLinks.config.params,
+      permissions: listEntityLinks.config.permissions,
+    },
+    listEntityLinks.handler,
+  );

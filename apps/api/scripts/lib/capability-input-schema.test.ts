@@ -1,5 +1,5 @@
-import { KindGuard, Type } from "@sinclair/typebox";
 import { expect, test } from "bun:test";
+import { KindGuard, Type } from "typebox";
 
 import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-defs";
 import type { AdvertisedSchemas } from "../../src/mcp/advertised-schema";

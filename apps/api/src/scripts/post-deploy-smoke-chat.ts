@@ -22,7 +22,7 @@
  * connection or reads the app's env module.
  */
 import { TaggedError } from "better-result";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 import * as v from "valibot";
 
 import { sleep } from "@stll/concurrency/sleep";

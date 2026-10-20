@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entityViews } from "@/api/db/schema";
@@ -92,8 +92,8 @@ describe("entity view owner isolation", () => {
     await testDb.insert(entityViews).values(rows);
 
     const result = await listViews.handler(contextFor(ids.orgA, ids.userA1));
-    expect(result).not.toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (result instanceof ElysiaCustomStatusResponse) {
+    expect(result).not.toBeInstanceOf(ElysiaStatus);
+    if (result instanceof ElysiaStatus) {
       panic("Expected the entity view list");
     }
     expect(result.items.map((view) => view.name)).toEqual(["A private"]);

@@ -33,10 +33,14 @@ export const createPublicSanctionsRoute = (
         options?.rateLimitOptions ?? createPublicSanctionsRateLimitOptions(),
       ),
     )
-    .post("/search", search.handler, {
-      body: search.config.body,
-      response: search.config.response,
-    });
+    .post(
+      "/search",
+      {
+        body: search.config.body,
+        response: search.config.response,
+      },
+      search.handler,
+    );
 };
 
 export const publicSanctionsRoute = createPublicSanctionsRoute();

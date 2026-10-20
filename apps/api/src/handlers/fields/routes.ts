@@ -12,19 +12,35 @@ export const fieldsRoute = new Elysia({ prefix: "/fields/:workspaceId" })
   .guard({
     validateWorkspaceAccess: true,
   })
-  .post("/", upsertField.handler, {
-    body: upsertField.config.body,
-    permissions: upsertField.config.permissions,
-  })
-  .patch("/kanban-placement", updateKanbanPlacement.handler, {
-    body: updateKanbanPlacement.config.body,
-    permissions: updateKanbanPlacement.config.permissions,
-  })
-  .patch("/metadata", updateCellMetadata.handler, {
-    body: updateCellMetadata.config.body,
-    permissions: updateCellMetadata.config.permissions,
-  })
-  .patch("/metadata-batch", markColumnFlag.handler, {
-    body: markColumnFlag.config.body,
-    permissions: markColumnFlag.config.permissions,
-  });
+  .post(
+    "/",
+    {
+      body: upsertField.config.body,
+      permissions: upsertField.config.permissions,
+    },
+    upsertField.handler,
+  )
+  .patch(
+    "/kanban-placement",
+    {
+      body: updateKanbanPlacement.config.body,
+      permissions: updateKanbanPlacement.config.permissions,
+    },
+    updateKanbanPlacement.handler,
+  )
+  .patch(
+    "/metadata",
+    {
+      body: updateCellMetadata.config.body,
+      permissions: updateCellMetadata.config.permissions,
+    },
+    updateCellMetadata.handler,
+  )
+  .patch(
+    "/metadata-batch",
+    {
+      body: markColumnFlag.config.body,
+      permissions: markColumnFlag.config.permissions,
+    },
+    markColumnFlag.handler,
+  );

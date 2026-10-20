@@ -1,6 +1,6 @@
-import { Type } from "@sinclair/typebox";
 import { Result } from "better-result";
 import { t } from "elysia";
+import { Type } from "typebox";
 
 import { desktopMattersResponseSchema } from "@stll/api-contract/desktop-time-entries";
 import type { DesktopMattersResponse } from "@stll/api-contract/desktop-time-entries";

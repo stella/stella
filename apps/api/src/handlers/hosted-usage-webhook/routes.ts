@@ -33,6 +33,15 @@ export const hostedUsageWebhookRoute = new Elysia({
   )
   .post(
     "/webhook",
+    {
+      // 64 KiB cap. Webhook payloads are typically 5-50 KB;
+      // anything significantly larger is pathological or malicious
+      // (HMAC verification still costs CPU per byte). Combined
+      // with the per-IP rate limit above, this bounds the worst
+      // case an unauthenticated attacker can drive.
+      body: t.String({ maxLength: 65_536 }),
+      parse: "text",
+    },
     async ({ request, body }) => {
       // The route schema below requires `body` to be a string at
       // runtime — Elysia rejects anything else before this handler
@@ -44,14 +53,5 @@ export const hostedUsageWebhookRoute = new Elysia({
         panic("hosted usage webhook body bypassed t.String schema");
       }
       return await receiveHostedUsageWebhook({ request, body });
-    },
-    {
-      // 64 KiB cap. Webhook payloads are typically 5-50 KB;
-      // anything significantly larger is pathological or malicious
-      // (HMAC verification still costs CPU per byte). Combined
-      // with the per-IP rate limit above, this bounds the worst
-      // case an unauthenticated attacker can drive.
-      body: t.String({ maxLength: 65_536 }),
-      parse: "text",
     },
   );

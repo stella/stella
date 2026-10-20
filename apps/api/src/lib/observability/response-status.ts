@@ -1,5 +1,4 @@
-import { StatusMap, type Context } from "elysia";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus, StatusMap, type Context } from "elysia";
 
 const DEFAULT_RESPONSE_STATUS = 200;
 
@@ -25,11 +24,8 @@ export const resolveResponseStatus = ({
   let value = response;
   let selectedStatus = set.status;
   // Each status wrapper replaces set.status before Elysia maps its payload.
-  while (
-    value instanceof ElysiaCustomStatusResponse &&
-    typeof value.code === "number"
-  ) {
-    selectedStatus = value.code;
+  while (value instanceof ElysiaStatus && typeof value.status === "number") {
+    selectedStatus = value.status;
     value = value.response;
   }
 
@@ -54,7 +50,7 @@ export const normalizeResponseStatus = ({
   set,
 }: ResolveResponseStatusOptions) => {
   let raw = response;
-  while (raw instanceof ElysiaCustomStatusResponse) {
+  while (raw instanceof ElysiaStatus) {
     raw = raw.response;
   }
   if (!(raw instanceof Response)) {

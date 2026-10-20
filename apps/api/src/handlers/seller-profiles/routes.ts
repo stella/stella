@@ -21,28 +21,52 @@ export const sellerProfilesRoute = new Elysia({ prefix: "/seller-profiles" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listSellerProfiles.handler, {
-    permissions: listSellerProfiles.config.permissions,
-    query: listSellerProfiles.config.query,
-  })
-  .post("/", createSellerProfile.handler, {
-    permissions: createSellerProfile.config.permissions,
-    body: createSellerProfile.config.body,
-  })
-  .get("/:sellerProfileId", getSellerProfile.handler, {
-    permissions: getSellerProfile.config.permissions,
-    params: getSellerProfile.config.params,
-  })
-  .patch("/:sellerProfileId", updateSellerProfile.handler, {
-    permissions: updateSellerProfile.config.permissions,
-    params: updateSellerProfile.config.params,
-    body: updateSellerProfile.config.body,
-  })
-  .post("/:sellerProfileId/default", updateSellerProfileDefault.handler, {
-    permissions: updateSellerProfileDefault.config.permissions,
-    params: updateSellerProfileDefault.config.params,
-  })
-  .post("/:sellerProfileId/archive", archiveSellerProfile.handler, {
-    permissions: archiveSellerProfile.config.permissions,
-    params: archiveSellerProfile.config.params,
-  });
+  .get(
+    "/",
+    {
+      permissions: listSellerProfiles.config.permissions,
+      query: listSellerProfiles.config.query,
+    },
+    listSellerProfiles.handler,
+  )
+  .post(
+    "/",
+    {
+      permissions: createSellerProfile.config.permissions,
+      body: createSellerProfile.config.body,
+    },
+    createSellerProfile.handler,
+  )
+  .get(
+    "/:sellerProfileId",
+    {
+      permissions: getSellerProfile.config.permissions,
+      params: getSellerProfile.config.params,
+    },
+    getSellerProfile.handler,
+  )
+  .patch(
+    "/:sellerProfileId",
+    {
+      permissions: updateSellerProfile.config.permissions,
+      params: updateSellerProfile.config.params,
+      body: updateSellerProfile.config.body,
+    },
+    updateSellerProfile.handler,
+  )
+  .post(
+    "/:sellerProfileId/default",
+    {
+      permissions: updateSellerProfileDefault.config.permissions,
+      params: updateSellerProfileDefault.config.params,
+    },
+    updateSellerProfileDefault.handler,
+  )
+  .post(
+    "/:sellerProfileId/archive",
+    {
+      permissions: archiveSellerProfile.config.permissions,
+      params: archiveSellerProfile.config.params,
+    },
+    archiveSellerProfile.handler,
+  );

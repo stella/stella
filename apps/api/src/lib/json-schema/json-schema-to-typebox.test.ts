@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
+import { Value } from "typebox/value";
 import * as v from "valibot";
 
 import { jsonSchemaToTypeBox } from "./json-schema-to-typebox";

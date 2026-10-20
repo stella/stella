@@ -1,7 +1,7 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import { Value } from "typebox/value";
 
 import {
   ACTION_ADMISSION_CODES,

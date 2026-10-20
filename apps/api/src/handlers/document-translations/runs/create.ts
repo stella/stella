@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { isDocumentTranslationDeepLSupportedMimeType } from "@stll/api-contract/document-translation";
 

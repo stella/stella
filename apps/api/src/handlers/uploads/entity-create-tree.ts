@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { sha256HexToBase64 } from "@stll/sha256";
 

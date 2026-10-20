@@ -33,49 +33,93 @@ export const styleSetsRoute = new Elysia({ prefix: "/style-sets" })
     }),
   )
   .guard({ validateAuth: true })
-  .get("/", listStyleSets.handler, {
-    permissions: listStyleSets.config.permissions,
-    query: listStyleSets.config.query,
-  })
-  .put("/", createStyleSet.handler, {
-    body: createStyleSet.config.body,
-    permissions: createStyleSet.config.permissions,
-  })
-  .get("/editor/stella", readStellaStyleEditor.handler, {
-    permissions: readStellaStyleEditor.config.permissions,
-  })
-  .post("/editor/preview", previewStyleSetFromEditor.handler, {
-    body: previewStyleSetFromEditor.config.body,
-    permissions: previewStyleSetFromEditor.config.permissions,
-  })
-  .put("/editor", createStyleSetFromEditor.handler, {
-    body: createStyleSetFromEditor.config.body,
-    permissions: createStyleSetFromEditor.config.permissions,
-  })
-  .get("/:styleSetId/download", downloadStyleSet.handler, {
-    params: downloadStyleSet.config.params,
-    permissions: downloadStyleSet.config.permissions,
-  })
-  .post("/:styleSetId", updateStyleSet.handler, {
-    body: updateStyleSet.config.body,
-    params: updateStyleSet.config.params,
-    permissions: updateStyleSet.config.permissions,
-  })
-  .post("/:styleSetId/source", replaceStyleSet.handler, {
-    body: replaceStyleSet.config.body,
-    params: replaceStyleSet.config.params,
-    permissions: replaceStyleSet.config.permissions,
-  })
-  .get("/:styleSetId/editor", readStyleSetEditor.handler, {
-    params: readStyleSetEditor.config.params,
-    permissions: readStyleSetEditor.config.permissions,
-  })
-  .post("/:styleSetId/editor", updateStyleSetFromEditor.handler, {
-    body: updateStyleSetFromEditor.config.body,
-    params: updateStyleSetFromEditor.config.params,
-    permissions: updateStyleSetFromEditor.config.permissions,
-  })
-  .delete("/:styleSetId", deleteStyleSet.handler, {
-    params: deleteStyleSet.config.params,
-    permissions: deleteStyleSet.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      permissions: listStyleSets.config.permissions,
+      query: listStyleSets.config.query,
+    },
+    listStyleSets.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createStyleSet.config.body,
+      permissions: createStyleSet.config.permissions,
+    },
+    createStyleSet.handler,
+  )
+  .get(
+    "/editor/stella",
+    {
+      permissions: readStellaStyleEditor.config.permissions,
+    },
+    readStellaStyleEditor.handler,
+  )
+  .post(
+    "/editor/preview",
+    {
+      body: previewStyleSetFromEditor.config.body,
+      permissions: previewStyleSetFromEditor.config.permissions,
+    },
+    previewStyleSetFromEditor.handler,
+  )
+  .put(
+    "/editor",
+    {
+      body: createStyleSetFromEditor.config.body,
+      permissions: createStyleSetFromEditor.config.permissions,
+    },
+    createStyleSetFromEditor.handler,
+  )
+  .get(
+    "/:styleSetId/download",
+    {
+      params: downloadStyleSet.config.params,
+      permissions: downloadStyleSet.config.permissions,
+    },
+    downloadStyleSet.handler,
+  )
+  .post(
+    "/:styleSetId",
+    {
+      body: updateStyleSet.config.body,
+      params: updateStyleSet.config.params,
+      permissions: updateStyleSet.config.permissions,
+    },
+    updateStyleSet.handler,
+  )
+  .post(
+    "/:styleSetId/source",
+    {
+      body: replaceStyleSet.config.body,
+      params: replaceStyleSet.config.params,
+      permissions: replaceStyleSet.config.permissions,
+    },
+    replaceStyleSet.handler,
+  )
+  .get(
+    "/:styleSetId/editor",
+    {
+      params: readStyleSetEditor.config.params,
+      permissions: readStyleSetEditor.config.permissions,
+    },
+    readStyleSetEditor.handler,
+  )
+  .post(
+    "/:styleSetId/editor",
+    {
+      body: updateStyleSetFromEditor.config.body,
+      params: updateStyleSetFromEditor.config.params,
+      permissions: updateStyleSetFromEditor.config.permissions,
+    },
+    updateStyleSetFromEditor.handler,
+  )
+  .delete(
+    "/:styleSetId",
+    {
+      params: deleteStyleSet.config.params,
+      permissions: deleteStyleSet.config.permissions,
+    },
+    deleteStyleSet.handler,
+  );

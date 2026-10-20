@@ -14,26 +14,46 @@ export const flowRunsRoute = new Elysia({
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
-  .post("/", startFlowRun.handler, {
-    params: startFlowRun.config.params,
-    body: startFlowRun.config.body,
-    permissions: startFlowRun.config.permissions,
-  })
-  .get("/", listFlowRuns.handler, {
-    params: listFlowRuns.config.params,
-    query: listFlowRuns.config.query,
-    permissions: listFlowRuns.config.permissions,
-  })
-  .get("/:runId", getFlowRun.handler, {
-    params: getFlowRun.config.params,
-    permissions: getFlowRun.config.permissions,
-  })
-  .post("/:runId/review", reviewFlowRun.handler, {
-    params: reviewFlowRun.config.params,
-    body: reviewFlowRun.config.body,
-    permissions: reviewFlowRun.config.permissions,
-  })
-  .post("/:runId/cancel", cancelFlowRun.handler, {
-    params: cancelFlowRun.config.params,
-    permissions: cancelFlowRun.config.permissions,
-  });
+  .post(
+    "/",
+    {
+      params: startFlowRun.config.params,
+      body: startFlowRun.config.body,
+      permissions: startFlowRun.config.permissions,
+    },
+    startFlowRun.handler,
+  )
+  .get(
+    "/",
+    {
+      params: listFlowRuns.config.params,
+      query: listFlowRuns.config.query,
+      permissions: listFlowRuns.config.permissions,
+    },
+    listFlowRuns.handler,
+  )
+  .get(
+    "/:runId",
+    {
+      params: getFlowRun.config.params,
+      permissions: getFlowRun.config.permissions,
+    },
+    getFlowRun.handler,
+  )
+  .post(
+    "/:runId/review",
+    {
+      params: reviewFlowRun.config.params,
+      body: reviewFlowRun.config.body,
+      permissions: reviewFlowRun.config.permissions,
+    },
+    reviewFlowRun.handler,
+  )
+  .post(
+    "/:runId/cancel",
+    {
+      params: cancelFlowRun.config.params,
+      permissions: cancelFlowRun.config.permissions,
+    },
+    cancelFlowRun.handler,
+  );

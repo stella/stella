@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, isNull, max, notExists } from "drizzle-orm";
-import { type Static, t } from "elysia";
+import { t } from "elysia";
+import type { Static } from "typebox";
 
 import {
   INVOICE_LINE_SOURCE,

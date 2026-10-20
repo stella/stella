@@ -1,9 +1,10 @@
-import { TypeCompiler } from "@sinclair/typebox/compiler";
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, expectTypeOf, spyOn, test } from "bun:test";
-import { getSchemaValidator } from "elysia";
-import type { Static, UnwrapSchema } from "elysia";
+import { Validator } from "elysia";
+import type { UnwrapSchema } from "elysia";
 import fc from "fast-check";
+import type { Static } from "typebox";
+import { TypeCompiler } from "typebox/compiler";
+import { Value } from "typebox/value";
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
@@ -309,12 +310,9 @@ describe("case-law search response schema", () => {
   test("the response schema builds its exact serializer", () => {
     const warnings = spyOn(console, "warn").mockImplementation(() => {});
     try {
-      const validator = getSchemaValidator(
-        searchDecisionsSuccessResponseSchema,
-        {
-          normalize: "exactMirror",
-        },
-      );
+      const validator = Validator.create(searchDecisionsSuccessResponseSchema, {
+        normalize: "exactMirror",
+      });
       expect(warnings.mock.calls).toEqual([]);
       const response = { ...validResponse, facets: firstPageFacets };
       expect(validator.Check(response)).toBe(true);

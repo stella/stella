@@ -21,20 +21,36 @@ export const savedTimeNarrativesRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listSavedTimeNarratives.handler, {
-    query: listSavedTimeNarratives.config.query,
-    permissions: listSavedTimeNarratives.config.permissions,
-  })
-  .post("/", createSavedTimeNarrative.handler, {
-    body: createSavedTimeNarrative.config.body,
-    permissions: createSavedTimeNarrative.config.permissions,
-  })
-  .patch("/:id", updateSavedTimeNarrative.handler, {
-    params: updateSavedTimeNarrative.config.params,
-    body: updateSavedTimeNarrative.config.body,
-    permissions: updateSavedTimeNarrative.config.permissions,
-  })
-  .delete("/:id", deleteSavedTimeNarrative.handler, {
-    params: deleteSavedTimeNarrative.config.params,
-    permissions: deleteSavedTimeNarrative.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      query: listSavedTimeNarratives.config.query,
+      permissions: listSavedTimeNarratives.config.permissions,
+    },
+    listSavedTimeNarratives.handler,
+  )
+  .post(
+    "/",
+    {
+      body: createSavedTimeNarrative.config.body,
+      permissions: createSavedTimeNarrative.config.permissions,
+    },
+    createSavedTimeNarrative.handler,
+  )
+  .patch(
+    "/:id",
+    {
+      params: updateSavedTimeNarrative.config.params,
+      body: updateSavedTimeNarrative.config.body,
+      permissions: updateSavedTimeNarrative.config.permissions,
+    },
+    updateSavedTimeNarrative.handler,
+  )
+  .delete(
+    "/:id",
+    {
+      params: deleteSavedTimeNarrative.config.params,
+      permissions: deleteSavedTimeNarrative.config.permissions,
+    },
+    deleteSavedTimeNarrative.handler,
+  );

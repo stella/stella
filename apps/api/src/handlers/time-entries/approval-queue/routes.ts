@@ -21,15 +21,27 @@ export const timeApprovalQueueRoute = new Elysia({ prefix: "/v1/time-entries" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/approval-queue", listApprovalQueue.handler, {
-    permissions: listApprovalQueue.config.permissions,
-    query: listApprovalQueue.config.query,
-  })
-  .post("/approve", approveTimeEntries.handler, {
-    permissions: approveTimeEntries.config.permissions,
-    body: approveTimeEntries.config.body,
-  })
-  .post("/approval-queue/return", returnTimeEntry.handler, {
-    permissions: returnTimeEntry.config.permissions,
-    body: returnTimeEntry.config.body,
-  });
+  .get(
+    "/approval-queue",
+    {
+      permissions: listApprovalQueue.config.permissions,
+      query: listApprovalQueue.config.query,
+    },
+    listApprovalQueue.handler,
+  )
+  .post(
+    "/approve",
+    {
+      permissions: approveTimeEntries.config.permissions,
+      body: approveTimeEntries.config.body,
+    },
+    approveTimeEntries.handler,
+  )
+  .post(
+    "/approval-queue/return",
+    {
+      permissions: returnTimeEntry.config.permissions,
+      body: returnTimeEntry.config.body,
+    },
+    returnTimeEntry.handler,
+  );

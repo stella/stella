@@ -27,7 +27,7 @@ import { TaggedError } from "better-result";
  * client, no env module) so it can run as a standalone `bun` invocation
  * from a deploy job without booting the server or opening a connection.
  */
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 import * as v from "valibot";
 
 import { sleep } from "@stll/concurrency/sleep";

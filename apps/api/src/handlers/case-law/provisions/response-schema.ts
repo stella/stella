@@ -1,6 +1,6 @@
-import type { TSchema } from "@sinclair/typebox";
-import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
+import type { TSchema } from "typebox";
+import { Type } from "typebox";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-version";

@@ -181,14 +181,22 @@ const createBatchHarness = (existingEntries = 0) => {
   const statusEndpoint =
     createDesktopTimeEntryBatchStatusEndpoint(authorizeAccount);
   const app = new Elysia()
-    .put("/batch", endpoint.handler, {
-      body: endpoint.config.body,
-      response: endpoint.config.response,
-    })
-    .put("/status", statusEndpoint.handler, {
-      body: statusEndpoint.config.body,
-      response: statusEndpoint.config.response,
-    });
+    .put(
+      "/batch",
+      {
+        body: endpoint.config.body,
+        response: endpoint.config.response,
+      },
+      endpoint.handler,
+    )
+    .put(
+      "/status",
+      {
+        body: statusEndpoint.config.body,
+        response: statusEndpoint.config.response,
+      },
+      statusEndpoint.handler,
+    );
   const status = async () =>
     await app.handle(
       new Request("http://localhost/status", {
@@ -253,10 +261,14 @@ test("batch rejects unknown fields before authorization under default normalizat
   const endpoint = createDesktopTimeEntryBatchEndpoint(async () =>
     panic("Invalid batch must fail validation before authorization"),
   );
-  const app = new Elysia().put("/batch", endpoint.handler, {
-    body: endpoint.config.body,
-    response: endpoint.config.response,
-  });
+  const app = new Elysia().put(
+    "/batch",
+    {
+      body: endpoint.config.body,
+      response: endpoint.config.response,
+    },
+    endpoint.handler,
+  );
   for (const extra of [
     { appName: "private" },
     { rawSegments: [] },

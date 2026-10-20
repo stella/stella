@@ -1,7 +1,7 @@
-import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
+import { Type } from "typebox";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";

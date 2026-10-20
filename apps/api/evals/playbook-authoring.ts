@@ -33,11 +33,11 @@
  *   bun run eval:playbook-authoring -- --tier behavior --task discovery --surface chat
  */
 
-import { Value } from "@sinclair/typebox/value";
 import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, ModelMessage, TokenUsage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
+import { Value } from "typebox/value";
 
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 

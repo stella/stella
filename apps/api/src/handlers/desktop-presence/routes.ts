@@ -13,14 +13,22 @@ export const desktopPresenceRoute = new Elysia({
   prefix: `${STELLA_API_VERSION_PREFIX}/desktop/presence`,
 })
   .use(rateLimit(createStandardApiRateLimitOptions()))
-  .post("/", report.handler, {
-    body: report.config.body,
-    response: report.config.response,
-  })
+  .post(
+    "/",
+    {
+      body: report.config.body,
+      response: report.config.response,
+    },
+    report.handler,
+  )
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", read.handler, {
-    permissions: read.config.permissions,
-    response: read.config.response,
-  });
+  .get(
+    "/",
+    {
+      permissions: read.config.permissions,
+      response: read.config.response,
+    },
+    read.handler,
+  );

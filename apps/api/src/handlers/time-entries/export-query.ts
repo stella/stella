@@ -1,6 +1,6 @@
 import { eq, gte, lte } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { Temporal } from "@stll/time";

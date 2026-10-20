@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { and, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 

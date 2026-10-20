@@ -12,10 +12,14 @@ const report = {
 
 test("desktop presence reports require the desktop account credential", async () => {
   const endpoint = createDesktopPresenceReportEndpoint();
-  const app = new Elysia().post("/v1/desktop/presence", endpoint.handler, {
-    body: endpoint.config.body,
-    response: endpoint.config.response,
-  });
+  const app = new Elysia().post(
+    "/v1/desktop/presence",
+    {
+      body: endpoint.config.body,
+      response: endpoint.config.response,
+    },
+    endpoint.handler,
+  );
   for (const authorization of [undefined, "Bearer unrelated-credential"]) {
     const response = await app.handle(
       new Request("http://localhost/v1/desktop/presence", {
@@ -36,10 +40,14 @@ test("desktop presence reports require the desktop account credential", async ()
 
 test("reports reject client time and ownership fields at the contract boundary", async () => {
   const endpoint = createDesktopPresenceReportEndpoint();
-  const app = new Elysia().post("/v1/desktop/presence", endpoint.handler, {
-    body: endpoint.config.body,
-    response: endpoint.config.response,
-  });
+  const app = new Elysia().post(
+    "/v1/desktop/presence",
+    {
+      body: endpoint.config.body,
+      response: endpoint.config.response,
+    },
+    endpoint.handler,
+  );
   for (const extra of [
     { lastSeenAt: "2030-01-01T00:00:00.000Z" },
     { userId: "other" },

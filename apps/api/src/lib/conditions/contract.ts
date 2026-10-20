@@ -1,3 +1,4 @@
+import { t } from "elysia";
 /**
  * Elysia (TypeBox) mirror of the canonical `@stll/conditions`
  * AST, for HTTP route contracts. The valibot schema in the
@@ -6,10 +7,8 @@
  * bodies are typed with `t`. The `_conditionParity` guard below
  * fails typecheck if the two ever drift.
  */
-import type { TSchema } from "@sinclair/typebox";
-import { Type } from "@sinclair/typebox";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static, TSchema } from "typebox";
+import { Type } from "typebox";
 
 import { VIEW_FILTERS_MAX } from "@stll/api-contract";
 import {

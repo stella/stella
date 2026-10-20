@@ -1,9 +1,9 @@
-import { TypeCompiler } from "@sinclair/typebox/compiler";
 import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
+import { TypeCompiler } from "typebox/compiler";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { clauses, clauseVariants, clauseVersions } from "@/api/db/schema";

@@ -14,23 +14,47 @@ export const legislationRoute = new Elysia({ prefix: "/legislation" })
   .guard({
     validateAuth: true,
   })
-  .get("/search", boeSearch.handler, {
-    query: boeSearch.config.query,
-  })
-  .get("/laws/:lawId", boeGetLaw.handler, {
-    params: boeGetLaw.config.params,
-    query: boeGetLaw.config.query,
-  })
-  .get("/laws/:lawId/structure", boeLawStructure.handler, {
-    params: boeLawStructure.config.params,
-  })
-  .get("/laws/:lawId/blocks/:blockId", boeTextBlock.handler, {
-    params: boeTextBlock.config.params,
-  })
-  .get("/laws/:lawId/related", boeRelatedLaws.handler, {
-    params: boeRelatedLaws.config.params,
-    query: boeRelatedLaws.config.query,
-  })
-  .get("/borme/:date", bormeSummary.handler, {
-    params: bormeSummary.config.params,
-  });
+  .get(
+    "/search",
+    {
+      query: boeSearch.config.query,
+    },
+    boeSearch.handler,
+  )
+  .get(
+    "/laws/:lawId",
+    {
+      params: boeGetLaw.config.params,
+      query: boeGetLaw.config.query,
+    },
+    boeGetLaw.handler,
+  )
+  .get(
+    "/laws/:lawId/structure",
+    {
+      params: boeLawStructure.config.params,
+    },
+    boeLawStructure.handler,
+  )
+  .get(
+    "/laws/:lawId/blocks/:blockId",
+    {
+      params: boeTextBlock.config.params,
+    },
+    boeTextBlock.handler,
+  )
+  .get(
+    "/laws/:lawId/related",
+    {
+      params: boeRelatedLaws.config.params,
+      query: boeRelatedLaws.config.query,
+    },
+    boeRelatedLaws.handler,
+  )
+  .get(
+    "/borme/:date",
+    {
+      params: bormeSummary.config.params,
+    },
+    bormeSummary.handler,
+  );

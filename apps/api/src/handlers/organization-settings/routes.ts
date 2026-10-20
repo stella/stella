@@ -55,148 +55,244 @@ export const organizationSettingsRoute = new Elysia({
   })
   .get(
     "/correspondence/allowed-senders",
-    listCorrespondenceAllowedSenders.handler,
     {
       permissions: listCorrespondenceAllowedSenders.config.permissions,
       query: listCorrespondenceAllowedSenders.config.query,
     },
+    listCorrespondenceAllowedSenders.handler,
   )
   .post(
     "/correspondence/allowed-senders",
-    createCorrespondenceAllowedSender.handler,
     {
       permissions: createCorrespondenceAllowedSender.config.permissions,
       body: createCorrespondenceAllowedSender.config.body,
     },
+    createCorrespondenceAllowedSender.handler,
   )
   .delete(
     "/correspondence/allowed-senders/:senderId",
-    deleteCorrespondenceAllowedSender.handler,
     {
       permissions: deleteCorrespondenceAllowedSender.config.permissions,
       params: deleteCorrespondenceAllowedSender.config.params,
     },
+    deleteCorrespondenceAllowedSender.handler,
   )
   .post(
     "/correspondence/allowed-senders/:senderId/scope",
-    addCorrespondenceAllowedSenderScope.handler,
     {
       permissions: addCorrespondenceAllowedSenderScope.config.permissions,
       params: addCorrespondenceAllowedSenderScope.config.params,
       body: addCorrespondenceAllowedSenderScope.config.body,
     },
+    addCorrespondenceAllowedSenderScope.handler,
   )
   .delete(
     "/correspondence/allowed-senders/:senderId/scope",
-    removeCorrespondenceAllowedSenderScope.handler,
     {
       permissions: removeCorrespondenceAllowedSenderScope.config.permissions,
       params: removeCorrespondenceAllowedSenderScope.config.params,
       body: removeCorrespondenceAllowedSenderScope.config.body,
     },
+    removeCorrespondenceAllowedSenderScope.handler,
   )
-  .get("/", readOrganizationSettings.handler, {
-    permissions: readOrganizationSettings.config.permissions,
-  })
+  .get(
+    "/",
+    {
+      permissions: readOrganizationSettings.config.permissions,
+    },
+    readOrganizationSettings.handler,
+  )
   .get(
     "/business-registry-credentials",
-    readBusinessRegistryCredentials.handler,
     { permissions: readBusinessRegistryCredentials.config.permissions },
+    readBusinessRegistryCredentials.handler,
   )
   .post(
     "/business-registry-credentials",
-    saveBusinessRegistryCredential.handler,
     {
       body: saveBusinessRegistryCredential.config.body,
       permissions: saveBusinessRegistryCredential.config.permissions,
     },
+    saveBusinessRegistryCredential.handler,
   )
   .delete(
     "/business-registry-credentials",
-    deleteBusinessRegistryCredential.handler,
     {
       query: deleteBusinessRegistryCredential.config.query,
       permissions: deleteBusinessRegistryCredential.config.permissions,
     },
+    deleteBusinessRegistryCredential.handler,
   )
-  .post("/", updateOrganizationSettings.handler, {
-    body: updateOrganizationSettings.config.body,
-    permissions: updateOrganizationSettings.config.permissions,
-  })
-  .post("/sanctions-monitoring", updateSanctionsMonitoring.handler, {
-    permissions: updateSanctionsMonitoring.config.permissions,
-    body: updateSanctionsMonitoring.config.body,
-  })
-  .post("/practice-jurisdictions", updatePracticeJurisdictions.handler, {
-    body: updatePracticeJurisdictions.config.body,
-    permissions: updatePracticeJurisdictions.config.permissions,
-  })
-  .post("/preview", previewOrganizationSettings.handler, {
-    body: previewOrganizationSettings.config.body,
-    permissions: previewOrganizationSettings.config.permissions,
-  })
-  .get("/ai-availability", readAIAvailability.handler, {
-    permissions: readAIAvailability.config.permissions,
-  })
-  .get("/feature-enrolments", getFeatureEnrolments.handler, {
-    permissions: getFeatureEnrolments.config.permissions,
-  })
-  .put("/feature-enrolments/:featureId", enrolFeature.handler, {
-    permissions: enrolFeature.config.permissions,
-    params: enrolFeature.config.params,
-  })
-  .delete("/feature-enrolments/:featureId", unenrolFeature.handler, {
-    permissions: unenrolFeature.config.permissions,
-    params: unenrolFeature.config.params,
-  })
-  .get("/feature-access", getFeatureAccess.handler, {
-    permissions: getFeatureAccess.config.permissions,
-  })
-  .get("/document-ocr-availability", getDocumentOcrAvailability.handler, {
-    permissions: getDocumentOcrAvailability.config.permissions,
-  })
-  .post("/ai-config/defaults-preview", previewAIConfigDefaults.handler, {
-    body: previewAIConfigDefaults.config.body,
-    permissions: previewAIConfigDefaults.config.permissions,
-  })
-  .get("/ai-config", readAIConfig.handler, {
-    permissions: readAIConfig.config.permissions,
-  })
-  .post("/ai-config", updateAIConfig.handler, {
-    body: updateAIConfig.config.body,
-    permissions: updateAIConfig.config.permissions,
-  })
-  .delete("/ai-config", deleteAIConfig.handler, {
-    permissions: deleteAIConfig.config.permissions,
-  })
-  .get("/deepl", readDeepLAvailability.handler, {
-    permissions: readDeepLAvailability.config.permissions,
-  })
-  .get("/deepl-config", readDeepLConfig.handler, {
-    permissions: readDeepLConfig.config.permissions,
-  })
-  .post("/deepl", updateDeepLKey.handler, {
-    body: updateDeepLKey.config.body,
-    permissions: updateDeepLKey.config.permissions,
-  })
-  .delete("/deepl", deleteDeepLKey.handler, {
-    permissions: deleteDeepLKey.config.permissions,
-  })
-  .get("/web-search-config", readWebSearchConfig.handler, {
-    permissions: readWebSearchConfig.config.permissions,
-  })
-  .post("/web-search-key", updateWebSearchKey.handler, {
-    body: updateWebSearchKey.config.body,
-    permissions: updateWebSearchKey.config.permissions,
-  })
-  .delete("/web-search-key", deleteWebSearchKey.handler, {
-    body: deleteWebSearchKey.config.body,
-    permissions: deleteWebSearchKey.config.permissions,
-  })
-  .get("/anonymization-blacklist", readAnonymizationBlacklist.handler, {
-    permissions: readAnonymizationBlacklist.config.permissions,
-  })
-  .put("/anonymization-blacklist", updateAnonymizationBlacklist.handler, {
-    body: updateAnonymizationBlacklist.config.body,
-    permissions: updateAnonymizationBlacklist.config.permissions,
-  });
+  .post(
+    "/",
+    {
+      body: updateOrganizationSettings.config.body,
+      permissions: updateOrganizationSettings.config.permissions,
+    },
+    updateOrganizationSettings.handler,
+  )
+  .post(
+    "/sanctions-monitoring",
+    {
+      permissions: updateSanctionsMonitoring.config.permissions,
+      body: updateSanctionsMonitoring.config.body,
+    },
+    updateSanctionsMonitoring.handler,
+  )
+  .post(
+    "/practice-jurisdictions",
+    {
+      body: updatePracticeJurisdictions.config.body,
+      permissions: updatePracticeJurisdictions.config.permissions,
+    },
+    updatePracticeJurisdictions.handler,
+  )
+  .post(
+    "/preview",
+    {
+      body: previewOrganizationSettings.config.body,
+      permissions: previewOrganizationSettings.config.permissions,
+    },
+    previewOrganizationSettings.handler,
+  )
+  .get(
+    "/ai-availability",
+    {
+      permissions: readAIAvailability.config.permissions,
+    },
+    readAIAvailability.handler,
+  )
+  .get(
+    "/feature-enrolments",
+    {
+      permissions: getFeatureEnrolments.config.permissions,
+    },
+    getFeatureEnrolments.handler,
+  )
+  .put(
+    "/feature-enrolments/:featureId",
+    {
+      permissions: enrolFeature.config.permissions,
+      params: enrolFeature.config.params,
+    },
+    enrolFeature.handler,
+  )
+  .delete(
+    "/feature-enrolments/:featureId",
+    {
+      permissions: unenrolFeature.config.permissions,
+      params: unenrolFeature.config.params,
+    },
+    unenrolFeature.handler,
+  )
+  .get(
+    "/feature-access",
+    {
+      permissions: getFeatureAccess.config.permissions,
+    },
+    getFeatureAccess.handler,
+  )
+  .get(
+    "/document-ocr-availability",
+    {
+      permissions: getDocumentOcrAvailability.config.permissions,
+    },
+    getDocumentOcrAvailability.handler,
+  )
+  .post(
+    "/ai-config/defaults-preview",
+    {
+      body: previewAIConfigDefaults.config.body,
+      permissions: previewAIConfigDefaults.config.permissions,
+    },
+    previewAIConfigDefaults.handler,
+  )
+  .get(
+    "/ai-config",
+    {
+      permissions: readAIConfig.config.permissions,
+    },
+    readAIConfig.handler,
+  )
+  .post(
+    "/ai-config",
+    {
+      body: updateAIConfig.config.body,
+      permissions: updateAIConfig.config.permissions,
+    },
+    updateAIConfig.handler,
+  )
+  .delete(
+    "/ai-config",
+    {
+      permissions: deleteAIConfig.config.permissions,
+    },
+    deleteAIConfig.handler,
+  )
+  .get(
+    "/deepl",
+    {
+      permissions: readDeepLAvailability.config.permissions,
+    },
+    readDeepLAvailability.handler,
+  )
+  .get(
+    "/deepl-config",
+    {
+      permissions: readDeepLConfig.config.permissions,
+    },
+    readDeepLConfig.handler,
+  )
+  .post(
+    "/deepl",
+    {
+      body: updateDeepLKey.config.body,
+      permissions: updateDeepLKey.config.permissions,
+    },
+    updateDeepLKey.handler,
+  )
+  .delete(
+    "/deepl",
+    {
+      permissions: deleteDeepLKey.config.permissions,
+    },
+    deleteDeepLKey.handler,
+  )
+  .get(
+    "/web-search-config",
+    {
+      permissions: readWebSearchConfig.config.permissions,
+    },
+    readWebSearchConfig.handler,
+  )
+  .post(
+    "/web-search-key",
+    {
+      body: updateWebSearchKey.config.body,
+      permissions: updateWebSearchKey.config.permissions,
+    },
+    updateWebSearchKey.handler,
+  )
+  .delete(
+    "/web-search-key",
+    {
+      body: deleteWebSearchKey.config.body,
+      permissions: deleteWebSearchKey.config.permissions,
+    },
+    deleteWebSearchKey.handler,
+  )
+  .get(
+    "/anonymization-blacklist",
+    {
+      permissions: readAnonymizationBlacklist.config.permissions,
+    },
+    readAnonymizationBlacklist.handler,
+  )
+  .put(
+    "/anonymization-blacklist",
+    {
+      body: updateAnonymizationBlacklist.config.body,
+      permissions: updateAnonymizationBlacklist.config.permissions,
+    },
+    updateAnonymizationBlacklist.handler,
+  );

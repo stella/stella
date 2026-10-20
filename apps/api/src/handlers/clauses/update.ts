@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
 

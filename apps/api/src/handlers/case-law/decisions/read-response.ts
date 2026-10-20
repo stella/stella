@@ -1,6 +1,6 @@
-import type { TSchema } from "@sinclair/typebox";
 import { panic } from "better-result";
 import { t } from "elysia";
+import type { TSchema } from "typebox";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";

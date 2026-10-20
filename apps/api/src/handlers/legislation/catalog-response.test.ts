@@ -1,7 +1,7 @@
-import type { TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import type { TSchema } from "typebox";
+import { Value } from "typebox/value";
 
 import {
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE,

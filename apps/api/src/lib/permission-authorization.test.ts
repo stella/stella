@@ -224,11 +224,13 @@ describe("permission authorization", () => {
   });
 
   test("permission macro authenticates before checking permissions", async () => {
-    const app = new Elysia()
-      .use(permissionMacro)
-      .get("/protected", () => ({ ok: true }), {
+    const app = new Elysia().use(permissionMacro).get(
+      "/protected",
+      {
         permissions: { workspace: ["read"] },
-      });
+      },
+      () => ({ ok: true }),
+    );
 
     const response = await app.handle(
       new Request("http://localhost/protected"),

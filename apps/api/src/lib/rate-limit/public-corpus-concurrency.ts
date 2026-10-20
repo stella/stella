@@ -81,47 +81,44 @@ export const publicCorpusConcurrencyLimit = ({
 
   return (
     new Elysia()
-      .onBeforeHandle(
-        { as: "scoped" },
-        async ({ request, server, set, status }) => {
-          if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
-            return undefined;
-          }
-          const policy = resolvePublicCorpusPolicy(request);
-          if (policy === undefined || policy.class === "browse") {
-            return undefined;
-          }
-          const routeClass = policy.class;
-          const lease = await admission.acquire({
-            routeClass,
-            client: clientOf(request, server),
-            waitMs: waitMsOf(routeClass),
-            signal: request.signal,
-          });
-          if (lease === null) {
-            observe({ class: routeClass, outcome: "refused" });
-            logger.warn("api.public_corpus.admission_refused", {
-              class: routeClass,
-              capacity: capacityOf(routeClass),
-              totalCapacity: policyLimits.totalConcurrency,
-            });
-            set.headers["Retry-After"] = "1";
-            return status(429, DEFAULT_RATE_LIMIT_ERROR_RESPONSE);
-          }
-          leases.set(request, lease);
-          observe({ class: routeClass, outcome: "acquired" });
+      .onBeforeHandle("plugin", async ({ request, server, set, status }) => {
+        if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
           return undefined;
-        },
-      )
+        }
+        const policy = resolvePublicCorpusPolicy(request);
+        if (policy === undefined || policy.class === "browse") {
+          return undefined;
+        }
+        const routeClass = policy.class;
+        const lease = await admission.acquire({
+          routeClass,
+          client: clientOf(request, server),
+          waitMs: waitMsOf(routeClass),
+          signal: request.signal,
+        });
+        if (lease === null) {
+          observe({ class: routeClass, outcome: "refused" });
+          logger.warn("api.public_corpus.admission_refused", {
+            class: routeClass,
+            capacity: capacityOf(routeClass),
+            totalCapacity: policyLimits.totalConcurrency,
+          });
+          set.headers["Retry-After"] = "1";
+          return status(429, DEFAULT_RATE_LIMIT_ERROR_RESPONSE);
+        }
+        leases.set(request, lease);
+        observe({ class: routeClass, outcome: "acquired" });
+        return undefined;
+      })
       // Disconnect does not cancel these handlers' database/index work. Keep
       // its lease until that work settles, including after abort or timeout.
-      .onError({ as: "scoped" }, ({ request }) => {
+      .onError("plugin", ({ request }) => {
         release(request);
       })
-      .mapResponse({ as: "scoped" }, ({ request }) => {
+      .mapResponse("plugin", ({ request }) => {
         release(request);
       })
-      .onAfterResponse({ as: "scoped" }, ({ request }) => {
+      .onAfterResponse("plugin", ({ request }) => {
         release(request);
       })
   );

@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
+import { Value } from "typebox/value";
 
 import {
   TANSTACK_AI_PROVIDERS,

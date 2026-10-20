@@ -23,19 +23,35 @@ export const expensesRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .get("/", readExpenses.handler, {
-    permissions: readExpenses.config.permissions,
-    query: readExpenses.config.query,
-  })
-  .put("/", createExpense.handler, {
-    body: createExpense.config.body,
-    permissions: createExpense.config.permissions,
-  })
-  .patch("/", updateExpense.handler, {
-    body: updateExpense.config.body,
-    permissions: updateExpense.config.permissions,
-  })
-  .delete("/", deleteExpense.handler, {
-    body: deleteExpense.config.body,
-    permissions: deleteExpense.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      permissions: readExpenses.config.permissions,
+      query: readExpenses.config.query,
+    },
+    readExpenses.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createExpense.config.body,
+      permissions: createExpense.config.permissions,
+    },
+    createExpense.handler,
+  )
+  .patch(
+    "/",
+    {
+      body: updateExpense.config.body,
+      permissions: updateExpense.config.permissions,
+    },
+    updateExpense.handler,
+  )
+  .delete(
+    "/",
+    {
+      body: deleteExpense.config.body,
+      permissions: deleteExpense.config.permissions,
+    },
+    deleteExpense.handler,
+  );

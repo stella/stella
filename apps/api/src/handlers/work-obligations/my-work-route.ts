@@ -7,7 +7,11 @@ export const myWorkRoute = new Elysia({ prefix: "/my-work" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", myWork.handler, {
-    query: myWork.config.query,
-    permissions: myWork.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      query: myWork.config.query,
+      permissions: myWork.config.permissions,
+    },
+    myWork.handler,
+  );

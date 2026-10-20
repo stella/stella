@@ -55,23 +55,43 @@ export const uploadsRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .post("/presign", presignUpload.handler, {
-    body: presignUpload.config.body,
-    permissions: presignUpload.config.permissions,
-  })
-  .post("/entity-create/preflight", preflightEntityCreate.handler, {
-    body: preflightEntityCreate.config.body,
-    permissions: preflightEntityCreate.config.permissions,
-  })
-  .post("/entity-create/tree", entityCreateTree.handler, {
-    body: entityCreateTree.config.body,
-    permissions: entityCreateTree.config.permissions,
-  })
-  .post("/:uploadId/finalize", finalizeUpload.handler, {
-    params: finalizeUpload.config.params,
-    permissions: finalizeUpload.config.permissions,
-  })
-  .post("/:uploadId/abort", abortUpload.handler, {
-    params: abortUpload.config.params,
-    permissions: abortUpload.config.permissions,
-  });
+  .post(
+    "/presign",
+    {
+      body: presignUpload.config.body,
+      permissions: presignUpload.config.permissions,
+    },
+    presignUpload.handler,
+  )
+  .post(
+    "/entity-create/preflight",
+    {
+      body: preflightEntityCreate.config.body,
+      permissions: preflightEntityCreate.config.permissions,
+    },
+    preflightEntityCreate.handler,
+  )
+  .post(
+    "/entity-create/tree",
+    {
+      body: entityCreateTree.config.body,
+      permissions: entityCreateTree.config.permissions,
+    },
+    entityCreateTree.handler,
+  )
+  .post(
+    "/:uploadId/finalize",
+    {
+      params: finalizeUpload.config.params,
+      permissions: finalizeUpload.config.permissions,
+    },
+    finalizeUpload.handler,
+  )
+  .post(
+    "/:uploadId/abort",
+    {
+      params: abortUpload.config.params,
+      permissions: abortUpload.config.permissions,
+    },
+    abortUpload.handler,
+  );

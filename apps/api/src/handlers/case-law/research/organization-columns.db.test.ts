@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import {
   afterAll,
   beforeAll,
@@ -9,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { eq, sql } from "drizzle-orm";
+import { Value } from "typebox/value";
 
 import {
   caseLawResearchAnswers,

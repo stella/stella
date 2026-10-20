@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { t } from "elysia";
+import { Value } from "typebox/value";
 
 import {
   currencyCodeSchema,

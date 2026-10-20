@@ -2482,7 +2482,7 @@ const VALIDATE_AUTH_REJECTION_BODY = {
 
 export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
   validateSession: {
-    async resolve({ status, request, set }) {
+    async derive({ status, request, set }) {
       const sessionResult = await Result.tryPromise(async () => {
         const resolved = await getAuth().api.getSession({
           headers: request.headers,
@@ -3222,7 +3222,7 @@ export const createAuthMacro = ({
   return new Elysia({ name: "authMacro" }).macro({
     validateAuth: {
       detail: { [TENANT_ACTION_DETAIL]: true },
-      async resolve({ params, query, status, request, server, set }) {
+      async derive({ params, query, status, request, server, set }) {
         const result = await resolveAuth({
           params,
           query,
@@ -3248,22 +3248,24 @@ export const authMacro = createAuthMacro();
 
 export const permissionMacro = new Elysia({ name: "permissionMacro" })
   .use(authMacro)
-  .macro("permissions", (permissions: PermissionInput) => ({
-    // Reuse authMacro's resolved member role instead of asking better-auth to
-    // perform the same permission check through a second session read.
-    validateAuth: true,
-    // Without this, when this macro is used with another macro that extends the body,
-    // the final merged body would not include the first macro's body extension.
-    body: t.Object({}),
-    beforeHandle(ctx) {
-      const memberRole = readAuthorizedMemberRole(ctx);
-      if (!memberRole || !hasMemberPermission(memberRole, permissions)) {
-        return ctx.status(403, AUTH_REJECTION_BODY[403]);
-      }
+  .macro({
+    permissions: (permissions: PermissionInput) => ({
+      // Reuse authMacro's resolved member role instead of asking better-auth to
+      // perform the same permission check through a second session read.
+      validateAuth: true,
+      // Without this, when this macro is used with another macro that extends the body,
+      // the final merged body would not include the first macro's body extension.
+      body: t.Object({}),
+      beforeHandle(ctx) {
+        const memberRole = readAuthorizedMemberRole(ctx);
+        if (!memberRole || !hasMemberPermission(memberRole, permissions)) {
+          return ctx.status(403, AUTH_REJECTION_BODY[403]);
+        }
 
-      return undefined;
-    },
-  }));
+        return undefined;
+      },
+    }),
+  });
 
 const bindWorkspaceRecorder = (
   ctx: {
@@ -3303,42 +3305,46 @@ export const workspaceAccessMacro = new Elysia({
   name: "workspaceAccessMacro",
 })
   .use(authMacro)
-  .macro("validateWorkspaceAccess", {
-    validateAuth: true,
-    params: t.Object({ workspaceId: tUuid }),
-    // Without this, when this macro is used with another macro that extends the body,
-    // the final merged body would not include the first macro's body extension.
-    body: t.Object({}),
-    async resolve(ctx) {
-      const workspaceId = toSafeId<"workspace">(ctx.params.workspaceId);
-      const ws = await ctx.getWorkspaceAccess(workspaceId);
+  .macro({
+    validateWorkspaceAccess: {
+      validateAuth: true,
+      params: t.Object({ workspaceId: tUuid }),
+      // Without this, when this macro is used with another macro that extends the body,
+      // the final merged body would not include the first macro's body extension.
+      body: t.Object({}),
+      async derive(ctx) {
+        const workspaceId = toSafeId<"workspace">(ctx.params.workspaceId);
+        const ws = await ctx.getWorkspaceAccess(workspaceId);
 
-      if (ws?.status !== "active") {
-        return ctx.status(404, AUTH_REJECTION_BODY[404]);
-      }
+        if (ws?.status !== "active") {
+          return ctx.status(404, AUTH_REJECTION_BODY[404]);
+        }
 
-      return {
-        workspaceId,
-        ...bindWorkspaceRecorder(ctx, workspaceId),
-      };
+        return {
+          workspaceId,
+          ...bindWorkspaceRecorder(ctx, workspaceId),
+        };
+      },
     },
   })
-  .macro("validateWorkspaceAccessIncludingArchived", {
-    validateAuth: true,
-    params: t.Object({ workspaceId: tUuid }),
-    body: t.Object({}),
-    async resolve(ctx) {
-      const workspaceId = toSafeId<"workspace">(ctx.params.workspaceId);
-      const ws = await ctx.getWorkspaceAccess(workspaceId);
+  .macro({
+    validateWorkspaceAccessIncludingArchived: {
+      validateAuth: true,
+      params: t.Object({ workspaceId: tUuid }),
+      body: t.Object({}),
+      async derive(ctx) {
+        const workspaceId = toSafeId<"workspace">(ctx.params.workspaceId);
+        const ws = await ctx.getWorkspaceAccess(workspaceId);
 
-      if (!ws || (ws.status !== "active" && ws.status !== "archived")) {
-        return ctx.status(404, AUTH_REJECTION_BODY[404]);
-      }
+        if (!ws || (ws.status !== "active" && ws.status !== "archived")) {
+          return ctx.status(404, AUTH_REJECTION_BODY[404]);
+        }
 
-      return {
-        workspaceId,
-        ...bindWorkspaceRecorder(ctx, workspaceId),
-      };
+        return {
+          workspaceId,
+          ...bindWorkspaceRecorder(ctx, workspaceId),
+        };
+      },
     },
   });
 

@@ -21,21 +21,37 @@ export const templatePacksRoute = new Elysia({ prefix: "/template-packs" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listTemplatePacks.handler, {
-    permissions: listTemplatePacks.config.permissions,
-    query: listTemplatePacks.config.query,
-  })
-  .post("/visibility", updateTemplatePackVisibility.handler, {
-    body: updateTemplatePackVisibility.config.body,
-    permissions: updateTemplatePackVisibility.config.permissions,
-  })
-  .get("/:packId", getTemplatePack.handler, {
-    params: getTemplatePack.config.params,
-    permissions: getTemplatePack.config.permissions,
-    query: getTemplatePack.config.query,
-  })
-  .post("/:packId/install", installTemplatePack.handler, {
-    body: installTemplatePack.config.body,
-    params: installTemplatePack.config.params,
-    permissions: installTemplatePack.config.permissions,
-  });
+  .get(
+    "/",
+    {
+      permissions: listTemplatePacks.config.permissions,
+      query: listTemplatePacks.config.query,
+    },
+    listTemplatePacks.handler,
+  )
+  .post(
+    "/visibility",
+    {
+      body: updateTemplatePackVisibility.config.body,
+      permissions: updateTemplatePackVisibility.config.permissions,
+    },
+    updateTemplatePackVisibility.handler,
+  )
+  .get(
+    "/:packId",
+    {
+      params: getTemplatePack.config.params,
+      permissions: getTemplatePack.config.permissions,
+      query: getTemplatePack.config.query,
+    },
+    getTemplatePack.handler,
+  )
+  .post(
+    "/:packId/install",
+    {
+      body: installTemplatePack.config.body,
+      params: installTemplatePack.config.params,
+      permissions: installTemplatePack.config.permissions,
+    },
+    installTemplatePack.handler,
+  );

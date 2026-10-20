@@ -10,10 +10,14 @@ test("favicon bytes require an authenticated chat principal", async () => {
     .use(workspaceAccessMacro)
     .use(permissionMacro)
     .guard({ validateAuth: true })
-    .get("/chat/link-icons/:hostname", getLinkIcon.handler, {
-      params: getLinkIcon.config.params,
-      permissions: getLinkIcon.config.permissions,
-    });
+    .get(
+      "/chat/link-icons/:hostname",
+      {
+        params: getLinkIcon.config.params,
+        permissions: getLinkIcon.config.permissions,
+      },
+      getLinkIcon.handler,
+    );
   const response = await app.handle(
     new Request("http://localhost/chat/link-icons/example.com"),
   );

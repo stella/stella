@@ -1,7 +1,7 @@
 import { panic, Result, UnhandledException } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import { envBase } from "@/api/env-base";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
@@ -57,11 +57,11 @@ describe("PostgreSQL metadata filter admission", () => {
       caseLawDb: unreadableDb,
       observer: "unobserved",
     });
-    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (!(result instanceof ElysiaCustomStatusResponse)) {
+    expect(result).toBeInstanceOf(ElysiaStatus);
+    if (!(result instanceof ElysiaStatus)) {
       panic("Expected metadata-filter rejection");
     }
-    expect(result.code).toBe(400);
+    expect(result.status).toBe(400);
     expect(result.response.message).toContain("require corpus-index search");
     expect(result.response.message).toContain(
       "Remove category and hasLegalSentence",
@@ -118,11 +118,11 @@ test("the corpus handler rejects a cursor after a query variant changes", async 
         readServingTarget: async () => Result.ok(target),
       },
     });
-    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (!(result instanceof ElysiaCustomStatusResponse)) {
+    expect(result).toBeInstanceOf(ElysiaStatus);
+    if (!(result instanceof ElysiaStatus)) {
       panic("Expected cross-variant cursor rejection");
     }
-    expect(result.code).toBe(400);
+    expect(result.status).toBe(400);
     expect(result.response).toEqual({ message: "Invalid cursor" });
   }
 });
@@ -261,19 +261,19 @@ test.each(SERVING_TARGET_REFUSALS)(
     });
 
     expect(requested).toEqual([]);
-    expect(outcome).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (!(outcome instanceof ElysiaCustomStatusResponse)) {
+    expect(outcome).toBeInstanceOf(ElysiaStatus);
+    if (!(outcome instanceof ElysiaStatus)) {
       return;
     }
     // The returned envelope is the body the route error mapping renders for
     // the thrown refusal, so a client cannot tell the two paths apart.
     const thrown = searchIndexUnavailableError(failure);
-    expect(thrown.status).toBe(outcome.code);
+    expect(thrown.status).toBe(outcome.status);
     // Compared as a value: the envelope's declared type is the union of every
     // body the route may return.
     const body: unknown = outcome.response;
     expect(body).toEqual({
-      code: thrown.code,
+      code: thrown.status,
       message: thrown.message,
       hint: thrown.hint,
       retryable: thrown.retryable,

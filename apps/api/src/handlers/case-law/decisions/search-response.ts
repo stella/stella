@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";

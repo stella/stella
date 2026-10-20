@@ -5,8 +5,8 @@
 // rule MUST flag. If the rule regresses, the matching disable becomes unused
 // and `--report-unused-disable-directives-severity=error` fails CI.
 
-import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
+import { Type } from "typebox";
 
 const DIRECTIONS = ["cited", "citing"] as const;
 const STATUS = { draft: "draft", final: "final" } as const;

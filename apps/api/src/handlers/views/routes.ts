@@ -17,36 +17,64 @@ export const viewsRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .get("/", readViews.handler, {
-    permissions: readViews.config.permissions,
-  })
-  .put("/", createView.handler, {
-    body: createView.config.body,
-    permissions: createView.config.permissions,
-  })
-  .post("/reorder", reorderViews.handler, {
-    body: reorderViews.config.body,
-    permissions: reorderViews.config.permissions,
-  })
+  .get(
+    "/",
+    {
+      permissions: readViews.config.permissions,
+    },
+    readViews.handler,
+  )
+  .put(
+    "/",
+    {
+      body: createView.config.body,
+      permissions: createView.config.permissions,
+    },
+    createView.handler,
+  )
+  .post(
+    "/reorder",
+    {
+      body: reorderViews.config.body,
+      permissions: reorderViews.config.permissions,
+    },
+    reorderViews.handler,
+  )
   .group("/view/:viewId", (app) =>
     app
-      .post("/", updateView.handler, {
-        body: updateView.config.body,
-        params: updateView.config.params,
-        permissions: updateView.config.permissions,
-      })
-      .post("/convert", convertView.handler, {
-        body: convertView.config.body,
-        params: convertView.config.params,
-        permissions: convertView.config.permissions,
-      })
-      .get("/export", exportTableView.handler, {
-        params: exportTableView.config.params,
-        permissions: exportTableView.config.permissions,
-        query: exportTableView.config.query,
-      })
-      .delete("/", deleteView.handler, {
-        params: deleteView.config.params,
-        permissions: deleteView.config.permissions,
-      }),
+      .post(
+        "/",
+        {
+          body: updateView.config.body,
+          params: updateView.config.params,
+          permissions: updateView.config.permissions,
+        },
+        updateView.handler,
+      )
+      .post(
+        "/convert",
+        {
+          body: convertView.config.body,
+          params: convertView.config.params,
+          permissions: convertView.config.permissions,
+        },
+        convertView.handler,
+      )
+      .get(
+        "/export",
+        {
+          params: exportTableView.config.params,
+          permissions: exportTableView.config.permissions,
+          query: exportTableView.config.query,
+        },
+        exportTableView.handler,
+      )
+      .delete(
+        "/",
+        {
+          params: deleteView.config.params,
+          permissions: deleteView.config.permissions,
+        },
+        deleteView.handler,
+      ),
   );

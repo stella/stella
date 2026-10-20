@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import type { CliClientMetadataDocument } from "@stll/cli/client-metadata-document";
 

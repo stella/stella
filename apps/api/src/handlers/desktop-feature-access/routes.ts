@@ -11,4 +11,4 @@ export const desktopFeatureAccessRoute = new Elysia({
   prefix: DESKTOP_FEATURE_ACCESS_PATH,
 })
   .use(rateLimit(createStandardApiRateLimitOptions()))
-  .get("/", read.handler, { response: read.config.response });
+  .get("/", { response: read.config.response }, read.handler);

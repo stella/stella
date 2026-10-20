@@ -1,5 +1,5 @@
-import { FormatRegistry } from "@sinclair/typebox";
 import { t } from "elysia";
+import { FormatRegistry } from "typebox";
 
 export const boundedString = (maxBytes: number) => {
   const format = `legislation-search-utf8-${maxBytes}`;

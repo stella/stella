@@ -16,12 +16,20 @@ export const legislationCorpusRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .post("/search", searchLegislation.handler, {
-    body: searchLegislation.config.body,
-    permissions: searchLegislation.config.permissions,
-    response: searchLegislation.config.response,
-  })
-  .get("/:documentId", readLegislation.handler, {
-    params: readLegislation.config.params,
-    permissions: readLegislation.config.permissions,
-  });
+  .post(
+    "/search",
+    {
+      body: searchLegislation.config.body,
+      permissions: searchLegislation.config.permissions,
+      response: searchLegislation.config.response,
+    },
+    searchLegislation.handler,
+  )
+  .get(
+    "/:documentId",
+    {
+      params: readLegislation.config.params,
+      permissions: readLegislation.config.permissions,
+    },
+    readLegislation.handler,
+  );

@@ -11,9 +11,17 @@ export const viewTemplatesRoute = new Elysia({
   .use(workspaceAccessMacro)
   .guard({ validateWorkspaceAccess: true })
   .get("/", listViewTemplates.handler)
-  .put("/", createViewTemplate.handler, {
-    body: createViewTemplate.config.body,
-  })
-  .delete("/:templateId", deleteViewTemplate.handler, {
-    params: deleteViewTemplate.config.params,
-  });
+  .put(
+    "/",
+    {
+      body: createViewTemplate.config.body,
+    },
+    createViewTemplate.handler,
+  )
+  .delete(
+    "/:templateId",
+    {
+      params: deleteViewTemplate.config.params,
+    },
+    deleteViewTemplate.handler,
+  );

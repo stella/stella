@@ -364,7 +364,7 @@ describe("personal key persistence and receipts", () => {
               },
             }),
           )
-          .get("/protected", () => "authenticated", { validateAuth: true });
+          .get("/protected", { validateAuth: true }, () => "authenticated");
         const resolveAuthorization: NonNullable<
           Parameters<typeof resolveMachineApiKeySession>[1]
         >["resolveAuthorization"] = async ({ organizationId, userId }) => {

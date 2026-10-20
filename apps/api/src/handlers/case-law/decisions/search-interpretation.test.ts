@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 

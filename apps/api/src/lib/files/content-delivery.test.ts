@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -181,9 +181,9 @@ describe("handler content delivery", () => {
             expect(response).toBe(value);
             continue;
           }
-          expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-          if (response instanceof ElysiaCustomStatusResponse) {
-            expect(response.code).toBe(500);
+          expect(response).toBeInstanceOf(ElysiaStatus);
+          if (response instanceof ElysiaStatus) {
+            expect(response.status).toBe(500);
             expect(response.response).toEqual({ message: DELIVERY_ERROR });
           }
         }
@@ -262,9 +262,9 @@ describe("handler content delivery", () => {
             }
             continue;
           }
-          expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-          if (response instanceof ElysiaCustomStatusResponse) {
-            expect(response.code).toBe(500);
+          expect(response).toBeInstanceOf(ElysiaStatus);
+          if (response instanceof ElysiaStatus) {
+            expect(response.status).toBe(500);
           }
         }
       } finally {
@@ -317,9 +317,9 @@ describe("handler content delivery", () => {
             }
             continue;
           }
-          expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-          if (response instanceof ElysiaCustomStatusResponse) {
-            expect(response.code).toBe(500);
+          expect(response).toBeInstanceOf(ElysiaStatus);
+          if (response instanceof ElysiaStatus) {
+            expect(response.status).toBe(500);
             expect(response.response).toEqual({ message: DELIVERY_ERROR });
           }
         }

@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
+import { Value } from "typebox/value";
 
 import {
   caseLawResearchAnswers,

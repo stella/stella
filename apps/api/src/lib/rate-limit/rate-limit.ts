@@ -377,57 +377,54 @@ export const rateLimit = ({
       set,
     });
   rateLimitHooks.add(beforeHandle);
-  plugin.onBeforeHandle({ as: "scoped" }, beforeHandle);
+  plugin.onBeforeHandle("plugin", beforeHandle);
 
-  plugin.onError(
-    { as: "scoped" },
-    async ({ code, error, request, server, set }) => {
-      const state = requestState.get(request);
-      if (state !== undefined) {
-        switch (state.type) {
-          case "counted":
-            requestState.set(request, { type: "refunded" });
-            await Promise.all(
-              state.charges.map(
-                async ({ key, windowStart }) =>
-                  await context.decrement(key, windowStart),
-              ),
-            );
-            return undefined;
-          case "counted_early_failure":
-          case "limited":
-          case "refunded":
-          case "skipped":
-            return undefined;
-          default: {
-            state satisfies never;
-            return panic(`Unhandled state: ${String(state)}`);
-          }
+  plugin.onError("plugin", async ({ code, error, request, server, set }) => {
+    const state = requestState.get(request);
+    if (state !== undefined) {
+      switch (state.type) {
+        case "counted":
+          requestState.set(request, { type: "refunded" });
+          await Promise.all(
+            state.charges.map(
+              async ({ key, windowStart }) =>
+                await context.decrement(key, windowStart),
+            ),
+          );
+          return undefined;
+        case "counted_early_failure":
+        case "limited":
+        case "refunded":
+        case "skipped":
+          return undefined;
+        default: {
+          state satisfies never;
+          return panic(`Unhandled state: ${String(state)}`);
         }
       }
+    }
 
-      const currentStatus =
-        typeof set.status === "number" ? set.status : undefined;
-      const failedBeforeRateLimit =
-        code === "NOT_FOUND" ||
-        code === "PARSE" ||
-        (code === "VALIDATION" && !isResponseValidationError(error)) ||
-        currentStatus === 404 ||
-        rateLimitErrorStatus(error) === 404;
+    const currentStatus =
+      typeof set.status === "number" ? set.status : undefined;
+    const failedBeforeRateLimit =
+      code === "NOT_FOUND" ||
+      code === "PARSE" ||
+      (code === "VALIDATION" && !isResponseValidationError(error)) ||
+      currentStatus === 404 ||
+      rateLimitErrorStatus(error) === 404;
 
-      if (failedBeforeRateLimit) {
-        return await applyRateLimit({
-          phase: "early_failure",
-          request,
-          server,
-          set,
-        });
-      }
-      return undefined;
-    },
-  );
+    if (failedBeforeRateLimit) {
+      return await applyRateLimit({
+        phase: "early_failure",
+        request,
+        server,
+        set,
+      });
+    }
+    return undefined;
+  });
 
-  plugin.mapResponse({ as: "scoped" }, async (lifecycle) => {
+  plugin.mapResponse("plugin", async (lifecycle) => {
     const { request, responseValue, server, set } = lifecycle;
     const handledError = Object.hasOwn(lifecycle, "code");
     const statusCode = resolveResponseStatus({
@@ -489,7 +486,7 @@ export const rateLimit = ({
   });
 
   plugin.onAfterResponse(
-    { as: "scoped" },
+    "plugin",
     async ({ request }) =>
       await completeRateLimitRequest({ context, requestState, request }),
   );

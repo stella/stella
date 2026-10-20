@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { machineApiKeyNameSchema } from "@/api/handlers/api-keys/mint";
 import { tPaginationCursor } from "@/api/lib/custom-schema";

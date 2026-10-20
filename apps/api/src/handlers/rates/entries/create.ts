@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import type { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 

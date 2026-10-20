@@ -1,4 +1,4 @@
-import { Elysia, NotFoundError } from "elysia";
+import { Elysia, NotFound } from "elysia";
 
 /**
  * Keep a route in the inferred API contract while making the deployed surface
@@ -10,8 +10,8 @@ import { Elysia, NotFoundError } from "elysia";
  * route's response schema has to admit it.
  */
 export const deploymentFeatureGate = (isEnabled: () => boolean) =>
-  new Elysia().onTransform({ as: "scoped" }, () => {
+  new Elysia().onTransform("plugin", () => {
     if (!isEnabled()) {
-      throw new NotFoundError();
+      throw new NotFound();
     }
   });

@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import { tSafeId } from "@/api/lib/custom-schema";
 import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";

@@ -10,7 +10,7 @@
  */
 
 import { panic, Result } from "better-result";
-import type { Static } from "elysia";
+import type { Static } from "typebox";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { ReferenceSource } from "@/api/handlers/document-reviews/reference-position-normalizer";

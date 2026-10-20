@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { ElysiaStatus } from "elysia";
 
 import { DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL } from "@stll/api-contract/desktop-handoff";
 
@@ -55,8 +55,8 @@ test("organization removal clears only the departing member's presence and rejoi
         session: { activeOrganizationId: organizationId },
       }),
     );
-    expect(result).not.toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (result instanceof ElysiaCustomStatusResponse) {
+    expect(result).not.toBeInstanceOf(ElysiaStatus);
+    if (result instanceof ElysiaStatus) {
       return panic(`Expected presence success, received status ${result.code}`);
     }
     return result;
