@@ -4578,6 +4578,37 @@ test("route-relevant changes plan the required merge-group smoke", () => {
   ).toBe(0);
 }, 30_000);
 
+test("a merge group relies on route-smoke after the duplicate matrix leg is removed", () => {
+  const event = EVENT.mergeGroup;
+  expect(
+    evaluateResult({
+      event,
+      results: {
+        "e2e-production-shard": "success",
+        "route-smoke": "success",
+      },
+    }),
+  ).toBe(0);
+  expect(
+    evaluateResult({
+      event,
+      results: {
+        "e2e-production-shard": "success",
+        "route-smoke": "failure",
+      },
+    }),
+  ).toBe(1);
+  expect(
+    evaluateResult({
+      event,
+      results: {
+        "e2e-production-shard": "success",
+        "route-smoke": "skipped",
+      },
+    }),
+  ).toBe(1);
+});
+
 test("a merge group plans both browser suites for app changes and neither for docs", () => {
   const scopes = ["route_smoke_required", "e2e_production_required"] as const;
   const appChange = [
@@ -6124,6 +6155,7 @@ test.each([
           env: {
             PATH: Bun.env["PATH"] ?? "",
             E2E_PRODUCTION_REQUIRED: "true",
+            ROUTE_SMOKE_REQUIRED: "false",
             EVENT_NAME: event,
             GITHUB_OUTPUT: output,
             SELECTED_MATRIX: matrix,
@@ -6147,6 +6179,57 @@ test.each([
           "",
         ].join("\n"),
       );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test.each([
+  {
+    event: EVENT.mergeGroup,
+    routeSmokeRequired: "true",
+    expected: '{"shard":[1,2]}',
+  },
+  {
+    event: EVENT.pullRequest,
+    routeSmokeRequired: "true",
+    expected: '{"shard":[1,2,"network-baseline"]}',
+  },
+])(
+  "the e2e planner deduplicates the merge-group network proof: %j",
+  ({ event, routeSmokeRequired, expected }) => {
+    const planner = jobSteps(ciJobs["ci-plan"]).find(
+      (step) => step.name === "Plan changed PR e2e shards",
+    );
+    const directory = mkdtempSync(nodePath.join(tmpdir(), "e2e-proof-plan-"));
+    const output = nodePath.join(directory, "output");
+    try {
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-c",
+          `bun() { printf '%s' '{"shard":[1,2,"network-baseline"]}'; }\n${planner?.run ?? panic("Missing e2e shard planner")}`,
+        ],
+        {
+          env: {
+            PATH: Bun.env["PATH"] ?? "",
+            E2E_PRODUCTION_REQUIRED: "true",
+            ROUTE_SMOKE_REQUIRED: routeSmokeRequired,
+            EVENT_NAME: event,
+            GITHUB_OUTPUT: output,
+            SELECTED_MATRIX: "",
+            SELECTED_MODE: "",
+            SELECTED_SPECS: "",
+            SELECTOR_OUTCOME: "skipped",
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(readFileSync(output, "utf-8")).toContain(`matrix=${expected}\n`);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
