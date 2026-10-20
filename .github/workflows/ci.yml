@@ -87,6 +87,9 @@ env:
 
 jobs:
   ci-plan:
+    # The result gate uses this explicit marker to distinguish metadata runs
+    # from code runs without relying on which one happened first.
+    name: ${{ github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && 'ci-metadata-plan' || 'ci-plan' }}
     # Decide trust before checkout, then compute every changed-file scope in
     # the same runner so downstream work starts after one scheduling wave.
     # Skip draft PRs (CI runs when marked ready for review via `reopened`).
@@ -6298,10 +6301,9 @@ jobs:
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
   ci-result:
-    # A metadata run has a distinct check name. It can reuse a completed code
-    # run or exercise a changed scope, but can never overwrite the required
-    # ci-result while that code run is pending or failed.
-    name: ${{ github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && 'ci-metadata-result' || 'ci-result' }}
+    # Every completed workflow run reports the required check. Metadata runs
+    # mirror the newest code run for this pull request and exact head.
+    name: ci-result
     if: always()
     needs:
       [
@@ -6528,6 +6530,75 @@ jobs:
             echo "required_summary=$record" >> "${GITHUB_OUTPUT:-}"
           }
           trap 'record_required_jobs "$?" || echo "::error::The required-jobs record could not be written."' EXIT
+          mirror_metadata_code_run() {
+            local poll_seconds=30 max_wait_seconds=5400 waited=0 runs candidates candidate jobs plan_name result status conclusion running code_found
+            while ((waited <= max_wait_seconds)); do
+              runs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$HEAD_SHA&per_page=100") || {
+                echo "::error::Metadata mirror could not list CI code runs."
+                return 1
+              }
+              candidates=$(jq -cr --argjson current "$GITHUB_RUN_ID" --argjson pr "$PR_NUMBER" --arg head "$HEAD_SHA" '
+                [.[].workflow_runs[]
+                  | select(.id != $current and .head_sha == $head)
+                  | select(any(.pull_requests[]?; .number == $pr))]
+                | sort_by(.run_number, .id) | reverse | .[].id
+                ' <<< "$runs") || {
+                echo "::error::Metadata mirror received invalid CI run data."
+                return 1
+              }
+              running=false
+              code_found=false
+              while IFS= read -r candidate; do
+                [[ -n "$candidate" ]] || continue
+                jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$candidate/jobs?per_page=100") || {
+                  echo "::error::Metadata mirror could not inspect code run $candidate."
+                  return 1
+                }
+                plan_name=$(jq -er '[.[].jobs[] | select(.name == "ci-plan" or .name == "ci-metadata-plan") | .name] | first // ""' <<< "$jobs") || return 1
+                # Historical metadata runs used a distinct result name; new
+                # runs carry the classification on their ci-plan job.
+                if [[ "$plan_name" == ci-metadata-plan ]] || jq -e 'any(.[].jobs[]; .name == "ci-metadata-result")' <<< "$jobs" >/dev/null; then
+                  continue
+                fi
+                [[ "$plan_name" == ci-plan ]] || continue
+                code_found=true
+                result=$(jq -cer '[.[].jobs[] | select(.name == "ci-result")] | sort_by(.id) | last // null' <<< "$jobs") || {
+                  echo "::error::Code run $candidate has no ci-result job."
+                  return 1
+                }
+                status=$(jq -er '.status | select(type == "string")' <<< "$result") || return 1
+                conclusion=$(jq -er '.conclusion // "" | select(type == "string")' <<< "$result") || return 1
+                if [[ "$status" != completed ]]; then
+                  if ((waited == max_wait_seconds)); then
+                    echo "::error::Metadata mirror: code run still running after 90 min."
+                    return 1
+                  fi
+                  running=true
+                  break
+                fi
+                if [[ "$conclusion" == success ]]; then
+                  echo "Metadata mirror: code run $candidate succeeded for head $HEAD_SHA."
+                  pass_through_reason=metadata-mirror
+                  reused_from_run_id="$candidate"
+                  return 0
+                fi
+                echo "::error::Metadata mirror: code run $candidate completed with ${conclusion:-no conclusion}."
+                return 1
+              done <<< "$candidates"
+              if [[ "$code_found" == false ]]; then
+                echo "::error::Metadata mirror: no code run exists for pull request $PR_NUMBER at head $HEAD_SHA."
+                return 1
+              fi
+              if [[ "$running" == true ]]; then
+                sleep "$poll_seconds"
+                waited=$((waited + poll_seconds))
+              fi
+            done
+          }
+          if [[ "$EVENT" == pull_request && "$METADATA_ONLY" == true ]]; then
+            mirror_metadata_code_run
+            exit $?
+          fi
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1
           fi
@@ -6699,11 +6770,6 @@ jobs:
             exit 1
           fi
           if [[ "${RUN_REQUIRED:-true}" == false ]]; then
-            if [[ "$METADATA_ONLY" == true && -z "$COMPLETED_RUN_ID" ]]; then
-              echo "No completed evidence exists for this metadata event; the code run owns ci-result."
-              pass_through_reason=metadata
-              exit 0
-            fi
             if [[ "$EVENT" != pull_request || ! "$COMPLETED_RUN_ID" =~ ^[1-9][0-9]*$ ]] || ! jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" > /dev/null; then
               echo "::error::Invalid completed-depth reuse or unexpected dependency outcome."
               exit 1
