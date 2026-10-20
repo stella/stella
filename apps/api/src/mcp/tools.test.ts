@@ -5957,7 +5957,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(error["issues"]).toEqual([
       {
         path: "country",
-        message: '"XAA" is not a country code, one of CZE.',
+        message: `"XAA" is not a country code, one of ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}.`,
       },
     ]);
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
