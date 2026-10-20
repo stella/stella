@@ -1,3 +1,4 @@
+// parser-output-unchanged: page-furniture separation is opt-in; the default reading the Polish parsers use is byte-identical, pinned by a recorded-output digest test.
 /**
  * Polish Supreme Court (Sąd Najwyższy) document reader.
  *
