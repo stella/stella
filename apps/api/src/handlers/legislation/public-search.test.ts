@@ -214,23 +214,27 @@ test.each([
         durationMs: 12,
         rounds: 2,
         candidateCount: 6,
+        outcome: "completed",
       }),
       expect.objectContaining({
         stage: "candidate_hydration",
         durationMs: 14,
         rounds: 2,
         candidateCount: 6,
+        outcome: "completed",
       }),
       expect.objectContaining({
         stage: "work_collapse_ranking",
         durationMs: 26,
         rounds: 2,
         resultCount: 2,
+        outcome: "completed",
       }),
       expect.objectContaining({
         stage: "response_serialization",
         durationMs: 17,
         resultCount: 1,
+        outcome: "completed",
       }),
     ]);
     for (const record of records) {
@@ -265,16 +269,19 @@ test("a failed second-round index read keeps both index intervals", async () => 
       durationMs: 12,
       rounds: 1,
       candidateCount: 3,
+      outcome: "failed",
     }),
     expect.objectContaining({
       stage: "candidate_hydration",
       durationMs: 11,
       rounds: 1,
+      outcome: "completed",
     }),
     expect.objectContaining({
       stage: "work_collapse_ranking",
       durationMs: 13,
       rounds: 1,
+      outcome: "completed",
     }),
   ]);
 });

@@ -140,7 +140,10 @@ import {
 } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { emitRequestStage } from "@/api/lib/observability/request-metrics";
-import type { RequestStage } from "@/api/lib/observability/request-metrics";
+import type {
+  RequestStage,
+  RequestStageOutcome,
+} from "@/api/lib/observability/request-metrics";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -1157,7 +1160,10 @@ type CorpusLegislationSearchOptions = {
   hitDispositions: CorpusHitDispositionCounter;
   observeStage: ObserveLegislationStage;
   now: () => number;
-  recordIndexScan: (scan: IndexScanTiming) => void;
+  recordIndexScan: (
+    scan: IndexScanTiming,
+    outcome: RequestStageOutcome,
+  ) => void;
   reads: CorpusLegislationReadDependencies;
 };
 
@@ -1181,7 +1187,7 @@ const createIndexRecorder = ({
   emit,
 }: {
   now: () => number;
-  emit: (scan: IndexScanTiming) => void;
+  emit: (scan: IndexScanTiming, outcome: RequestStageOutcome) => void;
 }) => {
   const scan: IndexScanTiming = { durationMs: 0, candidateCount: 0, rounds: 0 };
   let openedAt: number | undefined = now();
@@ -1200,11 +1206,22 @@ const createIndexRecorder = ({
         openedAt = now();
       };
     },
-    settle: () => {
+    settle: (outcome: RequestStageOutcome) => {
       closeInterval();
-      emit(scan);
+      emit(scan, outcome);
     },
   };
+};
+
+const settleIndexRead = async <T>(
+  pending: Promise<T>,
+  recorder: ReturnType<typeof createIndexRecorder>,
+) => {
+  const outcome = pending.then(
+    (): RequestStageOutcome => "completed",
+    (_error: unknown): RequestStageOutcome => "failed",
+  );
+  return await pending.finally(async () => recorder.settle(await outcome));
 };
 
 const corpusIndexSearch = async ({
@@ -1262,54 +1279,53 @@ const corpusIndexSearch = async ({
       }
     }
     const indexTiming = createIndexRecorder({ now, emit: recordIndexScan });
-    return await reads
-      .readPage({
-        hitDispositions,
-        observer,
-        cluster,
-        indexId,
-        query,
-        limit: pageLimit,
-        order: RELEVANCE_ORDER,
-        // A legislation hit is a whole statute version; the native endpoint
-        // would return its full stored text for each of up to 300 hits a round.
-        scanTransport: SCORED_SCAN_TRANSPORT,
-        parsedCursor: cursor,
-        ...(active.type === "relaxed"
-          ? {
-              maxRounds: 1,
-            }
-          : {}),
-        snippetFields: ["text"],
-        projectionRevisionField: requireCorpusIndexManifest(
-          "legislation",
+    const pending = reads.readPage({
+      hitDispositions,
+      observer,
+      cluster,
+      indexId,
+      query,
+      limit: pageLimit,
+      order: RELEVANCE_ORDER,
+      // A legislation hit is a whole statute version; the native endpoint
+      // would return its full stored text for each of up to 300 hits a round.
+      scanTransport: SCORED_SCAN_TRANSPORT,
+      parsedCursor: cursor,
+      ...(active.type === "relaxed"
+        ? {
+            maxRounds: 1,
+          }
+        : {}),
+      snippetFields: ["text"],
+      projectionRevisionField: requireCorpusIndexManifest(
+        "legislation",
+        generation,
+      ).projection.projectionRevisionField,
+      extractId: extractCorpusDocumentId,
+      extractSnippet: extractCorpusSnippet,
+      unseenScoreUpperBound:
+        active.type === "strict" ? stableBlendUpperBound : (score) => score,
+      rankCandidates: async (candidates, { selectAppliedCandidates }) => {
+        const resumeIndexTiming = indexTiming.pause(candidates.length);
+        const ranked = await rehydrateLegislationCandidates({
+          hitDispositions,
+          body,
+          candidates,
+          selectAppliedCandidates,
           generation,
-        ).projection.projectionRevisionField,
-        extractId: extractCorpusDocumentId,
-        extractSnippet: extractCorpusSnippet,
-        unseenScoreUpperBound:
-          active.type === "strict" ? stableBlendUpperBound : (score) => score,
-        rankCandidates: async (candidates, { selectAppliedCandidates }) => {
-          const resumeIndexTiming = indexTiming.pause(candidates.length);
-          const ranked = await rehydrateLegislationCandidates({
-            hitDispositions,
-            body,
-            candidates,
-            selectAppliedCandidates,
-            generation,
-            legislationDb,
-            cursorId: cursor?.id,
-            namedWorks: active.type === "strict" ? namedWorks : [],
-            excludedWorkTokens: [...excludedWorkTokens],
-            ranking: active.type === "strict" ? "authority" : "lexical",
-            observeStage,
-            readCandidateRows: reads.readCandidateRows,
-          });
-          resumeIndexTiming();
-          return ranked;
-        },
-      })
-      .finally(indexTiming.settle);
+          legislationDb,
+          cursorId: cursor?.id,
+          namedWorks: active.type === "strict" ? namedWorks : [],
+          excludedWorkTokens: [...excludedWorkTokens],
+          ranking: active.type === "strict" ? "authority" : "lexical",
+          observeStage,
+          readCandidateRows: reads.readCandidateRows,
+        });
+        resumeIndexTiming();
+        return ranked;
+      },
+    });
+    return await settleIndexRead(pending, indexTiming);
   };
 
   type PhasePage = NonNullable<Awaited<ReturnType<typeof readPhase>>>;
@@ -1473,6 +1489,7 @@ type EmitAggregatedSearchStage = (record: {
   stage: AggregatedSearchStage;
   durationMs: number;
   counts: AggregatedSearchStageCounts;
+  outcome: RequestStageOutcome;
 }) => void;
 
 const createSearchStageAccumulator = (
@@ -1481,7 +1498,10 @@ const createSearchStageAccumulator = (
 ) => {
   const stages = new Map<
     AggregatedSearchStage,
-    AggregatedSearchStageCounts & { durationMs: number }
+    AggregatedSearchStageCounts & {
+      durationMs: number;
+      outcome: RequestStageOutcome;
+    }
   >();
   const failedStages = new Set<RequestStage>();
   const valueFor = (stage: AggregatedSearchStage) =>
@@ -1490,6 +1510,7 @@ const createSearchStageAccumulator = (
       rounds: 0,
       candidateCount: 0,
       resultCount: 0,
+      outcome: "completed",
     };
   const observeStage: ObserveLegislationStage = async (
     stage,
@@ -1512,12 +1533,18 @@ const createSearchStageAccumulator = (
     stages.set(stage, accumulated);
     return value;
   };
-  const recordIndexScan = (scan: IndexScanTiming) => {
+  const recordIndexScan = (
+    scan: IndexScanTiming,
+    outcome: RequestStageOutcome,
+  ) => {
     const stage = "index_scan";
     const accumulated = valueFor(stage);
     accumulated.durationMs += scan.durationMs;
     accumulated.rounds += scan.rounds;
     accumulated.candidateCount += scan.candidateCount;
+    if (outcome === "failed") {
+      accumulated.outcome = outcome;
+    }
     stages.set(stage, accumulated);
   };
   const settle = () => {
@@ -1535,6 +1562,7 @@ const createSearchStageAccumulator = (
           stage,
           durationMs: accumulated.durationMs,
           counts: accumulated,
+          outcome: accumulated.outcome,
         });
       }
     }
@@ -1561,6 +1589,7 @@ export const searchLegislationHandler = async (
       resultCount?: number;
     } = {},
     durationMs = now() - timing.startedAt,
+    outcome: RequestStageOutcome = "completed",
   ) => {
     emitStage({
       route,
@@ -1570,12 +1599,12 @@ export const searchLegislationHandler = async (
       stage: timing.stage,
       durationMs,
       ...counts,
-      outcome: "completed",
+      outcome,
     });
   };
   const stageAccumulator = createSearchStageAccumulator(
     now,
-    ({ stage, durationMs, counts: accumulated }) =>
+    ({ stage, durationMs, counts: accumulated, outcome }) =>
       finishStage(
         { stage, startedAt: 0 },
         {
@@ -1588,6 +1617,7 @@ export const searchLegislationHandler = async (
             : { resultCount: accumulated.resultCount }),
         },
         durationMs,
+        outcome,
       ),
   );
   const { observeStage, recordIndexScan } = stageAccumulator;
