@@ -17,6 +17,7 @@ import {
   buildCzechQrPaymentPayload,
   buildPolishQrPaymentPayload,
   normalizeIban,
+  polishNip,
 } from "@stll/invoicing";
 import type {
   InvoiceDocumentType,
@@ -484,8 +485,11 @@ export const buildInvoicePaymentPayload = ({
     }).map((result) => ({ ...result, errorCorrection: "M" as const }));
   }
   if (country === "PL") {
-    // An institutional payee's code needs its NIP; without one, no code.
-    if (seller.vatId === null) {
+    // An institutional payee's code needs a Polish NIP. A Polish account does
+    // not make its owner a Polish taxpayer, and the code is optional: a seller
+    // without a valid NIP gets no code rather than a failed PDF.
+    const nip = seller.vatId === null ? null : polishNip(seller.vatId);
+    if (nip === null) {
       return null;
     }
     return buildPolishQrPaymentPayload({
@@ -493,7 +497,7 @@ export const buildInvoicePaymentPayload = ({
       iban: payment.iban,
       amountMinor: payment.amountMinor,
       currency: payment.currency,
-      recipientNip: seller.vatId,
+      recipientNip: nip,
       recipientName: seller.legalName,
       title:
         payment.message ?? invoice.reference ?? INVOICE_PDF_LABELS.pl.invoice,

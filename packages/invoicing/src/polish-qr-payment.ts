@@ -38,6 +38,15 @@ const MIN_AMOUNT_DIGITS = 6;
 const DISALLOWED = /[^\w ,./\\\-@#&*ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/gu;
 const POLISH_LETTER = /^[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]$/u;
 
+/**
+ * The NIP in a seller's tax ID, or null when it is not a valid Polish NIP
+ * (a foreign VAT ID on a firm that banks in Poland, a typo).
+ */
+export const polishNip = (taxId: string): string | null => {
+  const nip = compactNip(taxId);
+  return validateNip(nip).valid ? nip : null;
+};
+
 export const buildPolishQrPaymentPayload = ({
   documentType,
   iban,

@@ -9,6 +9,7 @@ export {
 export { calculateLineNetAmount, VAT_TREATMENTS } from "./line-amount";
 export {
   buildPolishQrPaymentPayload,
+  polishNip,
   type PolishQrPaymentInput,
   type PolishQrPaymentResult,
 } from "./polish-qr-payment";

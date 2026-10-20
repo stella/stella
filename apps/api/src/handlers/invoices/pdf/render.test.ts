@@ -245,7 +245,7 @@ describe("invoice QR payment", () => {
     ).toBe(true);
   });
 
-  test("a Polish account gets the ZBP code, at error correction L", () => {
+  test("a Polish account gets the ZBP code, at error correction L", async () => {
     const polish = {
       ...options,
       invoice: { ...options.invoice, currency: "PLN" },
@@ -273,13 +273,17 @@ describe("invoice QR payment", () => {
       reason: "not_pln",
       errorCorrection: "L",
     });
-    // No NIP on the seller profile: no code.
-    expect(
-      buildInvoicePaymentPayload({
-        ...polish,
-        seller: { ...polish.seller, vatId: null },
-      }),
-    ).toBeNull();
+    // No NIP on the seller profile, or a foreign VAT ID on a firm that banks
+    // in Poland: no code, and the PDF still renders.
+    for (const vatId of [null, "CZ27082440", "PL 526-000-12-47"]) {
+      const seller = { ...polish.seller, vatId };
+      expect(buildInvoicePaymentPayload({ ...polish, seller })).toBeNull();
+    }
+    const czechSeller = {
+      ...polish,
+      seller: { ...polish.seller, vatId: "CZ27082440" },
+    } satisfies RenderInvoicePdfOptions;
+    expect((await textOf(czechSeller)).text).toContain("Kancelaria Nowak");
   });
 
   test("skips QR for zero, negative, credit notes or missing IBAN", () => {
