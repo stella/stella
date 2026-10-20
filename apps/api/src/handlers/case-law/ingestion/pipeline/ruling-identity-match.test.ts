@@ -1,4 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
+
+import { listAdapterKeys } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 
 import {
   matchRepublishedRuling,
@@ -17,6 +22,32 @@ const complete = {
 const stored = [{ decisionId: "canonical", identity: complete }];
 
 describe("cross-source ruling identity", () => {
+  test("all registered source pairs converge on the same complete identity", async () => {
+    await assertProperty(
+      "republished ruling identity converges across registered source pairs",
+      fc.property(
+        fc.constantFrom(...listAdapterKeys()),
+        fc.constantFrom(...listAdapterKeys()),
+        (sourceA, sourceB) => {
+          fc.pre(sourceA !== sourceB);
+          const first = matchRepublishedRuling(complete, stored);
+          const replay = matchRepublishedRuling(complete, stored);
+          expect({ sourceA, sourceB, first, replay }).toEqual({
+            sourceA,
+            sourceB,
+            first: {
+              type: REPUBLISHED_RULING_OUTCOME.LINKED,
+              decisionId: "canonical",
+            },
+            replay: {
+              type: REPUBLISHED_RULING_OUTCOME.LINKED,
+              decisionId: "canonical",
+            },
+          });
+        },
+      ),
+    );
+  });
   test("links only one complete matching ruling", () => {
     expect(matchRepublishedRuling(complete, stored)).toEqual({
       type: REPUBLISHED_RULING_OUTCOME.LINKED,

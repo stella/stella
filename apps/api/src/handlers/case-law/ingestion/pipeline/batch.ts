@@ -32,6 +32,8 @@ import {
   wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { REPUBLISHED_RULING_OUTCOME } from "@/api/handlers/case-law/ingestion/pipeline/ruling-identity-match";
+import type { RepublishedRulingPartialReason } from "@/api/handlers/case-law/ingestion/pipeline/ruling-identity-match";
 import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import type { SourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
@@ -258,6 +260,50 @@ type DecisionBatchApplication = {
   failureLedger: FailureLedgerWrite;
   /** One per reached record, in batch order. */
   settlements: readonly RecordSettlement[];
+  republishedRulings: RepublishedRulingTally;
+};
+
+export type RepublishedRulingTally = {
+  linked: number;
+  separatePartial: Map<RepublishedRulingPartialReason, number>;
+  separateAmbiguous: number;
+};
+
+export const emptyRepublishedRulingTally = (): RepublishedRulingTally => ({
+  linked: 0,
+  separatePartial: new Map(),
+  separateAmbiguous: 0,
+});
+
+/** The tally as the cycle result and run log carry it. */
+export const republishedRulingCounts = ({
+  linked,
+  separatePartial,
+  separateAmbiguous,
+}: RepublishedRulingTally) => ({
+  linked,
+  separatePartial: Object.fromEntries(separatePartial),
+  separateAmbiguous,
+});
+
+const countPartial = (
+  counts: Map<RepublishedRulingPartialReason, number>,
+  reason: RepublishedRulingPartialReason,
+  count: number,
+): void => {
+  counts.set(reason, (counts.get(reason) ?? 0) + count);
+};
+
+/** Adds one batch's tally into a cycle's. */
+export const addRepublishedRulingTally = (
+  into: RepublishedRulingTally,
+  from: RepublishedRulingTally,
+): void => {
+  into.linked += from.linked;
+  into.separateAmbiguous += from.separateAmbiguous;
+  for (const [reason, count] of from.separatePartial) {
+    countPartial(into.separatePartial, reason, count);
+  }
 };
 
 type BatchTally = {
@@ -270,6 +316,7 @@ type BatchTally = {
   failures: IngestionFailureRow[];
   /** The records whose failure rows are in `failures`. */
   ledgerIndexes: number[];
+  republishedRulings: RepublishedRulingTally;
 };
 
 type BatchLogContext = {
@@ -283,6 +330,28 @@ const settleDecision = (
   tally: BatchTally,
   outcome: ProcessResult,
 ): DecisionBatchHalt | null => {
+  if (outcome.status === PROCESS_DECISION_STATUS.COMPLETE) {
+    switch (outcome.republished?.type) {
+      case REPUBLISHED_RULING_OUTCOME.LINKED:
+        tally.republishedRulings.linked++;
+        break;
+      case REPUBLISHED_RULING_OUTCOME.SEPARATE_PARTIAL:
+        countPartial(
+          tally.republishedRulings.separatePartial,
+          outcome.republished.reason,
+          1,
+        );
+        break;
+      case REPUBLISHED_RULING_OUTCOME.SEPARATE_AMBIGUOUS:
+        tally.republishedRulings.separateAmbiguous++;
+        break;
+      case undefined:
+        break;
+      default:
+        outcome.republished satisfies never;
+        return panic("Unhandled republished ruling outcome.");
+    }
+  }
   if (outcome.inserted) {
     tally.inserted++;
   } else {
@@ -575,6 +644,7 @@ export const applyDecisionBatch = async (
     settlements: [],
     failures: [],
     ledgerIndexes: [],
+    republishedRulings: emptyRepublishedRulingTally(),
   };
   const pack = openCorpusPackBatch({
     scopedDb,
@@ -687,6 +757,7 @@ export const applyDecisionBatch = async (
     halt,
     failureLedger,
     settlements: tally.settlements,
+    republishedRulings: tally.republishedRulings,
   };
 };
 

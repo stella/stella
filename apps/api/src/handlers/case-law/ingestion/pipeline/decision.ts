@@ -38,6 +38,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { REPUBLISHED_RULING_OUTCOME } from "@/api/handlers/case-law/ingestion/pipeline/ruling-identity-match";
+import type { RepublishedRulingMatch } from "@/api/handlers/case-law/ingestion/pipeline/ruling-identity-match";
 import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import type { SourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import {
@@ -128,6 +129,17 @@ const settleRepublishedLink = async ({
     republished,
   });
 };
+
+const completedInsert = (
+  s3UploadFailed: boolean,
+  republished: RepublishedRulingMatch | undefined,
+): ProcessResult =>
+  withSourceRawRetry(s3UploadFailed, {
+    status: PROCESS_DECISION_STATUS.COMPLETE,
+    inserted: true,
+    searchVectorFailed: false,
+    ...(republished === undefined ? {} : { republished }),
+  });
 
 const recordAppliedIdentityRaw = async (
   writeStatus: DecisionRowWriteStatus,
@@ -431,11 +443,7 @@ const runDecisionAttempt = async ({
     return flushed;
   }
 
-  return withSourceRawRetry(rawArtifact.s3UploadFailed, {
-    status: PROCESS_DECISION_STATUS.COMPLETE,
-    inserted: true,
-    searchVectorFailed: false,
-  });
+  return completedInsert(rawArtifact.s3UploadFailed, identity.republished);
 };
 
 /**

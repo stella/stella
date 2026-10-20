@@ -316,11 +316,39 @@ export const sweepCaseLawRawDecision = async ({
     return { type: kept };
   }
 
-  const erased = await eraseRawDocument({ ...documentOwner(owner), signal });
-  if (Result.isError(erased)) {
-    return { type: "incomplete", error: erased.error };
+  const identitySources = await scopedDb(
+    async (tx) =>
+      await tx
+        .select({ sourceId: caseLawDecisionSourceIdentities.sourceId })
+        .from(caseLawDecisionSourceIdentities)
+        .where(eq(caseLawDecisionSourceIdentities.decisionId, decisionId)),
+  );
+  const sourceIds = [
+    ...new Set([
+      owner.sourceId,
+      ...identitySources.map(({ sourceId }) => sourceId),
+    ]),
+  ];
+  const erased = await Promise.all(
+    sourceIds.map(
+      async (sourceId) =>
+        await eraseRawDocument({
+          ...documentOwner({ decisionId, sourceId }),
+          signal,
+        }),
+    ),
+  );
+  const failed = erased.find(Result.isError);
+  if (failed !== undefined && Result.isError(failed)) {
+    return { type: "incomplete", error: failed.error };
   }
-  const legacy = (await sourceHoldsLegacyRawObjects(owner.sourceId, signal))
+  const legacy = (
+    await Promise.all(
+      sourceIds.map(
+        async (sourceId) => await sourceHoldsLegacyRawObjects(sourceId, signal),
+      ),
+    )
+  ).some(Boolean)
     ? "pending"
     : "none";
   if (legacy === "none") {

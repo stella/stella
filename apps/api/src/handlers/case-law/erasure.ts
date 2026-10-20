@@ -6,6 +6,7 @@ import { Temporal } from "@stll/time";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisionSourceIdentities,
   caseLawCitationDoctrineReviews,
   caseLawDecisionSupplements,
   caseLawDecisions,
@@ -584,6 +585,10 @@ export const redactCaseLawDecision = async ({
           sourceRawContentType: null,
         })
         .where(eq(caseLawDecisions.id, decisionId));
+      await tx
+        .update(caseLawDecisionSourceIdentities)
+        .set({ sourceRawS3Key: null, sourceRawContentType: null })
+        .where(eq(caseLawDecisionSourceIdentities.decisionId, decisionId));
       await runDecisionWriteExtension(tx, decisionId);
     });
   }

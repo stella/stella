@@ -18,9 +18,12 @@ import {
 import type { SyncPage } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
+  addRepublishedRulingTally,
   applyDecisionBatch,
+  emptyRepublishedRulingTally,
   MAX_CONSECUTIVE_FAILURES,
   recordIngestionFailures,
+  republishedRulingCounts,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch";
 import type {
   DecisionBatchHalt,
@@ -270,6 +273,7 @@ export const runIngestionPipeline = async ({
   let skipped = 0;
   let searchVectorFailures = 0;
   let s3UploadFailures = 0;
+  const republishedRulings = emptyRepublishedRulingTally();
   let pagesProcessed = 0;
   /** Track recent cursors to detect parking (stagnation or ping-pong). */
   const recentCursors = new Set<string | null>();
@@ -523,6 +527,7 @@ export const runIngestionPipeline = async ({
       skipped += applied.skipped;
       searchVectorFailures += applied.searchVectorFailures;
       s3UploadFailures += applied.corpusWriteFailures;
+      addRepublishedRulingTally(republishedRulings, applied.republishedRulings);
       consecutiveFailures = applied.failureStreak;
       // A reason the batch stopped for wins over the ledger write's own.
       const batchHalt =
@@ -775,6 +780,7 @@ export const runIngestionPipeline = async ({
         skipped: pageSkipped,
         durationMs: Math.round(performance.now() - pageT0),
         halted: haltReason !== null,
+        republishedRulings: republishedRulingCounts(republishedRulings),
       });
 
       if (haltReason) {
@@ -856,6 +862,7 @@ export const runIngestionPipeline = async ({
     pagesProcessed,
     nextCursor: cursor,
     haltReason,
+    republishedRulings: republishedRulingCounts(republishedRulings),
     ...(stopKind === undefined ? {} : { stopKind }),
   };
 };

@@ -21,11 +21,14 @@ export const REPUBLISHED_RULING_PARTIAL_REASON = {
   TYPE_DIFFERS: "type_differs",
 } as const;
 
+export type RepublishedRulingPartialReason =
+  (typeof REPUBLISHED_RULING_PARTIAL_REASON)[keyof typeof REPUBLISHED_RULING_PARTIAL_REASON];
+
 export type RepublishedRulingMatch =
   | { type: typeof REPUBLISHED_RULING_OUTCOME.LINKED; decisionId: string }
   | {
       type: typeof REPUBLISHED_RULING_OUTCOME.SEPARATE_PARTIAL;
-      reason: (typeof REPUBLISHED_RULING_PARTIAL_REASON)[keyof typeof REPUBLISHED_RULING_PARTIAL_REASON];
+      reason: RepublishedRulingPartialReason;
     }
   | { type: typeof REPUBLISHED_RULING_OUTCOME.SEPARATE_AMBIGUOUS };
 

@@ -28,6 +28,11 @@ export type IngestionPipelineResult = {
   nextCursor: string | null;
   /** Non-null if the adapter was halted early due to repeated failures. */
   haltReason: string | null;
+  republishedRulings: {
+    linked: number;
+    separatePartial: Record<string, number>;
+    separateAmbiguous: number;
+  };
   stopKind?: IngestionStopKind;
 };
 
