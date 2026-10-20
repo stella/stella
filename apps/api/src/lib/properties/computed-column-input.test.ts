@@ -5,6 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   AIColumnInputRequiredError,
+  computedColumnInputHandlerError,
   requireComputedColumnInputs,
 } from "./computed-column-input";
 
@@ -32,6 +33,10 @@ describe("computed column input ownership", () => {
     expect(result.error).toMatchObject({
       code: "ai-column-input-required",
       candidateFileColumnIds: ["one", "two"],
+    });
+    expect(computedColumnInputHandlerError(result.error)).toMatchObject({
+      status: 422,
+      hint: "Candidate file columns: one, two",
     });
   });
 });

@@ -13,7 +13,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import {
+  computedColumnInputHandlerError,
+  requireComputedColumnInputs,
+} from "@/api/lib/properties/computed-column-input";
 import {
   DOCUMENT_TYPE_CLASSIFIER_ROLE,
   buildPropertyParts,
@@ -48,6 +51,7 @@ const createPropertiesBatch = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const builtItems = body.items.map((item) => ({
+      id: createSafeId<"property">(),
       name: item.name,
       built: buildPropertyParts(item),
     }));
@@ -81,22 +85,22 @@ const createPropertiesBatch = createSafeHandler(
           });
         }
 
+        const resultingColumns = [
+          ...existingRows,
+          ...builtItems.flatMap(({ id, built }) =>
+            "status" in built ? [] : [{ id, content: built.content }],
+          ),
+        ];
         for (const { built } of builtItems) {
           if ("status" in built || built.tool.type !== "ai-model") {
             continue;
           }
           const resolved = requireComputedColumnInputs({
-            candidates: existingRows,
+            candidates: resultingColumns,
             inputs: built.dependencies,
           });
           if (Result.isError(resolved)) {
-            const error = resolved.error;
-            throw new HandlerError({
-              status: 422,
-              code: error.code,
-              message: error.message,
-              hint: `Candidate file columns: ${error.candidateFileColumnIds.join(", ") || "none"}`,
-            });
+            throw computedColumnInputHandlerError(resolved.error);
           }
           built.dependencies = [...resolved.value];
         }
@@ -160,13 +164,11 @@ const createPropertiesBatch = createSafeHandler(
         // rows, their dependency rows and their audit events can be assembled
         // in full before anything is written: three statements for the batch
         // instead of two per item.
-        for (const { name, built } of builtItems) {
+        for (const { id: propertyId, name, built } of builtItems) {
           if ("status" in built) {
             continue;
           }
           const { content, tool, dependencies, role } = built;
-          const propertyId = createSafeId<"property">();
-
           propertyRows.push({
             id: propertyId,
             workspaceId,

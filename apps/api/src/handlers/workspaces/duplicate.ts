@@ -58,7 +58,10 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
-import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import {
+  computedColumnInputHandlerError,
+  requireComputedColumnInputs,
+} from "@/api/lib/properties/computed-column-input";
 import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
@@ -467,28 +470,25 @@ const wireDuplicatedComputedInputs = ({
     candidate.id ? [{ id: candidate.id, content: candidate.content }] : [],
   );
   for (const property of newProperties) {
-    if (property.tool.type !== "ai-model") {
+    if (property.tool?.type !== "ai-model") {
       continue;
     }
     if (!property.id) {
       panic("Duplicated property is missing its minted id");
     }
     const propertyId = property.id;
-    const existingInputs = wired.filter(
-      (dependency) => dependency.propertyId === propertyId,
-    );
+    const existingInputs = wired
+      .filter((dependency) => dependency.propertyId === propertyId)
+      .map(({ dependsOnPropertyId, condition }) => ({
+        dependsOnPropertyId,
+        condition: condition ?? null,
+      }));
     const inputs = requireComputedColumnInputs({
       candidates,
       inputs: existingInputs,
     });
     if (Result.isError(inputs)) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          code: inputs.error.code,
-          message: inputs.error.message,
-        }),
-      );
+      return Result.err(computedColumnInputHandlerError(inputs.error));
     }
     if (existingInputs.length === 0) {
       wired.push(

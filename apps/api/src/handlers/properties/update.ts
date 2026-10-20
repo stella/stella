@@ -31,7 +31,10 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
-import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import {
+  computedColumnInputHandlerError,
+  requireComputedColumnInputs,
+} from "@/api/lib/properties/computed-column-input";
 import {
   DOCUMENT_TYPE_CLASSIFIER_ROLE,
   isDocumentTypeClassifierProperty,
@@ -387,25 +390,8 @@ const updateProperty = createSafeHandler(
           };
         }
 
-        const isStale = comparePropertiesForStale({
-          oldProperty: {
-            content: oldProperty.content,
-            // Manual-input and verdict columns both compare as a plain manual
-            // single-select; the update body cannot set a verdict tool, so an
-            // existing verdict is treated like a manual column for staleness.
-            tool:
-              oldProperty.tool.type === "ai-model"
-                ? {
-                    ...oldProperty.tool,
-                    dependencies: oldDependencies,
-                  }
-                : { version: 1, type: "manual-input" },
-          },
-          newProperty: { content, tool },
-        });
-
-        const allProperties =
-          body.tool.type === "ai-model" || isStale
+        let allProperties =
+          body.tool.type === "ai-model"
             ? await tx.query.properties.findMany({
                 where: { workspaceId: { eq: workspaceId } },
                 columns: {
@@ -423,25 +409,6 @@ const updateProperty = createSafeHandler(
                 },
               })
             : [];
-
-        if (body.tool.type === "ai-model") {
-          const resolved = requireComputedColumnInputs({
-            candidates: allProperties.filter(({ id }) => id !== propertyId),
-            inputs: dependencies,
-          });
-          if (Result.isError(resolved)) {
-            const error = resolved.error;
-            return {
-              ok: false as const,
-              status: 422 as const,
-              code: error.code,
-              retryable: false,
-              message: error.message,
-              hint: `Candidate file columns: ${error.candidateFileColumnIds.join(", ") || "none"}`,
-            };
-          }
-          dependencies = [...resolved.value];
-        }
 
         const otherTaggedClassifierExists = allProperties.some(
           (property) =>
@@ -486,6 +453,55 @@ const updateProperty = createSafeHandler(
             status: 422 as const,
             message: "Document type classifier already exists",
           };
+        }
+
+        if (body.tool.type === "ai-model") {
+          const resolved = requireComputedColumnInputs({
+            candidates: allProperties.filter(({ id }) => id !== propertyId),
+            inputs: dependencies,
+          });
+          if (Result.isError(resolved)) {
+            throw computedColumnInputHandlerError(resolved.error);
+          }
+          dependencies = [...resolved.value];
+        }
+
+        const resolvedTool =
+          tool.type === "ai-model" ? { ...tool, dependencies } : tool;
+        const isStale = comparePropertiesForStale({
+          oldProperty: {
+            content: oldProperty.content,
+            // Manual-input and verdict columns both compare as a plain manual
+            // single-select; the update body cannot set a verdict tool, so an
+            // existing verdict is treated like a manual column for staleness.
+            tool:
+              oldProperty.tool.type === "ai-model"
+                ? {
+                    ...oldProperty.tool,
+                    dependencies: oldDependencies,
+                  }
+                : { version: 1, type: "manual-input" },
+          },
+          newProperty: { content, tool: resolvedTool },
+        });
+
+        if (body.tool.type !== "ai-model" && isStale) {
+          allProperties = await tx.query.properties.findMany({
+            where: { workspaceId: { eq: workspaceId } },
+            columns: {
+              id: true,
+              name: true,
+              content: true,
+              tool: true,
+              role: true,
+            },
+            limit: LIMITS.propertiesCount,
+            with: {
+              dependencies: {
+                columns: { dependsOnPropertyId: true },
+              },
+            },
+          });
         }
 
         if (

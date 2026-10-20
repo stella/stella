@@ -9,7 +9,10 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import {
+  computedColumnInputHandlerError,
+  requireComputedColumnInputs,
+} from "@/api/lib/properties/computed-column-input";
 import {
   buildPropertyParts,
   createPropertyBodySchema,
@@ -95,13 +98,7 @@ const createProperty = createSafeHandler(
             inputs: requestedDependencies,
           });
           if (Result.isError(resolved)) {
-            const error = resolved.error;
-            throw new HandlerError({
-              status: 422,
-              code: error.code,
-              message: error.message,
-              hint: `Candidate file columns: ${error.candidateFileColumnIds.join(", ") || "none"}`,
-            });
+            throw computedColumnInputHandlerError(resolved.error);
           }
           dependencies = [...resolved.value];
         }

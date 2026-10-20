@@ -25,4 +25,18 @@ describe("computed column input owner census", () => {
       ).toBe(true);
     });
   }
+
+  for (const relativePath of [
+    "../../handlers/properties/create.ts",
+    "../../handlers/properties/batch/create.ts",
+    "../../handlers/properties/update.ts",
+    "../../handlers/workspaces/duplicate.ts",
+  ] as const) {
+    test(`${relativePath} preserves the owner's HTTP refusal`, async () => {
+      const source = await Bun.file(
+        new URL(relativePath, import.meta.url),
+      ).text();
+      expect(source).toContain("computedColumnInputHandlerError(");
+    });
+  }
 });
