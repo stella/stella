@@ -11,6 +11,7 @@ import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { withTimeout } from "@/api/lib/with-timeout";
+import { authorizeWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 const OCR_EXPORT_STORAGE_READ_TIMEOUT_MS = 30 * 1000;
 const OCR_EXPORT_URL_EXPIRY_SECONDS = 15 * 60;
@@ -43,6 +44,7 @@ export const readOcrExport = async ({
   const row = await scopedDb(
     async (tx) =>
       await loadCurrentOcrExport({
+        authorizedWorkspaceIds: authorizeWorkspaceIds([workspaceId]),
         db: tx,
         fieldId,
         organizationId,

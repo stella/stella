@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
+import { authorizeWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
   COMPAT_FETCH_OUTPUT_SCHEMA,
   COMPAT_SEARCH_OUTPUT_SCHEMA,
@@ -100,7 +101,7 @@ const getFetchableEntityMap = async ({
       await loadCurrentExtractedContents(tx, {
         entityIds: safeEntityIds,
         organizationId: context.organizationId,
-        workspaceIds: context.accessibleWorkspaceIds,
+        workspaceIds: authorizeWorkspaceIds(context.accessibleWorkspaceIds),
       }),
   );
   const fetchableEntityMap = new Map<string, FetchableEntity>();
@@ -407,7 +408,7 @@ const searchMatterKnowledge = async ({
   )(context.scopedDb).search({
     query,
     organizationId: context.organizationId,
-    workspaceIds: context.accessibleWorkspaceIds,
+    workspaceIds: authorizeWorkspaceIds(context.accessibleWorkspaceIds),
     limit: normalizeTenantPageLimit(DEFAULT_COMPAT_SEARCH_LIMIT),
     ...(cursor === undefined ? {} : { cursor }),
   });
@@ -562,7 +563,7 @@ const handleCompatFetchTool: McpToolHandler<
         await loadCurrentExtractedContents(tx, {
           entityIds: [entityId],
           organizationId: context.organizationId,
-          workspaceIds: context.accessibleWorkspaceIds,
+          workspaceIds: authorizeWorkspaceIds(context.accessibleWorkspaceIds),
         }),
     )
   ).at(0);

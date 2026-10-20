@@ -96,6 +96,10 @@ import type { TaskDeploymentFeatures } from "@/api/lib/tasks/deployment-features
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 import { settleWorkObligation } from "@/api/lib/work-obligations/settle-work-obligation";
 import { WORK_OBLIGATION_SOURCE_SETTLEMENT } from "@/api/lib/work-obligations/transitions";
+import {
+  authorizeWorkspaceIds,
+  type AuthorizedWorkspaceIds,
+} from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -453,7 +457,7 @@ const runAiStep = async ({
     ? await loadInputDocuments(
         scopedDb,
         organizationId,
-        [run.workspaceId],
+        authorizeWorkspaceIds([run.workspaceId]),
         run.inputEntityIds,
       )
     : [];
@@ -602,7 +606,7 @@ const readPriorAiMarkdown = async (
 export const loadInputDocuments = async (
   scopedDb: ReturnType<typeof createRootScopedDb>,
   organizationId: SafeId<"organization">,
-  workspaceIds: SafeId<"workspace">[],
+  workspaceIds: AuthorizedWorkspaceIds,
   entityIds: SafeId<"entity">[],
 ): Promise<FlowStepDocument[]> => {
   if (entityIds.length === 0) {
@@ -640,12 +644,12 @@ export const loadInputDocuments = async (
   const drained = await drainFanOut({
     items: available,
     signal: new AbortController().signal,
-    operation: async (row, signal) => {
+    operation: (row, signal) => {
       signal.throwIfAborted();
-      return {
+      return Promise.resolve({
         label: row.name,
         text: row.text,
-      };
+      });
     },
   });
   if (Result.isError(drained)) {

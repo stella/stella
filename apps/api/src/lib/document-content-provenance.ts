@@ -13,6 +13,7 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
+import type { AuthorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 type ExtractedContentProvenance = {
   extractedAt: Date;
@@ -169,8 +170,12 @@ export const selectCurrentExtractedContent = <
 type LoadCurrentExtractedContentsOptions = {
   entityIds: SafeId<"entity">[];
   organizationId: SafeId<"organization">;
-  workspaceIds: SafeId<"workspace">[];
+  workspaceIds: AuthorizedWorkspaceIds;
 };
+
+type RlsCurrentContentDb = Pick<Transaction, "query" | "rollback">;
+
+export type SystemSweep = "search-indexing" | "deadline-scout";
 
 const loadCurrentExtractedContentsFromDatabase = async (
   database: Pick<typeof rootDb, "query">,
@@ -272,27 +277,34 @@ const loadCurrentExtractedContentsFromDatabase = async (
 };
 
 export const loadCurrentExtractedContents = async (
-  database: Pick<Transaction, "query">,
+  database: RlsCurrentContentDb,
   options: LoadCurrentExtractedContentsOptions,
 ) => await loadCurrentExtractedContentsFromDatabase(database, options);
 
 /** Organization-wide search indexing is a system projection, not a request read. */
 export const loadCurrentExtractedContentsForSearchIndex = async (
   database: Pick<typeof rootDb, "query">,
+  sweep: Extract<SystemSweep, "search-indexing">,
   {
     entityIds,
     organizationId,
   }: Omit<LoadCurrentExtractedContentsOptions, "workspaceIds">,
-) =>
-  await loadCurrentExtractedContentsFromDatabase(database, {
-    entityIds,
-    organizationId,
-    workspaceIds: null,
-  });
+) => {
+  sweep satisfies "search-indexing";
+  return (
+    await loadCurrentExtractedContentsFromDatabase(database, {
+      entityIds,
+      organizationId,
+      workspaceIds: null,
+    })
+  ).map(({ entityId, language, text }) => ({ entityId, language, text }));
+};
 
-type CurrentExtractionReadDb = Pick<typeof rootDb, "select">;
+type CurrentExtractionReadDb = Pick<Transaction, "select" | "rollback">;
+type SystemExtractionReadDb = Pick<typeof rootDb, "select">;
 
 type LoadCurrentOcrExportOptions = {
+  authorizedWorkspaceIds: AuthorizedWorkspaceIds;
   db: CurrentExtractionReadDb;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
@@ -300,11 +312,15 @@ type LoadCurrentOcrExportOptions = {
 };
 
 export const loadCurrentOcrExport = async ({
+  authorizedWorkspaceIds,
   db,
   fieldId,
   organizationId,
   workspaceId,
 }: LoadCurrentOcrExportOptions) => {
+  if (!authorizedWorkspaceIds.includes(workspaceId)) {
+    return null;
+  }
   const rows = await db
     .select({
       ciphertext: extractedContent.ciphertext,
@@ -384,9 +400,11 @@ const currentSourceWhere = (run: DeadlineSourceRun) =>
   );
 
 export const loadCurrentDeadlineSource = async (
-  db: CurrentExtractionReadDb,
+  db: SystemExtractionReadDb,
+  sweep: Extract<SystemSweep, "deadline-scout">,
   run: DeadlineSourceRun,
 ) => {
+  sweep satisfies "deadline-scout";
   const rows = await db
     .select({
       ciphertext: extractedContent.ciphertext,

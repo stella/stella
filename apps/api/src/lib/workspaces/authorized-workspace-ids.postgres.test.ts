@@ -122,8 +122,8 @@ describe.skipIf(!runPostgresTests)(
               { id: closingId, status: "deleting" },
             ]),
           );
-          expect(outcome.set.value.activeIds).toEqual([assignedId]);
-          expect(outcome.ids.value).toEqual([assignedId]);
+          expect([...outcome.set.value.activeIds]).toEqual([assignedId]);
+          expect([...outcome.ids.value]).toEqual([assignedId]);
           expect(outcome.assigned).toEqual([{ id: assignedId }]);
           expect(outcome.other).toEqual([]);
           expect(outcome.compared).toEqual([{ id: assignedId }]);

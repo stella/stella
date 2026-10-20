@@ -35,6 +35,44 @@ const collectFindings = (): MatterAccessFinding[] => {
   return findings;
 };
 
+const EXTRACTED_CONTENT_OWNER =
+  "apps/api/src/lib/document-content-provenance.ts";
+const collectExtractedContentReaders = () => {
+  const violations: string[] = [];
+  for (const file of new Glob("apps/api/src/**/*.ts").scanSync({
+    cwd: repoRoot,
+  })) {
+    if (!isProductionSource(file) || file === EXTRACTED_CONTENT_OWNER) {
+      continue;
+    }
+    const source = readFileSync(path.join(repoRoot, file), "utf-8");
+    const selectsPayloadColumn =
+      /\bextractedContent\.(?:ciphertext|iv|ocrPayloadCiphertext|ocrPayloadIv)\b/u.test(
+        source,
+      ) ||
+      /\bquery\.extractedContent\.find(?:First|Many)\s*\([\s\S]{0,3000}\b(?:ciphertext|iv|ocrPayloadCiphertext|ocrPayloadIv)\s*:\s*true\b/u.test(
+        source,
+      ) ||
+      (/\bquery\.extractedContent\.find(?:First|Many)\s*\(\s*\{[\s\S]{0,1000}\.\.\.[A-Za-z_$][\w$]*/u.test(
+        source,
+      ) &&
+        /\b(?:ciphertext|iv|ocrPayloadCiphertext|ocrPayloadIv)\s*:\s*true\b/u.test(
+          source,
+        )) ||
+      /\bselect\b[\s\S]{0,300}\b(?:ciphertext|iv|ocr_payload_ciphertext|ocr_payload_iv)\b[\s\S]{0,300}\bfrom\s+extracted_content\b/iu.test(
+        source,
+      );
+    if (
+      selectsPayloadColumn ||
+      (/\bextractedContent\b|\bextracted_content\b/u.test(source) &&
+        /\bdecryptContent\s*\(/u.test(source))
+    ) {
+      violations.push(file);
+    }
+  }
+  return violations;
+};
+
 // Modules that hand request and MCP code the actor's workspace set. They
 // must take it from the owner module; a local query would be a second source.
 const WORKSPACE_SET_PRODUCERS = [
@@ -68,6 +106,29 @@ describe("matter access census", () => {
       expect(source).toContain(`from "${AUTHORIZED_WORKSPACE_OWNER_MODULE}"`);
       expect(source).toContain("readAuthorizedWorkspaces(tx");
     }
+  });
+
+  test("only the permission owner constructs authorized workspace ids", () => {
+    const violations: string[] = [];
+    for (const file of new Glob("apps/api/src/**/*.ts").scanSync({
+      cwd: repoRoot,
+    })) {
+      if (
+        !isProductionSource(file) ||
+        file === AUTHORIZED_WORKSPACE_OWNER_FILE
+      ) {
+        continue;
+      }
+      const source = readFileSync(path.join(repoRoot, file), "utf-8");
+      if (/new\s+AuthorizedWorkspaceIds\b/u.test(source)) {
+        violations.push(file);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  test("only the extracted-content owner reads encrypted document payloads", () => {
+    expect(collectExtractedContentReaders()).toEqual([]);
   });
 
   test("every allowlist entry states a reason", () => {

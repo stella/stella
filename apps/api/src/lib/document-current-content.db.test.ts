@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { rootDb } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
@@ -19,6 +20,7 @@ import {
   loadCurrentExtractedContents,
   loadCurrentOcrExport,
 } from "@/api/lib/document-content-provenance";
+import { authorizeWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -50,8 +52,17 @@ const readCurrent = async (tx: TestDatabaseTransaction) =>
   await loadCurrentExtractedContents(tx, {
     entityIds: [ids.entityA1, ids.entityA2, ids.entityB1],
     organizationId: ids.orgA,
-    workspaceIds: [ids.wsA1],
+    workspaceIds: authorizeWorkspaceIds([ids.wsA1]),
   });
+
+test("owner connection is not a user-facing content reader", () => {
+  // @ts-expect-error The owner connection is intentionally not an RLS transaction.
+  void loadCurrentExtractedContents(rootDb, {
+    entityIds: [],
+    organizationId: ids.orgA,
+    workspaceIds: authorizeWorkspaceIds([]),
+  });
+});
 
 const inMatter = async (run: (tx: TestDatabaseTransaction) => Promise<void>) =>
   await createDryScopedQuery(database)([ids.wsA1], ids.orgA, run, ids.userA1);
@@ -65,14 +76,14 @@ test("current content follows organization and matter scope", async () => {
       await loadCurrentExtractedContents(tx, {
         entityIds: [ids.entityA1],
         organizationId: ids.orgA,
-        workspaceIds: [ids.wsA2],
+        workspaceIds: authorizeWorkspaceIds([ids.wsA2]),
       }),
     ).toEqual([]);
     expect(
       await loadCurrentExtractedContents(tx, {
         entityIds: [ids.entityA1],
         organizationId: ids.orgB,
-        workspaceIds: [ids.wsA1],
+        workspaceIds: authorizeWorkspaceIds([ids.wsA1]),
       }),
     ).toEqual([]);
   });
@@ -87,7 +98,7 @@ test("the required matter list narrows an otherwise authorized transaction", asy
         await loadCurrentExtractedContents(tx, {
           entityIds: [ids.entityA1],
           organizationId: ids.orgA,
-          workspaceIds: [ids.wsA2],
+          workspaceIds: authorizeWorkspaceIds([ids.wsA2]),
         }),
       ).toEqual([]);
     },
@@ -95,20 +106,24 @@ test("the required matter list narrows an otherwise authorized transaction", asy
   );
 });
 
-test.each(["compat search", "cross-matter read"])(
-  "%s returns extracted text only from an authorized matter",
-  async () => {
-    await inMatter(async (tx) => {
-      const rows = await loadCurrentExtractedContents(tx, {
-        entityIds: [ids.entityA1, ids.entityA2],
-        organizationId: ids.orgA,
-        workspaceIds: [ids.wsA1],
-      });
-      expect(rows.map(({ entityId }) => entityId)).toEqual([ids.entityA1]);
-      expect(rows.at(0)?.text).toBe("extracted text a1");
+test.each([
+  "compat search",
+  "compat fetch",
+  "cross-matter read",
+  "template prefill",
+  "flows",
+  "OCR export",
+])("%s returns extracted text only from an authorized matter", async () => {
+  await inMatter(async (tx) => {
+    const rows = await loadCurrentExtractedContents(tx, {
+      entityIds: [ids.entityA1, ids.entityA2],
+      organizationId: ids.orgA,
+      workspaceIds: authorizeWorkspaceIds([ids.wsA1]),
     });
-  },
-);
+    expect(rows.map(({ entityId }) => entityId)).toEqual([ids.entityA1]);
+    expect(rows.at(0)?.text).toBe("extracted text a1");
+  });
+});
 
 test.each([
   {
@@ -280,13 +295,16 @@ test.each(["exact", "legacy"] as const)(
         })
         .where(eq(extractedContent.entityId, ids.entityA1));
       const exportOptions = {
+        authorizedWorkspaceIds: authorizeWorkspaceIds([ids.wsA1]),
         db: tx,
         fieldId: ids.fileFieldA1,
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,
       };
       expect(await loadCurrentOcrExport(exportOptions)).not.toBeNull();
-      expect(await loadCurrentDeadlineSource(tx, run)).not.toBeNull();
+      expect(
+        await loadCurrentDeadlineSource(tx, "deadline-scout", run),
+      ).not.toBeNull();
       expect(await isCurrentDeadlineSource(tx, run)).toBe(true);
       if (provenance === "legacy") {
         await tx
@@ -336,7 +354,9 @@ test.each(["exact", "legacy"] as const)(
       expect(contentCount).toEqual([]);
       expect(await readCurrent(tx)).toEqual([]);
       expect(await loadCurrentOcrExport(exportOptions)).toBeNull();
-      expect(await loadCurrentDeadlineSource(tx, run)).toBeNull();
+      expect(
+        await loadCurrentDeadlineSource(tx, "deadline-scout", run),
+      ).toBeNull();
       expect(await isCurrentDeadlineSource(tx, run)).toBe(false);
     });
     await database

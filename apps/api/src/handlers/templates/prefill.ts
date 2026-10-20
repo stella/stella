@@ -40,6 +40,7 @@ import {
   readStoredTemplateFile,
   STORED_TEMPLATE_FILE_COLUMNS,
 } from "@/api/lib/templates/stored-template-file";
+import { authorizeWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_PASTED_TEXT_CHARS = 100_000;
@@ -336,29 +337,14 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
             await loadCurrentExtractedContents(tx, {
               entityIds,
               organizationId,
-              workspaceIds,
+              workspaceIds: authorizeWorkspaceIds(workspaceIds),
             }),
         ),
       );
 
-      const decrypted = yield* Result.await(
-        Result.tryPromise({
-          try: async () =>
-            await Promise.all(
-              contentRows.map(async (row) => ({
-                label: row.name,
-                text: row.text,
-              })),
-            ),
-          catch: (cause) =>
-            new HandlerError({
-              status: 500,
-              message: "Failed to read the selected documents",
-              cause,
-            }),
-        }),
+      sources.push(
+        ...contentRows.map((row) => ({ label: row.name, text: row.text })),
       );
-      sources.push(...decrypted);
     }
   }
 

@@ -28,8 +28,34 @@ export type AuthorizedWorkspaceSet = {
   /** Every authorized workspace with its status, including `deleting`. */
   readonly workspaces: AccessibleWorkspace[];
   /** Authorized workspaces that are not being deleted. */
-  readonly activeIds: SafeId<"workspace">[];
+  readonly activeIds: AuthorizedWorkspaceIds;
 };
+
+/** Workspace ids produced only after the matter-access owner has checked them. */
+class AuthorizedWorkspaceIdList extends Array<SafeId<"workspace">> {
+  declare private readonly authorizedWorkspaceIds: true;
+
+  private constructor(ids: readonly SafeId<"workspace">[]) {
+    super(...ids);
+  }
+
+  static override get [Symbol.species](): ArrayConstructor {
+    return Array;
+  }
+
+  static fromPermissionCheck(
+    ids: readonly SafeId<"workspace">[],
+  ): AuthorizedWorkspaceIdList {
+    return new AuthorizedWorkspaceIdList(ids);
+  }
+}
+
+export type AuthorizedWorkspaceIds = AuthorizedWorkspaceIdList;
+
+/** Brand ids at the boundary immediately following the existing permission check. */
+export const authorizeWorkspaceIds = (
+  ids: readonly SafeId<"workspace">[],
+): AuthorizedWorkspaceIds => AuthorizedWorkspaceIdList.fromPermissionCheck(ids);
 
 export class AuthorizedWorkspaceReadError extends TaggedError(
   "AuthorizedWorkspaceReadError",
@@ -72,16 +98,16 @@ export const readAuthorizedWorkspaces = async (
     })
   ).map((rows) => ({
     workspaces: rows,
-    activeIds: rows
-      .filter((row) => row.status !== "deleting")
-      .map((row) => row.id),
+    activeIds: authorizeWorkspaceIds(
+      rows.filter((row) => row.status !== "deleting").map((row) => row.id),
+    ),
   }));
 
 /** The active authorized workspace ids, for callers that need only the ids. */
 export const authorizedWorkspaceIds = async (
   tx: AuthorizedWorkspaceReader,
   scope: OrganizationScope,
-): Promise<Result<SafeId<"workspace">[], AuthorizedWorkspaceReadError>> =>
+): Promise<Result<AuthorizedWorkspaceIds, AuthorizedWorkspaceReadError>> =>
   (await readAuthorizedWorkspaces(tx, scope)).map((set) => set.activeIds);
 
 /**

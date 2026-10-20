@@ -31,6 +31,7 @@ import {
   FlowStepError,
   loadInputDocuments,
 } from "@/api/lib/flows/flow-executor";
+import { authorizeWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -157,7 +158,7 @@ describe("loadInputDocuments", () => {
     const caught = await loadInputDocuments(
       scopedDb(),
       organizationId,
-      [workspaceId],
+      authorizeWorkspaceIds([workspaceId]),
       [extractedEntityId, pendingEntityId],
     ).then(
       () => null,
@@ -191,7 +192,7 @@ describe("loadInputDocuments", () => {
         const caught = await loadInputDocuments(
           scoped,
           organizationId,
-          [workspaceId],
+          authorizeWorkspaceIds([workspaceId]),
           [extractedEntityId],
         ).then(
           () => null,

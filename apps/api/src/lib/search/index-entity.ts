@@ -277,10 +277,14 @@ const buildSearchDocument = async (
   const extractedContentRow = entity.extractedContent;
   // Search indexing is an organization-wide system projection.
   const currentExtractedContent = (
-    await loadCurrentExtractedContentsForSearchIndex(database, {
-      entityIds: [entityId],
-      organizationId: workspace.organizationId,
-    })
+    await loadCurrentExtractedContentsForSearchIndex(
+      database,
+      "search-indexing",
+      {
+        entityIds: [entityId],
+        organizationId: workspace.organizationId,
+      },
+    )
   ).at(0);
   if (currentExtractedContent) {
     language = isoToRegconfig(currentExtractedContent.language);

@@ -148,6 +148,7 @@ import {
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
 import { withTimeout } from "@/api/lib/with-timeout";
+import { authorizeWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
 import { decisionBlockDeepLink } from "@/api/mcp/case-law-decision-link";
 import {
@@ -1866,7 +1867,9 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
               await loadCurrentExtractedContents(tx, {
                 entityIds: [entityId],
                 organizationId: context.organizationId,
-                workspaceIds: [currentDocument.workspaceId],
+                workspaceIds: authorizeWorkspaceIds([
+                  currentDocument.workspaceId,
+                ]),
               }),
           )
         ).at(0);

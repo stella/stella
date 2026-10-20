@@ -417,7 +417,11 @@ export const runDocumentDeadlineScout = async ({
           scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
           observe: async () => {
             // Deadline scouting is system work bound to its persisted run source.
-            const source = await loadCurrentDeadlineSource(db, run);
+            const source = await loadCurrentDeadlineSource(
+              db,
+              "deadline-scout",
+              run,
+            );
             if (!source) {
               return [];
             }
