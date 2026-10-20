@@ -518,6 +518,7 @@ const runAiStep = async ({
   // unchanged under `USE_MOCK_AI` (model resolution short-circuits to the mock
   // adapter). No tools are ever passed.
   const markdown = await generateTextForTask({
+    userId: admission.userId,
     dataClass: "customer",
     task: "chat",
     organizationId,

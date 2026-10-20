@@ -147,6 +147,7 @@ const extractFieldValues = async ({
   timezone: string;
 }): Promise<PrefillSuggestion[]> => {
   const { fields } = await generateTanStackObjectForTask({
+    userId: admission.userId,
     dataClass: "customer",
     admission,
     task: "short-text",
