@@ -37,6 +37,50 @@ const collectFindings = (): MatterAccessFinding[] => {
 
 const EXTRACTED_CONTENT_OWNER =
   "apps/api/src/lib/document-content-provenance.ts";
+const EXTRACTED_PAYLOAD_COLUMN =
+  /\b(?:ciphertext|iv|ocrPayloadCiphertext|ocrPayloadIv)\b/u;
+const METADATA_COLUMNS_ONLY = /^\{\s*columns\s*:\s*\{([^{}]*)\}\s*,?\s*\}$/u;
+
+/** The balanced `{...}` block starting at `start`, or null when unbalanced. */
+const braceBlock = (source: string, start: number): string | null => {
+  let depth = 0;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+  return null;
+};
+
+// A relation selection outside the owner may name extracted content only to
+// exclude it or to select metadata columns. Any other form (`true`, a nested
+// selection, a spread) could load the payload, wherever the object is written
+// and however it later reaches a query.
+const selectsExtractedRelationPayload = (source: string): boolean =>
+  [...source.matchAll(/\bextractedContent\s*:\s*(true\b|\{)/gu)].some(
+    (match) => {
+      if (match[1] === "true") {
+        return true;
+      }
+      const block = braceBlock(
+        source,
+        (match.index ?? 0) + match[0].length - 1,
+      );
+      const columns = block === null ? null : METADATA_COLUMNS_ONLY.exec(block);
+      return (
+        columns === null ||
+        (columns[1] ?? "").includes("...") ||
+        EXTRACTED_PAYLOAD_COLUMN.test(columns[1] ?? "")
+      );
+    },
+  );
+
 const collectExtractedContentReaders = () => {
   const violations: string[] = [];
   for (const file of new Glob("apps/api/src/**/*.ts").scanSync({
@@ -64,6 +108,9 @@ const collectExtractedContentReaders = () => {
       );
     if (
       selectsPayloadColumn ||
+      // Schema modules define the relation itself; they select nothing.
+      (!file.startsWith("apps/api/src/db/schema/") &&
+        selectsExtractedRelationPayload(source)) ||
       (/\bextractedContent\b|\bextracted_content\b/u.test(source) &&
         /\bdecryptContent\s*\(/u.test(source))
     ) {
@@ -129,6 +176,41 @@ describe("matter access census", () => {
       }
     }
     expect(violations).toEqual([]);
+  });
+
+  test("relation selections name extracted content only to exclude it or select metadata", () => {
+    // An exported selection is caught where it is written, before any module
+    // passes it to a query.
+    expect(
+      selectsExtractedRelationPayload(
+        "export const relations = { extractedContent: true };",
+      ),
+    ).toBe(true);
+    expect(
+      selectsExtractedRelationPayload(
+        "const r = { extractedContent: { columns: { ciphertext: true } } };",
+      ),
+    ).toBe(true);
+    expect(
+      selectsExtractedRelationPayload(
+        "const r = { extractedContent: { columns: { ...rest } } };",
+      ),
+    ).toBe(true);
+    expect(
+      selectsExtractedRelationPayload(
+        "const r = { extractedContent: { with: { entity: true } } };",
+      ),
+    ).toBe(true);
+    expect(
+      selectsExtractedRelationPayload(
+        "const r = { extractedContent: { columns: { sourceFieldId: true, extractedAt: true } } };",
+      ),
+    ).toBe(false);
+    expect(
+      selectsExtractedRelationPayload(
+        "const r = { extractedContent: false }; type T = { extractedContent: Provenance | null };",
+      ),
+    ).toBe(false);
   });
 
   test("only the extracted-content owner reads encrypted document payloads", () => {

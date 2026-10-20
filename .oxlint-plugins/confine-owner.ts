@@ -707,7 +707,7 @@ const nestedRelationSelectsOwnedColumns = ({
     }
     const relations = stableValue(context, withValue);
     // A relation selection the rule cannot see may name the owned relation;
-    // only an imported one is checked where it is defined.
+    // an imported one is left to the census, which checks it where written.
     if (
       relations?.type !== "ObjectExpression" ||
       !Array.isArray(relations.properties)
@@ -750,7 +750,8 @@ const nestedRelationSelectsOwnedColumns = ({
   return found.unknown || found.candidates.some(relationsSelectOwnedColumns);
 };
 
-// A value imported from another module is checked where it is defined; an
+// A value imported from another module cannot be resolved here; the matter
+// access census checks every relation selection where it is written. An
 // unresolved local (a parameter, a computed value) fails closed instead.
 const isImportedValue = (context: ScopeContext, value: unknown): boolean => {
   let base = unwrapExpression(value);
