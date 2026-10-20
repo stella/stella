@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
-import { and, eq, inArray, TransactionRollbackError } from "drizzle-orm";
+import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import JSZip from "jszip";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
@@ -163,30 +163,38 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
       title: "Lifecycle census thread",
       workspaceId: null,
     });
-    await database.insert(userFiles).values([
-      {
-        id: organizationFileId,
-        userId,
-        fileName: "organization.pdf",
-        mimeType: PDF_MIME,
-        sizeBytes: 19,
-        sha256Hex: "a".repeat(64),
-        s3Key: organizationKey,
-        threadId,
-        thumbnailFileId: organizationThumbnailId,
-      },
-      {
-        id: uploaderFileId,
-        userId,
-        fileName: "uploader.pdf",
-        mimeType: PDF_MIME,
-        sizeBytes: 23,
-        sha256Hex: "b".repeat(64),
-        s3Key: uploaderKey,
-        threadId,
-        thumbnailFileId: uploaderThumbnailId,
-      },
-    ]);
+    await database.transaction(async (tx) => {
+      await tx.execute(
+        sql`ALTER TABLE public.user_files DISABLE TRIGGER user_files_organization_key_guard`,
+      );
+      await tx.insert(userFiles).values([
+        {
+          id: organizationFileId,
+          userId,
+          fileName: "organization.pdf",
+          mimeType: PDF_MIME,
+          sizeBytes: 19,
+          sha256Hex: "a".repeat(64),
+          s3Key: organizationKey,
+          threadId,
+          thumbnailFileId: organizationThumbnailId,
+        },
+        {
+          id: uploaderFileId,
+          userId,
+          fileName: "uploader.pdf",
+          mimeType: PDF_MIME,
+          sizeBytes: 23,
+          sha256Hex: "b".repeat(64),
+          s3Key: uploaderKey,
+          threadId,
+          thumbnailFileId: uploaderThumbnailId,
+        },
+      ]);
+      await tx.execute(
+        sql`ALTER TABLE public.user_files ENABLE TRIGGER user_files_organization_key_guard`,
+      );
+    });
     invalidRows = [
       {
         id: otherOrganizationFileId,
@@ -433,7 +441,15 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
   });
 
   test("content, visual, and thumbnail readers accept owned keys and refuse other owners", async () => {
-    await database.insert(userFiles).values(invalidRows);
+    await database.transaction(async (tx) => {
+      await tx.execute(
+        sql`ALTER TABLE public.user_files DISABLE TRIGGER user_files_organization_key_guard`,
+      );
+      await tx.insert(userFiles).values(invalidRows);
+      await tx.execute(
+        sql`ALTER TABLE public.user_files ENABLE TRIGGER user_files_organization_key_guard`,
+      );
+    });
     const auditedKeys: string[] = [];
     const audit: AuditRecorder = async (_tx, event) => {
       const events = Array.isArray(event) ? event : [event];

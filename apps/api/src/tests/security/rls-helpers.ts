@@ -62,12 +62,12 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { cents } from "@/api/lib/money";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { testFileKey } from "@/api/tests/helpers/file-key";
 import type {
   TestDatabase,
   TestDatabaseTransaction,
@@ -1162,28 +1162,44 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       ...userFileFixture,
       id: ids.userFileGlobalA1,
       userId: ids.userA1,
-      s3Key: testFileKey(`user-files/${ids.userFileGlobalA1}`),
+      s3Key: createUserFileKey({
+        fileId: ids.userFileGlobalA1,
+        mimeType: userFileFixture.mimeType,
+        organizationId: ids.orgA,
+      }),
       threadId: ids.chatThreadGlobalA1,
     },
     {
       ...userFileFixture,
       id: ids.userFileWorkspaceA1,
       userId: ids.userA1,
-      s3Key: testFileKey(`user-files/${ids.userFileWorkspaceA1}`),
+      s3Key: createUserFileKey({
+        fileId: ids.userFileWorkspaceA1,
+        mimeType: userFileFixture.mimeType,
+        organizationId: ids.orgA,
+      }),
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
       ...userFileFixture,
       id: ids.userFileGlobalB1UserA1,
       userId: ids.userA1,
-      s3Key: testFileKey(`user-files/${ids.userFileGlobalB1UserA1}`),
+      s3Key: createUserFileKey({
+        fileId: ids.userFileGlobalB1UserA1,
+        mimeType: userFileFixture.mimeType,
+        organizationId: ids.orgB,
+      }),
       threadId: ids.chatThreadGlobalB1UserA1,
     },
     {
       ...userFileFixture,
       id: ids.userFileWorkspaceB1UserA1,
       userId: ids.userA1,
-      s3Key: testFileKey(`user-files/${ids.userFileWorkspaceB1UserA1}`),
+      s3Key: createUserFileKey({
+        fileId: ids.userFileWorkspaceB1UserA1,
+        mimeType: userFileFixture.mimeType,
+        organizationId: ids.orgB,
+      }),
       threadId: ids.chatThreadWorkspaceB1UserA1,
       thumbnailFileId: Bun.randomUUIDv7(),
     },
