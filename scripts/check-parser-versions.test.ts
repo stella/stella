@@ -5,7 +5,10 @@ import { checkParserVersions, comparisonBase } from "./check-parser-versions";
 const INGESTION = "apps/api/src/handlers/case-law/ingestion/";
 const ADAPTERS = `${INGESTION}adapters/`;
 const PARSERS = `${INGESTION}parsers/`;
+const ENV_BASE = "apps/api/src/env-base.ts";
+const TAGGED_ERRORS = "apps/api/src/lib/errors/tagged-errors.ts";
 const LOGGER = "apps/api/src/lib/observability/logger.ts";
+const VERSION = "apps/api/src/lib/version.ts";
 
 type FixtureOptions = {
   versions?: Partial<Record<"A" | "B" | "C", number>>;
@@ -60,7 +63,10 @@ const fixture = ({
       ].join("\n"),
     ],
     [`${PARSERS}shared-helper.ts`, `${markerSource}${helperSource}`],
+    [ENV_BASE, "export const env = {};"],
+    [TAGGED_ERRORS, "export class TaggedError extends Error {}"],
     [LOGGER, "export const logger = { info: () => {} };"],
+    [VERSION, "export const APP_VERSION = 'test';"],
   ]);
 
   for (const key of adapters) {
@@ -305,19 +311,43 @@ test("output boundaries cannot lie in any output-shaping root", () => {
 test("an output module also reachable without a boundary still needs a bump", () => {
   const base = fixture();
   const head = fixture();
-  const output = `${PARSERS}shared-helper.ts`;
   for (const tree of [base, head]) {
     tree.set(
+      `${PARSERS}parser-a.ts`,
+      [
+        'import { logger } from "@/api/lib/observability/logger";',
+        'import { helper } from "./shared-helper";',
+        "export const parseA = () => { logger.info(); return helper(); };",
+      ].join("\n"),
+    );
+    tree.set(
       LOGGER,
-      'import { helper } from "../../handlers/case-law/ingestion/parsers/shared-helper";\nexport const logger = { info: () => helper() };',
+      'import { hidden } from "../output-hidden-by-logger";\nexport const logger = { info: () => hidden };',
+    );
+    tree.set(
+      "apps/api/src/lib/output-hidden-by-logger.ts",
+      "export const hidden = 'base';",
     );
   }
-  head.set(output, "export const helper = () => 'changed';\n");
+  head.set(
+    `${PARSERS}shared-helper.ts`,
+    "export const helper = () => 'changed';\n",
+  );
 
   expect(changed(base, head)).toEqual([
     expect.stringContaining("test-a: parser version 1 must exceed base 1"),
     expect.stringContaining("test-b: parser version 1 must exceed base 1"),
   ]);
+
+  head.set(
+    `${PARSERS}shared-helper.ts`,
+    "export const helper = () => 'base';\n",
+  );
+  head.set(
+    "apps/api/src/lib/output-hidden-by-logger.ts",
+    "export const hidden = 'changed';",
+  );
+  expect(changed(base, head)).toEqual([]);
 });
 
 test("a newly added marker exempts only its changed file", () => {
