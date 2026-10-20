@@ -350,6 +350,7 @@ const chooseSource = async (
             (
               await buildBackgroundReplayProbe(tx, {
                 sourceId: candidate.id,
+                adapterKey: candidate.adapterKey,
                 currentParserVersion: candidate.currentParserVersion,
                 mode: candidate.mode,
               })
@@ -420,6 +421,7 @@ const selectNext = async (
     await work(tx);
   const selection = {
     type: "background",
+    adapterKey: source.adapterKey,
     currentParserVersion: source.currentParserVersion,
     mode: source.mode,
   } as const;
@@ -1444,7 +1446,7 @@ const checkReplayCompletion = ({
   }
   if (
     receipt.outcome === "unchanged" &&
-    (decision.parserVersion !== batch.parserVersionFrom ||
+    ((decision.parserVersion ?? -1) < batch.targetParserVersion ||
       report.checkedUpdateToken === undefined ||
       decision.updateToken !== report.checkedUpdateToken)
   ) {
@@ -1575,8 +1577,9 @@ const completeBatch = async (
     const rowDisposition = completionDisposition(terminal);
     const successful = rowDisposition !== "blocked";
     // A recovered write is applied even when the replay reports unchanged.
-    // Changed rows require the parser stamp; unchanged rows retain their stamp
-    // and are fenced by the exact checked input token. Both settle the receipt.
+    // Both changed and unchanged rows require the target parser stamp. An
+    // unchanged replay preserves the content revision token while recording
+    // provenance, so the exact input fence still settles its receipt.
     await tx
       .update(caseLawReplayBatches)
       .set({

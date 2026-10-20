@@ -199,6 +199,7 @@ const textChangingAdapter = stubAdapter((stored) => ({
     language: stored.language,
     ...splitStoredDecisionTextMetadata(stored.metadata),
     rawHash: "hash-from-the-new-parser",
+    parserVersion: 5,
     fulltext: NEW_PARSER_TEXT,
     documentAst: EMPTY_AST,
   }),
@@ -287,6 +288,25 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     observationOrder: 1n,
   });
 
+  await db
+    .update(caseLawDecisions)
+    .set({ parserVersion: 1 })
+    .where(eq(caseLawDecisions.id, id));
+  const [beforeUnchanged] = await db
+    .select({
+      contentHash: caseLawDecisions.contentHash,
+      projectionEpoch: caseLawDecisions.projectionEpoch,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, id));
+  if (beforeUnchanged === undefined) {
+    panic("Expected the replayed decision to remain stored");
+  }
+  const desiredBeforeUnchanged = await db
+    .select()
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, id));
+
   // Same payload, same parser: the second run re-derives the stored hash, so
   // neither the decision nor its observation watermark is written.
   // That fixed point is what makes a re-run safe.
@@ -299,7 +319,10 @@ test("a writing replay goes through the pipeline, and replaying again converges"
 
   const [converged] = await db
     .select({
+      contentHash: caseLawDecisions.contentHash,
       fulltext: caseLawDecisions.fulltext,
+      parserVersion: caseLawDecisions.parserVersion,
+      projectionEpoch: caseLawDecisions.projectionEpoch,
       sourceHash: caseLawDecisions.sourceHash,
       sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
       observationOrder: caseLawDecisions.sourceObservationOrder,
@@ -307,11 +330,20 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     .from(caseLawDecisions)
     .where(eq(caseLawDecisions.id, id));
   expect(converged).toEqual({
+    contentHash: beforeUnchanged.contentHash,
     fulltext: NEW_PARSER_TEXT,
+    parserVersion: 5,
+    projectionEpoch: beforeUnchanged.projectionEpoch,
     sourceHash: "hash-from-the-new-parser",
     sourceRawS3Key: contentAddressedKey,
     observationOrder: 1n,
   });
+  expect(
+    await db
+      .select()
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, id)),
+  ).toEqual(desiredBeforeUnchanged);
   // A converged replay re-reads the payload but has nothing to store: the
   // key the row already records names an object with these exact bytes.
   expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
