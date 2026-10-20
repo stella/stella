@@ -196,7 +196,7 @@ const isNoteTarget = ($: cheerio.CheerioAPI, target: Element): boolean => {
     ) {
       return true;
     }
-    const parent = $(element).parent().get(0);
+    const parent: AnyNode | undefined = $(element).parent().get(0);
     element = parent !== undefined && isTag(parent) ? parent : undefined;
   }
   return false;
@@ -399,6 +399,9 @@ const prepareFragmentLinks = (
     .find("a[href^='#']")
     .addBack("a[href^='#']")
     .each((_, link) => {
+      if (!isTag(link)) {
+        return;
+      }
       const href = link.attribs["href"];
       if (href === undefined) {
         return;
@@ -666,7 +669,7 @@ const sourceBlockOf = (
     if (block !== undefined) {
       return block;
     }
-    const parent = state.$(element).parent().get(0);
+    const parent: AnyNode | undefined = state.$(element).parent().get(0);
     element = parent !== undefined && isTag(parent) ? parent : undefined;
   }
   for (const descendant of state.$(target).find("*").toArray()) {

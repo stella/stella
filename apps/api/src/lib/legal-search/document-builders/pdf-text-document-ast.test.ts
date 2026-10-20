@@ -135,6 +135,22 @@ describe("the PDF text builder", () => {
     );
   });
 
+  test.each(["WP29", "G7", "EU27"])(
+    "does not read digits in the acronym %s as a footnote mark",
+    (acronym) => {
+      const label = /\d+$/u.exec(acronym)?.at(0);
+      expect(label).toBeDefined();
+      const ast = build(
+        [`The body names ${acronym} here.`, " ", label, " A note."].join("\n"),
+      );
+      const body = ast.blocks.filter(({ id }) => id !== `fn-${label}`);
+      expect(body.flatMap((block) => marksOf(inlinesOf(block)))).toEqual([]);
+      expect(
+        body.map((block) => textWithoutMarks(inlinesOf(block))).join(" "),
+      ).toContain(acronym);
+    },
+  );
+
   test("reads sections, numbered paragraphs, footnotes and their marks", () => {
     const page = (lines: string[]) => lines.join("\n");
     const ast = build(

@@ -56,14 +56,14 @@ const MARK_RUN_LINE = /^\d{1,3}(?: \d{1,3})*$/u;
 const INDENTED = /^ \S/u;
 
 /**
- * A mark glued to what precedes it: a word or a closing bracket or quote,
+ * A mark glued to what precedes it: a lowercase letter or a closing bracket or quote,
  * optionally through one clause punctuation, or a year through punctuation
  * or act number through punctuation (`November 2022.4`, `2016/679.2`).
  * Never another number directly, so `6(1)` and the
  * section numbers `1.1` and `2.2` stay text.
  */
 const GLUED_MARK =
-  /(?<=[\p{L})\]”’"][.,;:]?|(?<![\d/])\d{4}(?:\/\d{1,4})?[.,;:])(\d{1,3})(?=[\s.,;:)]|$)/gu;
+  /(?<=[\p{Ll})\]”’"][.,;:]?|(?<![\d/])\d{4}(?:\/\d{1,4})?[.,;:])(\d{1,3})(?=[\s.,;:)]|$)/gu;
 
 /**
  * An EU act number with a mark glued to its last digit (`2022/20652`): EU
