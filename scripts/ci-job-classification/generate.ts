@@ -5,13 +5,15 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
-import {
-  PUBLIC_METADATA,
-  REFRESH_COMMAND,
-  verifyPublicMetadata,
-} from "./public-metadata";
+import { verifyPublicMetadata } from "./public-metadata";
 import type { PublicMetadata, MetadataReader } from "./public-metadata";
-import { GIT_ORIGIN, metadataReferenceIdentity } from "./references";
+import {
+  GIT_ORIGIN,
+  parseRemoteReference,
+  sameMetadataOrigin,
+} from "./references";
+import type { MetadataOrigin, MetadataReferenceKind } from "./references";
+import { isPrivilegedJob, ReviewRequiredError } from "./review";
 import { AdmissionError, parseDocument } from "./yaml";
 
 const DECISIONS = v.record(
@@ -19,6 +21,7 @@ const DECISIONS = v.record(
   v.strictObject({
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
+    reviewedDigest: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
   }),
 );
 const SNAPSHOTS = v.record(
@@ -62,7 +65,6 @@ export const readClassificationInputs = (root: string) => {
     },
   };
   return {
-    manifest: v.parse(PUBLIC_METADATA, read("ci-job-classification.json")),
     decisions: v.parse(DECISIONS, read("ci-job-classification-decisions.json")),
     snapshots,
     reader,
@@ -80,151 +82,210 @@ export const readClassificationInputs = (root: string) => {
   };
 };
 
+type RemoteSourceOptions = {
+  reference: string;
+  kind: MetadataReferenceKind;
+  snapshots: v.InferOutput<typeof SNAPSHOTS>;
+};
+const findRemoteSource = ({
+  reference,
+  kind,
+  snapshots,
+}: RemoteSourceOptions) => {
+  if (reference.startsWith("docker://")) {
+    return undefined;
+  }
+  const remote = parseRemoteReference(reference);
+  const snapshot = Object.entries(snapshots).find(([, entry]) =>
+    sameMetadataOrigin({
+      caller: {
+        type: "git",
+        owner: remote.owner,
+        repo: remote.repo,
+        sha: remote.sha,
+      },
+      target: entry.origin,
+    }),
+  );
+  if (!snapshot) {
+    return undefined;
+  }
+  const file =
+    kind === "reusable-workflow"
+      ? remote.path
+      : ["action.yml", "action.yaml"]
+          .map((name) => (remote.path ? `${remote.path}/${name}` : name))
+          .find(
+            (candidatePath) =>
+              snapshot[1].documents[candidatePath] !== undefined,
+          );
+  if (!file || snapshot[1].documents[file] === undefined) {
+    return undefined;
+  }
+  return { repository: snapshot[0], file, origin: snapshot[1].origin };
+};
+
 type GenerateOptions = {
-  manifest: PublicMetadata;
   decisions: v.InferOutput<typeof DECISIONS>;
+  snapshots: v.InferOutput<typeof SNAPSHOTS>;
   reader: MetadataReader;
   localActionPath: (directory: string) => string;
 };
-// Every emitted field except kind/qualifier is derived from the reachable tree.
 export const generateClassification = ({
-  manifest,
   decisions,
+  snapshots,
   reader,
   localActionPath,
 }: GenerateOptions) =>
   Result.try({
     try: () => {
       const nodes = new Map<string, PublicMetadata["nodes"][number]>();
-      const missing: string[] = [];
-      const source = (repository: string, file: string) =>
-        manifest.nodes.find(
-          (node) =>
-            node.type === "metadata" &&
-            node.repository === repository &&
-            node.path === file,
-        );
-      const visit = (original: PublicMetadata["nodes"][number]): string => {
-        if (nodes.has(original.id)) {
-          return original.id;
+      const entries: Record<string, unknown> = {};
+      const privilegedJobs: string[] = [];
+      const observedJobs = new Set<string>();
+      type VisitOptions = {
+        repository: string;
+        file: string;
+        origin: MetadataOrigin;
+      };
+      const visit = ({ repository, file, origin }: VisitOptions): string => {
+        const id = `source-${sha256(`${repository}:${file}`)}`;
+        if (nodes.has(id)) {
+          return id;
         }
-        if (original.type === "supplier") {
-          nodes.set(original.id, original);
-          return original.id;
-        }
-        const parsed = parseDocument(
-          reader.read(original.repository, original.path),
-        );
+        const parsed = parseDocument(reader.read(repository, file));
         if (parsed.isErr()) {
           throw parsed.error;
         }
-        const edges: Record<string, string> = {};
         const references: string[] = [];
+        const edges: Record<string, string> = {};
         const node = {
-          ...original,
+          type: "metadata",
+          id,
+          repository,
+          origin,
+          path: file,
           digest: parsed.value.digest,
           references,
           edges,
-          jobs: Object.entries(parsed.value.jobs).flatMap(([id, job]) => {
-            const key = `${original.repository}:${original.path}/${id}`;
+          jobs: Object.entries(parsed.value.jobs).flatMap(([jobId, job]) => {
+            const key = `${repository}:${file}/${jobId}`;
+            observedJobs.add(key);
             const decision = decisions[key];
-            if (!decision) {
-              missing.push(key);
-              return [];
+            if (!decision || decision.reviewedDigest !== job.digest) {
+              entries[key] = {
+                kind:
+                  decision?.kind ?? "<choose ordinary, support, or priority>",
+                qualifier:
+                  decision?.qualifier ??
+                  "<describe the reviewed classification>",
+                reviewedDigest: job.digest,
+              };
+              if (isPrivilegedJob({ kind: decision?.kind, shape: job.shape })) {
+                privilegedJobs.push(key);
+              }
             }
-            return [{ id, ...decision, digest: job.digest }];
+            return decision
+              ? [
+                  {
+                    id: jobId,
+                    kind: decision.kind,
+                    qualifier: decision.qualifier,
+                    digest: job.digest,
+                  },
+                ]
+              : [];
           }),
         } satisfies PublicMetadata["nodes"][number];
-        nodes.set(node.id, node);
+        // Register before recursion; the verifier reports dependency cycles.
+        nodes.set(id, node);
         for (const [reference, kind] of Object.entries(
           parsed.value.dependencies,
         ).toSorted(([left], [right]) => compareCodeUnit(left, right))) {
-          const identity = metadataReferenceIdentity(
-            reference,
-            node.repository,
-          );
-          let target = manifest.nodes.find((entry) => {
-            if (entry.type === "supplier") {
-              return entry.reference === identity;
-            }
-            return entry.references.some(
-              (declared) =>
-                metadataReferenceIdentity(declared, entry.repository) ===
-                identity,
-            );
-          });
-          if (
-            reference.startsWith("$/") ||
-            (reference.startsWith("./") && !target)
-          ) {
+          let targetId: string;
+          if (reference.startsWith("$/") || reference.startsWith("./")) {
             const relative = reference.slice(2);
-            const file = /\.ya?ml$/u.test(relative)
-              ? relative
-              : localActionPath(relative);
-            target = source(node.repository, file) ?? {
-              type: "metadata",
-              id: `source-${sha256(`${node.repository}:${file}`)}`,
-              repository: node.repository,
-              origin: node.origin,
-              path: file,
-              digest: "0".repeat(64),
-              references: [],
-              jobs: [],
-              edges: {},
-            };
-          }
-          if (!target) {
+            const relocation = parsed.value.relocatedActions[reference]?.at(0);
+            const sourcePath = relocation?.path ?? relative;
+            let targetPath: string;
             if (kind === "reusable-workflow") {
-              throw new AdmissionError({
-                message: `Reusable workflow snapshot required: ${reference}`,
+              targetPath = relative;
+            } else if (repository === "candidate") {
+              targetPath = localActionPath(sourcePath);
+            } else {
+              const documents = snapshots[repository]?.documents;
+              const found = ["action.yml", "action.yaml"]
+                .map((name) => `${sourcePath}/${name}`)
+                .find(
+                  (candidatePath) => documents?.[candidatePath] !== undefined,
+                );
+              if (!found) {
+                throw new AdmissionError({
+                  message: `Local action metadata missing: ${repository}:${sourcePath}`,
+                });
+              }
+              targetPath = found;
+            }
+            targetId = visit({ repository, file: targetPath, origin });
+          } else {
+            const source = findRemoteSource({ reference, kind, snapshots });
+            if (source) {
+              targetId = visit(source);
+            } else {
+              if (kind === "reusable-workflow") {
+                throw new AdmissionError({
+                  message: `Reusable workflow snapshot required: ${reference}`,
+                });
+              }
+              targetId = `supplier-${sha256(reference)}`;
+              nodes.set(targetId, {
+                type: "supplier",
+                id: targetId,
+                reference,
+                binding: "immutable",
               });
             }
-            target = {
-              type: "supplier",
-              id: `supplier-${sha256(reference)}`,
-              reference,
-              binding: "immutable",
-            };
           }
-          node.edges[reference] = visit(target);
-          const emitted = nodes.get(target.id);
+          node.edges[reference] = targetId;
+          const target = nodes.get(targetId);
           if (
-            emitted?.type === "metadata" &&
-            !emitted.references.includes(reference)
+            target?.type === "metadata" &&
+            !target.references.includes(reference)
           ) {
-            emitted.references.push(reference);
+            target.references.push(reference);
           }
         }
-        return node.id;
+        return id;
       };
       const workflows = reader
         .workflows()
         .toSorted()
-        .map((file) => {
-          const original =
-            source(manifest.repository, file) ??
-            ({
-              type: "metadata",
-              id: `source-${sha256(`${manifest.repository}:${file}`)}`,
-              repository: manifest.repository,
-              origin: { type: "checkout" },
-              path: file,
-              digest: "0".repeat(64),
-              references: [],
-              jobs: [],
-              edges: {},
-            } satisfies PublicMetadata["nodes"][number]);
-          return { path: file, node: visit(original) };
-        });
-      if (missing.length) {
+        .map((file) => ({
+          path: file,
+          node: visit({
+            repository: "candidate",
+            file,
+            origin: { type: "checkout" },
+          }),
+        }));
+      const removed = Object.keys(decisions).filter(
+        (key) => !observedJobs.has(key),
+      );
+      if (removed.length) {
         throw new AdmissionError({
-          message: `Unclassified jobs: ${missing.join(", ")}. Add kind and qualifier to .github/ci-job-classification-decisions.json, then run ${REFRESH_COMMAND}`,
+          message: `Decisions for removed jobs: ${removed.join(", ")}. Remove these entries from .github/ci-job-classification-decisions.json`,
+        });
+      }
+      if (Object.keys(entries).length) {
+        throw new ReviewRequiredError({
+          message: `${privilegedJobs.length ? `Sensitive classification change: ${privilegedJobs.join(", ")}\n` : ""}Missing or changed job review. Re-review kind and qualifier; paste these entries into .github/ci-job-classification-decisions.json (choose kind and qualifier for new jobs):\n${JSON.stringify(entries, null, 2)}`,
+          privilegedJobs,
         });
       }
       const generated = {
-        version: manifest.version,
-        mode: manifest.mode,
-        repository: manifest.repository,
+        version: 1,
+        mode: "public-metadata",
+        repository: "candidate",
         workflows,
         nodes: [...nodes.values()]
           .map((node) =>
@@ -233,7 +294,7 @@ export const generateClassification = ({
               : node,
           )
           .toSorted((a, b) => compareCodeUnit(a.id, b.id)),
-      };
+      } as const satisfies PublicMetadata;
       const checked = verifyPublicMetadata({ manifest: generated, reader });
       if (checked.isErr()) {
         throw checked.error;
@@ -241,10 +302,12 @@ export const generateClassification = ({
       return generated;
     },
     catch: (cause) =>
-      new AdmissionError({
-        message:
-          cause instanceof Error
-            ? cause.message
-            : "Classification generation failed",
-      }),
+      cause instanceof ReviewRequiredError
+        ? cause
+        : new AdmissionError({
+            message:
+              cause instanceof Error
+                ? cause.message
+                : "Classification derivation failed",
+          }),
   });

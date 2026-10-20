@@ -18,8 +18,8 @@ import {
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
 import { AdmissionError, parseDocument } from "./yaml";
 
-export const REFRESH_COMMAND =
-  "bun scripts/check-ci-job-classification.ts --write";
+const REVIEW_INSTRUCTION =
+  "review .github/ci-job-classification-decisions.json";
 
 const TEXT = v.pipe(
   v.string(),
@@ -193,7 +193,7 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
         )
       ) {
         reject(
-          `Unclassified workflows: ${observed.filter((path) => !metadata.workflows.some((workflow) => workflow.path === path)).join(", ")}. Classify their jobs, then run ${REFRESH_COMMAND}`,
+          `Unclassified workflows: ${observed.filter((path) => !metadata.workflows.some((workflow) => workflow.path === path)).join(", ")}. Classify their jobs, then ${REVIEW_INSTRUCTION}`,
         );
       }
       const nodes = new Map(metadata.nodes.map((node) => [node.id, node]));
@@ -234,7 +234,7 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
                 parsed.value.jobs,
               )
                 .filter((job) => !node.jobs.some((entry) => entry.id === job))
-                .join(", ")}. Classify new jobs, then run ${REFRESH_COMMAND}`,
+                .join(", ")}. Classify new jobs, then ${REVIEW_INSTRUCTION}`,
             );
           }
           const changedJobs = node.jobs.filter(
@@ -242,7 +242,7 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
           );
           if (changedJobs.length) {
             reject(
-              `Classification-relevant shape changed: ${changedJobs.map((job) => `${node.path}/${job.id}`).join(", ")}. Re-review kind and qualifier, then run ${REFRESH_COMMAND}`,
+              `Classification-relevant shape changed: ${changedJobs.map((job) => `${node.path}/${job.id}`).join(", ")}. Re-review kind and qualifier, then ${REVIEW_INSTRUCTION}`,
             );
           }
           for (const job of node.jobs) {
@@ -251,7 +251,7 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
           }
           if (parsed.value.digest !== node.digest) {
             reject(
-              `Classification-relevant metadata changed: ${node.path} (jobs: ${node.jobs.map((job) => job.id).join(", ")}). Re-review classifications, then run ${REFRESH_COMMAND}`,
+              `Classification-relevant metadata changed: ${node.path} (jobs: ${node.jobs.map((job) => job.id).join(", ")}). Re-review classifications, then ${REVIEW_INSTRUCTION}`,
             );
           }
           const references = new Set(Object.keys(parsed.value.dependencies));

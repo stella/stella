@@ -15,7 +15,16 @@ export const CLASSIFICATION_EXCLUSIONS = {
 
 const DOCUMENT = v.strictObject({
   digest: v.string(),
-  jobs: v.record(v.string(), v.strictObject({ digest: v.string() })),
+  jobs: v.record(
+    v.string(),
+    v.strictObject({
+      digest: v.string(),
+      shape: v.strictObject({
+        document: v.record(v.string(), v.unknown()),
+        job: v.record(v.string(), v.unknown()),
+      }),
+    }),
+  ),
   dependencies: v.record(
     v.string(),
     v.picklist(["action", "reusable-workflow"]),
@@ -31,6 +40,8 @@ const DOCUMENT = v.strictObject({
     ),
   ),
 });
+
+export type JobShape = v.InferOutput<typeof DOCUMENT>["jobs"][string]["shape"];
 
 // Validate duplicate keys and bound alias expansion before projecting classification metadata.
 const PARSER = String.raw`
@@ -225,7 +236,8 @@ if data.key?('jobs')
       dependencies[j['uses']] = 'reusable-workflow'
     end
     add_action_dependencies(dependencies, ss, relocated_actions)
-    jobs[id] = {'digest'=>digest({'document'=>context, 'job'=>job_shape(j)})}
+    job_context = {'document'=>context, 'job'=>job_shape(j)}
+    jobs[id] = {'digest'=>digest(job_context), 'shape'=>job_context}
   end
 end
 ss = []

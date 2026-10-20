@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import fc from "fast-check";
 import {
   mkdtempSync,
   mkdirSync,
@@ -9,6 +10,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   CLASSIFICATIONS,
@@ -30,6 +33,10 @@ import type {
 import { parseRemoteReference } from "../../../scripts/ci-job-classification/references";
 import type { MetadataOrigin } from "../../../scripts/ci-job-classification/references";
 import {
+  isPrivilegedJob,
+  ReviewRequiredError,
+} from "../../../scripts/ci-job-classification/review";
+import {
   AdmissionError,
   CLASSIFICATION_EXCLUSIONS,
   parseDocument,
@@ -42,8 +49,13 @@ const githubExpression = (expression: string) =>
   ["$", "{{ ", expression, " }}"].join("");
 
 test("committed classifications cover the repository and its pinned metadata callees", () => {
-  const { manifest, decisions, snapshots, reader } =
-    readClassificationInputs(repositoryRoot);
+  const inputs = readClassificationInputs(repositoryRoot);
+  const { decisions, snapshots } = inputs;
+  const generated = generateClassification(inputs);
+  if (generated.isErr()) {
+    throw generated.error;
+  }
+  const manifest = generated.value;
   // Parsing must preserve all reviewed decisions and pinned supplier metadata.
   for (const [file, parsed] of [
     [".github/ci-job-classification-decisions.json", decisions],
@@ -54,33 +66,14 @@ test("committed classifications cover the repository and its pinned metadata cal
     );
   }
   expect(fixtureDecisions(manifest)).toEqual(decisions);
-  const result = verifyPublicMetadata({ manifest, reader });
-  expect(result.isOk()).toBe(true);
-  if (result.isErr()) {
-    throw result.error;
-  }
-  expect(result.value.workflowCount).toBe(manifest.workflows.length);
-  expect(result.value.classifications.priority).toBeGreaterThan(0);
-  // Parses every reachable workflow and action document in a child process.
-}, 60_000);
-
-test("the consolidated quick checks retain the support classification of the jobs they replace", () => {
-  const { decisions } = readClassificationInputs(repositoryRoot);
+  expect(manifest.workflows.length).toBeGreaterThan(0);
   expect(
-    decisions["candidate:.github/workflows/ci.yml/ci-quick-checks"]?.kind,
-  ).toBe(SUPPORT);
-});
-
-test("committed classifications declare every local action", () => {
-  const manifest = v.parse(
-    PUBLIC_METADATA,
-    JSON.parse(
-      readFileSync(
-        path.join(repositoryRoot, ".github/ci-job-classification.json"),
-        "utf-8",
-      ),
+    manifest.nodes.some(
+      (node) =>
+        node.type === "metadata" &&
+        node.jobs.some((job) => job.kind === "priority"),
     ),
-  );
+  ).toBe(true);
   const declared = manifest.nodes
     .flatMap((node) =>
       node.type === "metadata" && node.repository === "candidate"
@@ -96,6 +89,14 @@ test("committed classifications declare every local action", () => {
   ].toSorted();
   expect(actions.length).toBeGreaterThan(0);
   expect(declared).toEqual(actions);
+  // Parses every reachable workflow and action document in a child process.
+}, 60_000);
+
+test("the consolidated quick checks retain the support classification of the jobs they replace", () => {
+  const { decisions } = readClassificationInputs(repositoryRoot);
+  expect(
+    decisions["candidate:.github/workflows/ci.yml/ci-quick-checks"]?.kind,
+  ).toBe(SUPPORT);
 });
 
 test("the policy check invokes classification after a successful install", () => {
@@ -861,11 +862,70 @@ const fixtureDecisions = (manifest: PublicMetadata) =>
       node.type === "metadata"
         ? node.jobs.map((job) => [
             `${node.repository}:${node.path}/${job.id}`,
-            { kind: job.kind, qualifier: job.qualifier },
+            {
+              kind: job.kind,
+              qualifier: job.qualifier,
+              reviewedDigest: job.digest,
+            },
           ])
         : [],
     ),
   );
+
+const fixtureGenerationOptions = (f: ReturnType<typeof fixture>) => {
+  const root = parseDocument(
+    f.reader.read("candidate", ".github/workflows/ci.yml"),
+  );
+  if (root.isErr()) {
+    throw root.error;
+  }
+  return {
+    decisions: Object.fromEntries(
+      f.manifest.nodes.flatMap((node) => {
+        if (
+          node.type !== "metadata" ||
+          (node.origin.type === "git" &&
+            !node.references.some(
+              (reference) => root.value.dependencies[reference],
+            ))
+        ) {
+          return [];
+        }
+        const parsed = parseDocument(f.reader.read(node.repository, node.path));
+        if (parsed.isErr()) {
+          throw parsed.error;
+        }
+        return Object.entries(parsed.value.jobs).map(([id, job]) => [
+          `${node.repository}:${node.path}/${id}`,
+          {
+            kind: ORDINARY,
+            qualifier: "Reviewed checks",
+            reviewedDigest: job.digest,
+          },
+        ]);
+      }),
+    ),
+    snapshots: Object.fromEntries(
+      f.manifest.nodes.flatMap((node) =>
+        node.type === "metadata" && node.origin.type === "git"
+          ? [
+              [
+                node.repository,
+                {
+                  origin: node.origin,
+                  documents: {
+                    [node.path]: f.reader.read(node.repository, node.path),
+                  },
+                },
+              ],
+            ]
+          : [],
+      ),
+    ),
+    reader: f.reader,
+    localActionPath: (directory: string) => `${directory}/action.yml`,
+  };
+};
 
 test("classification ignores unrelated workflow and composite action edits", () => {
   const f = fixture();
@@ -900,52 +960,45 @@ for (const change of [
     failure(verifyPublicMetadata(f), ".github/workflows/ci.yml/caller");
     failure(
       verifyPublicMetadata(f),
-      "bun scripts/check-ci-job-classification.ts --write",
+      ".github/ci-job-classification-decisions.json",
     );
   });
 }
 
 test("new jobs remain unclassified even when refreshing generated metadata", () => {
   const f = fixture();
+  const options = fixtureGenerationOptions(f);
   f.documents.set(
     "candidate:.github/workflows/ci.yml",
     `${f.reader.read("candidate", ".github/workflows/ci.yml")}  added:\n    steps: []\n`,
   );
-  const result = generateClassification({
-    ...f,
-    decisions: fixtureDecisions(f.manifest),
-    localActionPath: (directory) => `${directory}/action.yml`,
-  });
+  const result = generateClassification(options);
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.message).toContain(
-      "Unclassified jobs: candidate:.github/workflows/ci.yml/added",
+      "candidate:.github/workflows/ci.yml/added",
     );
     expect(result.error.message).toContain(
-      "bun scripts/check-ci-job-classification.ts --write",
+      ".github/ci-job-classification-decisions.json",
     );
   }
-});
+}, 15_000);
 
 test("classification generation reaches a fixed point and preserves human decisions", () => {
   const f = fixture();
-  const decisions = fixtureDecisions(f.manifest);
-  const options = {
-    ...f,
-    decisions,
-    localActionPath: (directory: string) => `${directory}/action.yml`,
-  };
+  const options = fixtureGenerationOptions(f);
+  const { decisions } = options;
   const first = generateClassification(options);
   if (first.isErr()) {
     throw first.error;
   }
-  const second = generateClassification({ ...options, manifest: first.value });
+  const second = generateClassification(options);
   if (second.isErr()) {
     throw second.error;
   }
   expect(JSON.stringify(second.value)).toBe(JSON.stringify(first.value));
   expect(fixtureDecisions(second.value)).toEqual(decisions);
-});
+}, 15_000);
 
 test("classification generation scopes relative action identity to the caller repository", () => {
   const f = fixture();
@@ -963,41 +1016,33 @@ test("classification generation scopes relative action identity to the caller re
     "other:.github/actions/local/action.yml",
     f.reader.read("candidate", action.path),
   );
-  const foreign = {
-    ...action,
-    id: "foreign-action",
-    repository: "other",
-    references: [reference],
-  } satisfies PublicMetadata["nodes"][number];
-  const manifest: PublicMetadata = {
-    ...f.manifest,
-    nodes: [
-      foreign,
-      ...f.manifest.nodes.map((node) =>
-        node.id === "action" ? { ...node, references: [reference] } : node,
-      ),
-    ],
-  };
-  const generated = generateClassification({
-    manifest,
-    decisions: fixtureDecisions(manifest),
-    reader: f.reader,
-    localActionPath: (directory) => `${directory}/action.yml`,
-  });
+  const generated = generateClassification(fixtureGenerationOptions(f));
   if (generated.isErr()) {
     throw generated.error;
   }
   const generatedRoot = generated.value.nodes.find(
-    (node) => node.id === "root",
+    (node) =>
+      node.type === "metadata" &&
+      node.repository === "candidate" &&
+      node.path === root.path,
   );
   expect(generatedRoot?.type).toBe("metadata");
   if (generatedRoot?.type === "metadata") {
-    expect(generatedRoot.edges[reference]).toBe("action");
+    const target = generated.value.nodes.find(
+      (node) => node.id === generatedRoot.edges[reference],
+    );
+    expect(target?.type).toBe("metadata");
+    if (target?.type === "metadata") {
+      expect(target.repository).toBe("candidate");
+      expect(target.path).toBe(action.path);
+    }
   }
-  expect(generated.value.nodes.some((node) => node.id === foreign.id)).toBe(
-    false,
-  );
-});
+  expect(
+    generated.value.nodes.some(
+      (node) => node.type === "metadata" && node.repository === "other",
+    ),
+  ).toBe(false);
+}, 15_000);
 
 test("real ci.yml classification is stable across comments, timeouts and step names", () => {
   const original = readFileSync(
@@ -1087,11 +1132,7 @@ for (const [before, after] of [
     const workflow = `jobs:\n  caller:\n    steps:\n      - uses: docker/build-push-action@${"a".repeat(40)}\n        if: always()\n        ${before}\n      - run: echo initial\n`;
     const key = "candidate:.github/workflows/ci.yml";
     f.documents.set(key, workflow);
-    const options = {
-      ...f,
-      decisions: fixtureDecisions(f.manifest),
-      localActionPath: (directory: string) => `${directory}/action.yml`,
-    };
+    const options = fixtureGenerationOptions(f);
     const baseline = generateClassification(options);
     if (baseline.isErr()) {
       throw baseline.error;
@@ -1105,12 +1146,14 @@ for (const [before, after] of [
     );
     failure(
       verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
-      "bun scripts/check-ci-job-classification.ts --write",
+      ".github/ci-job-classification-decisions.json",
     );
-    const refreshed = generateClassification({
-      ...options,
-      manifest: baseline.value,
-    });
+    const stale = generateClassification(options);
+    expect(stale.isErr()).toBe(true);
+    if (stale.isErr()) {
+      expect(stale.error).toBeInstanceOf(ReviewRequiredError);
+    }
+    const refreshed = generateClassification(fixtureGenerationOptions(f));
     if (refreshed.isErr()) {
       throw refreshed.error;
     }
@@ -1130,7 +1173,7 @@ for (const [before, after] of [
         reader: f.reader,
       }).isOk(),
     ).toBe(true);
-  });
+  }, 15_000);
 }
 
 test("action input and environment mapping order does not change classification", () => {
@@ -1160,11 +1203,7 @@ test("reusable workflow caller inputs require review until metadata is refreshed
     "  reusable:\n    with: {dist-tag: preview, publish: false}\n",
   );
   f.documents.set(key, workflow);
-  const options = {
-    ...f,
-    decisions: fixtureDecisions(f.manifest),
-    localActionPath: (directory: string) => `${directory}/action.yml`,
-  };
+  const options = fixtureGenerationOptions(f);
   const baseline = generateClassification(options);
   if (baseline.isErr()) {
     throw baseline.error;
@@ -1181,12 +1220,14 @@ test("reusable workflow caller inputs require review until metadata is refreshed
   );
   failure(
     verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
-    "bun scripts/check-ci-job-classification.ts --write",
+    ".github/ci-job-classification-decisions.json",
   );
-  const refreshed = generateClassification({
-    ...options,
-    manifest: baseline.value,
-  });
+  const stale = generateClassification(options);
+  expect(stale.isErr()).toBe(true);
+  if (stale.isErr()) {
+    expect(stale.error).toBeInstanceOf(ReviewRequiredError);
+  }
+  const refreshed = generateClassification(fixtureGenerationOptions(f));
   if (refreshed.isErr()) {
     throw refreshed.error;
   }
@@ -1196,7 +1237,7 @@ test("reusable workflow caller inputs require review until metadata is refreshed
       reader: f.reader,
     }).isOk(),
   ).toBe(true);
-});
+}, 15_000);
 
 // Key census from https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax.
 // Separate fixtures retain the job/step variants; future keys prove default inclusion.
@@ -1368,11 +1409,7 @@ for (const [before, after] of [
     const key = "candidate:.github/workflows/ci.yml";
     const workflow = `${before}\n${f.reader.read("candidate", ".github/workflows/ci.yml")}`;
     f.documents.set(key, workflow);
-    const options = {
-      ...f,
-      decisions: fixtureDecisions(f.manifest),
-      localActionPath: (directory: string) => `${directory}/action.yml`,
-    };
+    const options = fixtureGenerationOptions(f);
     const baseline = generateClassification(options);
     if (baseline.isErr()) {
       throw baseline.error;
@@ -1382,12 +1419,14 @@ for (const [before, after] of [
     f.documents.set(key, changed);
     failure(
       verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
-      "bun scripts/check-ci-job-classification.ts --write",
+      ".github/ci-job-classification-decisions.json",
     );
-    const refreshed = generateClassification({
-      ...options,
-      manifest: baseline.value,
-    });
+    const stale = generateClassification(options);
+    expect(stale.isErr()).toBe(true);
+    if (stale.isErr()) {
+      expect(stale.error).toBeInstanceOf(ReviewRequiredError);
+    }
+    const refreshed = generateClassification(fixtureGenerationOptions(f));
     if (refreshed.isErr()) {
       throw refreshed.error;
     }
@@ -1397,7 +1436,7 @@ for (const [before, after] of [
         reader: f.reader,
       }).isOk(),
     ).toBe(true);
-  });
+  }, 15_000);
 }
 
 test("every nested invocation key participates in document classification", () => {
@@ -1459,3 +1498,259 @@ test("GitHub on keys retain their string identity in canonical YAML", () => {
   expect(quoted.value.digest).toBe(original.value.digest);
   expect(extraKey.value.digest).not.toBe(original.value.digest);
 });
+
+const parsedWorkflow = (document: Record<string, unknown>) => {
+  const parsed = parseDocument(JSON.stringify(document));
+  if (parsed.isErr()) {
+    throw parsed.error;
+  }
+  return parsed.value;
+};
+
+test("job digests isolate sibling edits and bind document headers", () => {
+  assertProperty(
+    "job digests isolate sibling edits and bind document headers",
+    fc.property(
+      fc.dictionary(fc.stringMatching(/^[a-z][a-z0-9]{0,8}$/u), fc.string(), {
+        maxKeys: 4,
+      }),
+      fc.array(fc.string(), { minLength: 2, maxLength: 5 }),
+      (header, labels) => {
+        const jobs = Object.fromEntries(
+          labels.map((label, index) => [
+            `job${index}`,
+            { "runs-on": "ubuntu-latest", env: { LABEL: label }, steps: [] },
+          ]),
+        );
+        const baseline = parsedWorkflow({ env: header, jobs });
+        const changedJob = parsedWorkflow({
+          env: header,
+          jobs: { ...jobs, job0: { "runs-on": "windows-latest", steps: [] } },
+        });
+        expect(changedJob.jobs["job0"]?.digest).not.toBe(
+          baseline.jobs["job0"]?.digest,
+        );
+        for (let index = 1; index < labels.length; index += 1) {
+          expect(changedJob.jobs[`job${index}`]?.digest).toBe(
+            baseline.jobs[`job${index}`]?.digest,
+          );
+        }
+        const changedHeader = parsedWorkflow({
+          env: header,
+          "future-document-key": "changed",
+          jobs,
+        });
+        for (const id of Object.keys(jobs)) {
+          expect(changedHeader.jobs[id]?.digest).not.toBe(
+            baseline.jobs[id]?.digest,
+          );
+        }
+      },
+    ),
+    { numRuns: 30 },
+  );
+}, 60_000);
+
+for (const job of [
+  { permissions: { contents: "write" }, steps: [] },
+  { permissions: { "id-token": "write" }, steps: [] },
+  { "runs-on": ["self-hosted", "linux"], steps: [] },
+  { secrets: "inherit", uses: "./child.yml" },
+  { steps: [{ run: `echo ${githubExpression("secrets.TOKEN")}` }] },
+  { steps: [{ run: "npm publish" }] },
+  { steps: [{ run: "bun deploy" }] },
+  { steps: [{ run: "bun release" }] },
+]) {
+  test(`privileged derived shapes require sensitive review: ${JSON.stringify(job)}`, () => {
+    const parsed = parsedWorkflow({ jobs: { check: job } });
+    const definition = parsed.jobs["check"];
+    if (!definition) {
+      throw new AdmissionError({ message: "privileged fixture job missing" });
+    }
+    expect(isPrivilegedJob({ kind: ORDINARY, shape: definition.shape })).toBe(
+      true,
+    );
+  });
+}
+
+test("priority decisions are sensitive even for an unprivileged derived shape", () => {
+  const parsed = parsedWorkflow({ jobs: { check: { steps: [] } } });
+  const definition = parsed.jobs["check"];
+  if (!definition) {
+    throw new AdmissionError({ message: "priority fixture job missing" });
+  }
+  expect(isPrivilegedJob({ kind: "priority", shape: definition.shape })).toBe(
+    true,
+  );
+  expect(isPrivilegedJob({ kind: ORDINARY, shape: definition.shape })).toBe(
+    false,
+  );
+});
+
+for (const review of ["missing", "stale"] as const) {
+  test(`${review} decisions fail with the exact decision entry to paste`, () => {
+    const f = fixture();
+    const options = fixtureGenerationOptions(f);
+    const key = "candidate:.github/workflows/ci.yml/caller";
+    const decision = options.decisions[key];
+    if (!decision) {
+      throw new AdmissionError({ message: "review fixture decision missing" });
+    }
+    if (review === "missing") {
+      options.decisions = Object.fromEntries(
+        Object.entries(options.decisions).filter(([jobKey]) => jobKey !== key),
+      );
+    }
+    const workflow = f.reader
+      .read("candidate", ".github/workflows/ci.yml")
+      .replace(
+        "  caller:\n",
+        "  caller:\n    permissions: {contents: write}\n",
+      );
+    f.documents.set("candidate:.github/workflows/ci.yml", workflow);
+    const parsed = parseDocument(workflow);
+    if (parsed.isErr()) {
+      throw parsed.error;
+    }
+    const current = parsed.value.jobs["caller"];
+    if (!current) {
+      throw new AdmissionError({ message: "review fixture job missing" });
+    }
+    expect(current.digest).not.toBe(decision.reviewedDigest);
+    const result = generateClassification(options);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(ReviewRequiredError);
+      expect(result.error.message).toContain(
+        JSON.stringify(
+          {
+            [key]: {
+              kind:
+                review === "missing"
+                  ? "<choose ordinary, support, or priority>"
+                  : decision.kind,
+              qualifier:
+                review === "missing"
+                  ? "<describe the reviewed classification>"
+                  : decision.qualifier,
+              reviewedDigest: current.digest,
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      expect(result.error.message).toMatch(/sensitive/iu);
+      if (result.error instanceof ReviewRequiredError) {
+        expect(result.error.privilegedJobs).toEqual([key]);
+      }
+    }
+  }, 15_000);
+}
+
+test("the CLI emits a sensitive annotation and machine output until review is updated", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "classification-review-"));
+  try {
+    mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
+    const workflowPath = path.join(root, ".github/workflows/ci.yml");
+    const decisionsPath = path.join(
+      root,
+      ".github/ci-job-classification-decisions.json",
+    );
+    const outputPath = path.join(root, "step-output");
+    const key = "candidate:.github/workflows/ci.yml/publish";
+    const baseline = parsedWorkflow({ jobs: { publish: { steps: [] } } });
+    const changed = parsedWorkflow({
+      jobs: { publish: { permissions: { contents: "write" }, steps: [] } },
+    });
+    const originalJob = baseline.jobs["publish"];
+    const changedJob = changed.jobs["publish"];
+    if (!originalJob || !changedJob) {
+      throw new AdmissionError({ message: "CLI review fixture job missing" });
+    }
+    expect(changedJob.digest).not.toBe(originalJob.digest);
+    writeFileSync(
+      workflowPath,
+      "jobs: {publish: {permissions: {contents: write}, steps: []}}",
+    );
+    writeFileSync(
+      path.join(root, ".github/ci-job-classification-sources.json"),
+      "{}",
+    );
+    const decision = {
+      kind: ORDINARY,
+      qualifier: "Reviewed checks",
+      reviewedDigest: originalJob.digest,
+    };
+    writeFileSync(decisionsPath, JSON.stringify({ [key]: decision }));
+    const check = () =>
+      Bun.spawnSync(
+        [
+          process.execPath,
+          path.join(repositoryRoot, "scripts/check-ci-job-classification.ts"),
+          root,
+        ],
+        {
+          env: { ...process.env, GITHUB_OUTPUT: outputPath },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+    const stale = check();
+    expect(stale.exitCode).toBe(1);
+    expect(new TextDecoder().decode(stale.stdout)).toContain(
+      `::error title=Sensitive classification change::${key}`,
+    );
+    expect(new TextDecoder().decode(stale.stderr)).toContain(
+      "Sensitive classification change",
+    );
+    expect(readFileSync(outputPath, "utf-8")).toBe(
+      "privileged_classification_change=true\n",
+    );
+    writeFileSync(
+      decisionsPath,
+      JSON.stringify({
+        [key]: { ...decision, reviewedDigest: changedJob.digest },
+      }),
+    );
+    const reviewed = check();
+    expect(reviewed.exitCode).toBe(0);
+    expect(new TextDecoder().decode(reviewed.stdout)).toBe(
+      "Classified 1 workflows\n",
+    );
+    expect(new TextDecoder().decode(reviewed.stderr)).toBe("");
+    expect(readFileSync(outputPath, "utf-8")).toBe(
+      "privileged_classification_change=true\nprivileged_classification_change=false\n",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 10_000);
+
+test("decisions for removed jobs fail without changing sibling job digests", () => {
+  const f = fixture();
+  const options = fixtureGenerationOptions(f);
+  const key = "candidate:.github/workflows/ci.yml";
+  const original = f.reader.read("candidate", ".github/workflows/ci.yml");
+  const removed = original.replace(
+    / {2}caller:\n[\s\S]*?(?= {2}reusable:)/u,
+    "",
+  );
+  expect(removed).not.toBe(original);
+  f.documents.set(key, removed);
+  const parsed = parseDocument(removed);
+  if (parsed.isErr()) {
+    throw parsed.error;
+  }
+  expect(parsed.value.jobs["reusable"]?.digest).toBe(
+    options.decisions[`${key}/reusable`]?.reviewedDigest,
+  );
+  const result = generateClassification(options);
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error).toBeInstanceOf(AdmissionError);
+    expect(result.error.message).toContain(
+      `Decisions for removed jobs: ${key}/caller`,
+    );
+  }
+}, 15_000);
