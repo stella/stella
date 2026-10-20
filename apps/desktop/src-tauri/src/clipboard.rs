@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use ammonia::Builder as HtmlSanitizer;
 use chrono::{DateTime, Duration, Utc};
 use clipboard_rs::common::RustImage;
@@ -3251,7 +3252,10 @@ impl HistoryClipboardHandler {
       }
     };
     if outcome == ClipboardCaptureOutcome::Captured {
-      let _ = self.app.emit(HISTORY_EVENT, ());
+      best_effort(
+        self.app.emit(HISTORY_EVENT, ()),
+        "clipboard history change was not announced",
+      );
     }
     outcome
   }
@@ -3635,7 +3639,10 @@ pub fn initialize_and_watch(
     });
     return;
   }
-  let _ = app.emit(HISTORY_EVENT, ());
+  best_effort(
+    app.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
 
   let retention_manager = Arc::clone(&manager);
   let retention_app = app.clone();
@@ -3669,7 +3676,10 @@ pub fn initialize_and_watch(
         }
       };
       if changed {
-        let _ = retention_app.emit(HISTORY_EVENT, ());
+        best_effort(
+          retention_app.emit(HISTORY_EVENT, ()),
+          "clipboard history change was not announced",
+        );
       }
     }
   });
