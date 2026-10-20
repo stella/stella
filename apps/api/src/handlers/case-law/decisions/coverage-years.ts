@@ -15,6 +15,8 @@ type CaseLawCoverageYear =
   | {
       year: number;
       type: "unlisted";
+      missing: number;
+      shortSlices: number;
       unlistedSlices: number;
       latestWalkError: string;
     };
@@ -85,7 +87,9 @@ const COVERAGE_SLICE_GRAMMAR_BY_KEY: ReadonlyMap<
 > = new Map(Object.entries(COVERAGE_SLICE_GRAMMAR));
 
 /** Four decimal digits are the entire declared year key space. */
-const COVERAGE_YEAR_ROWS_BOUND = CASE_LAW_SOURCE_ROWS_BOUND * 10_000;
+export const CASE_LAW_COVERAGE_YEARS_PER_SOURCE_BOUND = 10_000;
+const COVERAGE_YEAR_ROWS_BOUND =
+  CASE_LAW_SOURCE_ROWS_BOUND * CASE_LAW_COVERAGE_YEARS_PER_SOURCE_BOUND;
 
 type CoverageYearAggregate = {
   year: number;
@@ -111,6 +115,8 @@ export const summarizeCaseLawCoverageYears = (
       years.push({
         year: row.year,
         type: "unlisted",
+        missing: row.missing,
+        shortSlices: row.shortSlices,
         unlistedSlices: row.unlistedSlices,
         latestWalkError: row.latestWalkError,
       });

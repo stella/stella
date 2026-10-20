@@ -431,6 +431,8 @@ test(
           {
             year: 2025,
             type: "unlisted",
+            missing: 0,
+            shortSlices: 0,
             unlistedSlices: 2,
             latestWalkError: "rate_limited",
           },
@@ -466,8 +468,10 @@ test("per-year missing counts sum to the source missing count", () => {
           year: fc.integer({ min: 1900, max: 2100 }),
           missing: fc.nat({ max: 10_000 }),
           shortSlices: fc.nat({ max: 366 }),
-          unlistedSlices: fc.constant(0),
-          latestWalkError: fc.constant(null),
+          unlistedSlices: fc.nat({ max: 366 }),
+          latestWalkError: fc.option(fc.string({ minLength: 1 }), {
+            nil: null,
+          }),
         }),
       ),
       (rows) => {
@@ -475,6 +479,9 @@ test("per-year missing counts sum to the source missing count", () => {
         let missingFromYears = 0;
         for (const year of result.years) {
           if (year.type === "gaps") {
+            missingFromYears += year.missing;
+          }
+          if (year.type === "unlisted") {
             missingFromYears += year.missing;
           }
         }
