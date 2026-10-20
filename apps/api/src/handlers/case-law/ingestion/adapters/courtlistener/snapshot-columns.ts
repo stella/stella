@@ -1,3 +1,4 @@
+// parser-output-unchanged: [us-courtlistener] canonical ID helpers and OpinionRow moved to parser modules; output is identical.
 /**
  * The CourtListener bulk CSV columns of the pinned 2026-06-30 snapshot, one
  * map per table in header order, each column with what becomes of it.

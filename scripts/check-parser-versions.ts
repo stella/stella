@@ -40,6 +40,7 @@ const PARSER_VERSION_MODULE =
   "apps/api/src/lib/legal-search/ingestion-constants.ts";
 const OUTPUT_SHAPING_ROOTS = [
   ADAPTER_DIRECTORY,
+  LEGISLATION_ADAPTER_DIRECTORY,
   ...PARSER_DIRECTORIES,
   CASE_LAW_DIRECTORY,
   "packages/legal-ast/",

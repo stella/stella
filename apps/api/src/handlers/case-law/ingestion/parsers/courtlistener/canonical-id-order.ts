@@ -1,3 +1,4 @@
+// parser-output-unchanged: [us-courtlistener] canonical ID helpers moved here unchanged; output is identical.
 /** UTF-16 code-unit order, independent of locale. */
 export const compareBytewise = (left: string, right: string): number => {
   if (left === right) {

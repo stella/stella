@@ -1,3 +1,32 @@
+// parser-output-unchanged: [cz-ns] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [cz-nss] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [cz-us] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [cz-regional] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [sk-courts] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [sk-us] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-courts] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-sn] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-kio] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-tk] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-nsa] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-ncourt] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-courts] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-vfgh] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-vwgh] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-bvwg] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-lvwg] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-asylgh] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-ubas] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-uvs] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-verg] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-umse] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-bks] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-findok] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [eu-ecj] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [hu-bhgy] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-kis] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-uodo] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-uokik] shared utilities moved to parser owners with byte-identical output.
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 // parser-output-unchanged: removes an unused type guard; no adapter calls it.

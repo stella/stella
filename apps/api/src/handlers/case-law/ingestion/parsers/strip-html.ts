@@ -1,3 +1,34 @@
+import { Result } from "better-result";
+
+// parser-output-unchanged: [cz-ns] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [cz-nss] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [cz-us] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [cz-regional] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [sk-courts] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [sk-us] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [pl-courts] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [pl-sn] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [pl-kio] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [pl-tk] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [pl-nsa] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [pl-ncourt] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [at-courts] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [at-vfgh] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [at-vwgh] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [at-bvwg] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [at-lvwg] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [at-asylgh] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [at-ubas] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [at-uvs] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [at-verg] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [at-umse] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [at-bks] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [at-findok] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [eu-ecj] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [hu-bhgy] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [pl-kis] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [pl-uodo] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
+// parser-output-unchanged: [pl-uokik] HTML stripping moved unchanged from adapter utilities; output is byte-identical.
 /**
  * Remove every `<`…`>` span, taking each `<` to the next `>` exactly as
  * `/<[^>]*>/g` does, and leaving a trailing unterminated `<` in place.
@@ -54,31 +85,26 @@ const decodeEntity = (
   hex: string | undefined,
   dec: string | undefined,
 ): string => {
-  switch (named) {
-    case "nbsp": {
-      return " ";
-    }
-    case "amp": {
-      return "&";
-    }
-    case "lt": {
-      return "<";
-    }
-    case "gt": {
-      return ">";
-    }
+  if (named === "nbsp") {
+    return " ";
+  }
+  if (named === "amp") {
+    return "&";
+  }
+  if (named === "lt") {
+    return "<";
+  }
+  if (named === "gt") {
+    return ">";
   }
 
   const codePoint =
     hex === undefined
       ? Number.parseInt(dec ?? "", 10)
       : Number.parseInt(hex, 16);
-  try {
-    return String.fromCodePoint(codePoint);
-  } catch {
-    // Not a valid code point (out of range or a lone surrogate).
-    return entity;
-  }
+  const decoded = Result.try(() => String.fromCodePoint(codePoint));
+  // Invalid code points (out of range or lone surrogates) stay encoded.
+  return Result.isError(decoded) ? entity : decoded.value;
 };
 
 /**

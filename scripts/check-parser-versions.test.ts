@@ -5,6 +5,8 @@ import { checkParserVersions, comparisonBase } from "./check-parser-versions";
 const INGESTION = "apps/api/src/handlers/case-law/ingestion/";
 const ADAPTERS = `${INGESTION}adapters/`;
 const PARSERS = `${INGESTION}parsers/`;
+const LEGISLATION_ADAPTERS =
+  "apps/api/src/handlers/legislation/ingestion/adapters/";
 const ENV_BASE = "apps/api/src/env-base.ts";
 const TAGGED_ERRORS = "apps/api/src/lib/errors/tagged-errors.ts";
 const LOGGER = "apps/api/src/lib/observability/logger.ts";
@@ -282,6 +284,7 @@ test("a stale output boundary fails", () => {
 test("output boundaries cannot lie in any output-shaping root", () => {
   const roots = [
     `${ADAPTERS}boundary.ts`,
+    `${LEGISLATION_ADAPTERS}boundary.ts`,
     `${PARSERS}boundary.ts`,
     "apps/api/src/lib/legal-search/parsers/boundary.ts",
     "apps/api/src/lib/case-law/boundary.ts",

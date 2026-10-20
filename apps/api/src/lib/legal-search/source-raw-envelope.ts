@@ -1,3 +1,4 @@
+// parser-output-unchanged: [eu-ecj] envelope types moved to their owner with byte-identical parser output.
 import { Result } from "better-result";
 
 /**
