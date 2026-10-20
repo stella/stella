@@ -23,6 +23,10 @@ const DOCUMENT = v.strictObject({
         document: v.record(v.string(), v.unknown()),
         job: v.record(v.string(), v.unknown()),
       }),
+      dependencies: v.record(
+        v.string(),
+        v.picklist(["action", "reusable-workflow"]),
+      ),
     }),
   ),
   dependencies: v.record(
@@ -42,6 +46,7 @@ const DOCUMENT = v.strictObject({
 });
 
 export type JobShape = v.InferOutput<typeof DOCUMENT>["jobs"][string]["shape"];
+export type ParsedDocument = v.InferOutput<typeof DOCUMENT>;
 
 // Validate duplicate keys and bound alias expansion before projecting classification metadata.
 const PARSER = String.raw`
@@ -237,7 +242,10 @@ if data.key?('jobs')
     end
     add_action_dependencies(dependencies, ss, relocated_actions)
     job_context = {'document'=>context, 'job'=>job_shape(j)}
-    jobs[id] = {'digest'=>digest(job_context), 'shape'=>job_context}
+    job_dependencies = {}
+    job_dependencies[j['uses']] = 'reusable-workflow' if j.key?('uses')
+    add_action_dependencies(job_dependencies, ss, {})
+    jobs[id] = {'digest'=>digest(job_context), 'shape'=>job_context, 'dependencies'=>job_dependencies}
   end
 end
 ss = []

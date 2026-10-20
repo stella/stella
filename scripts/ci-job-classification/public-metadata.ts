@@ -2,7 +2,8 @@ import { Result } from "better-result";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
-import { CLASSIFICATIONS } from "./classification-values";
+import { compareCodeUnit } from "../../packages/collation/src/collation";
+import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import {
   createGitProvider,
   resolveGitHead,
@@ -17,6 +18,7 @@ import {
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
 import { AdmissionError, parseDocument } from "./yaml";
+import type { ParsedDocument } from "./yaml";
 
 const REVIEW_INSTRUCTION =
   "review .github/ci-job-classification-decisions.json";
@@ -200,6 +202,7 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
       const visited = new Set<string>();
       const active = new Set<string>();
       const classifications = { ordinary: 0, support: 0, priority: 0 };
+      const parsedDocuments = new Map<string, ParsedDocument>();
       let jobCount = 0;
       let documentCount = 0;
       const visit = (id: string): void => {
@@ -221,6 +224,7 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
           if (parsed.isErr()) {
             throw parsed.error;
           }
+          parsedDocuments.set(id, parsed.value);
           unique(
             node.jobs.map((job) => job.id),
             "callee job classification",
@@ -237,22 +241,9 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
                 .join(", ")}. Classify new jobs, then ${REVIEW_INSTRUCTION}`,
             );
           }
-          const changedJobs = node.jobs.filter(
-            (job) => parsed.value.jobs[job.id]?.digest !== job.digest,
-          );
-          if (changedJobs.length) {
-            reject(
-              `Classification-relevant shape changed: ${changedJobs.map((job) => `${node.path}/${job.id}`).join(", ")}. Re-review kind and qualifier, then ${REVIEW_INSTRUCTION}`,
-            );
-          }
           for (const job of node.jobs) {
             classifications[job.kind] += 1;
             jobCount += 1;
-          }
-          if (parsed.value.digest !== node.digest) {
-            reject(
-              `Classification-relevant metadata changed: ${node.path} (jobs: ${node.jobs.map((job) => job.id).join(", ")}). Re-review classifications, then ${REVIEW_INSTRUCTION}`,
-            );
           }
           const references = new Set(Object.keys(parsed.value.dependencies));
           if (
@@ -298,6 +289,65 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
       }
       if (visited.size !== nodes.size) {
         reject("unreachable metadata declaration");
+      }
+      const documentDigests = new Map<string, string>();
+      const documentDigest = (id: string): string => {
+        const cached = documentDigests.get(id);
+        if (cached) {
+          return cached;
+        }
+        const node = nodes.get(id);
+        const parsed = parsedDocuments.get(id);
+        if (!node || node.type !== "metadata" || !parsed) {
+          return id;
+        }
+        const dependencies = Object.fromEntries(
+          Object.entries(node.edges)
+            .filter(([, target]) => nodes.get(target)?.type === "metadata")
+            .toSorted(([left], [right]) => compareCodeUnit(left, right))
+            .map(([reference, target]) => [reference, documentDigest(target)]),
+        );
+        const digest = Object.keys(dependencies).length
+          ? sha256(JSON.stringify({ digest: parsed.digest, dependencies }))
+          : parsed.digest;
+        documentDigests.set(id, digest);
+        return digest;
+      };
+      for (const node of nodes.values()) {
+        if (node.type !== "metadata") {
+          continue;
+        }
+        const parsed = parsedDocuments.get(node.id);
+        if (!parsed) {
+          reject("parsed metadata missing");
+        }
+        const changedJobs = node.jobs.filter((job) => {
+          const definition = parsed.jobs[job.id];
+          if (!definition) {
+            return true;
+          }
+          const dependencies = Object.fromEntries(
+            Object.keys(definition.dependencies)
+              .toSorted(compareCodeUnit)
+              .flatMap((reference) => {
+                const target = node.edges[reference];
+                return target && nodes.get(target)?.type === "metadata"
+                  ? [[reference, documentDigest(target)]]
+                  : [];
+              }),
+          );
+          const digest = Object.keys(dependencies).length
+            ? sha256(
+                JSON.stringify({ digest: definition.digest, dependencies }),
+              )
+            : definition.digest;
+          return digest !== job.digest && definition.digest !== job.digest;
+        });
+        if (changedJobs.length) {
+          reject(
+            `Classification-relevant shape changed: ${changedJobs.map((job) => `${node.path}/${job.id}`).join(", ")}. Re-review kind and qualifier, then ${REVIEW_INSTRUCTION}`,
+          );
+        }
       }
       return {
         workflowCount: metadata.workflows.length,

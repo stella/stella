@@ -15,6 +15,7 @@ import {
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
 import { isPrivilegedJob, ReviewRequiredError } from "./review";
 import { AdmissionError, parseDocument } from "./yaml";
+import type { ParsedDocument } from "./yaml";
 
 const DECISIONS = v.record(
   v.string(),
@@ -125,6 +126,131 @@ const findRemoteSource = ({
   return { repository: snapshot[0], file, origin: snapshot[1].origin };
 };
 
+type MetadataNodes = Map<string, PublicMetadata["nodes"][number]>;
+type DocumentDigestOptions = {
+  nodes: MetadataNodes;
+  parsedDocuments: ReadonlyMap<string, ParsedDocument>;
+};
+// A document digest binds its own shape and every metadata document it
+// reaches, so editing a callee changes the digest of each caller.
+const createDocumentDigest = ({
+  nodes,
+  parsedDocuments,
+}: DocumentDigestOptions) => {
+  const documentDigests = new Map<string, string>();
+  const activeDigests = new Set<string>();
+  const documentDigest = (id: string): string => {
+    const cached = documentDigests.get(id);
+    if (cached) {
+      return cached;
+    }
+    if (activeDigests.has(id)) {
+      throw new AdmissionError({ message: "metadata dependency cycle" });
+    }
+    const node = nodes.get(id);
+    const parsed = parsedDocuments.get(id);
+    if (!node || node.type !== "metadata" || !parsed) {
+      return id;
+    }
+    activeDigests.add(id);
+    const dependencies = Object.fromEntries(
+      Object.entries(node.edges)
+        .filter(([, target]) => nodes.get(target)?.type === "metadata")
+        .toSorted(([left], [right]) => compareCodeUnit(left, right))
+        .map(([reference, target]) => [reference, documentDigest(target)]),
+    );
+    activeDigests.delete(id);
+    const digest = Object.keys(dependencies).length
+      ? sha256(JSON.stringify({ digest: parsed.digest, dependencies }))
+      : parsed.digest;
+    documentDigests.set(id, digest);
+    return digest;
+  };
+  return documentDigest;
+};
+
+type ReviewJobsOptions = DocumentDigestOptions & {
+  decisions: v.InferOutput<typeof DECISIONS>;
+  documentDigest: (id: string) => string;
+};
+const reviewJobs = ({
+  nodes,
+  parsedDocuments,
+  decisions,
+  documentDigest,
+}: ReviewJobsOptions) => {
+  const entries: Record<string, unknown> = {};
+  const privilegedJobs: string[] = [];
+  const observedJobs = new Set<string>();
+  for (const node of nodes.values()) {
+    if (node.type !== "metadata") {
+      continue;
+    }
+    const parsed = parsedDocuments.get(node.id);
+    if (!parsed) {
+      throw new AdmissionError({ message: "parsed metadata missing" });
+    }
+    node.jobs = Object.entries(parsed.jobs).flatMap(([jobId, job]) => {
+      const key = `${node.repository}:${node.path}/${jobId}`;
+      observedJobs.add(key);
+      const dependencyDigests = Object.fromEntries(
+        Object.keys(job.dependencies)
+          .toSorted(compareCodeUnit)
+          .flatMap((reference) => {
+            const target = node.edges[reference];
+            return target && nodes.get(target)?.type === "metadata"
+              ? [[reference, documentDigest(target)]]
+              : [];
+          }),
+      );
+      const digest = Object.keys(dependencyDigests).length
+        ? sha256(
+            JSON.stringify({
+              digest: job.digest,
+              dependencies: dependencyDigests,
+            }),
+          )
+        : job.digest;
+      const decision = decisions[key];
+      if (!decision || decision.reviewedDigest !== digest) {
+        entries[key] = {
+          kind: decision?.kind ?? "<choose ordinary, support, or priority>",
+          qualifier:
+            decision?.qualifier ?? "<describe the reviewed classification>",
+          reviewedDigest: digest,
+        };
+        if (isPrivilegedJob({ kind: decision?.kind, shape: job.shape })) {
+          privilegedJobs.push(key);
+        }
+      }
+      return decision
+        ? [
+            {
+              id: jobId,
+              kind: decision.kind,
+              qualifier: decision.qualifier,
+              digest,
+            },
+          ]
+        : [];
+    });
+  }
+  const removed = Object.keys(decisions).filter(
+    (key) => !observedJobs.has(key),
+  );
+  if (removed.length) {
+    throw new AdmissionError({
+      message: `Decisions for removed jobs: ${removed.join(", ")}. Remove these entries from .github/ci-job-classification-decisions.json`,
+    });
+  }
+  if (Object.keys(entries).length) {
+    throw new ReviewRequiredError({
+      message: `${privilegedJobs.length ? `Sensitive classification change: ${privilegedJobs.join(", ")}\n` : ""}Missing or changed job review. Re-review kind and qualifier; paste these entries into .github/ci-job-classification-decisions.json (choose kind and qualifier for new jobs):\n${JSON.stringify(entries, null, 2)}`,
+      privilegedJobs,
+    });
+  }
+};
+
 type GenerateOptions = {
   decisions: v.InferOutput<typeof DECISIONS>;
   snapshots: v.InferOutput<typeof SNAPSHOTS>;
@@ -139,10 +265,8 @@ export const generateClassification = ({
 }: GenerateOptions) =>
   Result.try({
     try: () => {
-      const nodes = new Map<string, PublicMetadata["nodes"][number]>();
-      const entries: Record<string, unknown> = {};
-      const privilegedJobs: string[] = [];
-      const observedJobs = new Set<string>();
+      const nodes: MetadataNodes = new Map();
+      const parsedDocuments = new Map<string, ParsedDocument>();
       type VisitOptions = {
         repository: string;
         file: string;
@@ -159,6 +283,7 @@ export const generateClassification = ({
         }
         const references: string[] = [];
         const edges: Record<string, string> = {};
+        parsedDocuments.set(id, parsed.value);
         const node = {
           type: "metadata",
           id,
@@ -168,34 +293,7 @@ export const generateClassification = ({
           digest: parsed.value.digest,
           references,
           edges,
-          jobs: Object.entries(parsed.value.jobs).flatMap(([jobId, job]) => {
-            const key = `${repository}:${file}/${jobId}`;
-            observedJobs.add(key);
-            const decision = decisions[key];
-            if (!decision || decision.reviewedDigest !== job.digest) {
-              entries[key] = {
-                kind:
-                  decision?.kind ?? "<choose ordinary, support, or priority>",
-                qualifier:
-                  decision?.qualifier ??
-                  "<describe the reviewed classification>",
-                reviewedDigest: job.digest,
-              };
-              if (isPrivilegedJob({ kind: decision?.kind, shape: job.shape })) {
-                privilegedJobs.push(key);
-              }
-            }
-            return decision
-              ? [
-                  {
-                    id: jobId,
-                    kind: decision.kind,
-                    qualifier: decision.qualifier,
-                    digest: job.digest,
-                  },
-                ]
-              : [];
-          }),
+          jobs: [],
         } satisfies PublicMetadata["nodes"][number];
         // Register before recursion; the verifier reports dependency cycles.
         nodes.set(id, node);
@@ -268,20 +366,8 @@ export const generateClassification = ({
             origin: { type: "checkout" },
           }),
         }));
-      const removed = Object.keys(decisions).filter(
-        (key) => !observedJobs.has(key),
-      );
-      if (removed.length) {
-        throw new AdmissionError({
-          message: `Decisions for removed jobs: ${removed.join(", ")}. Remove these entries from .github/ci-job-classification-decisions.json`,
-        });
-      }
-      if (Object.keys(entries).length) {
-        throw new ReviewRequiredError({
-          message: `${privilegedJobs.length ? `Sensitive classification change: ${privilegedJobs.join(", ")}\n` : ""}Missing or changed job review. Re-review kind and qualifier; paste these entries into .github/ci-job-classification-decisions.json (choose kind and qualifier for new jobs):\n${JSON.stringify(entries, null, 2)}`,
-          privilegedJobs,
-        });
-      }
+      const documentDigest = createDocumentDigest({ nodes, parsedDocuments });
+      reviewJobs({ nodes, parsedDocuments, decisions, documentDigest });
       const generated = {
         version: 1,
         mode: "public-metadata",

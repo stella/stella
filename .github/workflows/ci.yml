@@ -2535,6 +2535,7 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
+          fetch-depth: 0
           persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: |
@@ -2548,6 +2549,18 @@ jobs:
             packages/sha256/src/node.ts
             packages/sha256/src/types.ts
 
+      - name: Select measured ratchet base from the target branch
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+          MERGE_GROUP_BASE_SHA: ${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          base="${MERGE_GROUP_BASE_SHA:-$(git merge-base "origin/$BASE_REF" HEAD)}"
+          git cat-file -e "$base^{commit}"
+          echo "RATCHET_BASE_REF=$base" >> "$GITHUB_ENV"
+
       - name: Check workflow job classifications
         id: job-classification
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2558,7 +2571,7 @@ jobs:
         # candidate tree.
         run: |
           trap 'rm -rf .workflow-tooling' EXIT
-          bun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling
+          bun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling --base "$RATCHET_BASE_REF"
 
       - name: Compute affected flag
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2578,18 +2591,6 @@ jobs:
             echo "flag=--affected" >> "$GITHUB_OUTPUT"
             echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
           fi
-
-      - name: Select measured ratchet base from the target branch
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-          MERGE_GROUP_BASE_SHA: ${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}
-          BASE_REF: ${{ github.base_ref || 'main' }}
-        run: |
-          base="${MERGE_GROUP_BASE_SHA:-$(git merge-base "origin/$BASE_REF" HEAD)}"
-          git cat-file -e "$base^{commit}"
-          echo "RATCHET_BASE_REF=$base" >> "$GITHUB_ENV"
 
       - name: Run policy checks
         id: check_pool
