@@ -33,7 +33,8 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { writeFileSync } from "node:fs";
+
+import { writeRegeneratedFile } from "@stll/test-kit";
 
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json";
@@ -155,10 +156,12 @@ afterAll(() => {
         .toSorted()
         .map((key) => [key, recorded[key] ?? observedRows.get(key)]),
     );
-    writeFileSync(
-      BASELINE_FILE,
-      `${JSON.stringify({ comment: baseline.comment, rows }, null, 2)}\n`,
-    );
+    writeRegeneratedFile({
+      flag: "READ_FAULT_BASELINE",
+      value: "write",
+      file: BASELINE_FILE,
+      contents: `${JSON.stringify({ comment: baseline.comment, rows }, null, 2)}\n`,
+    });
   }
 });
 

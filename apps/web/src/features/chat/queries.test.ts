@@ -39,10 +39,12 @@ import {
   __resetChatRequestStateForTests,
   acquireChatRuntime,
 } from "@/features/chat/chat-runtime-registry";
+import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import {
   applyChatModelChange,
   chatThreadOptions,
   chatThreadTitleOptions,
+  fileChatThreadOptions,
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
   invalidateChatThreadLists,
@@ -4165,5 +4167,95 @@ describe("acquireChatRuntime reconcile", () => {
         queryClient,
       }),
     ).toBe(skillRuntime);
+  });
+});
+
+describe("file thread binding", () => {
+  const previousFetch = globalThis.fetch;
+  const fileKey = {
+    entityId: "entity-1",
+    fieldId: "field-1",
+    userId: "user-1",
+    workspaceId: "workspace-1",
+  };
+  const fileThreadResponse = (threadId: string | null) => ({
+    threadId,
+    activeTurnId: null,
+    attachedFiles: [],
+    messages: [],
+    olderCursor: null,
+    contextMatterIds: [],
+    lastActivityAt: null,
+    usedAnonymization: false,
+    webSearchAvailable: false,
+    webSearchEnabled: false,
+    model: null,
+    reasoningEffort: null,
+    context: null,
+  });
+  const serve = (threadId: string | null, requested: string[]): typeof fetch =>
+    Object.assign(
+      async (...[input]: Parameters<typeof fetch>) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        requested.push(new URL(url).pathname);
+        return url.includes("/tool-grants")
+          ? Response.json({ grants: [] })
+          : Response.json(fileThreadResponse(threadId));
+      },
+      { preconnect: previousFetch.preconnect },
+    );
+
+  afterEach(() => {
+    globalThis.fetch = previousFetch;
+  });
+
+  test("a file without a thread reads no tool grants", async () => {
+    const requested: string[] = [];
+    globalThis.fetch = serve(null, requested);
+    const client = new QueryClient();
+
+    const binding = await client.query(
+      fileChatThreadOptions({
+        activeOrganizationId: "org-1",
+        key: fileKey,
+        hasDocxEditSurface: false,
+      }),
+    );
+
+    expect(binding.threadExists).toBeFalse();
+    expect(requested.some((path) => path.includes("/tool-grants"))).toBeFalse();
+    expect(
+      client.getQueryData(
+        chatToolGrantsOptions({
+          activeOrganizationId: "org-1",
+          threadId: binding.threadId,
+          userId: fileKey.userId,
+        }).queryKey,
+      ),
+    ).toEqual({ grants: [] });
+  });
+
+  test("a file with a thread starts its tool grants read with the binding", async () => {
+    const requested: string[] = [];
+    globalThis.fetch = serve("018f0000-0000-7000-8000-0000000000f1", requested);
+    const client = new QueryClient();
+
+    const binding = await client.query(
+      fileChatThreadOptions({
+        activeOrganizationId: "org-1",
+        key: fileKey,
+        hasDocxEditSurface: false,
+      }),
+    );
+    const grantsKey = chatToolGrantsOptions({
+      activeOrganizationId: "org-1",
+      threadId: binding.threadId,
+      userId: fileKey.userId,
+    }).queryKey;
+
+    // The binding itself started the grants read; nothing mounted yet.
+    expect(client.getQueryState(grantsKey)).toBeDefined();
+    await sleep(0);
+    expect(requested.some((path) => path.includes("/tool-grants"))).toBeTrue();
   });
 });

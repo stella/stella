@@ -373,9 +373,9 @@ if (typeof selectionCommand !== "string") {
   throw new TypeError("Ratchet base selection step must have a run command");
 }
 
-test("CI selects the merge base on PRs and the event base on merge groups", () => {
+test("CI selects the merge base on PRs and the target-branch base on merge groups", () => {
   expect(selectionStep["env"]).toMatchObject({
-    MERGE_GROUP_BASE_SHA: `\${{ github.event.merge_group.base_sha }}`,
+    MERGE_GROUP_BASE_SHA: `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
     BASE_REF: `\${{ github.base_ref || 'main' }}`,
   });
   expect(policySteps.indexOf(selectionStep)).toBeLessThan(
