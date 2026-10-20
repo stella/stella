@@ -61,3 +61,15 @@ corpus_index_group_withdrawals.actor             varchar      not null          
 corpus_index_group_withdrawals.reason            varchar      not null            corpus-index-generations.ts:248
 corpus_index_group_withdrawals.withdrawn_at      timestamptz  default,not null    corpus-index-generations.ts:249
 ```
+
+## corpus_index_jurisdiction_serving · `corpusIndexJurisdictionServing` · corpus-index-generations.ts:297 · rls
+
+The generation that serves one jurisdiction when it is not the family's serving generation.
+
+```text
+corpus_index_jurisdiction_serving.family           text         not null          corpus-index-generations.ts:300
+corpus_index_jurisdiction_serving.jurisdiction     varchar      not null          corpus-index-generations.ts:301
+corpus_index_jurisdiction_serving.generation       varchar      not null          corpus-index-generations.ts:302
+corpus_index_jurisdiction_serving.from_generation  varchar      not null          corpus-index-generations.ts:309  The generation the jurisdiction was served by until the flip: the one whose copies are erased, and the only one.
+corpus_index_jurisdiction_serving.flipped_at       timestamptz  default,not null  corpus-index-generations.ts:314
+```

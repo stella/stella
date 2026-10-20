@@ -1009,6 +1009,9 @@
       "saved": "{count, plural, zero {Saglabāti # nolēmumu} one {Saglabāts # nolēmums} other {Saglabāti # nolēmumi}} lietā {matter}"
     },
     "newestDecisions": "Jaunākie nolēmumi",
+    "noResults": {
+      "hint": "Izmēģiniet citus vārdus, uzlabojiet vaicājumu ar AI vai uzdodiet jautājumu tērzēšanā."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Cilvēku"
@@ -1081,6 +1084,10 @@
         "medium": "Vidējs",
         "short": "Īss"
       }
+    },
+    "rewritten": {
+      "line": "Nav precīzu atbilstību vaicājumam <bdi>{original}</bdi>; rādīti rezultāti vaicājumam <bdi>{query}</bdi>",
+      "searchOriginal": "Meklēt manus sākotnējos vārdus"
     },
     "sameCaseNumber": "{count, plural, zero {# nolēmumu ir} one {# nolēmumam ir} other {# nolēmumiem ir}} šis lietas numurs. Izvēlieties tiesu.",
     "searchLabel": "Meklēt judikatūrā",
@@ -2662,10 +2669,12 @@
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
       "caseLawCountryUnavailable": "Šīs valsts judikatūra nav pieejama. Izvēlieties citu valsti.",
+      "caseLawIdentityOnly": "Šajā valstī ir pieejama tikai precīza nolēmumu meklēšana un lasīšana.",
       "caseLawSearchUnavailable": "Šīs valsts judikatūras meklēšana nav pieejama. Tās publiskos tiesu nolēmumus joprojām varat lasīt.",
       "conflict": "Pieprasījums konfliktē ar pašreizējo stāvokli.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "legislationCountryUnavailable": "Šīs valsts tiesību akti nav pieejami. Izvēlieties citu valsti.",
+      "legislationIdentityOnly": "Šajā valstī ir pieejama tikai precīza tiesību aktu meklēšana un lasīšana.",
       "legislationSearchUnavailable": "Šīs valsts tiesību aktu meklēšana nav pieejama. Tās publiskos tiesību aktus joprojām varat lasīt.",
       "notFound": "Pieprasīto vienumu neizdevās atrast.",
       "payloadTooLarge": "Pieprasījums ir pārāk liels.",
@@ -2688,6 +2697,10 @@
       "aiConfigModelInvalid": "AI modeļa konfigurācija nav derīga. Pārbaudiet atlasītos modeļus.",
       "aiConfigProviderInvalid": "AI pakalpojuma sniedzēja konfigurācija nav derīga. Pārbaudiet pakalpojuma sniedzēja iestatījumus.",
       "aiConfigProviderValidationFailed": "AI pakalpojuma sniedzējs noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",
+      "aiOutputInvalid": "AI atbilde bija neparedzētā formātā. Mēģiniet vēlreiz.",
+      "aiOutputModerated": "AI pakalpojumu sniedzējs moderēja izvadi. Pārfrāzējiet pieprasījumu vai izvēlieties citu modeli.",
+      "aiProviderTaskUnsupported": "Konfigurētais AI pakalpojumu sniedzējs nevar izpildīt šo uzdevumu. Izvēlieties tādu, kas to spēj.",
+      "aiUnknown": "AI pieprasījums neizdevās. Mēģiniet vēlreiz.",
       "clauseDirectivesInvalid": "Saistītā klauzulā ir nederīgas direktīvas. Pirms veidnes aizpildīšanas izlabojiet klauzulu.",
       "clauseDirectivesInvalidDetails": "Klauzulā {clauseName} laukā {slotName} ir nederīgas direktīvas. Atveriet klauzulu redaktoru, izlabojiet norādītās rindkopas un vēlreiz aizpildiet veidni.",
       "clauseDirectivesOverrideInvalidDetails": "Klauzulas {clauseName} aizstātais teksts laukā {slotName} satur nederīgas direktīvas. Izlabojiet šīs aizpildīšanas aizstāto tekstu un mēģiniet vēlreiz.",
@@ -4234,6 +4247,10 @@
     "archivedEmpty": "Nav arhivētu atmiņu.",
     "archivedToast": "Atmiņa arhivēta",
     "createdToast": "Saglabāts atmiņā",
+    "deleteConfirmation": "Lai apstiprinātu, ievadiet {confirmation}",
+    "deleteDescription": "Šī atmiņa tiks neatgriezeniski dzēsta. Šo darbību nevar atsaukt.",
+    "deleteTitle": "Dzēst atmiņu?",
+    "deletedToast": "Atmiņa dzēsta",
     "empty": "Atmiņā vēl nekā nav.",
     "kinds": {
       "decision": "Lēmums",
@@ -5162,6 +5179,8 @@
     "outline": "Saturs",
     "outlineJumpLabel": "Pāriet uz normu",
     "outlineJumpPlaceholder": "§ 10 vai virsraksts",
+    "pendingChanges": "Gaidāmie grozījumi",
+    "pendingChangesIncomplete": "Izdevēja datos var nebūt iekļauti visi gaidāmie grozījumi.",
     "provisionAskContextPrompt": "\n\nFragmenti, kuros norma piemērota autoritatīvākajos nolēmumos:\n{passages}\n\nIzmanto judikatūras rīkus, lai izlasītu jebkuru no šiem nolēmumiem pilnībā vai atrastu citus nolēmumus, kas atsaucas uz normu.",
     "provisionAskPlaceholder": "Jautājiet par šo normu",
     "provisionAskQuestionPrompt": "Par {subject}: {question}",

@@ -408,6 +408,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       listPublicDecisionLanguageAlternates({
         tx,
         languageGroupKey: decision.languageGroupKey,
+        countries: subject.countries,
       }),
       listDecisionJudges(tx, decisionId),
       citationCursors.from.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
