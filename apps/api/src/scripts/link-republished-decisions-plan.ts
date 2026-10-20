@@ -390,6 +390,9 @@ export const reverseRepublishedDecisionBatch = async (
   limit: number,
   reconcile: Reconcile,
 ): Promise<ReverseRepublishedDecisionOutcome[]> => {
+  // Like apply: the erasure check below stays valid for the whole page only
+  // while no erasure can run beside it.
+  await lockCaseLawRepublication({ tx, mode: "exclusive" });
   const rows = executedRows(
     await tx.execute(sql`
     WITH selected AS MATERIALIZED (
