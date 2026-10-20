@@ -1,9 +1,18 @@
-import { expectTypeOf, test } from "bun:test";
+import { expect, expectTypeOf, test } from "bun:test";
 
-import type { Transaction } from "@/api/db/root";
+import { rootDb, type Transaction } from "@/api/db/root";
 
-import type { SyntheticSessionAuthorityReader } from "./session-authority";
+import {
+  readSyntheticSessionAuthority,
+  type SyntheticSessionAuthorityReader,
+} from "./session-authority";
 
-test("scoped transactions cannot be used as authority readers", () => {
+test("scoped transactions cannot be used as authority readers", async () => {
   expectTypeOf<Transaction>().not.toExtend<SyntheticSessionAuthorityReader>();
+  expect(
+    await readSyntheticSessionAuthority(rootDb, {
+      sessionId: null,
+      userId: "unused-without-a-session",
+    }),
+  ).toBeNull();
 });

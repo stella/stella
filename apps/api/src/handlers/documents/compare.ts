@@ -44,6 +44,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import {
   deliverTemporaryRedline,
   TEMPORARY_REDLINE_FAILURE_MESSAGE,
@@ -519,6 +520,7 @@ const comparisonSource = ({
  */
 export const createDocumentCompareGenerator = (
   dependencies: DocumentCompareDependencies = DEFAULT_DOCUMENT_COMPARE_DEPENDENCIES,
+  readSessionAuthority: SyntheticSessionAuthorityReader = ownerSyntheticSessionAuthorityReader,
 ) =>
   async function* ({
     safeDb,
@@ -865,7 +867,7 @@ export const createDocumentCompareGenerator = (
         bytes: new Uint8Array(compared.buffer),
         fileName,
         organizationId: session.activeOrganizationId,
-        readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+        readSessionAuthority,
         scopedDb,
         signal: comparisonSignal,
         source: downloadSource,
@@ -1108,7 +1110,7 @@ export const createDocumentCompareGenerator = (
           await dependencies.withTimeout(
             async () =>
               await dependencies.readFileHandler({
-                readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+                readSessionAuthority,
                 scopedDb,
                 fieldId: saved.fieldId,
                 userId: user.id,
@@ -1164,8 +1166,12 @@ export const createDocumentCompareGenerator = (
 
 export const createDocumentCompareHandler = (
   dependencies: DocumentCompareDependencies = DEFAULT_DOCUMENT_COMPARE_DEPENDENCIES,
+  readSessionAuthority: SyntheticSessionAuthorityReader = ownerSyntheticSessionAuthorityReader,
 ) => {
-  const compare = createDocumentCompareGenerator(dependencies);
+  const compare = createDocumentCompareGenerator(
+    dependencies,
+    readSessionAuthority,
+  );
   return createSafeHandler(config, (ctx) =>
     compare({ ...ctx, abortSignal: ctx.request.signal }),
   );

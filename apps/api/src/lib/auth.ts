@@ -53,6 +53,7 @@ import { isUuid } from "@stll/uuid-codec";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import {
+  authorizeOwnerSyntheticSession,
   bindOwnerSyntheticSessionAuthorityReader,
   rootDb,
   rlsDb,
@@ -287,10 +288,7 @@ import {
   checkSyntheticPrincipalAccess,
   syntheticPrincipalAuthConfig,
 } from "@/api/lib/synthetic-principal/policy";
-import {
-  authorizeSyntheticSession,
-  readSyntheticSessionAuthority,
-} from "@/api/lib/synthetic-principal/session-authority";
+import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
 import { includes, isRecord } from "@/api/lib/type-guards";
 import {
   checkMemberAdmission,
@@ -1920,8 +1918,7 @@ export const createAuth = (
         config: syntheticPrincipalAuthConfig,
         localPasswordEnabled: true,
         checkAccess: checkSyntheticPrincipalAccess,
-        authorizeSession: async (session) =>
-          await authorizeSyntheticSession(rootDb, session),
+        authorizeSession: authorizeOwnerSyntheticSession,
       }),
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),
