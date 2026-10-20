@@ -21,7 +21,7 @@ export const serialCases = async () => {
 
 export const togetherCases = async () => {
   // expect-clean: no-serial-lint-case/no-serial-lint-case
-  await Promise.all(cases.map((source) => lintSingleRule(source)));
+  await Promise.all(cases.map(async (source) => lintSingleRule(source)));
   // expect-clean: no-serial-lint-case/no-serial-lint-case
   await lintSingleRule("one case outside a loop");
   for (const source of cases) {
