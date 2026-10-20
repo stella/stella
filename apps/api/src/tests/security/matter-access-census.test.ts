@@ -69,10 +69,7 @@ const selectsExtractedRelationPayload = (source: string): boolean =>
       if (match[1] === "true") {
         return true;
       }
-      const block = braceBlock(
-        source,
-        (match.index ?? 0) + match[0].length - 1,
-      );
+      const block = braceBlock(source, match.index + match[0].length - 1);
       const columns = block === null ? null : METADATA_COLUMNS_ONLY.exec(block);
       // Only an inclusion list is metadata-only: a `false` entry makes Drizzle
       // return every other column, the payload included.
