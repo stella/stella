@@ -16,6 +16,15 @@ for argument in "$@"; do
     exit 1
   fi
 done
+if [[ "$1" == api ]]; then
+  case "$2" in
+    repos/stella/stella/pulls/4193) printf '%s\n' '{"draft":false,"title":"chore: release v1.2.3","base":{"sha":"base","ref":"main"},"head":{"sha":"head","repo":{"full_name":"stella/stella"}},"changed_files":0}' | jq --argjson files "${STELLA_TEST_RELEASE_FILES:-[]}" '.changed_files = ($files | length)' ;;
+    'repos/stella/stella/compare/base...head') printf '%s\n' '{"merge_base_commit":{"sha":"base"}}' ;;
+    'repos/stella/stella/pulls/4193/files?per_page=100') printf '%s\n' "${STELLA_TEST_RELEASE_FILES:-[]}" | jq -s '.' ;;
+    *) exit 1 ;;
+  esac
+  exit 0
+fi
 [[ "$*" == 'pr list --repo stella/stella --state open --base main --limit 500 --json number,title,isDraft,isCrossRepository' ]] || exit 1
 printf '%s\n' "$STELLA_TEST_PULL_REQUESTS"
 EOF
@@ -68,3 +77,16 @@ if PATH="$stub_dir:$PATH" bash "$subject" >/dev/null 2>&1; then
   echo "FAIL requires --repo" >&2
   exit 1
 fi
+
+python3 "$script_dir/check-release-pr-content.test.py"
+
+if STELLA_TEST_PULL_REQUESTS="$fixtures" STELLA_TEST_RELEASE_FILES='[{"filename":"apps/api/src/not-versioning.ts","status":"modified"}]' PATH="$stub_dir:$PATH" bash "$subject" --repo stella/stella --number 4193 >"$stub_dir/output" 2>"$stub_dir/error"; then
+  echo "FAIL must refuse source changes in a recognized release" >&2
+  exit 1
+fi
+[[ ! -s "$stub_dir/output" ]]
+grep -q 'apps/api/src/not-versioning.ts: not a versioning output' "$stub_dir/error"
+echo "ok   recognized release fails closed on source changes"
+
+STELLA_TEST_RELEASE_FILES='[{"filename":"apps/api/src/not-versioning.ts","status":"modified"}]' expect_output "unrelated PR is unaffected by invalid release" "$fixtures" \
+  $'open_other=1\ncurrent_is_release=false' --repo stella/stella --number 12

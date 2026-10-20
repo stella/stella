@@ -118,7 +118,6 @@
     "Release changelog guard": ["**"],
     "Release queue history guard": ["**"],
     "Release CLI coupling guard": ["**"],
-    "Release CLI changeset hold": ["**"],
     "CLI contract changeset guard": ["**"],
     "SQL performance suppression summary": ["**"],
     "Release marketing provenance warning": ["**"],

@@ -2144,8 +2144,6 @@ jobs:
     timeout-minutes: 105
     permissions:
       contents: read
-      # Release PR state for the release CLI changeset hold.
-      pull-requests: read
       actions: write
     env:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
@@ -2430,8 +2428,6 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
-      # Release PR state for the release CLI changeset hold.
-      pull-requests: read
       actions: write
     env:
       CI_CANCELLATION_KIND: CONTEXTUAL
@@ -2638,8 +2634,6 @@ jobs:
     timeout-minutes: 40
     permissions:
       contents: read
-      # Release PR state for the release CLI changeset hold.
-      pull-requests: read
       actions: write
     env:
       CI_CANCELLATION_KIND: CONTEXTUAL
@@ -7423,7 +7417,9 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           sparse-checkout: |
             scripts/check-main-merge-hold.sh
+            scripts/gh-retry.sh
             scripts/release-pull-requests.sh
+            scripts/check-release-pr-content.py
           sparse-checkout-cone-mode: false
 
       - name: Main merge hold
