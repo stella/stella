@@ -3,6 +3,8 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { cachedForRepository } from "./ci-repository-cache";
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 export const ROUTE_SMOKE_SPEC_PATH = "apps/web/e2e/specs/route-smoke.spec.ts";
 const ENTRY_POINTS = [
@@ -27,6 +29,7 @@ const isSourceExtension = (extension: string): extension is SourceExtension =>
   Object.hasOwn(LOADERS, extension);
 const RUNTIME_FILES = new Set([
   ".github/workflows/ci.yml",
+  "scripts/ci-repository-cache.ts",
   "scripts/detect-route-smoke-changes.ts",
   "scripts/detect-route-smoke-changes.test.ts",
   "bun.lock",
@@ -147,11 +150,11 @@ export const routeSmokeAffected = (
   if (files.some(runtimePath)) {
     return true;
   }
-  let imports = routeSmokeClosures.get(root);
-  if (imports === undefined) {
-    imports = routeSmokeImportClosure(root);
-    routeSmokeClosures.set(root, imports);
-  }
+  const imports = cachedForRepository(
+    routeSmokeClosures,
+    { root, key: root },
+    () => routeSmokeImportClosure(root),
+  );
   return files.some((file) => imports.has(file));
 };
 

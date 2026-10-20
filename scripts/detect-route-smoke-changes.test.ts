@@ -115,7 +115,7 @@ describe("route traffic changes require the route smoke", () => {
       );
       writeFixture(root, "tools/helper.ts", "export const helper = () => {};");
       const newlyImported = "tools/deep/new-helper.ts";
-      expect(routeSmokeImportClosure(root).has(newlyImported)).toBe(false);
+      expect(routeSmokeAffected([newlyImported], root)).toBe(false);
       writeFixture(
         root,
         "tools/helper.ts",

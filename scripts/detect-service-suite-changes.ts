@@ -1,11 +1,13 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { cachedForRepository } from "./ci-repository-cache";
 import { GENERATORS } from "./generated-files";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const infrastructurePaths = new Set([
   ".github/workflows/ci.yml",
+  "scripts/ci-repository-cache.ts",
   "scripts/detect-service-suite-changes.ts",
   "scripts/detect-service-suite-changes.test.ts",
   "scripts/generated-files.ts",
@@ -28,25 +30,8 @@ const SUITES = {
 } as const;
 type ServiceSuite = keyof typeof SUITES;
 
-// A planning process observes one immutable checkout. Own repository reads and
-// parsing here so the four suite projections share the same source inventory.
-// Any other root (a test fixture) may change between calls, so it is read fresh.
-const cachedForRepository = <Value>(
-  cache: Map<string, Value>,
-  { root, key }: { root: string; key: string },
-  compute: () => Value,
-) => {
-  if (root !== repositoryRoot) {
-    return compute();
-  }
-  const cached = cache.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const value = compute();
-  cache.set(key, value);
-  return value;
-};
+// Own repository reads and parsing here so the four suite projections share
+// the same source inventory.
 const repositorySources = new Map<string, string>();
 const repositoryImports = new Map<
   string,

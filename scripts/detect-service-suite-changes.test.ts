@@ -21,6 +21,7 @@ import { GENERATORS } from "./generated-files";
 const DETECTOR_SOURCES = Object.fromEntries(
   [
     "../packages/scripts/src/generated-files.ts",
+    "ci-repository-cache.ts",
     "detect-service-suite-changes.ts",
     "generated-files.ts",
     "baseline-paths.ts",
