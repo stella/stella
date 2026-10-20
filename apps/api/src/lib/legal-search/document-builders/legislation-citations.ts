@@ -168,7 +168,8 @@ export const legislationTargetOfHref = (
 };
 
 /**
- * Printed EU designations. The optional `No` decides the number order; the
+ * Printed EU designations. `No` marks number-first order; short regulation
+ * numbers followed by a four-digit year also omit it. The
  * trailing `(?!\d)` keeps a longer run of digits from being cut into an act.
  */
 const EU_DESIGNATION =
@@ -194,9 +195,14 @@ const euMatchTarget = (
   if (!isSeriesKey(SERIES_BY_EU_FORM, key)) {
     return null;
   }
-  return numberFirst === undefined
-    ? targetOf(SERIES_BY_EU_FORM[key], fullYear(left), Number(right))
-    : targetOf(SERIES_BY_EU_FORM[key], fullYear(right), Number(left));
+  const order =
+    numberFirst !== undefined ||
+    (key === "regulation" && left.length < 4 && right.length === 4)
+      ? "number-first"
+      : "year-first";
+  return order === "number-first"
+    ? targetOf(SERIES_BY_EU_FORM[key], fullYear(right), Number(left))
+    : targetOf(SERIES_BY_EU_FORM[key], fullYear(left), Number(right));
 };
 
 /** Every printed act designation in `text`, in order, never overlapping. */
