@@ -91,7 +91,7 @@ test("two loop instances sharing the advisory lock emit once", async () => {
         held = true;
         return true;
       },
-      read: () => Promise.resolve(report),
+      read: async () => Promise.resolve(report),
     });
   };
 
