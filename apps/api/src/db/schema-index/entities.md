@@ -319,43 +319,43 @@ buffer_object_cleanup_intents.next_attempt_at  timestamptz         default,not n
 buffer_object_cleanup_intents.created_at       timestamptz         default,not null  entities.ts:1381
 ```
 
-## fields · `fields` · entities.ts:1484
+## fields · `fields` · entities.ts:1487
 
 ```text
-fields.{...entityFeatureGateColumns()}           spread                        entities.ts:1487
-fields.{...entityFeatureWorkspaceGateColumns()}  spread                        entities.ts:1488
-fields.id                                        pUuid            pk,not null  entities.ts:1489
-fields.workspace_id                              safeWorkspaceId  not null     entities.ts:1490
-fields.property_id                               safeUuid         not null     entities.ts:1491
-fields.entity_version_id                         safeUuid         fk,not null  entities.ts:1492
-fields.file_id                                   safeUuid         null         entities.ts:1495
-fields.content                                   jsonb            not null     entities.ts:1496
+fields.{...entityFeatureGateColumns()}           spread                        entities.ts:1490
+fields.{...entityFeatureWorkspaceGateColumns()}  spread                        entities.ts:1491
+fields.id                                        pUuid            pk,not null  entities.ts:1492
+fields.workspace_id                              safeWorkspaceId  not null     entities.ts:1493
+fields.property_id                               safeUuid         not null     entities.ts:1494
+fields.entity_version_id                         safeUuid         fk,not null  entities.ts:1495
+fields.file_id                                   safeUuid         null         entities.ts:1498
+fields.content                                   jsonb            not null     entities.ts:1499
 ```
 
-## cell_metadata · `cellMetadata` · entities.ts:1575
+## cell_metadata · `cellMetadata` · entities.ts:1578
 
 ```text
-cell_metadata.{...entityFeatureGateColumns()}           spread                             entities.ts:1578
-cell_metadata.{...entityFeatureWorkspaceGateColumns()}  spread                             entities.ts:1579
-cell_metadata.workspace_id                              safeWorkspaceId  not null          entities.ts:1580
-cell_metadata.entity_version_id                         safeUuid         fk,not null       entities.ts:1581
-cell_metadata.property_id                               safeUuid         not null          entities.ts:1584
-cell_metadata.metadata                                  jsonb            not null          entities.ts:1585
-cell_metadata.created_by                                text             fk,null           entities.ts:1586
-cell_metadata.updated_by                                text             fk,null           entities.ts:1589
-cell_metadata.created_at                                timestamptz      default,not null  entities.ts:1592
-cell_metadata.updated_at                                timestamptz      default,not null  entities.ts:1593
+cell_metadata.{...entityFeatureGateColumns()}           spread                             entities.ts:1581
+cell_metadata.{...entityFeatureWorkspaceGateColumns()}  spread                             entities.ts:1582
+cell_metadata.workspace_id                              safeWorkspaceId  not null          entities.ts:1583
+cell_metadata.entity_version_id                         safeUuid         fk,not null       entities.ts:1584
+cell_metadata.property_id                               safeUuid         not null          entities.ts:1587
+cell_metadata.metadata                                  jsonb            not null          entities.ts:1588
+cell_metadata.created_by                                text             fk,null           entities.ts:1589
+cell_metadata.updated_by                                text             fk,null           entities.ts:1592
+cell_metadata.created_at                                timestamptz      default,not null  entities.ts:1595
+cell_metadata.updated_at                                timestamptz      default,not null  entities.ts:1596
 ```
 
-## justifications · `justifications` · entities.ts:1622
+## justifications · `justifications` · entities.ts:1625
 
 ```text
-justifications.{...entityFeatureGateColumns()}           spread                                   entities.ts:1625
-justifications.{...entityFeatureWorkspaceGateColumns()}  spread                                   entities.ts:1626
-justifications.id                                        pUuid            pk,not null             entities.ts:1627
-justifications.workspace_id                              safeWorkspaceId  not null                entities.ts:1628
-justifications.field_id                                  safeUuid         not null                entities.ts:1629
-justifications.content                                   jsonb            not null                entities.ts:1630
-justifications.bounding_boxes                            jsonb            null                    entities.ts:1631
-justifications.file_field_ids                            safeUuid         array,default,not null  entities.ts:1632
+justifications.{...entityFeatureGateColumns()}           spread                                   entities.ts:1628
+justifications.{...entityFeatureWorkspaceGateColumns()}  spread                                   entities.ts:1629
+justifications.id                                        pUuid            pk,not null             entities.ts:1630
+justifications.workspace_id                              safeWorkspaceId  not null                entities.ts:1631
+justifications.field_id                                  safeUuid         not null                entities.ts:1632
+justifications.content                                   jsonb            not null                entities.ts:1633
+justifications.bounding_boxes                            jsonb            null                    entities.ts:1634
+justifications.file_field_ids                            safeUuid         array,default,not null  entities.ts:1635
 ```
