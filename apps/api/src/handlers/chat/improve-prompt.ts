@@ -96,6 +96,7 @@ const improvePrompt = createSafeRootHandler(
             body.strategy,
           );
           return await generateTanStackTextForTask({
+            userId: user.id,
             dataClass: "customer",
             abortSignal: actionSignal ?? request.signal,
             deadlineMs: IMPROVE_PROMPT_TIMEOUT_MS,

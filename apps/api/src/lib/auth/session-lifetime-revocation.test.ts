@@ -36,8 +36,10 @@ const createFixture = async (cacheEnabled: boolean) => {
   const aliases = new Map<string, { sessionId: string; expiresAt: number }>();
   let clock = new Date();
   let transactionActive = false;
+  let observationCount = 0;
   const store = {
     observe: async ({ token, now }) => {
+      observationCount += 1;
       if (transactionActive) {
         panic(
           "Root session observation must not run inside an auth transaction",
@@ -157,6 +159,7 @@ const createFixture = async (cacheEnabled: boolean) => {
     );
   return {
     auth,
+    observationCount: () => observationCount,
     context,
     database,
     caller,
@@ -320,4 +323,14 @@ describe("session revocation through HTTP", () => {
       ),
     ).toBe(true);
   });
+});
+
+test("ordinary cookie snapshots keep their stored-session read budget", async () => {
+  const fixture = await createFixture(true);
+  const before = fixture.observationCount();
+  const resolved = await fixture.auth.api.getSession({
+    headers: { cookie: fixture.cookie },
+  });
+  expect(resolved?.session.id).toBe(fixture.caller.id);
+  expect(fixture.observationCount()).toBe(before);
 });
