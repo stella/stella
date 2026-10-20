@@ -13,8 +13,18 @@ export type PersistedJsonValue =
   | PersistedJsonValue[]
   | string;
 
-type PersistedJsonObject = {
+export type PersistedJsonObject = {
   readonly [key: string]: PersistedJsonValue;
+};
+
+/**
+ * Provider artefacts a writer stored beside a tool call (for example
+ * reasoning details or a thought signature), kept exactly as stored. Whether
+ * any of them is replayed on a continued turn is the runtime's decision.
+ */
+export type PersistedToolProviderMetadata = {
+  call?: PersistedJsonObject | undefined;
+  result?: PersistedJsonObject | undefined;
 };
 
 type PersistedToolCallMetadata = PersistedJsonObject & {
@@ -68,6 +78,7 @@ export type PersistedToolCallPart = {
   metadata: PersistedToolCallMetadata;
   name: string;
   output?: ParsedToolOutput | undefined;
+  providerMetadata?: PersistedToolProviderMetadata | undefined;
   state: ToolCallState;
   type: "tool-call";
 };
@@ -145,6 +156,22 @@ const isPersistedJsonValueAt = (
 export const isPersistedJsonValue = (
   value: unknown,
 ): value is PersistedJsonValue => isPersistedJsonValueAt(value, new WeakSet());
+
+export const isPersistedJsonObject = (
+  value: unknown,
+): value is PersistedJsonObject =>
+  isPersistedJsonValue(value) &&
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value);
+
+export const isPersistedToolProviderMetadata = (
+  value: unknown,
+): value is PersistedToolProviderMetadata =>
+  isPersistedJsonObject(value) &&
+  Object.keys(value).every((key) => key === "call" || key === "result") &&
+  (value["call"] === undefined || isPersistedJsonObject(value["call"])) &&
+  (value["result"] === undefined || isPersistedJsonObject(value["result"]));
 
 const isParsedToolInput = (input: {
   status: "parsed";

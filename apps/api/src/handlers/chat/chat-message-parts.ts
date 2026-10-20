@@ -43,7 +43,9 @@ import type {
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  isPersistedJsonObject,
   isPersistedJsonValue,
+  isPersistedToolProviderMetadata,
   proveParsedToolInput,
   proveParsedToolOutput,
   provePersistedChatMessageContentV3,
@@ -266,6 +268,9 @@ const persistedV3PartToChatPart = ({
       ...(part.metadata === undefined ? {} : { metadata: part.metadata }),
       name: part.name,
       ...(part.output === undefined ? {} : { output }),
+      ...(part.providerMetadata === undefined
+        ? {}
+        : { providerMetadata: part.providerMetadata }),
       state: part.state,
       type: "tool-call",
     };
@@ -956,12 +961,16 @@ const CHAT_PART_VALIDATORS = {
   thinking: (part) =>
     typeof part["content"] === "string" &&
     (part["provenance"] === undefined ||
-      isReasoningProvenance(part["provenance"])),
+      isReasoningProvenance(part["provenance"])) &&
+    (part["providerMetadata"] === undefined ||
+      isPersistedJsonObject(part["providerMetadata"])),
   "tool-call": (part) =>
     typeof part["id"] === "string" &&
     typeof part["name"] === "string" &&
     typeof part["arguments"] === "string" &&
-    isTanStackToolCallState(part["state"]),
+    isTanStackToolCallState(part["state"]) &&
+    (part["providerMetadata"] === undefined ||
+      isPersistedToolProviderMetadata(part["providerMetadata"])),
   "tool-result": (part) =>
     typeof part["toolCallId"] === "string" &&
     isTanStackToolResultContent(part["content"]) &&
@@ -1303,6 +1312,9 @@ const chatPartToPersistedV3Part = ({
       ...(part.output === undefined
         ? {}
         : { output: proveParsedToolOutput(part.output) }),
+      ...(part.providerMetadata === undefined
+        ? {}
+        : { providerMetadata: part.providerMetadata }),
       state: part.state,
       type: "tool-call",
     };
