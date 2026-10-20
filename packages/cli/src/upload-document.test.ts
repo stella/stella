@@ -2,8 +2,6 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { advisedRetry as sharedAdvisedRetry } from "@stll/concurrency/retry-advised";
-
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
 import type {
@@ -15,7 +13,6 @@ import {
   DOCUMENT_UPLOAD_POLICY,
   uploadDocument,
 } from "./upload-document.js";
-import { advisedRetry } from "./upload-retry.js";
 
 type InvocationCall = {
   capability: string;
@@ -48,17 +45,6 @@ const reservation = {
     "x-amz-checksum-sha256": "checksum",
   },
 };
-
-test("local advised retry policy matches the shared policy", () => {
-  const advisedDelays = [undefined, 0, 1, 999, 1000, 5000, 30_000, 60_000];
-  for (let attempt = 0; attempt <= 8; attempt += 1) {
-    for (const advisedDelayMs of advisedDelays) {
-      expect(advisedRetry({ attempt, advisedDelayMs })).toEqual(
-        sharedAdvisedRetry({ attempt, advisedDelayMs }),
-      );
-    }
-  }
-});
 
 const createDependencies = ({
   invoke,

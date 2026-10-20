@@ -21,7 +21,7 @@ import type { CallToolResult, McpClientError } from "./mcp-client.js";
 import { callTool } from "./mcp-client.js";
 import { parsePayload } from "./run-leaf-command.js";
 import { sha256Hex as hashSha256Hex } from "./sha256.js";
-import { advisedRetry, sleep } from "./upload-retry.js";
+import { sleep, uploadRetryDecision } from "./upload-retry.js";
 
 const LIST_PROPERTIES_CAPABILITY = "properties.list";
 const UPLOAD_CAPABILITIES = {
@@ -509,7 +509,7 @@ export const uploadDocument = async ({
     if (!isRecord(envelope) || envelope["retryable"] !== true) {
       break;
     }
-    const decision = advisedRetry({
+    const decision = uploadRetryDecision({
       attempt,
       advisedDelayMs:
         typeof envelope["retryAfterMs"] === "number"
