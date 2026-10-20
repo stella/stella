@@ -6,6 +6,7 @@ use std::sync::{Arc, OnceLock};
 use tauri::{Emitter, State, WebviewWindow};
 use tokio::sync::Mutex;
 
+use crate::logging::with_cause_logged;
 use crate::types::{
   DesktopAccountCredential, DesktopAccountIdentity, DesktopAccountSnapshot,
   LinkAccountRequest, LinkedAccountSnapshot, is_valid_linked_account,
@@ -107,6 +108,30 @@ fn credential_fingerprint(key: &str) -> [u8; 32] {
   fingerprint
 }
 
+/// Account JSON can hold credentials, which serde repeats in its messages:
+/// only the error's category and position reach the log.
+fn json_error(message: &'static str) -> impl FnOnce(serde_json::Error) -> String {
+  move |error| {
+    tracing::warn!(
+      category = ?error.classify(),
+      line = error.line(),
+      column = error.column(),
+      "{message}"
+    );
+    message.to_string()
+  }
+}
+
+/// A rejected account whose saved link could not be removed: its key is never
+/// presented again, and the windows get the code they recognize.
+fn rejected_but_kept(key: &str) -> impl FnOnce(String) -> String + '_ {
+  move |cause| {
+    tracing::warn!(cause = %cause, "rejected account could not be cleared");
+    mark_rejected(key);
+    keychain_clear_failed()
+  }
+}
+
 fn mark_rejected(key: &str) {
   let fingerprint = credential_fingerprint(key);
   let mut rejected = REJECTED_CREDENTIALS
@@ -204,8 +229,7 @@ impl PendingLinkedAccount {
       .cloned()
       .ok_or_else(|| "Invalid registry account".to_string())
       .and_then(|account| {
-        serde_json::from_value(account)
-          .map_err(|_| "Invalid registry account".to_string())
+        serde_json::from_value(account).map_err(json_error("Invalid registry account"))
       })?;
     if !is_valid_linked_account(&account) {
       return Err("Invalid registry account".into());
@@ -216,7 +240,7 @@ impl PendingLinkedAccount {
       .ok_or_else(|| "Invalid registry identity".to_string())
       .and_then(|identity| {
         serde_json::from_value(identity)
-          .map_err(|_| "Invalid registry identity".to_string())
+          .map_err(json_error("Invalid registry identity"))
       })?;
     if identity.user_id.trim().is_empty() || identity.organization_id.trim().is_empty()
     {
@@ -284,7 +308,7 @@ impl AccountStore {
           return Ok(None);
         };
         let mut account: LinkedAccount = serde_json::from_str(&value)
-          .map_err(|_| "Desktop account connection is unreadable")?;
+          .map_err(json_error("Desktop account connection is unreadable"))?;
         account.device_key = crate::device_proof::required().await?;
         Ok(Some(account))
       }
@@ -323,7 +347,7 @@ impl AccountStore {
     match self {
       Self::Keychain => {
         let value = serde_json::to_string(&account)
-          .map_err(|_| "Could not save desktop account")?;
+          .map_err(json_error("Could not save desktop account"))?;
         crate::keychain::store_account_connection(value).await?;
         crate::keychain::clear_account_expired().await
       }
@@ -374,7 +398,7 @@ impl AccountStore {
         .await?
         .map(|value| {
           serde_json::from_str(&value)
-            .map_err(|_| "Account rotation is unreadable".to_string())
+            .map_err(json_error("Account rotation is unreadable"))
         })
         .transpose(),
       #[cfg(test)]
@@ -398,7 +422,7 @@ impl AccountStore {
           pending
             .map(|value| {
               serde_json::to_string(&value)
-                .map_err(|_| "Could not stage account rotation".to_string())
+                .map_err(json_error("Could not stage account rotation"))
             })
             .transpose()?,
         )
@@ -526,8 +550,10 @@ impl RenewalTransport for HttpRenewal {
     )
     .await
     {
-      Ok(value) => serde_json::from_value(value).map_err(|_| {
-        RenewalFailure::Unavailable("Account renewal response is invalid".into())
+      Ok(value) => serde_json::from_value(value).map_err(|error| {
+        RenewalFailure::Unavailable(json_error("Account renewal response is invalid")(
+          error,
+        ))
       }),
       Err(message) if message == crate::registry::not_connected() => {
         Err(RenewalFailure::Rejected)
@@ -619,10 +645,10 @@ async fn recover_rotation(
             Err(RenewalFailure::Unavailable(message)) => Err(message),
             Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
             Err(RenewalFailure::Rejected) => {
-              store.clear().await.map_err(|_| {
-                mark_rejected(&account.credential.key);
-                keychain_clear_failed()
-              })?;
+              store
+                .clear()
+                .await
+                .map_err(rejected_but_kept(&account.credential.key))?;
               Err(crate::registry::not_connected())
             }
           },
@@ -640,10 +666,10 @@ async fn recover_rotation(
           Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
           Err(RenewalFailure::Rejected) => {
             if is_live_expiry(&account.credential.expires_at) {
-              store.clear().await.map_err(|_| {
-                mark_rejected(&account.credential.key);
-                keychain_clear_failed()
-              })?;
+              store
+                .clear()
+                .await
+                .map_err(rejected_but_kept(&account.credential.key))?;
             } else {
               store.expire().await?;
             }
@@ -672,10 +698,10 @@ async fn rotate_account(
       Ok(account)
     }
     Err(RenewalFailure::Rejected) => {
-      store.clear().await.map_err(|_| {
-        mark_rejected(&account.credential.key);
-        keychain_clear_failed()
-      })?;
+      store
+        .clear()
+        .await
+        .map_err(rejected_but_kept(&account.credential.key))?;
       Err(crate::registry::not_connected())
     }
   }
@@ -885,11 +911,12 @@ pub async fn invalidate(
     .await?
     .is_some_and(|current| current.credential.key == account.credential.key)
   {
-    store.clear().await.map_err(|_| {
+    store.clear().await.map_err(|cause| {
       tracing::warn!(
         target: crate::logging::TRAIL_TARGET,
         event = "account.keychain_clear_failed",
-        code = "invalidate"
+        code = "invalidate",
+        cause = %cause
       );
       keychain_clear_failed()
     })?;
@@ -1001,7 +1028,7 @@ pub async fn account_disconnect(
   drop(store);
   *BROWSER_CONNECTION
     .lock()
-    .map_err(|_| "Desktop connection is unavailable")? = None;
+    .map_err(with_cause_logged("Desktop connection is unavailable"))? = None;
   notify(&app);
   Ok(())
 }
@@ -1060,7 +1087,7 @@ fn random_secret() -> Result<String, String> {
   let mut bytes = [0_u8; 32];
   ring::rand::SystemRandom::new()
     .fill(&mut bytes)
-    .map_err(|_| "Could not start desktop connection".to_string())?;
+    .map_err(with_cause_logged("Could not start desktop connection"))?;
   Ok(hex::encode(bytes))
 }
 
@@ -1077,7 +1104,7 @@ fn new_browser_connection_with_key(
   let correlation_id = uuid::Uuid::new_v4().to_string();
   let verifier_hash = hex::encode(Sha256::digest(verifier.as_bytes()));
   let mut url = reqwest::Url::parse(&format!("{web_origin}/settings/account/desktop"))
-    .map_err(|_| "Could not start desktop connection".to_string())?;
+    .map_err(with_cause_logged("Could not start desktop connection"))?;
   let protocol = policy().link_protocol.to_string();
   let device_jkt = device_key.thumbprint()?;
   let params = reqwest::Url::parse_with_params(
@@ -1090,7 +1117,7 @@ fn new_browser_connection_with_key(
       ("deviceJkt", device_jkt.as_str()),
     ],
   )
-  .map_err(|_| "Could not start desktop connection".to_string())?;
+  .map_err(with_cause_logged("Could not start desktop connection"))?;
   url.set_fragment(Some(&format!(
     "desktop-account?{}",
     params.query().unwrap_or_default()
@@ -1171,7 +1198,7 @@ impl PreparedBrowserConnection {
     use tauri_plugin_opener::OpenerExt;
     let mut pending = BROWSER_CONNECTION
       .lock()
-      .map_err(|_| "Desktop connection is unavailable")?;
+      .map_err(with_cause_logged("Desktop connection is unavailable"))?;
     match reserve_browser_connection(
       &mut pending,
       self.connection,
@@ -1187,7 +1214,8 @@ impl PreparedBrowserConnection {
         app
           .opener()
           .open_url(url, None::<&str>)
-          .map_err(|_| "Could not open desktop connection")?;
+          // The opener's message can repeat the URL, which carries the port secret.
+          .map_err(|_url_bearing| "Could not open desktop connection")?;
         return Ok(ConnectionStart::Resumed);
       }
       outcome @ (ConnectionStart::SameOriginPending
@@ -1380,7 +1408,7 @@ pub async fn signed_browser_connection_status(
   let status = browser_connection_status(state, correlation_id).await;
   let pending = BROWSER_CONNECTION
     .lock()
-    .map_err(|_| "Desktop connection is unavailable")?;
+    .map_err(with_cause_logged("Desktop connection is unavailable"))?;
   let connection = pending
     .as_ref()
     .ok_or("Desktop connection is unavailable")?;
@@ -1478,7 +1506,7 @@ pub async fn complete_browser_connection(
   let pending = {
     let mut connection = BROWSER_CONNECTION
       .lock()
-      .map_err(|_| "Desktop connection is unavailable")?;
+      .map_err(with_cause_logged("Desktop connection is unavailable"))?;
     connection
       .as_mut()
       .ok_or("Desktop connection is unavailable")?
@@ -1529,7 +1557,7 @@ async fn redeem_browser_connection(
       redirect: reqwest::redirect::Policy::none(),
       timeout: None,
     })
-    .map_err(|_| "Desktop connection is unavailable")?;
+    .map_err(with_cause_logged("Desktop connection is unavailable"))?;
   let device_jkt = device_key.thumbprint()?;
   let redeem_request = redemption_request(RedeemRequestOptions {
     client: &client,
@@ -1549,7 +1577,7 @@ async fn redeem_browser_connection(
   let response = redeem_request
     .send()
     .await
-    .map_err(|_| "Desktop connection is unavailable")?;
+    .map_err(with_cause_logged("Desktop connection is unavailable"))?;
   drop(verifier);
   if response.status() == reqwest::StatusCode::UPGRADE_REQUIRED {
     return Err("Update stella desktop".into());
@@ -1560,7 +1588,7 @@ async fn redeem_browser_connection(
   let redeemed = response
     .json::<RedeemedLink>()
     .await
-    .map_err(|_| "Desktop connection is unavailable")?;
+    .map_err(with_cause_logged("Desktop connection is unavailable"))?;
   let request = match redeemed {
     RedeemedLink::Connected { identity } => {
       let Some(current) = current(&state).await? else {
