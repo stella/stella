@@ -1569,7 +1569,6 @@
         "$TURBO_ROOT$/docker-compose.yml",
         "$TURBO_ROOT$/docker/postgres/**",
         "$TURBO_ROOT$/.github/workflows/**",
-        "$TURBO_ROOT$/.github/ci-job-classification.json",
         "$TURBO_ROOT$/.github/ci-job-classification-decisions.json",
         "$TURBO_ROOT$/.github/ci-job-classification-sources.json",
         "$TURBO_ROOT$/.github/actions/**",
