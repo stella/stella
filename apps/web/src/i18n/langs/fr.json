@@ -1009,6 +1009,9 @@
       "saved": "{count, plural, one {# décision enregistrée} other {# décisions enregistrées}} dans {matter}"
     },
     "newestDecisions": "Décisions les plus récentes",
+    "noResults": {
+      "hint": "Essayez d'autres mots, améliorez la requête avec l'IA ou posez la question dans la conversation."
+    },
     "notesFilter": {
       "ai": "IA",
       "human": "Humaines"
@@ -1081,6 +1084,10 @@
         "medium": "Moyen",
         "short": "Court"
       }
+    },
+    "rewritten": {
+      "line": "Aucune correspondance exacte pour <bdi>{original}</bdi> ; résultats pour <bdi>{query}</bdi>",
+      "searchOriginal": "Rechercher mes mots d'origine"
     },
     "sameCaseNumber": "{count, plural, one {# décision porte} other {# décisions portent}} ce numéro d'affaire. Choisissez la juridiction.",
     "searchLabel": "Rechercher dans la jurisprudence",
@@ -4262,6 +4269,10 @@
     "archivedEmpty": "Aucune mémoire archivée.",
     "archivedToast": "Mémoire archivée",
     "createdToast": "Enregistré dans la mémoire",
+    "deleteConfirmation": "Saisissez {confirmation} pour confirmer",
+    "deleteDescription": "Cette mémoire sera supprimée définitivement. Cette action est irréversible.",
+    "deleteTitle": "Supprimer la mémoire ?",
+    "deletedToast": "Mémoire supprimée",
     "empty": "Encore rien en mémoire.",
     "kinds": {
       "decision": "Décision",

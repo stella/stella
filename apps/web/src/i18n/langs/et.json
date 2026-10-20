@@ -1009,6 +1009,9 @@
       "saved": "{count, plural, one {# lahend} other {# lahendit}} salvestatud toimikusse {matter}"
     },
     "newestDecisions": "Uusimad lahendid",
+    "noResults": {
+      "hint": "Proovige teisi sõnu, parandage päringut tehisintellektiga või esitage küsimus vestluses."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Inimeste"
@@ -1081,6 +1084,10 @@
         "medium": "Keskmine",
         "short": "Lühike"
       }
+    },
+    "rewritten": {
+      "line": "Päringule <bdi>{original}</bdi> täpseid vasteid pole; kuvatakse tulemused päringule <bdi>{query}</bdi>",
+      "searchOriginal": "Otsi minu algseid sõnu"
     },
     "sameCaseNumber": "{count, plural, one {# lahend kannab} other {# lahendit kannavad}} seda kohtuasja numbrit. Valige kohus.",
     "searchLabel": "Otsi kohtupraktikast",
@@ -4262,6 +4269,10 @@
     "archivedEmpty": "Arhiveeritud mälu puudub.",
     "archivedToast": "Mälu arhiveeritud",
     "createdToast": "Mällu salvestatud",
+    "deleteConfirmation": "Kinnitamiseks sisestage {confirmation}",
+    "deleteDescription": "See kustutab selle mälu jäädavalt. Seda toimingut ei saa tagasi võtta.",
+    "deleteTitle": "Kas kustutada mälu?",
+    "deletedToast": "Mälu kustutatud",
     "empty": "Mälus pole veel midagi.",
     "kinds": {
       "decision": "Otsus",

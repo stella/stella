@@ -34,6 +34,7 @@ import {
   installPgliteReaderAnswerRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
+  installPgliteAiMemoryActiveUserGuard,
   installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteServiceClientCredentialCascade,
@@ -807,6 +808,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await installPgliteCorrespondenceSources(tx);
   });
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteServiceClientCredentialCascade(db);

@@ -146,6 +146,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "mcp_connector_authorization_reviews.approved_endpoint_origins",
   "mcp_connectors.oauth_confirmed_endpoint_origins",
   "mcp_oauth_clients.registration_response",
+  "mcp_oauth_state.authorization_response_binding",
   "mcp_user_connections.cached_tools",
   "notifications.metadata",
   "organization_settings.data_box_ids",
@@ -507,6 +508,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped connection; the person stays an organization member.",
   "sharepoint_oauth_state.user_id":
     "Organization-scoped connection; the person stays an organization member.",
+  "chat_tool_grants.user_id":
+    "The person's own organization-scoped tool approvals; every tool call still checks matter access.",
   "invitation.inviter_id":
     "Organization invitation; the person stays an organization member.",
   "session.user_id":
