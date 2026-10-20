@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -279,6 +279,7 @@ export const ConnectConnectorCard = ({
   const [heldReceipt, setHeldReceipt] = useState<ConnectConnectorOutput>();
   const [hasContinuationError, setHasContinuationError] = useState(false);
   const [isContinuing, setIsContinuing] = useState(false);
+  const hasAnswered = useRef(false);
   const input = part.state === "input-streaming" ? null : part.input;
   const output = part.state === "complete" ? part.output : undefined;
   const shownOutput = output ?? heldReceipt;
@@ -299,16 +300,22 @@ export const ConnectConnectorCard = ({
 
   // The server decides: `connected` is confirmed against the stored
   // connection, and refused while there is none.
-  const submit = async (decision: ConnectConnectorDecision) => {
-    if (!isPending || heldReceipt !== undefined) {
+  const submit = async (
+    decision: ConnectConnectorDecision,
+    beforeSubmit?: () => Promise<void>,
+  ) => {
+    if (!isPending || heldReceipt !== undefined || hasAnswered.current) {
       return;
     }
+    hasAnswered.current = true;
+    await beforeSubmit?.();
     setPhase({ type: "confirming" });
     const result = await Result.tryPromise({
       try: async () => await handleConnectConnector(part.id, decision),
       catch: (error: unknown) => error,
     });
     if (Result.isError(result)) {
+      hasAnswered.current = false;
       setPhase({
         type: "failed",
         reason:
@@ -324,10 +331,11 @@ export const ConnectConnectorCard = ({
   };
 
   const confirmConnected = async () => {
-    await queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.mcp.all(activeOrganizationId),
+    await submit("connected", async () => {
+      await queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.mcp.all(activeOrganizationId),
+      });
     });
-    await submit("connected");
   };
 
   const startConnect = async () => {

@@ -45,6 +45,7 @@ const catalog = {
 } satisfies McpConnectorsResponse;
 
 const requests: { method: string; url: string }[] = [];
+let catalogResponse: Promise<Response> | undefined;
 const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(
   async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -57,7 +58,7 @@ globalThis.fetch = Object.assign(
         Response.json({ type: "oauth2", authorizeUrl }),
       );
     }
-    return await Promise.resolve(Response.json(catalog));
+    return await (catalogResponse ?? Promise.resolve(Response.json(catalog)));
   },
   { preconnect: () => undefined },
 );
@@ -148,6 +149,7 @@ const text = (template: string, values: Record<string, string>) =>
 afterEach(async () => {
   requests.length = 0;
   opened.length = 0;
+  catalogResponse = undefined;
   await act(async () => cleanup());
 });
 
@@ -261,6 +263,45 @@ describe("connect connector card", () => {
     await act(async () => broadcastMcpOAuthOutcome({ status: "connected" }));
     await waitFor(() => expect(continuations).toEqual([connected]));
     expect(decisions).toEqual(["connected"]);
+    queryClient.clear();
+  });
+
+  test("the first answer wins while connection confirmation refreshes", async () => {
+    const decisions: ConnectConnectorDecision[] = [];
+    const connected = { status: "connected", connectorSlug } as const;
+    const continuations: ConnectConnectorOutput[] = [];
+    const { queryClient } = mountCard({
+      handleConnectConnector: async (_toolCallId, decision) => {
+        decisions.push(decision);
+        return await Promise.resolve(connected);
+      },
+      continueConnectConnector: async (_toolCallId, receipt) => {
+        continuations.push(receipt);
+        await Promise.resolve();
+      },
+    });
+
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: messages.common.connect }),
+      ),
+    );
+    await screen.findByText(messages.chat.connectConnector.waiting);
+
+    const invalidation = Promise.withResolvers<Response>();
+    catalogResponse = invalidation.promise;
+    await act(async () => broadcastMcpOAuthOutcome({ status: "connected" }));
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: messages.common.notNow }),
+      ),
+    );
+    expect(decisions).toEqual([]);
+
+    invalidation.resolve(Response.json(catalog));
+    await waitFor(() => expect(continuations).toEqual([connected]));
+    expect(decisions).toEqual(["connected"]);
+    expect(continuations).toEqual([connected]);
     queryClient.clear();
   });
 
