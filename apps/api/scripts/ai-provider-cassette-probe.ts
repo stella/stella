@@ -55,7 +55,7 @@ const run = async () => {
   } as const;
   const output = await generateTanStackTextForTask({
     dataClass: "public_corpus",
-    abortSignal: AbortSignal.timeout(30_000),
+    deadlineMs: 30_000,
     caching: { enabled: false, reason: "org-disabled" },
     finishPolicy: "require-complete",
     maxOutputTokens: 32,

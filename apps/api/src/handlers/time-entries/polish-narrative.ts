@@ -124,10 +124,8 @@ const polishTimeEntryNarrative = createSafeHandler(
           await generateTanStackTextForTask({
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
-            abortSignal: AbortSignal.any([
-              request.signal,
-              AbortSignal.timeout(POLISH_TIMEOUT_MS),
-            ]),
+            abortSignal: request.signal,
+            deadlineMs: POLISH_TIMEOUT_MS,
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled,
