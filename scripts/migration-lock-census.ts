@@ -311,6 +311,13 @@ export const DDL_FORMS = {
     lockMode: "NO EXISTING RELATION",
     pattern: /^ALTER TEXT SEARCH CONFIGURATION\b/u,
   },
+  // The command text may contain any DDL, so unresolved dynamic SQL assumes
+  // the strongest relation lock until the migration records a typed decision.
+  "unresolved-execute": {
+    scope: "statement",
+    lockMode: "ACCESS EXCLUSIVE",
+    pattern: /\b\B/u,
+  },
 } as const satisfies Record<string, DdlFormDefinition>;
 
 export type DdlForm = keyof typeof DDL_FORMS;
@@ -411,7 +418,7 @@ const onRelationKey = (tokens: StatementTokens): string | undefined => {
   return readMigrationRelation(tokens, start)?.relation.key;
 };
 
-export const censusSql = (source: string) => {
+const censusSqlSource = (source: string, topLevel: boolean) => {
   const forms: CensusForm[] = [];
   const errors: string[] = [];
   const createdRelations = new Set<string>();
@@ -513,24 +520,42 @@ export const censusSql = (source: string) => {
           target: onRelationKey(sqlTokens),
         });
         const created = createdRelationKey(sqlTokens);
-        if (created !== undefined) {
+        if (
+          topLevel &&
+          statement.enclosingLine === undefined &&
+          start === 0 &&
+          created !== undefined
+        ) {
           createdRelations.add(created);
         }
       }
     }
-    // SQL passed to EXECUTE/format is executable, unlike ordinary string data.
-    if (/\bEXECUTE\b/iu.test(statement.text)) {
-      for (const literal of statement.literals) {
-        if (
-          !/^\s*(?:CREATE|ALTER|DROP|REINDEX|ANALYZE|COMMENT|TRUNCATE|LOCK|VACUUM|CLUSTER|REFRESH|SECURITY|IMPORT|REASSIGN)\b/iu.test(
-            literal.value,
-          )
-        ) {
-          continue;
-        }
-        const nested = censusSql(
-          literal.value.replace(/%(?:\d+\$)?[ILs]/gu, '"dynamic_identifier"'),
-        );
+    // Only one literal can prove the complete command text. Expressions such
+    // as format(), concatenation, and variables can construct arbitrary DDL.
+    const executeTokens = tokens.filter(
+      (token) => token.kind === "word" && token.value === "execute",
+    );
+    for (const [position, execute] of executeTokens.entries()) {
+      const end = executeTokens[position + 1]?.index ?? statement.text.length;
+      const literals = statement.literals.filter(
+        (literal) => literal.index > execute.index && literal.index < end,
+      );
+      const literal = literals.at(0);
+      const before = literal
+        ? statement.text
+            .slice(execute.index + execute.value.length, literal.index)
+            .trim()
+        : "";
+      const after = literal
+        ? statement.text.slice(literal.end, end).trim()
+        : "";
+      if (
+        literal &&
+        literals.length === 1 &&
+        (before === "" || before.toLowerCase() === "e") &&
+        /^(?:INTO|USING|$)/iu.test(after)
+      ) {
+        const nested = censusSqlSource(literal.value, false);
         forms.push(
           ...nested.forms.map((form) => ({
             ...form,
@@ -543,11 +568,22 @@ export const censusSql = (source: string) => {
             (error) => `line ${statement.line}: dynamic SQL: ${error}`,
           ),
         );
+        continue;
       }
+      forms.push({
+        form: "unresolved-execute",
+        lockMode: "ACCESS EXCLUSIVE",
+        line: statement.line,
+        statementIndex,
+        sql: "EXECUTE unresolved_dynamic_sql",
+        newRelation: false,
+      });
     }
   }
   return { forms, errors };
 };
+
+export const censusSql = (source: string) => censusSqlSource(source, true);
 
 export type MigrationLockAllowance = {
   migration: string;

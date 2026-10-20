@@ -3,7 +3,7 @@
 import type { LockBaselineEntry } from "./migration-lock-census";
 
 export const MIGRATION_LOCK_BASELINE = {
-  revision: "9d003bcce33b90a27bc3b97c51acc2e539c07c82",
+  revision: "d7550888503168809fb11147443cae0e798bcd93",
   entries: [
     {
       migration: "20260429152450_entity-version-ai-summaries",
@@ -356,6 +356,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 21,
     },
     {
+      migration: "20260510140000_document_rls_role_bootstrap",
+      form: "unresolved-execute",
+      count: 3,
+    },
+    {
       migration: "20260512090000_user-managed-skills",
       form: "add-foreign-key",
       count: 4,
@@ -486,6 +491,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20260516000000_case_law_ingestion_role",
+      form: "unresolved-execute",
+      count: 2,
+    },
+    {
       migration: "20260516120000_chat-thread-list-pagination",
       form: "create-index",
       count: 1,
@@ -528,6 +538,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20260522100000_entity_hot_path_indexes",
       form: "create-trigger",
+      count: 2,
+    },
+    {
+      migration: "20260522100000_entity_hot_path_indexes",
+      form: "unresolved-execute",
       count: 2,
     },
     {
@@ -1143,12 +1158,17 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20260710173000_scalable_workspace_authorization",
       form: "alter-policy",
-      count: 10,
+      count: 4,
     },
     {
       migration: "20260710173000_scalable_workspace_authorization",
       form: "replace-view",
       count: 1,
+    },
+    {
+      migration: "20260710173000_scalable_workspace_authorization",
+      form: "unresolved-execute",
+      count: 6,
     },
     {
       migration: "20260714120000_style_sets",
@@ -1493,6 +1513,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20260729140000_search_preview_passages",
       form: "row-level-security",
+      count: 5,
+    },
+    {
+      migration: "20260729140000_search_preview_passages",
+      form: "unresolved-execute",
       count: 5,
     },
     {
@@ -1851,6 +1876,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 4,
     },
     {
+      migration: "20260731170000_case_law_corpus_generation_backfill",
+      form: "unresolved-execute",
+      count: 4,
+    },
+    {
       migration: "20260731180000_case_law_source_observation_order",
       form: "add-column",
       count: 4,
@@ -1868,6 +1898,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20260731190000_case_law_observation_legacy_fence",
       form: "drop-trigger",
+      count: 1,
+    },
+    {
+      migration: "20260731190000_case_law_observation_legacy_fence",
+      form: "unresolved-execute",
       count: 1,
     },
     {
@@ -1893,6 +1928,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20260731200000_case_law_ingestion_retry_state",
       form: "drop-trigger",
+      count: 2,
+    },
+    {
+      migration: "20260731200000_case_law_ingestion_retry_state",
+      form: "unresolved-execute",
       count: 2,
     },
     {
@@ -1939,6 +1979,11 @@ export const MIGRATION_LOCK_BASELINE = {
       migration: "20260731220000_case_law_redaction_fence",
       form: "row-level-security",
       count: 1,
+    },
+    {
+      migration: "20260731220000_case_law_redaction_fence",
+      form: "unresolved-execute",
+      count: 2,
     },
     {
       migration: "20260801100000_desktop_edit_live_entity_index",
@@ -1988,6 +2033,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20260801130000_case_law_redaction_projection_fence",
       form: "drop-trigger",
+      count: 1,
+    },
+    {
+      migration: "20260801130000_case_law_redaction_projection_fence",
+      form: "unresolved-execute",
       count: 1,
     },
     {
@@ -2073,6 +2123,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20260803120000_chat_thread_turn_workspace_cascade",
       form: "drop-trigger",
+      count: 1,
+    },
+    {
+      migration: "20260803120000_chat_thread_turn_workspace_cascade",
+      form: "unresolved-execute",
       count: 1,
     },
     {
@@ -2226,6 +2281,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20260808005000_ai_memory",
+      form: "unresolved-execute",
+      count: 2,
+    },
+    {
       migration: "20260808006000_ai_memory_extractor_index",
       form: "create-index-concurrently",
       count: 2,
@@ -2286,6 +2346,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20260808012000_ai_memory_source_cleanup",
+      form: "unresolved-execute",
+      count: 1,
+    },
+    {
       migration: "20260808013000_list_item_types",
       form: "add-column",
       count: 1,
@@ -2313,7 +2378,7 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20260808014000_legal_lists",
       form: "create-policy",
-      count: 11,
+      count: 7,
     },
     {
       migration: "20260808014000_legal_lists",
@@ -2332,8 +2397,8 @@ export const MIGRATION_LOCK_BASELINE = {
     },
     {
       migration: "20260808014000_legal_lists",
-      form: "row-level-security",
-      count: 1,
+      form: "unresolved-execute",
+      count: 6,
     },
     {
       migration: "20260808120000_case_law_source_identities",
@@ -3009,6 +3074,11 @@ export const MIGRATION_LOCK_BASELINE = {
     },
     {
       migration: "20260817150000_corpus_generation_date_walk",
+      form: "unresolved-execute",
+      count: 1,
+    },
+    {
+      migration: "20260817150000_corpus_generation_date_walk",
       form: "validate-constraint",
       count: 1,
     },
@@ -3408,6 +3478,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 2,
     },
     {
+      migration: "20260823020000_case_law_corpus_index_counts",
+      form: "unresolved-execute",
+      count: 5,
+    },
+    {
       migration: "20260823190000_public_law_reader_role",
       form: "create-policy",
       count: 7,
@@ -3573,6 +3648,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20260825120000_case_law_corpus_jurisdictions",
+      form: "unresolved-execute",
+      count: 2,
+    },
+    {
       migration: "20260825130000_case_law_citation_court_hint",
       form: "add-column",
       count: 1,
@@ -3605,6 +3685,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20260825135100_document_review_rolling_basis_bridge",
       form: "create-trigger",
+      count: 1,
+    },
+    {
+      migration: "20260825135100_document_review_rolling_basis_bridge",
+      form: "unresolved-execute",
       count: 1,
     },
     {
@@ -3660,6 +3745,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20260825137100_corpus_index_generations",
       form: "row-level-security",
+      count: 1,
+    },
+    {
+      migration: "20260825137100_corpus_index_generations",
+      form: "unresolved-execute",
       count: 1,
     },
     {
@@ -3741,6 +3831,11 @@ export const MIGRATION_LOCK_BASELINE = {
       migration: "20260825142000_corpus_index_projection_intents",
       form: "row-level-security",
       count: 2,
+    },
+    {
+      migration: "20260825142000_corpus_index_projection_intents",
+      form: "unresolved-execute",
+      count: 8,
     },
     {
       migration: "20260825211300_corpus_projection_delete_guard_record",
@@ -3838,6 +3933,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20260826003700_corpus_projection_work_schedule",
+      form: "unresolved-execute",
+      count: 2,
+    },
+    {
       migration: "20260826003800_corpus_projection_work_schedule_validate",
       form: "validate-constraint",
       count: 5,
@@ -3893,6 +3993,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 6,
     },
     {
+      migration: "20260826004100_corpus_projection_revision_fence",
+      form: "unresolved-execute",
+      count: 6,
+    },
+    {
       migration: "20260826004110_corpus_projection_revision_validate",
       form: "validate-constraint",
       count: 1,
@@ -3931,6 +4036,11 @@ export const MIGRATION_LOCK_BASELINE = {
       migration: "20260827080000_agent_skill_revisions",
       form: "row-level-security",
       count: 3,
+    },
+    {
+      migration: "20260827080000_agent_skill_revisions",
+      form: "unresolved-execute",
+      count: 2,
     },
     {
       migration: "20260827120000_docx_suggestion_source_matters",
@@ -4435,6 +4545,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20260901060000_concurrent_corpus_projection_revision_fence",
+      form: "unresolved-execute",
+      count: 4,
+    },
+    {
       migration: "20260901070000_final_corpus_projection_rebuild",
       form: "create-function",
       count: 2,
@@ -4532,6 +4647,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20260902123000_properties_kinds_convergence",
       form: "create-trigger",
+      count: 1,
+    },
+    {
+      migration: "20260902123000_properties_kinds_convergence",
+      form: "unresolved-execute",
       count: 1,
     },
     {
@@ -4883,6 +5003,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 3,
     },
     {
+      migration: "20260911150000_statute_citation_counts",
+      form: "unresolved-execute",
+      count: 6,
+    },
+    {
       migration: "20260912160000_case_law_decisions_country_updated_idx",
       form: "create-index-concurrently",
       count: 1,
@@ -5142,6 +5267,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20260916110000_published_statute_citation_counts",
       form: "drop-trigger",
+      count: 1,
+    },
+    {
+      migration: "20260916110000_published_statute_citation_counts",
+      form: "unresolved-execute",
       count: 1,
     },
     {
@@ -5668,6 +5798,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 2,
     },
     {
+      migration: "20260926150000_legislation_payload_revision",
+      form: "unresolved-execute",
+      count: 5,
+    },
+    {
       migration: "20260926160000_case_law_provision_extraction_state",
       form: "add-column",
       count: 12,
@@ -5723,6 +5858,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 10,
     },
     {
+      migration: "20260926160000_case_law_provision_extraction_state",
+      form: "unresolved-execute",
+      count: 4,
+    },
+    {
       migration: "20260926170000_case_law_provision_backfill",
       form: "create-function",
       count: 2,
@@ -5746,6 +5886,11 @@ export const MIGRATION_LOCK_BASELINE = {
       migration: "20260926170000_case_law_provision_backfill",
       form: "row-level-security",
       count: 4,
+    },
+    {
+      migration: "20260926170000_case_law_provision_backfill",
+      form: "unresolved-execute",
+      count: 1,
     },
     {
       migration: "20260926190000_chat_turn_cancel_requested_at",
@@ -6264,6 +6409,11 @@ export const MIGRATION_LOCK_BASELINE = {
     },
     {
       migration: "20261003120000_legislation_expression_identity",
+      form: "unresolved-execute",
+      count: 2,
+    },
+    {
+      migration: "20261003120000_legislation_expression_identity",
       form: "validate-constraint",
       count: 4,
     },
@@ -6285,6 +6435,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20261003120100_organization_member_capacity",
       form: "create-trigger",
+      count: 1,
+    },
+    {
+      migration: "20261003120100_organization_member_capacity",
+      form: "unresolved-execute",
       count: 1,
     },
     {
@@ -6558,6 +6713,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20261003122400_ingestion_role_set_grant",
+      form: "unresolved-execute",
+      count: 1,
+    },
+    {
       migration: "20261003122400_invoice_document_types",
       form: "add-column",
       count: 3,
@@ -6633,6 +6793,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20261003122400_public_sanctions_reader",
+      form: "unresolved-execute",
+      count: 1,
+    },
+    {
       migration: "20261003122401_validate_invoice_document_types",
       form: "validate-constraint",
       count: 4,
@@ -6680,6 +6845,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20261003122600_timer_admin_stop",
       form: "row-level-security",
+      count: 2,
+    },
+    {
+      migration: "20261003122600_timer_admin_stop",
+      form: "unresolved-execute",
       count: 2,
     },
     {
@@ -6938,6 +7108,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 4,
     },
     {
+      migration: "20261003122900_sanctions_monitoring_marks",
+      form: "unresolved-execute",
+      count: 4,
+    },
+    {
       migration: "20261003122900_sanctions_monitoring_reviews",
       form: "add-column",
       count: 6,
@@ -7003,6 +7178,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 2,
     },
     {
+      migration: "20261003123000_case_law_decision_aliases",
+      form: "unresolved-execute",
+      count: 4,
+    },
+    {
       migration: "20261003123000_sanctions_monitoring_backfills",
       form: "create-function",
       count: 1,
@@ -7031,6 +7211,11 @@ export const MIGRATION_LOCK_BASELINE = {
       migration: "20261003123000_sanctions_monitoring_backfills",
       form: "row-level-security",
       count: 4,
+    },
+    {
+      migration: "20261003123000_sanctions_monitoring_backfills",
+      form: "unresolved-execute",
+      count: 2,
     },
     {
       migration: "20261003123000_sanctions_monitoring_review_index",
@@ -7063,6 +7248,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 11,
     },
     {
+      migration: "20261003123100_plain_text_markup_guard",
+      form: "unresolved-execute",
+      count: 11,
+    },
+    {
       migration: "20261003123100_scheduler_operator_pauses",
       form: "add-column",
       count: 3,
@@ -7080,6 +7270,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20261003123100_scheduler_operator_pauses",
       form: "create-trigger",
+      count: 1,
+    },
+    {
+      migration: "20261003123100_scheduler_operator_pauses",
+      form: "unresolved-execute",
       count: 1,
     },
     {
@@ -7298,6 +7493,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20261003123700_membership_role_invariants",
+      form: "unresolved-execute",
+      count: 1,
+    },
+    {
       migration: "20261003123800_validate_membership_role_invariants",
       form: "validate-constraint",
       count: 2,
@@ -7320,6 +7520,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20261003124600_flow_run_transitions",
       form: "create-trigger",
+      count: 2,
+    },
+    {
+      migration: "20261003124600_flow_run_transitions",
+      form: "unresolved-execute",
       count: 2,
     },
     {
@@ -7453,6 +7658,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20261003125100_workspace_contact_capacity",
+      form: "unresolved-execute",
+      count: 1,
+    },
+    {
       migration: "20261003125200_playbook_document_type_reference",
       form: "add-column",
       count: 1,
@@ -7470,6 +7680,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20261003125200_playbook_document_type_reference",
       form: "create-trigger",
+      count: 1,
+    },
+    {
+      migration: "20261003125200_playbook_document_type_reference",
+      form: "unresolved-execute",
       count: 1,
     },
     {
@@ -7503,6 +7718,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 3,
     },
     {
+      migration: "20261004001000_matter_membership_organization_membership",
+      form: "unresolved-execute",
+      count: 3,
+    },
+    {
       migration: "20261004003000_tree_parent_cycle_guard",
       form: "create-function",
       count: 1,
@@ -7511,6 +7731,11 @@ export const MIGRATION_LOCK_BASELINE = {
       migration: "20261004003000_tree_parent_cycle_guard",
       form: "create-trigger",
       count: 3,
+    },
+    {
+      migration: "20261004003000_tree_parent_cycle_guard",
+      form: "unresolved-execute",
+      count: 6,
     },
     {
       migration: "20261004100000_organization_time_zone",
@@ -7673,6 +7898,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20261004120300_sanctions_drain_retry",
+      form: "unresolved-execute",
+      count: 1,
+    },
+    {
       migration: "20261004120400_validate_personal_api_key_policy",
       form: "validate-constraint",
       count: 1,
@@ -7768,6 +7998,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 4,
     },
     {
+      migration: "20261005120200_decision_citation_stats",
+      form: "unresolved-execute",
+      count: 5,
+    },
+    {
       migration: "20261005120200_list_verification_force_rls",
       form: "create-policy",
       count: 1,
@@ -7821,6 +8056,11 @@ export const MIGRATION_LOCK_BASELINE = {
       migration: "20261005120400_list_verification_run_caps",
       form: "row-level-security",
       count: 2,
+    },
+    {
+      migration: "20261005120400_list_verification_run_caps",
+      form: "unresolved-execute",
+      count: 3,
     },
     {
       migration: "20261005120400_verification_read_receipts",
@@ -8138,6 +8378,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 123,
     },
     {
+      migration: "20261009112500_entity_feature_row_gates",
+      form: "unresolved-execute",
+      count: 126,
+    },
+    {
       migration: "20261009165000_desktop_activity_batch_receipts",
       form: "create-policy",
       count: 6,
@@ -8221,6 +8466,11 @@ export const MIGRATION_LOCK_BASELINE = {
       migration: "20261009190500_service_oauth_clients",
       form: "row-level-security",
       count: 2,
+    },
+    {
+      migration: "20261009190500_service_oauth_clients",
+      form: "unresolved-execute",
+      count: 1,
     },
     {
       migration: "20261010002000_desktop_device_proof_replays",
@@ -8318,6 +8568,11 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20261010110000_case_law_provision_pending_since",
+      form: "unresolved-execute",
+      count: 1,
+    },
+    {
       migration: "20261010160000_chat_thread_active_skill",
       form: "add-column",
       count: 1,
@@ -8355,6 +8610,11 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20261010212100_case_law_publication_filter",
       form: "drop-trigger",
+      count: 1,
+    },
+    {
+      migration: "20261010212100_case_law_publication_filter",
+      form: "unresolved-execute",
       count: 1,
     },
     {
@@ -8528,6 +8788,41 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20261014120000_case_law_corpus_index_group_cze",
+      form: "add-constraint",
+      count: 1,
+    },
+    {
+      migration: "20261014120000_case_law_corpus_index_group_cze",
+      form: "create-function",
+      count: 1,
+    },
+    {
+      migration: "20261014120000_case_law_corpus_index_group_cze",
+      form: "create-policy",
+      count: 4,
+    },
+    {
+      migration: "20261014120000_case_law_corpus_index_group_cze",
+      form: "create-table-references",
+      count: 1,
+    },
+    {
+      migration: "20261014120000_case_law_corpus_index_group_cze",
+      form: "drop-constraint",
+      count: 1,
+    },
+    {
+      migration: "20261014120000_case_law_corpus_index_group_cze",
+      form: "row-level-security",
+      count: 2,
+    },
+    {
+      migration: "20261014120000_case_law_corpus_index_group_cze",
+      form: "validate-constraint",
+      count: 1,
+    },
+    {
       migration: "20261014155000_folio_collab_snapshot_recovered_at",
       form: "add-column",
       count: 1,
@@ -8603,6 +8898,31 @@ export const MIGRATION_LOCK_BASELINE = {
       count: 1,
     },
     {
+      migration: "20261015060000_folio_collab_saved_snapshot_cut",
+      form: "add-column",
+      count: 3,
+    },
+    {
+      migration: "20261015060000_folio_collab_saved_snapshot_cut",
+      form: "add-constraint",
+      count: 2,
+    },
+    {
+      migration: "20261015060000_folio_collab_saved_snapshot_cut",
+      form: "drop-constraint",
+      count: 2,
+    },
+    {
+      migration: "20261015060010_validate_folio_collab_seed_receipt",
+      form: "validate-constraint",
+      count: 2,
+    },
+    {
+      migration: "20261015060100_clause_list_level_numbering",
+      form: "create-function",
+      count: 2,
+    },
+    {
       migration: "20261015090000_matter_access_rule_function",
       form: "create-function",
       count: 3,
@@ -8615,6 +8935,26 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20261015202900_sanctions_screening_incomplete_status",
       form: "drop-constraint",
+      count: 1,
+    },
+    {
+      migration: "20261016010000_case_law_country_uppercase",
+      form: "create-function",
+      count: 1,
+    },
+    {
+      migration: "20261016010000_case_law_country_uppercase",
+      form: "create-trigger",
+      count: 1,
+    },
+    {
+      migration: "20261016010000_case_law_country_uppercase",
+      form: "drop-trigger",
+      count: 1,
+    },
+    {
+      migration: "20261016010000_case_law_country_uppercase",
+      form: "unresolved-execute",
       count: 1,
     },
     {
@@ -8645,6 +8985,211 @@ export const MIGRATION_LOCK_BASELINE = {
     {
       migration: "20261016100400_chat_turn_active_timing_index",
       form: "drop-index-concurrently",
+      count: 1,
+    },
+    {
+      migration: "20261016100500_account_exports",
+      form: "create-index",
+      count: 3,
+    },
+    {
+      migration: "20261016100500_account_exports",
+      form: "create-policy",
+      count: 4,
+    },
+    {
+      migration: "20261016100500_account_exports",
+      form: "create-table-references",
+      count: 1,
+    },
+    {
+      migration: "20261016100500_account_exports",
+      form: "row-level-security",
+      count: 2,
+    },
+    {
+      migration: "20261016100500_chat_tool_grants",
+      form: "add-foreign-key",
+      count: 4,
+    },
+    {
+      migration: "20261016100500_chat_tool_grants",
+      form: "create-index",
+      count: 3,
+    },
+    {
+      migration: "20261016100500_chat_tool_grants",
+      form: "create-policy",
+      count: 5,
+    },
+    {
+      migration: "20261016100500_chat_tool_grants",
+      form: "create-table",
+      count: 1,
+    },
+    {
+      migration: "20261016100500_chat_tool_grants",
+      form: "row-level-security",
+      count: 2,
+    },
+    {
+      migration: "20261016100600_mcp_oauth_response_binding",
+      form: "add-column",
+      count: 1,
+    },
+    {
+      migration: "20261016183000_eu_provision_work_identity",
+      form: "add-column",
+      count: 2,
+    },
+    {
+      migration: "20261016183000_eu_provision_work_identity",
+      form: "add-constraint",
+      count: 2,
+    },
+    {
+      migration: "20261016183000_eu_provision_work_identity",
+      form: "alter-column",
+      count: 2,
+    },
+    {
+      migration: "20261017100000_commission_case_number_identifier",
+      form: "add-constraint",
+      count: 2,
+    },
+    {
+      migration: "20261017100000_commission_case_number_identifier",
+      form: "drop-constraint",
+      count: 2,
+    },
+    {
+      migration: "20261017100000_commission_case_number_identifier",
+      form: "validate-constraint",
+      count: 2,
+    },
+    {
+      migration: "20261018050100_ai_memory_delete",
+      form: "create-policy",
+      count: 1,
+    },
+    {
+      migration: "20261018050100_ai_memory_delete",
+      form: "drop-policy",
+      count: 1,
+    },
+    {
+      migration: "20261018050200_ai_memory_active_user_guard",
+      form: "create-function",
+      count: 1,
+    },
+    {
+      migration: "20261018050200_ai_memory_active_user_guard",
+      form: "create-trigger",
+      count: 1,
+    },
+    {
+      migration: "20261018050200_ai_memory_active_user_guard",
+      form: "unresolved-execute",
+      count: 1,
+    },
+    {
+      migration: "20261018120000_authority_decision_identifier_type",
+      form: "add-constraint",
+      count: 2,
+    },
+    {
+      migration: "20261018120000_authority_decision_identifier_type",
+      form: "drop-constraint",
+      count: 2,
+    },
+    {
+      migration: "20261018120000_authority_decision_identifier_type",
+      form: "validate-constraint",
+      count: 2,
+    },
+    {
+      migration: "20261019060000_legislation_amendments",
+      form: "create-index",
+      count: 2,
+    },
+    {
+      migration: "20261019060000_legislation_amendments",
+      form: "create-policy",
+      count: 6,
+    },
+    {
+      migration: "20261019060000_legislation_amendments",
+      form: "create-table-references",
+      count: 2,
+    },
+    {
+      migration: "20261019060000_legislation_amendments",
+      form: "row-level-security",
+      count: 4,
+    },
+    {
+      migration: "20261019070000_monitoring_session",
+      form: "add-constraint",
+      count: 2,
+    },
+    {
+      migration: "20261019070000_monitoring_session",
+      form: "create-function",
+      count: 1,
+    },
+    {
+      migration: "20261019070000_monitoring_session",
+      form: "create-policy",
+      count: 2,
+    },
+    {
+      migration: "20261019070000_monitoring_session",
+      form: "create-table",
+      count: 1,
+    },
+    {
+      migration: "20261019070000_monitoring_session",
+      form: "create-trigger",
+      count: 1,
+    },
+    {
+      migration: "20261019070000_monitoring_session",
+      form: "row-level-security",
+      count: 2,
+    },
+    {
+      migration: "20261019070000_monitoring_session",
+      form: "unresolved-execute",
+      count: 1,
+    },
+    {
+      migration: "20261019090000_eu_soft_law_statement_kind",
+      form: "add-column",
+      count: 2,
+    },
+    {
+      migration: "20261019090000_eu_soft_law_statement_kind",
+      form: "add-constraint",
+      count: 3,
+    },
+    {
+      migration: "20261019090000_eu_soft_law_statement_kind",
+      form: "drop-constraint",
+      count: 3,
+    },
+    {
+      migration: "20261019090000_eu_soft_law_statement_kind",
+      form: "validate-constraint",
+      count: 3,
+    },
+    {
+      migration: "20261019090000_monitoring_credentials",
+      form: "add-column",
+      count: 1,
+    },
+    {
+      migration: "20261019090000_monitoring_credentials",
+      form: "add-foreign-key",
       count: 1,
     },
   ],

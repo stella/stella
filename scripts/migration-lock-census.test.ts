@@ -248,6 +248,41 @@ describe("migration lock census", () => {
     ).toBeGreaterThan(0);
   });
 
+  test("conditional table creation does not make a later lock uncontended", () => {
+    const sql = `DO $$ BEGIN IF false THEN CREATE TABLE probe(id int); END IF; END $$;
+ALTER TABLE probe ADD COLUMN title text;`;
+    expect(
+      checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+    ).toEqual([expect.stringContaining("ACCESS EXCLUSIVE add-column needs")]);
+  });
+
+  test("an unconditional top-level table creation makes a later lock uncontended", () => {
+    const sql = `CREATE TABLE probe(id int);
+ALTER TABLE probe ADD COLUMN title text;`;
+    expect(
+      checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+    ).toEqual([]);
+  });
+
+  test("unresolved dynamic SQL fails closed", () => {
+    const sql = `DO $$ BEGIN
+      EXECUTE format('%s TABLE probe ADD COLUMN title text', 'ALTER');
+    END $$;`;
+    expect(
+      checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+    ).toEqual([
+      expect.stringContaining("ACCESS EXCLUSIVE unresolved-execute needs"),
+    ]);
+  });
+
+  test("a fully literal EXECUTE retains its DDL classification", () => {
+    const result = censusSql("DO $$ BEGIN EXECUTE 'DROP TABLE probe'; END $$;");
+    expect(result.errors).toEqual([]);
+    expect(result.forms.map(({ form, lockMode }) => [form, lockMode])).toEqual([
+      ["drop-table", "ACCESS EXCLUSIVE"],
+    ]);
+  });
+
   test("typed allowances name the migration and form and carry a reason", () => {
     const sources = source("ALTER TABLE probe ADD COLUMN title text;");
     expect(
@@ -369,7 +404,7 @@ DROP TABLE a; DROP TABLE b;`;
     expect(result.errors).toEqual([]);
     expect(result.forms.map(({ form }) => form)).toEqual([
       "add-column",
-      "drop-policy",
+      "unresolved-execute",
       "create-function",
     ]);
   });
