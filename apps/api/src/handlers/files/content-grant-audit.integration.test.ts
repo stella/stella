@@ -252,7 +252,7 @@ const readUrl = async (
 ) =>
   await readFileHandler({
     readSessionAuthority: async () => null,
-    sourceSessionId: "fixture-session",
+    source: { kind: "request", sessionId: "fixture-session" },
     scopedDb: scopedDbA(),
     fieldId,
     userId: ids.userA1,
@@ -377,7 +377,7 @@ const setupDedicatedDownload = async () => {
         sessionId === source.id && authorityUserId === userId
           ? authority
           : null,
-      sourceSessionId: source.id,
+      source: { kind: "request", sessionId: source.id },
       scopedDb,
       fieldId,
       userId,

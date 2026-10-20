@@ -35,7 +35,10 @@ import {
   setTenantS3OperationHooksForTesting,
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
-import type { S3SigningScope } from "@/api/lib/s3-presign";
+import type {
+  PresignDownloadOptions,
+  S3SigningScope,
+} from "@/api/lib/s3-presign";
 import { SYNTHETIC_PRINCIPAL } from "@/api/lib/synthetic-principal/constants";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -219,7 +222,7 @@ describe("presignDownloadUrl", () => {
     const url = await presignDownloadUrl("org_1/ws_1/file_1.pdf", {
       userId: null,
       expiresIn: 60,
-      sourceSessionId: null,
+      source: { kind: "background", reason: "storage cache policy test" },
       readSessionAuthority: async () => null,
     });
 
@@ -228,19 +231,20 @@ describe("presignDownloadUrl", () => {
     );
   });
 
-  const syntheticOptions = (expiresAt: Date) => ({
-    userId: SYNTHETIC_PRINCIPAL.user.id,
-    organizationId: SYNTHETIC_PRINCIPAL.org.id,
-    expiresIn: 900,
-    sourceSessionId: "synthetic-session-download",
-    readSessionAuthority: async () => ({
-      sessionId: "synthetic-session-download",
-      expiresAt,
-    }),
-    scope: { organizationId: SYNTHETIC_PRINCIPAL.org.id },
-  });
+  const syntheticOptions = (expiresAt: Date) =>
+    ({
+      userId: SYNTHETIC_PRINCIPAL.user.id,
+      organizationId: SYNTHETIC_PRINCIPAL.org.id,
+      expiresIn: 900,
+      source: { kind: "request", sessionId: "synthetic-session-download" },
+      readSessionAuthority: async () => ({
+        sessionId: "synthetic-session-download",
+        expiresAt,
+      }),
+      scope: { organizationId: SYNTHETIC_PRINCIPAL.org.id },
+    }) satisfies PresignDownloadOptions;
 
-  test("bounds a monitoring download to the configured lifetime", async () => {
+  test("bounds a dedicated-principal download to the configured lifetime", async () => {
     const url = await presignDownloadUrl(
       `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
       syntheticOptions(new Date(Date.now() + 5 * 60 * 1000)),
@@ -251,7 +255,7 @@ describe("presignDownloadUrl", () => {
     ).toBeLessThanOrEqual(60);
   });
 
-  test("bounds a monitoring download to the remaining session lifetime", async () => {
+  test("bounds a dedicated-principal download to the remaining session lifetime", async () => {
     const url = await presignDownloadUrl(
       `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
       syntheticOptions(new Date(Date.now() + 20_000)),
@@ -262,12 +266,12 @@ describe("presignDownloadUrl", () => {
     ).toBeLessThanOrEqual(20);
   });
 
-  test("keeps the requested lifetime for a regular user", async () => {
+  test("keeps the requested lifetime for a regular user's background download", async () => {
     const url = await presignDownloadUrl("org_1/file.pdf", {
       userId: "user_1",
       organizationId: "org_1",
       expiresIn: 900,
-      sourceSessionId: "session_1",
+      source: { kind: "background", reason: "regular-user export" },
       readSessionAuthority: async () => null,
       scope: { organizationId: "org_1" },
     });
@@ -275,7 +279,7 @@ describe("presignDownloadUrl", () => {
     expect(new URL(url).searchParams.get("X-Amz-Expires")).toBe("900");
   });
 
-  test("refuses monitoring uploads", async () => {
+  test("refuses dedicated-principal uploads", async () => {
     expect(
       await rejectionOf(
         presignUploadUrl({
@@ -319,22 +323,29 @@ describe("presignDownloadUrl", () => {
       },
     },
     {
-      name: "inactive monitoring session",
+      name: "inactive dedicated session",
       options: {
         ...syntheticOptions(new Date(Date.now() + 60_000)),
         readSessionAuthority: async () => null,
       },
     },
     {
-      name: "monitoring email with other identifiers",
+      name: "dedicated-principal email with other identifiers",
       options: {
         userId: "user_1",
         organizationId: "org_1",
         email: SYNTHETIC_PRINCIPAL.user.email,
         expiresIn: 900,
-        sourceSessionId: "session_1",
+        source: { kind: "request", sessionId: "session_1" },
         readSessionAuthority: async () => null,
         scope: { organizationId: "org_1" },
+      },
+    },
+    {
+      name: "dedicated principal without a request session",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        source: { kind: "background", reason: "scheduled export" },
       },
     },
   ])("refuses $name", async ({ key, options }) => {

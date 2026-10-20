@@ -64,7 +64,7 @@ const readUserFileContent = createSafeRootHandler(
           resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
           resourceId: fileId,
           userId: user.id,
-          sourceSessionId,
+          source: { kind: "request", sessionId: sourceSessionId },
           s3Key: file.s3Key,
           expiresInSeconds: 900,
           workspaceId: file.workspaceId,

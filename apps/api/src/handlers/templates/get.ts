@@ -76,7 +76,7 @@ const getTemplate = createSafeRootHandler(
           resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
           resourceId: templateId,
           userId: user.id,
-          sourceSessionId: session.id,
+          source: { kind: "request", sessionId: session.id },
           s3Key: template.s3Key,
           expiresInSeconds: PRESIGN_EXPIRES_IN,
           fileName: template.fileName,

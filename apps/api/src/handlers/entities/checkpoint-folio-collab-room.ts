@@ -528,6 +528,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
         async () =>
           await presignDocxDownloadFromFileId({
             readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+            source: { kind: "request", sessionId: session.id },
             userId: user.id,
             fileId: nextFileId,
             fileName: target.room.fileName,

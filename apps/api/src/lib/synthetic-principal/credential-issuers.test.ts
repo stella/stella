@@ -6,6 +6,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { session } from "@/api/db/auth-schema";
 import { syntheticSessionControl } from "@/api/db/schema";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
+import type { PresignDownloadOptions } from "@/api/lib/s3-presign";
 import {
   SYNTHETIC_PRINCIPAL,
   SYNTHETIC_SESSION_CONTROL_ID,
@@ -80,14 +81,14 @@ test("revoking a dedicated session refuses new signed downloads", async () => {
     userId: SYNTHETIC_PRINCIPAL.user.id,
     organizationId: SYNTHETIC_PRINCIPAL.org.id,
     expiresIn: 900,
-    sourceSessionId: source.id,
+    source: { kind: "request", sessionId: source.id },
     readSessionAuthority: async (authority: {
       sessionId: string | null;
       userId: string;
       now?: Date;
     }) => await readSyntheticSessionAuthority(testDb, authority),
     scope: { organizationId: SYNTHETIC_PRINCIPAL.org.id },
-  };
+  } satisfies PresignDownloadOptions;
   const issued = await presignDownloadUrl(
     `${SYNTHETIC_PRINCIPAL.org.id}/seed.docx`,
     options,

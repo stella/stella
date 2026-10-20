@@ -329,6 +329,7 @@ export const redeemDesktopEditHandoffHandler = async (
       organizationId: access.organizationId,
       recordAuditEvent,
       safeDb,
+      source: { kind: "background", reason: "desktop edit session fixture" },
       userId: brandPersistedUserId(handoff.createdBy),
       workspaceId: handoff.workspaceId,
     });

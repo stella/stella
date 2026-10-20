@@ -82,7 +82,7 @@ export default createSafeHandler(
                 resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
                 resourceId: row.entityId,
                 userId: user.id,
-                sourceSessionId: session.id,
+                source: { kind: "request", sessionId: session.id },
                 s3Key: createFileKey({
                   organizationId,
                   workspaceId,

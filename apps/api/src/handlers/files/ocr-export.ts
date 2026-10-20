@@ -15,6 +15,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { getS3 } from "@/api/lib/s3";
+import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
@@ -27,7 +28,7 @@ type OcrExportFormat = (typeof OCR_EXPORT_FORMATS)[number];
 
 type ReadOcrExportOptions = {
   userId: SafeId<"user">;
-  sourceSessionId: string;
+  source: SignedDownloadSource;
   fieldId: SafeId<"field">;
   format: OcrExportFormat;
   organizationId: SafeId<"organization">;
@@ -47,7 +48,7 @@ export const readOcrExport = async ({
   fieldId,
   format,
   userId,
-  sourceSessionId,
+  source,
   organizationId,
   recordAuditEvent,
   readSessionAuthority,
@@ -126,7 +127,7 @@ export const readOcrExport = async ({
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: row.entityId,
           userId,
-          sourceSessionId,
+          source,
           s3Key,
           expiresInSeconds: OCR_EXPORT_URL_EXPIRY_SECONDS,
           fileName,

@@ -104,12 +104,12 @@ describe("template version download", () => {
     const props = {
       scopedDb,
       userId,
-      sourceSessionId: "fixture-session",
+      source: { kind: "request", sessionId: "fixture-session" },
       organizationId,
       templateId,
       versionId,
       recordAuditEvent,
-    };
+    } satisfies Parameters<typeof getTemplateVersionHandler>[0];
 
     const result = await getTemplateVersionHandler(props);
 
@@ -167,7 +167,7 @@ describe("template version download", () => {
     const result = await getTemplateVersionHandler({
       scopedDb,
       userId,
-      sourceSessionId: "fixture-session",
+      source: { kind: "request", sessionId: "fixture-session" },
       organizationId,
       templateId,
       versionId,
@@ -193,7 +193,7 @@ describe("template version download", () => {
     const result = await getTemplateVersionHandler({
       scopedDb,
       userId,
-      sourceSessionId: "fixture-session",
+      source: { kind: "request", sessionId: "fixture-session" },
       organizationId,
       templateId,
       versionId,

@@ -60,7 +60,7 @@ export const readFileEndpoint = createSafeHandler(
           await readFileHandler({
             fieldId,
             userId: user.id,
-            sourceSessionId: session.id,
+            source: { kind: "request", sessionId: session.id },
             organizationId: session.activeOrganizationId,
             workspaceId,
             purpose,
@@ -363,7 +363,7 @@ export const ocrExportEndpoint = createSafeHandler(
             fieldId,
             format,
             userId: user.id,
-            sourceSessionId: session.id,
+            source: { kind: "request", sessionId: session.id },
             organizationId: session.activeOrganizationId,
             recordAuditEvent,
             scopedDb,

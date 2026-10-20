@@ -42,6 +42,7 @@ import {
 } from "@/api/lib/files/read-file";
 import { LIMITS } from "@/api/lib/limits";
 import { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
+import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
 import {
   deliverTemporaryRedline,
@@ -530,6 +531,15 @@ export const createDocumentCompareGenerator = (
     recordAuditEvent,
     abortSignal,
   }: DocumentCompareProps): SafeHandlerGenerator<DocumentCompareResponse> {
+    const downloadSource = session.id
+      ? ({
+          kind: "request",
+          sessionId: session.id,
+        } satisfies SignedDownloadSource)
+      : ({
+          kind: "background",
+          reason: "document comparison without a request session",
+        } satisfies SignedDownloadSource);
     const comparisonSignal = AbortSignal.any([
       abortSignal,
       AbortSignal.timeout(DOCUMENT_COMPARE_DEADLINE_MS),
@@ -858,6 +868,7 @@ export const createDocumentCompareGenerator = (
         readSessionAuthority: ownerSyntheticSessionAuthorityReader,
         scopedDb,
         signal: comparisonSignal,
+        source: downloadSource,
         userId: user.id,
       });
       if (Result.isError(delivered)) {
@@ -1101,7 +1112,7 @@ export const createDocumentCompareGenerator = (
                 scopedDb,
                 fieldId: saved.fieldId,
                 userId: user.id,
-                sourceSessionId: session.id,
+                source: downloadSource,
                 organizationId: session.activeOrganizationId,
                 workspaceId,
                 purpose: "download",

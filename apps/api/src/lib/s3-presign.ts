@@ -955,16 +955,23 @@ export const presignUploadUrl = async ({
   });
 };
 
+export type SignedDownloadSource =
+  | { kind: "request"; sessionId: string }
+  | { kind: "background"; reason: string };
+
 export type PresignDownloadOptions = {
   userId: string | null;
   organizationId?: string | null;
   email?: string;
   expiresIn: number;
-  sourceSessionId: string | null;
+  source: SignedDownloadSource;
   readSessionAuthority: SyntheticSessionAuthorityReader;
   fileName?: string;
   scope?: S3SigningScope;
 };
+
+const refuseBackgroundSessionAuthority: SyntheticSessionAuthorityReader =
+  async () => await Promise.resolve(null);
 
 export const presignDownloadUrl = async (
   key: string,
@@ -974,7 +981,7 @@ export const presignDownloadUrl = async (
     scope,
     organizationId = scope?.organizationId,
     expiresIn,
-    sourceSessionId,
+    source,
     readSessionAuthority,
     fileName,
   }: PresignDownloadOptions,
@@ -988,8 +995,11 @@ export const presignDownloadUrl = async (
       fileOrganizationId: scope?.organizationId,
       requestedTtlSeconds: expiresIn,
       now: new Date(Temporal.Now.instant().epochMilliseconds),
-      sessionId: sourceSessionId,
-      readSessionAuthority,
+      sessionId: source.kind === "request" ? source.sessionId : null,
+      readSessionAuthority:
+        source.kind === "request"
+          ? readSessionAuthority
+          : refuseBackgroundSessionAuthority,
     },
   );
   const result = await Result.tryPromise({

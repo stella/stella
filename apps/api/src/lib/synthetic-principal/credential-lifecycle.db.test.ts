@@ -236,7 +236,7 @@ const setup = async () => {
     });
     return await readFileHandler({
       userId: brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
-      sourceSessionId: source.id,
+      source: { kind: "request", sessionId: source.id },
       scopedDb,
       fieldId,
       organizationId: brandPersistedOrganizationId(SYNTHETIC_PRINCIPAL.org.id),

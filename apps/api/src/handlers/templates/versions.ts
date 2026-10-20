@@ -20,6 +20,7 @@ import {
   encodePaginationCursor,
 } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import {
   readStoredTemplateFile,
   STORED_TEMPLATE_FILE_COLUMNS,
@@ -155,7 +156,7 @@ export const listTemplateVersionsHandler = async ({
 
 type GetVersionProps = {
   userId: SafeId<"user">;
-  sourceSessionId: string;
+  source: SignedDownloadSource;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: SafeId<"template">;
@@ -165,7 +166,7 @@ type GetVersionProps = {
 
 export const getTemplateVersionHandler = async ({
   userId,
-  sourceSessionId,
+  source,
   scopedDb,
   organizationId,
   templateId,
@@ -204,7 +205,7 @@ export const getTemplateVersionHandler = async ({
       resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
       resourceId: templateId,
       userId,
-      sourceSessionId,
+      source,
       s3Key: version.s3Key,
       expiresInSeconds: PRESIGN_EXPIRES_IN,
       fileName: template.fileName,

@@ -42,6 +42,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-room-contract";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
+import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 const openDesktopEditSessionBodySchema = t.Object({
@@ -67,6 +68,7 @@ type OpenDesktopEditSessionHandlerProps = {
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
+  source: SignedDownloadSource;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 };
@@ -212,6 +214,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
   recordAuditEvent,
   sessionToken,
   sessionTokenHash,
+  source,
   tx,
   workspaceId,
 }: {
@@ -222,6 +225,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
   recordAuditEvent: AuditRecorder;
   sessionToken: string;
   sessionTokenHash: string;
+  source: SignedDownloadSource;
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
 }) => {
@@ -281,6 +285,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
         fileName: existingSession.fileName,
         fileType: existingSession.fileType,
         organizationId,
+        source,
         workspaceId,
       }),
       fileName: existingSession.fileName,
@@ -317,6 +322,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
       userId,
       fileTarget: baseVersionTarget,
       organizationId,
+      source,
       workspaceId,
     }),
     fileName: baseVersionTarget.fileContent.fileName,
@@ -334,6 +340,7 @@ export const openDesktopEditSessionHandler = async function* ({
   organizationId,
   recordAuditEvent,
   safeDb,
+  source,
   userId,
   workspaceId,
 }: OpenDesktopEditSessionHandlerProps) {
@@ -454,6 +461,7 @@ export const openDesktopEditSessionHandler = async function* ({
             recordAuditEvent,
             sessionToken,
             sessionTokenHash,
+            source,
             tx,
             workspaceId,
           }),
@@ -544,6 +552,7 @@ export const openDesktopEditSessionHandler = async function* ({
             userId,
             fileTarget: currentTarget,
             organizationId,
+            source,
             workspaceId,
           }),
           fileName: currentTarget.fileContent.fileName,
@@ -670,6 +679,7 @@ const openDesktopEditSession = createSafeHandler(
       organizationId: session.activeOrganizationId,
       recordAuditEvent,
       safeDb,
+      source: { kind: "request", sessionId: session.id },
       userId: user.id,
       workspaceId,
     });

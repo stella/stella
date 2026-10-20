@@ -136,7 +136,7 @@ const readReportExport = createSafeHandler(
               await presignDownloadUrl(resultS3Key, {
                 userId: user.id,
                 expiresIn: DOWNLOAD_URL_EXPIRES_SECONDS,
-                sourceSessionId: session.id,
+                source: { kind: "request", sessionId: session.id },
                 readSessionAuthority: ownerSyntheticSessionAuthorityReader,
                 fileName: downloadFileName(resultS3Key),
                 scope: {

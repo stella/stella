@@ -10,6 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isStampableDocx } from "@/api/lib/docx-stamp";
 import { isNativelyRenderableMimeType } from "@/api/lib/files/gotenberg";
 import { createFileKey } from "@/api/lib/files/utils";
+import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -19,7 +20,7 @@ type FilePurpose = "download" | "display" | "native-display";
 
 type ReadFileHandlerProps = {
   userId: SafeId<"user">;
-  sourceSessionId: string | null;
+  source: SignedDownloadSource;
   scopedDb: ScopedDb;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
@@ -64,7 +65,7 @@ export const fileFieldQuery = async (
 export const readFileHandler = async ({
   scopedDb,
   userId,
-  sourceSessionId,
+  source,
   fieldId,
   organizationId,
   workspaceId,
@@ -113,7 +114,7 @@ export const readFileHandler = async ({
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: row.entityId,
           userId,
-          sourceSessionId,
+          source,
           s3Key,
           expiresInSeconds: FILE_READ_URL_EXPIRY_SECONDS,
           ...(fileName === undefined ? {} : { fileName }),

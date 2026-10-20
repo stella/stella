@@ -190,7 +190,7 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
               resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
               resourceId: loaded.invoice.id,
               userId: user.id,
-              sourceSessionId: session.id,
+              source: { kind: "request", sessionId: session.id },
               s3Key: key,
               s3Keyspace: "exports",
               expiresInSeconds: EXPORT_URL_TTL_SECONDS,

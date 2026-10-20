@@ -143,7 +143,7 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
                 : AUDIT_RESOURCE_TYPE.WORKSPACE,
               resourceId: single ? single.id : workspaceId,
               userId: user.id,
-              sourceSessionId: session.id,
+              source: { kind: "request", sessionId: session.id },
               s3Key: key,
               s3Keyspace: "exports",
               expiresInSeconds: EXPORT_URL_TTL_SECONDS,

@@ -290,7 +290,7 @@ const createMessageExport = createSafeRootHandler(
             resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
             resourceId: messageId,
             userId: user.id,
-            sourceSessionId: session.id,
+            source: { kind: "request", sessionId: session.id },
             s3Key: key,
             s3Keyspace: "exports",
             expiresInSeconds: CHAT_EXPORT_URL_TTL_SECONDS,

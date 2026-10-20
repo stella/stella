@@ -13,6 +13,16 @@ import {
   writeFolioCollabCheckpointObject,
 } from "./checkpoint-folio-collab-room";
 
+test("the checkpoint download stays bound to its request session", async () => {
+  const source = await Bun.file(
+    `${import.meta.dir}/checkpoint-folio-collab-room.ts`,
+  ).text();
+
+  expect(source).toContain(
+    'source: { kind: "request", sessionId: session.id },',
+  );
+});
+
 describe("folio collaboration checkpoint snapshot cut", () => {
   const materialized = {
     baseVersionId: createSafeId<"entityVersion">(),

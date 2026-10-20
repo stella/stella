@@ -429,6 +429,7 @@ const deliver = async ({
       readSessionAuthority: ownerSyntheticSessionAuthorityReader,
       scopedDb: context.scopedDb,
       signal,
+      source: { kind: "background", reason: "MCP credential request" },
       userId: context.userId,
     },
     dependencies,
