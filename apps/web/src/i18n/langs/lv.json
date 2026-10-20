@@ -3505,6 +3505,7 @@
     },
     "conversionRefusal": {
       "legacyFormat": "Šis ir mantotā formāta {format} fails. Lai to konvertētu, saglabājiet to vēlreiz kā {replacementExtension}.",
+      "unsupportedEncoding": "Šajā dokumentā izmantots neatbalstīts {encoding} kodējums, tāpēc to nevar konvertēt.",
       "unsupportedField": "Šajā dokumentā ir lauks {fieldType}, ko nevar konvertēt.",
       "unsupportedReference": "Šajā dokumentā {element} {attribute} atsaucas uz ārēju resursu, tāpēc to nevar konvertēt."
     },

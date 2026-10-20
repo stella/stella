@@ -200,7 +200,99 @@ export type ReferenceAllowlist = readonly {
   reason: string;
 }[];
 
-const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
+type SupportedEncoding = "utf-8" | "utf-16le" | "utf-16be";
+
+type DecodedText =
+  | { kind: "source"; value: string }
+  | { kind: "unsupported_encoding"; encoding: string };
+
+const normalizeEncoding = (encoding: string): string =>
+  encoding.trim().toLowerCase().replaceAll("_", "-");
+
+const supportedEncoding = (encoding: string): SupportedEncoding | null => {
+  switch (normalizeEncoding(encoding)) {
+    case "utf-8":
+      return "utf-8";
+    case "utf-16":
+    case "utf-16le":
+      return "utf-16le";
+    case "utf-16be":
+      return "utf-16be";
+    default:
+      return null;
+  }
+};
+
+const bomEncoding = (bytes: Uint8Array): SupportedEncoding | null => {
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return "utf-8";
+  }
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return "utf-16le";
+  }
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return "utf-16be";
+  }
+  return null;
+};
+
+const signatureEncoding = (bytes: Uint8Array): SupportedEncoding | null => {
+  if (bytes[0] === 0x3c && bytes[1] === 0x00) {
+    return "utf-16le";
+  }
+  if (bytes[0] === 0x00 && bytes[1] === 0x3c) {
+    return "utf-16be";
+  }
+  return null;
+};
+
+const declaredEncoding = (source: string): string | null => {
+  const prefix = source.slice(0, 2048);
+  const xml = /<\?xml\s[^>]*\bencoding\s*=\s*["']\s*([^\s"']+)/iu.exec(
+    prefix,
+  )?.[1];
+  if (xml !== undefined) {
+    return normalizeEncoding(xml);
+  }
+  const $ = load(prefix);
+  for (const node of $("meta").toArray()) {
+    if (!isTag(node)) {
+      continue;
+    }
+    const charset = node.attribs["charset"];
+    if (charset !== undefined) {
+      return normalizeEncoding(charset);
+    }
+    if (node.attribs["http-equiv"]?.toLowerCase() !== "content-type") {
+      continue;
+    }
+    const content = node.attribs["content"] ?? "";
+    const declared = /\bcharset\s*=\s*([^\s;"']+)/iu.exec(content)?.[1];
+    if (declared !== undefined) {
+      return normalizeEncoding(declared);
+    }
+  }
+  return null;
+};
+
+const decodeText = (bytes: Uint8Array): DecodedText => {
+  const bom = bomEncoding(bytes);
+  const detected = bom ?? signatureEncoding(bytes) ?? "utf-8";
+  const tentative = new TextDecoder(detected).decode(bytes);
+  const declaration = declaredEncoding(tentative);
+  if (declaration === null) {
+    return { kind: "source", value: tentative };
+  }
+  const declared = supportedEncoding(declaration);
+  if (declared === null) {
+    return { kind: "unsupported_encoding", encoding: declaration };
+  }
+  const encoding =
+    bom ??
+    (declaration === "utf-16" && detected !== "utf-8" ? detected : declared);
+  return { kind: "source", value: new TextDecoder(encoding).decode(bytes) };
+};
+
 const latin1 = (bytes: Uint8Array): string =>
   new TextDecoder("windows-1252").decode(bytes);
 
@@ -260,6 +352,22 @@ const isExternalReference = (value: string): boolean => {
     normalized.slice(colon + 1).startsWith("//") ||
     FETCHABLE_SCHEME_NAMES.has(scheme)
   );
+};
+
+const RASTER_DATA_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+
+const isUnsupportedDataUrl = (value: string): boolean => {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized.startsWith("data:")) {
+    return false;
+  }
+  const mediaType = normalized.slice(5).split(/[;,]/u, 1)[0] ?? "";
+  return !RASTER_DATA_MEDIA_TYPES.has(mediaType);
 };
 
 const normalizeCss = (source: string): string | null => {
@@ -371,7 +479,8 @@ const cssHasExternalReference = (source: string): boolean => {
     if (end === valueAt || (quoted && end >= lower.length)) {
       return true;
     }
-    if (isExternalReference(normalized.slice(valueAt, end))) {
+    const value = normalized.slice(valueAt, end);
+    if (isExternalReference(value) || isUnsupportedDataUrl(value)) {
       return true;
     }
     cursor = end + 1;
@@ -379,8 +488,7 @@ const cssHasExternalReference = (source: string): boolean => {
   return false;
 };
 
-const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
-  const source = text(bytes);
+const htmlHasExternalReference = (source: string): boolean => {
   const $ = load(source);
   for (const node of $("*").toArray()) {
     if (!isTag(node)) {
@@ -536,7 +644,9 @@ const allowlistMatches = (
   );
 
 const valueHasExternalReference = (value: string): boolean =>
-  isExternalReference(value) || cssHasExternalReference(value);
+  isExternalReference(value) ||
+  isUnsupportedDataUrl(value) ||
+  cssHasExternalReference(value);
 
 const QNAME_ATTRIBUTES = [
   {
@@ -571,6 +681,14 @@ const xmlCatchAllRefusal = (
         continue;
       }
       const attributeName = xmlQualifiedName(attribute);
+      if (attribute.localName.toLowerCase() === "srcdoc") {
+        return {
+          kind: "unsupported_reference",
+          format: mime,
+          element: elementName,
+          attribute: attributeName,
+        };
+      }
       if (!valueHasExternalReference(attribute.value)) {
         continue;
       }
@@ -601,11 +719,11 @@ const xmlCatchAllRefusal = (
 };
 
 const htmlCatchAllRefusal = (
-  bytes: Uint8Array,
+  source: string,
   mime: ConvertibleMime,
   referenceAllowlist: ReferenceAllowlist,
 ): ReferenceRefusal | null => {
-  const $ = load(text(bytes));
+  const $ = load(source);
   for (const node of $("*").toArray()) {
     if (!isTag(node)) {
       continue;
@@ -613,6 +731,14 @@ const htmlCatchAllRefusal = (
     const element = node.name.toLowerCase();
     for (const [attribute, value] of Object.entries(node.attribs)) {
       const name = attribute.toLowerCase();
+      if (name === "srcdoc") {
+        return {
+          kind: "unsupported_reference",
+          format: mime,
+          element,
+          attribute: name,
+        };
+      }
       if (
         valueHasExternalReference(value) &&
         !allowlistMatches("html", element, name, referenceAllowlist)
@@ -630,10 +756,10 @@ const htmlCatchAllRefusal = (
 };
 
 const htmlStyleAttributeRefusal = (
-  bytes: Uint8Array,
+  source: string,
   mime: ConvertibleMime,
 ): ReferenceRefusal | null => {
-  const $ = load(text(bytes));
+  const $ = load(source);
   for (const node of $("*").toArray()) {
     if (!isTag(node)) {
       continue;
@@ -685,8 +811,8 @@ const relationshipHasExternalReference = (source: string): boolean => {
   return false;
 };
 
-const xhtmlHasExternalReference = (bytes: Uint8Array): boolean => {
-  const document = slimdom.parseXmlDocument(text(bytes));
+const xhtmlHasExternalReference = (source: string): boolean => {
+  const document = slimdom.parseXmlDocument(source);
   for (const element of xmlElements(document.documentElement)) {
     const isXhtmlElement = (localName: string): boolean =>
       xmlNameMatches(element, XML_NAMESPACES.xhtml, localName) ||
@@ -949,6 +1075,7 @@ type PartSize = "body" | "metadata";
 type InspectedPart =
   | { kind: "missing" }
   | { kind: "too_large" }
+  | { kind: "unsupported_encoding"; encoding: string }
   | { kind: "source"; value: string };
 
 const readInspectedPart = async (
@@ -957,8 +1084,8 @@ const readInspectedPart = async (
   partSize: PartSize,
 ): Promise<InspectedPart> => {
   if (partSize === "body") {
-    const value = await archive.readEntryString(path);
-    return value === null ? { kind: "missing" } : { kind: "source", value };
+    const value = await archive.readEntryUint8(path);
+    return value === null ? { kind: "missing" } : decodeText(value);
   }
   const entry = archive.zip.file(path);
   if (entry === null) {
@@ -978,12 +1105,7 @@ const readInspectedPart = async (
       }
       chunks.push(chunk);
     });
-    stream.on("end", () =>
-      resolve({
-        kind: "source",
-        value: Buffer.concat(chunks, size).toString("utf-8"),
-      }),
-    );
+    stream.on("end", () => resolve(decodeText(Buffer.concat(chunks, size))));
     stream.on("error", reject);
   });
 };
@@ -1003,6 +1125,8 @@ const archiveHas = async (
         break;
       case "too_large":
         return true;
+      case "unsupported_encoding":
+        return true;
       case "source":
         if (inspect(path, part.value)) {
           return true;
@@ -1014,6 +1138,27 @@ const archiveHas = async (
     }
   }
   return false;
+};
+
+const archiveUnsupportedEncoding = async (
+  bytes: Uint8Array,
+  format: "ooxml" | "odf",
+): Promise<string | null> => {
+  const archive = await loadDocxArchive(bytes);
+  const selectedPaths = Object.keys(archive.zip.files).filter((path) =>
+    format === "ooxml" ? isOoxmlInspectedPath(path) : isOdfInspectedPath(path),
+  );
+  for (const path of selectedPaths) {
+    const part = await readInspectedPart(
+      archive,
+      path,
+      path.endsWith(".rels") || path === "styles.xml" ? "metadata" : "body",
+    );
+    if (part.kind === "unsupported_encoding") {
+      return part.encoding;
+    }
+  }
+  return null;
 };
 
 const archiveCatchAllRefusal = async (
@@ -1279,8 +1424,7 @@ const decodeRtfInstruction = (
   return null;
 };
 
-const rtfHasExternalReference = (bytes: Uint8Array): boolean => {
-  const source = latin1(bytes);
+const rtfHasExternalReference = (source: string): boolean => {
   const lower = source.toLowerCase();
   if (lower.includes("\\objlink")) {
     return true;
@@ -1520,9 +1664,9 @@ const DETECTORS = {
   "application/vnd.oasis.opendocument.presentation": odfHasExternalReference,
   "application/vnd.oasis.opendocument.spreadsheet": odfHasExternalReference,
   "application/vnd.oasis.opendocument.text": odfHasExternalReference,
-  "application/rtf": rtfHasExternalReference,
+  "application/rtf": safe,
   "application/vnd.apple.pages": safe,
-  "application/xhtml+xml": xhtmlHasExternalReference,
+  "application/xhtml+xml": safe,
   "image/bmp": safe,
   "image/gif": safe,
   "image/jpeg": safe,
@@ -1530,15 +1674,78 @@ const DETECTORS = {
   "image/tiff": safe,
   "image/webp": safe,
   "text/csv": safe,
-  "text/html": htmlHasExternalReference,
+  "text/html": safe,
   "text/plain": safe,
 } as const satisfies Record<ConvertibleMime, Detector>;
+
+type PreparedInputText = DecodedText | { kind: "binary" };
+
+const archiveMarkupFormat = (mime: ConvertibleMime): "ooxml" | "odf" | null => {
+  if (
+    mime ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mime ===
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  ) {
+    return "ooxml";
+  }
+  if (
+    mime === "application/vnd.oasis.opendocument.presentation" ||
+    mime === "application/vnd.oasis.opendocument.spreadsheet" ||
+    mime === "application/vnd.oasis.opendocument.text"
+  ) {
+    return "odf";
+  }
+  return null;
+};
+
+const prepareInputText = async (
+  mime: ConvertibleMime,
+  bytes: Uint8Array,
+): Promise<PreparedInputText> => {
+  if (
+    mime === "text/html" ||
+    mime === "application/xhtml+xml" ||
+    mime === "application/rtf"
+  ) {
+    return decodeText(bytes);
+  }
+  const archiveFormat = archiveMarkupFormat(mime);
+  if (archiveFormat === null) {
+    return { kind: "binary" };
+  }
+  const encoding = await archiveUnsupportedEncoding(bytes, archiveFormat);
+  return encoding === null
+    ? { kind: "binary" }
+    : { kind: "unsupported_encoding", encoding };
+};
+
+const decodedTextHasExternalReference = (
+  mime: ConvertibleMime,
+  source: string | null,
+): boolean => {
+  if (mime === "text/html") {
+    return htmlHasExternalReference(source ?? "");
+  }
+  if (mime === "application/xhtml+xml") {
+    return xhtmlHasExternalReference(source ?? "");
+  }
+  return mime === "application/rtf"
+    ? rtfHasExternalReference(source ?? "")
+    : false;
+};
 
 export const checkConversionInput = async (
   mime: ConvertibleMime,
   bytes: Uint8Array,
   referenceAllowlist: ReferenceAllowlist = REFERENCE_ALLOWLIST,
 ): Promise<ConversionInputResult> => {
+  const prepared = await prepareInputText(mime, bytes);
+  if (prepared.kind === "unsupported_encoding") {
+    return { kind: "refuse", format: mime, reason: prepared };
+  }
+  const decodedSource = prepared.kind === "source" ? prepared.value : null;
   if (mime === "application/vnd.ms-excel") {
     return {
       kind: "refuse",
@@ -1587,10 +1794,17 @@ export const checkConversionInput = async (
     }
   }
   if (mime === "text/html") {
-    const styleRefusal = htmlStyleAttributeRefusal(bytes, mime);
+    const styleRefusal = htmlStyleAttributeRefusal(decodedSource ?? "", mime);
     if (styleRefusal !== null) {
       return { kind: "refuse", format: mime, reason: styleRefusal };
     }
+  }
+  if (decodedTextHasExternalReference(mime, decodedSource)) {
+    return {
+      kind: "refuse",
+      reason: { kind: "external_reference" },
+      format: mime,
+    };
   }
   if (await DETECTORS[mime](bytes)) {
     return {
@@ -1601,10 +1815,14 @@ export const checkConversionInput = async (
   }
   let catchAllRefusal: ReferenceRefusal | null = null;
   if (mime === "text/html") {
-    catchAllRefusal = htmlCatchAllRefusal(bytes, mime, referenceAllowlist);
+    catchAllRefusal = htmlCatchAllRefusal(
+      decodedSource ?? "",
+      mime,
+      referenceAllowlist,
+    );
   } else if (mime === "application/xhtml+xml") {
     catchAllRefusal = xmlCatchAllRefusal(
-      text(bytes),
+      decodedSource ?? "",
       mime,
       "xhtml",
       referenceAllowlist,

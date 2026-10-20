@@ -3505,6 +3505,7 @@
     },
     "conversionRefusal": {
       "legacyFormat": "Il s’agit d’un ancien fichier {format}. Enregistrez-le au format {replacementExtension} pour le convertir.",
+      "unsupportedEncoding": "Ce document utilise l’encodage {encoding}, qui n’est pas pris en charge, et ne peut donc pas être converti.",
       "unsupportedField": "Ce document contient un champ {fieldType} qui ne peut pas être converti.",
       "unsupportedReference": "Ce document fait référence à une ressource externe dans {element} {attribute} et ne peut donc pas être converti."
     },

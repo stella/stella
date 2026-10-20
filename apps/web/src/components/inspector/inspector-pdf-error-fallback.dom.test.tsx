@@ -60,6 +60,16 @@ test("shows the document reference conversion refusal", () => {
   ).toBeTruthy();
 });
 
+test("shows the document encoding conversion refusal", () => {
+  mount({ kind: "unsupported_encoding", encoding: "windows-1252" });
+
+  expect(
+    screen.getByText(
+      "This document uses the unsupported windows-1252 encoding, so it can’t be converted.",
+    ),
+  ).toBeTruthy();
+});
+
 test("shows a document reference refusal from file data", () => {
   const tab: FileTab = {
     type: "pdf",

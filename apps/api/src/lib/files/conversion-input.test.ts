@@ -11,6 +11,19 @@ import type { ConvertibleMime } from "@/api/lib/files/pdf-derivative-policy";
 import { legacyWordFile } from "@/api/tests/helpers/legacy-word-fixture";
 
 const encode = (value: string): Uint8Array => new TextEncoder().encode(value);
+const encodeUtf16 = (value: string, byteOrder: "le" | "be"): Uint8Array => {
+  const bytes = new Uint8Array(2 + value.length * 2);
+  bytes.set(byteOrder === "le" ? [0xff, 0xfe] : [0xfe, 0xff]);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < value.length; index++) {
+    view.setUint16(
+      2 + index * 2,
+      value.codePointAt(index) ?? 0,
+      byteOrder === "le",
+    );
+  }
+  return bytes;
+};
 const zip = async (path: string, value: string): Promise<Uint8Array> =>
   new Uint8Array(
     await writeZipEntry(new JSZip(), path, encode(value)).generateAsync({
@@ -27,6 +40,13 @@ const zipEntries = async (
   }
   return new Uint8Array(await archive.generateAsync({ type: "arraybuffer" }));
 };
+
+const zipBytes = async (path: string, value: Uint8Array): Promise<Uint8Array> =>
+  new Uint8Array(
+    await writeZipEntry(new JSZip(), path, value).generateAsync({
+      type: "arraybuffer",
+    }),
+  );
 
 const binaryField = (instruction: string): Uint8Array =>
   new Uint8Array([0x13, ...encode(instruction), 0x14]);
@@ -124,6 +144,87 @@ const fixtures = {
 } as const satisfies Record<string, Fixture>;
 
 describe("document conversion input", () => {
+  test.each(["le", "be"] as const)(
+    "checks UTF-16%s HTML references",
+    async (byteOrder) => {
+      const remote = encodeUtf16(
+        '<html><img src="https://example.test/a.png"></html>',
+        byteOrder,
+      );
+      const local = encodeUtf16(
+        '<html><img src="data:image/png;base64,AA=="></html>',
+        byteOrder,
+      );
+
+      expect(await checkConversionInput("text/html", remote)).toMatchObject({
+        kind: "refuse",
+      });
+      expect(await checkConversionInput("text/html", local)).toEqual({
+        kind: "convert",
+      });
+    },
+  );
+
+  test("refuses a declared unsupported HTML encoding", async () => {
+    expect(
+      await checkConversionInput(
+        "text/html",
+        encode('<meta charset="windows-1252"><p>Document</p>'),
+      ),
+    ).toEqual({
+      kind: "refuse",
+      format: "text/html",
+      reason: { kind: "unsupported_encoding", encoding: "windows-1252" },
+    });
+  });
+
+  test("checks a UTF-16 XML document part", async () => {
+    const input = await zipBytes(
+      "word/document.xml",
+      encodeUtf16(
+        '<?xml version="1.0" encoding="UTF-16"?><document image="https://example.test/a.png"/>',
+        "le",
+      ),
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toMatchObject({ kind: "refuse" });
+  });
+
+  test.each([
+    [
+      "<iframe srcdoc=\"&lt;img src='https://example.test/a.png'&gt;\"></iframe>",
+      "iframe",
+      "srcdoc",
+    ],
+    ['<img src="data:text/html,%3Cp%3EDocument%3C/p%3E">', "img", "src"],
+    ['<img src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E">', "img", "src"],
+    [
+      '<div style="background:url(data:image/svg+xml,%3Csvg%3E%3C/svg%3E)"></div>',
+      "div",
+      "style",
+    ],
+  ])("refuses a nested HTML reference", async (source, element, attribute) => {
+    expect(
+      await checkConversionInput("text/html", encode(source)),
+    ).toMatchObject({
+      kind: "refuse",
+      reason: { kind: "unsupported_reference", element, attribute },
+    });
+  });
+
+  test("converts an embedded raster image", async () => {
+    expect(
+      await checkConversionInput(
+        "text/html",
+        encode('<img src="data:image/png;base64,AA==">'),
+      ),
+    ).toEqual({ kind: "convert" });
+  });
+
   test("every listed reference has a conversion case", async () => {
     const relationshipNamespaces = {
       transitional:

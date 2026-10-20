@@ -1,4 +1,5 @@
 export type ConversionRefusal =
+  | { kind: "unsupported_encoding"; encoding: string }
   | {
       kind: "unsupported_reference";
       format: string;

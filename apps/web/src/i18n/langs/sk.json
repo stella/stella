@@ -3505,6 +3505,7 @@
     },
     "conversionRefusal": {
       "legacyFormat": "Toto je starší súbor {format}. Ak ho chcete konvertovať, znova ho uložte ako {replacementExtension}.",
+      "unsupportedEncoding": "Tento dokument používa nepodporované kódovanie {encoding}, preto ho nemožno konvertovať.",
       "unsupportedField": "Tento dokument obsahuje pole {fieldType}, ktoré nemožno konvertovať.",
       "unsupportedReference": "Tento dokument odkazuje na externý prostriedok v {element} {attribute}, preto ho nemožno konvertovať."
     },

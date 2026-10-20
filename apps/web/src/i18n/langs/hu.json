@@ -3505,6 +3505,7 @@
     },
     "conversionRefusal": {
       "legacyFormat": "Ez egy régi formátumú {format}-fájl. A konvertáláshoz mentse újra {replacementExtension} formátumban.",
+      "unsupportedEncoding": "Ez a dokument nem támogatott {encoding} kódolást használ, ezért nem konvertálható.",
       "unsupportedField": "Ez a dokumentum egy nem konvertálható {fieldType} mezőt tartalmaz.",
       "unsupportedReference": "Ez a dokumentum külső erőforrásra hivatkozik a(z) {element} {attribute} helyen, ezért nem konvertálható."
     },

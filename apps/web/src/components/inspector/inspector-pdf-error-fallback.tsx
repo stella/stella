@@ -21,6 +21,11 @@ export const ConversionRefusalFallback = ({
   const t = useTranslations();
   let message: string;
   switch (refusal.kind) {
+    case "unsupported_encoding":
+      message = t("inspector.conversionRefusal.unsupportedEncoding", {
+        encoding: refusal.encoding,
+      });
+      break;
     case "unsupported_field":
       message = t("inspector.conversionRefusal.unsupportedField", {
         fieldType: refusal.fieldType,
