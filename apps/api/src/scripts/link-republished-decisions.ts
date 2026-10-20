@@ -32,6 +32,7 @@ import {
   type RepublishedDecisionCandidate,
   reverseRepublishedDecisionBatch,
   selectRepublishedDecisionCandidates,
+  selectRepublishedDecisionReport,
 } from "@/api/scripts/link-republished-decisions-plan";
 import { flagInteger } from "@/api/scripts/repair-flags";
 
@@ -91,25 +92,35 @@ await runScriptWithErrorOutput(async () => {
   }
 
   const candidates = await selectRepublishedDecisionCandidates(rootDb, limit);
-  const bySource = new Map<string, number>();
-  for (const { duplicate } of candidates) {
-    bySource.set(
-      duplicate.adapterKey,
-      (bySource.get(duplicate.adapterKey) ?? 0) + 1,
-    );
-  }
-  console.info("outcome linked", candidates.length);
-  console.info("outcome separate_partial/date_absent 0");
-  console.info("outcome separate_partial/type_absent 0");
-  console.info("outcome separate_partial/date_differs 0");
-  console.info("outcome separate_partial/type_differs 0");
-  console.info("outcome separate_ambiguous 0");
-  for (const [source, count] of [...bySource].toSorted()) {
-    console.info(
-      `source ${source} before=${String(count)} after=${apply ? "0" : String(count)}`,
-    );
-  }
+  const before = await selectRepublishedDecisionReport(rootDb);
+  console.info("outcome linked", before.outcomes.linked);
+  console.info(
+    "outcome separate_partial/date_absent",
+    before.outcomes.separatePartial.dateAbsent,
+  );
+  console.info(
+    "outcome separate_partial/type_absent",
+    before.outcomes.separatePartial.typeAbsent,
+  );
+  console.info(
+    "outcome separate_partial/signature_absent",
+    before.outcomes.separatePartial.signatureAbsent,
+  );
+  console.info(
+    "outcome separate_partial/date_differs",
+    before.outcomes.separatePartial.dateDiffers,
+  );
+  console.info(
+    "outcome separate_partial/type_differs",
+    before.outcomes.separatePartial.typeDiffers,
+  );
+  console.info("outcome separate_ambiguous", before.outcomes.separateAmbiguous);
   if (dryRun) {
+    for (const [source, count] of [...before.bySource].toSorted()) {
+      console.info(
+        `source ${source} before=${String(count)} after=${String(count)}`,
+      );
+    }
     return;
   }
   const linked = await withAggregateTransaction(
@@ -117,5 +128,15 @@ await runScriptWithErrorOutput(async () => {
     async (tx) =>
       await applyRepublishedDecisionBatch(tx, candidates, reconcile(tx)),
   );
+  const after = await selectRepublishedDecisionReport(rootDb);
+  const sources = new Set([
+    ...before.bySource.keys(),
+    ...after.bySource.keys(),
+  ]);
+  for (const source of [...sources].toSorted()) {
+    console.info(
+      `source ${source} before=${String(before.bySource.get(source) ?? 0)} after=${String(after.bySource.get(source) ?? 0)}`,
+    );
+  }
   console.info(`linked=${String(linked)}`);
 });

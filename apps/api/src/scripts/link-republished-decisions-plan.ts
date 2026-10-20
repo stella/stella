@@ -62,6 +62,21 @@ type PlanTransaction = {
   execute: (query: SQL) => PromiseLike<unknown>;
 };
 
+export type RepublishedDecisionReport = {
+  outcomes: {
+    linked: number;
+    separateAmbiguous: number;
+    separatePartial: {
+      dateAbsent: number;
+      dateDiffers: number;
+      signatureAbsent: number;
+      typeAbsent: number;
+      typeDiffers: number;
+    };
+  };
+  bySource: ReadonlyMap<string, number>;
+};
+
 export type RepublishedDecisionCandidate = {
   canonical: CandidateSide;
   duplicate: CandidateSide;
@@ -169,6 +184,87 @@ export const selectRepublishedDecisionCandidates = async (
       : { canonical: right, duplicate: left };
   });
 
+const reportCount = (row: Record<string, unknown>, key: string): number => {
+  const value = row[key];
+  if (typeof value !== "number" && typeof value !== "bigint") {
+    return panic("Republished-decision report returned an invalid count");
+  }
+  return Number(value);
+};
+
+/** Re-read the current corpus rather than predicting the effect of a repair page. */
+export const selectRepublishedDecisionReport = async (
+  tx: PlanTransaction,
+): Promise<RepublishedDecisionReport> => {
+  const candidates = await selectRepublishedDecisionCandidates(
+    tx,
+    2_147_483_647,
+  );
+  const bySource = new Map<string, number>();
+  for (const { duplicate } of candidates) {
+    bySource.set(
+      duplicate.adapterKey,
+      (bySource.get(duplicate.adapterKey) ?? 0) + 1,
+    );
+  }
+
+  const rows = executedRows(
+    await tx.execute(sql`
+      WITH active AS MATERIALIZED (
+        SELECT d.*
+          FROM case_law_decisions d
+         WHERE NOT EXISTS (
+           SELECT 1 FROM case_law_decision_aliases a
+            WHERE a.retired_decision_id = d.id
+         )
+      ), comparable AS MATERIALIZED (
+        SELECT d.id,
+               d.decision_date,
+               d.decision_type,
+               d.docket_family_key,
+               count(p.id) FILTER (
+                 WHERE d.decision_date = p.decision_date
+                   AND lower(d.decision_type) = lower(p.decision_type)
+               ) AS exact_count,
+               bool_or(d.decision_date <> p.decision_date) AS date_differs
+          FROM active d
+          JOIN active p
+            ON p.id <> d.id
+           AND p.source_id <> d.source_id
+           AND p.country = d.country
+           AND p.court = d.court
+           AND (d.docket_family_key IS NULL OR p.docket_family_key = d.docket_family_key)
+         GROUP BY d.id, d.decision_date, d.decision_type, d.docket_family_key
+      )
+      SELECT count(*) FILTER (WHERE docket_family_key IS NOT NULL AND decision_date IS NULL) AS "dateAbsent",
+             count(*) FILTER (WHERE docket_family_key IS NOT NULL AND decision_date IS NOT NULL AND decision_type IS NULL) AS "typeAbsent",
+             count(*) FILTER (WHERE docket_family_key IS NULL) AS "signatureAbsent",
+             count(*) FILTER (WHERE docket_family_key IS NOT NULL AND decision_date IS NOT NULL AND decision_type IS NOT NULL AND exact_count > 1) AS "separateAmbiguous",
+             count(*) FILTER (WHERE docket_family_key IS NOT NULL AND decision_date IS NOT NULL AND decision_type IS NOT NULL AND exact_count = 0 AND date_differs) AS "dateDiffers",
+             count(*) FILTER (WHERE docket_family_key IS NOT NULL AND decision_date IS NOT NULL AND decision_type IS NOT NULL AND exact_count = 0 AND NOT date_differs) AS "typeDiffers"
+        FROM comparable
+    `),
+  );
+  const row = rows.at(0);
+  if (!isRecord(row)) {
+    return panic("Republished-decision report returned an invalid row");
+  }
+  return {
+    outcomes: {
+      linked: candidates.length,
+      separateAmbiguous: reportCount(row, "separateAmbiguous"),
+      separatePartial: {
+        dateAbsent: reportCount(row, "dateAbsent"),
+        dateDiffers: reportCount(row, "dateDiffers"),
+        signatureAbsent: reportCount(row, "signatureAbsent"),
+        typeAbsent: reportCount(row, "typeAbsent"),
+        typeDiffers: reportCount(row, "typeDiffers"),
+      },
+    },
+    bySource,
+  };
+};
+
 type Reconcile = (
   candidate: RepublishedDecisionCandidate,
   direction: "apply" | "reverse",
@@ -213,10 +309,16 @@ export const reverseRepublishedDecisionBatch = async (
     await tx.execute(sql`
     SELECT a.retired_decision_id AS "retiredId",
            a.canonical_decision_id AS "canonicalId",
-           d.source_id AS "sourceId"
+           d.source_id AS "sourceId",
+           ds.adapter_key AS "retiredAdapterKey",
+           d.created_at AS "retiredCreatedAt",
+           cs.adapter_key AS "canonicalAdapterKey",
+           c.created_at AS "canonicalCreatedAt"
       FROM case_law_decision_aliases a
       JOIN case_law_decisions d ON d.id = a.retired_decision_id
       JOIN case_law_decisions c ON c.id = a.canonical_decision_id
+      JOIN case_law_sources ds ON ds.id = d.source_id
+      JOIN case_law_sources cs ON cs.id = c.source_id
      WHERE d.source_id <> c.source_id
        AND EXISTS (
          SELECT 1 FROM case_law_decision_source_identities i
@@ -240,6 +342,22 @@ export const reverseRepublishedDecisionBatch = async (
     }
     const retiredId = brandPersistedCaseLawDecisionId(value["retiredId"]);
     const canonicalId = brandPersistedCaseLawDecisionId(value["canonicalId"]);
+    const retired = side(
+      {
+        rightId: retiredId,
+        rightAdapterKey: value["retiredAdapterKey"],
+        rightCreatedAt: value["retiredCreatedAt"],
+      },
+      "right",
+    );
+    const canonical = side(
+      {
+        leftId: canonicalId,
+        leftAdapterKey: value["canonicalAdapterKey"],
+        leftCreatedAt: value["canonicalCreatedAt"],
+      },
+      "left",
+    );
     await tx.execute(sql`
       UPDATE case_law_decision_source_identities
          SET decision_id = ${retiredId}
@@ -249,20 +367,7 @@ export const reverseRepublishedDecisionBatch = async (
     await tx.execute(
       sql`DELETE FROM case_law_decision_aliases WHERE retired_decision_id = ${retiredId}`,
     );
-    const candidates = await selectRepublishedDecisionCandidates(tx, 1);
-    const candidate = candidates.at(0) ?? {
-      canonical: {
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        createdAt: new Date(0),
-        id: canonicalId,
-      },
-      duplicate: {
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        createdAt: new Date(0),
-        id: retiredId,
-      },
-    };
-    await reconcile(candidate, "reverse");
+    await reconcile({ canonical, duplicate: retired }, "reverse");
   }
   return rows.length;
 };
