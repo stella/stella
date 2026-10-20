@@ -109,7 +109,7 @@ test("every public case-law response family bounds serialized multibyte response
       (schema, text, choice) => {
         const input = stressResponse(schema, text.repeat(16_385), choice);
         const output = projectResponseText(input, schema);
-        expect(Value.Check(schema, output)).toBe(true);
+        expect([...Value.Errors(schema, output)]).toEqual([]);
         expect(
           Buffer.byteLength(JSON.stringify(output), "utf-8"),
         ).toBeLessThanOrEqual(responseByteBound(schema));

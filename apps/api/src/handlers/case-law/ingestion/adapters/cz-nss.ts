@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the stated listing count, including zero for empty slices; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -2547,7 +2548,7 @@ const listCzNssSlicePage = async ({
         cursor: slice,
       });
     }
-    return { items: [], totalPages: 0 };
+    return { items: [], totalPages: 0, publisherCount: 0 };
   }
 
   const { continuation } = search;
@@ -2599,6 +2600,7 @@ const listCzNssSlicePage = async ({
       payload: row,
     })),
     totalPages: czNssTotalPages(search.statedCount),
+    publisherCount: search.statedCount,
   };
 };
 

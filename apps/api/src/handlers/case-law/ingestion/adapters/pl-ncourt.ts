@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the existing listing total for the census; decision parsing, listed items and page counts are unchanged.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -2482,6 +2483,7 @@ const listPlNcourtSlicePage = async ({
   const { items, total } = listed.value;
   return {
     items,
+    publisherCount: total,
     // A page every row of which was unservable states no total; it is still
     // a page, and the ones after it are listed.
     totalPages:

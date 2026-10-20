@@ -12,6 +12,7 @@ import { describe, expect, setSystemTime, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import { FormattingProvider } from "@/i18n/formatting-context";
+import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 import { CaseLawCoveragePage } from "@/routes/law/-law-coverage/coverage-page";
 import type {
@@ -56,6 +57,23 @@ const COUNTED_AT = "2026-09-17T00:00:00.000Z";
  * A source four decisions in a thousand short of the publisher's total: the
  * boundary the displayed percentage must never round up through.
  */
+const UNMEASURED_CENSUS = {
+  aggregateUnit: "slice-memberships",
+  verdict: "unmeasured",
+  scopeStatus: "full-publisher",
+  outcome: "publisher-count",
+  evidenceRef: "https://example.test/publisher-count",
+  measuredSlices: 0,
+  expectedSlices: 1,
+  shortSlices: 0,
+  publisher: null,
+  stored: 0,
+  withText: 0,
+  observedAt: null,
+  years: [],
+  worstSlices: [],
+} satisfies CaseLawCoverageSource["census"];
+
 const NEARLY_COMPLETE: CaseLawCoverageSource = {
   adapterKey: "cz-ns",
   name: "Nejvyšší soud",
@@ -65,6 +83,7 @@ const NEARLY_COMPLETE: CaseLawCoverageSource = {
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
   pendingTextCount: 0,
+  census: UNMEASURED_CENSUS,
   knownGaps: { type: "unknown" },
   addedLastWeek: 12,
   completeness: {
@@ -86,6 +105,7 @@ const NEVER_MEASURED: CaseLawCoverageSource = {
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
   pendingTextCount: 0,
+  census: UNMEASURED_CENSUS,
   knownGaps: { type: "unknown" },
   addedLastWeek: 0,
   completeness: { state: "not-measured-yet" },
@@ -101,12 +121,14 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
   pendingTextCount: 0,
+  census: UNMEASURED_CENSUS,
   knownGaps: { type: "unknown" },
   addedLastWeek: 0,
   completeness: { state: "not-counted-yet" },
 };
 
 const CZECHIA: CaseLawCoverageCountry = {
+  censusVerdict: "unmeasured",
   availability: "searchable",
   country: "CZE",
   health: "delayed",
@@ -151,6 +173,7 @@ const COVERAGE: CaseLawCoverage = {
 
 /** A country the public search cannot reach yet, with nothing counted. */
 const IN_PREPARATION: CaseLawCoverageCountry = {
+  censusVerdict: "unmeasured",
   availability: "in-preparation",
   country: "SVK",
   health: "current",
@@ -210,7 +233,7 @@ describe("the coverage page states what it counts", () => {
     expect(markup).not.toContain("50%");
   });
 
-  test("a source states its decision years, pending texts and known gaps", () => {
+  test("a source states its decision years, pending texts, census counts and known gaps", () => {
     const markup = render(
       <CaseLawCoveragePage
         coverage={{
@@ -224,6 +247,16 @@ describe("the coverage page states what it counts", () => {
                   decisionYearFrom: 1958,
                   decisionYearTo: 2011,
                   pendingTextCount: 1234,
+                  census: {
+                    ...UNMEASURED_CENSUS,
+                    verdict: "incomplete",
+                    measuredSlices: 1,
+                    shortSlices: 1,
+                    publisher: 1000,
+                    stored: 996,
+                    withText: 995,
+                    observedAt: OBSERVED_AT,
+                  },
                   knownGaps: {
                     type: "known",
                     gaps: [
@@ -251,10 +284,57 @@ describe("the coverage page states what it counts", () => {
 
     // The source's own range, distinct from the country's 1993–2026.
     expect(markup).toContain("1958–2011");
+    expect(markup).toContain("996 held / 1,000 published");
+    expect(markup).toContain(messages.caseLaw.coverage.censusIncomplete);
     expect(markup).toContain(
       `${messages.caseLaw.coverage.pendingTexts}: 1,234`,
     );
     expect(markup).toContain(`${messages.caseLaw.coverage.knownGaps}: 2`);
+  });
+
+  test("a text deficit stays visible when held and publisher counts agree, in English and Arabic", () => {
+    const coverage = {
+      ...COVERAGE,
+      countries: [
+        {
+          ...CZECHIA,
+          censusVerdict: "incomplete",
+          sources: [
+            {
+              ...NEARLY_COMPLETE,
+              census: {
+                ...UNMEASURED_CENSUS,
+                verdict: "incomplete",
+                measuredSlices: 1,
+                shortSlices: 1,
+                publisher: 1000,
+                stored: 1000,
+                withText: 998,
+                observedAt: OBSERVED_AT,
+              },
+            },
+          ],
+        },
+      ],
+    } satisfies CaseLawCoverage;
+    const english = render(<CaseLawCoveragePage coverage={coverage} />);
+    expect(english).toContain("1,000 held / 1,000 published · 998 with text");
+    expect(english).toContain(
+      "Counts across slices; a decision may appear more than once.",
+    );
+    expect(english).toContain(messages.caseLaw.coverage.censusIncomplete);
+
+    const arabic = render(
+      <IntlProvider locale="ar" messages={arabicMessages} timeZone="UTC">
+        <CaseLawCoveragePage coverage={coverage} />
+      </IntlProvider>,
+      "ar-u-nu-arab",
+    );
+    expect(arabic).toContain("١٬٠٠٠ محفوظة / ١٬٠٠٠ منشورة · ٩٩٨ بنص متاح");
+    expect(arabic).toContain(
+      "الأعداد مجمّعة حسب الفترات والفئات؛ وقد يظهر القرار أكثر من مرة.",
+    );
+    expect(arabic).toContain(arabicMessages.caseLaw.coverage.censusIncomplete);
   });
 
   test("freshness is a word, with the dot only beside it", () => {

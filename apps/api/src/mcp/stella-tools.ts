@@ -1132,7 +1132,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+      "Report case-law availability per jurisdiction and source: year ranges, last sync, publisher census counts, per-year summaries, worst slices, pending texts, and court breakdowns. censusVerdict is complete only when every expected slice is measured, held at least to its publisher count, and at least 99.9% has text; unmeasured is not complete. Source and year counts measure slice memberships; a decision may appear more than once. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     inputSchema: caseLawCoverageArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -3887,6 +3887,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
         case "in-preparation":
           return {
             country: entry.country,
+            censusVerdict: entry.censusVerdict,
             availability: entry.availability,
             decisions: entry.stored.decisions,
             decisionYearFrom: null,
@@ -3898,6 +3899,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
               decisionYearFrom: source.decisionYearFrom,
               decisionYearTo: source.decisionYearTo,
               pendingTextCount: source.pendingTextCount,
+              census: source.census,
               knownGaps:
                 source.knownGaps.type === "known"
                   ? { ...source.knownGaps, gaps: [...source.knownGaps.gaps] }
@@ -3908,6 +3910,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
         case "searchable":
           return {
             country: entry.country,
+            censusVerdict: entry.censusVerdict,
             availability: entry.availability,
             decisions: entry.searchable,
             decisionYearFrom: entry.decisionYearFrom,
@@ -3919,6 +3922,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
               decisionYearFrom: source.decisionYearFrom,
               decisionYearTo: source.decisionYearTo,
               pendingTextCount: source.pendingTextCount,
+              census: source.census,
               knownGaps:
                 source.knownGaps.type === "known"
                   ? { ...source.knownGaps, gaps: [...source.knownGaps.gaps] }

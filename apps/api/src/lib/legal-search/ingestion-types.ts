@@ -1,3 +1,4 @@
+// parser-output-unchanged: The optional reconciliation publisherCount field carries census observations; decision parser inputs and output are unchanged.
 // parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
 // parser-output-unchanged: document scheduling is checked against the source manifest; parsed output is unchanged.
 // parser-output-unchanged: Adds an optional observation-quality discriminator; publisher fields and document parsing are unchanged.
@@ -1203,6 +1204,8 @@ export type ReconciliationSlicePage = {
   items: ReconciliationListingItem[];
   /** 0 where the publisher lists nothing for the slice at all. */
   totalPages: number;
+  /** Exact count stated for this whole slice by the listing already fetched. */
+  publisherCount?: number | undefined;
 };
 
 export type ReconciliationSlicePageOptions = {

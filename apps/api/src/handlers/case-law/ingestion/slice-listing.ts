@@ -33,6 +33,8 @@ export type ListedSlice = {
   listed: number;
   unidentifiable: number;
   duplicate: number;
+  /** Absent when the listing exposes only enumeration, rather than a count. */
+  publisherCount?: number | undefined;
 };
 
 type ListReconciliationSliceOptions = {
@@ -78,6 +80,24 @@ export const listReconciliationSlice = async ({
       page,
       signal: AbortSignal.timeout(pageTimeoutMs),
     });
+    if (listed.publisherCount !== undefined) {
+      if (
+        !Number.isSafeInteger(listed.publisherCount) ||
+        listed.publisherCount < 0 ||
+        (listing.publisherCount !== undefined &&
+          listing.publisherCount !== listed.publisherCount)
+      ) {
+        return Result.err(
+          new AdapterFetchError({
+            message:
+              "Slice listing stated an invalid or changing publisher count",
+            adapterKey,
+            cursor: slice,
+          }),
+        );
+      }
+      listing.publisherCount = listed.publisherCount;
+    }
     listing.listed += listed.items.length;
     for (const item of listed.items) {
       const identityKey = listingIdentityKey(item.identity);

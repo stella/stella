@@ -87,8 +87,13 @@ import {
   MAX_SLICE_PAGES,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
+import { censusScope } from "@/api/lib/case-law/completeness-census";
+import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
-import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import {
+  rowHoldsDocumentFor,
+  supplementIsMergedFor,
+} from "@/api/lib/case-law/stored-payload";
 import {
   errorFingerprint,
   errorSystemFields,
@@ -639,9 +644,7 @@ const selectHeldDocumentIds = async (
     supplements: await tx
       .select({
         sourceDocumentId: caseLawDecisionSupplements.sourceDocumentId,
-        decisionId: caseLawDecisionSupplements.decisionId,
-        sourceHash: caseLawDecisionSupplements.sourceHash,
-        mergedSourceHash: caseLawDecisionSupplements.mergedSourceHash,
+        merged: supplementIsMergedFor(caseLawDecisionSupplements),
       })
       .from(caseLawDecisionSupplements)
       .where(
@@ -657,12 +660,7 @@ const selectHeldDocumentIds = async (
   const supplementStateById = new Map(
     supplements.map(
       (row) =>
-        [
-          row.sourceDocumentId,
-          row.decisionId !== null && row.mergedSourceHash === row.sourceHash
-            ? "merged"
-            : "unmerged",
-        ] as const,
+        [row.sourceDocumentId, row.merged ? "merged" : "unmerged"] as const,
     ),
   );
   const rowsById = new Map(
@@ -1446,6 +1444,7 @@ const ingestListedItem = async ({
 };
 
 type WalkSliceOptions = {
+  publisherScope: ReturnType<typeof censusScope>;
   adapterKey: string;
   fetchDelayMs: number;
   ingestBudget: number;
@@ -1470,6 +1469,7 @@ type WalkSliceOptions = {
  * slice whose misses exceeded the budget records short and is selected again.
  */
 const walkSlice = async ({
+  publisherScope,
   adapterKey,
   fetchDelayMs,
   ingestBudget,
@@ -1619,6 +1619,18 @@ const walkSlice = async ({
       reported: summary.keyable,
       collected: summary.heldBefore + summary.written,
     },
+  });
+  await lease.beforeDatabaseMark();
+  await recordCompletenessCensus(scopedDb, {
+    adapterKey,
+    sourceId,
+    leaseToken: lease.leaseToken,
+    slice,
+    scope: publisherScope,
+    identities: items.map(({ identity }) => identity),
+    listed: listing.value.keyed.size + listing.value.unidentifiable,
+    publisherCount: listing.value.publisherCount,
+    observedAt: now(),
   });
   return summary;
 };
@@ -1907,6 +1919,7 @@ type ExecuteReconciliationUnitOptions = Pick<
   | "sleep"
   | "sourceId"
 > & {
+  publisherScope: ReturnType<typeof censusScope>;
   readStoredRaw: StoredRawResultReader;
   reconciliation: SourceReconciliation;
   sliceIngestBudget: number;
@@ -1915,6 +1928,7 @@ type ExecuteReconciliationUnitOptions = Pick<
 };
 
 const executeReconciliationUnit = async ({
+  publisherScope,
   adapterKey,
   fetchDelayMs,
   now,
@@ -1979,6 +1993,7 @@ const executeReconciliationUnit = async ({
         return {
           type: "worked",
           summary: await walkSlice({
+            publisherScope,
             adapterKey,
             fetchDelayMs,
             ingestBudget: sliceIngestBudget,
@@ -2223,6 +2238,7 @@ export const runReconciliationWorkUnit = async ({
   }
 
   return await executeReconciliationUnit({
+    publisherScope: censusScope(adapterReconciliation, startedAt),
     adapterKey,
     fetchDelayMs,
     now,

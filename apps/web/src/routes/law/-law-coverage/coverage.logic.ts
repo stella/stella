@@ -172,3 +172,21 @@ export const coverageGlobeFrame = (
   const scale = Math.min(europe.scale, PIN_REACH / reachOf(centred));
   return { ...centred, scale: Math.max(1, scale) };
 };
+
+export const CASE_LAW_CENSUS_LABEL_KEYS = {
+  complete: "caseLaw.coverage.censusComplete",
+  incomplete: "caseLaw.coverage.censusIncomplete",
+  unmeasured: "caseLaw.coverage.notMeasuredYet",
+} as const satisfies Record<
+  CaseLawCoverageCountry["censusVerdict"],
+  TranslationKey
+>;
+
+export const CASE_LAW_CENSUS_TONES = {
+  complete: "success",
+  incomplete: "warning",
+  unmeasured: "neutral",
+} as const satisfies Record<
+  CaseLawCoverageCountry["censusVerdict"],
+  ReviewStatusTone
+>;
