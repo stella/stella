@@ -1736,6 +1736,16 @@ const processOneBatch = async ({
       entityVersionId,
       batch,
       contentType: "pending",
+      owner: {
+        runId: requestId,
+        batchId: batch.id,
+        deadlineAt: new Date(
+          Temporal.Now.instant().add({
+            milliseconds: getWorkflowBatchAITimeoutMs(serviceTier) + 30_000,
+          }).epochMilliseconds,
+        ),
+        attempt: 0,
+      },
       writeDb: actor.writeDb,
     });
 
@@ -1840,6 +1850,12 @@ const processOneBatch = async ({
         unsupportedPropertyIds.push(
           ...batchResult.value.unsupportedPropertyIds,
         );
+        for (const { id: propertyId } of aiModelProperties) {
+          const outcome = batchResult.value.settlements.get(propertyId);
+          if (outcome === "notStated" || outcome === "refused") {
+            skippedPropertyIds.push(propertyId);
+          }
+        }
       }
     }
 
@@ -2317,15 +2333,26 @@ type SetFieldsStatusArgs = {
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
   batch: PropertyBatch;
-  contentType: "pending" | "error" | "unsupported";
   writeDb: WorkflowRunActor["writeDb"];
-};
+} & (
+  | {
+      contentType: "pending";
+      owner: {
+        runId: string;
+        batchId: string;
+        deadlineAt: Date;
+        attempt: 0 | 1;
+      };
+    }
+  | { contentType: "error" | "unsupported"; owner?: never }
+);
 
 const setFieldsStatus = async ({
   workspaceId,
   entityVersionId,
   batch,
   contentType,
+  owner,
   writeDb,
 }: SetFieldsStatusArgs) => {
   const propertyIds = batch.properties.map((p) => p.id);
@@ -2377,6 +2404,10 @@ const setFieldsStatus = async ({
       propertyId,
       entityVersionId,
       content: { type: contentType, version: 1 as const },
+      ownerRunId: owner?.runId ?? null,
+      ownerBatchId: owner?.batchId ?? null,
+      deadlineAt: owner?.deadlineAt ?? null,
+      attempt: owner?.attempt ?? null,
     }));
 
     await tx.insert(fields).values(fieldValues);
