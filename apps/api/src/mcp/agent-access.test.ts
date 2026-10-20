@@ -13,11 +13,11 @@ import {
   decideAgentCall,
   describeAgentAccess,
 } from "@/api/mcp/agent-access";
-import type { AgentAccessTarget } from "@/api/mcp/agent-access";
+import type { AgentAccess, AgentAccessTarget } from "@/api/mcp/agent-access";
+import { loadCapabilityCatalog } from "@/api/mcp/capability-tools";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { listGatewayMcpToolDefinitions } from "@/api/mcp/gateway/list-tools";
-import capabilityCatalog from "@/api/mcp/generated/capability-catalog";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -27,6 +27,7 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 const MATTER_ID = "018f2a3e-4b5c-7d6e-8f90-a1b2c3d4e5f6";
 const CALLER = { toolConfirmation: TOOL_CONFIRMATION.caller };
 const AGENT_RUN = { toolConfirmation: TOOL_CONFIRMATION.unavailable };
+const capabilityCatalog = await loadCapabilityCatalog();
 
 const createContext = (
   toolConfirmation?: McpRequestContext["toolConfirmation"],
@@ -209,7 +210,7 @@ describe("classification", () => {
     const changesSettings = {
       kind: AGENT_ACCESS_KIND.personApproves,
       reason: "changes-organization-settings",
-    };
+    } as const satisfies AgentAccess;
     for (const { id } of settingsWrites) {
       expect({
         id,
