@@ -116,7 +116,59 @@ const createContext = ({
               : { practiceJurisdictions },
           ),
       },
+      extractedContent: {
+        findMany: async () => [
+          {
+            entityId: ENTITY_ID,
+            workspaceId: WORKSPACE_ID,
+            ciphertext: "unused",
+            iv: "unused",
+            charCount: 1,
+            language: null,
+            extractedAt: new Date("2026-01-02"),
+            sourceEntityVersionId: "version_1",
+            sourceFieldId: "field_1",
+            sourceFileId: "file_1",
+            sourceSha256Hex: "a".repeat(64),
+            ocrRunId: null,
+            entity: {
+              name: "SPA",
+              workspaceId: WORKSPACE_ID,
+              workspace: { status: "active" },
+              currentVersion: {
+                id: "version_1",
+                createdAt: new Date("2026-01-01"),
+                deletedAt: null,
+                fields: [
+                  {
+                    id: "field_1",
+                    content: {
+                      type: "file",
+                      version: 1,
+                      id: "file_1",
+                      fileName: "SPA.pdf",
+                      mimeType: "application/pdf",
+                      sizeBytes: 1,
+                      encrypted: false,
+                      sha256Hex: "a".repeat(64),
+                      pdfFileId: "pdf_1",
+                    },
+                  },
+                ],
+              },
+              versions: [{ id: "version_1" }],
+            },
+          },
+        ],
+      },
     },
+    selectDistinct: () => ({
+      from: () => ({
+        innerJoin: () => ({
+          where: async () => await Promise.resolve([{ id: WORKSPACE_ID }]),
+        }),
+      }),
+    }),
     select: () => ({
       from: () => ({
         innerJoin: () => ({

@@ -61,6 +61,7 @@ import {
   DEFAULT_COMPAT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
+  internalFailureResult,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
@@ -414,22 +415,12 @@ const searchMatterKnowledge = async ({
   cursor: string | undefined;
   query: string;
 }): Promise<Result<MatterSearchPage, AuthorizedWorkspaceReadError>> => {
-  const workspaceIdsResult = await context.scopedDb(
-    async (tx) =>
-      await authorizedWorkspaceIds(tx, {
-        organizationId: context.organizationId,
-        workspaceIds: context.accessibleWorkspaceIds,
-      }),
-  );
-  if (workspaceIdsResult.isErr()) {
-    return workspaceIdsResult;
-  }
   const page = await (
     context.testDependencies?.getSearchReader ?? getSearchReader
   )(context.scopedDb).search({
     query,
     organizationId: context.organizationId,
-    workspaceIds: workspaceIdsResult.value,
+    workspaceIds: context.accessibleWorkspaceIds,
     limit: normalizeTenantPageLimit(DEFAULT_COMPAT_SEARCH_LIMIT),
     ...(cursor === undefined ? {} : { cursor }),
   });
@@ -485,7 +476,7 @@ const handleCompatSearchTool: McpToolHandler<
           query,
         });
   if (matterResult.isErr()) {
-    return errorResult(matterResult.error.message);
+    return internalFailureResult(matterResult.error);
   }
   const matter = matterResult.value;
 
