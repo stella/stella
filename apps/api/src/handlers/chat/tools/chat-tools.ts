@@ -26,6 +26,7 @@ import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
+import { auditChatToolExecutions } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
 import {
   corpusScopeDroppedTools,
   corpusScopeUnavailableReason,
@@ -111,7 +112,6 @@ import type {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { authorizeDocumentWriteAccess } from "@/api/lib/entities/authorize-document-write";
 import type {
   DocumentWriteAccess,
@@ -120,6 +120,7 @@ import type {
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+  AI_MEMORY_FEATURE_ID,
   FEATURE_REGISTRY,
   type FeatureRegistry,
 } from "@/api/lib/feature-access/registry";
@@ -828,11 +829,20 @@ const createSecretToolsForTurn = ({
   return createSecretTools({ safeDb, organizationId, userId, threadId });
 };
 
-export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
+const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
     testDependencies,
-    memoryEnabled = isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+    memoryEnabled = isMcpDescriptorFeatureEnabled({
+      context: {
+        featureAccessSnapshot: props.featureAccessSnapshot,
+        organizationId: props.organizationId,
+        userId: props.userId,
+      },
+      kind: "tools",
+      id: REMEMBER_TOOL_NAME,
+      featureId: AI_MEMORY_FEATURE_ID,
+    }),
     safeDb,
     scopedDb,
     pinServerValidatedWorkspaceId,
@@ -1380,6 +1390,26 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     ]),
   };
   return tools;
+};
+
+export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
+  const tools = buildChatTools(props);
+  // A run's approval-gated tools record each execution; validation sets never
+  // execute.
+  if (
+    props.purpose === CHAT_TOOL_SET_PURPOSE.validation ||
+    props.recordAuditEvent === undefined
+  ) {
+    return tools;
+  }
+  return auditChatToolExecutions({
+    audit: {
+      recordAuditEvent: props.recordAuditEvent,
+      safeDb: props.safeDb,
+      threadId: props.threadId,
+    },
+    tools,
+  });
 };
 
 type GetChatValidationToolsProps = Omit<

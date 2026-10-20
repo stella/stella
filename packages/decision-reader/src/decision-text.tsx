@@ -66,6 +66,7 @@ import type {
   CitationAnchorSource,
   CitedProvisionTarget,
   DecisionProvisionAnchor,
+  ExternalDecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
   ReaderDecision,
 } from "./reader-types";
@@ -497,6 +498,7 @@ const buildAnchorsByPieceId = ({
   blocks,
   citations,
   provisionSpans,
+  externalProvisionSpans,
   statutes,
 }: {
   adapters: Pick<
@@ -507,6 +509,10 @@ const buildAnchorsByPieceId = ({
   blocks: readonly Block[];
   citations: readonly CitationAnchorSource[];
   provisionSpans: Record<string, ProvisionAnchorSpan<CitedProvisionTarget>[]>;
+  externalProvisionSpans: Record<
+    string,
+    ProvisionAnchorSpan<{ href: string }>[]
+  >;
   statutes: readonly DecisionStatuteCitationAnchor[];
 }): DecisionTextAnchorPlacements => {
   const failures: ProvisionPlacementFailure[] = [];
@@ -552,6 +558,7 @@ const buildAnchorsByPieceId = ({
   const blockIds = new Set([
     ...Object.keys(citationSpans),
     ...Object.keys(provisionSpans),
+    ...Object.keys(externalProvisionSpans),
     ...statuteSpans.keys(),
     ...externalCjeuSpansByBlock.keys(),
     ...annotationsByBlock.keys(),
@@ -611,6 +618,24 @@ const buildAnchorsByPieceId = ({
           });
         },
         start: span.start,
+      });
+    }
+    for (const span of externalProvisionSpans[blockId] ?? []) {
+      anchors.push({
+        start: span.start,
+        end: span.end,
+        key: `provision:${span.source.id}`,
+        render: (children): ReactElement => (
+          <ExternalCitationLink href={span.source.target.href}>
+            {renderLinkAnnotations({
+              annotations: annotationsOverlappingTextSpan(
+                blockAnnotations ?? [],
+                span,
+              ),
+              children,
+            })}
+          </ExternalCitationLink>
+        ),
       });
     }
     for (const span of statuteSpans.get(blockId) ?? []) {
@@ -719,6 +744,9 @@ export type PrepareDecisionTextPlacementsOptions = {
   blocks: readonly Block[];
   citationAnchors: readonly CitationAnchorSource[];
   provisionAnchors: readonly DecisionProvisionAnchor[];
+  externalProvisionAnchors?:
+    | readonly ExternalDecisionProvisionAnchor[]
+    | undefined;
   statuteCitationAnchors: readonly DecisionStatuteCitationAnchor[];
 };
 
@@ -759,11 +787,16 @@ export const prepareDecisionTextPlacements = ({
   blocks,
   citationAnchors,
   provisionAnchors,
+  externalProvisionAnchors = [],
   statuteCitationAnchors,
 }: PrepareDecisionTextPlacementsOptions): DecisionTextAnchorPlacements => {
   const provisionPlacement = locateProvisionAnchors({
     blocks,
     provisions: provisionAnchors,
+  });
+  const externalPlacement = locateProvisionAnchors({
+    blocks,
+    provisions: externalProvisionAnchors,
   });
   const placements = buildAnchorsByPieceId({
     adapters,
@@ -771,12 +804,17 @@ export const prepareDecisionTextPlacements = ({
     blocks,
     citations: citationAnchors,
     provisionSpans: provisionPlacement.anchorsByPieceId,
+    externalProvisionSpans: externalPlacement.anchorsByPieceId,
     statutes: statuteCitationAnchors,
   });
   return {
     anchorsByPieceId: placements.anchorsByPieceId,
     provisionsByAnchorId: placements.provisionsByAnchorId,
-    failures: [...provisionPlacement.failures, ...placements.failures],
+    failures: [
+      ...provisionPlacement.failures,
+      ...externalPlacement.failures,
+      ...placements.failures,
+    ],
   };
 };
 
