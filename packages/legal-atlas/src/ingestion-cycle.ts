@@ -1,4 +1,5 @@
 // parser-output-unchanged: Stop dispositions classify cycle failures; parsed decision output is unchanged.
+// parser-output-unchanged: republished-ruling link counts report ingestion outcomes; parsed decision output is unchanged.
 export const INGESTION_STOP_KIND = {
   SOURCE_UNREACHABLE: "source_unreachable",
   PUBLISHER_REFUSAL: "publisher_refusal",
