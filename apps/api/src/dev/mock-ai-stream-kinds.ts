@@ -1,8 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import type { AdapterYieldChunk, ModelMessage, TokenUsage } from "@tanstack/ai";
 
-import { AhoCorasick } from "@stll/aho-corasick";
-
 import { MOCK_AI_STREAM_KIND_MARKERS } from "@/api/dev/mock-ai-stream-kind-markers";
 import type { MockAiStreamKind } from "@/api/dev/mock-ai-stream-kind-markers";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
@@ -37,20 +35,11 @@ const KINDS = Object.keys(MOCK_AI_STREAM_KIND_MARKERS).filter(
   (kind): kind is MockAiStreamKind => kind in MOCK_AI_STREAM_KIND_MARKERS,
 );
 
-const STREAM_KIND_MATCHER = new AhoCorasick(
-  KINDS.map((kind) => MOCK_AI_STREAM_KIND_MARKERS[kind]),
-);
-
 /** The kind whose marker `text` holds, if any. */
 export const mockAiStreamKindOf = (
   text: string,
-): MockAiStreamKind | undefined => {
-  let first = KINDS.length;
-  for (const match of STREAM_KIND_MATCHER.findOverlappingIter(text)) {
-    first = Math.min(first, match.pattern);
-  }
-  return KINDS.at(first);
-};
+): MockAiStreamKind | undefined =>
+  KINDS.find((kind) => text.includes(MOCK_AI_STREAM_KIND_MARKERS[kind]));
 
 const words = (count: number) =>
   Array.from({ length: count }, (_, index) => `w${String(index)} `);
