@@ -297,18 +297,15 @@ export const parseCzUohsDocumentPdf = async (
  * only from the head of the text.
  */
 const LETTERHEAD_SPAN = 1500;
-const LETTERHEAD_LABEL = /Datum,\s*místo/u;
-const LETTERHEAD_DATE = /(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4}),\s*Brno/u;
+// The value must follow its own label: a date elsewhere in the head is not it.
+const LETTERHEAD_DATE =
+  /Datum,\s*místo\s+(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4}),\s*Brno/u;
 
 /** Where a ÚOHS decision date was read from; the export states none. */
 export const CZ_UOHS_DECISION_DATE_SOURCE = "document";
 
 export const czUohsLetterheadDate = (text: string): string | undefined => {
-  const head = text.slice(0, LETTERHEAD_SPAN);
-  if (!LETTERHEAD_LABEL.test(head)) {
-    return undefined;
-  }
-  const match = LETTERHEAD_DATE.exec(head);
+  const match = LETTERHEAD_DATE.exec(text.slice(0, LETTERHEAD_SPAN));
   if (match === null) {
     return undefined;
   }

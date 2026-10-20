@@ -5,10 +5,7 @@
 // recording yet. `processed-field-inventory.test.ts` holds the inventory and
 // the file to exact agreement; agreement alone would let a change add a debt
 // to both in one diff. This compares the file against the base revision's:
-// a pair the base did not list fails. The one exception is a source the
-// base revision does not register at all: it may enter with debt it declares
-// under `newSourceDeclarations`, owned and linked to the change that clears
-// it, so an existing source can never grow its backlog.
+// a pair the base did not list fails.
 //
 //   bun apps/api/scripts/processed-field-backlog-guard.ts --base <rev>   CI gate
 
@@ -110,92 +107,6 @@ export const BOOTSTRAP_BACKLOG = {
   ]),
 } as const;
 
-/**
- * Debt a source added in this change enters with, declared beside the lists:
- * which pairs, who owns clearing them, and the change that will. Pairs are
- * written without the source (`skipped:not-extracted|court-paragraph-numbers`).
- */
-export type NewSourceDeclaration = {
-  readonly owner: string;
-  readonly followUp: string;
-  readonly pairs: readonly string[];
-};
-
-const nonEmptyString = (value: unknown): value is string =>
-  typeof value === "string" && value.trim().length > 0;
-
-const isNewSourceDeclaration = (
-  value: unknown,
-): value is NewSourceDeclaration => {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  const pairs: unknown = Reflect.get(value, "pairs");
-  return (
-    nonEmptyString(Reflect.get(value, "owner")) &&
-    nonEmptyString(Reflect.get(value, "followUp")) &&
-    Array.isArray(pairs) &&
-    pairs.every(nonEmptyString)
-  );
-};
-
-/** The full pairs each new-source declaration admits, keyed by source. */
-export const declaredNewSourcePairs = (
-  baseline: unknown,
-  where: string,
-): ReadonlyMap<string, readonly string[]> => {
-  const declared: unknown =
-    typeof baseline === "object" && baseline !== null
-      ? Reflect.get(baseline, "newSourceDeclarations")
-      : undefined;
-  if (declared === undefined) {
-    return new Map();
-  }
-  if (typeof declared !== "object" || declared === null) {
-    return panic(`${where}: newSourceDeclarations is not a map of sources`);
-  }
-  return new Map(
-    Object.entries(declared).map(([source, declaration]) => {
-      if (!isNewSourceDeclaration(declaration)) {
-        return panic(
-          `${where}: newSourceDeclarations.${source} needs owner, followUp and pairs`,
-        );
-      }
-      return [
-        source,
-        declaration.pairs.map((pair) => {
-          const [list, field] = pair.split("|");
-          return list === undefined || field === undefined
-            ? panic(`${where}: newSourceDeclarations.${source} pair ${pair}`)
-            : `${list}|${source}|${field}`;
-        }),
-      ];
-    }),
-  );
-};
-
-/**
- * Grown pairs a new source declared. A source counts as new only when the
- * base revision registers no adapter under its key.
- */
-export const admittedNewSourcePairs = ({
-  grown,
-  declared,
-  isRegisteredAtBase,
-}: {
-  grown: readonly string[];
-  declared: ReadonlyMap<string, readonly string[]>;
-  isRegisteredAtBase: (source: string) => boolean;
-}): string[] =>
-  grown.filter((pair) => {
-    const source = pair.split("|").at(1);
-    return (
-      source !== undefined &&
-      !isRegisteredAtBase(source) &&
-      (declared.get(source) ?? []).includes(pair)
-    );
-  });
-
 /** The reference pairs: the base revision's file, or the bootstrap list. */
 export const referencePairs = (base: readonly string[] | undefined) =>
   base ?? backlogPairs(BOOTSTRAP_BACKLOG, "bootstrap backlog");
@@ -233,22 +144,6 @@ const readBasePairs = (base: string): string[] | undefined => {
   return backlogPairs(JSON.parse(shown.stdout.toString()), base);
 };
 
-const ADAPTER_KEYS_FILE =
-  "apps/api/src/lib/legal-search/ingestion-constants.ts";
-
-/** Whether the base revision registers an adapter under this key. */
-const registeredAtBase =
-  (base: string) =>
-  (source: string): boolean => {
-    const shown = git(["show", `${base}:${ADAPTER_KEYS_FILE}`]);
-    if (shown.exitCode !== 0) {
-      return panic(
-        `processed-field-backlog-guard: cannot read ${base}:${ADAPTER_KEYS_FILE}`,
-      );
-    }
-    return shown.stdout.toString().includes(`"${source}"`);
-  };
-
 const baseArgument = (): string => {
   const index = process.argv.indexOf("--base");
   const value = index === -1 ? undefined : process.argv[index + 1];
@@ -258,33 +153,20 @@ const baseArgument = (): string => {
 };
 
 const main = (): number => {
-  const baseRevision = baseArgument();
-  const basePairs = readBasePairs(baseRevision);
+  const basePairs = readBasePairs(baseArgument());
   if (basePairs === undefined) {
     console.log(
       "processed-field-backlog-guard: the base has no backlog file; comparing with the bootstrap backlog.",
     );
   }
   const base = referencePairs(basePairs);
-  const baseline: unknown = JSON.parse(
-    readFileSync(path.join(REPO_ROOT, PROCESSED_FIELD_BACKLOG_FILE), "utf-8"),
+  const current = backlogPairs(
+    JSON.parse(
+      readFileSync(path.join(REPO_ROOT, PROCESSED_FIELD_BACKLOG_FILE), "utf-8"),
+    ),
+    PROCESSED_FIELD_BACKLOG_FILE,
   );
-  const current = backlogPairs(baseline, PROCESSED_FIELD_BACKLOG_FILE);
-  const admitted = new Set(
-    admittedNewSourcePairs({
-      grown: grownPairs({ current, base }),
-      declared: declaredNewSourcePairs(baseline, PROCESSED_FIELD_BACKLOG_FILE),
-      isRegisteredAtBase: registeredAtBase(baseRevision),
-    }),
-  );
-  for (const pair of admitted) {
-    console.log(
-      `processed-field-backlog-guard: ${pair} enters with a new source, as its declaration states.`,
-    );
-  }
-  const grown = grownPairs({ current, base }).filter(
-    (pair) => !admitted.has(pair),
-  );
+  const grown = grownPairs({ current, base });
   if (grown.length === 0) {
     console.log(
       `processed-field-backlog-guard: ${String(current.length)} pairs, none new against the base.`,

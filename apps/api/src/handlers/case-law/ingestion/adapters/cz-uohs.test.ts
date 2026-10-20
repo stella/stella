@@ -156,6 +156,12 @@ describe("ÚOHS JSON-LD", () => {
     expect(
       czUohsLetterheadDate("Rozhodnutí 12. 10. 2026, Brno"),
     ).toBeUndefined();
+    // The label with an unreadable value does not borrow another date.
+    expect(
+      czUohsLetterheadDate(
+        "Datum, místo neuvedeno\nPodnět ze dne 5. 3. 2026, Brno",
+      ),
+    ).toBeUndefined();
     expect(
       czUohsLetterheadDate("Datum, místo 31. 2. 2026, Brno"),
     ).toBeUndefined();
