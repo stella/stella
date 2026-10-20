@@ -5,7 +5,6 @@ import type {
 import type * as v from "valibot";
 
 import type { SearchPaginationOutcome } from "@stll/api-contract/search";
-import type { PermissionInput } from "@stll/permissions";
 
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
@@ -106,7 +105,7 @@ const MCP_ANONYMIZED_EXCLUSION_REASONS = [
   "personal_register_data",
 ] as const;
 
-export type McpAnonymizedExclusionReason =
+type McpAnonymizedExclusionReason =
   (typeof MCP_ANONYMIZED_EXCLUSION_REASONS)[number];
 
 /**
@@ -145,10 +144,6 @@ export type McpAnonymizedPolicy =
  * consequence of the same fact). The registry-quality suite cross-checks all
  * three stay coherent.
  */
-const MCP_TOOL_ACCESS_LEVELS = ["read", "write"] as const;
-
-export type McpToolAccess = (typeof MCP_TOOL_ACCESS_LEVELS)[number];
-
 export type McpToolAnnotations = NonNullable<McpTool["annotations"]> & {
   destructiveHint: boolean;
   openWorldHint: boolean;
@@ -164,7 +159,7 @@ export type McpToolAnnotationReasons = Readonly<{
 
 export type McpReadClass = "tenant" | "public" | "both";
 
-export type McpReadClassResolver = (
+type McpReadClassResolver = (
   args: unknown,
 ) => McpReadClass | undefined | Promise<McpReadClass | undefined>;
 
@@ -209,7 +204,7 @@ export type McpToolAccessBranch =
       accountAccess: AccountAccess;
     };
 
-export type McpToolDestructiveBehavior =
+type McpToolDestructiveBehavior =
   | { type: "always" }
   | {
       type: "input-discriminator";
@@ -300,7 +295,7 @@ export type McpToolDefinitionAuthoring = BaseMcpToolDefinition;
 export const PUBLIC_MCP_TOOL_DEFINITION = Symbol("PublicMcpToolDefinition");
 export const PUBLIC_MCP_TOOL_HANDLER = Symbol("PublicMcpToolHandler");
 
-export type PublicMcpToolDefinition = BaseMcpToolDefinition & {
+type PublicMcpToolDefinition = BaseMcpToolDefinition & {
   access: "read";
   authority: { kind: "public"; reason: string };
   readonly [PUBLIC_MCP_TOOL_DEFINITION]: true;
@@ -349,7 +344,7 @@ export const MCP_CLI_TOOL_SCOPES: readonly McpCliToolScope[] = Object.values(
   MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE,
 ).filter((scope): scope is McpCliToolScope => scope !== null);
 
-export type McpCliDiscriminatorSubcommand = {
+type McpCliDiscriminatorSubcommand = {
   command: string;
   destructive?: boolean;
   include?: readonly string[];
@@ -512,7 +507,7 @@ export type McpStructuredTextField = {
  * metadata back into the payload. Windowing runs after anonymization so an
  * entity name can never be split across a window edge.
  */
-export type McpStructuredWindow = {
+type McpStructuredWindow = {
   apply: (window: TextWindowResult) => void;
   cursor: string | undefined;
   maxChars: number;
@@ -643,11 +638,6 @@ export type PublicMcpToolHandler<TData = unknown> = (options: {
   context: PublicMcpHandlerContext;
 }) => McpToolResponse<TData> | Promise<McpToolResponse<TData>>;
 
-type TenantReadDefinition = McpToolDefinition & {
-  access: "read";
-  authority: { kind: "tenant"; permissions: PermissionInput };
-};
-
 export const definePublicReadTool = <
   TData,
   const TDefinition extends McpToolDefinitionAuthoring & {
@@ -669,11 +659,6 @@ export const definePublicReadTool = <
   return sealed;
 };
 
-export const defineTenantReadTool = <TData>(
-  definition: TenantReadDefinition,
-  handler: McpToolHandler<TData>,
-) => ({ ...definition, handler });
-
 type TypedHandlerData<THandler> =
   THandler extends McpToolHandler<infer TData>
     ? TData
@@ -689,13 +674,6 @@ type IsUnknown<TValue> =
   IsAny<TValue> extends true ? false : unknown extends TValue ? true : false;
 
 type IsBroadRecord<TValue> = string extends keyof TValue ? true : false;
-
-export type TypedHandlerDataByName<
-  THandlers,
-  TNames extends keyof THandlers,
-> = {
-  [TName in TNames]: TypedHandlerData<THandlers[TName]>;
-};
 
 type HandlerOutputIsTyped<THandler, TData = TypedHandlerData<THandler>> =
   IsNever<TData> extends true
@@ -741,19 +719,16 @@ export type HandlerOutputsMatchByName<
   ? false
   : true;
 
-export type AssertTrue<TValue extends true> = TValue;
-
-export type McpToolHandlerMap<
-  TDefinitions extends readonly McpToolDefinition[],
-> = Readonly<
-  Record<
-    Exclude<
-      TDefinitions[number]["name"],
-      Extract<TDefinitions[number], PublicMcpToolDefinition>["name"]
-    >,
-    McpToolHandler
-  >
->;
+type McpToolHandlerMap<TDefinitions extends readonly McpToolDefinition[]> =
+  Readonly<
+    Record<
+      Exclude<
+        TDefinitions[number]["name"],
+        Extract<TDefinitions[number], PublicMcpToolDefinition>["name"]
+      >,
+      McpToolHandler
+    >
+  >;
 
 export type McpToolOutputContractMap<
   TDefinitions extends readonly McpToolDefinition[],

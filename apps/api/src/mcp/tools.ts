@@ -69,7 +69,6 @@ import {
 } from "@/api/mcp/tool-utils";
 
 export { findUndeclaredArguments } from "@/api/mcp/input-normalization";
-export type { UndeclaredArgument } from "@/api/mcp/input-normalization";
 
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,

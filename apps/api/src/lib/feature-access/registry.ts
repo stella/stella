@@ -104,8 +104,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
         },
         {
           type: "admitted",
-          module:
-            "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-write-tool.ts",
+          module: "apps/api/src/mcp/static-tool-definitions.ts",
           admission: "isMcpDescriptorFeatureEnabled",
         },
         {

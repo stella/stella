@@ -13,7 +13,7 @@ const REQUIRES_THIRD_PARTY_OUTBOUND: unique symbol = Symbol(
  * tools need a permit: chat binds its read script policy to it, and a read
  * whose handler carries it cannot be offered to scripts.
  */
-export type RequiresThirdPartyOutbound = {
+type RequiresThirdPartyOutbound = {
   readonly [REQUIRES_THIRD_PARTY_OUTBOUND]: true;
 };
 

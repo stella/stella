@@ -36,7 +36,11 @@ export default eslintCompatPlugin({
         return {
           ImportDeclaration(node: Node) {
             const filename = repoRelativeFilename(context);
-            if (ALLOWED_MODULES.has(filename) || filename.includes(".test.")) {
+            if (
+              ALLOWED_MODULES.has(filename) ||
+              filename.includes(".test.") ||
+              !Array.isArray(node.specifiers)
+            ) {
               return;
             }
             for (const specifier of node.specifiers) {

@@ -2395,7 +2395,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
   }),
 ] as const satisfies readonly McpToolDefinition[];
 
-export const CAPABILITY_TOOL_HANDLERS = {
+const CAPABILITY_TOOL_HANDLERS = {
   list_capabilities: listCapabilitiesHandler,
   describe_capability: describeCapabilityHandler,
   [MCP_CAPABILITY_EXECUTORS.read]: async ({ args, context }) =>

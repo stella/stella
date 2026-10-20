@@ -20,6 +20,10 @@ import { coordinationKey } from "@/api/lib/redis-keys";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
+import {
+  serializeToolResult,
+  untypedToolDataResult,
+} from "@/api/mcp/tool-utils";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
@@ -159,9 +163,16 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         },
         getMcpToolDefinition: async () => tool,
         getMcpToolRequiredScopesHint: () => ["stella:read"],
-        handleMcpToolCall: async () => {
-          dispatches += 1;
-          return { content: [{ type: "text", text: "ok" }] };
+        handleMcpToolCall: async ({ context }) => {
+          const invoke = async () => {
+            dispatches += 1;
+            return untypedToolDataResult({ ok: true });
+          };
+          const result =
+            context.admitToolInvocation === undefined
+              ? await invoke()
+              : await context.admitToolInvocation(invoke);
+          return serializeToolResult(result);
         },
         listMcpTools: async () => [],
         listMcpResources: () => [],

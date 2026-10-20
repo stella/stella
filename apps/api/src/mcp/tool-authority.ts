@@ -221,7 +221,7 @@ export const hasMcpToolAuthority = (
 };
 
 /** `isMemberAuthorizedForMcpToolInput` for an MCP request. */
-export const hasMcpToolInputAuthority = (
+const hasMcpToolInputAuthority = (
   authority: McpEffectiveAuthority,
   definition: McpToolAuthorityDeclaration,
   input: Readonly<Record<string, unknown>>,
@@ -237,7 +237,7 @@ export const hasMcpToolInputAuthority = (
 export type AccountOperationCheck = typeof checkRestrictedAccountOperation;
 
 /** The refusal REST answers a `standard` handler with for a restricted account. */
-export const ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE =
+const ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE =
   "This operation is unavailable for this account.";
 
 /**
