@@ -1,3 +1,5 @@
+// parser-output-unchanged: Known-gap declarations serve coverage reads only; manifest parser policies and parsed decision output are unchanged.
+// parser-output-unchanged: known gaps now come from the coverage slice ledger; removing the static declarations changes coverage reads only.
 import { panic } from "better-result";
 
 import {
