@@ -1,5 +1,13 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  notExists,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -7,6 +15,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionSourceIdentities,
+  caseLawDecisionAliases,
   caseLawDecisions,
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -618,6 +627,18 @@ export const findRepublishedRulingTx = async (
       reason: "signature_absent",
     } satisfies RepublishedRulingMatch;
   }
+  if (observed.decisionDate === undefined) {
+    return {
+      type: REPUBLISHED_RULING_OUTCOME.SEPARATE_PARTIAL,
+      reason: "date_absent",
+    } satisfies RepublishedRulingMatch;
+  }
+  if (observed.decisionType === undefined) {
+    return {
+      type: REPUBLISHED_RULING_OUTCOME.SEPARATE_PARTIAL,
+      reason: "type_absent",
+    } satisfies RepublishedRulingMatch;
+  }
   const candidates = await tx
     .select({
       decisionId: caseLawDecisions.id,
@@ -639,11 +660,80 @@ export const findRepublishedRulingTx = async (
           courtId: caseLawDecisions.courtId,
         }),
         eq(caseLawDecisions.docketFamilyKey, docketFamilyKey),
+        eq(caseLawDecisions.decisionDate, observed.decisionDate),
+        sql`lower(${caseLawDecisions.decisionType}) = lower(${observed.decisionType})`,
         notInArray(caseLawDecisions.sourceId, [sourceId]),
+        notExists(
+          tx
+            .select({
+              retiredDecisionId: caseLawDecisionAliases.retiredDecisionId,
+            })
+            .from(caseLawDecisionAliases)
+            .where(
+              eq(caseLawDecisionAliases.retiredDecisionId, caseLawDecisions.id),
+            ),
+        ),
       ),
     )
     .orderBy(caseLawDecisions.id)
     .limit(MAX_REPUBLISHED_RULING_CANDIDATES);
+  if (candidates.length === MAX_REPUBLISHED_RULING_CANDIDATES) {
+    return {
+      type: REPUBLISHED_RULING_OUTCOME.SEPARATE_AMBIGUOUS,
+    } satisfies RepublishedRulingMatch;
+  }
+  if (candidates.length === 0) {
+    const comparable = await tx
+      .select({
+        decisionId: caseLawDecisions.id,
+        country: caseLawDecisions.country,
+        court: caseLawDecisions.court,
+        courtId: caseLawDecisions.courtId,
+        decisionDate: caseLawDecisions.decisionDate,
+        caseNumber: caseLawDecisions.caseNumber,
+        caseNumberType: caseLawDecisions.caseNumberType,
+        ecli: caseLawDecisions.ecli,
+        decisionType: caseLawDecisions.decisionType,
+      })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          eq(caseLawDecisions.country, observed.country),
+          republishedRulingCourtPredicate(observed, {
+            court: caseLawDecisions.court,
+            courtId: caseLawDecisions.courtId,
+          }),
+          eq(caseLawDecisions.docketFamilyKey, docketFamilyKey),
+          notInArray(caseLawDecisions.sourceId, [sourceId]),
+          notExists(
+            tx
+              .select({
+                retiredDecisionId: caseLawDecisionAliases.retiredDecisionId,
+              })
+              .from(caseLawDecisionAliases)
+              .where(
+                eq(
+                  caseLawDecisionAliases.retiredDecisionId,
+                  caseLawDecisions.id,
+                ),
+              ),
+          ),
+        ),
+      )
+      .orderBy(caseLawDecisions.id)
+      .limit(MAX_REPUBLISHED_RULING_CANDIDATES);
+    const partial = matchRepublishedRuling(
+      observed,
+      comparable.map(({ decisionId, ...identity }) => ({
+        decisionId,
+        identity,
+      })),
+    );
+    if (partial.type === REPUBLISHED_RULING_OUTCOME.LINKED) {
+      return panic("Republished ruling exact query lost its linked candidate");
+    }
+    return partial;
+  }
   const match = matchRepublishedRuling(
     observed,
     candidates.map(({ decisionId, ...identity }) => ({ decisionId, identity })),

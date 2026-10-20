@@ -502,4 +502,89 @@ describe("cross-source ruling identity lookup", () => {
       { numRuns: 8 },
     );
   });
+
+  test("raw provenance is never written to a redacted decision", async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    const sourceId = sourceAt(1);
+    await db.insert(caseLawDecisions).values({
+      id: decisionId,
+      sourceId,
+      sourceDocumentId: "redacted-document",
+      country: "POL",
+      court: observed.court,
+      language: observed.language,
+      caseNumber: "RAW 2/26",
+      docketFamilyKey: docketFamilyKeyOf("RAW 2/26", "POL"),
+      redactedAt: new Date("2026-10-19T00:00:00Z"),
+    });
+    await db.insert(caseLawDecisionSourceIdentities).values({
+      sourceId,
+      sourceDocumentId: "redacted-document",
+      decisionId,
+    });
+    const scopedDb: ScopedDb = async (callback) =>
+      await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+
+    await recordSourceIdentityRaw({
+      scopedDb,
+      sourceId,
+      decisionId,
+      sourceDocumentId: "redacted-document",
+      rawArtifact: {
+        sourceRawS3Key: "raw/redacted/late",
+        sourceRawContentType: "application/json",
+      },
+      sourceUrl: "https://example.invalid/redacted",
+      observedAt: new Date("2026-10-20T00:00:00Z"),
+    });
+
+    expect(
+      await db
+        .select({
+          sourceRawS3Key: caseLawDecisionSourceIdentities.sourceRawS3Key,
+          sourceUrl: caseLawDecisionSourceIdentities.sourceUrl,
+        })
+        .from(caseLawDecisionSourceIdentities)
+        .where(eq(caseLawDecisionSourceIdentities.decisionId, decisionId)),
+    ).toEqual([{ sourceRawS3Key: null, sourceUrl: null }]);
+  });
+
+  // Runs last: its exact matches would make earlier link expectations ambiguous.
+  test("a bounded complete candidate set remains ambiguous", async () => {
+    const decisionIds = Array.from({ length: 18 }, () =>
+      createSafeId<"caseLawDecision">(),
+    );
+    const docketFamilyKey = docketFamilyKeyOf(
+      observed.caseNumber,
+      observed.country,
+    );
+    await db.insert(caseLawDecisions).values(
+      decisionIds.map((id, index) => ({
+        id,
+        sourceId: sourceAt(index + 1),
+        sourceDocumentId: `ambiguous-${String(index)}`,
+        country: observed.country,
+        court: observed.court,
+        language: observed.language,
+        caseNumber: observed.caseNumber,
+        docketFamilyKey,
+        decisionDate:
+          index === 0 || index === decisionIds.length - 1
+            ? observed.decisionDate
+            : "2024-06-04",
+        decisionType: observed.decisionType,
+      })),
+    );
+
+    expect(
+      await db.transaction(
+        async (tx) =>
+          await findRepublishedRulingTx(
+            asTestRaw<Transaction>(tx),
+            observed,
+            sourceAt(0),
+          ),
+      ),
+    ).toEqual({ type: REPUBLISHED_RULING_OUTCOME.SEPARATE_AMBIGUOUS });
+  });
 });

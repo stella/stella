@@ -59,6 +59,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockUnredactedCitingDecisions } from "@/api/lib/db/aggregate-lock";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -88,6 +89,14 @@ export const recordSourceIdentityRaw = async ({
     return;
   }
   await scopedDb(async (tx) => {
+    const writable = await lockUnredactedCitingDecisions({
+      tx,
+      decisionIds: [decisionId],
+      lock: true,
+    });
+    if (!writable.has(decisionId)) {
+      return;
+    }
     // audit: skip - publisher provenance for public case-law data
     await tx
       .update(caseLawDecisionSourceIdentities)
