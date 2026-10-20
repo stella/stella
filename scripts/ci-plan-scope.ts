@@ -361,6 +361,10 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
 // Every check is selected by this module and the modules it imports, so a
 // change to any of them cannot be scoped by the planner's own answer.
 const plannerClosures = new Map<string, ReadonlySet<string>>();
+const WIDE_OWNED_OUTPUTS: ReadonlySet<ScopeOutput> = new Set([
+  "api_image_platforms",
+  "landing_build_required",
+] as const satisfies readonly ScopeOutput[]);
 const plannerChanged = ({
   changedFiles,
   root = REPO_ROOT,
@@ -1016,9 +1020,11 @@ export const computeChangedFileScope = (
   const scope = Object.fromEntries(
     OUTPUT_ORDER.map((output) => {
       const planned = OUTPUT_RULES[output](facts);
+      // The wide scope also owns the image platforms and the landing build,
+      // which its e2e-landing run already performs.
       const widened =
         wide !== undefined &&
-        (wide[output] === TRUE || output === "api_image_platforms");
+        (wide[output] === TRUE || WIDE_OWNED_OUTPUTS.has(output));
       return [output, widened ? wide[output] : planned];
     }),
   );

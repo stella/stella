@@ -732,7 +732,13 @@ test("a change to the planner or a module it imports plans every wide check", ()
         heavyOnly: false,
         prTitle: "",
       },
-      DEFAULT_DETECTORS,
+      // A standalone landing build is selected, so the widened plan must
+      // still leave it to e2e-landing.
+      {
+        ...DEFAULT_DETECTORS,
+        landingBuild: () => true,
+        landingDeploy: () => false,
+      },
     );
     return outputs;
   };
@@ -740,8 +746,13 @@ test("a change to the planner or a module it imports plans every wide check", ()
   expect(wide.route_tree_required).toBe("true");
   expect(wide.model_catalog_drift_required).toBe("true");
   expect(wide.web_api_types_required).toBe("true");
+  expect(wide.e2e_landing_required).toBe("true");
+  expect(wide.landing_build_required).toBe("false");
   const widePlanned = Object.entries(wide).filter(
-    ([output, value]) => value === "true" || output === "api_image_platforms",
+    ([output, value]) =>
+      value === "true" ||
+      output === "api_image_platforms" ||
+      output === "landing_build_required",
   );
   for (const file of planner) {
     expect(plan([file], false), file).toMatchObject(
