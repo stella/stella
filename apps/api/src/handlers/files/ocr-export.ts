@@ -92,7 +92,7 @@ export const readOcrExport = async ({
     return Response.redirect(url, 302);
   }
 
-  const text = row.text;
+  const text = await row.readText();
   const bytes = new TextEncoder().encode(text);
   const fileName = replaceExtension(row.content.fileName, ".txt");
   await scopedDb(

@@ -7,6 +7,7 @@ import { documentProcessingRuns, extractedContent } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -35,7 +36,7 @@ describe("OCR text export", () => {
             content: { fileName: "smlouva.pdf", type: "file" },
             entityId,
             ocrRunId: runId,
-            text: "Příliš žluťoučký kůň",
+            readText: async () => await Promise.resolve("Příliš žluťoučký kůň"),
           };
         }
         return await callback({});
@@ -77,6 +78,44 @@ describe("OCR text export", () => {
         resourceType: "entity",
       }),
     ]);
+  });
+
+  test("a searchable PDF export never decrypts the extracted text", async () => {
+    const fake = startFakeS3();
+    let decryptions = 0;
+    let scopedDbCall = 0;
+    try {
+      const scopedDb = asTestRaw<ScopedDb>(
+        async (callback: (tx: object) => Promise<unknown>) => {
+          scopedDbCall += 1;
+          if (scopedDbCall === 1) {
+            return {
+              content: { fileName: "smlouva.pdf", type: "file" },
+              entityId,
+              ocrRunId: runId,
+              readText: async () => {
+                decryptions += 1;
+                return await Promise.reject(new Error("text unavailable"));
+              },
+            };
+          }
+          return await callback({});
+        },
+      );
+      const response = await readOcrExport({
+        fieldId,
+        format: "searchable-pdf",
+        organizationId,
+        recordAuditEvent: async () => await Promise.resolve(),
+        scopedDb,
+        workspaceId,
+      });
+      // No stored PDF in the fake store: the export answers from metadata alone.
+      expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
+      expect(decryptions).toBe(0);
+    } finally {
+      fake.stop();
+    }
   });
 
   test("returns 404 without auditing when no tenant-scoped current projection exists", async () => {

@@ -395,7 +395,8 @@ export const loadCurrentOcrExport = async ({
   const { ciphertext, iv, ...metadata } = row;
   return {
     ...metadata,
-    text: await decryptContent(organizationId, ciphertext, iv),
+    // Only the text export decrypts; the PDF export needs the metadata alone.
+    readText: async () => await decryptContent(organizationId, ciphertext, iv),
   };
 };
 
