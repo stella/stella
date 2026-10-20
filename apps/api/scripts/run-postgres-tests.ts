@@ -90,7 +90,7 @@ process.exitCode = await runGatedTests({
         admin: {
           query: async (query, parameters = []) =>
             sql.unsafe(query, [...parameters]),
-          close: async () => Promise.resolve(),
+          close: async () => {},
         },
         runWorker: ({ files: workerFiles, databaseUrl: workerUrl }) => {
           const reporterArguments =
