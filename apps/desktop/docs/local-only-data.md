@@ -131,9 +131,9 @@ before truncation even after browser consent. Browser URLs are never captured.
 Titles and document filenames appear only in the activity window; the full
 local path appears on hover. Proposed blocks group segments per matter using a
 manual assignment, an open Stella edit session, or a unique matter reference or
-name in the recorded details. Unmatched time stays in its own group; every
-segment counts toward its group's duration, and each group is rounded up to the
-next six minutes. Explicit Copy summary may include document filenames. Draft
+name in the recorded details. Unmatched time stays in its own group; recorded
+time not yet drafted counts toward its group's duration, and each group is
+rounded up to the next six minutes. Explicit Copy summary may include document filenames. Draft
 narratives are prefilled locally from recorded document names, opted-in window
 titles, or app names; the user can edit them, and they are sent only after
 confirmation.
