@@ -1,11 +1,14 @@
 import { betterAuth } from "better-auth";
-import type { BetterAuthPlugin } from "better-auth";
+import type { BetterAuthPlugin, Session } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { createAuthMiddleware } from "better-auth/api";
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { createSessionLifetime } from "@/api/lib/auth/session-lifetime";
+import type { SessionLifetimeStore } from "@/api/lib/auth/session-lifetime";
 import {
   createSessionTokenRedactionPlugin,
   redactForeignSessionTokens,
@@ -114,6 +117,97 @@ describe("session list over HTTP", () => {
       ? body.map((row: { id?: unknown }) => typeof row.id)
       : [];
     expect(ids).toEqual(["string", "string", "string"]);
+  });
+});
+
+describe("signing out another device by id", () => {
+  test("a listed device is revoked by its id and its credential stops working", async () => {
+    const database: {
+      user: never[];
+      session: Session[];
+      account: never[];
+      verification: never[];
+    } = { user: [], session: [], account: [], verification: [] };
+    const store = {
+      observe: async ({ token }) =>
+        database.session.find((row) => row.token === token) ?? null,
+      refresh: async ({ token }) =>
+        database.session.find((row) => row.token === token) ?? null,
+      revokeById: async ({ sessionId, userId }) => {
+        database.session = database.session.filter(
+          (row) => row.id !== sessionId || row.userId !== userId,
+        );
+      },
+    } satisfies SessionLifetimeStore;
+    const lifetime = createSessionLifetime({ store });
+    const auth = betterAuth({
+      baseURL: "http://localhost:3001",
+      secret: "test-secret-that-is-long-enough-for-better-auth",
+      database: memoryAdapter(database),
+      emailAndPassword: { enabled: true },
+      plugins: [lifetime.plugin, createSessionTokenRedactionPlugin()],
+      hooks: {
+        before: createAuthMiddleware(async (ctx) => {
+          lifetime.prepare(ctx.context);
+          await Promise.resolve();
+        }),
+      },
+    });
+    const credentials = {
+      email: "revoke@example.test",
+      password: "Fixture password 123!",
+    };
+    await auth.api.signUpEmail({ body: { ...credentials, name: "Revoke" } });
+    const signIn = async () =>
+      signedCookie(
+        await auth.api.signInEmail({ body: credentials, asResponse: true }),
+      );
+    const current = await signIn();
+    const other = await signIn();
+    const whoAmI = async (cookie: string) => {
+      const response = await auth.handler(
+        new Request("http://localhost:3001/api/auth/get-session", {
+          headers: { cookie },
+        }),
+      );
+      const body: unknown = await response.json();
+      return body;
+    };
+    const otherSession = await whoAmI(other);
+    const otherId =
+      typeof otherSession === "object" &&
+      otherSession !== null &&
+      "session" in otherSession &&
+      typeof otherSession.session === "object" &&
+      otherSession.session !== null &&
+      "id" in otherSession.session &&
+      typeof otherSession.session.id === "string"
+        ? otherSession.session.id
+        : undefined;
+    expect(otherId).toBeDefined();
+
+    const listed = await auth.handler(
+      new Request("http://localhost:3001/api/auth/list-sessions", {
+        headers: { cookie: current },
+      }),
+    );
+    const listedText = await listed.text();
+    expect(listedText).toContain(otherId ?? "missing");
+
+    const revoked = await auth.handler(
+      new Request("http://localhost:3001/api/auth/revoke-session-by-id", {
+        method: "POST",
+        headers: {
+          cookie: current,
+          "content-type": "application/json",
+          origin: "http://localhost:3001",
+        },
+        body: JSON.stringify({ sessionId: otherId }),
+      }),
+    );
+    expect(revoked.status).toBe(200);
+    expect(await whoAmI(other)).toBeNull();
+    expect(await whoAmI(current)).not.toBeNull();
   });
 });
 
