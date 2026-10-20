@@ -4,10 +4,10 @@
  * The adapter knows the publisher's page and names the element holding the
  * text (`contentRoot`); everything inside it is read by HTML semantics alone,
  * never by publisher class names: headings are `h1`–`h6`, blocks are the
- * elements HTML lays out as blocks, and a footnote is whatever an in-page
- * marker link (`<a href="#fn3">3</a>`, Word's `[3]`) points at. Notes are
- * read where they are printed and set after the body, each under the mark
- * the body printed for it.
+ * elements HTML lays out as blocks. A footnote is an explicitly identified
+ * note that an in-page marker link (`<a href="#fn3">3</a>`, Word's `[3]`)
+ * points at. Notes are read where they are printed and set after the body,
+ * each under the mark the body printed for it.
  */
 
 import { Result } from "better-result";
@@ -158,6 +158,43 @@ const fragmentTargets = (
   return targets;
 };
 
+const NOTE_ROLE = new Set([
+  "doc-footnote",
+  "doc-endnote",
+  "doc-footnotes",
+  "doc-endnotes",
+]);
+const NOTE_CONTAINER_NAME = /^(?:footnotes?|endnotes?|notes)$/iu;
+const NOTE_TARGET_ID = /^_?(?:fn|ftn|footnote)(?:[-_:]?\d|%)/iu;
+
+/** Positive publisher annotations that identify a fragment target as a note. */
+const isNoteTarget = ($: cheerio.CheerioAPI, target: Element): boolean => {
+  if (isHeadingTag(target.tagName.toLowerCase())) {
+    return false;
+  }
+  let element: Element | undefined = target;
+  while (element !== undefined) {
+    const role = element.attribs["role"];
+    const names = [
+      element.attribs["id"],
+      ...(element.attribs["class"]?.split(/\s+/u) ?? []),
+    ];
+    if (
+      (role !== undefined && NOTE_ROLE.has(role.toLowerCase())) ||
+      names.some(
+        (name) =>
+          name !== undefined &&
+          (NOTE_CONTAINER_NAME.test(name) || NOTE_TARGET_ID.test(name)),
+      )
+    ) {
+      return true;
+    }
+    const parent = $(element).parent().get(0);
+    element = parent !== undefined && isTag(parent) ? parent : undefined;
+  }
+  return false;
+};
+
 /**
  * Every footnote a marker link in the body points at. A link counts only
  * outside every note found so far, and never when its target contains it: a
@@ -178,6 +215,7 @@ const findFootnotes = (
     if (
       mark === null ||
       target === undefined ||
+      !isNoteTarget($, target) ||
       labels.has(target) ||
       $(link).closest(target).length > 0 ||
       [...labels.keys()].some((note) => $(link).closest(note).length > 0)
@@ -202,10 +240,9 @@ type ResolveFragmentsOptions = {
 };
 
 /**
- * In-page links resolved: a marker link becomes its mark in superscript,
- * a note's back reference is dropped (the note carries its mark), and any
- * other in-page link keeps its text without the link, since it navigates
- * the publisher's page rather than the document.
+ * In-page links resolved: a marker link becomes its mark in superscript and
+ * a note's marker-shaped back reference is dropped (the note carries its
+ * mark). Every other in-page link remains an ordinary document link.
  */
 const resolveFragments = (
   inlines: readonly Inline[],
@@ -218,10 +255,15 @@ const resolveFragments = (
       if (mark !== undefined && !options.inNote) {
         out.push(noteMarkInline(mark));
       } else if (
-        !options.inNote ||
-        markOf(plainTextOf(inline.children)) === null
+        options.inNote &&
+        markOf(plainTextOf(inline.children)) !== null
       ) {
-        out.push(...resolveFragments(inline.children, options));
+        continue;
+      } else {
+        out.push({
+          ...inline,
+          children: resolveFragments(inline.children, options),
+        });
       }
       continue;
     }

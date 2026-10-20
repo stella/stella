@@ -125,6 +125,16 @@ describe("the PDF text builder", () => {
     ).toBe("The authority applies Regulation (EU) 2022/2065 in full.");
   });
 
+  test("keeps a real empty line and its footnote on the same page", () => {
+    const ast = build("Body.1\n\n1\n A note.");
+    const body = ast.blocks.filter(({ id }) => id !== "fn-1");
+    expect(body.flatMap((block) => marksOf(inlinesOf(block)))).toEqual(["1"]);
+    expect(body.map(({ plainText }) => plainText)).toEqual(["Body.1"]);
+    expect(ast.blocks.find(({ id }) => id === "fn-1")?.plainText).toBe(
+      "A note.",
+    );
+  });
+
   test("reads sections, numbered paragraphs, footnotes and their marks", () => {
     const page = (lines: string[]) => lines.join("\n");
     const ast = build(

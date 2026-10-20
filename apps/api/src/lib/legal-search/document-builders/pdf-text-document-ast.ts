@@ -41,7 +41,7 @@ import { assembleDocumentAst, draftText } from "./document-assembly";
 import type { DocumentBuildError } from "./document-assembly";
 
 /** How the soft-law text extractor joins the pages of a PDF. */
-export const PDF_PAGE_SEPARATOR = "\n\n";
+export const PDF_PAGE_SEPARATOR = "\f";
 
 /**
  * A line on at least this share of page edges is running furniture. Set

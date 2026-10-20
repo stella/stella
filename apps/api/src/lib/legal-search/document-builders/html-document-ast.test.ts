@@ -105,6 +105,22 @@ describe("the HTML builder", () => {
     });
   });
 
+  test("keeps a numeric link to a section in the body and outline", () => {
+    const ast = build(
+      `<p>See section <a href="#scope">2</a>.</p><h2 id="scope">2 Scope</h2>`,
+    );
+    expect(outline(ast)).toEqual([
+      { id: "front_1", type: "paragraph", text: "See section 2." },
+      { id: "s-2", type: "heading", text: "2 Scope" },
+    ]);
+    const [body] = ast.blocks;
+    expect(body?.type === "paragraph" ? body.inlines : []).toContainEqual({
+      type: "link",
+      href: "#scope",
+      children: [{ type: "text", text: "2" }],
+    });
+  });
+
   test("reads a malformed fragment escape as printed instead of failing", () => {
     const ast = build(
       `<p>Body<a href="#fn%E0">1</a></p><p id="fn%E0">The note.</p>`,
