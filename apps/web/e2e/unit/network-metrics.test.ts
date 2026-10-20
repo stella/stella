@@ -2,6 +2,7 @@
 // so they launch no browser and need no dev server or storageState.
 import { describe, expect, test } from "bun:test";
 
+import { NETWORK_DEPTH_METHOD as SCOPE_NETWORK_DEPTH_METHOD } from "../../../../scripts/network-baseline-scope";
 import {
   NETWORK_DEPTH_METHOD,
   type NetworkBaseline,
@@ -518,6 +519,11 @@ describe("diffNetworkBaseline", () => {
     );
     expect(problems).toEqual([]);
   });
+});
+
+test("declarations use the depth method the route smoke measures", () => {
+  // The baseline scope script runs install-free, so it keeps its own copy.
+  expect(SCOPE_NETWORK_DEPTH_METHOD).toBe(NETWORK_DEPTH_METHOD);
 });
 
 describe("mergeNetworkBaseline", () => {

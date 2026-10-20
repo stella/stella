@@ -11,7 +11,6 @@ import {
 import os from "node:os";
 import path from "node:path";
 
-import { NETWORK_DEPTH_METHOD as WEB_NETWORK_DEPTH_METHOD } from "../apps/web/e2e/helpers/network";
 import { isCanonicalFailureCancellation } from "./ci-cancellation-contract";
 import {
   NETWORK_DEPTH_METHOD,
@@ -488,10 +487,6 @@ describe("reviewed network budgets", () => {
     });
     expect(result.changedRoutes).toEqual(["/chat", "/chat target"]);
     expect(result.notices).toEqual([]);
-  });
-
-  test("declarations use the depth method the route smoke measures", () => {
-    expect(NETWORK_DEPTH_METHOD).toBe(WEB_NETWORK_DEPTH_METHOD);
   });
 
   test("an explicit budget affects only its declared route and reports its reason", () => {
