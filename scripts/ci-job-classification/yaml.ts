@@ -15,7 +15,21 @@ export const CLASSIFICATION_EXCLUSIONS = {
 
 const DOCUMENT = v.strictObject({
   digest: v.string(),
-  jobs: v.record(v.string(), v.strictObject({ digest: v.string() })),
+  privileged: v.boolean(),
+  jobs: v.record(
+    v.string(),
+    v.strictObject({
+      digest: v.string(),
+      shape: v.strictObject({
+        document: v.record(v.string(), v.unknown()),
+        job: v.record(v.string(), v.unknown()),
+      }),
+      dependencies: v.record(
+        v.string(),
+        v.picklist(["action", "reusable-workflow"]),
+      ),
+    }),
+  ),
   dependencies: v.record(
     v.string(),
     v.picklist(["action", "reusable-workflow"]),
@@ -31,6 +45,9 @@ const DOCUMENT = v.strictObject({
     ),
   ),
 });
+
+export type JobShape = v.InferOutput<typeof DOCUMENT>["jobs"][string]["shape"];
+export type ParsedDocument = v.InferOutput<typeof DOCUMENT>;
 
 // Validate duplicate keys and bound alias expansion before projecting classification metadata.
 const PARSER = String.raw`
@@ -198,6 +215,23 @@ end
 def digest(value)
   Digest::SHA256.hexdigest(JSON.generate(canon(value)))
 end
+def privileged(value)
+  case value
+  when String
+    value.match?(/secrets(?:\.|\[)|publish|deploy|release|self-hosted/i)
+  when Array
+    value.any? { |child| privileged(child) }
+  when Hash
+    value.any? do |key,child|
+      (key == 'publication-command' && child == true) ||
+        (key == 'secrets' && !child.nil?) ||
+        (key == 'permissions' && (child == 'write-all' || (child.is_a?(Hash) && child.value?('write')))) ||
+        privileged(child)
+    end
+  else
+    false
+  end
+end
 text = STDIN.read
 raise 'YAML source byte limit exceeded' if text.bytesize > MAX_SOURCE_BYTES
 tree = Psych.parse_stream(text)
@@ -225,7 +259,11 @@ if data.key?('jobs')
       dependencies[j['uses']] = 'reusable-workflow'
     end
     add_action_dependencies(dependencies, ss, relocated_actions)
-    jobs[id] = {'digest'=>digest({'document'=>context, 'job'=>job_shape(j)})}
+    job_context = {'document'=>context, 'job'=>job_shape(j)}
+    job_dependencies = {}
+    job_dependencies[j['uses']] = 'reusable-workflow' if j.key?('uses')
+    add_action_dependencies(job_dependencies, ss, {})
+    jobs[id] = {'digest'=>digest(job_context), 'shape'=>job_context, 'dependencies'=>job_dependencies}
   end
 end
 ss = []
@@ -241,7 +279,9 @@ if data.key?('runs')
 end
 add_action_dependencies(dependencies, ss, relocated_actions)
 shape['jobs'] = jobs.transform_values { |j| j['digest'] } if data.key?('jobs')
-STDOUT.write(JSON.generate({'digest'=>digest(shape),'jobs'=>jobs,'dependencies'=>dependencies,'relocatedActions'=>relocated_actions}))
+# A reached document is privileged when its header or any of its jobs is.
+document_privileged = privileged(shape) || jobs.values.any? { |j| privileged(j['shape']) }
+STDOUT.write(JSON.generate({'digest'=>digest(shape),'privileged'=>document_privileged,'jobs'=>jobs,'dependencies'=>dependencies,'relocatedActions'=>relocated_actions}))
 `;
 
 export const parseDocument = (text: string) =>
