@@ -236,7 +236,9 @@ test("Escape from a panel opened without a focused tick lands on a tick", async 
         new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
       );
     });
-    expect([...ticks]).toContain(document.activeElement);
+    expect([...ticks].some((tick) => tick === document.activeElement)).toBe(
+      true,
+    );
     expect(ticks[0]?.getAttribute("aria-expanded")).toBe("false");
   } finally {
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
