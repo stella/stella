@@ -186,7 +186,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.14.5",
+    "@happy-dom/global-registrator": "21.0.1",
     "@playwright/test": "^1.63.0",
     "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
@@ -206,7 +206,7 @@
     "@vitejs/plugin-react": "catalog:",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
-    "happy-dom": "20.14.5",
+    "happy-dom": "21.0.1",
     "oxc-transform-react": "catalog:",
     "rollup-plugin-visualizer": "^7.1.1",
     "tailwindcss": "catalog:",
