@@ -1256,7 +1256,7 @@ const AI_MEMORY_SOURCE_SQL_VALUES = AI_MEMORY_SOURCES.map((source) =>
  * Persistent AI memory: typed facts and preferences the assistant
  * recalls across sessions, scoped to the firm (organization), the
  * lawyer (user), or a matter (workspace). Read precedence is matter
- * > user > firm. User-managed lifecycle changes are archive-only, while
+ * > user > firm. Users may archive, restore, or permanently erase memories;
  * deleting a source matter erases every memory derived from it. Memories are
  * tenant-isolated via RLS; matter-derived content is additionally gated by
  * `sourceDataWorkspaceIds` so it cannot cross matters.

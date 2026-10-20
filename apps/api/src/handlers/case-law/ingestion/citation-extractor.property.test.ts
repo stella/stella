@@ -5,16 +5,35 @@ import fc from "fast-check";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
+  assertProperty,
   propertyConfig,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
 
 import {
+  COMMISSION_CASE_CUES,
+  CUE_GATED_CITATION_PATTERNS,
   extractCitations,
   extractDecisionCitations,
   normalizeDecisionIdentifier,
 } from "./citation-extractor";
+
+const commissionCaseNumber = fc.oneof(
+  fc.integer({ min: 10_000, max: 99_999 }).map((number) => `AT.${number}`),
+  fc
+    .tuple(fc.integer({ min: 10, max: 99 }), fc.integer({ min: 100, max: 999 }))
+    .map(([series, number]) => `COMP/${series}.${number}`),
+  fc.integer({ min: 1000, max: 99_999 }).map((number) => `M.${number}`),
+  fc.integer({ min: 1000, max: 99_999 }).map((number) => `SA.${number}`),
+  fc
+    .tuple(
+      fc.constantFrom("C", "N", "NN"),
+      fc.integer({ min: 1, max: 999 }),
+      fc.integer({ min: 2050, max: 2099 }),
+    )
+    .map(([series, number, year]) => `${series} ${number}/${year}`),
+);
 
 const noise = fc
   .array(
@@ -91,6 +110,58 @@ const documentOf = (text: string): DocumentAst => ({
     },
   ],
 });
+
+test(
+  "Commission case numbers require a nearby official-language cue",
+  () => {
+    assertProperty(
+      "Commission case numbers require a nearby official-language cue",
+      fc.property(commissionCaseNumber, (caseNumber) => {
+        expect(extractCitations([{ index: 0, text: caseNumber }])).toEqual([]);
+        for (const { cue } of COMMISSION_CASE_CUES) {
+          expect(
+            extractCitations([{ index: 0, text: `${cue}: ${caseNumber}` }]),
+          ).toEqual([
+            expect.objectContaining({
+              identifierType: DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER,
+              identifierValue: caseNumber,
+            }),
+          ]);
+        }
+      }),
+    );
+  },
+  propertyTestTimeout(10_000),
+);
+
+test(
+  "national docket prefixes cannot license Commission case numbers",
+  () => {
+    assertProperty(
+      "national docket prefixes cannot license Commission case numbers",
+      fc.property(
+        fc.constantFrom("C", "N", "NN"),
+        fc.integer({ min: 1, max: 999 }),
+        fc.integer({ min: 1900, max: 2099 }),
+        fc.oneof(
+          fc.integer({ min: 1, max: 999 }).map(String),
+          fc.constantFrom("I", "II", "III", "IV", "V", "VI", "VII"),
+        ),
+        (series, number, year, division) => {
+          const text = `case no. ${division} ${series} ${String(number)}/${String(year)}`;
+          expect(
+            extractCitations([{ index: 0, text }]).filter(
+              ({ identifierType }) =>
+                identifierType ===
+                DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER,
+            ),
+          ).toEqual([]);
+        },
+      ),
+    );
+  },
+  propertyTestTimeout(10_000),
+);
 
 test(
   "identifier normalization reaches a fixed point",
@@ -219,3 +290,38 @@ test(
   },
   propertyTestTimeout(15_000),
 );
+
+const cueGateExamples = {
+  "pl-tk": { number: "K 2/19", cue: "TK" },
+  "pl-uodo": { number: "DKN.5131.6.2024", cue: "UODO" },
+  "pl-uokik": { number: "DOK-1/2020", cue: "UOKiK" },
+  "cz-uohs": { number: "ÚOHS-S123/2024/VZ", cue: "ÚOHS" },
+  "cz-uoou": { number: "UOOU-12345/17-12", cue: "ÚOOÚ" },
+  "eu-commission": { number: "AT.40099", cue: "case" },
+} as const satisfies Record<
+  (typeof CUE_GATED_CITATION_PATTERNS)[number]["id"],
+  { number: string; cue: string }
+>;
+
+test("every cue-gated pattern rejects uncued numbers and accepts cues on enabled sides", () => {
+  for (const gate of CUE_GATED_CITATION_PATTERNS) {
+    const example = cueGateExamples[gate.id];
+    expect(extractCitations([{ index: 0, text: example.number }])).toHaveLength(
+      0,
+    );
+    if (gate.windowBefore > 0) {
+      expect(
+        extractCitations([
+          { index: 0, text: `${example.cue} ${example.number}` },
+        ]).some(({ citationText }) => citationText === example.number),
+      ).toBe(true);
+    }
+    if (gate.windowAfter > 0) {
+      expect(
+        extractCitations([
+          { index: 0, text: `${example.number} ${example.cue}` },
+        ]).some(({ citationText }) => citationText === example.number),
+      ).toBe(true);
+    }
+  }
+});
