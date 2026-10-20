@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { isDocumentAst } from "@stll/legal-ast/document-ast";
+
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CZ_UOHS_SYNTHETIC_LISTING,
@@ -263,6 +265,12 @@ describe("ÚOHS JSON-LD", () => {
     );
     const decision = await buildCzUohsDecision(record);
     expect(decision.fulltext).toContain("Fiktivni rozhodnuti");
+    // The links point at the file the text was read from, not the first one.
+    expect(decision.documentUrl).toBe("https://uohs.gov.cz/second.pdf");
+    const ast = decision.documentAst;
+    expect(isDocumentAst(ast) ? ast.source.printUrl : undefined).toBe(
+      "https://uohs.gov.cz/second.pdf",
+    );
     expect(Object.keys(decision.sourceRawObjects ?? {})).toEqual([
       "document",
       "document-1",
