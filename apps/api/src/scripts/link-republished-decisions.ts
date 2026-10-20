@@ -105,8 +105,12 @@ await runScriptWithErrorOutput(async () => {
     const refusedErased = outcomes.filter(
       ({ type }) => type === "refused_erased",
     ).length;
+    const refusedUnrestorable = outcomes.filter(
+      ({ type }) => type === "refused_unrestorable",
+    ).length;
     console.info(`reversed=${String(reversed)}`);
     console.info(`refused_erased=${String(refusedErased)}`);
+    console.info(`refused_unrestorable=${String(refusedUnrestorable)}`);
     return;
   }
 

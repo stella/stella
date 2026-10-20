@@ -590,22 +590,31 @@ test("reverse restores the projection desired state for every repaired pair", as
   });
 });
 
-test("reverse prioritizes a reversible pair over an earlier erased pair", async () => {
+test("reverse prioritizes a reversible pair and refuses erased or unrestorable pairs", async () => {
   const retiredIds = [
+    createSafeId<"caseLawDecision">(),
     createSafeId<"caseLawDecision">(),
     createSafeId<"caseLawDecision">(),
   ].toSorted(compareCodeUnit);
   const erasedRetiredId =
-    retiredIds.at(0) ?? panic("Reverse fixture requires two retired ids");
+    retiredIds.at(0) ?? panic("Reverse fixture requires three retired ids");
+  const unrestorableRetiredId =
+    retiredIds.at(1) ?? panic("Reverse fixture requires three retired ids");
   const reversibleRetiredId =
-    retiredIds.at(1) ?? panic("Reverse fixture requires two retired ids");
+    retiredIds.at(2) ?? panic("Reverse fixture requires three retired ids");
   const erasedCanonicalId = createSafeId<"caseLawDecision">();
+  const unrestorableCanonicalId = createSafeId<"caseLawDecision">();
   const reversibleCanonicalId = createSafeId<"caseLawDecision">();
   const pairs = [
     {
       canonicalId: erasedCanonicalId,
       docket: "reverse-erased",
       retiredId: erasedRetiredId,
+    },
+    {
+      canonicalId: unrestorableCanonicalId,
+      docket: "reverse-unrestorable",
+      retiredId: unrestorableRetiredId,
     },
     {
       canonicalId: reversibleCanonicalId,
@@ -661,7 +670,7 @@ test("reverse prioritizes a reversible pair over an earlier erased pair", async 
   const reverseCandidates = candidates.filter(({ duplicate }) =>
     retiredIds.includes(duplicate.id),
   );
-  expect(reverseCandidates).toHaveLength(2);
+  expect(reverseCandidates).toHaveLength(3);
   await db.transaction(async (tx) => {
     expect(
       await applyRepublishedDecisionBatch(
@@ -669,23 +678,45 @@ test("reverse prioritizes a reversible pair over an earlier erased pair", async 
         reverseCandidates,
         async () => undefined,
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
   await db
     .update(caseLawDecisions)
     .set({ redactedAt: new Date("2026-05-07") })
     .where(eq(caseLawDecisions.id, erasedCanonicalId));
+  await db
+    .delete(caseLawDecisionSourceIdentities)
+    .where(
+      eq(
+        caseLawDecisionSourceIdentities.sourceDocumentId,
+        "reverse-unrestorable-republisher",
+      ),
+    );
 
+  const reconciled: SafeId<"caseLawDecision">[] = [];
+  const recordReconciled = async (
+    batch: readonly RepublishedDecisionCandidate[],
+  ) => {
+    reconciled.push(...batch.map(({ duplicate }) => duplicate.id));
+  };
   expect(
-    await reverseRepublishedDecisionBatch(db, 1, async () => undefined),
+    await reverseRepublishedDecisionBatch(db, 1, recordReconciled),
   ).toEqual([{ type: "reversed", retiredId: reversibleRetiredId }]);
   expect(
-    await reverseRepublishedDecisionBatch(db, 1, async () => undefined),
-  ).toEqual([{ type: "refused_erased", retiredId: erasedRetiredId }]);
+    await reverseRepublishedDecisionBatch(db, 2, recordReconciled),
+  ).toEqual([
+    { type: "refused_erased", retiredId: erasedRetiredId },
+    { type: "refused_unrestorable", retiredId: unrestorableRetiredId },
+  ]);
+  expect(reconciled).toEqual([reversibleRetiredId]);
   expect(
     await db
       .select({ retiredId: caseLawDecisionAliases.retiredDecisionId })
       .from(caseLawDecisionAliases)
-      .where(inArray(caseLawDecisionAliases.retiredDecisionId, retiredIds)),
-  ).toEqual([{ retiredId: erasedRetiredId }]);
+      .where(inArray(caseLawDecisionAliases.retiredDecisionId, retiredIds))
+      .orderBy(caseLawDecisionAliases.retiredDecisionId),
+  ).toEqual([
+    { retiredId: erasedRetiredId },
+    { retiredId: unrestorableRetiredId },
+  ]);
 });
