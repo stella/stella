@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, setSystemTime, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   captureError,
@@ -9,6 +12,7 @@ import { setAnalyticsForTesting } from "@/api/lib/analytics/client";
 import {
   extractionWorkerErrorCode,
   ExtractionWorkerError,
+  HandlerError,
   type ExtractionWorkerTermination,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
@@ -23,6 +27,19 @@ const captured: {
   groups?: Record<string, string>;
   properties: Record<string, unknown>;
 }[] = [];
+
+const firstExceptionValue = (): string | undefined => {
+  const list = captured.at(0)?.properties["$exception_list"];
+  if (!Array.isArray(list)) {
+    return undefined;
+  }
+  const entry: unknown = list.at(0);
+  if (typeof entry !== "object" || entry === null) {
+    return undefined;
+  }
+  const value = Reflect.get(entry, "value");
+  return typeof value === "string" ? value : undefined;
+};
 
 // The seam, not a module mock: a mock of `analytics/client` is process-wide
 // and would swallow `setAnalyticsForTesting` for every test file batched
@@ -63,6 +80,15 @@ const captureQueryFailure = (sqlState: string): void => {
   const driverError = new Error("driver rejected the statement");
   Reflect.set(driverError, "errno", sqlState);
   captureError(new Error("query failed", { cause: driverError }));
+};
+
+const errorAt = (className: "Error" | "TypeError", location: string): Error => {
+  const error =
+    className === "TypeError"
+      ? new TypeError("private detail")
+      : new Error("private detail");
+  error.stack = `${className}: private detail\n    at run (${location})`;
+  return error;
 };
 
 const extractionError = ({
@@ -195,6 +221,71 @@ describe("captureError issue grouping", () => {
     const fingerprint = captured.at(0)?.properties["$exception_fingerprint"];
     expect(typeof fingerprint).toBe("string");
     expect(fingerprint).not.toContain("Privileged");
+  });
+
+  test("renders an actionable value from typed failure fields", () => {
+    captureError(
+      new HandlerError({
+        code: "upstream_unavailable",
+        message: "Alex Doe <alex@example.test> privileged document text",
+        status: 502,
+      }),
+    );
+
+    expect(firstExceptionValue()).toMatch(
+      /^HandlerError\[upstream_unavailable\] 502 transient at apps\/api\/src\/lib\/analytics\/capture\.test\.ts:\d+:\d+$/u,
+    );
+  });
+
+  test.each([
+    "/workspace/stella/apps/api/src/lib/analytics/capture.ts:319:17",
+    "/app/apps/api/src/lib/analytics/capture.ts:319:17",
+    "/home/runner/work/stella/stella/apps/api/src/lib/analytics/capture.ts:319:17",
+  ])("keeps recognized absolute repository frames from %s", (location) => {
+    captureError(errorAt("Error", location));
+
+    expect(firstExceptionValue()).toBe(
+      "Error unclassified defect at apps/api/src/lib/analytics/capture.ts:319:17",
+    );
+  });
+
+  test.each(["Error", "TypeError"] as const)(
+    "does not render a class-derived code for %s",
+    (className) => {
+      captureError(
+        errorAt(className, "apps/api/src/lib/analytics/capture.test.ts:1:2"),
+      );
+
+      const value = firstExceptionValue();
+      expect(value).not.toContain(`[${className}]`);
+      expect(value).toBe(
+        `${className} unclassified defect at apps/api/src/lib/analytics/capture.test.ts:1:2`,
+      );
+    },
+  );
+
+  test("captured properties never carry arbitrary message text", () => {
+    assertProperty(
+      "captured properties never carry arbitrary message text",
+      fc.property(fc.string(), (message) => {
+        captured.length = 0;
+        resetCaptureWindows();
+        const privateMessage = `Alex Doe <alex@example.test> document ${JSON.stringify(message)}`;
+        captureError(
+          Object.assign(
+            new HandlerError({
+              code: "upstream_unavailable",
+              message: privateMessage,
+              status: 502,
+            }),
+            { unknownField: privateMessage },
+          ),
+        );
+
+        const properties = captured.at(0)?.properties;
+        expect(JSON.stringify(properties)).not.toContain(privateMessage);
+      }),
+    );
   });
 });
 

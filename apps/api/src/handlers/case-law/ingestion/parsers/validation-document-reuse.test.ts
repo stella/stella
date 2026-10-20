@@ -8,7 +8,12 @@ import * as astValidation from "@/api/lib/legal-search/parsers/validate-ast";
 import { parseNssDecisionHtml } from "./cz-nss";
 import { ecjDocumentHtml, parseEcjDecisionHtml } from "./eu-ecj";
 import { parsePlDecisionContent } from "./pl-courts";
-import { parsePlTkText, readPlTkCasePage, readPlTkRuling } from "./pl-tk";
+import {
+  parsePlTkPage,
+  parsePlTkText,
+  readPlTkCasePage,
+  readPlTkRuling,
+} from "./pl-tk";
 import { parseSkUsDocumentXhtml } from "./sk-us";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
@@ -163,12 +168,15 @@ describe("validation document reuse", () => {
     }
   });
 
-  test("matches a fresh parse for every ruling in every TK fixture", async () => {
+  // TK blocks are built from the case page DOM the adapter already parsed, so
+  // validation's own parse of the ruling fragment is the only one left: it
+  // receives no document and must validate the same fragment as before.
+  test("validates every TK ruling from its own single fragment parse", async () => {
     for await (const name of new Glob("pl-tk-case-*.html.gz").scan(
       FIXTURES.pathname,
     )) {
-      const pageHtml = await gunzip(new URL(name, FIXTURES));
-      const page = readPlTkCasePage(pageHtml);
+      const parsedPage = parsePlTkPage(await gunzip(new URL(name, FIXTURES)));
+      const page = readPlTkCasePage(parsedPage);
       if (page === null) {
         throw new Error(`fixture ${name} is not a TK case page`);
       }
@@ -177,7 +185,7 @@ describe("validation document reuse", () => {
         throw new Error(`fixture ${name} has no case number`);
       }
       for (const rulingId of page.rulingIds) {
-        const ruling = readPlTkRuling(pageHtml, rulingId);
+        const ruling = readPlTkRuling(parsedPage, rulingId);
         if (ruling === null) {
           throw new Error(`fixture ${name} has no ruling ${rulingId}`);
         }
@@ -187,6 +195,7 @@ describe("validation document reuse", () => {
         }
         const { call } = captureValidation(() =>
           parsePlTkText({
+            page: parsedPage,
             caseNumber,
             court: "Trybunał Konstytucyjny",
             decisionDate: ruling.decisionDate,
@@ -197,7 +206,8 @@ describe("validation document reuse", () => {
             textHtml,
           }),
         );
-        expectCapturedDocumentMatchesFreshParse(call);
+        expect(call.documentHtml).toBeUndefined();
+        expect(call.sourceHtml).toBe(`<body>${textHtml}</body>`);
       }
     }
   });
