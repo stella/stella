@@ -648,7 +648,10 @@ describe("native authentication session responses", () => {
         lastSeenAt: new Date(fixture.clock.getTime() - HOUR_MS),
       })
       .where(eq(session.id, fixture.original.id));
-    const response = await fixture.requestSession({ authoritative: true });
+    const response = await fixture.requestSession({
+      authoritative: true,
+      disableCookieCache: true,
+    });
     expect(fixture.authoritativeToken()).toBeNull();
     expect(await response.json()).toBeNull();
   });

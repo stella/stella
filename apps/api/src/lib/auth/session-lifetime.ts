@@ -132,7 +132,13 @@ export const createSessionLifetime = ({
       let current = await observe(token);
       if (!current) {
         const expired = await findSession(token);
-        if (expired && expired.session.expiresAt <= now()) {
+        // An expired or outlived row is removed, like any refused session.
+        if (
+          expired &&
+          (expired.session.expiresAt <= now() ||
+            expired.session.createdAt.getTime() <=
+              now().getTime() - SESSION_ABSOLUTE_AGE_MS)
+        ) {
           await deleteSession(expired.session.token);
         }
         return null;
