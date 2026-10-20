@@ -66,6 +66,14 @@ const missingWorkflowParity = (source: string): string[] => {
   return failures;
 };
 
+// A helper runs where a command names it; a path pattern that only lists it
+// (a changed-file scope, say) runs nothing.
+const invokesHelper = (run: string, helper: string) =>
+  new RegExp(
+    `(?:^|[\\s;&(])(?:bash\\s+|sh\\s+)?${helper.replaceAll(".", "\\.")}(?=[\\s;&)"']|$)`,
+    "mu",
+  ).test(run);
+
 const missingPostgresRuntime = (
   source: string,
   helpers: string[],
@@ -98,7 +106,7 @@ const missingPostgresRuntime = (
       const run = record(step)["run"];
       if (
         typeof run !== "string" ||
-        !helpers.some((helper) => run.includes(helper))
+        !helpers.some((helper) => invokesHelper(run, helper))
       ) {
         continue;
       }
@@ -155,11 +163,20 @@ describe("Postgres execution and owner parity", () => {
         .replaceAll("bun ci", "removed-ci");
       const failures = missingPostgresRuntime(removed, helpers);
       definitions += failures.length;
-      if (helpers.some((helper) => source.includes(helper))) {
+      if (helpers.some((helper) => invokesHelper(source, helper))) {
         expect(failures.length).toBeGreaterThan(0);
       }
     }
     expect(definitions).toBeGreaterThan(0);
+    const helper = "scripts/configure-test-postgres.sh";
+    expect(invokesHelper(`bash ${helper} "$ID" stella_owner`, helper)).toBe(
+      true,
+    );
+    expect(invokesHelper(`cd x && ${helper}`, helper)).toBe(true);
+    expect(invokesHelper(`  case "$f" in\n    a|${helper}|b)`, helper)).toBe(
+      false,
+    );
+    expect(invokesHelper(`bash ${helper}.bak`, helper)).toBe(false);
   });
   test("every workflow database is configured before its first consumer", async () => {
     const files = [

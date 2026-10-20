@@ -56,6 +56,8 @@ const CONSUMERS = {
   "apps/web/src/components/chat/case-law-open.ts": "pages",
   "apps/web/src/components/chat/chat-decision-citation.tsx": "pages",
   "apps/web/src/features/statutes/statute-route-resolution.ts": "pages",
+  "apps/web/src/features/statutes/components/pending-statute-changes.logic.ts":
+    "pages",
   // Sitemaps.
   "apps/api/src/handlers/case-law/decisions/sitemap.ts": "sitemap",
   "apps/api/src/handlers/legislation/sitemap.ts": "sitemap",
