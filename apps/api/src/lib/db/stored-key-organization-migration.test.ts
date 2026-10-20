@@ -35,4 +35,16 @@ describe("stored object organization key migration", () => {
     expect(migration).toContain("user_files.s3_key is immutable");
     expect(migration).toContain("BEFORE INSERT OR UPDATE OF s3_key, thread_id");
   });
+
+  test("accepts stored uploader keys only during the existing-row precheck", () => {
+    expect(migration).toContain(
+      "AND NOT starts_with(uf.s3_key, uf.user_id || '/')",
+    );
+    expect(migration).toContain(
+      "AND (TG_OP = 'INSERT' OR NOT starts_with(NEW.s3_key, NEW.user_id || '/'))",
+    );
+    expect(migration).toContain(
+      "NOT starts_with(NEW.s3_key, owning_organization_id || '/')",
+    );
+  });
 });
