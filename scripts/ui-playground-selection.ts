@@ -111,7 +111,11 @@ export const specVisualNames = (
       names.add(match[1]);
     }
   }
-  const dynamic = source.includes("/dev?visual=${");
+  // A `visual=` not followed by a literal name is computed, whatever builds
+  // it (interpolation, concatenation) and whichever parameters precede it.
+  const dynamic = /\/dev\?(?:[^"'`\s]*&)?visual=(?![a-z0-9-]+["'`&#])/u.test(
+    source,
+  );
   const registryCensus =
     dynamic && /Object\.entries\(visualRegistry\)/u.test(source);
   if (registryCensus) {

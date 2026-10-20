@@ -14,6 +14,7 @@ import {
   readPlaygroundInventory,
   replaySelection,
   selectGeometrySpecs,
+  specVisualNames,
   staticImportClosure,
 } from "./ui-playground-selection";
 
@@ -526,4 +527,29 @@ test("a JSX transform warning keeps the closure exact", () => {
   } finally {
     rmSync(fixture.root, { force: true, recursive: true });
   }
+});
+
+test("a computed visual URL leaves the spec incomplete beside a literal one", () => {
+  const registered = new Set(["a", "b"]);
+  // Spec source text: `$` and `{` are split so the fixture stays a plain string.
+  const interpolated = (name: string) => ["$", `{${name}}`].join("");
+  for (const computed of [
+    `const url = \`/dev?visual=${interpolated("name")}\`;`,
+    `const url = \`/dev?theme=${interpolated("theme")}&visual=${interpolated("name")}\`;`,
+    'const url = "/dev?visual=" + name;',
+  ]) {
+    expect(
+      specVisualNames(
+        `const fixed = "/dev?visual=a";\n${computed}\n`,
+        registered,
+      ),
+      computed,
+    ).toEqual({ names: new Set(["a"]), complete: false });
+  }
+  expect(
+    specVisualNames(
+      'const a = "/dev?visual=a";\nconst b = "/dev?theme=dark&visual=b#top";\n',
+      registered,
+    ),
+  ).toEqual({ names: new Set(["a", "b"]), complete: true });
 });
