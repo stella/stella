@@ -245,7 +245,10 @@ export type DocumentCompareProps = {
   workspaceId: SafeId<"workspace">;
   params: Static<typeof config.params>;
   body: Static<typeof config.body>;
-  session: { activeOrganizationId: SafeId<"organization"> };
+  session: {
+    activeOrganizationId: SafeId<"organization">;
+    id: string | null;
+  };
   user: { id: SafeId<"user"> };
   recordAuditEvent: AuditRecorder;
   /** Caller's cancellation, ANDed with this operation's own deadline. */
@@ -1098,6 +1101,7 @@ export const createDocumentCompareGenerator = (
                 scopedDb,
                 fieldId: saved.fieldId,
                 userId: user.id,
+                sourceSessionId: session.id,
                 organizationId: session.activeOrganizationId,
                 workspaceId,
                 purpose: "download",

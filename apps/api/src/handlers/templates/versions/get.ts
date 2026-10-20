@@ -41,6 +41,7 @@ const getTemplateVersion = createSafeRootHandler(
           await getTemplateVersionHandler({
             scopedDb,
             userId: user.id,
+            sourceSessionId: session.id,
             organizationId: session.activeOrganizationId,
             templateId: params.templateId,
             versionId: params.versionId,

@@ -219,6 +219,7 @@ const readUrl = async (
 ) =>
   await readFileHandler({
     readSessionAuthority: async () => null,
+    sourceSessionId: "fixture-session",
     scopedDb: scopedDbA(),
     fieldId,
     userId: ids.userA1,

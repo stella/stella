@@ -22,7 +22,7 @@ const readUserFileContent = createSafeRootHandler(
   async function* ({
     params: { fileId },
     safeDb,
-    session: { activeOrganizationId },
+    session: { activeOrganizationId, id: sourceSessionId },
     user,
     recordAuditEvent,
   }) {
@@ -64,6 +64,7 @@ const readUserFileContent = createSafeRootHandler(
           resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
           resourceId: fileId,
           userId: user.id,
+          sourceSessionId,
           s3Key: file.s3Key,
           expiresInSeconds: 900,
           workspaceId: file.workspaceId,

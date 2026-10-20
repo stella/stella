@@ -27,6 +27,7 @@ type OcrExportFormat = (typeof OCR_EXPORT_FORMATS)[number];
 
 type ReadOcrExportOptions = {
   userId: SafeId<"user">;
+  sourceSessionId: string;
   fieldId: SafeId<"field">;
   format: OcrExportFormat;
   organizationId: SafeId<"organization">;
@@ -46,6 +47,7 @@ export const readOcrExport = async ({
   fieldId,
   format,
   userId,
+  sourceSessionId,
   organizationId,
   recordAuditEvent,
   readSessionAuthority,
@@ -124,6 +126,7 @@ export const readOcrExport = async ({
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: row.entityId,
           userId,
+          sourceSessionId,
           s3Key,
           expiresInSeconds: OCR_EXPORT_URL_EXPIRY_SECONDS,
           fileName,

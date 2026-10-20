@@ -104,6 +104,7 @@ describe("template version download", () => {
     const props = {
       scopedDb,
       userId,
+      sourceSessionId: "fixture-session",
       organizationId,
       templateId,
       versionId,
@@ -166,6 +167,7 @@ describe("template version download", () => {
     const result = await getTemplateVersionHandler({
       scopedDb,
       userId,
+      sourceSessionId: "fixture-session",
       organizationId,
       templateId,
       versionId,
@@ -191,6 +193,7 @@ describe("template version download", () => {
     const result = await getTemplateVersionHandler({
       scopedDb,
       userId,
+      sourceSessionId: "fixture-session",
       organizationId,
       templateId,
       versionId,

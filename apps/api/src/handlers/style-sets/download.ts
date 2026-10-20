@@ -64,6 +64,7 @@ export default createSafeRootHandler(
           resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
           resourceId: styleSet.id,
           userId: user.id,
+          sourceSessionId: session.id,
           s3Key: styleSet.s3Key,
           expiresInSeconds: STYLE_SET_DOWNLOAD_TTL_SECONDS,
           fileName: styleSet.fileName,

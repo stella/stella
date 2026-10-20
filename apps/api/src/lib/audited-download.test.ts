@@ -19,12 +19,14 @@ describe("signed content delivery", () => {
     { fileName: "fixture.pdf", action: AUDIT_ACTION.DOWNLOAD },
   ])("a completed $action row permits a URL", async ({ fileName, action }) => {
     const events: (AuditEvent | AuditEvent[])[] = [];
+    const signedSourceSessionIds: (string | null)[] = [];
     const url = await runWithContentDeliveryScope(
       { type: "audited" },
       async () => {
         const result = await auditedPresignDownload({
           readSessionAuthority: async () => null,
           userId: null,
+          sourceSessionId: "fixture-session",
           tx: asTestRaw<Transaction>({}),
           recordAuditEvent: async (_tx, event) => {
             events.push(event);
@@ -34,7 +36,8 @@ describe("signed content delivery", () => {
           s3Key: "fixture-key",
           expiresInSeconds: 60,
           ...(fileName === undefined ? {} : { fileName }),
-          signDownload: async () => {
+          signDownload: async (_key, options) => {
+            signedSourceSessionIds.push(options.sourceSessionId);
             markContentDeliveryIntent();
             return "https://example.test/fixture";
           },
@@ -44,6 +47,7 @@ describe("signed content delivery", () => {
       },
     );
     expect(url).toBe("https://example.test/fixture");
+    expect(signedSourceSessionIds).toEqual(["fixture-session"]);
     expect(events).toHaveLength(1);
     expect(events.at(0)).toMatchObject({
       action,
@@ -59,6 +63,7 @@ describe("signed content delivery", () => {
       const result = await auditedPresignDownload({
         readSessionAuthority: async () => null,
         userId: null,
+        sourceSessionId: "fixture-session",
         tx: asTestRaw<Transaction>({}),
         recordAuditEvent: async () => await Promise.reject(failure),
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
@@ -90,6 +95,7 @@ describe("signed content delivery", () => {
       const delivery = auditedPresignDownload({
         readSessionAuthority: async () => null,
         userId: null,
+        sourceSessionId: "fixture-session",
         tx: asTestRaw<Transaction>({}),
         recordAuditEvent: async () => {
           started.resolve(undefined);

@@ -48,12 +48,13 @@ export default createSafeHandler(
   config,
   async function* ({
     params: { fieldId },
-    session: { activeOrganizationId: organizationId },
+    session,
     user,
     recordAuditEvent,
     scopedDb,
     workspaceId,
   }): SafeHandlerGenerator<Response | ElysiaCustomStatusResponse<404>> {
+    const organizationId = session.activeOrganizationId;
     const rows = yield* Result.await(
       Result.tryPromise(
         async () => await fileFieldQuery(scopedDb, fieldId, workspaceId),
@@ -81,6 +82,7 @@ export default createSafeHandler(
                 resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
                 resourceId: row.entityId,
                 userId: user.id,
+                sourceSessionId: session.id,
                 s3Key: createFileKey({
                   organizationId,
                   workspaceId,

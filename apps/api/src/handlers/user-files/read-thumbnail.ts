@@ -24,7 +24,7 @@ const readUserFileThumbnail = createSafeRootHandler(
   async function* ({
     params: { fileId },
     safeDb,
-    session: { activeOrganizationId },
+    session: { activeOrganizationId, id: sourceSessionId },
     user,
     recordAuditEvent,
   }) {
@@ -72,6 +72,7 @@ const readUserFileThumbnail = createSafeRootHandler(
           resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
           resourceId: fileId,
           userId: user.id,
+          sourceSessionId,
           s3Key: thumbnailKey,
           expiresInSeconds: 900,
           workspaceId: file.workspaceId,

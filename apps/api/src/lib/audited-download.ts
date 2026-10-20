@@ -25,6 +25,7 @@ export const CONTENT_DELIVERY_AUDIT_ACTION = {
 
 type AuditedPresignDownloadOptions = {
   userId: string | null;
+  sourceSessionId: string | null;
   tx: Transaction;
   recordAuditEvent: AuditRecorder;
   readSessionAuthority: SyntheticSessionAuthorityReader;
@@ -59,6 +60,7 @@ type AuditedPresignDownloadOptions = {
  */
 export const auditedPresignDownload = async ({
   userId,
+  sourceSessionId,
   tx,
   recordAuditEvent,
   readSessionAuthority,
@@ -93,7 +95,7 @@ export const auditedPresignDownload = async ({
   return await signDownload(s3Key, {
     userId,
     expiresIn: expiresInSeconds,
-    sourceSessionId: null,
+    sourceSessionId,
     readSessionAuthority,
     ...(fileName ? { fileName } : {}),
     ...(organizationId
