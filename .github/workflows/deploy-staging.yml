@@ -28,6 +28,10 @@ on:
         description: "Commit SHA to deploy (blank deploys main; release_candidate allows a release PR head)"
         required: false
         type: string
+      expected_base:
+        description: "Expected main tip for a release merge-group deploy"
+        required: false
+        type: string
       proof_sha:
         description: "Reuse the release gates of a tree-identical commit instead of deploying again"
         required: false
@@ -75,7 +79,7 @@ jobs:
 
     steps:
       - name: Check release candidate
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true && inputs.expected_base == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -145,10 +149,12 @@ jobs:
           no-cache: true
 
       - name: Resolve the commit to deploy
+        timeout-minutes: 2
         id: resolve
         env:
           REQUESTED_SHA: ${{ inputs.sha }}
           GH_TOKEN: ${{ github.token }}
+          EXPECTED_BASE: ${{ inputs.expected_base }}
           RELEASE_PR_HEAD: ${{ inputs.release_candidate && inputs.sha != '' }}
           RELEASE_TREE_PROOF_VERIFIER: ${{ github.workspace }}/scripts/verify-release-tree-proof.sh
         run: bash scripts/resolve-staging-deploy-sha.sh --sha "$REQUESTED_SHA" >> "$GITHUB_OUTPUT"
@@ -161,7 +167,9 @@ jobs:
           DEPLOY_SHA: ${{ steps.resolve.outputs.sha }}
           PROOF_SHA: ${{ inputs.proof_sha }}
           WAIVE_CHECK: ${{ inputs.waive_check || 'none' }}
+          EXPECTED_BASE: ${{ inputs.expected_base }}
         run: |
+          [[ -z "$EXPECTED_BASE" ]] || { echo '::error::Merge-group staging cannot reuse proof'; exit 1; }
           [[ "$WAIVE_CHECK" == none ]] || { echo '::error::Proof reuse cannot add a staging waiver'; exit 1; }
           bash scripts/verify-release-tree-proof.sh "$GITHUB_REPOSITORY" "$DEPLOY_SHA" "$PROOF_SHA" >/dev/null
           bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$DEPLOY_SHA" "$PROOF_SHA"
@@ -779,6 +787,7 @@ jobs:
           retention-days: 7
 
       - name: Record staging verification
+        timeout-minutes: 2
         if: ${{ always() && steps.deployment.outputs.id != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -792,6 +801,7 @@ jobs:
           WAIVE_REASON: ${{ inputs.waive_reason }}
           JOB_STATUS: ${{ job.status }}
           PROOF_MAIN_BASE: ${{ needs.resolve.outputs.main-sha }}
+          EXPECTED_BASE: ${{ inputs.expected_base }}
         run: |
           set -euo pipefail
           state=failure
@@ -821,6 +831,16 @@ jobs:
             # The full waiver reason remains in the summary; statuses allow 140 characters.
             description="${description:0:93}; main=$PROOF_MAIN_BASE"
           fi
+          if [[ -n "${EXPECTED_BASE:-}" ]]; then
+            if ! main_tip=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha'); then
+              main_tip=""
+            fi
+            if [[ "$main_tip" != "$EXPECTED_BASE" ]]; then
+              state=failure
+              description="group no longer the head group"
+              echo "::error::STAGING_GROUP_NO_LONGER_HEAD: $description"
+            fi
+          fi
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           jq -n --arg state "$state" --arg description "$description" --arg url "$run_url" \
             '{state: $state, context: "staging/verified", description: $description, target_url: $url}' |
@@ -830,3 +850,4 @@ jobs:
             '{state: $state, environment_url: "https://staging.stll.app", log_url: $url}' |
             bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/deployments/${DEPLOYMENT_ID}/statuses" \
               --method POST --input - >/dev/null
+          [[ "$state" == success ]]

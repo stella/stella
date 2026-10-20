@@ -9,12 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import * as v from "valibot";
 
-const ACTION = path.resolve(
-  import.meta.dir,
-  "../.github/actions/promote-dispatch/action.yml",
-);
 const HELPER = path.resolve(import.meta.dir, "gh-retry.sh");
 const FAKE_GH = `#!/usr/bin/env python3
 import json,os,pathlib,subprocess,sys
@@ -26,6 +21,7 @@ method=args[args.index('--method')+1] if '--method' in args else 'GET'
 if endpoint.endswith('/access_tokens'):phase='token'
 elif endpoint.endswith('/dispatches'):phase='dispatch'
 elif '/runs?' in endpoint:phase='lookup'
+elif endpoint.endswith('/runs/777/cancel'):phase='cancel'
 elif endpoint.endswith('/runs/777'):phase='poll'
 elif endpoint=='/installation/token':phase='revoke'
 elif endpoint.endswith('/installation'):phase='installation'
@@ -48,7 +44,7 @@ elif phase=='lookup':payload={'workflow_runs':[
  {'id':777,'created_at':'2026-10-07T12:00:01Z','display_title':'Promote v1.2.3 → staging'}]}
 elif phase=='poll':
  completed=attempt>= (3 if os.environ['FAILURE_PHASE']=='poll' else 2)
- payload={'status':'completed' if completed else 'in_progress','conclusion':'success' if completed else None,'html_url':'https://github.com/example/infra/actions/runs/777'}
+ payload={'status':'completed' if completed else 'in_progress','conclusion':os.environ.get('RUN_CONCLUSION','success') if completed else None,'html_url':'https://github.com/example/infra/actions/runs/777'}
 else:sys.exit(0)
 if '--jq' in args:
  result=subprocess.run(['jq','-r',args[args.index('--jq')+1]],input=json.dumps(payload),text=True,capture_output=True)
@@ -76,16 +72,22 @@ else:
 type PromotionScenarioOptions = {
   failurePhase: "lookup" | "poll" | "none";
   failureKind: "transport" | "unknown";
+  conclusion?: string;
+  maxPolls?: string;
+  deadline?: string;
+  unfinishedRun?: "leave" | "cancel";
 };
 const promotionScenario = async ({
   failurePhase,
   failureKind,
+  conclusion = "success",
+  maxPolls = "2160",
+  deadline = "",
+  unfinishedRun = "leave",
 }: PromotionScenarioOptions) => {
-  const action = v.parse(
-    v.object({
-      runs: v.object({ steps: v.tuple([v.object({ run: v.string() })]) }),
-    }),
-    Bun.YAML.parse(await readFile(ACTION, "utf-8")),
+  const script = await readFile(
+    path.join(import.meta.dir, "workflow-dispatch-watch.sh"),
+    "utf-8",
   );
   const directory = await mkdtemp(
     path.join(tmpdir(), "promote-dispatch-test-"),
@@ -105,7 +107,7 @@ const promotionScenario = async ({
       await writeFile(executable, source);
       await chmod(executable, 0o700);
     }
-    const process = Bun.spawn(["bash", "-c", action.runs.steps[0].run], {
+    const process = Bun.spawn(["bash", "-c", script], {
       cwd: directory,
       env: {
         ...Bun.env,
@@ -113,7 +115,16 @@ const promotionScenario = async ({
         FAKE_ROOT: directory,
         FAILURE_PHASE: failurePhase,
         FAILURE_KIND: failureKind,
+        RUN_CONCLUSION: conclusion,
+        WATCH_MAX_POLLS: maxPolls,
+        WATCH_DEADLINE_EPOCH: deadline,
+        UNFINISHED_RUN: unfinishedRun,
         GITHUB_ACTION_PATH: actionPath,
+        GITHUB_WORKSPACE: directory,
+        EXPECTED_TITLE: "Promote v1.2.3 → staging",
+        DISPATCH_INPUTS:
+          '{"release_ref":"v1.2.3","target_environment":"staging"}',
+        DISPATCH_REF: "main",
         APP_CLIENT_ID: "fixture-app",
         APP_PRIVATE_KEY: "fixture-key",
         INFRA_REPO: "example/infra",
@@ -208,3 +219,60 @@ test.each(["lookup", "poll"] as const)(
     expect(result.stdout).not.toContain("Promote run completed successfully:");
   },
 );
+
+test.each(["failure", "cancelled", "timed_out"])(
+  "dispatch acceptance does not hide %s run outcomes",
+  async (conclusion) => {
+    const result = await promotionScenario({
+      failurePhase: "none",
+      failureKind: "unknown",
+      conclusion,
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stderr).toContain(
+      conclusion === "cancelled"
+        ? "was cancelled"
+        : `conclusion '${conclusion}'`,
+    );
+  },
+);
+test("the workflow watcher refuses after its finite completion budget", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    maxPolls: "1",
+    unfinishedRun: "cancel",
+  });
+  expect(result.exit).toBe(1);
+  expect(result.stderr).toContain("workflow_run_timeout");
+  expect(result.calls.filter((call) => call.startsWith("poll "))).toHaveLength(
+    1,
+  );
+});
+
+test("the absolute stage deadline preserves cleanup time despite a larger poll budget", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    deadline: "900",
+    unfinishedRun: "cancel",
+  });
+  expect(result.exit).toBe(1);
+  expect(result.stderr).toContain("stage deadline reached");
+  expect(result.calls.filter((call) => call.startsWith("poll "))).toHaveLength(
+    0,
+  );
+  expect(result.calls).toContain("cancel POST 1 ok");
+});
+
+test("promotion watchers preserve an unfinished run when a status read fails", async () => {
+  const result = await promotionScenario({
+    failurePhase: "poll",
+    failureKind: "unknown",
+  });
+  expect(result.exit).toBe(1);
+  expect(result.stderr).toContain("Promote run status lookup failed");
+  expect(
+    result.calls.filter((call) => call.startsWith("cancel ")),
+  ).toHaveLength(0);
+});

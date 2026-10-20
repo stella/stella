@@ -227,12 +227,23 @@ const resolve = (requested: string) => {
   };
 };
 
-const runRecord = async (deploySha: string) => {
+type RecordOptions = {
+  deploySha: string;
+  expectedBase?: string;
+  mainTip?: string;
+};
+const runRecord = async ({
+  deploySha,
+  expectedBase = "",
+  mainTip = "",
+}: RecordOptions) => {
   const callsPath = path.join(workspace, `gh-calls-${Bun.randomUUIDv7()}`);
   await Bun.write(callsPath, "");
   const result = Bun.spawnSync(["bash", recordScriptPath], {
     env: {
       ...process.env,
+      EXPECTED_BASE: expectedBase,
+      STUB_MAIN_TIP: mainTip,
       API_SMOKE: "success",
       DEPLOYMENT_ID: "1",
       DEPLOY_SHA: deploySha,
@@ -298,6 +309,10 @@ beforeAll(async () => {
     ghStub,
     `#!/usr/bin/env bash
 set -euo pipefail
+if [[ "$*" == *"/git/ref/heads/main"* ]]; then
+  printf '%s\\n' "$STUB_MAIN_TIP"
+  exit 0
+fi
 printf '%s %s\\n' "$*" "$(jq -c .)" >> "$STUB_CALLS_PATH"
 exit "\${STUB_GH_EXIT_CODE:-0}"
 `,
@@ -543,7 +558,7 @@ describe("staging deploy commit", () => {
   });
 
   test("records staging/verified on the pinned commit", async () => {
-    const result = await runRecord(baseSha);
+    const result = await runRecord({ deploySha: baseSha });
 
     expect(result.exitCode).toBe(0);
     const statusWrites = result.calls
@@ -556,6 +571,31 @@ describe("staging deploy commit", () => {
     expect(statusWrites[0]).toContain('"context":"staging/verified"');
     expect(statusWrites[0]).toContain('"state":"success"');
   });
+
+  test.each([
+    { mainTip: TIP_SHA, state: "success", exitCode: 0 },
+    { mainTip: OTHER_SHA, state: "failure", exitCode: 1 },
+  ])(
+    "merge-group final verification requires the unchanged main base: $state",
+    async ({ mainTip, state, exitCode }) => {
+      const result = await runRecord({
+        deploySha: baseSha,
+        expectedBase: TIP_SHA,
+        mainTip,
+      });
+      expect(result.exitCode).toBe(exitCode);
+      const writes = result.calls
+        .split("\n")
+        .filter((line) => line.includes("repos/stella/stella/statuses/"));
+      expect(writes).toHaveLength(1);
+      expect(writes.at(0)).toContain(`"state":"${state}"`);
+      if (state === "failure") {
+        expect(writes.at(0)).toContain(
+          '"description":"group no longer the head group"',
+        );
+      }
+    },
+  );
 
   test("builds, promotes and verifies only the resolved commit", async () => {
     const workflow = await Bun.file(WORKFLOW_URL).text();

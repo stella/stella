@@ -1,0 +1,62 @@
+name: Dispatch and watch workflow
+description: Dispatch an exact workflow title and require its successful completion.
+inputs:
+  app-client-id:
+    description: GitHub App client ID
+    default: ""
+  app-private-key:
+    description: GitHub App private key
+    default: ""
+  token:
+    description: Existing repository token, otherwise mint and renew an App token
+    default: ""
+  repository:
+    description: Target owner/repository
+    required: true
+  workflow:
+    description: Workflow filename
+    required: true
+  title:
+    description: Exact dispatched run title
+    required: true
+  inputs:
+    description: JSON workflow inputs
+    required: true
+  unfinished-run:
+    description: Leave or cancel an unfinished dispatched run when the watcher exits
+    default: leave
+  deadline:
+    description: Optional absolute epoch deadline for this stage
+    default: ""
+  receipt-artifact:
+    description: Optional JSON artifact name to retrieve after success
+    default: ""
+  max-polls:
+    description: Maximum ten-second completion polls
+    default: "2160"
+outputs:
+  receipt:
+    description: Local JSON receipt path
+    value: ${{ steps.watch.outputs.receipt }}
+  run-url:
+    description: Dispatched workflow run URL
+    value: ${{ steps.watch.outputs.run-url }}
+runs:
+  using: composite
+  steps:
+    - id: watch
+      shell: bash
+      env:
+        APP_CLIENT_ID: ${{ inputs.app-client-id }}
+        APP_PRIVATE_KEY: ${{ inputs.app-private-key }}
+        DISPATCH_TOKEN: ${{ inputs.token }}
+        INFRA_REPO: ${{ inputs.repository }}
+        WORKFLOW_FILE: ${{ inputs.workflow }}
+        EXPECTED_TITLE: ${{ inputs.title }}
+        DISPATCH_INPUTS: ${{ inputs.inputs }}
+        DISPATCH_REF: main
+        UNFINISHED_RUN: ${{ inputs.unfinished-run }}
+        WATCH_DEADLINE_EPOCH: ${{ inputs.deadline }}
+        RECEIPT_ARTIFACT: ${{ inputs.receipt-artifact }}
+        WATCH_MAX_POLLS: ${{ inputs.max-polls }}
+      run: bash "$GITHUB_WORKSPACE/scripts/workflow-dispatch-watch.sh"

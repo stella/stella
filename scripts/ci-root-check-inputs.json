@@ -14,6 +14,8 @@
     "Check local base selection": [],
     "Check local skill overrides": [".ai/**", ".agents/**", ".claude/**"],
     "Load release policy": ["**"],
+    "Release pull request content guard": ["**"],
+    "Test release content boundary": ["**"],
     "Published package lists match the release policy": ["**"],
     "Changeset packages match changed files": ["**"],
     "Validate AI skills": ["**"],

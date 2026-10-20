@@ -200,6 +200,9 @@ jobs:
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
       marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
+      release_stage_required: ${{ steps.release-stage-plan.outputs.release_stage_required }}
+      release_pr_required: ${{ steps.release-stage-plan.outputs.release_pr_required }}
+      release_version_commits: ${{ steps.release-stage-plan.outputs.release_version_commits }}
       migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
@@ -811,6 +814,19 @@ jobs:
           fi
           echo "required=$required" >> "$GITHUB_OUTPUT"
 
+      - name: Plan release staging
+        id: release-stage-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_BASE_SHA: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha || steps.target-base.outputs.base_sha }}
+          RELEASE_HEAD_SHA: ${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha || github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/plan-release-stage.sh >> "$GITHUB_OUTPUT"
+
       - name: Check changed file scope
         if: >-
           steps.completed-depth.outputs.run_required != 'false'
@@ -825,6 +841,8 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
+          RELEASE_PR_REQUIRED: ${{ steps.release-stage-plan.outputs.release_pr_required }}
+          RELEASE_VERSION_COMMITS: ${{ steps.release-stage-plan.outputs.release_version_commits }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
         run: |
           changed_files=()
@@ -1005,6 +1023,12 @@ jobs:
             if [[ "$package_scope" == false ]]; then
               package_checks_required=false
             fi
+          fi
+
+          # Release recognition is independent of paths: even a release-titled
+          # documentation-only PR must run the fail-closed content guard.
+          if [[ "${RELEASE_PR_REQUIRED:-false}" == true || "${RELEASE_VERSION_COMMITS:-[]}" != '[]' ]]; then
+            package_checks_required=true
           fi
 
           docs_checks_required=false
@@ -2635,6 +2659,7 @@ jobs:
     permissions:
       contents: read
       actions: write
+      pull-requests: read
     env:
       CI_CANCELLATION_KIND: CONTEXTUAL
       CI_CANCELLATION_CONTEXT: Queue failure cancellation depends on workflow outcomes.
@@ -6803,6 +6828,67 @@ jobs:
 
       - *merge_group_cancel
 
+  # Staging follows every planned code gate. Skipped optional gates are
+  # expected, so use an explicit status predicate rather than implicit success().
+  release-stage:
+    needs:
+      [
+        ci-plan,
+        generated-sources,
+
+        pr-heavy-gate,
+        ci-quick-checks,
+        dependency-malware,
+        docker-checks,
+        ci-checks-generated,
+        ci-checks-policy,
+        ci-checks-rest,
+        ci-browser,
+        ci-tests,
+        code-quality-api,
+        code-quality-web-rest,
+        service-suites,
+        postgres-service-suites,
+        query-perf,
+        release-typecheck,
+        fix-tests-on-base,
+        web-build,
+        heavy-web-build,
+        web-image-smoke,
+        mobile-build,
+        landing-build,
+        marketing-screenshots,
+        migration-upgrade-rehearsal,
+        route-smoke,
+        scan-engine-wasm-drift,
+        e2e-production-shard,
+        e2e-vite-canary,
+        e2e-landing,
+        stack-redaction-browsers,
+        api-image-smoke,
+        legal-atlas-image,
+        windows-scripts,
+        desktop-windows-dry-run,
+        desktop-rust-tests,
+        desktop-rust-lint,
+      ]
+    if: >-
+      always() && !failure() && !cancelled()
+      && inputs.heavy_only != true
+      && github.event_name == 'merge_group'
+      && needs.ci-plan.outputs.release_stage_required == 'true'
+    uses: ./.github/workflows/release-stage.yml
+    permissions:
+      contents: read
+      actions: write
+      statuses: read
+    with:
+      group_sha: ${{ github.event.merge_group.head_sha }}
+      base_sha: ${{ github.event.merge_group.base_sha }}
+      needs_json: ${{ toJSON(needs) }}
+      plan_json: ${{ toJSON(needs.ci-plan.outputs) }}
+    secrets: inherit
+
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
@@ -6815,6 +6901,7 @@ jobs:
     needs:
       [
         ci-plan,
+        release-stage,
         generated-sources,
 
         pr-heavy-gate,
@@ -6858,10 +6945,12 @@ jobs:
       # `ci-required-summary` artifact holds the same record.
       required_summary: ${{ steps.outcome.outputs.required_summary }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 150
     permissions:
       contents: read
       actions: write
       checks: read
+      statuses: read
       # A skipped plan passes only while the pull request is still a draft.
       pull-requests: read
     steps:
@@ -6884,6 +6973,7 @@ jobs:
           sparse-checkout: |
             scripts/gh-retry.sh
             scripts/retry.sh
+            scripts/wait-release-staging-status.sh
             scripts/ci-failure-digest.ts
             scripts/fetch-failed-job-logs.sh
             /package.json
@@ -6971,6 +7061,7 @@ jobs:
             "migration-upgrade-rehearsal": "migration_rehearsal_required",
             "mobile-build": "mobile_build_required",
             "release-typecheck": "release_typecheck_required",
+            "release-stage": "release_stage_required",
             "service-suites": "service_suites_required",
             "postgres-service-suites": "postgres_service_suites_required",
             "query-perf": "query_perf_required",
@@ -7306,6 +7397,18 @@ jobs:
               exit 1
               ;;
           esac
+          # HEADGREEN groups behind the release hold one hosted runner each
+          # for at most 120 min, bounded by max_entries_to_build minus one.
+          # Keep the proof inside the verdict trap so its failure cannot emit
+          # a successful required-jobs record.
+          if [[ "$EVENT" == merge_group ]]; then
+            release_stage_required=$(jq -r '.release_stage_required // "false"' <<< "$PLAN")
+            RELEASE_VERSION_COMMITS=$(jq -r '.release_version_commits // "[]"' <<< "$PLAN")
+            if [[ "$release_stage_required" != true && "$RELEASE_VERSION_COMMITS" != '[]' ]]; then
+              export RELEASE_VERSION_COMMITS
+              bash .workflow-tooling/scripts/wait-release-staging-status.sh
+            fi
+          fi
           # Completion evidence lets a later unchanged-head run skip every
           # suite, so only a run that planned and ran them records it: every
           # planned job succeeded and no job was cancelled or failed. A run

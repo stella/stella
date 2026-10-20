@@ -1493,3 +1493,20 @@ checks:
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
     if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Bridge-version guard')) }}
     run: bash scripts/check-bridge-version.sh
+
+  - name: Release pull request content guard
+    timeout-minutes: 10
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Checks immutable release PR diffs selected by current GitHub release recognition and merge group membership."
+      GH_TOKEN: ${{ github.token }}
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+    run: bun scripts/check-release-pr-content.ts
+
+  - name: Test release content boundary
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: release_content_test
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_release_content_test != 'true') }}
+    run: bun test --timeout 30000 scripts/check-release-pr-content.test.ts scripts/release-stage-plan.test.ts scripts/release-stage-preflight.test.ts

@@ -746,5 +746,13 @@
   "candidate:.github/workflows/release.yml/dispatch-release-health": {
     "kind": "support",
     "qualifier": "Dispatches health evaluation after successful stable production promotion to supply evidence for the next release gate."
+  },
+  "candidate:.github/workflows/ci.yml/release-stage": {
+    "kind": "priority",
+    "qualifier": "Deploys and verifies release candidates on staging before merge."
+  },
+  "candidate:.github/workflows/release-stage.yml/stage": {
+    "kind": "priority",
+    "qualifier": "Deploys and verifies release candidates on staging before merge."
   }
 }

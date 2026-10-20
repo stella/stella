@@ -256,6 +256,10 @@
       "node": "n0076"
     },
     {
+      "path": ".github/workflows/release-stage.yml",
+      "node": "source-c0e5b0d55987b2c26e10dad1af0eed117bb6383a3ee5925a207c2ccf5b62e9dd"
+    },
+    {
       "path": ".github/workflows/release-tag.yml",
       "node": "n0077"
     },
@@ -508,7 +512,7 @@
         "type": "checkout"
       },
       "path": ".github/actions/promote-dispatch/action.yml",
-      "digest": "4852f749fc979f19b82c5c3ad2f78109ee34b16061bad417b4a371548ed0f2ff",
+      "digest": "e83169f69bdac4889a9c8b4ff31fc8e14bfdffb4b423c1e2f81907991b6493e6",
       "references": ["./.github/actions/promote-dispatch"],
       "jobs": [],
       "edges": {}
@@ -939,14 +943,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "336d2b0bf285753308d1d8d21ce2d5c90818d143701877e65dc097b4bc82974e",
+      "digest": "333a21233815059035693d7e6f308389818f99de188f64f5d63d588d82ee73ee",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
           "id": "ci-plan",
           "kind": "support",
           "qualifier": "Plans trust, scopes and prerequisites for merge-required checks.",
-          "digest": "699b50c051d3c5b383419b8eefe829ca0fffce023566c01ee31bac9e2e37b8b3"
+          "digest": "a0bbd7b7e949e1966a269fc530100d658ea905aef3a4bdae48a62171e617de19"
         },
         {
           "id": "generated-sources",
@@ -970,13 +974,13 @@
           "id": "ci-checks-generated",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "6136de71dca441be552e282920c85d9c6ce4926088ce12bb3b04820a4830c8cc"
+          "digest": "fa122730f6f6ace09a4a4a5cad18c03c9ce7f1d3cbd2d6073c0546c79ea9715f"
         },
         {
           "id": "ci-checks-policy",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "1f5925471afbb8663f9688354cd08de85f409cd88da1bf72c28ce26f26230761"
+          "digest": "ec965447291b6d63ae174138b087fe77a7c9d73562331da0e7163498ceee4228"
         },
         {
           "id": "ci-checks-rest",
@@ -1195,10 +1199,16 @@
           "digest": "2ad3552ce098136dd474a1a236d079a35a56c69514a707af82949f1e21260ccc"
         },
         {
+          "id": "release-stage",
+          "kind": "priority",
+          "qualifier": "Deploys and verifies release candidates on staging before merge.",
+          "digest": "c5e0322ac59a69896b6d0780874898e120f8601bd5130e713966d54fa5f000e3"
+        },
+        {
           "id": "ci-result",
           "kind": "support",
           "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs.",
-          "digest": "739dea18d53150e6b871d66b1ca2ab475d5111c076a7badef7e2792bfcff8edb"
+          "digest": "1655ea79fcba7db007edc985ebdb32709bec12f7509c8b3fd45e03c76e9d1134"
         }
       ],
       "edges": {
@@ -1214,6 +1224,7 @@
         "./.github/actions/setup-production-e2e": "n0017",
         "./.github/workflows/marketing-screenshots.yml": "n0055",
         "./.github/workflows/query-perf.yml": "n0071",
+        "./.github/workflows/release-stage.yml": "source-c0e5b0d55987b2c26e10dad1af0eed117bb6383a3ee5925a207c2ccf5b62e9dd",
         "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0116",
         "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0118",
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
@@ -1506,38 +1517,38 @@
         "type": "checkout"
       },
       "path": ".github/workflows/deploy-staging.yml",
-      "digest": "2be1c60924e921c6f294cd7ece1f8f81a5bb0136aae605254af43b84fafcefb9",
+      "digest": "52ab34abb1383c11c2114e2fb660b33b400d4aeb9960386c1f67ed771543250d",
       "references": [],
       "jobs": [
         {
           "id": "resolve",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "69f9fc243ca519dd7171a21f6ef08d8090388a0df5ab640b8984cb0408a19504"
+          "digest": "9fd14a034945297c48f107879fe4e03da4bdb9e6123cbcc25e874e7a64ef14b8"
         },
         {
           "id": "staging-health",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "290da2e9c9706d47792db95d5cde1f97b26ec50082c076fb5684a0c6b33be10b"
+          "digest": "4d187a6b89e02b97b36c1cdf33603e0d5aa9a4a4566d310d11e102215c0b29dd"
         },
         {
           "id": "build-api",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "03ade74616ebaa48076f8cfad3e93ad880b7eeab40072d5effd47bc2e551ba6d"
+          "digest": "ba5289d99fd9f8ca67081e4b5fde57d3f0dc9f5de84e129a4e9aca8297b16578"
         },
         {
           "id": "build-web",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "474ded8c44e40c134eaeaa3a706418da1580c3bdde6a8e3fabdf0061a083618b"
+          "digest": "5846900f9b6b38044cbf0f4b78904e143b7cbcd917f3587e037362dccc04f89b"
         },
         {
           "id": "promote-staging",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "063c06cead309a7829812207426c013ee33de0dedcf0ec9ed22b7084dc35b2f4"
+          "digest": "9d1189748d4c6ce9c80355c525bd17f2b1693cdf5918d5185f8e831fca1933b1"
         }
       ],
       "edges": {
@@ -2548,14 +2559,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/release-pr.yml",
-      "digest": "dfeb51104a00e9aa3328963e5d98df4f4dd154a272721309919325bb4d9929e7",
+      "digest": "ef1264d3318c97ac12f182ec9d252de4dce95da30427c7e446351672f37786e9",
       "references": [],
       "jobs": [
+        {
+          "id": "tag-version",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "8eaf31cf8e7e01ccb3216e685f72f92922e1d484e139cb130c6dfce2b1831317"
+        },
         {
           "id": "gate",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "d977553ea927832aba86b2e29395d7995095ee86d6b46facf37b9560c6ed1deb"
+          "digest": "67ec839456d289a866797e69ea4f7eafb33a31bd4972f92aae447c754e770fdc"
         },
         {
           "id": "version",
@@ -2599,20 +2616,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/release-tag.yml",
-      "digest": "ff4eaadc15f4d442c8559f372acc3830914531ddf7e3bf261bcff63bcfbb9c08",
+      "digest": "78f4c6186df612b2c921e1b5a11181a2df57e76de51461f6421029c1b14a0e67",
       "references": [],
       "jobs": [
         {
           "id": "tag",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "0ac8654d28ad5e7431c4c03a8e039bbce384019864ed882829e40e9726a699dd"
+          "digest": "729a970daf520cb097b3327d7c4ce50eae7ce8318080aa5e05ffca7a276ab118"
         },
         {
           "id": "marketing-freshness",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "d598f21e05db5eb64e3e1c17524ea53bb317f75dd6d6ba517b389e808f42015d"
+          "digest": "a964d9615f423a67cbed79da9e30bd1222245d566a4033bde629163c29af0555"
         }
       ],
       "edges": {
@@ -3425,6 +3442,46 @@
       "path": ".github/actions/merge-target-base/action.yml",
       "digest": "e7b0d686574acffff6bff6b71b595fa15b8a31974b6e4429f6f3f32eb40b0014",
       "references": ["./.github/actions/merge-target-base"],
+      "jobs": [],
+      "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "source-c0e5b0d55987b2c26e10dad1af0eed117bb6383a3ee5925a207c2ccf5b62e9dd",
+      "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
+      "path": ".github/workflows/release-stage.yml",
+      "digest": "3265f8c4840e633f5d968208de118e4b7c5c933d66f624db54c19128d12a0e5b",
+      "references": ["./.github/workflows/release-stage.yml"],
+      "jobs": [
+        {
+          "id": "stage",
+          "kind": "priority",
+          "qualifier": "Deploys and verifies release candidates on staging before merge.",
+          "digest": "39b2dbb2e03b14df8424e4ca1df60ac382656c98c66e307314b53b39738fa44c"
+        }
+      ],
+      "edges": {
+        "./.github/actions/workflow-dispatch-watch": "source-ce4e49b638d9cc839336f9a36096f63745cd92ab105d246a7968e9c52f04fd69",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133",
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "source-ce4e49b638d9cc839336f9a36096f63745cd92ab105d246a7968e9c52f04fd69",
+      "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
+      "path": ".github/actions/workflow-dispatch-watch/action.yml",
+      "digest": "69e8ae16706ec78a224e19be5c18e73306479c6111b51a7a24e957369eb7f60f",
+      "references": ["./.github/actions/workflow-dispatch-watch"],
       "jobs": [],
       "edges": {}
     },
