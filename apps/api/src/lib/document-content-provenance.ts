@@ -67,14 +67,25 @@ export const resolveDesignatedExtractionFileField = <T extends FileFieldRow>({
   currentVersionId,
   extracted,
   fields,
+  pendingSourceFieldId,
 }: {
   currentVersionId: SafeId<"entityVersion">;
   extracted: ExtractedContentSourceProvenance | null | undefined;
   fields: readonly T[];
-}): T | null =>
-  extracted
-    ? resolveCurrentExtractionFileField({ currentVersionId, extracted, fields })
-    : chooseExtractionSource(fields);
+  pendingSourceFieldId?: SafeId<"field"> | undefined;
+}): T | null => {
+  if (extracted) {
+    return resolveCurrentExtractionFileField({
+      currentVersionId,
+      extracted,
+      fields,
+    });
+  }
+  if (pendingSourceFieldId) {
+    return fields.find(({ id }) => id === pendingSourceFieldId) ?? null;
+  }
+  return chooseExtractionSource(fields);
+};
 
 /**
  * Resolve the current file that live processing or direct reads may use.
