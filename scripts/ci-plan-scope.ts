@@ -11,13 +11,19 @@ import {
   requiresLandingBuild,
   requiresPackageChecks,
 } from "./ci-package-scope";
-import { routeSmokeAffected } from "./detect-route-smoke-changes";
+import { cachedForRepository } from "./ci-repository-cache";
+import {
+  routeSmokeAffected,
+  sourceImportClosure,
+} from "./detect-route-smoke-changes";
 import { planServiceSuites } from "./detect-service-suite-changes";
 import { landingDeployAffected } from "./landing-deploy-scope";
 import { productionE2eChanged } from "./production-e2e-inputs.mjs";
 
 const TRUE = "true";
 const FALSE = "false";
+const REPO_ROOT = path.resolve(import.meta.dir, "..");
+const PLANNER_ENTRY = "scripts/ci-plan-scope.ts";
 const BOTH_PLATFORMS =
   '[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-24.04","platform":"linux/amd64"}]';
 const ARM_PLATFORM = '[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"}]';
@@ -350,6 +356,21 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     windows_scripts_required: TRUE,
     desktop_windows_dry_run_required: TRUE,
   };
+};
+
+// Every check is selected by this module and the modules it imports, so a
+// change to any of them cannot be scoped by the planner's own answer.
+const plannerClosures = new Map<string, ReadonlySet<string>>();
+const plannerChanged = ({
+  changedFiles,
+  root = REPO_ROOT,
+}: ChangedFileScopeInput) => {
+  const planner = cachedForRepository(
+    plannerClosures,
+    { root, key: root },
+    () => sourceImportClosure([PLANNER_ENTRY], root),
+  );
+  return changedFiles.some((file) => planner.has(file));
 };
 
 const deriveScopeFacts = (
@@ -989,8 +1010,17 @@ export const computeChangedFileScope = (
   detectors: ChangedFileScopeDetectors = DEFAULT_DETECTORS,
 ): ChangedFileScope => {
   const facts = deriveScopeFacts(input, detectors);
+  const wide = plannerChanged(input) ? wideScope(input) : undefined;
+  // A planner change keeps what its files select and adds every check the
+  // wide scope runs, since the planner cannot narrow a change to itself.
   const scope = Object.fromEntries(
-    OUTPUT_ORDER.map((output) => [output, OUTPUT_RULES[output](facts)]),
+    OUTPUT_ORDER.map((output) => {
+      const planned = OUTPUT_RULES[output](facts);
+      const widened =
+        wide !== undefined &&
+        (wide[output] === TRUE || output === "api_image_platforms");
+      return [output, widened ? wide[output] : planned];
+    }),
   );
   if (!isCompleteScope(scope)) {
     throw new ScopeOutputMissingError(

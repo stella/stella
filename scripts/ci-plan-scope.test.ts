@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -24,6 +25,7 @@ import {
   type ChangedFileScopeInput,
   type ScopeOutput,
 } from "./ci-plan-scope";
+import { sourceImportClosure } from "./detect-route-smoke-changes";
 import { GENERATORS } from "./generated-files";
 
 markdownReaders();
@@ -703,5 +705,46 @@ test("the real changed-file step preserves paths and fails closed on git failure
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+// The planner selects every check, so a change to it or any module it imports
+// runs at least what an unknown scope runs.
+test("a change to the planner or a module it imports plans every wide check", () => {
+  const root = nodePath.resolve(import.meta.dir, "..");
+  const planner = [
+    ...sourceImportClosure(["scripts/ci-plan-scope.ts"], root),
+  ].filter((file) => existsSync(nodePath.join(root, file)));
+  expect(planner).toContain("scripts/ci-package-scope.ts");
+  const plan = (changedFiles: readonly string[], scopeUnknown: boolean) => {
+    const {
+      api_scope_unknown: _unknown,
+      changed_files: _files,
+      ...outputs
+    } = computeChangedFileScope(
+      {
+        changedFiles,
+        comparisonBase: "",
+        scopeUnknown,
+        eventName: "pull_request",
+        suiteDepth: "fast",
+        heavyOnly: false,
+        prTitle: "",
+      },
+      DEFAULT_DETECTORS,
+    );
+    return outputs;
+  };
+  const wide = plan([], true);
+  expect(wide.route_tree_required).toBe("true");
+  expect(wide.model_catalog_drift_required).toBe("true");
+  expect(wide.web_api_types_required).toBe("true");
+  const widePlanned = Object.entries(wide).filter(
+    ([output, value]) => value === "true" || output === "api_image_platforms",
+  );
+  for (const file of planner) {
+    expect(plan([file], false), file).toMatchObject(
+      Object.fromEntries(widePlanned),
+    );
   }
 });

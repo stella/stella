@@ -100,11 +100,12 @@ const importCandidates = (importer: string, specifier: string): string[] => {
   return candidates;
 };
 
-export const routeSmokeImportClosure = (
-  root = REPO_ROOT,
+export const sourceImportClosure = (
+  entryPoints: readonly string[],
+  root: string,
 ): ReadonlySet<string> => {
   const visited = new Set<string>();
-  const pending: string[] = [...ENTRY_POINTS];
+  const pending = [...entryPoints];
   // Bun is already installed by ci-plan; no repository install is needed to
   // parse imports, re-exports and literal dynamic imports without regex drift.
   const parsers = new Map<SourceExtension, Bun.Transpiler>();
@@ -131,14 +132,18 @@ export const routeSmokeImportClosure = (
     ) {
       continue;
     }
+    // scanImports rejects a script's leading shebang line.
     for (const imported of parserFor(extension).scanImports(
-      readFileSync(absolute, "utf-8"),
+      readFileSync(absolute, "utf-8").replace(/^#![^\n]*/u, ""),
     )) {
       pending.push(...importCandidates(file, imported.path));
     }
   }
   return visited;
 };
+
+export const routeSmokeImportClosure = (root = REPO_ROOT) =>
+  sourceImportClosure(ENTRY_POINTS, root);
 
 const routeSmokeClosures = new Map<string, ReadonlySet<string>>();
 
