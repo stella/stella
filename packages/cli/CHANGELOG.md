@@ -1,5 +1,35 @@
 # @stll/cli
 
+## 5.1.0
+
+### Minor Changes
+
+- [#6144](https://github.com/stella/stella/pull/6144) [`fb28b69`](https://github.com/stella/stella/commit/fb28b69d95d8094029029517032bfe1b519cc83d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `read_case_law_citations` filters by doctrine and polarity; a doctrine filter on a surface without doctrine is refused instead of returning an empty page.
+
+- [#5986](https://github.com/stella/stella/pull/5986) [`20eaeb8`](https://github.com/stella/stella/commit/20eaeb874a0f097a78b56b520a3fe80226c4d187) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an as-of date to legislation search and return the matched consolidation validity window.
+
+- [#6012](https://github.com/stella/stella/pull/6012) [`0ff6a2c`](https://github.com/stella/stella/commit/0ff6a2cc9329ff77c5a9f3c5f47d221995935579) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `read_statute` returns publisher-stated pending changes and, per version, the amendments that produced it.
+
+### Patch Changes
+
+- [#5984](https://github.com/stella/stella/pull/5984) [`a4dc90d`](https://github.com/stella/stella/commit/a4dc90d7e0174d34f3435408998c973db7c538d7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Resolve EU decisions by ECLI and include available decision languages.
+
+- [#5982](https://github.com/stella/stella/pull/5982) [`fcd5c17`](https://github.com/stella/stella/commit/fcd5c17d4bf9f955501d6f09aac6bd2bb277ff61) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document EU-law provision filters for case-law search.
+
+## 5.0.0
+
+### Major Changes
+
+- [#5865](https://github.com/stella/stella/pull/5865) [`0b164f3`](https://github.com/stella/stella/commit/0b164f3f3bcf91d53d10f9f46f725ad2e581c18b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Replace clause list depth fields with named numbering variants in the generated contracts.
+
+### Patch Changes
+
+- [#5554](https://github.com/stella/stella/pull/5554) [`20316a1`](https://github.com/stella/stella/commit/20316a1133c7d433112551c4b843362d4dff1aac) Thanks [@jan-kubica](https://github.com/jan-kubica)! - List retained answer versions with the text before and after each change and the name of the member who made it.
+
+- [#6046](https://github.com/stella/stella/pull/6046) [`b83289b`](https://github.com/stella/stella/commit/b83289b9a22c5e21999eb033498dac37b6efb1ea) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use `url` for legal reader links and retain distinct publisher links in `source_url`.
+
+- [#5985](https://github.com/stella/stella/pull/5985) [`b65b24a`](https://github.com/stella/stella/commit/b65b24a5445be69c1f26b54f72d86640f3ad9258) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document that statute reads include outline and versions on the first text page only.
+
 ## 4.3.0
 
 ### Minor Changes

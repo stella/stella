@@ -946,7 +946,10 @@ export const didYouMean = (labels: readonly string[]): string => {
     : `Did you mean one of ${labels.join(", ")}?`;
 };
 
-const levenshtein = (a: string, b: string): number => {
+const levenshtein = (left: string, right: string): number => {
+  // Over Unicode scalar values, so an astral character is one edit.
+  const a = Array.from(left);
+  const b = Array.from(right);
   // Rolling single-row DP. `previous` always holds `b.length + 1` entries and
   // every read below is in range by construction; `panic` documents that as a
   // hard invariant instead of masking an out-of-range read with a default.
