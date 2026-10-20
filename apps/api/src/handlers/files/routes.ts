@@ -20,7 +20,11 @@ import officeCitationEndpoint from "@/api/handlers/files/office-citation";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
 import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
 import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeHandler,
+  safeHandlerResponseSchemas,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
@@ -340,7 +344,7 @@ export const ocrExportEndpoint = createSafeHandler(
     access: "read",
     query: t.Object({ format: t.UnionEnum(OCR_EXPORT_FORMATS) }),
     params: workspaceParams({ fieldId: tSafeId("field") }),
-    response: t.Unknown(),
+    response: safeHandlerResponseSchemas(t.Unknown()),
   } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },

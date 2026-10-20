@@ -223,6 +223,16 @@ export type ConformanceHttpResponse = {
   body: { cancel: (reason?: unknown) => Promise<void> } | null;
 };
 
+const containsFileSchema = (schema: unknown): boolean => {
+  if (!TypeGuard.IsSchema(schema)) {
+    return false;
+  }
+  if (schema[Kind] === "File") {
+    return true;
+  }
+  return TypeGuard.IsUnion(schema) && schema.anyOf.some(containsFileSchema);
+};
+
 type AssertHttpResponseConformanceOptions = SchemaReferences & {
   route: string;
   response: ConformanceHttpResponse;
@@ -308,8 +318,13 @@ export const assertHttpResponseConformance = async ({
   const clone = cloned.value;
   try {
     const body = await Result.tryPromise(async () => {
-      const value: unknown = jsonBody ? await clone.json() : await clone.text();
-      return value;
+      if (jsonBody) {
+        return await clone.json();
+      }
+      if (containsFileSchema(bodySchema)) {
+        return await clone.blob();
+      }
+      return await clone.text();
     });
     if (Result.isError(body)) {
       throw failure(bodyIdentity, "(body)");

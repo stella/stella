@@ -8,10 +8,17 @@ import {
 } from "@/api/handlers/chat/link-icons/origin";
 import { readLinkIcon } from "@/api/handlers/chat/link-icons/read";
 import { linkIconBody } from "@/api/handlers/chat/link-icons/response";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeRootHandler,
+  safeHandlerResponseSchemas,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { resolveClientIp } from "@/api/lib/client-ip";
+
+// The handler returns Blob bytes; the wire representation is a file.
+const iconFileResponseSchema = t.Unsafe<Blob>(t.File());
 
 const config = {
   contract: "patch",
@@ -27,6 +34,13 @@ const config = {
         "Decorative icons are optional; use the bundled globe when image bytes are unavailable.",
     },
   },
+  response: safeHandlerResponseSchemas(
+    t.Union([
+      iconFileResponseSchema,
+      t.Object({ type: t.Literal("no-icon") }),
+      t.Object({ type: t.Literal("temporary") }),
+    ]),
+  ),
   params: t.Object({ hostname: t.String({ maxLength: 253 }) }),
 } satisfies HandlerConfig;
 

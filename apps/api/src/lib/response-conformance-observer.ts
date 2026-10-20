@@ -1,4 +1,4 @@
-export type ResponseConformanceObservation = {
+type ResponseConformanceObservation = {
   handler: object;
   config: { response?: unknown };
   context: unknown;
@@ -32,6 +32,13 @@ export const observeHandlerResponses = <THandler extends object>(
     return handler;
   }
   return new Proxy(handler, {
+    get: (target, property, receiver) => {
+      // Elysia infers context access and response mapping from the handler source.
+      if (property === "toString") {
+        return () => Function.prototype.toString.call(target);
+      }
+      return Reflect.get(target, property, receiver);
+    },
     apply: async (target, thisArg: unknown, args: unknown[]) => {
       const result: unknown = await Reflect.apply(target, thisArg, args);
       await observer({

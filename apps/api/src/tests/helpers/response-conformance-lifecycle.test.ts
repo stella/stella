@@ -72,7 +72,7 @@ import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { serializeToolResult } from "@/api/mcp/tool-utils";
+import { nullAsAbsent, serializeToolResult } from "@/api/mcp/tool-utils";
 import { defineMcpToolOutput, defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 import { createTestHandlerContext, NO_AUDIT, NO_DB } from "@/api/tests/helpers/handler-context";
 
@@ -85,7 +85,7 @@ const definition = defineValibotMcpTool({
   consumesServices: false,
   anonymized: { exposure: "passthrough" },
   annotations: { title: "Conformance fixture", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  inputSchema: v.strictObject({}),
+  inputSchema: nullAsAbsent(v.strictObject({})),
 });
 const output = defineMcpToolOutput(v.strictObject({ count: v.number() }));
 const context = createTestHandlerContext<McpRequestContext>({
@@ -116,7 +116,7 @@ const transport = createMcpHttpRequestHandler({
 });
 
 test("malformed tool output crosses the real MCP HTTP transport", async () => {
-  const app = new Elysia({ aot: false }).use(createMcpRoute({ handleMcpHttpRequest: transport }));
+  const app = new Elysia().use(createMcpRoute({ handleMcpHttpRequest: transport }));
   const response = await app.handle(new Request("http://localhost/mcp", {
     method: "POST",
     headers: { authorization: "Bearer fixture", accept: "application/json, text/event-stream", "content-type": "application/json" },

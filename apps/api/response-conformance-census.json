@@ -3,19 +3,19 @@
   "testEvidence": "statically resolved invocations; not proof of completed execution",
   "runtimeExecutionEvidence": "not-collected",
   "counts": {
-    "routesTotal": 773,
-    "routesExercisedByTests": 231,
-    "routesWithoutExecutionEvidence": 773,
-    "routesWithDeclaredSchema": 51,
-    "routesWithHttpTestCalls": 4,
-    "routesWithHandlerTestCalls": 227,
-    "toolsTotal": 208,
-    "capabilitiesTotal": 434
+    "routesTotal": 784,
+    "routesExercisedByTests": 247,
+    "routesWithoutExecutionEvidence": 784,
+    "routesWithDeclaredSchema": 62,
+    "routesWithHttpTestCalls": 11,
+    "routesWithHandlerTestCalls": 236,
+    "toolsTotal": 212,
+    "capabilitiesTotal": 436
   },
   "unresolvedCalls": {
     "handler": 1,
-    "http": 505,
-    "mcp": 50
+    "http": 523,
+    "mcp": 51
   },
   "surfaces": [
     {
@@ -256,6 +256,7 @@
       "httpTests": [],
       "handlerTests": [
         "apps/api/src/handlers/chat/fork/create.integration.test.ts",
+        "apps/api/src/handlers/chat/messages/turn-timing.postgres.test.ts",
         "apps/api/src/handlers/chat/thread-active-skill.integration.test.ts"
       ],
       "toolTests": [],
@@ -1804,6 +1805,7 @@
         "apps/api/src/handlers/invoices/create.test.ts",
         "apps/api/src/handlers/invoices/invoice-types.integration.test.ts",
         "apps/api/src/handlers/invoices/lines/lines.integration.test.ts",
+        "apps/api/src/handlers/invoices/prefill.integration.test.ts",
         "apps/api/src/handlers/invoices/running-time.integration.test.ts"
       ],
       "toolTests": [],
@@ -1987,6 +1989,40 @@
     },
     {
       "kind": "capability",
+      "id": "invoices.prefill",
+      "surface": "capability",
+      "owner": "stella",
+      "schemaSource": "apps/api/src/handlers/invoices/prefill.ts#config.response",
+      "handlerEndpoint": "apps/api/src/handlers/invoices/prefill.ts",
+      "httpTests": [],
+      "handlerTests": [
+        "apps/api/src/handlers/invoices/prefill.integration.test.ts"
+      ],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "e35c5fb2401422c43c8146149d5d8c9655623dcd7c126953386293c29041a167",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
+      }
+    },
+    {
+      "kind": "capability",
       "id": "invoices.transition",
       "surface": "capability",
       "owner": "stella",
@@ -1997,6 +2033,7 @@
         "apps/api/src/handlers/invoices/billing-modes.integration.test.ts",
         "apps/api/src/handlers/invoices/invoice-types.integration.test.ts",
         "apps/api/src/handlers/invoices/lines/lines.integration.test.ts",
+        "apps/api/src/handlers/invoices/prefill.integration.test.ts",
         "apps/api/src/handlers/invoices/running-time.integration.test.ts",
         "apps/api/src/handlers/invoices/seller-numbering.postgres.test.ts",
         "apps/api/src/handlers/invoices/transition.integration.test.ts"
@@ -2190,7 +2227,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "9886a136371c16a8ddf12b2aac4425cfb09318c082245bcd991590cf34064321",
+        "declaration": "0e8f00c921cb6a2e8de03937ab7a599bb017ca276f073f559ed20434f3f1c2c8",
         "statuses": [
           "200",
           "400",
@@ -2484,6 +2521,40 @@
       "toolTests": [],
       "response": {
         "type": "missing"
+      }
+    },
+    {
+      "kind": "capability",
+      "id": "lists.sample-case.create",
+      "surface": "capability",
+      "owner": "stella",
+      "schemaSource": "apps/api/src/handlers/lists/sample-case/create.ts#config.response",
+      "handlerEndpoint": "apps/api/src/handlers/lists/sample-case/create.ts",
+      "httpTests": [],
+      "handlerTests": [
+        "apps/api/src/handlers/lists/sample-case/create.postgres.test.ts"
+      ],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "4b0f8fdb8d4e513fad4cdd4c39a66b3cdba60e6dc22c6e5a58ee557d3d8b2bc2",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
       }
     },
     {
@@ -2934,10 +3005,7 @@
       "schemaSource": "apps/api/src/handlers/workspaces/update.ts#config.response",
       "handlerEndpoint": "apps/api/src/handlers/workspaces/update.ts",
       "httpTests": [],
-      "handlerTests": [
-        "apps/api/src/handlers/workspaces/update-by-id.test.ts",
-        "apps/api/src/lib/demo-account-handlers.test.ts"
-      ],
+      "handlerTests": ["apps/api/src/handlers/workspaces/update-by-id.test.ts"],
       "toolTests": [],
       "response": {
         "type": "missing"
@@ -6457,6 +6525,23 @@
     },
     {
       "kind": "mcp",
+      "id": "advanced:add_matter_member",
+      "mode": "advanced",
+      "name": "add_matter_member",
+      "surface": "static",
+      "owner": "stella",
+      "schemaSource": "apps/api/src/mcp/static-tool-definitions.ts#getStaticMcpToolOutputContract",
+      "httpTests": [],
+      "handlerTests": [],
+      "toolTests": ["apps/api/src/mcp/research-admin-tools.test.ts"],
+      "response": {
+        "type": "declared",
+        "declaration": "e463b2fa91c632dc8b135ecda2a9ff49e31845b9ca89f8c84b80311974425fd4",
+        "statuses": ["200"]
+      }
+    },
+    {
+      "kind": "mcp",
       "id": "advanced:case_law_coverage",
       "mode": "advanced",
       "name": "case_law_coverage",
@@ -6485,7 +6570,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "ea59fe26950645148ad126e87d13dd4c0174815bf6fe22380017843a28ba9f50",
+        "declaration": "0081b15629618709d9fd271f01da4d1e1861a0c5e42b56757301cd2ed39cdc34",
         "statuses": ["200"]
       }
     },
@@ -7001,23 +7086,6 @@
     },
     {
       "kind": "mcp",
-      "id": "advanced:manage_organization",
-      "mode": "advanced",
-      "name": "manage_organization",
-      "surface": "static",
-      "owner": "stella",
-      "schemaSource": "apps/api/src/mcp/static-tool-definitions.ts#getStaticMcpToolOutputContract",
-      "httpTests": [],
-      "handlerTests": [],
-      "toolTests": [],
-      "response": {
-        "type": "declared",
-        "declaration": "8d5b8c5cff8c8edecbed61cf8ce766f7d5255e4c727455bd907a81f7bbe73f30",
-        "statuses": ["200"]
-      }
-    },
-    {
-      "kind": "mcp",
       "id": "advanced:open_case_law_decision",
       "mode": "advanced",
       "name": "open_case_law_decision",
@@ -7029,7 +7097,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "bc3f059f2a1d9a3867cc07efa24e8f217f796ea6e938f88e11606570c750d462",
+        "declaration": "624f6b5d5c9e7073170242329c33c2174f1faf056663833b3b7f6e8029a5ac03",
         "statuses": ["200"]
       }
     },
@@ -7131,7 +7199,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "122afa108012ff4206b9297fc58c642e36dcef024ca831c58b39d14a89b9535b",
+        "declaration": "20b93963ab3469ac653b0c46fb46f1379261c4368e163233f08d7ec208698429",
         "statuses": ["200"]
       }
     },
@@ -7182,7 +7250,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "46d79a88f7d137f5982dce453addb76d96b5b0b0f288bd4b33025ae871d53f38",
+        "declaration": "81ad75651fba675e27d3f8564d9369b6f696a381688f7dced010ce17ebd37c4b",
         "statuses": ["200"]
       }
     },
@@ -7216,7 +7284,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "00083a71f7d0c820a496ea33c5679d3006de85d98874d0c65bd2f9d22860f257",
+        "declaration": "ed90f1bedd1732153ff3aafa3182f41ae393af42576f0cf83ed7e78b46b6045e",
         "statuses": ["200"]
       }
     },
@@ -7284,7 +7352,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "5ce3aee7cf3451c11f64e6c3be37b967b1238cd3ab8a8df7c9ac2207ac335800",
+        "declaration": "278b5c21ea76415e21a25c71519fd2c503614cc2b8c81ba5b983a842eeaef30d",
         "statuses": ["200"]
       }
     },
@@ -7301,7 +7369,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "75e12152b12c866750f6d6f9adcccc2b86a684f99f1fa0578b512b1fc930d7c3",
+        "declaration": "59b72acaf1893a532a0bc4e7a532ef91e78c8b302e40d11371da70906ba75405",
         "statuses": ["200"]
       }
     },
@@ -7318,7 +7386,24 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "0120599d54945c57de5689c0daeb3a38996b568bb3140a0ac0f50b0ee068072a",
+        "declaration": "e5e593062fde2f6e4e8d0100075a3d4bbc51fcf9244763a9692357951b7a364c",
+        "statuses": ["200"]
+      }
+    },
+    {
+      "kind": "mcp",
+      "id": "advanced:remove_matter_member",
+      "mode": "advanced",
+      "name": "remove_matter_member",
+      "surface": "static",
+      "owner": "stella",
+      "schemaSource": "apps/api/src/mcp/static-tool-definitions.ts#getStaticMcpToolOutputContract",
+      "httpTests": [],
+      "handlerTests": [],
+      "toolTests": ["apps/api/src/mcp/research-admin-tools.test.ts"],
+      "response": {
+        "type": "declared",
+        "declaration": "2e6f5ea694ab6f6c1ac24a5d717c7699979c8bc33c371788b1289621cc8572c6",
         "statuses": ["200"]
       }
     },
@@ -7335,7 +7420,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "dd17ae2f4cd24fc9fdb3b51cbad82216272418cb4a300f179bf3d9641f56bf66",
+        "declaration": "7b095cd5f841f4eb32fe078021e1fd4fc3ce7bd880759701c6dde69aaca8d121",
         "statuses": ["200"]
       }
     },
@@ -7352,7 +7437,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "dd17ae2f4cd24fc9fdb3b51cbad82216272418cb4a300f179bf3d9641f56bf66",
+        "declaration": "7b095cd5f841f4eb32fe078021e1fd4fc3ce7bd880759701c6dde69aaca8d121",
         "statuses": ["200"]
       }
     },
@@ -7590,7 +7675,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "3aa9feafcc2e3002dcdfa9ab696960869407fcf4561cfe617b8ce133dd491a53",
+        "declaration": "782e8c4b3009fef64db336c3425ad7dc8ef6c0eb7d62c938d95ac1fbc623d1a7",
         "statuses": ["200"]
       }
     },
@@ -7607,7 +7692,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "faad53fd51fe6936d3c16ed4bc46f7e2f81f75a4a7ebffa8aa05ee07fc6f3acc",
+        "declaration": "26a91f5e201e9473827bde196d5b59dce6c7700b28dcde2581f1382961ba06e7",
         "statuses": ["200"]
       }
     },
@@ -7659,6 +7744,23 @@
       "response": {
         "type": "declared",
         "declaration": "e587846a5bb57a390893550c738c5678230c25beb1232373d52721a165ec62e0",
+        "statuses": ["200"]
+      }
+    },
+    {
+      "kind": "mcp",
+      "id": "advanced:update_organization_settings",
+      "mode": "advanced",
+      "name": "update_organization_settings",
+      "surface": "static",
+      "owner": "stella",
+      "schemaSource": "apps/api/src/mcp/static-tool-definitions.ts#getStaticMcpToolOutputContract",
+      "httpTests": [],
+      "handlerTests": [],
+      "toolTests": ["apps/api/src/mcp/research-admin-tools.test.ts"],
+      "response": {
+        "type": "declared",
+        "declaration": "dc7326e31d527c58865ae5e58c79c27254405c06a476d213e768e7ee4771d7cf",
         "statuses": ["200"]
       }
     },
@@ -7964,7 +8066,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "bc3f059f2a1d9a3867cc07efa24e8f217f796ea6e938f88e11606570c750d462",
+        "declaration": "624f6b5d5c9e7073170242329c33c2174f1faf056663833b3b7f6e8029a5ac03",
         "statuses": ["200"]
       }
     },
@@ -7981,7 +8083,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "122afa108012ff4206b9297fc58c642e36dcef024ca831c58b39d14a89b9535b",
+        "declaration": "20b93963ab3469ac653b0c46fb46f1379261c4368e163233f08d7ec208698429",
         "statuses": ["200"]
       }
     },
@@ -8015,7 +8117,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "46d79a88f7d137f5982dce453addb76d96b5b0b0f288bd4b33025ae871d53f38",
+        "declaration": "81ad75651fba675e27d3f8564d9369b6f696a381688f7dced010ce17ebd37c4b",
         "statuses": ["200"]
       }
     },
@@ -8049,7 +8151,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "00083a71f7d0c820a496ea33c5679d3006de85d98874d0c65bd2f9d22860f257",
+        "declaration": "ed90f1bedd1732153ff3aafa3182f41ae393af42576f0cf83ed7e78b46b6045e",
         "statuses": ["200"]
       }
     },
@@ -8117,7 +8219,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "5ce3aee7cf3451c11f64e6c3be37b967b1238cd3ab8a8df7c9ac2207ac335800",
+        "declaration": "278b5c21ea76415e21a25c71519fd2c503614cc2b8c81ba5b983a842eeaef30d",
         "statuses": ["200"]
       }
     },
@@ -8134,7 +8236,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "75e12152b12c866750f6d6f9adcccc2b86a684f99f1fa0578b512b1fc930d7c3",
+        "declaration": "59b72acaf1893a532a0bc4e7a532ef91e78c8b302e40d11371da70906ba75405",
         "statuses": ["200"]
       }
     },
@@ -8151,7 +8253,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "0120599d54945c57de5689c0daeb3a38996b568bb3140a0ac0f50b0ee068072a",
+        "declaration": "e5e593062fde2f6e4e8d0100075a3d4bbc51fcf9244763a9692357951b7a364c",
         "statuses": ["200"]
       }
     },
@@ -8168,7 +8270,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "dd17ae2f4cd24fc9fdb3b51cbad82216272418cb4a300f179bf3d9641f56bf66",
+        "declaration": "7b095cd5f841f4eb32fe078021e1fd4fc3ce7bd880759701c6dde69aaca8d121",
         "statuses": ["200"]
       }
     },
@@ -8185,7 +8287,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "dd17ae2f4cd24fc9fdb3b51cbad82216272418cb4a300f179bf3d9641f56bf66",
+        "declaration": "7b095cd5f841f4eb32fe078021e1fd4fc3ce7bd880759701c6dde69aaca8d121",
         "statuses": ["200"]
       }
     },
@@ -8270,7 +8372,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "3aa9feafcc2e3002dcdfa9ab696960869407fcf4561cfe617b8ce133dd491a53",
+        "declaration": "782e8c4b3009fef64db336c3425ad7dc8ef6c0eb7d62c938d95ac1fbc623d1a7",
         "statuses": ["200"]
       }
     },
@@ -8287,7 +8389,24 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "faad53fd51fe6936d3c16ed4bc46f7e2f81f75a4a7ebffa8aa05ee07fc6f3acc",
+        "declaration": "26a91f5e201e9473827bde196d5b59dce6c7700b28dcde2581f1382961ba06e7",
+        "statuses": ["200"]
+      }
+    },
+    {
+      "kind": "mcp",
+      "id": "default:add_matter_member",
+      "mode": "default",
+      "name": "add_matter_member",
+      "surface": "static",
+      "owner": "stella",
+      "schemaSource": "apps/api/src/mcp/static-tool-definitions.ts#getStaticMcpToolOutputContract",
+      "httpTests": [],
+      "handlerTests": [],
+      "toolTests": ["apps/api/src/mcp/write-tool-authority.test.ts"],
+      "response": {
+        "type": "declared",
+        "declaration": "e463b2fa91c632dc8b135ecda2a9ff49e31845b9ca89f8c84b80311974425fd4",
         "statuses": ["200"]
       }
     },
@@ -8321,7 +8440,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "ea59fe26950645148ad126e87d13dd4c0174815bf6fe22380017843a28ba9f50",
+        "declaration": "0081b15629618709d9fd271f01da4d1e1861a0c5e42b56757301cd2ed39cdc34",
         "statuses": ["200"]
       }
     },
@@ -8806,23 +8925,6 @@
     },
     {
       "kind": "mcp",
-      "id": "default:manage_organization",
-      "mode": "default",
-      "name": "manage_organization",
-      "surface": "static",
-      "owner": "stella",
-      "schemaSource": "apps/api/src/mcp/static-tool-definitions.ts#getStaticMcpToolOutputContract",
-      "httpTests": [],
-      "handlerTests": [],
-      "toolTests": ["apps/api/src/mcp/write-tool-authority.test.ts"],
-      "response": {
-        "type": "declared",
-        "declaration": "8d5b8c5cff8c8edecbed61cf8ce766f7d5255e4c727455bd907a81f7bbe73f30",
-        "statuses": ["200"]
-      }
-    },
-    {
-      "kind": "mcp",
       "id": "default:open_case_law_decision",
       "mode": "default",
       "name": "open_case_law_decision",
@@ -8834,7 +8936,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "bc3f059f2a1d9a3867cc07efa24e8f217f796ea6e938f88e11606570c750d462",
+        "declaration": "624f6b5d5c9e7073170242329c33c2174f1faf056663833b3b7f6e8029a5ac03",
         "statuses": ["200"]
       }
     },
@@ -8936,7 +9038,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "122afa108012ff4206b9297fc58c642e36dcef024ca831c58b39d14a89b9535b",
+        "declaration": "20b93963ab3469ac653b0c46fb46f1379261c4368e163233f08d7ec208698429",
         "statuses": ["200"]
       }
     },
@@ -8970,7 +9072,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "46d79a88f7d137f5982dce453addb76d96b5b0b0f288bd4b33025ae871d53f38",
+        "declaration": "81ad75651fba675e27d3f8564d9369b6f696a381688f7dced010ce17ebd37c4b",
         "statuses": ["200"]
       }
     },
@@ -9004,7 +9106,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "00083a71f7d0c820a496ea33c5679d3006de85d98874d0c65bd2f9d22860f257",
+        "declaration": "ed90f1bedd1732153ff3aafa3182f41ae393af42576f0cf83ed7e78b46b6045e",
         "statuses": ["200"]
       }
     },
@@ -9072,7 +9174,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "5ce3aee7cf3451c11f64e6c3be37b967b1238cd3ab8a8df7c9ac2207ac335800",
+        "declaration": "278b5c21ea76415e21a25c71519fd2c503614cc2b8c81ba5b983a842eeaef30d",
         "statuses": ["200"]
       }
     },
@@ -9089,7 +9191,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "75e12152b12c866750f6d6f9adcccc2b86a684f99f1fa0578b512b1fc930d7c3",
+        "declaration": "59b72acaf1893a532a0bc4e7a532ef91e78c8b302e40d11371da70906ba75405",
         "statuses": ["200"]
       }
     },
@@ -9106,7 +9208,24 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "0120599d54945c57de5689c0daeb3a38996b568bb3140a0ac0f50b0ee068072a",
+        "declaration": "e5e593062fde2f6e4e8d0100075a3d4bbc51fcf9244763a9692357951b7a364c",
+        "statuses": ["200"]
+      }
+    },
+    {
+      "kind": "mcp",
+      "id": "default:remove_matter_member",
+      "mode": "default",
+      "name": "remove_matter_member",
+      "surface": "static",
+      "owner": "stella",
+      "schemaSource": "apps/api/src/mcp/static-tool-definitions.ts#getStaticMcpToolOutputContract",
+      "httpTests": [],
+      "handlerTests": [],
+      "toolTests": ["apps/api/src/mcp/research-admin-tools.test.ts"],
+      "response": {
+        "type": "declared",
+        "declaration": "2e6f5ea694ab6f6c1ac24a5d717c7699979c8bc33c371788b1289621cc8572c6",
         "statuses": ["200"]
       }
     },
@@ -9123,7 +9242,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "dd17ae2f4cd24fc9fdb3b51cbad82216272418cb4a300f179bf3d9641f56bf66",
+        "declaration": "7b095cd5f841f4eb32fe078021e1fd4fc3ce7bd880759701c6dde69aaca8d121",
         "statuses": ["200"]
       }
     },
@@ -9140,7 +9259,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "dd17ae2f4cd24fc9fdb3b51cbad82216272418cb4a300f179bf3d9641f56bf66",
+        "declaration": "7b095cd5f841f4eb32fe078021e1fd4fc3ce7bd880759701c6dde69aaca8d121",
         "statuses": ["200"]
       }
     },
@@ -9381,7 +9500,7 @@
       "toolTests": ["apps/api/src/mcp/search-index-unavailable.test.ts"],
       "response": {
         "type": "declared",
-        "declaration": "3aa9feafcc2e3002dcdfa9ab696960869407fcf4561cfe617b8ce133dd491a53",
+        "declaration": "782e8c4b3009fef64db336c3425ad7dc8ef6c0eb7d62c938d95ac1fbc623d1a7",
         "statuses": ["200"]
       }
     },
@@ -9398,7 +9517,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "faad53fd51fe6936d3c16ed4bc46f7e2f81f75a4a7ebffa8aa05ee07fc6f3acc",
+        "declaration": "26a91f5e201e9473827bde196d5b59dce6c7700b28dcde2581f1382961ba06e7",
         "statuses": ["200"]
       }
     },
@@ -9450,6 +9569,23 @@
       "response": {
         "type": "declared",
         "declaration": "e587846a5bb57a390893550c738c5678230c25beb1232373d52721a165ec62e0",
+        "statuses": ["200"]
+      }
+    },
+    {
+      "kind": "mcp",
+      "id": "default:update_organization_settings",
+      "mode": "default",
+      "name": "update_organization_settings",
+      "surface": "static",
+      "owner": "stella",
+      "schemaSource": "apps/api/src/mcp/static-tool-definitions.ts#getStaticMcpToolOutputContract",
+      "httpTests": [],
+      "handlerTests": [],
+      "toolTests": ["apps/api/src/mcp/write-tool-authority.test.ts"],
+      "response": {
+        "type": "declared",
+        "declaration": "dc7326e31d527c58865ae5e58c79c27254405c06a476d213e768e7ee4771d7cf",
         "statuses": ["200"]
       }
     },
@@ -9786,7 +9922,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "bc3f059f2a1d9a3867cc07efa24e8f217f796ea6e938f88e11606570c750d462",
+        "declaration": "624f6b5d5c9e7073170242329c33c2174f1faf056663833b3b7f6e8029a5ac03",
         "statuses": ["200"]
       }
     },
@@ -9803,7 +9939,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "122afa108012ff4206b9297fc58c642e36dcef024ca831c58b39d14a89b9535b",
+        "declaration": "20b93963ab3469ac653b0c46fb46f1379261c4368e163233f08d7ec208698429",
         "statuses": ["200"]
       }
     },
@@ -9820,7 +9956,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "46d79a88f7d137f5982dce453addb76d96b5b0b0f288bd4b33025ae871d53f38",
+        "declaration": "81ad75651fba675e27d3f8564d9369b6f696a381688f7dced010ce17ebd37c4b",
         "statuses": ["200"]
       }
     },
@@ -9854,7 +9990,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "00083a71f7d0c820a496ea33c5679d3006de85d98874d0c65bd2f9d22860f257",
+        "declaration": "ed90f1bedd1732153ff3aafa3182f41ae393af42576f0cf83ed7e78b46b6045e",
         "statuses": ["200"]
       }
     },
@@ -9871,7 +10007,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "5ce3aee7cf3451c11f64e6c3be37b967b1238cd3ab8a8df7c9ac2207ac335800",
+        "declaration": "278b5c21ea76415e21a25c71519fd2c503614cc2b8c81ba5b983a842eeaef30d",
         "statuses": ["200"]
       }
     },
@@ -9888,7 +10024,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "75e12152b12c866750f6d6f9adcccc2b86a684f99f1fa0578b512b1fc930d7c3",
+        "declaration": "59b72acaf1893a532a0bc4e7a532ef91e78c8b302e40d11371da70906ba75405",
         "statuses": ["200"]
       }
     },
@@ -9905,7 +10041,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "0120599d54945c57de5689c0daeb3a38996b568bb3140a0ac0f50b0ee068072a",
+        "declaration": "e5e593062fde2f6e4e8d0100075a3d4bbc51fcf9244763a9692357951b7a364c",
         "statuses": ["200"]
       }
     },
@@ -9922,7 +10058,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "dd17ae2f4cd24fc9fdb3b51cbad82216272418cb4a300f179bf3d9641f56bf66",
+        "declaration": "7b095cd5f841f4eb32fe078021e1fd4fc3ce7bd880759701c6dde69aaca8d121",
         "statuses": ["200"]
       }
     },
@@ -9939,7 +10075,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "dd17ae2f4cd24fc9fdb3b51cbad82216272418cb4a300f179bf3d9641f56bf66",
+        "declaration": "7b095cd5f841f4eb32fe078021e1fd4fc3ce7bd880759701c6dde69aaca8d121",
         "statuses": ["200"]
       }
     },
@@ -9973,7 +10109,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "3aa9feafcc2e3002dcdfa9ab696960869407fcf4561cfe617b8ce133dd491a53",
+        "declaration": "782e8c4b3009fef64db336c3425ad7dc8ef6c0eb7d62c938d95ac1fbc623d1a7",
         "statuses": ["200"]
       }
     },
@@ -9990,7 +10126,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "faad53fd51fe6936d3c16ed4bc46f7e2f81f75a4a7ebffa8aa05ee07fc6f3acc",
+        "declaration": "26a91f5e201e9473827bde196d5b59dce6c7700b28dcde2581f1382961ba06e7",
         "statuses": ["200"]
       }
     },
@@ -10346,6 +10482,40 @@
       "toolTests": [],
       "response": {
         "type": "missing"
+      }
+    },
+    {
+      "kind": "route",
+      "id": "DELETE /v1/memories/:memoryId",
+      "owner": "stella",
+      "schemaSource": "DELETE /v1/memories/:memoryId#hooks.response",
+      "handlerEndpoint": "apps/api/src/handlers/memories/delete.ts",
+      "httpTests": [],
+      "handlerTests": [
+        "apps/api/src/handlers/memories/delete.postgres.test.ts",
+        "apps/api/src/handlers/memories/feature-access.test.ts"
+      ],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "bcdd802d3ca7440aafae43afb8b009d746449c48dd851ab6755fb3442096c0ce",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
       }
     },
     {
@@ -10961,7 +11131,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "d7fdec956407c9d2cc57149d5e15e254fbfc88c17a493f9cadd117ac597cf8b7",
+        "declaration": "33aa6e43370dd809d96bc3e4d6d81750416383647ef278fdae53f090defc96a2",
         "statuses": [
           "200",
           "400",
@@ -10992,7 +11162,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "d7fdec956407c9d2cc57149d5e15e254fbfc88c17a493f9cadd117ac597cf8b7",
+        "declaration": "33aa6e43370dd809d96bc3e4d6d81750416383647ef278fdae53f090defc96a2",
         "statuses": [
           "200",
           "400",
@@ -11023,7 +11193,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "d7fdec956407c9d2cc57149d5e15e254fbfc88c17a493f9cadd117ac597cf8b7",
+        "declaration": "33aa6e43370dd809d96bc3e4d6d81750416383647ef278fdae53f090defc96a2",
         "statuses": [
           "200",
           "400",
@@ -11054,7 +11224,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "d7fdec956407c9d2cc57149d5e15e254fbfc88c17a493f9cadd117ac597cf8b7",
+        "declaration": "33aa6e43370dd809d96bc3e4d6d81750416383647ef278fdae53f090defc96a2",
         "statuses": [
           "200",
           "400",
@@ -11085,7 +11255,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "d7fdec956407c9d2cc57149d5e15e254fbfc88c17a493f9cadd117ac597cf8b7",
+        "declaration": "33aa6e43370dd809d96bc3e4d6d81750416383647ef278fdae53f090defc96a2",
         "statuses": [
           "200",
           "400",
@@ -11116,7 +11286,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "d7fdec956407c9d2cc57149d5e15e254fbfc88c17a493f9cadd117ac597cf8b7",
+        "declaration": "33aa6e43370dd809d96bc3e4d6d81750416383647ef278fdae53f090defc96a2",
         "statuses": [
           "200",
           "400",
@@ -11443,7 +11613,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "872f0e99569b277ce0fd4a1b75030c2a5397db2766159ded91b99900539b9720",
+        "declaration": "d8c8348a813324ddec672d03c39d1cef70d175733d0cee45a41f76c1510ada81",
         "statuses": [
           "200",
           "400",
@@ -11473,7 +11643,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "11658be993727dcd948e0d33e2dddc484bff21305d41e6a18da285d8ad4d88e7",
+        "declaration": "3534ddec88b504fcaf95822f2297fbc81cb515b6171e29d11333b0fbba59c95e",
         "statuses": [
           "200",
           "400",
@@ -11503,7 +11673,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "c5aeafeb4e8d589db7e1ee9c4553eb46fcd4e99e2aae70b111f60a2c5eb1412f",
+        "declaration": "b9337bb96ac831fb88fdb4607598f5a3f676d682f7c8ba9dc532f15c86676dd6",
         "statuses": [
           "200",
           "400",
@@ -11547,7 +11717,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "f63f9cf199c16217fc6497198c5d93beea24fa29949475b70a951e859f81dddd",
+        "declaration": "32fa1f9500e5e25db5d0e931198816a5ed7efcc1b83b6f5634ca2336cfb370e6",
         "statuses": [
           "200",
           "400",
@@ -11578,7 +11748,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "679a747e00c0c3ce5b406c407e2613526779b8c15536da1ea1fb2382b3e70df9",
+        "declaration": "186ff90b027ed8bdd1feec8f5ba6c3770b19e90b0e1ce0ab931974247e229ef6",
         "statuses": [
           "200",
           "400",
@@ -11609,7 +11779,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "688ecaca7b1fb337c807b9199242ba4e5266ba17dc38fc70b952092992013159",
+        "declaration": "6059a9a6e275fab993d64fb62d2c221fa2beb503667d9ab11ae83a6d3d3ef275",
         "statuses": [
           "200",
           "400",
@@ -11639,7 +11809,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "bfff7a31feb306e08a7c7ea41b00a0cb035831b0165b1df67a702d3d7363c21f",
+        "declaration": "a801f58c2fbe0db69a2b88316c6c7abc36e6a4146eeee7ebd6f295944a62e8d9",
         "statuses": [
           "200",
           "400",
@@ -11669,7 +11839,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "478f8bc8b57e1a58e88d1286feaf16068d51199b77441083eb0eca5ae3809be3",
+        "declaration": "dbf89ee586a5a2bdee766cd0cacfa40b34fc97e97d20c27e1a72055119cf57cf",
         "statuses": [
           "200",
           "400",
@@ -11699,7 +11869,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "68d77a541dbfc6186183639bed9b0dec520a4e5a2835d76039add81faaaf6060",
+        "declaration": "aead7fb5a2dae493c7246eaa5a6e3061d8fef976d0e66f2340c799af05f962cb",
         "statuses": [
           "200",
           "400",
@@ -11729,7 +11899,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "297d4ad960bec78b9f1683050081d107c0b90c479ecbdabe75ae13ea7bab3f9a",
+        "declaration": "c8e50a57cbeefb9616d2b8a25b8a25eb1cc93e41be96f348348856cc6d4346e0",
         "statuses": [
           "200",
           "400",
@@ -11759,7 +11929,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "6fe56a904b13cf27b5d428e900ef1df1b83852812c7df8b20797f31f561c7846",
+        "declaration": "c5252494d1a6ccbe418026fcac0e28436077cfa0e9bbda4b257c11928b146358",
         "statuses": [
           "200",
           "400",
@@ -11816,7 +11986,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "72f123065987b1df6a782e1f9c962d1327c064277bfd4069fab713f4f2a1ddb3",
+        "declaration": "cf33c4c2ed0a892f4649fadd316919c883958a83a8e529d62c9387dd1bd1979a",
         "statuses": [
           "200",
           "400",
@@ -11846,7 +12016,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "56f19e2729fe7a2af624b9d607af3dd9fe5f950893949c2d0ee623119fb0dbd9",
+        "declaration": "eb400b486aba53623ae22696f224bfac6888352e90f07a95a7d224d905280415",
         "statuses": [
           "200",
           "400",
@@ -11889,7 +12059,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "b846c2513142fcd214171ed8d810b0c7bca271fc10af70136cd46cde1fa61681",
+        "declaration": "f13c31cffc73e77059cf04c4074a43d8cf1d9a963998a43d4fc0789d97b42eb8",
         "statuses": [
           "200",
           "400",
@@ -11919,7 +12089,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "4f0f8d77962bea4cde997e6b43fa6a2fa816818f3f27ffc050cbc2822b1e0fe6",
+        "declaration": "f9cc2e1e89dbffc7f8e31dee3406e1966bf0b4a5385c3aefdab6996d3308cc1f",
         "statuses": [
           "200",
           "400",
@@ -11980,6 +12150,37 @@
     },
     {
       "kind": "route",
+      "id": "GET /v1/chat/link-icons/:hostname",
+      "owner": "stella",
+      "schemaSource": "GET /v1/chat/link-icons/:hostname#hooks.response",
+      "handlerEndpoint": "apps/api/src/handlers/chat/link-icons/get.ts",
+      "httpTests": ["apps/api/src/tests/security/auxiliary-route-auth.test.ts"],
+      "handlerTests": [],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "65e3fd8170a48eb7ba0ece292c0a11df4bd48d31991c05895c35c90125315af1",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
+      }
+    },
+    {
+      "kind": "route",
       "id": "GET /v1/chat/model-options",
       "owner": "stella",
       "schemaSource": "GET /v1/chat/model-options#hooks.response",
@@ -12029,6 +12230,7 @@
       "httpTests": [],
       "handlerTests": [
         "apps/api/src/handlers/chat/fork/create.integration.test.ts",
+        "apps/api/src/handlers/chat/messages/turn-timing.postgres.test.ts",
         "apps/api/src/handlers/chat/thread-active-skill.integration.test.ts"
       ],
       "toolTests": [],
@@ -12386,7 +12588,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "98dcb3d8846bf7658c97d060975d7e91fd44c5dac584a3a335085ae4970babd4",
+        "declaration": "a417bf7a73f4aff8d59a956e630ac2846d9f23aba5cc1485778b15285b7023a7",
         "statuses": [
           "200",
           "400",
@@ -12417,7 +12619,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "b734993a92e674b648577dcbd1b3eabb409a334b108a0633349a1c0816a3e23d",
+        "declaration": "ba41000040f149a949dfa5552402b1c90ba2782b403f314a8c3b43ae4beb3e85",
         "statuses": [
           "200",
           "400",
@@ -12448,7 +12650,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "50fbff22bc0b51319049f792cb24c68ae8b5b0d31d5c0e67ec3d578cdcf56fb5",
+        "declaration": "e43de017d3a569c80e5074bcb56bed8ed92c58523b549f37b1ab84448da2a9d2",
         "statuses": [
           "200",
           "400",
@@ -12826,8 +13028,24 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-        "statuses": ["200"]
+        "declaration": "30357171e0ed9a03c17bfedf3f8d80538622eff2fb9b6ceb2911382c11e67e46",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
       }
     },
     {
@@ -12968,6 +13186,39 @@
     },
     {
       "kind": "route",
+      "id": "GET /v1/invoices/:workspaceId/prefill",
+      "owner": "stella",
+      "schemaSource": "GET /v1/invoices/:workspaceId/prefill#hooks.response",
+      "handlerEndpoint": "apps/api/src/handlers/invoices/prefill.ts",
+      "httpTests": [],
+      "handlerTests": [
+        "apps/api/src/handlers/invoices/prefill.integration.test.ts"
+      ],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "e35c5fb2401422c43c8146149d5d8c9655623dcd7c126953386293c29041a167",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
+      }
+    },
+    {
+      "kind": "route",
       "id": "GET /v1/law/:country/citations/resolve",
       "owner": "stella",
       "schemaSource": "GET /v1/law/:country/citations/resolve#hooks.response",
@@ -12991,7 +13242,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "f65535c52e82a3067319a6cc3478504be5a6e895cc07648f074eb4400ce8f003",
+        "declaration": "7a51da062e837c05dbc62451fcbe31b977a2b68e18878cf2b9f073149e535e97",
         "statuses": [
           "200",
           "400",
@@ -13021,7 +13272,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "56b05a163e277e880813023f637744e990df2521e0f2bd99dfaed3f20f2f71e9",
+        "declaration": "fce791f4ae0617c22ec78cb795265bbed42d7d9892a2674c0a9592e80ddc135d",
         "statuses": [
           "200",
           "400",
@@ -13051,7 +13302,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "3115c3e376176df209aa3b51875c187cfb701aa5d8ae2d1cdb222af5098e4ebe",
+        "declaration": "15e028df74d13b9aa92b78a3cf39d5aeccebf9dafb470edfd411b63b2fb8802f",
         "statuses": [
           "200",
           "400",
@@ -13081,7 +13332,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "4cb72fe89ca941b107911ae6cd6285c2ac2428b1c28de8a18d2028c772f19c28",
+        "declaration": "1b5b2db81b0753ded4732ccc07354c364f8adab2f8b076a02d0dca768f15306c",
         "statuses": [
           "200",
           "400",
@@ -13111,7 +13362,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "0156ee31c073fb43fe265cdfb060e4e603403cf0a730e99048187e8f0569e319",
+        "declaration": "0d40e87b1c4a1558a07872b8d954e57405bd202c3fd66416b2a8ac5411ae6059",
         "statuses": [
           "200",
           "400",
@@ -13142,7 +13393,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "abb11f10201f1efb8946887fd8b865e61be021932492341b38f56b50b2202884",
+        "declaration": "b64b649e83c2f2c2f9768f90d1019b25fb8cb9d9f882c9128f77eba38b01ac0c",
         "statuses": [
           "200",
           "400",
@@ -13172,7 +13423,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "2b82099ba9e54139a47d7cc281f071350e46a31d009911b1a14cd67e125529f0",
+        "declaration": "93d88efd8ba41074bef5042c065939db84c4b0ea92c5e85b2065d10ca1772492",
         "statuses": [
           "200",
           "400",
@@ -13202,7 +13453,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "ece60096dc30d79a3bac4e513bfe4e95940a7f60d2d86d98c9865613bf9c165b",
+        "declaration": "d1d817d69b4b2bffae07299f6bca5cb5924a6ea1739e9c3ab115b7af70553f35",
         "statuses": [
           "200",
           "400",
@@ -13232,7 +13483,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "b29afb26a9a8b9b1c2c2c2cf750171ca81e74b6bdf261f390130df42d6e55e3f",
+        "declaration": "90d891c706d8b8f99885794c858855a3aaa08a6d75792d365ce486fc6975a102",
         "statuses": [
           "200",
           "400",
@@ -13262,7 +13513,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "cc57d33e692f3ad0465eaf877823013f9c3d746add54e612089e5aea12351313",
+        "declaration": "fb5e1b505f6001d8ff7b982dc28094e1410361e465817221eec7132fdd1a05e2",
         "statuses": [
           "200",
           "400",
@@ -13293,7 +13544,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "9886a136371c16a8ddf12b2aac4425cfb09318c082245bcd991590cf34064321",
+        "declaration": "0e8f00c921cb6a2e8de03937ab7a599bb017ca276f073f559ed20434f3f1c2c8",
         "statuses": [
           "200",
           "400",
@@ -13323,7 +13574,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "0949a3af3fbde43c6ea2181ab63689acefb476252906e990c369a743c34c937c",
+        "declaration": "35748f8eb305fd3d7bd88bafca94c0b3097ff266a11e6010fef1c8a08b3a25b1",
         "statuses": [
           "200",
           "400",
@@ -13614,7 +13865,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "7e2edab8dd097c4f682bd9afdfa7f4ac133acf25a456a29d727d883c27ea09cb",
+        "declaration": "db3dd855f3310241b1ad6a6679b24ecccd37dfb39ecdaa7e18e1572fcf69374a",
         "statuses": [
           "200",
           "400",
@@ -13645,7 +13896,100 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "30a2bed5b7ca0af5c2f49ccf80e58c848af49dcda5279b69e4e994b596a712f4",
+        "declaration": "f227a6e5f4e37e1b8caf5d0c4327561dbabe9f3a21b8e35c486cc9f841d27844",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
+      }
+    },
+    {
+      "kind": "route",
+      "id": "GET /v1/me/data-exports/",
+      "owner": "stella",
+      "schemaSource": "GET /v1/me/data-exports/#hooks.response",
+      "handlerEndpoint": "apps/api/src/handlers/account-exports/get.ts",
+      "httpTests": ["apps/api/src/tests/security/auxiliary-route-auth.test.ts"],
+      "handlerTests": [],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "fc4ca178364522e453a2b8d2e7c1d001c464d37ec42a811eabd9eb215ffcd6ce",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
+      }
+    },
+    {
+      "kind": "route",
+      "id": "GET /v1/me/data-exports/:exportId",
+      "owner": "stella",
+      "schemaSource": "GET /v1/me/data-exports/:exportId#hooks.response",
+      "handlerEndpoint": "apps/api/src/handlers/account-exports/status/get.ts",
+      "httpTests": ["apps/api/src/tests/security/auxiliary-route-auth.test.ts"],
+      "handlerTests": [],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "94a0c00e181e76c97e321a0c0450538d6e14045042e7ee5f3912f0a3749d2cb6",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
+      }
+    },
+    {
+      "kind": "route",
+      "id": "GET /v1/me/data-exports/:exportId/download",
+      "owner": "stella",
+      "schemaSource": "GET /v1/me/data-exports/:exportId/download#hooks.response",
+      "handlerEndpoint": "apps/api/src/handlers/account-exports/download.ts",
+      "httpTests": ["apps/api/src/tests/security/auxiliary-route-auth.test.ts"],
+      "handlerTests": [],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "01a344bab0c6dacf552090d41917068bec43ae4e8313b089a014fbe34dd82106",
         "statuses": [
           "200",
           "400",
@@ -13711,7 +14055,7 @@
       "schemaSource": "GET /v1/memories/#hooks.response",
       "handlerEndpoint": "apps/api/src/handlers/memories/list.ts",
       "httpTests": [],
-      "handlerTests": [],
+      "handlerTests": ["apps/api/src/handlers/memories/feature-access.test.ts"],
       "toolTests": [],
       "response": {
         "type": "missing"
@@ -13836,7 +14180,8 @@
       "handlerEndpoint": "apps/api/src/handlers/organization-settings/read-ai-config.ts",
       "httpTests": [],
       "handlerTests": [
-        "apps/api/src/handlers/organization-settings/ai-config-decrypt-failure.test.ts"
+        "apps/api/src/handlers/organization-settings/ai-config-decrypt-failure.test.ts",
+        "apps/api/src/handlers/organization-settings/read-ai-config.test.ts"
       ],
       "toolTests": [],
       "response": {
@@ -16061,7 +16406,7 @@
       "schemaSource": "PATCH /v1/memories/:memoryId#hooks.response",
       "handlerEndpoint": "apps/api/src/handlers/memories/update.ts",
       "httpTests": [],
-      "handlerTests": [],
+      "handlerTests": ["apps/api/src/handlers/memories/feature-access.test.ts"],
       "toolTests": [],
       "response": {
         "type": "missing"
@@ -16615,7 +16960,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "3ade5276e34c70be7fb9efcf17687d73ceac2ff34bce94113cab2b0432a3668b",
+        "declaration": "ff715cfa18543d2ffa4e8867c0e41e10b83e03d1e915025c7e48c6435c03c3e2",
         "statuses": [
           "200",
           "400",
@@ -16782,6 +17127,37 @@
       "toolTests": [],
       "response": {
         "type": "missing"
+      }
+    },
+    {
+      "kind": "route",
+      "id": "POST /v1/chat/table-chart",
+      "owner": "stella",
+      "schemaSource": "POST /v1/chat/table-chart#hooks.response",
+      "handlerEndpoint": "apps/api/src/handlers/chat/table-chart.ts",
+      "httpTests": ["apps/api/src/tests/security/auxiliary-route-auth.test.ts"],
+      "handlerTests": [],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "19bf69f6927ccb5a83f1baac45a65c9b4b80e966ec07fe2c3e0e659e13c81f0c",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
       }
     },
     {
@@ -17272,7 +17648,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "f119073e02dcf34081ebf3ae98566dfce9c2c0f3712d884bd88118015972aed1",
+        "declaration": "3718db80d23490bef71b9371c7390c6b8edab217807af3eb09a7d05f9f6803db",
         "statuses": [
           "200",
           "400",
@@ -17316,7 +17692,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "d04bf59bb9de606cb8299938dec8eaa2378f677624009bd23fbc40cddb212e6f",
+        "declaration": "ebddb98ac4b0ffa4c0c672cebafd69f7e66c3eee2a0e92c69619288ce4b41975",
         "statuses": [
           "200",
           "400",
@@ -17666,7 +18042,9 @@
       "schemaSource": "POST /v1/entities/:workspaceId/folio-collab-rooms/join#hooks.response",
       "handlerEndpoint": "apps/api/src/handlers/entities/join-folio-collab-room.ts",
       "httpTests": [],
-      "handlerTests": [],
+      "handlerTests": [
+        "apps/api/src/handlers/entities/join-folio-collab-room.db.test.ts"
+      ],
       "toolTests": [],
       "response": {
         "type": "missing"
@@ -17968,6 +18346,37 @@
     },
     {
       "kind": "route",
+      "id": "POST /v1/folio-collab-rooms/snapshot/seed",
+      "owner": "stella",
+      "schemaSource": "POST /v1/folio-collab-rooms/snapshot/seed#hooks.response",
+      "handlerEndpoint": "apps/api/src/handlers/folio-collab/snapshot-seed.ts",
+      "httpTests": ["apps/api/src/tests/security/auxiliary-route-auth.test.ts"],
+      "handlerTests": [],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "ffcb914a97b25b041a7982b03cb832ddc9d8a2bf15753bfedd8091a0261c1f5f",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
+      }
+    },
+    {
+      "kind": "route",
       "id": "POST /v1/folio-collab-rooms/snapshot/store",
       "owner": "stella",
       "schemaSource": "POST /v1/folio-collab-rooms/snapshot/store#hooks.response",
@@ -18041,6 +18450,7 @@
         "apps/api/src/handlers/invoices/billing-modes.integration.test.ts",
         "apps/api/src/handlers/invoices/invoice-types.integration.test.ts",
         "apps/api/src/handlers/invoices/lines/lines.integration.test.ts",
+        "apps/api/src/handlers/invoices/prefill.integration.test.ts",
         "apps/api/src/handlers/invoices/running-time.integration.test.ts",
         "apps/api/src/handlers/invoices/seller-numbering.postgres.test.ts",
         "apps/api/src/handlers/invoices/transition.integration.test.ts"
@@ -18073,7 +18483,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "8f3fbd92b0470d796c995b98ae957de42b89898dc706b9474c6cd52c1f469595",
+        "declaration": "5d82a168e61e045a9e80ead8f307d6b8e05de7e2f2a0e4cc5d6b4179df040534",
         "statuses": [
           "200",
           "400",
@@ -18104,7 +18514,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "9886a136371c16a8ddf12b2aac4425cfb09318c082245bcd991590cf34064321",
+        "declaration": "0e8f00c921cb6a2e8de03937ab7a599bb017ca276f073f559ed20434f3f1c2c8",
         "statuses": [
           "200",
           "400",
@@ -18258,6 +18668,39 @@
     },
     {
       "kind": "route",
+      "id": "POST /v1/lists/:workspaceId/sample-case",
+      "owner": "stella",
+      "schemaSource": "POST /v1/lists/:workspaceId/sample-case#hooks.response",
+      "handlerEndpoint": "apps/api/src/handlers/lists/sample-case/create.ts",
+      "httpTests": [],
+      "handlerTests": [
+        "apps/api/src/handlers/lists/sample-case/create.postgres.test.ts"
+      ],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "4b0f8fdb8d4e513fad4cdd4c39a66b3cdba60e6dc22c6e5a58ee557d3d8b2bc2",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
+      }
+    },
+    {
+      "kind": "route",
       "id": "POST /v1/lists/:workspaceId/sections",
       "owner": "stella",
       "schemaSource": "POST /v1/lists/:workspaceId/sections#hooks.response",
@@ -18364,6 +18807,37 @@
     },
     {
       "kind": "route",
+      "id": "POST /v1/me/data-exports/",
+      "owner": "stella",
+      "schemaSource": "POST /v1/me/data-exports/#hooks.response",
+      "handlerEndpoint": "apps/api/src/handlers/account-exports/create.ts",
+      "httpTests": ["apps/api/src/tests/security/auxiliary-route-auth.test.ts"],
+      "handlerTests": [],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "94a0c00e181e76c97e321a0c0450538d6e14045042e7ee5f3912f0a3749d2cb6",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
+      }
+    },
+    {
+      "kind": "route",
       "id": "POST /v1/me/delete/send-otp",
       "owner": "stella",
       "schemaSource": "POST /v1/me/delete/send-otp#hooks.response",
@@ -18421,7 +18895,7 @@
       "schemaSource": "POST /v1/memories/#hooks.response",
       "handlerEndpoint": "apps/api/src/handlers/memories/create.ts",
       "httpTests": [],
-      "handlerTests": [],
+      "handlerTests": ["apps/api/src/handlers/memories/feature-access.test.ts"],
       "toolTests": [],
       "response": {
         "type": "missing"
@@ -18434,7 +18908,7 @@
       "schemaSource": "POST /v1/memories/firm#hooks.response",
       "handlerEndpoint": "apps/api/src/handlers/memories/create-firm.ts",
       "httpTests": [],
-      "handlerTests": [],
+      "handlerTests": ["apps/api/src/handlers/memories/feature-access.test.ts"],
       "toolTests": [],
       "response": {
         "type": "missing"
@@ -18541,6 +19015,39 @@
       "toolTests": [],
       "response": {
         "type": "missing"
+      }
+    },
+    {
+      "kind": "route",
+      "id": "POST /v1/organization-settings/ai-config/defaults-preview",
+      "owner": "stella",
+      "schemaSource": "POST /v1/organization-settings/ai-config/defaults-preview#hooks.response",
+      "handlerEndpoint": "apps/api/src/handlers/organization-settings/ai-config/defaults/preview.ts",
+      "httpTests": [],
+      "handlerTests": [
+        "apps/api/src/handlers/organization-settings/ai-config/defaults/preview.test.ts"
+      ],
+      "toolTests": [],
+      "response": {
+        "type": "declared",
+        "declaration": "95d237fd7ce8d9cef37de6446f32a4e7296afd6c995bb9f5b51d72f36329e1ff",
+        "statuses": [
+          "200",
+          "400",
+          "401",
+          "402",
+          "403",
+          "404",
+          "409",
+          "413",
+          "422",
+          "426",
+          "428",
+          "429",
+          "500",
+          "502",
+          "503"
+        ]
       }
     },
     {
@@ -18885,7 +19392,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "75819c9688c5086fc3896def74992e3de0e7fe8bd114d8f7aec7fb23f3d73f5c",
+        "declaration": "df283ab58c2dac092a0e245f8e95b0a7e5b94c13cb9083e9f9a1b1d301b8d89c",
         "statuses": [
           "200",
           "400",
@@ -20174,10 +20681,7 @@
       "schemaSource": "POST /v1/workspaces/:workspaceId/#hooks.response",
       "handlerEndpoint": "apps/api/src/handlers/workspaces/update.ts",
       "httpTests": [],
-      "handlerTests": [
-        "apps/api/src/handlers/workspaces/update-by-id.test.ts",
-        "apps/api/src/lib/demo-account-handlers.test.ts"
-      ],
+      "handlerTests": ["apps/api/src/handlers/workspaces/update-by-id.test.ts"],
       "toolTests": [],
       "response": {
         "type": "missing"
@@ -20655,7 +21159,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "265b75095c4e65b54e1a8b38ee03dc0826f48d81e49726ba4597ff5f4b078397",
+        "declaration": "17aa1cf78be027669774dfdf89e1d3e00b908acc7e0c1f8752a37fd3bee521ba",
         "statuses": [
           "200",
           "400",
@@ -20686,7 +21190,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "eb2a758bc2931a9810f3fc4defa5ccf7b1c8d33b31597d604916a3c61e30ed66",
+        "declaration": "0c9805cf2a104e7e46a1fd1e5742a6a7d26d578a2c4f441ad2730a025802249c",
         "statuses": [
           "200",
           "400",
@@ -20717,7 +21221,7 @@
       "toolTests": [],
       "response": {
         "type": "declared",
-        "declaration": "ad43cb39d8a734e2c0751b09f3288a6e68991693d0fe40ff9cffabbfeaeee3af",
+        "declaration": "6f1632c58bed938f0a611ecf277ffdb2c4395683ef1a1d9971e5382a3205401d",
         "statuses": [
           "200",
           "400",
@@ -20844,6 +21348,7 @@
         "apps/api/src/handlers/invoices/create.test.ts",
         "apps/api/src/handlers/invoices/invoice-types.integration.test.ts",
         "apps/api/src/handlers/invoices/lines/lines.integration.test.ts",
+        "apps/api/src/handlers/invoices/prefill.integration.test.ts",
         "apps/api/src/handlers/invoices/running-time.integration.test.ts"
       ],
       "toolTests": [],

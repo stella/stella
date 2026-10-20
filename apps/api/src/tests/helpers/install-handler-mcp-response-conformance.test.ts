@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Panic, Result } from "better-result";
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { status, t } from "elysia";
 
@@ -95,12 +95,10 @@ describe("installed handler and MCP conformance observers", () => {
         expect(Result.isError(observed)).toBe(true);
         if (Result.isError(observed)) {
           expect(() => rethrowResponseConformanceError(observed.error)).toThrow(
-            ResponseConformanceError,
+            Panic,
           );
         }
-        expect(() => rethrowResponseConformanceFailure(request)).toThrow(
-          ResponseConformanceError,
-        );
+        expect(() => rethrowResponseConformanceFailure(request)).toThrow(Panic);
       },
     );
     expect(violations).toMatchObject([
@@ -119,8 +117,7 @@ describe("installed handler and MCP conformance observers", () => {
           },
         );
         expect(await rejectionOf(handler())).toMatchObject({
-          status: 201,
-          issuePath: "(status)",
+          cause: { status: 201, issuePath: "(status)" },
         });
       },
     );
@@ -159,7 +156,7 @@ describe("installed handler and MCP conformance observers", () => {
           await rejectionOf(
             Reflect.apply(handler, undefined, [{ request: unresolved }]),
           ),
-        ).toMatchObject({ issuePath: "(schema)" });
+        ).toMatchObject({ cause: { issuePath: "(schema)" } });
         const resolved = new Request("http://localhost/resolved");
         setResponseConformanceRequestModels(resolved, {
           Output: t.Object({ count: t.Number() }),

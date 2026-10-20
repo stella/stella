@@ -432,7 +432,9 @@ describe("response conformance validation", () => {
       [t.Number(), "42", 42],
       [t.Boolean(), "false", false],
     ] as const) {
-      const response = new Response(text);
+      const response = new Response(text, {
+        headers: { "content-type": "text/plain" },
+      });
       const clone = spyOn(response, "clone");
       try {
         expect(
@@ -692,7 +694,9 @@ describe("response conformance validation", () => {
     ).toBe("valid");
     expect(await jsonObject.json()).toEqual({ count: 1 });
 
-    const textObject = new Response('{"count":1}');
+    const textObject = new Response('{"count":1}', {
+      headers: { "content-type": "text/plain" },
+    });
     expect(
       await rejectionOf(
         assertHttpResponseConformance({
@@ -723,4 +727,52 @@ describe("response conformance validation", () => {
       ),
     ).toBeInstanceOf(ResponseConformanceError);
   });
+});
+
+test("validates file union size constraints and JSON fallback representations", async () => {
+  const schema = t.Union([
+    t.File({ maxSize: 3 }),
+    t.Object({ type: t.Literal("no-icon") }),
+  ]);
+  for (const bytes of [
+    new Uint8Array([1, 2, 3]),
+    new Uint8Array([1, 2, 3, 4]),
+  ]) {
+    const response = new Response(bytes, {
+      headers: { "content-type": "image/png" },
+    });
+    const checked = assertHttpResponseConformance({
+      route,
+      response,
+      method: "GET",
+      schema,
+    });
+    if (bytes.length === 3) {
+      expect(await checked).toBe("valid");
+    } else {
+      expect(await rejectionOf(checked)).toMatchObject({
+        issuePath: "(root)",
+        contentType: "image/png",
+      });
+    }
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+  }
+  for (const type of ["no-icon", "invalid"]) {
+    const response = Response.json({ type });
+    const checked = assertHttpResponseConformance({
+      route,
+      response,
+      method: "GET",
+      schema,
+    });
+    if (type === "no-icon") {
+      expect(await checked).toBe("valid");
+    } else {
+      expect(await rejectionOf(checked)).toMatchObject({
+        issuePath: "(root)",
+        contentType: "application/json",
+      });
+    }
+    expect(await response.json()).toEqual({ type });
+  }
 });

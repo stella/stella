@@ -2143,7 +2143,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/nightly-test.yml",
-      "digest": "85e25a630d60d3e45269ec9f8ee4e76c181247b87d9816116331799319cd94ce",
+      "digest": "e5109723ff347749b397578db60a305f8e06097c89580d919c236ac5a5d61210",
       "references": [],
       "jobs": [
         {
@@ -2162,7 +2162,7 @@
           "id": "full-test",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "0781d3c1b4d7e136117fb755f6c9fbd1a4e1a39a1d87810634d9ced2e25d8c96"
+          "digest": "de2c54f3cfccccc9f4c65e3c5384c798573ac54733afe45685538ac6b1675efb"
         },
         {
           "id": "web-build-profile",

@@ -13,7 +13,7 @@ export type ElysiaResponseApp = {
   models: Readonly<Record<string, unknown>>;
 };
 
-export type ElysiaResponseObservation = {
+type ElysiaResponseObservation = {
   app: ElysiaResponseApp;
   request: Request;
   response: ConformanceHttpResponse;

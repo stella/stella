@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 /** Path-only diagnostics: response values can contain privileged content. */
 export class ResponseConformanceError extends TaggedError(
@@ -11,7 +11,7 @@ export class ResponseConformanceError extends TaggedError(
   contentType?: string;
 }> {}
 
-/** Result and panic wrappers must not turn a test conformance defect into an expected error response. */
+/** A response schema violation is a programmer defect, never an expected error response. */
 export const rethrowResponseConformanceError = (error: unknown): void => {
   const seen = new Set<object>();
   let current = error;
@@ -21,9 +21,16 @@ export const rethrowResponseConformanceError = (error: unknown): void => {
     !seen.has(current)
   ) {
     if (ResponseConformanceError.is(current)) {
-      throw current;
+      panic(current.message, current);
     }
     seen.add(current);
-    current = "cause" in current ? current.cause : undefined;
+    const candidate = current;
+    const cause = Result.try(() =>
+      "cause" in candidate ? candidate.cause : undefined,
+    );
+    if (Result.isError(cause)) {
+      return;
+    }
+    current = cause.value;
   }
 };

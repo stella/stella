@@ -31,6 +31,7 @@ import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import { requestValidationResponseSchema } from "@/api/lib/errors/request-validation-response";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -797,16 +798,29 @@ const SAFE_PUBLIC_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS =
     safePublicHandlerErrorOrStatusTextResponseSchema,
   );
 
+const publicRequestValidationResponseSchema = t.Union([
+  safePublicHandlerErrorOrStatusTextResponseSchema,
+  requestValidationResponseSchema,
+]);
+
+type SafePublicHandlerStatusTextResponseSchemas<
+  TSuccessSchema extends TSchema,
+> = {
+  readonly [TStatus in 200 | HandlerErrorStatusCode]: TStatus extends 200
+    ? TSuccessSchema
+    : TStatus extends 422
+      ? typeof publicRequestValidationResponseSchema
+      : typeof safePublicHandlerErrorOrStatusTextResponseSchema;
+};
+
 export const safePublicHandlerResponseSchemasWithStatusText = <
   TSuccessSchema extends TSchema,
 >(
   successSchema: TSuccessSchema,
-): SafeHandlerResponseSchemasFor<
-  TSuccessSchema,
-  typeof safePublicHandlerErrorOrStatusTextResponseSchema
-> => ({
+): SafePublicHandlerStatusTextResponseSchemas<TSuccessSchema> => ({
   200: successSchema,
   ...SAFE_PUBLIC_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS,
+  422: publicRequestValidationResponseSchema,
 });
 
 // The conditional form is intentional: it keeps status unions distributive so

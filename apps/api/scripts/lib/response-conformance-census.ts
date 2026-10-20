@@ -9,7 +9,7 @@ export const isConformanceRecord = (
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** Stable declarations, not compiled validators or executable schema metadata. */
-export const serializeConformanceDeclaration = (value: unknown): string => {
+const serializeConformanceDeclaration = (value: unknown): string => {
   const serialized = JSON.stringify(value, (_key, entry: unknown) => {
     if (!isConformanceRecord(entry)) {
       return entry;
@@ -33,10 +33,10 @@ export const responseConformanceCensusMatches = (
   serializeConformanceDeclaration(committed) ===
   serializeConformanceDeclaration(current);
 
-export const conformanceDeclarationHash = (value: unknown): string =>
+const conformanceDeclarationHash = (value: unknown): string =>
   sha256Hex(serializeConformanceDeclaration(value));
 
-export const responseDeclarationStatuses = (schema: unknown): string[] => {
+const responseDeclarationStatuses = (schema: unknown): string[] => {
   if (schema === undefined || schema === null) {
     return [];
   }

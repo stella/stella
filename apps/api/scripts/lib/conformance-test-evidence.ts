@@ -3,7 +3,7 @@ import path from "node:path";
 import ts from "typescript";
 
 export type ConformanceTestSource = { file: string; source: string };
-export type HttpCallSource = "composed-api" | "standalone-app" | "fetch";
+type HttpCallSource = "composed-api" | "standalone-app" | "fetch";
 
 export type ConformanceTestEvidence = {
   /** Syntactic invocations only; these do not prove that a test ran. */
