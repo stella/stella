@@ -190,7 +190,8 @@ const documentTypeLabel = (key: string): string =>
   documentTypeLabels[key] ?? panic(`Missing document type label: ${key}`);
 // The taxonomy key the Czech playbook is scoped to; its label classifies the
 // akvizice SPA document so the gate matches.
-const SPA_DOCUMENT_TYPE_LABEL = documentTypeLabel("spa");
+const SPA_DOCUMENT_TYPE_KEY = "spa";
+const SPA_DOCUMENT_TYPE_LABEL = documentTypeLabel(SPA_DOCUMENT_TYPE_KEY);
 
 type BillingCodeId = SafeId<"billingCode">;
 type ContactId = SafeId<"contact">;
