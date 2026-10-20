@@ -779,13 +779,26 @@ export const OutlineRail = ({
             }
             scheduleClose();
           }}
-          onFocusCapture={openPanel}
+          onFocusCapture={() => {
+            // Focus that entered by pointer, with no tick focused first, holds
+            // the panel open too: a hover alone would lapse on mouse-out.
+            openPanel();
+            setFocusWithin(true);
+          }}
           onKeyDown={(event) => {
-            // Escape hands focus back to the tick the reader came from.
+            // Escape hands focus back to the tick the reader came from, or to
+            // the current tick when the panel was opened by pointer.
             if (event.key !== "Escape" || presentation !== "popover") {
               return;
             }
-            focusedTickRef.current?.focus();
+            const tickSelector = `button[aria-controls="${CSS.escape(panelId)}"]`;
+            const returnTick =
+              focusedTickRef.current ??
+              railRef.current?.querySelector<HTMLButtonElement>(
+                `${tickSelector}[aria-current="true"]`,
+              ) ??
+              railRef.current?.querySelector<HTMLButtonElement>(tickSelector);
+            returnTick?.focus();
             closePanel();
           }}
           onMouseEnter={openPanel}

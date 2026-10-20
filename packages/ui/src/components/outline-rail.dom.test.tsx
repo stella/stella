@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, jest, test } from "bun:test";
 
 import { OutlineRail, type OutlineItem } from "./outline-rail";
 
@@ -51,6 +51,18 @@ const renderOutline = async (presentation: "popover" | "rail" = "popover") => {
     );
   });
   return { container, root, scrollContainer };
+};
+
+// React derives mouseenter from a mouseover whose related target is outside.
+const hover = async (target: HTMLElement | null | undefined) => {
+  await act(async () => {
+    target?.dispatchEvent(
+      new MouseEvent("mouseover", {
+        bubbles: true,
+        relatedTarget: document.body,
+      }),
+    );
+  });
 };
 
 const cleanup = async (
@@ -171,6 +183,62 @@ test("leaving the rail from inside the panel closes the popover", async () => {
     expect(tick?.getAttribute("aria-expanded")).toBe("false");
   } finally {
     outside.remove();
+    await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
+  }
+});
+
+test("focus inside a hover-opened panel holds it open after the pointer leaves", async () => {
+  const rendered = await renderOutline();
+  const outside = document.createElement("div");
+  document.body.append(outside);
+  try {
+    const tick = rendered.container.querySelector<HTMLButtonElement>(
+      "[data-outline-ticks] button",
+    );
+    const panel = rendered.container.querySelector<HTMLElement>("nav");
+    const panelButton = panel?.querySelector<HTMLButtonElement>("button");
+    await hover(panel);
+    await act(async () => panelButton?.focus());
+    expect(document.activeElement).toBe(panelButton ?? null);
+    jest.useFakeTimers();
+    try {
+      await act(async () => {
+        panel?.dispatchEvent(
+          new MouseEvent("mouseout", { bubbles: true, relatedTarget: outside }),
+        );
+        // Past the hover close delay.
+        jest.advanceTimersByTime(200);
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(tick?.getAttribute("aria-expanded")).toBe("true");
+    expect(panel?.hasAttribute("inert")).toBe(false);
+  } finally {
+    outside.remove();
+    await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
+  }
+});
+
+test("Escape from a panel opened without a focused tick lands on a tick", async () => {
+  const rendered = await renderOutline();
+  try {
+    const ticks = rendered.container.querySelectorAll<HTMLButtonElement>(
+      "[data-outline-ticks] button",
+    );
+    const panel = rendered.container.querySelector<HTMLElement>("nav");
+    const panelButton = panel?.querySelector<HTMLButtonElement>("button");
+    await hover(panel);
+    await act(async () => panelButton?.focus());
+    expect(document.activeElement).toBe(panelButton ?? null);
+    await act(async () => {
+      panelButton?.dispatchEvent(
+        new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
+      );
+    });
+    expect([...ticks]).toContain(document.activeElement);
+    expect(ticks[0]?.getAttribute("aria-expanded")).toBe("false");
+  } finally {
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
   }
 });
