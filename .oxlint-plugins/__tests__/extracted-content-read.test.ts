@@ -61,4 +61,26 @@ describe.serial("extracted document content ownership", () => {
     ].join("\n");
     expect(await lintSingleRule("confine-owner", source, options)).toEqual([]);
   });
+
+  test("keeps system readers out of request modules", async () => {
+    const systemEntry = OWNERSHIP.find(
+      ({ id }) => id === "system-extracted-content-read",
+    );
+    const source =
+      'import { loadCurrentExtractedContentsForSearchIndex } from "@/api/lib/document-content-provenance";';
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [systemEntry] },
+        sourcePath: "apps/api/src/handlers/example.ts",
+        cwd: "scratch",
+      }),
+    ).toEqual([1]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [systemEntry] },
+        sourcePath: "apps/api/src/lib/search/index-entity.ts",
+        cwd: "scratch",
+      }),
+    ).toEqual([]);
+  });
 });

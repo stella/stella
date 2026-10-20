@@ -451,7 +451,12 @@ const runAiStep = async ({
     async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
   );
   const documents = stepDef.includeDocuments
-    ? await loadInputDocuments(scopedDb, organizationId, run.inputEntityIds)
+    ? await loadInputDocuments(
+        scopedDb,
+        organizationId,
+        [run.workspaceId],
+        run.inputEntityIds,
+      )
     : [];
 
   const prompt = buildAiStepPrompt({
@@ -598,6 +603,7 @@ const readPriorAiMarkdown = async (
 export const loadInputDocuments = async (
   scopedDb: ReturnType<typeof createRootScopedDb>,
   organizationId: SafeId<"organization">,
+  workspaceIds: SafeId<"workspace">[],
   entityIds: SafeId<"entity">[],
 ): Promise<FlowStepDocument[]> => {
   if (entityIds.length === 0) {
@@ -605,8 +611,13 @@ export const loadInputDocuments = async (
   }
 
   // Require the complete selected input set before decrypting document text.
-  const available = await scopedDb(async (tx) =>
-    loadCurrentExtractedContents(tx, { entityIds, organizationId }),
+  const available = await scopedDb(
+    async (tx) =>
+      await loadCurrentExtractedContents(tx, {
+        entityIds,
+        organizationId,
+        workspaceIds,
+      }),
   );
   if (available.length < entityIds.length) {
     const loaded = new Set(available.map((row) => row.entityId));

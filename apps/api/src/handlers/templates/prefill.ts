@@ -236,6 +236,7 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
     orgAIConfig,
     managedAIResidency,
     orgAIConfigStatus,
+    getActiveWorkspaceIds,
     user,
   } = ctx;
   const organizationId = session.activeOrganizationId;
@@ -327,9 +328,17 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
     }
 
     if (entityIds.length > 0) {
+      const workspaceIds = yield* Result.await(
+        Result.tryPromise(async () => await getActiveWorkspaceIds()),
+      );
       const contentRows = yield* Result.await(
-        safeDb(async (tx) =>
-          loadCurrentExtractedContents(tx, { entityIds, organizationId }),
+        safeDb(
+          async (tx) =>
+            await loadCurrentExtractedContents(tx, {
+              entityIds,
+              organizationId,
+              workspaceIds,
+            }),
         ),
       );
 

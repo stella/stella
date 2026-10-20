@@ -15,7 +15,7 @@ import { decryptContent } from "@/api/lib/content-encryption";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
-import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
+import { loadCurrentExtractedContentsForSearchIndex } from "@/api/lib/document-content-provenance";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage, iterateCursorPages } from "@/api/lib/pagination";
@@ -276,11 +276,11 @@ const buildSearchDocument = async (
   let language: string | null = null;
 
   const extractedContentRow = entity.extractedContent;
+  // Search indexing is an organization-wide system projection.
   const currentExtractedContent = (
-    await loadCurrentExtractedContents(database, {
+    await loadCurrentExtractedContentsForSearchIndex(database, {
       entityIds: [entityId],
       organizationId: workspace.organizationId,
-      workspaceIds: [entity.workspaceId],
     })
   ).at(0);
   if (currentExtractedContent) {

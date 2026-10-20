@@ -41,8 +41,14 @@ export const readOcrExport = async ({
   scopedDb,
   workspaceId,
 }: ReadOcrExportOptions) => {
-  const row = await scopedDb(async (tx) =>
-    loadCurrentOcrExport({ db: tx, fieldId, organizationId, workspaceId }),
+  const row = await scopedDb(
+    async (tx) =>
+      await loadCurrentOcrExport({
+        db: tx,
+        fieldId,
+        organizationId,
+        workspaceId,
+      }),
   );
   if (!row || row.content.type !== "file" || row.ocrRunId === null) {
     return status(404);

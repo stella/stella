@@ -96,12 +96,13 @@ const getFetchableEntityMap = async ({
 
   const safeEntityIds = entityIds.map(brandPersistedEntityId);
 
-  const rows = await context.scopedDb(async (tx) =>
-    loadCurrentExtractedContents(tx, {
-      entityIds: safeEntityIds,
-      organizationId: context.organizationId,
-      workspaceIds: context.accessibleWorkspaceIds,
-    }),
+  const rows = await context.scopedDb(
+    async (tx) =>
+      await loadCurrentExtractedContents(tx, {
+        entityIds: safeEntityIds,
+        organizationId: context.organizationId,
+        workspaceIds: context.accessibleWorkspaceIds,
+      }),
   );
   const fetchableEntityMap = new Map<string, FetchableEntity>();
   for (const row of rows) {
@@ -557,12 +558,13 @@ const handleCompatFetchTool: McpToolHandler<
   }
 
   const row = (
-    await context.scopedDb(async (tx) =>
-      loadCurrentExtractedContents(tx, {
-        entityIds: [entityId],
-        organizationId: context.organizationId,
-        workspaceIds: context.accessibleWorkspaceIds,
-      }),
+    await context.scopedDb(
+      async (tx) =>
+        await loadCurrentExtractedContents(tx, {
+          entityIds: [entityId],
+          organizationId: context.organizationId,
+          workspaceIds: context.accessibleWorkspaceIds,
+        }),
     )
   ).at(0);
 

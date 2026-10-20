@@ -50,6 +50,7 @@ const readCurrent = async (tx: TestDatabaseTransaction) =>
   await loadCurrentExtractedContents(tx, {
     entityIds: [ids.entityA1, ids.entityA2, ids.entityB1],
     organizationId: ids.orgA,
+    workspaceIds: [ids.wsA1],
   });
 
 const inMatter = async (run: (tx: TestDatabaseTransaction) => Promise<void>) =>
@@ -71,10 +72,26 @@ test("current content follows organization and matter scope", async () => {
       await loadCurrentExtractedContents(tx, {
         entityIds: [ids.entityA1],
         organizationId: ids.orgB,
+        workspaceIds: [ids.wsA1],
       }),
     ).toEqual([]);
   });
 });
+
+test.each(["compat search", "cross-matter read"])(
+  "%s returns extracted text only from an authorized matter",
+  async () => {
+    await inMatter(async (tx) => {
+      const rows = await loadCurrentExtractedContents(tx, {
+        entityIds: [ids.entityA1, ids.entityA2],
+        organizationId: ids.orgA,
+        workspaceIds: [ids.wsA1],
+      });
+      expect(rows.map(({ entityId }) => entityId)).toEqual([ids.entityA1]);
+      expect(rows.at(0)?.ciphertext).toEqual(Buffer.from("extracted text a1"));
+    });
+  },
+);
 
 test.each([
   {
@@ -200,6 +217,28 @@ test.each(["exact", "legacy"] as const)(
 test.each(["exact", "legacy"] as const)(
   "version deletion commits promotion and content cleanup for %s provenance",
   async (provenance) => {
+    const runId = createSafeId<"documentProcessingRun">();
+    const inserted = await database
+      .insert(documentProcessingRuns)
+      .values({
+        id: runId,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        entityId: ids.entityA1,
+        entityVersionId: ids.entityVersionA1,
+        fieldId: ids.fileFieldA1,
+        sourceFileId: ids.fileObjectA1,
+        sourceSha256Hex: "a".repeat(64),
+        kind: "ocr",
+        requestSource: "upload",
+        status: "succeeded",
+      })
+      .returning();
+    const run = inserted.at(0);
+    expect(run).toBeDefined();
+    if (!run) {
+      return;
+    }
     await inMatter(async (tx) => {
       const olderVersionId = createSafeId<"entityVersion">();
       await tx
@@ -212,28 +251,6 @@ test.each(["exact", "legacy"] as const)(
         workspaceId: ids.wsA1,
         versionNumber: 1,
       });
-      const runId = createSafeId<"documentProcessingRun">();
-      const inserted = await tx
-        .insert(documentProcessingRuns)
-        .values({
-          id: runId,
-          organizationId: ids.orgA,
-          workspaceId: ids.wsA1,
-          entityId: ids.entityA1,
-          entityVersionId: ids.entityVersionA1,
-          fieldId: ids.fileFieldA1,
-          sourceFileId: ids.fileObjectA1,
-          sourceSha256Hex: "a".repeat(64),
-          kind: "ocr",
-          requestSource: "upload",
-          status: "succeeded",
-        })
-        .returning();
-      const run = inserted.at(0);
-      expect(run).toBeDefined();
-      if (!run) {
-        return;
-      }
       await tx
         .update(extractedContent)
         .set({
@@ -303,5 +320,8 @@ test.each(["exact", "legacy"] as const)(
       expect(await loadCurrentDeadlineSource(tx, run)).toBeNull();
       expect(await isCurrentDeadlineSource(tx, run)).toBe(false);
     });
+    await database
+      .delete(documentProcessingRuns)
+      .where(eq(documentProcessingRuns.id, runId));
   },
 );

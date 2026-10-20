@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import type { documentProcessingRuns } from "@/api/db/schema";
 import {
   entities,
@@ -168,16 +168,18 @@ export const selectCurrentExtractedContent = <
 type LoadCurrentExtractedContentsOptions = {
   entityIds: SafeId<"entity">[];
   organizationId: SafeId<"organization">;
-  workspaceIds?: SafeId<"workspace">[];
+  workspaceIds: SafeId<"workspace">[];
 };
 
-export const loadCurrentExtractedContents = async (
+const loadCurrentExtractedContentsFromDatabase = async (
   database: Pick<typeof rootDb, "query">,
   {
     entityIds,
     organizationId,
     workspaceIds,
-  }: LoadCurrentExtractedContentsOptions,
+  }: Omit<LoadCurrentExtractedContentsOptions, "workspaceIds"> & {
+    workspaceIds?: SafeId<"workspace">[] | undefined;
+  },
 ) => {
   if (entityIds.length === 0 || workspaceIds?.length === 0) {
     return [];
@@ -247,6 +249,25 @@ export const loadCurrentExtractedContents = async (
     return current ? [{ ...current, name: entity.name }] : [];
   });
 };
+
+export const loadCurrentExtractedContents = async (
+  database: Pick<Transaction, "query">,
+  options: LoadCurrentExtractedContentsOptions,
+) => await loadCurrentExtractedContentsFromDatabase(database, options);
+
+/** Organization-wide search indexing is a system projection, not a request read. */
+export const loadCurrentExtractedContentsForSearchIndex = async (
+  database: Pick<typeof rootDb, "query">,
+  {
+    entityIds,
+    organizationId,
+  }: Omit<LoadCurrentExtractedContentsOptions, "workspaceIds">,
+) =>
+  await loadCurrentExtractedContentsFromDatabase(database, {
+    entityIds,
+    organizationId,
+    workspaceIds: undefined,
+  });
 
 type CurrentExtractionReadDb = Pick<typeof rootDb, "select">;
 

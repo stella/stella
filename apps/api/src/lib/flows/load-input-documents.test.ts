@@ -154,10 +154,12 @@ describe("loadInputDocuments", () => {
     );
 
   test("fails the step and names inputs whose content is unavailable", async () => {
-    const caught = await loadInputDocuments(scopedDb(), organizationId, [
-      extractedEntityId,
-      pendingEntityId,
-    ]).then(
+    const caught = await loadInputDocuments(
+      scopedDb(),
+      organizationId,
+      [workspaceId],
+      [extractedEntityId, pendingEntityId],
+    ).then(
       () => null,
       (error: unknown) => error,
     );
@@ -186,9 +188,12 @@ describe("loadInputDocuments", () => {
             run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
           ) => await run(tx),
         );
-        const caught = await loadInputDocuments(scoped, organizationId, [
-          extractedEntityId,
-        ]).then(
+        const caught = await loadInputDocuments(
+          scoped,
+          organizationId,
+          [workspaceId],
+          [extractedEntityId],
+        ).then(
           () => null,
           (error: unknown) => error,
         );
