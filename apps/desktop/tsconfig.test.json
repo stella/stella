@@ -4,6 +4,11 @@
     "types": ["bun-types"],
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.test.json"
   },
-  "include": ["tests/**/*.ts", "tests/**/*.tsx"],
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "tests/**/*.ts",
+    "tests/**/*.tsx"
+  ],
   "exclude": ["dist", "node_modules", "src-tauri"]
 }

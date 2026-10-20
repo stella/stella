@@ -612,6 +612,15 @@ const App = () => {
   const locale = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<AppSnapshot | null>(null);
+  // Bumped by every pushed snapshot and every preference edit. The backend
+  // pushes `state-changed` after each change, so a command reply applies only
+  // while its revision is current: a reply that lost the race to a newer push
+  // or edit would revert it.
+  const snapshotRevision = useRef(0);
+  // Only the newest edit reports a failure: a newer one carries its value too.
+  const latestEdit = useRef(0);
+  // The backend's latest snapshot, restored when the newest edit fails.
+  const confirmedSnapshot = useRef<AppSnapshot | null>(null);
   const [accountState, setAccountState] = useState<DesktopAccountState>({
     status: "loading",
   });
@@ -663,6 +672,8 @@ const App = () => {
           return;
         }
 
+        snapshotRevision.current += 1;
+        confirmedSnapshot.current = detail;
         startTransition(() => {
           setError(null);
           setState(detail);
@@ -672,18 +683,20 @@ const App = () => {
     });
 
     const syncState = async () => {
+      const revision = snapshotRevision.current;
       try {
         const nextState = await invoke<AppSnapshot>("get_state");
-        if (disposed) {
+        if (disposed || revision !== snapshotRevision.current) {
           return;
         }
 
+        confirmedSnapshot.current = nextState;
         startTransition(() => {
           setError(null);
           setState(nextState);
         });
       } catch (fetchError) {
-        if (disposed) {
+        if (disposed || revision !== snapshotRevision.current) {
           return;
         }
 
@@ -760,11 +773,14 @@ const App = () => {
       return;
     }
 
-    const previousPreferences = state.notificationPreferences;
     const nextPreferences = {
-      ...previousPreferences,
+      ...state.notificationPreferences,
       [preferenceKey]: checked,
     };
+    snapshotRevision.current += 1;
+    latestEdit.current += 1;
+    const revision = snapshotRevision.current;
+    const edit = latestEdit.current;
 
     startTransition(() => {
       setState((currentState) =>
@@ -782,21 +798,22 @@ const App = () => {
         "update_notification_preferences",
         { prefs: nextPreferences },
       );
+      if (revision !== snapshotRevision.current) {
+        return;
+      }
 
+      confirmedSnapshot.current = nextState;
       startTransition(() => {
         setError(null);
         setState(nextState);
       });
     } catch (updateError) {
+      if (edit !== latestEdit.current) {
+        return;
+      }
+      const confirmed = confirmedSnapshot.current;
       startTransition(() => {
-        setState((currentState) =>
-          currentState
-            ? {
-                ...currentState,
-                notificationPreferences: previousPreferences,
-              }
-            : currentState,
-        );
+        setState(confirmed);
         setError(commandErrorMessage(updateError, t("errorUpdatePreferences")));
       });
     }
