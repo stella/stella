@@ -518,6 +518,7 @@ const CONTINUATION_TOOL_CALL_PROPERTY_DISPOSITION = {
   metadata: "state-independent",
   name: "state-independent",
   output: "state-specific",
+  providerMetadata: "state-independent",
   state: "state-specific",
   type: "state-independent",
 } as const satisfies Record<

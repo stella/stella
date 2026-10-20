@@ -304,7 +304,7 @@ describe("API and CLI release contract", () => {
         if (typeof target !== "string") {
           throw new TypeError(`${packageName} has a non-string export target`);
         }
-        expect(target).toMatch(/^\.\/src\/.*\.tsx?$/u);
+        expect(target).toMatch(/^\.\/src\/.*\.(?:css|tsx?)$/u);
       }
     }
   });

@@ -3460,8 +3460,6 @@ const config = defineConfig({
         "packages/*/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-raw-date-parsing.fixture.ts",
       ],
-      // The package that owns the helpers and the named day length.
-      excludeFiles: ["packages/time/src/**"],
       rules: {
         "no-raw-date-parsing/no-raw-date-parsing": "error",
       },
@@ -5614,6 +5612,7 @@ const config = defineConfig({
         "apps/api/src/handlers/hosted-usage-webhook/routes.ts",
         "apps/api/src/handlers/notifications/routes.ts",
         "apps/api/src/handlers/smoke/routes.ts",
+        "apps/api/src/handlers/synthetic/routes.ts",
         "apps/api/src/handlers/verify/routes.ts",
         "apps/api/src/handlers/well-known/routes.ts",
       ],
