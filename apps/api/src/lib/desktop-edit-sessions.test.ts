@@ -10,7 +10,7 @@ import {
 
 describe("desktop edit handoff tokens", () => {
   test("uses a short-lived opaque token that can be stored as a hash", () => {
-    const token = createDesktopEditHandoffToken();
+    const token = createDesktopEditHandoffToken({ userId: null });
 
     expect(token).toMatch(/^[0-9a-f]{64}$/u);
     expect(hashDesktopEditHandoffToken(token)).toMatch(/^[0-9a-f]{64}$/u);

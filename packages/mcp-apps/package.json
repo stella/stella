@@ -51,7 +51,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.14.5",
+    "@happy-dom/global-registrator": "21.0.1",
     "@stll/portable-path": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/scripts": "workspace:*",

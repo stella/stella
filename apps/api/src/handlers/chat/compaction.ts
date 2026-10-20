@@ -44,7 +44,7 @@ export const COMPACTION_SUMMARY_MESSAGE_ID = "stella-chat-compaction-summary";
 
 type TanStackCompactionAIAnalytics = Pick<
   TanStackAIAnalyticsCallbacks,
-  "captureError" | "middleware"
+  "captureError" | "forModel" | "middleware"
 >;
 
 export type ChatCompactionPlan =
@@ -497,6 +497,9 @@ type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
   organizationId: SafeId<"organization">;
   admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
+  resolveTextModel?:
+    | Parameters<typeof generateTanStackTextForTask>[0]["resolveTextModel"]
+    | undefined;
   managedAIResidency: ManagedAIResidency;
   /** Tenant set for the model-ingress guard on the summarizer request. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -511,6 +514,9 @@ type CompactModelMessagesForModelOptions = {
   organizationId: SafeId<"organization">;
   admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
+  resolveTextModel?:
+    | Parameters<typeof generateTanStackTextForTask>[0]["resolveTextModel"]
+    | undefined;
   managedAIResidency: ManagedAIResidency;
   preserveTokens?: number | undefined;
   task: ModelTask;
@@ -530,6 +536,7 @@ export const compactChatMessagesForModel = async ({
   organizationId,
   admission,
   orgAIConfig,
+  resolveTextModel,
   managedAIResidency,
   preserveTokens,
   tenantWorkspaceIds,
@@ -548,6 +555,7 @@ export const compactChatMessagesForModel = async ({
       const result = await Result.tryPromise({
         try: async () =>
           await generateTanStackTextForTask({
+            userId: admission.userId,
             dataClass: "customer",
             abortSignal,
             analytics: aiAnalytics,
@@ -568,6 +576,7 @@ export const compactChatMessagesForModel = async ({
             organizationId,
             admission,
             orgAIConfig,
+            resolveTextModel,
             managedAIResidency,
             task: "chat",
             serviceTier: "standard",
@@ -598,6 +607,7 @@ export const compactModelMessagesForModel = async ({
   organizationId,
   admission,
   orgAIConfig,
+  resolveTextModel,
   managedAIResidency,
   preserveTokens,
   task,
@@ -619,6 +629,7 @@ export const compactModelMessagesForModel = async ({
       const result = await Result.tryPromise({
         try: async () =>
           await generateTanStackTextForTask({
+            userId: admission.userId,
             dataClass: "customer",
             abortSignal,
             analytics: aiAnalytics,
@@ -639,6 +650,7 @@ export const compactModelMessagesForModel = async ({
             organizationId,
             admission,
             orgAIConfig,
+            resolveTextModel,
             managedAIResidency,
             system: COMPACTION_SYSTEM_PROMPT,
             systemPromptOrigin: "server-built",

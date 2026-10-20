@@ -123,7 +123,7 @@ type ListCursor =
 const titleSortKey = legislationTitleSortKey(legislationDocuments.title);
 const validFromKey = versionSortKey(legislationDocuments.versionValidFrom);
 
-const decodeListCursor = (cursor: string): ListCursor | null => {
+export const decodeListCursor = (cursor: string): ListCursor | null => {
   const parts = decodePaginationCursor(cursor);
   if (parts === null) {
     return null;
@@ -165,6 +165,16 @@ const decodeListCursor = (cursor: string): ListCursor | null => {
 
   return null;
 };
+
+export const encodeListCursor = (cursor: ListCursor): string =>
+  cursor.type === LEGISLATION_LIST_CURSOR_KIND.recent
+    ? encodePaginationCursor([cursor.type, cursor.validFrom, cursor.id])
+    : encodePaginationCursor([
+        cursor.type,
+        cursor.rank,
+        cursor.titleSortKey,
+        cursor.id,
+      ]);
 
 const listedRef = listedLegislationRef;
 const workRef = legislationVersionRefAt("work");

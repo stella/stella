@@ -357,8 +357,11 @@ const baseCancellation = v.parse(
     `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toString("base64")}`
   ),
 ).CANONICAL_CANCEL_STEP;
-const baseCancellationSchema = cancellationJobSchema(baseCancellation, (pool) =>
-  git(["show", `${mergeBase}:${checkPoolRegistryPath(pool)}`]),
+const readBaseCheckPool: ReadCheckPool = (pool) =>
+  git(["show", `${mergeBase}:${checkPoolRegistryPath(pool)}`]);
+const baseCancellationSchema = cancellationJobSchema(
+  baseCancellation,
+  readBaseCheckPool,
 );
 const baseJobSchema = partitionJobSchema(baseCancellationSchema);
 const jobs = v.parse(
@@ -785,6 +788,46 @@ const withoutLocalVerification = (step: Step): Step => {
   return original;
 };
 
+// Steps that chose their base from the merge-group event now read the
+// planner's comparison base (the target branch for a merge group). Mapping the
+// merge-base form keeps every other field of those checks compared exactly.
+const TARGET_BASE_REWRITES = new Map([
+  [
+    `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}`,
+    `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+  ],
+  [
+    `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}`,
+    `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+  ],
+  [
+    `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}`,
+    `\${{ needs.ci-plan.outputs.target_base_sha || github.sha }}`,
+  ],
+  [
+    `\${{ github.event.merge_group.base_sha }}`,
+    `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
+  ],
+]);
+const withTargetBase = (step: Step): Step => {
+  const rewrite = (fields: unknown) =>
+    fields !== null && typeof fields === "object"
+      ? Object.fromEntries(
+          Object.entries(fields).map(([key, value]) => [
+            key,
+            typeof value === "string"
+              ? (TARGET_BASE_REWRITES.get(value) ?? value)
+              : value,
+          ]),
+        )
+      : fields;
+  return {
+    ...step,
+    ...(step["env"] === undefined ? {} : { env: rewrite(step["env"]) }),
+    ...(step["with"] === undefined ? {} : { with: rewrite(step["with"]) }),
+  };
+};
+
 // Checks that ran as background steps keep their ids in the check pool.
 const formerBackgroundIds: Record<string, string> = {
   "Test capability shard merge and package parity": "capability_parity",
@@ -797,6 +840,7 @@ const formerBackgroundIds: Record<string, string> = {
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
+    .map(withTargetBase)
     .map(withoutLocalVerification)
     .map(documentationScope)
     .map(withoutContinuation)
@@ -839,15 +883,28 @@ type ScopeOptions = {
 const expectScope = ({ current, base }: ScopeOptions) => {
   const { if: condition, ...scope } = current;
   const { if: originalCondition, ...originalScope } = base;
-  // ci-plan produces the generated sources. A merge base that still ran the
-  // producer as a job of its own names it beside the plan in `needs`.
+  // The generated-source producer is a job of its own, so its consumers
+  // name both. A merge base may name the plan alone, the current producer, or
+  // the retired producer that ran after the plan.
+  if (isDeepStrictEqual(scope["needs"], ["ci-plan", "generated-sources"])) {
+    scope["needs"] = "ci-plan";
+  }
   if (
     isDeepStrictEqual(originalScope["needs"], [
       "ci-plan",
       "ci-generated-sources",
-    ])
+    ]) ||
+    isDeepStrictEqual(originalScope["needs"], ["ci-plan", "generated-sources"])
   ) {
     originalScope["needs"] = "ci-plan";
+  }
+  // Jobs were pinned to ubuntu-24.04, the image ubuntu-latest resolved to, so
+  // a merge base that still names the floating label runs the same image.
+  if (
+    originalScope["runs-on"] === "ubuntu-latest" &&
+    scope["runs-on"] === "ubuntu-24.04"
+  ) {
+    originalScope["runs-on"] = "ubuntu-24.04";
   }
   const originalEnvironment =
     originalScope["env"] === undefined
@@ -1044,7 +1101,7 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     "bun test scripts/check-oxlint-rule-coverage.test.ts\nbun scripts/check-oxlint-rule-coverage.ts\n",
   );
   expect(coverage.env).toEqual({
-    BASE_SHA: `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}`,
+    BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
   });
   return Object.assign(step, { run: "bun run check:docs-sources" });
 });
@@ -2623,13 +2680,15 @@ test("documentation policy widens only its package gate and retains successful i
 const expectCancellationNormalization = (
   schema: ReturnType<typeof cancellationJobSchema>,
   candidateJobs: Record<string, unknown>,
+  // Pooled checks come from the same tree as the jobs under test.
+  readPool: ReadCheckPool,
 ) => {
   for (const id of partitionIds) {
     const original = v.parse(
       v.looseObject({ steps: v.unknown() }),
       candidateJobs[id],
     );
-    const leaves = flattenWorkflowSteps(original.steps).filter(
+    const leaves = flattenWorkflowSteps(original.steps, readPool).filter(
       (step) => !isWorkflowBarrier(step),
     );
     const normalized = v.parse(schema, original);
@@ -2640,7 +2699,7 @@ const expectCancellationNormalization = (
       panic("Workflow cancellation tail unavailable");
     }
     const mutated = structuredClone(original);
-    const changedTail = flattenWorkflowSteps(mutated.steps).findLast(
+    const changedTail = flattenWorkflowSteps(mutated.steps, readPool).findLast(
       (step) => !isWorkflowBarrier(step),
     );
     if (!changedTail) {
@@ -2655,11 +2714,19 @@ const expectCancellationNormalization = (
 };
 
 test("baseline cancellation normalization uses its own owner and rejects changed tails", () => {
-  expectCancellationNormalization(baseCancellationSchema, baseJobs);
+  expectCancellationNormalization(
+    baseCancellationSchema,
+    baseJobs,
+    readBaseCheckPool,
+  );
 });
 
 test("head cancellation normalization is valid as the next base and rejects changed tails", () => {
-  expectCancellationNormalization(headCancellationSchema, jobs);
+  expectCancellationNormalization(
+    headCancellationSchema,
+    jobs,
+    readWorkingTreeCheckPool,
+  );
 });
 
 test("already hydrated merge-base jobs retain their generated manifest environment", () => {

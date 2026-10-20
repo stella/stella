@@ -8,7 +8,9 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   blockingFailures,
+  checkLogText,
   continueOnErrorHolds,
+  failedCheckAnnotation,
   planChecks,
   POOL_CONTEXT_ROOTS,
   poolContext,
@@ -47,6 +49,61 @@ const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
   continueOnError: undefined,
   step: { name },
   ...extra,
+});
+
+test("failed checks emit one annotation with their first actionable cause", () => {
+  const result = { name: "Unit tests", detail: "exit code 1" };
+  // Bun prints a test's error before its (fail) line; a later test's error is
+  // not the first failure's cause.
+  expect(
+    failedCheckAnnotation(
+      result,
+      "(pass) earlier\nerror: expected A\n(fail) test A\nerror: expected B\n(fail) test B",
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A Unit tests::(fail) test A -- error: expected A",
+  );
+  // Output after the marker belongs to the next test, so a failed test
+  // without its own diagnostic is named alone.
+  expect(
+    failedCheckAnnotation(
+      result,
+      "(pass) earlier\n(fail) parser > rejects invalid input\ntrace\nerror: expected a value\n(fail) later",
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A Unit tests::(fail) parser > rejects invalid input",
+  );
+  expect(
+    failedCheckAnnotation(result, "loading\nERROR: compiler stopped"),
+  ).toBe("::error title=FAILED check%3A Unit tests::ERROR: compiler stopped");
+  expect(failedCheckAnnotation(result, "loading\nno diagnostic")).toBe(
+    "::error title=FAILED check%3A Unit tests::exit code 1",
+  );
+});
+
+test("failed check annotations escape and truncate their messages", () => {
+  const cause = `error: 100%\rnext${"x".repeat(600)}`;
+  const annotation = failedCheckAnnotation(
+    { name: "Policy, checks", detail: "exit code 2" },
+    cause,
+  );
+  expect(annotation).toStartWith(
+    "::error title=FAILED check%3A Policy%2C checks::error: 100%25",
+  );
+  expect(annotation).toContain("%0Dnext");
+  const message = annotation.slice(annotation.indexOf("::", 2) + 2);
+  expect(
+    message
+      .replaceAll("%0A", "\n")
+      .replaceAll("%0D", "\r")
+      .replaceAll("%25", "%"),
+  ).toHaveLength(500);
+  expect(
+    failedCheckAnnotation(
+      { name: "Fallback", detail: "exit%\r\ncode 2" },
+      "no diagnostic",
+    ),
+  ).toEndWith("::exit%25%0D%0Acode 2");
 });
 
 test("each pooled job runs its registry from exactly one pool step", () => {
@@ -454,7 +511,7 @@ test("every pooled expression reads only contexts the pool provides", () => {
   }
 });
 
-test("the generated manifest guard defers the scan engine only outside PR depth runs", () => {
+test("the generated manifest guard defers the scan engine outside PR depth runs and typecheck coverage to its job", () => {
   const guard = readCheckPool("ci-checks-rest").find(
     ({ name }) => name === "Generated files manifest guard",
   );
@@ -462,7 +519,7 @@ test("the generated manifest guard defers the scan engine only outside PR depth 
   if (guard === undefined) {
     return;
   }
-  const deferred = (inputs: Value) => {
+  const deferred = (inputs: Value, outputs: Record<string, string> = {}) => {
     const [planned] = planChecks(
       [guard],
       context(
@@ -471,7 +528,7 @@ test("the generated manifest guard defers the scan engine only outside PR depth 
         {},
         {
           inputs,
-          outputs: { scan_engine_wasm_required: "true" },
+          outputs: { scan_engine_wasm_required: "true", ...outputs },
         },
       ),
     );
@@ -480,8 +537,37 @@ test("the generated manifest guard defers the scan engine only outside PR depth 
       ? planned.env["GENERATED_CHECKS_IN_OTHER_JOBS"]
       : undefined;
   };
-  expect(deferred({ pr_depth_only: true })).toBe("[]");
-  expect(deferred({ pr_depth_only: false })).toBe('["scan-engine-wasm"]');
+  expect(deferred({ pr_depth_only: true })).toBe('["",""]');
+  expect(deferred({ pr_depth_only: false })).toBe('["scan-engine-wasm",""]');
   // Push and merge-group runs have no inputs: GitHub renders them as null.
-  expect(deferred(null)).toBe('["scan-engine-wasm"]');
+  expect(deferred(null)).toBe('["scan-engine-wasm",""]');
+  // code-quality-web-rest runs the full typecheck coverage in this run.
+  expect(
+    deferred(null, { package_checks_required: "true", trusted: "true" }),
+  ).toBe('["scan-engine-wasm","api-typecheck-projects"]');
+});
+
+test("only a failed check's own error commands reach the job log", () => {
+  const output = [
+    "::error::Release history includes a fixture pull request",
+    "::error file=a.ts,line=1::Expected refusal",
+    "  ::error::already indented",
+    "::warning::advisory note",
+    "::group::nested",
+    "ok",
+  ].join("\n");
+  const neutralized = [
+    " ::error::Release history includes a fixture pull request",
+    " ::error file=a.ts,line=1::Expected refusal",
+    "  ::error::already indented",
+    "::warning::advisory note",
+    " ::group::nested",
+    "ok",
+  ].join("\n");
+  for (const outcome of ["success", "skipped"] as const) {
+    expect(checkLogText(output, outcome)).toBe(neutralized);
+  }
+  expect(checkLogText(output, "failure")).toBe(
+    output.replace("::group::nested", " ::group::nested"),
+  );
 });
