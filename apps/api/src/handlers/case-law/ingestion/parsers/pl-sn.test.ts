@@ -161,7 +161,7 @@ describe("raised reference markers", () => {
         span(" a zahájil řízení.", 115, 100, 10),
       ],
       text: "1. Úřad obdržel podnět1 a zahájil řízení.",
-      bbox: { y: 100 },
+      bbox: { x: 0, y: 100 },
     };
     const cleaned = withoutRaisedReferenceMarkers(line, 10);
     expect(cleaned.text).toBe("1. Úřad obdržel podnět a zahájil řízení.");

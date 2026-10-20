@@ -137,7 +137,7 @@ type PageFurnitureSpan = PdfSpan & {
 type PageFurnitureLine = {
   readonly spans: readonly PageFurnitureSpan[];
   readonly text: string;
-  readonly bbox: { readonly y: number };
+  readonly bbox: { readonly x: number; readonly y: number };
 };
 
 export const PL_PDF_PAGE_FURNITURE = {
