@@ -506,6 +506,19 @@ const SETTLEMENT_STAGE_OUTCOME = {
   interrupted: "cancelled",
 } as const satisfies Record<SettlementOutcomeKind, RequestStageOutcome>;
 
+type OutputGeneratorPosition =
+  | { type: "running" }
+  | { type: "suspended" }
+  | { type: "completed" };
+
+const UNFINISHED_GENERATOR_STAGE_OUTCOME = {
+  running: "failed",
+  suspended: "cancelled",
+} as const satisfies Record<
+  Exclude<OutputGeneratorPosition["type"], "completed">,
+  RequestStageOutcome
+>;
+
 export const observeChatOutputStages = async function* ({
   source,
   startedAt,
@@ -514,10 +527,7 @@ export const observeChatOutputStages = async function* ({
   emitStage = emitRequestStage,
 }: ObserveChatOutputStagesOptions) {
   let firstTokenAt: number | undefined;
-  let finish:
-    | { type: "cancelled" }
-    | { type: "completed" }
-    | { type: "failed" } = { type: "cancelled" };
+  let position: OutputGeneratorPosition = { type: "running" };
   try {
     for await (const chunk of source) {
       if (firstTokenAt === undefined && chunkCarriesAnswer(chunk)) {
@@ -529,24 +539,27 @@ export const observeChatOutputStages = async function* ({
           outcome: "completed",
         });
       }
+      position = { type: "suspended" };
       yield chunk;
+      position = { type: "running" };
     }
+    position = { type: "completed" };
+  } finally {
     const settlementOutcome = getSettlementOutcome();
-    finish = {
-      type:
+    let outcome: RequestStageOutcome;
+    if (position.type === "completed") {
+      outcome =
         settlementOutcome === undefined
           ? "failed"
-          : SETTLEMENT_STAGE_OUTCOME[settlementOutcome],
-    };
-  } catch (error) {
-    finish = { type: "failed" };
-    throw error;
-  } finally {
+          : SETTLEMENT_STAGE_OUTCOME[settlementOutcome];
+    } else {
+      outcome = UNFINISHED_GENERATOR_STAGE_OUTCOME[position.type];
+    }
     emitStage({
       route: "/v1/chat/:threadId/messages",
       stage: "stream_finish",
       durationMs: now() - startedAt,
-      outcome: finish.type,
+      outcome,
     });
   }
 };
