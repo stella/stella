@@ -1165,9 +1165,15 @@ describe("session token responses", () => {
     // The matcher accepts every endpoint, so no auth response escapes it.
     expect(
       after.every(({ matcher }) =>
-        ["/list-sessions", "/get-session", "/organization/list", "/x"].every(
-          (path) => matcher(fakeCtx(path)),
-        ),
+        [
+          "/list-sessions",
+          "/get-session",
+          "/organization/list",
+          "/oauth2/token",
+          "/oauth2/userinfo",
+          "/mcp-handoff/sessions",
+          "/x",
+        ].every((path) => matcher(fakeCtx(path))),
       ),
     ).toBe(true);
     // Only the refusal log, which records the final answer, runs after it.

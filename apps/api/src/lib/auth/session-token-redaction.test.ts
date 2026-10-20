@@ -1,7 +1,10 @@
 import { betterAuth } from "better-auth";
 import type { BetterAuthPlugin } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import {
   createSessionTokenRedactionPlugin,
@@ -111,5 +114,39 @@ describe("session list over HTTP", () => {
       ? body.map((row: { id?: unknown }) => typeof row.id)
       : [];
     expect(ids).toEqual(["string", "string", "string"]);
+  });
+});
+
+const apiRoot = path.resolve(import.meta.dir, "../../..");
+// Only these modules read the session table outside Better Auth: the lifetime
+// store (credential checks) and the new-device notice (address and user agent).
+const SESSION_TABLE_READERS = new Set([
+  "src/lib/auth/session-history.ts",
+  "src/lib/auth/session-lifetime-store.ts",
+]);
+const SESSION_TABLE_READ =
+  /\bquery\.session\.find|\.from\(\s*session\s*\)|\bselect\([^)]*\bsession\.token\b/u;
+
+describe("session table census", () => {
+  test("no other module reads session rows that a response could carry", () => {
+    const readers = [
+      ...new Glob("src/**/*.ts").scanSync({ cwd: apiRoot }),
+    ].filter(
+      (file) =>
+        !file.endsWith(".test.ts") &&
+        !file.includes("/tests/") &&
+        SESSION_TABLE_READ.test(
+          readFileSync(path.join(apiRoot, file), "utf-8"),
+        ),
+    );
+    expect(readers.filter((file) => !SESSION_TABLE_READERS.has(file))).toEqual(
+      [],
+    );
+    expect(
+      readFileSync(
+        path.join(apiRoot, "src/lib/auth/session-history.ts"),
+        "utf-8",
+      ),
+    ).not.toMatch(/token:\s*true/u);
   });
 });
