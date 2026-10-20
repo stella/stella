@@ -20,6 +20,8 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export type GenerateBBoxesProps = {
   abortSignal: AbortSignal;
+  /** Bound on the page's model call; it fails as a named deadline. */
+  deadlineMs: number;
   justificationId: SafeId<"justification">;
   organizationId: SafeId<"organization">;
   admission: ModelDispatchAdmission;

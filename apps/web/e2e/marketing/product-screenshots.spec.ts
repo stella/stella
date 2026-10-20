@@ -398,9 +398,23 @@ test("capture landing product screenshots", async ({
           scroller.scrollTop += anchorTop - frameTop - 16;
         }, clip.y);
         await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
+        // The left notes column is the point of this shot. Require the
+        // seeded AI note and comment as typed margin notes, not merely text
+        // in some `aside`, and no visitor placeholders in their place.
+        const notesColumn = page.locator("aside[data-reader-notes-column]");
+        await expect(notesColumn).toBeVisible();
+        await expect(
+          notesColumn.locator('[data-margin-note="example"]'),
+        ).toHaveCount(0);
         const requiredElements = [
-          page.locator("aside").getByText(scenario.aiNote, { exact: true }),
-          page.locator("aside").getByText(scenario.comment, { exact: true }),
+          notesColumn
+            .locator(
+              '[data-margin-note="card"], [data-margin-note="annotation"]',
+            )
+            .getByText(scenario.aiNote, { exact: true }),
+          notesColumn
+            .locator('[data-margin-note="comment"]')
+            .getByText(scenario.comment, { exact: true }),
         ];
         for (const [anchor, variant, paragraphNumber] of [
           [
@@ -451,6 +465,7 @@ test("capture landing product screenshots", async ({
             )
             .toBe(true);
         }
+        await expectNoMarginNoteCut(page, clip.y);
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
         await page.getByRole("tab", { name: "Files" }).click();
@@ -569,6 +584,67 @@ const clearPersistedInspectorState = async (page: Page) => {
       }
     }
   }, INSPECTOR_STORAGE_PREFIXES);
+};
+
+// No margin note is half hidden at the top of the margin, under the sticky
+// section header or the frame's top edge. One running off the bottom edge
+// is fine: it reads as the page continuing.
+const expectNoMarginNoteCut = async (page: Page, clipTop: number) => {
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          (band) => {
+            const scroller = document
+              .querySelector('[data-slot="reader-document-column"]')
+              ?.closest(".reader-scroll");
+            if (!(scroller instanceof HTMLElement)) {
+              return ["the reader's scroller is missing"];
+            }
+            const frame = scroller.getBoundingClientRect();
+            // A note under the margin's sticky section header is as cut as
+            // one under the frame's edge: the header's contents bound it.
+            const aside = scroller
+              .querySelector('[data-slot="reader-document-column"]')
+              ?.parentElement?.querySelector("aside");
+            const stuckBottoms = aside
+              ? [...aside.querySelectorAll<HTMLElement>("*")]
+                  .filter(
+                    (element) =>
+                      getComputedStyle(element).position === "sticky" &&
+                      element.getBoundingClientRect().top <= frame.top + 1,
+                  )
+                  .map((element) =>
+                    Math.max(
+                      element.getBoundingClientRect().bottom,
+                      ...[...element.querySelectorAll("*")].map(
+                        (child) => child.getBoundingClientRect().bottom,
+                      ),
+                    ),
+                  )
+              : [];
+            const top = Math.max(frame.top, band.top, ...stuckBottoms);
+            const cut: string[] = [];
+            for (const note of document.querySelectorAll(
+              "[data-margin-note] > *",
+            )) {
+              const box = note.getBoundingClientRect();
+              if (box.top < top && box.bottom > top) {
+                const kind = note.parentElement?.dataset["marginNote"] ?? "?";
+                cut.push(
+                  `${kind} note "${note.textContent.slice(0, 40)}" spans ${String(Math.round(box.top))}-${String(Math.round(box.bottom))}`,
+                );
+              }
+            }
+            return cut;
+          },
+          { top: clipTop },
+        ),
+      {
+        message: "No margin note may be half hidden at the top of the margin",
+      },
+    )
+    .toEqual([]);
 };
 
 // Resolves the seeded agent thread's route by title via the chat threads

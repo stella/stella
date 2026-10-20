@@ -216,12 +216,15 @@ describe.each(SURFACES)(
       }
     });
 
-    test("result projections exclude diagnostic metadata", () => {
+    test("result projections exclude diagnostic metadata and redundant reader URLs", () => {
       for (const tool of definitions) {
         const contract = getStaticMcpToolOutputContract(tool.name, mode);
         if (contract === undefined) {
           panic(`Missing output contract for ${tool.name}`);
         }
+        expect(JSON.stringify(contract.outputSchema), tool.name).not.toContain(
+          '"appUrl"',
+        );
         expect(diagnosticResultKeys(contract.outputSchema), tool.name).toEqual(
           [],
         );

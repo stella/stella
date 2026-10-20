@@ -92,7 +92,7 @@ describe("createHostedSetupSession", () => {
       policyRef: "provider_policy_pro",
       externalAccountRef: "stella_org_org_test_001",
       successUrl: "https://app.stella.test/settings",
-      returnUrl: "https://app.stella.test/settings/organization/usage",
+      returnUrl: "https://app.stella.test/admin/usage",
       metadata: {
         organization_id: "org_test_001",
         usage_policy_id: "plan_test_001",
@@ -116,9 +116,7 @@ describe("createHostedSetupSession", () => {
     const body = readJsonRequestBody(calledInit?.body);
     expect(body["policy_refs"]).toEqual(["provider_policy_pro"]);
     expect(body["success_url"]).toBe("https://app.stella.test/settings");
-    expect(body["return_url"]).toBe(
-      "https://app.stella.test/settings/organization/usage",
-    );
+    expect(body["return_url"]).toBe("https://app.stella.test/admin/usage");
     expect(body["external_account_ref"]).toBe("stella_org_org_test_001");
     expect("account_ref" in body).toBe(false);
     const metadata = body["metadata"];
@@ -219,7 +217,7 @@ describe("createHostedManagementSession", () => {
     const result = await createHostedManagementSession({
       credentials,
       accountRef: "acct_test_xxx",
-      returnUrl: "https://app.stella.test/settings/organization/usage",
+      returnUrl: "https://app.stella.test/admin/usage",
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -234,9 +232,7 @@ describe("createHostedManagementSession", () => {
     );
     const body = readJsonRequestBody(calledInit?.body);
     expect(body["account_ref"]).toBe("acct_test_xxx");
-    expect(body["return_url"]).toBe(
-      "https://app.stella.test/settings/organization/usage",
-    );
+    expect(body["return_url"]).toBe("https://app.stella.test/admin/usage");
   });
 
   test("404 from provider surfaces as HostedUsageProviderApiError", async () => {
@@ -304,7 +300,7 @@ describe("createPolarSetupSession", () => {
       policyRef: "prod_pro",
       externalAccountRef: "stella_org_org_test_001",
       successUrl: "https://app.stella.test/settings",
-      returnUrl: "https://app.stella.test/settings/organization/usage",
+      returnUrl: "https://app.stella.test/admin/usage",
       metadata: {
         organization_id: "org_test_001",
         usage_policy_id: "plan_test_001",
@@ -367,7 +363,7 @@ describe("createPolarManagementSession", () => {
     const result = await createPolarManagementSession({
       credentials,
       accountRef: "cus_abc",
-      returnUrl: "https://app.stella.test/settings/organization/usage",
+      returnUrl: "https://app.stella.test/admin/usage",
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -379,9 +375,7 @@ describe("createPolarManagementSession", () => {
     );
     const body = readJsonRequestBody(calledInit?.body);
     expect(body["customer_id"]).toBe("cus_abc");
-    expect(body["return_url"]).toBe(
-      "https://app.stella.test/settings/organization/usage",
-    );
+    expect(body["return_url"]).toBe("https://app.stella.test/admin/usage");
   });
 });
 

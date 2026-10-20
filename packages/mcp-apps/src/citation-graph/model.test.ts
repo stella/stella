@@ -55,8 +55,7 @@ const citation = ({
   doctrine: null,
   decision: decision
     ? {
-        appUrl: `https://stll.app/case-law/${decisionId}`,
-        url: `https://example.org/cases/${decisionId}`,
+        url: `https://stll.app/case-law/${decisionId}`,
         caseNumber: `Synthetic ${decisionId}`,
         citationAuthority: 1,
         court: "Synthetic Court",
@@ -70,6 +69,19 @@ const citation = ({
 });
 
 describe("citation graph model", () => {
+  test("preserves the applied filters", () => {
+    const page = {
+      ...citationPage(),
+      doctrine: "distinguishes",
+      polarity: "supportive",
+    } satisfies CitationPage;
+
+    expect(createGraph(page)).toMatchObject({
+      doctrine: "distinguishes",
+      polarity: "supportive",
+    });
+  });
+
   test("preserves resolved and unresolved citations and every polarity", () => {
     const citations = GRAPH_TEST_CITATION_TREATMENTS.map((polarity, index) =>
       citation({
