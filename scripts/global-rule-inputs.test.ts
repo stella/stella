@@ -4,6 +4,11 @@ import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import {
+  checkPoolJob,
+  readCheckPool,
+  type ReadCheckPool,
+} from "./ci-check-pool-registry";
+import {
   loadGlobalRuleInputs,
   matchesGlobalRuleInput,
 } from "./global-rule-inputs";
@@ -24,7 +29,7 @@ const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
   .split("\0")
   .filter(Boolean);
 
-const getRunCommands = () => {
+const getRunCommands = (readPool?: ReadCheckPool) => {
   const workflow: unknown = Bun.YAML.parse(
     readFileSync(new URL(".github/workflows/ci.yml", REPOSITORY_ROOT), "utf-8"),
   );
@@ -49,7 +54,18 @@ const getRunCommands = () => {
         STATIC_CHECK_JOB_ROOTS.some((root) => root === name) ||
         STATIC_CHECK_JOB_PREFIXES.some((prefix) => name.startsWith(prefix)),
     )
-    .flatMap(([, job]) => job.steps.flatMap(({ run }) => (run ? [run] : [])));
+    .flatMap(([, job]) =>
+      job.steps.flatMap((step) => {
+        const commands = step.run ? [step.run] : [];
+        const poolJob = checkPoolJob(step);
+        if (poolJob) {
+          commands.push(
+            ...readCheckPool(poolJob, readPool).map(({ run }) => run),
+          );
+        }
+        return commands;
+      }),
+    );
 };
 
 const collectScriptPaths = (commands: string[]) => {
@@ -92,6 +108,14 @@ const collectScriptPaths = (commands: string[]) => {
   return [...paths].toSorted();
 };
 
+const getUnclassifiedScriptPaths = (commands: string[]) => {
+  const inputs = loadGlobalRuleInputs();
+  const changeScoped = new Set(inputs.changeScoped.map(({ path }) => path));
+  return collectScriptPaths(commands).filter(
+    (path) => !matchesGlobalRuleInput(path, inputs) && !changeScoped.has(path),
+  );
+};
+
 describe("global rule inputs", () => {
   test("the declaration is valid, ordered, and uses the restricted glob syntax", () => {
     const inputs = loadGlobalRuleInputs();
@@ -128,13 +152,17 @@ describe("global rule inputs", () => {
   });
 
   test("every static-check repository script has an explicit scope", () => {
-    const inputs = loadGlobalRuleInputs();
-    const changeScoped = new Set(inputs.changeScoped.map(({ path }) => path));
-    const scripts = collectScriptPaths(getRunCommands());
-    const unclassified = scripts.filter(
-      (path) =>
-        !matchesGlobalRuleInput(path, inputs) && !changeScoped.has(path),
+    expect(getUnclassifiedScriptPaths(getRunCommands())).toEqual([]);
+  });
+
+  test("a pooled-check command needs an explicit scope", () => {
+    const fixture = `checks:
+  - name: Unclassified fixture
+    if: \${{ true }}
+    run: bun scripts/global-rule-inputs.test.ts
+`;
+    expect(getUnclassifiedScriptPaths(getRunCommands(() => fixture))).toContain(
+      "scripts/global-rule-inputs.test.ts",
     );
-    expect(unclassified).toEqual([]);
   });
 });
