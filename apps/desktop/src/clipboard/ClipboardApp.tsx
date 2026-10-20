@@ -159,6 +159,7 @@ import {
   observeClipboardReopens,
 } from "./clipboard-startup-timing";
 import {
+  CLIPBOARD_HISTORY_CHANGED_EVENT,
   CLIPBOARD_RETENTIONS,
   isClipboardCopyError,
   isClipboardSnapshot,
@@ -1660,7 +1661,7 @@ const ClipboardApp = () => {
     };
     readSnapshot();
     const stopListening = subscribeDesktopEvent({
-      event: "clipboard-history-changed",
+      event: CLIPBOARD_HISTORY_CHANGED_EVENT,
       handler: readSnapshot,
       onError: () => {
         reportDesktopError({
