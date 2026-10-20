@@ -65,7 +65,7 @@ const NEARLY_COMPLETE: CaseLawCoverageSource = {
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
   pendingTextCount: 0,
-  knownGaps: { type: "unknown" },
+  knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 12,
   completeness: {
     state: "measured",
@@ -86,7 +86,7 @@ const NEVER_MEASURED: CaseLawCoverageSource = {
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
   pendingTextCount: 0,
-  knownGaps: { type: "unknown" },
+  knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 0,
   completeness: { state: "not-measured-yet" },
 };
@@ -101,7 +101,7 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
   pendingTextCount: 0,
-  knownGaps: { type: "unknown" },
+  knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 0,
   completeness: { state: "not-counted-yet" },
 };
@@ -225,19 +225,20 @@ describe("the coverage page states what it counts", () => {
                   decisionYearTo: 2011,
                   pendingTextCount: 1234,
                   knownGaps: {
-                    type: "known",
-                    gaps: [
+                    type: "reconciled",
+                    summary: { missing: 2, shortSlices: 2, unlistedSlices: 0 },
+                    years: [
                       {
-                        from: "1969-01-01",
-                        to: "1970-12-31",
-                        reason: "Publisher archive has no decisions",
-                        evidenceRef: "publisher-index",
+                        year: 1969,
+                        type: "gaps",
+                        missing: 1,
+                        shortSlices: 1,
                       },
                       {
-                        from: "1989-01-01",
-                        to: "1989-12-31",
-                        reason: "Publisher archive has no decisions",
-                        evidenceRef: "publisher-index",
+                        year: 1989,
+                        type: "gaps",
+                        missing: 1,
+                        shortSlices: 1,
                       },
                     ],
                   },

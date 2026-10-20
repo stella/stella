@@ -4,12 +4,15 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PROVISION_LINK_CAPABILITIES } from "@stll/api-contract/provision-link-capability";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   caseLawDecisions,
+  caseLawCoverageSlices,
   publishedCaseLawDecisions,
   caseLawSearchDocuments,
   caseLawSources,
@@ -22,6 +25,10 @@ import {
 } from "@/api/handlers/case-law/decisions/coverage";
 import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import { CASE_LAW_COVERAGE_HEALTH } from "@/api/handlers/case-law/decisions/coverage-health";
+import {
+  readCaseLawCoverageYearsQuery,
+  summarizeCaseLawCoverageYears,
+} from "@/api/handlers/case-law/decisions/coverage-years";
 import {
   caseLawCourtStatusRows,
   readCaseLawCourtCountQuery,
@@ -352,6 +359,10 @@ const loadCoverage = async (
         async (tx) =>
           await readCaseLawArrivalsQuery(tx, { sourceIds, now: NOW }),
       ),
+    readYearCompleteness: async (sources) =>
+      await readAsReader(
+        async (tx) => await readCaseLawCoverageYearsQuery(tx, sources),
+      ),
     readFacets: async (country) =>
       Result.ok({
         country: [{ value: country, count: 3 }],
@@ -366,7 +377,115 @@ const loadCoverage = async (
   });
 
 test(
-  "unindexed, withdrawn and listing-only decisions cannot widen either served year bound",
+  "slice ledgers report complete, short, and unlisted years while unsliced sources are explicit",
+  async () => {
+    const db = drizzle({ client });
+    await db.insert(caseLawCoverageSlices).values([
+      {
+        sourceId: czSourceId,
+        slice: "2023-01-01",
+        reported: 2,
+        collected: 2,
+        checkedAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+      {
+        sourceId: czSourceId,
+        slice: "2024-01-01",
+        reported: 5,
+        collected: 3,
+        checkedAt: new Date("2026-01-02T00:00:00.000Z"),
+      },
+      {
+        sourceId: czSourceId,
+        slice: "2025-01-02",
+        walkError: "publisher_unavailable",
+        checkedAt: new Date("2026-01-03T00:00:00.000Z"),
+      },
+      {
+        sourceId: czSourceId,
+        slice: "2025-01-03",
+        walkError: "rate_limited",
+        checkedAt: new Date("2026-01-04T00:00:00.000Z"),
+      },
+    ]);
+
+    try {
+      const coverage = await loadCoverage();
+      if (Result.isError(coverage)) {
+        throw coverage.error;
+      }
+      const czech = coverage.value.countries
+        .find(({ country }) => country === "CZE")
+        ?.sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS);
+      expect(czech?.knownGaps).toEqual({
+        type: "reconciled",
+        summary: { missing: 2, shortSlices: 1, unlistedSlices: 2 },
+        years: [
+          { year: 2023, type: "complete" },
+          {
+            year: 2024,
+            type: "gaps",
+            missing: 2,
+            shortSlices: 1,
+          },
+          {
+            year: 2025,
+            type: "unlisted",
+            unlistedSlices: 2,
+            latestWalkError: "rate_limited",
+          },
+        ],
+      });
+
+      const unsliced = await readAsReader(
+        async (tx) =>
+          await readCaseLawCoverageYearsQuery(tx, [
+            { id: czSourceId, adapterKey: ADAPTER_KEYS.PL_NSA },
+          ]),
+      );
+      expect(unsliced.get(String(czSourceId))).toEqual({
+        type: "not_reconciled",
+        reason:
+          "The source listing is not partitioned into calendar-date slices.",
+      });
+    } finally {
+      await db
+        .delete(caseLawCoverageSlices)
+        .where(eq(caseLawCoverageSlices.sourceId, czSourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test("per-year missing counts sum to the source missing count", () => {
+  assertProperty(
+    "case-law coverage per-year missing counts sum to the source missing count",
+    fc.property(
+      fc.array(
+        fc.record({
+          year: fc.integer({ min: 1900, max: 2100 }),
+          missing: fc.nat({ max: 10_000 }),
+          shortSlices: fc.nat({ max: 366 }),
+          unlistedSlices: fc.constant(0),
+          latestWalkError: fc.constant(null),
+        }),
+      ),
+      (rows) => {
+        const result = summarizeCaseLawCoverageYears(rows);
+        let missingFromYears = 0;
+        for (const year of result.years) {
+          if (year.type === "gaps") {
+            missingFromYears += year.missing;
+          }
+        }
+        expect(missingFromYears).toBe(result.summary.missing);
+      },
+    ),
+  );
+});
+
+test(
+  "held decision dates fill year bounds when the serving index has none",
   async () => {
     const db = drizzle({ client });
     const sourceId = createSafeId<"caseLawSource">();
@@ -503,8 +622,8 @@ test(
         readCaseLawCoverageSourcesQuery(tx, "corpus-index"),
       );
       expect(unknown.find(({ id }) => id === sourceId)).toMatchObject({
-        decisionYearFrom: null,
-        decisionYearTo: null,
+        decisionYearFrom: 1800,
+        decisionYearTo: 2020,
       });
       expect(sources.find(({ id }) => id === sourceId)).toMatchObject({
         decisionYearFrom: 2000,

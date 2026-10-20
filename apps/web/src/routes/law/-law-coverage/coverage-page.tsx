@@ -683,14 +683,15 @@ const SourceCoverageDetails = ({
       : `${formatter.number(source.decisionYearFrom, YEAR_FORMAT)}–${formatter.number(source.decisionYearTo, YEAR_FORMAT)}`;
   let gaps: string;
   switch (source.knownGaps.type) {
-    case "unknown":
+    case "not_reconciled":
       gaps = t("caseLaw.coverage.gapStatusUnknown");
       break;
-    case "none-recorded":
-      gaps = t("caseLaw.coverage.noGapsRecorded");
-      break;
-    case "known":
-      gaps = `${t("caseLaw.coverage.knownGaps")}: ${formatter.number(source.knownGaps.gaps.length)}`;
+    case "reconciled":
+      gaps =
+        source.knownGaps.summary.missing === 0 &&
+        source.knownGaps.summary.unlistedSlices === 0
+          ? t("caseLaw.coverage.noGapsRecorded")
+          : `${t("caseLaw.coverage.knownGaps")}: ${formatter.number(source.knownGaps.summary.missing + source.knownGaps.summary.unlistedSlices)}`;
       break;
     default:
       source.knownGaps satisfies never;

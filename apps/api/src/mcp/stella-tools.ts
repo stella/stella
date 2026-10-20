@@ -3899,8 +3899,8 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
               decisionYearTo: source.decisionYearTo,
               pendingTextCount: source.pendingTextCount,
               knownGaps:
-                source.knownGaps.type === "known"
-                  ? { ...source.knownGaps, gaps: [...source.knownGaps.gaps] }
+                source.knownGaps.type === "reconciled"
+                  ? { ...source.knownGaps, years: [...source.knownGaps.years] }
                   : source.knownGaps,
             })),
             courts: null,
@@ -3920,8 +3920,8 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
               decisionYearTo: source.decisionYearTo,
               pendingTextCount: source.pendingTextCount,
               knownGaps:
-                source.knownGaps.type === "known"
-                  ? { ...source.knownGaps, gaps: [...source.knownGaps.gaps] }
+                source.knownGaps.type === "reconciled"
+                  ? { ...source.knownGaps, years: [...source.knownGaps.years] }
                   : source.knownGaps,
             })),
             courts:

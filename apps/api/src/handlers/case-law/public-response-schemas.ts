@@ -406,26 +406,48 @@ const countryCoverage = {
         pendingTextCount: t.Number(),
         knownGaps: t.Union([
           t.Object(
-            { type: t.Literal("unknown") },
-            { additionalProperties: false },
-          ),
-          t.Object(
-            { type: t.Literal("none-recorded") },
+            {
+              type: t.Literal("not_reconciled"),
+              reason: boundedString(2048),
+            },
             { additionalProperties: false },
           ),
           t.Object(
             {
-              type: t.Literal("known"),
-              gaps: t.Array(
-                t.Object(
-                  {
-                    from: boundedString(128),
-                    to: boundedString(128),
-                    reason: boundedString(2048),
-                    evidenceRef: boundedString(8192),
-                  },
-                  { additionalProperties: false },
-                ),
+              type: t.Literal("reconciled"),
+              summary: t.Object(
+                {
+                  missing: t.Number(),
+                  shortSlices: t.Number(),
+                  unlistedSlices: t.Number(),
+                },
+                { additionalProperties: false },
+              ),
+              years: t.Array(
+                t.Union([
+                  t.Object(
+                    { year: t.Number(), type: t.Literal("complete") },
+                    { additionalProperties: false },
+                  ),
+                  t.Object(
+                    {
+                      year: t.Number(),
+                      type: t.Literal("gaps"),
+                      missing: t.Number(),
+                      shortSlices: t.Number(),
+                    },
+                    { additionalProperties: false },
+                  ),
+                  t.Object(
+                    {
+                      year: t.Number(),
+                      type: t.Literal("unlisted"),
+                      unlistedSlices: t.Number(),
+                      latestWalkError: boundedString(2048),
+                    },
+                    { additionalProperties: false },
+                  ),
+                ]),
                 { maxItems: 100 },
               ),
             },
