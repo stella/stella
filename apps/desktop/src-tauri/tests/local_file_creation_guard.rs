@@ -34,6 +34,7 @@ mod contract {
       configured, probes,
       "every configured writer must have a compile-fail probe"
     );
+    // kit-allow: compile-fail probes need a separate clippy process
     let output = Command::new("cargo")
       .current_dir(env!("CARGO_MANIFEST_DIR"))
       .args([
