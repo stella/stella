@@ -239,6 +239,9 @@ describe("the database-to-database corpus slice transfer", () => {
   const staleId = createSafeId<"caseLawDecision">();
   const transferSourceId = createSafeId<"caseLawSource">();
   const staleSourceId = createSafeId<"caseLawSource">();
+  const outOfSliceIds = Array.from({ length: 32 }, () =>
+    createSafeId<"caseLawDecision">(),
+  );
   const objectKeys = [
     "case-law/test/raw.json",
     "case-law/test/text.json",
@@ -330,6 +333,13 @@ describe("the database-to-database corpus slice transfer", () => {
         decisionDate: "2010-01-01",
         keys: ["excluded/raw.json", "excluded/text.json", "excluded/ast.json"],
       }),
+      ...outOfSliceIds.map((id) =>
+        decision({
+          id,
+          sourceId: transferSourceId,
+          decisionDate: "2010-01-01",
+        }),
+      ),
     ]);
     await targetDb.insert(caseLawSources).values(
       caseLawSourceRow({
@@ -354,6 +364,54 @@ describe("the database-to-database corpus slice transfer", () => {
       ),
       status: "building",
     });
+  });
+
+  test("database export pages only through slice decisions", async () => {
+    const statements: string[] = [];
+    const handle = rootHandle(sourceDb, sourceClient);
+    const recordingHandle = asTestRaw<CaseLawRootHandle>({
+      transaction: handle.transaction,
+      execute: async (query: Parameters<typeof handle.execute>[0]) => {
+        if (typeof query === "string") {
+          statements.push(query);
+        }
+        return await handle.execute(query);
+      },
+    });
+
+    await exportCorpusSliceFromDatabase({
+      database: recordingHandle,
+      storage,
+      prefix: "slice-scoped-read",
+      asOf: new Date("2026-10-20T00:00:00.000Z"),
+      batchSize: 1,
+    });
+
+    const decisionReads = statements.filter((statement) =>
+      statement.startsWith(
+        "SELECT row_to_json(t)::text AS row FROM case_law_decisions t",
+      ),
+    );
+    expect(decisionReads.length).toBeGreaterThan(1);
+    expect(
+      decisionReads.every(
+        (statement) =>
+          statement.includes("t.decision_date >= '2022-01-01'") &&
+          statement.includes("t.id = ANY(") &&
+          statement.includes("ORDER BY t.id LIMIT 1") &&
+          !statement.includes("OFFSET"),
+      ),
+    ).toBe(true);
+    const decisionBytes = storageObjects.get(
+      "slice-scoped-read/decisions.ndjson",
+    );
+    expect(decisionBytes).toBeDefined();
+    const decisionShard = new TextDecoder().decode(decisionBytes);
+    expect(decisionShard).toContain(includedId);
+    expect(decisionShard).not.toContain(excludedId);
+    for (const id of outOfSliceIds) {
+      expect(decisionShard).not.toContain(id);
+    }
   });
 
   afterAll(async () => {

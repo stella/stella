@@ -3,11 +3,13 @@ import type { Result } from "better-result";
 import { inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { Temporal } from "@stll/time";
+
 import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
+  CORPUS_SLICE_CONFIG,
   corpusSliceManifest,
-  isInCorpusSlice,
 } from "@/api/lib/case-law/corpus-slice";
 import {
   buildCorpusSliceExport,
@@ -35,36 +37,46 @@ type TransferRow = Readonly<Record<string, unknown>>;
 
 const rowEnvelopeSchema = v.strictObject({ row: v.string() });
 
-const readTable = async (
+const parseRows = (page: readonly { row: string }[]): TransferRow[] =>
+  page.map((envelope) => {
+    const parsedEnvelope = v.parse(rowEnvelopeSchema, envelope);
+    return v.parse(
+      v.record(v.string(), v.unknown()),
+      JSON.parse(parsedEnvelope.row),
+    );
+  });
+
+const readRows = async (
   database: CaseLawRootHandle,
   table: TransferTable,
-  batchSize: number,
+  predicate: string,
+  orderBy: string,
 ): Promise<TransferRow[]> => {
-  const rows: TransferRow[] = [];
-  let offset = 0;
-  while (true) {
-    const relation = TABLES[table];
-    const page = await database.execute<{ row: string }>(
-      `SELECT row_to_json(t)::text AS row FROM ${relation} t ORDER BY 1 LIMIT ${batchSize} OFFSET ${offset}`,
-    );
-    for (const envelope of page) {
-      const parsedEnvelope = v.parse(rowEnvelopeSchema, envelope);
-      rows.push(
-        v.parse(
-          v.record(v.string(), v.unknown()),
-          JSON.parse(parsedEnvelope.row),
-        ),
-      );
-    }
-    if (page.length < batchSize) {
-      return rows;
-    }
-    offset += page.length;
-  }
+  const relation = TABLES[table];
+  return parseRows(
+    await database.execute<{ row: string }>(
+      `SELECT row_to_json(t)::text AS row FROM ${relation} t WHERE ${predicate} ORDER BY ${orderBy}`,
+    ),
+  );
 };
 
 const field = (row: TransferRow, camel: string, snake: string): unknown =>
   row[camel] ?? row[snake];
+
+const sqlString = (value: string): string => `'${value.replaceAll("'", "''")}'`;
+const sqlUuidArray = (values: readonly string[]): string =>
+  `ARRAY[${values.map(sqlString).join(",")}]::uuid[]`;
+
+const slicePredicate = (asOf: Date, alias: string): string => {
+  const asOfDay = Temporal.Instant.fromEpochMilliseconds(asOf.getTime())
+    .toZonedDateTimeISO("UTC")
+    .toPlainDate();
+  const year = asOfDay.year - CORPUS_SLICE_CONFIG.recentYears + 1;
+  const start = `${String(year).padStart(4, "0")}-01-01`;
+  const end = asOfDay.toString();
+  const pinned = sqlUuidArray(CORPUS_SLICE_CONFIG.pinnedDecisionIds);
+  return `((${alias}.decision_date >= ${sqlString(start)} AND ${alias}.decision_date <= ${sqlString(end)}) OR ${alias}.id = ANY(${pinned}))`;
+};
 
 type ExportExecutionOptions = {
   database: CaseLawRootHandle;
@@ -81,19 +93,75 @@ export const exportCorpusSliceFromDatabase = async ({
   asOf,
   batchSize,
 }: ExportExecutionOptions): Promise<void> => {
-  const [sources, allDecisions, supplements, citations] = await Promise.all([
-    readTable(database, "sources", batchSize),
-    readTable(database, "decisions", batchSize),
-    readTable(database, "supplements", batchSize),
-    readTable(database, "citations", batchSize),
-  ]);
+  const sourcesById = new Map<string, TransferRow>();
+  const decisions: TransferRow[] = [];
+  const supplements: TransferRow[] = [];
+  const citations: TransferRow[] = [];
+  const decisionPredicate = slicePredicate(asOf, "t");
+
+  const readDecisionPage = async (lastId: string | null): Promise<void> => {
+    const cursor = lastId === null ? "" : ` AND t.id > ${sqlString(lastId)}`;
+    const page = parseRows(
+      await database.execute<{ row: string }>(
+        `SELECT row_to_json(t)::text AS row FROM case_law_decisions t WHERE ${decisionPredicate}${cursor} ORDER BY t.id LIMIT ${batchSize}`,
+      ),
+    );
+    if (page.length === 0) {
+      return;
+    }
+    const ids = page.map((row) => v.parse(v.string(), field(row, "id", "id")));
+    const sourceIds = [
+      ...new Set(
+        page.map((row) =>
+          v.parse(v.string(), field(row, "sourceId", "source_id")),
+        ),
+      ),
+    ];
+    const [pageSources, pageSupplements, pageCitations] = await Promise.all([
+      readRows(
+        database,
+        "sources",
+        `t.id = ANY(${sqlUuidArray(sourceIds)})`,
+        "t.id",
+      ),
+      readRows(
+        database,
+        "supplements",
+        `t.decision_id = ANY(${sqlUuidArray(ids)})`,
+        "t.decision_id, t.source_id, t.source_document_id",
+      ),
+      readRows(
+        database,
+        "citations",
+        `t.citing_decision_id = ANY(${sqlUuidArray(ids)}) AND t.cited_decision_id IN (SELECT d.id FROM case_law_decisions d WHERE ${slicePredicate(asOf, "d")})`,
+        "t.citing_decision_id, t.id",
+      ),
+    ]);
+    for (const source of pageSources) {
+      sourcesById.set(v.parse(v.string(), field(source, "id", "id")), source);
+    }
+    decisions.push(...page);
+    supplements.push(...pageSupplements);
+    citations.push(...pageCitations);
+    await readDecisionPage(ids.at(-1) ?? panic("decision page was empty"));
+  };
+
+  await readDecisionPage(null);
+  const sources = [...sourcesById.values()].toSorted((left, right) => {
+    const leftId = v.parse(v.string(), field(left, "id", "id"));
+    const rightId = v.parse(v.string(), field(right, "id", "id"));
+    if (leftId === rightId) {
+      return 0;
+    }
+    return leftId < rightId ? -1 : 1;
+  });
   const sourceKeys = new Map(
     sources.map((row) => [
       v.parse(v.string(), field(row, "id", "id")),
       v.parse(v.string(), field(row, "adapterKey", "adapter_key")),
     ]),
   );
-  const censusRows = allDecisions.map((row) => ({
+  const censusRows = decisions.map((row) => ({
     id: brandPersistedCaseLawDecisionId(
       v.parse(v.string(), field(row, "id", "id")),
     ),
@@ -108,18 +176,6 @@ export const exportCorpusSliceFromDatabase = async ({
     ),
   }));
   const manifest = corpusSliceManifest(censusRows, asOf);
-  const memberIds = new Set(
-    censusRows
-      .filter((row) => isInCorpusSlice(row, { asOf }))
-      .map(({ id }) => id),
-  );
-  const decisions = allDecisions.filter((row) =>
-    memberIds.has(
-      brandPersistedCaseLawDecisionId(
-        v.parse(v.string(), field(row, "id", "id")),
-      ),
-    ),
-  );
   await writeCorpusSliceExport(
     prefix,
     buildCorpusSliceExport({
@@ -133,7 +189,6 @@ export const exportCorpusSliceFromDatabase = async ({
   );
 };
 
-const sqlString = (value: string): string => `'${value.replaceAll("'", "''")}'`;
 const identifier = (value: string): string => {
   if (!/^[a-z][a-z0-9_]*$/u.test(value)) {
     return panic("invalid corpus transfer column");
@@ -144,6 +199,45 @@ const identifier = (value: string): string => {
 const rowsOf = <Row>(
   result: readonly Row[] | { rows: readonly Row[] },
 ): readonly Row[] => ("rows" in result ? result.rows : result);
+
+type ProjectionReconciler = (
+  tx: Transaction,
+  subject: {
+    family: "case_law";
+    entityId: ReturnType<typeof brandPersistedCaseLawDecisionId>;
+  },
+) => Promise<unknown>;
+
+type ProjectionSubject = Parameters<ProjectionReconciler>[1];
+
+type ReconcileProjectionSubjectsOptions = {
+  tx: Transaction;
+  subjects: readonly ProjectionSubject[];
+  reconcile: ProjectionReconciler;
+  retire?: ProjectionReconciler;
+  index?: number;
+};
+
+const reconcileProjectionSubjects = async ({
+  tx,
+  subjects,
+  reconcile,
+  retire,
+  index = 0,
+}: ReconcileProjectionSubjectsOptions): Promise<void> => {
+  const subject = subjects.at(index);
+  if (subject === undefined) {
+    return;
+  }
+  await reconcile(tx, subject);
+  if (retire !== undefined) {
+    await retire(tx, subject);
+  }
+  const next = { tx, subjects, reconcile, index: index + 1 };
+  await reconcileProjectionSubjects(
+    retire === undefined ? next : { ...next, retire },
+  );
+};
 
 const importStore = (
   ingestionDatabase: CaseLawIngestionHandle,
@@ -186,12 +280,14 @@ const importStore = (
               .select({ id: caseLawDecisions.id })
               .from(caseLawDecisions)
               .where(inArray(caseLawDecisions.id, parsedProjectionIds));
-      for (const { id } of existingProjectionIds) {
-        await reconcileProjection(tx, {
+      await reconcileProjectionSubjects({
+        tx,
+        subjects: existingProjectionIds.map(({ id }) => ({
           family: "case_law",
           entityId: id,
-        });
-      }
+        })),
+        reconcile: reconcileProjection,
+      });
       return {
         changed: changed.length,
         projectionsEnqueued: existingProjectionIds.length,
@@ -211,16 +307,15 @@ const importStore = (
           sql.raw(`SELECT id FROM case_law_decisions${predicate}`),
         ),
       );
-      for (const { id } of removed) {
-        await reconcileProjection(tx, {
+      await reconcileProjectionSubjects({
+        tx,
+        subjects: removed.map(({ id }) => ({
           family: "case_law",
           entityId: brandPersistedCaseLawDecisionId(id),
-        });
-        await retireProjection(tx, {
-          family: "case_law",
-          entityId: brandPersistedCaseLawDecisionId(id),
-        });
-      }
+        })),
+        reconcile: reconcileProjection,
+        retire: retireProjection,
+      });
       if (removed.length > 0) {
         const removedValues = removed.map(({ id }) => sqlString(id)).join(",");
         await tx.execute(
@@ -229,26 +324,20 @@ const importStore = (
           ),
         );
       }
-      for (const id of ids) {
-        await reconcileProjection(tx, {
+      await reconcileProjectionSubjects({
+        tx,
+        subjects: [...ids].map((id) => ({
           family: "case_law",
           entityId: brandPersistedCaseLawDecisionId(v.parse(v.string(), id)),
-        });
-      }
+        })),
+        reconcile: reconcileProjection,
+      });
       return {
         removedIds: removed.map(({ id }) => id),
         projectionsEnqueued: ids.size + removed.length,
       };
     }),
 });
-
-type ProjectionReconciler = (
-  tx: Transaction,
-  subject: {
-    family: "case_law";
-    entityId: ReturnType<typeof brandPersistedCaseLawDecisionId>;
-  },
-) => Promise<unknown>;
 
 const reconcileProjection: ProjectionReconciler = async (tx, subject) => {
   const { reconcileCorpusProjectionDesiredStateTx } =
