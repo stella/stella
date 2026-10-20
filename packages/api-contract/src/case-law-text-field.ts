@@ -159,6 +159,20 @@ export type SkUsEcliAvailability = {
   status: (typeof SK_US_ECLI_AVAILABILITY_STATUSES)[number];
 };
 
+/**
+ * Whether the source states a decision's issue date. Any source declares it
+ * in `metadata.decisionDateAvailability` when the date is not published, so
+ * the absence is a typed marker rather than a missing value.
+ */
+export const DECISION_DATE_AVAILABILITY_STATUSES = [
+  "published",
+  "not-published-by-source",
+] as const;
+
+export type DecisionDateAvailability = {
+  status: (typeof DECISION_DATE_AVAILABILITY_STATUSES)[number];
+};
+
 export const SK_COURTS_SOURCE_URL_STATUSES = [
   "published",
   "not-published-by-source",

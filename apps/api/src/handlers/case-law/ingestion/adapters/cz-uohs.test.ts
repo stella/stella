@@ -11,6 +11,7 @@ import {
   czUohsAdapter,
   czUohsCollectionOf,
   czUohsDecisionIdentifiers,
+  czUohsLetterheadDate,
   encodeCzUohsCursor,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
@@ -65,6 +66,58 @@ describe("ÚOHS JSON-LD", () => {
     const second = await buildCzUohsDecision(record);
     expect(second.rawHash).toBe(first.rawHash);
     expect(second.sourceRaw).toBe(first.sourceRaw);
+  });
+
+  test.each([
+    ["cz-uohs-2026-R0137.pdf", "2026-10-12"],
+    ["cz-uohs-2026-S0383.pdf", "2026-08-13"],
+  ])(
+    "reads the issue date from the letterhead of the captured %s",
+    async (fixture, issued) => {
+      const bytes = new Uint8Array(
+        await Bun.file(
+          new URL(`__fixtures__/${fixture}`, import.meta.url),
+        ).arrayBuffer(),
+      );
+      globalThis.fetch = asFetchMock(async () => new Response(bytes));
+      const decision = await buildCzUohsDecision((await records())[0]!);
+      expect(decision.decisionDate).toBe(issued);
+      expect(String(decision.metadata["decisionDateSource"])).toBe("document");
+      expect(decision.metadata["decisionDateAvailability"]).toBeUndefined();
+    },
+  );
+
+  test("a document without a letterhead date marks the date as not published", async () => {
+    globalThis.fetch = asFetchMock(
+      async () => new Response(czUohsSyntheticPdf()),
+    );
+    const decision = await buildCzUohsDecision((await records())[0]!);
+    expect(decision.fulltext).toContain("Fiktivni rozhodnuti");
+    expect(decision.decisionDate).toBeUndefined();
+    expect(JSON.stringify(decision.metadata["decisionDateAvailability"])).toBe(
+      JSON.stringify({ status: "not-published-by-source" }),
+    );
+  });
+
+  test("only the labelled letterhead date is the issue date", () => {
+    const letterhead =
+      "Č. j. ÚOHS-1/2026/163\nDatum, místo 12. 10. 2026, Brno\n";
+    expect(czUohsLetterheadDate(letterhead)).toBe("2026-10-12");
+    // A body date carries no place, and a date needs the letterhead label.
+    expect(
+      czUohsLetterheadDate("Datum, místo\nÚřad obdržel dne 5. 3. 2026 podnět"),
+    ).toBeUndefined();
+    expect(
+      czUohsLetterheadDate("Rozhodnutí 12. 10. 2026, Brno"),
+    ).toBeUndefined();
+    expect(
+      czUohsLetterheadDate("Datum, místo 31. 2. 2026, Brno"),
+    ).toBeUndefined();
+    expect(
+      czUohsLetterheadDate(
+        `${"x".repeat(2000)}Datum, místo 12. 10. 2026, Brno`,
+      ),
+    ).toBeUndefined();
   });
 
   test("the date of legal force is not the decision date", async () => {

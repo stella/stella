@@ -174,6 +174,58 @@ const pdfText = async (bytes: Uint8Array): Promise<string> => {
     .trim();
 };
 
+/**
+ * The letterhead of every ÚOHS decision states its issue date beside the
+ * place: "Datum, místo  12. 10. 2026, Brno". Body dates ("dne 5. 8. 2026")
+ * never carry the place, so only the labelled letterhead value is read, and
+ * only from the head of the text.
+ */
+const LETTERHEAD_SPAN = 1500;
+const LETTERHEAD_LABEL = /Datum,\s*místo/u;
+const LETTERHEAD_DATE = /(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4}),\s*Brno/u;
+
+/** Where a ÚOHS decision date was read from; the export states none. */
+export const CZ_UOHS_DECISION_DATE_SOURCE = "document";
+
+export const czUohsLetterheadDate = (text: string): string | undefined => {
+  const head = text.slice(0, LETTERHEAD_SPAN);
+  if (!LETTERHEAD_LABEL.test(head)) {
+    return undefined;
+  }
+  const match = LETTERHEAD_DATE.exec(head);
+  if (match === null) {
+    return undefined;
+  }
+  const [, day, month, year] = match;
+  const date = Result.try({
+    try: () =>
+      Temporal.PlainDate.from(
+        { year: Number(year), month: Number(month), day: Number(day) },
+        { overflow: "reject" },
+      ).toString(),
+    catch: String,
+  });
+  return Result.isOk(date) ? date.value : undefined;
+};
+
+/**
+ * How the decision date was established: read from the document, stated as
+ * not published by a document that carries none, or unknown while the
+ * document is unread.
+ */
+const decisionDateMetadata = (
+  decisionDate: string | undefined,
+  documentRead: boolean,
+) => {
+  if (decisionDate !== undefined) {
+    return { decisionDateSource: CZ_UOHS_DECISION_DATE_SOURCE };
+  }
+  if (!documentRead) {
+    return {};
+  }
+  return { decisionDateAvailability: { status: "not-published-by-source" } };
+};
+
 export const buildCzUohsDecision = async (
   record: CzUohsRecord,
   signal?: AbortSignal,
@@ -279,6 +331,10 @@ export const buildCzUohsDecision = async (
     }),
   });
   const identifiers = czUohsDecisionIdentifiers(record);
+  // The date comes from the decision's own text; a text without a letterhead
+  // date is a source that publishes none. An unread document says neither.
+  const decisionDate =
+    fulltext === undefined ? undefined : czUohsLetterheadDate(fulltext);
   return plainTextIngestionResult({
     caseNumber: identifiers[0].value,
     caseNumberType: "case-number",
@@ -287,6 +343,7 @@ export const buildCzUohsDecision = async (
     court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
     country: "CZE",
     language: "cs",
+    ...(decisionDate === undefined ? {} : { decisionDate }),
     ...(record.typ_rozhodnutí.at(0) === undefined
       ? {}
       : { decisionType: record.typ_rozhodnutí[0] }),
@@ -312,6 +369,7 @@ export const buildCzUohsDecision = async (
       collection: collection ?? null,
       // An authority decision carries no ECLI, and the export states none.
       ecliAvailability: { status: "not_published" },
+      ...decisionDateMetadata(decisionDate, fulltext !== undefined),
       legalForceDate: record.datum_právní_moci ?? null,
       proceedingTypes: record.typ_řízení,
       decisionTypes: record.typ_rozhodnutí,

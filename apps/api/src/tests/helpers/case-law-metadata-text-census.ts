@@ -151,6 +151,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   decisionDate: INSPECTED,
   decisionDateAsListed: INSPECTED,
   decisionDateAsPrinted: INSPECTED,
+  decisionDateAvailability: INSPECTED,
   decisionDateSource: INSPECTED,
   decisionFiles: INSPECTED,
   decisionForm: INSPECTED,

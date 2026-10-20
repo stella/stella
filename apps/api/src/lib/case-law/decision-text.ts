@@ -3,6 +3,8 @@ import { panic } from "better-result";
 
 import {
   DECISION_HEADNOTE_KEYWORDS,
+  DECISION_DATE_AVAILABILITY_STATUSES,
+  type DecisionDateAvailability,
   SK_US_ECLI_AVAILABILITY_STATUSES,
   SK_COURTS_SOURCE_URL_STATUSES,
   type SkUsEcliAvailability,
@@ -168,6 +170,14 @@ const ECLI_ABSENCE_REASON_BY_STATUS = {
   TextAbsenceReason | undefined
 >;
 
+const DECISION_DATE_ABSENCE_REASON_BY_STATUS = {
+  published: undefined,
+  "not-published-by-source": TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+} as const satisfies Record<
+  DecisionDateAvailability["status"],
+  TextAbsenceReason | undefined
+>;
+
 const SOURCE_URL_ABSENCE_REASON_BY_STATUS = {
   published: undefined,
   "not-published-by-source": TEXT_ABSENCE_REASON.NOT_PUBLISHED,
@@ -182,6 +192,11 @@ const isEcliAvailabilityStatus = (
   status: unknown,
 ): status is SkUsEcliAvailability["status"] =>
   SK_US_ECLI_AVAILABILITY_STATUSES.some((candidate) => candidate === status);
+
+const isDecisionDateAvailabilityStatus = (
+  status: unknown,
+): status is DecisionDateAvailability["status"] =>
+  DECISION_DATE_AVAILABILITY_STATUSES.some((candidate) => candidate === status);
 
 const isSourceUrlStatus = (
   status: unknown,
@@ -281,6 +296,22 @@ export const storeDecisionTextFields = ({
     const reason = ECLI_ABSENCE_REASON_BY_STATUS[ecliAvailability["status"]];
     if (reason !== undefined) {
       absent.push({ field: "ecli", reason });
+    }
+  }
+  const decisionDateAvailability = metadata["decisionDateAvailability"];
+  if (decisionDateAvailability !== undefined) {
+    if (
+      !isRecord(decisionDateAvailability) ||
+      !isDecisionDateAvailabilityStatus(decisionDateAvailability["status"])
+    ) {
+      return panic("Decision date availability must carry a source status");
+    }
+    const reason =
+      DECISION_DATE_ABSENCE_REASON_BY_STATUS[
+        decisionDateAvailability["status"]
+      ];
+    if (reason !== undefined) {
+      absent.push({ field: "decisionDate", reason });
     }
   }
   const sourceUrlStatus = metadata["sourceUrlStatus"];
