@@ -26,6 +26,7 @@ import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
+import { auditChatToolExecutions } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
 import {
   corpusScopeDroppedTools,
   corpusScopeUnavailableReason,
@@ -828,7 +829,7 @@ const createSecretToolsForTurn = ({
   return createSecretTools({ safeDb, organizationId, userId, threadId });
 };
 
-export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
+const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
     testDependencies,
@@ -1389,6 +1390,26 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     ]),
   };
   return tools;
+};
+
+export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
+  const tools = buildChatTools(props);
+  // A run's approval-gated tools record each execution; validation sets never
+  // execute.
+  if (
+    props.purpose === CHAT_TOOL_SET_PURPOSE.validation ||
+    props.recordAuditEvent === undefined
+  ) {
+    return tools;
+  }
+  return auditChatToolExecutions({
+    audit: {
+      recordAuditEvent: props.recordAuditEvent,
+      safeDb: props.safeDb,
+      threadId: props.threadId,
+    },
+    tools,
+  });
 };
 
 type GetChatValidationToolsProps = Omit<
