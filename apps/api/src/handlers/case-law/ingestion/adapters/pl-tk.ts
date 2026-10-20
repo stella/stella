@@ -786,7 +786,7 @@ const openStageListing = async (
     stage,
     cursor,
     signal,
-    pages: new Map(),
+    pages: new Map<number, { page: PlTkListingPage; url: string }>(),
   });
 };
 
@@ -1198,7 +1198,7 @@ export const createPlTkPageCache = (
 ): PlTkPageCache => {
   let parsed: { caseId: string; page: ParsedPlTkPage } | undefined;
   return {
-    html: new Map(),
+    html: new Map<string, string>(),
     parse: (caseId, html) => {
       if (parsed?.caseId === caseId) {
         return parsed.page;

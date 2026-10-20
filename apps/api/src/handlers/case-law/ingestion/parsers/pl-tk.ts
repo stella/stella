@@ -220,8 +220,9 @@ const propsOf = (
 ): Map<string, cheerio.Cheerio<AnyNode>> => {
   const node = container.get(0);
   return node === undefined
-    ? new Map()
-    : (page.propsByContainer.get(node) ?? new Map());
+    ? new Map<string, cheerio.Cheerio<AnyNode>>()
+    : (page.propsByContainer.get(node) ??
+        new Map<string, cheerio.Cheerio<AnyNode>>());
 };
 
 const valueText = (
@@ -369,7 +370,7 @@ export const parsePlTkPage = (html: string): ParsedPlTkPage => {
     $,
     fields: [...names],
     propsByContainer,
-    cleanedTextByDocumentId: new Map(),
+    cleanedTextByDocumentId: new Map<string, cheerio.Cheerio<AnyNode>>(),
   };
 };
 
