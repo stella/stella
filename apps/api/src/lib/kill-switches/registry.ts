@@ -1,3 +1,4 @@
+// parser-output-unchanged: kill-switch overrides are admission state read per request; no parser reads them.
 import { Result } from "better-result";
 import * as v from "valibot";
 

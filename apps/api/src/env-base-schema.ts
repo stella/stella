@@ -1,3 +1,4 @@
+// parser-output-unchanged: kill-switch overrides are admission state read per request; no parser reads them.
 // parser-output-unchanged: Database login admission configuration does not change parsed ingestion records.
 // parser-output-unchanged: The public corpus search address budget affects admission only, not parsed records.
 // parser-output-unchanged: Minimum public corpus request budgets affect admission only, not parsed records.
