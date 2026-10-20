@@ -1,8 +1,10 @@
 import { panic } from "better-result";
 import type { Result } from "better-result";
+import { inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
+import { caseLawDecisions } from "@/api/db/schema";
 import {
   corpusSliceManifest,
   isInCorpusSlice,
@@ -139,48 +141,104 @@ const identifier = (value: string): string => {
   return `"${value}"`;
 };
 
+const rowsOf = <Row>(
+  result: readonly Row[] | { rows: readonly Row[] },
+): readonly Row[] => ("rows" in result ? result.rows : result);
+
 const importStore = (
-  database: CaseLawRootHandle,
   ingestionDatabase: CaseLawIngestionHandle,
   reconcileProjection: ProjectionReconciler,
+  retireProjection: ProjectionReconciler,
 ) => ({
-  upsert: async (table: TransferTable, rows: readonly TransferRow[]) => {
-    if (rows.length === 0) {
-      return 0;
-    }
-    const columns = Object.keys(rows[0] ?? {}).map(identifier);
-    const conflicts =
-      table === "supplements"
-        ? ["source_id", "source_document_id", "kind"]
-        : ["id"];
-    const updates = columns.filter(
-      (column) => !conflicts.map(identifier).includes(column),
-    );
-    const name = TABLES[table];
-    const query = `INSERT INTO ${name} SELECT p.* FROM jsonb_populate_recordset(NULL::${name}, ${sqlString(JSON.stringify(rows))}::text::jsonb) p ON CONFLICT (${conflicts.map(identifier).join(",")}) DO UPDATE SET ${updates.map((column) => `${column}=EXCLUDED.${column}`).join(",")} WHERE to_jsonb(${name}) IS DISTINCT FROM to_jsonb(EXCLUDED) RETURNING 1`;
-    const changed = await database.execute(query);
-    return changed.length;
-  },
-  removeDecisionsExcept: async (ids: ReadonlySet<unknown>) => {
-    const values = [...ids]
-      .map((id) => sqlString(v.parse(v.string(), id)))
-      .join(",");
-    const query =
-      values.length === 0
-        ? "DELETE FROM case_law_decisions RETURNING 1"
-        : `DELETE FROM case_law_decisions WHERE id NOT IN (${values}) RETURNING 1`;
-    const removed = await database.execute(query);
-    return removed.length;
-  },
-  enqueueProjectionDesiredState: async (ids: ReadonlySet<unknown>) =>
+  upsertAndRecordProjectionDesiredState: async (
+    table: TransferTable,
+    rows: readonly TransferRow[],
+    projectionIds: ReadonlySet<unknown>,
+  ) =>
     await ingestionDatabase(async (tx) => {
+      const columns = Object.keys(rows[0] ?? {}).map(identifier);
+      const conflicts =
+        table === "supplements"
+          ? ["source_id", "source_document_id", "kind"]
+          : ["id"];
+      const ownerManagedColumnNames =
+        table === "decisions" ? ["projection_epoch", "updated_at"] : [];
+      const ownerManagedColumns = ownerManagedColumnNames.map(identifier);
+      const updates = columns.filter(
+        (column) =>
+          !conflicts.map(identifier).includes(column) &&
+          !ownerManagedColumns.includes(column),
+      );
+      const name = TABLES[table];
+      const comparableRow = (row: string) =>
+        ownerManagedColumns.length === 0
+          ? `to_jsonb(${row})`
+          : `to_jsonb(${row}) - ${ownerManagedColumnNames.map(sqlString).join(" - ")}`;
+      const query = `INSERT INTO ${name} SELECT p.* FROM jsonb_populate_recordset(NULL::${name}, ${sqlString(JSON.stringify(rows))}::text::jsonb) p ON CONFLICT (${conflicts.map(identifier).join(",")}) DO UPDATE SET ${updates.map((column) => `${column}=EXCLUDED.${column}`).join(",")} WHERE ${comparableRow(name)} IS DISTINCT FROM ${comparableRow("EXCLUDED")} RETURNING 1`;
+      const changed = rowsOf(await tx.execute(sql.raw(query)));
+      const parsedProjectionIds = [...projectionIds].map((id) =>
+        brandPersistedCaseLawDecisionId(v.parse(v.string(), id)),
+      );
+      const existingProjectionIds =
+        parsedProjectionIds.length === 0
+          ? []
+          : await tx
+              .select({ id: caseLawDecisions.id })
+              .from(caseLawDecisions)
+              .where(inArray(caseLawDecisions.id, parsedProjectionIds));
+      for (const { id } of existingProjectionIds) {
+        await reconcileProjection(tx, {
+          family: "case_law",
+          entityId: id,
+        });
+      }
+      return {
+        changed: changed.length,
+        projectionsEnqueued: existingProjectionIds.length,
+      };
+    }),
+  removeDecisionsExceptAndRecordProjectionDesiredState: async (
+    ids: ReadonlySet<unknown>,
+  ) =>
+    await ingestionDatabase(async (tx) => {
+      const values = [...ids]
+        .map((id) => sqlString(v.parse(v.string(), id)))
+        .join(",");
+      const predicate =
+        values.length === 0 ? "" : ` WHERE id NOT IN (${values})`;
+      const removed = rowsOf(
+        await tx.execute<{ id: string }>(
+          sql.raw(`SELECT id FROM case_law_decisions${predicate}`),
+        ),
+      );
+      for (const { id } of removed) {
+        await reconcileProjection(tx, {
+          family: "case_law",
+          entityId: brandPersistedCaseLawDecisionId(id),
+        });
+        await retireProjection(tx, {
+          family: "case_law",
+          entityId: brandPersistedCaseLawDecisionId(id),
+        });
+      }
+      if (removed.length > 0) {
+        const removedValues = removed.map(({ id }) => sqlString(id)).join(",");
+        await tx.execute(
+          sql.raw(
+            `DELETE FROM case_law_decisions WHERE id IN (${removedValues})`,
+          ),
+        );
+      }
       for (const id of ids) {
         await reconcileProjection(tx, {
           family: "case_law",
           entityId: brandPersistedCaseLawDecisionId(v.parse(v.string(), id)),
         });
       }
-      return ids.size;
+      return {
+        removedIds: removed.map(({ id }) => id),
+        projectionsEnqueued: ids.size + removed.length,
+      };
     }),
 });
 
@@ -198,25 +256,31 @@ const reconcileProjection: ProjectionReconciler = async (tx, subject) => {
   return await reconcileCorpusProjectionDesiredStateTx(tx, subject);
 };
 
+const retireProjection: ProjectionReconciler = async (tx, subject) => {
+  const { retireCorpusProjectionDesiredStateTx } =
+    await import("@/api/lib/legal-search/corpus-index-projection-desired-state");
+  return await retireCorpusProjectionDesiredStateTx(tx, subject);
+};
+
 type ImportExecutionOptions = {
   prefix: string;
   storage: CorpusSliceTransferStorage;
-  database: CaseLawRootHandle;
   ingestionDatabase: CaseLawIngestionHandle;
   reconcileProjection?: ProjectionReconciler;
+  retireProjection?: ProjectionReconciler;
 };
 
 export const importCorpusSliceIntoDatabase = async ({
   prefix,
   storage,
-  database,
   ingestionDatabase,
   reconcileProjection: reconcile = reconcileProjection,
+  retireProjection: retire = retireProjection,
 }: ImportExecutionOptions): Promise<
   Result<CorpusSliceImportResult, CorpusSliceTransferError>
 > =>
   await importStoredCorpusSlice(
     prefix,
     storage,
-    importStore(database, ingestionDatabase, reconcile),
+    importStore(ingestionDatabase, reconcile, retire),
   );

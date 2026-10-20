@@ -1,5 +1,6 @@
 import { and, gte, inArray, lte, or, sql } from "drizzle-orm";
 
+import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
@@ -33,10 +34,10 @@ type CorpusSliceCensusCell =
       held: number;
     };
 
-type CorpusSliceCensus = {
-  verdict: "complete" | "incomplete";
-  cells: CorpusSliceCensusCell[];
-};
+type CorpusSliceCensus =
+  | { verdict: "complete"; cells: CorpusSliceCensusCell[] }
+  | { verdict: "incomplete"; cells: CorpusSliceCensusCell[] }
+  | { verdict: "membership_mismatch"; cells: CorpusSliceCensusCell[] };
 
 type CorpusSliceCensusTransaction = Pick<
   CaseLawPublicReadTransaction,
@@ -48,6 +49,7 @@ type CorpusSliceCensusDb = <T>(
 ) => Promise<T>;
 
 type HeldCell = {
+  id: string;
   sourceKey: string;
   court: string;
   decisionDate: string | null;
@@ -77,6 +79,7 @@ export const corpusSliceCensus = async (
     async (tx) =>
       await tx
         .select({
+          id: publishedCaseLawDecisions.id,
           sourceKey: caseLawSources.adapterKey,
           court: publishedCaseLawDecisions.court,
           decisionDate: publishedCaseLawDecisions.decisionDate,
@@ -167,10 +170,17 @@ export const corpusSliceCensus = async (
     }
     return leftKey < rightKey ? -1 : 1;
   });
-  return {
-    verdict: cells.every(({ type }) => type === "complete")
-      ? "complete"
-      : "incomplete",
-    cells,
-  };
+  if (!cells.every(({ type }) => type === "complete")) {
+    return { verdict: "incomplete", cells };
+  }
+  const heldMemberIdsSha256 = sha256Hex(
+    heldRows
+      .map(({ id }) => id)
+      .toSorted()
+      .join("\n"),
+  );
+  if (heldMemberIdsSha256 !== manifest.memberIdsSha256) {
+    return { verdict: "membership_mismatch", cells };
+  }
+  return { verdict: "complete", cells };
 };

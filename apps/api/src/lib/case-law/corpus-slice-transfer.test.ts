@@ -1,10 +1,17 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import type { Transaction } from "@/api/db/root";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawSources,
+  corpusIndexGenerations,
+  corpusIndexProjectionStates,
+} from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   corpusSliceManifest,
@@ -26,13 +33,28 @@ import type {
   CaseLawIngestionHandle,
   CaseLawRootHandle,
 } from "@/api/lib/case-law/maintenance-lane";
+import {
+  CORPUS_INDEX_MANIFESTS,
+  corpusIndexManifestDigest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import { parseExportCorpusSliceArguments } from "@/api/scripts/export-corpus-slice-plan";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
+setDefaultTimeout(120_000);
+testState.setEnvIfAbsent(
+  "DATABASE_URL",
+  "postgres://api_login:password@localhost:5432/stella",
+);
+testState.setEnvIfAbsent("S3_ENDPOINT", "http://localhost:9000");
+testState.setEnvIfAbsent("S3_BUCKET", "test-bucket");
+testState.setEnvIfAbsent("S3_REGION", "test-region");
 
 const decisionId = createSafeId<"caseLawDecision">();
 const sourceId = createSafeId<"caseLawSource">();
@@ -86,9 +108,9 @@ test("slice import is a fixed point and removes decisions absent from the manife
   const held = new Set<unknown>(["obsolete"]);
   const importOnce = async () =>
     await importCorpusSlice(exported.manifest, exported.shards, {
-      upsert: async (table, rows) => {
+      upsertAndRecordProjectionDesiredState: async (table, rows, ids) => {
         if (table !== "decisions") {
-          return 0;
+          return { changed: 0, projectionsEnqueued: ids.size };
         }
         let changed = 0;
         for (const row of rows) {
@@ -97,9 +119,9 @@ test("slice import is a fixed point and removes decisions absent from the manife
             changed += 1;
           }
         }
-        return changed;
+        return { changed, projectionsEnqueued: ids.size };
       },
-      removeDecisionsExcept: async (ids) => {
+      removeDecisionsExceptAndRecordProjectionDesiredState: async (ids) => {
         let removed = 0;
         for (const id of held) {
           if (!ids.has(id)) {
@@ -107,16 +129,18 @@ test("slice import is a fixed point and removes decisions absent from the manife
             removed += 1;
           }
         }
-        return removed;
+        return {
+          removedIds: Array.from({ length: removed }, () => "obsolete"),
+          projectionsEnqueued: ids.size + removed,
+        };
       },
-      enqueueProjectionDesiredState: async (ids) => ids.size,
     });
 
   expect(await importOnce()).toMatchObject({
-    value: { changed: 1, removed: 1, projectionsEnqueued: 1 },
+    value: { changed: 1, removed: 1, projectionsEnqueued: 4 },
   });
   expect(await importOnce()).toMatchObject({
-    value: { changed: 0, removed: 0, projectionsEnqueued: 0 },
+    value: { changed: 0, removed: 0, projectionsEnqueued: 3 },
   });
   expect(held).toEqual(new Set([decisionId]));
 });
@@ -133,12 +157,14 @@ test("a tampered shard is refused before any write", async () => {
         : shard,
     ),
     {
-      upsert: async () => {
+      upsertAndRecordProjectionDesiredState: async () => {
         writes += 1;
-        return 0;
+        return { changed: 0, projectionsEnqueued: 0 };
       },
-      removeDecisionsExcept: async () => 0,
-      enqueueProjectionDesiredState: async () => 0,
+      removeDecisionsExceptAndRecordProjectionDesiredState: async () => ({
+        removedIds: [],
+        projectionsEnqueued: 0,
+      }),
     },
   );
   expect(result.isErr()).toBe(true);
@@ -158,15 +184,53 @@ test("stored transfer verifies every shard before opening the write path", async
   objects.set(shardKey, new TextEncoder().encode("tampered"));
   let writes = 0;
   const result = await importStoredCorpusSlice("round-3", storage, {
-    upsert: async () => {
+    upsertAndRecordProjectionDesiredState: async () => {
       writes += 1;
-      return 0;
+      return { changed: 0, projectionsEnqueued: 0 };
     },
-    removeDecisionsExcept: async () => 0,
-    enqueueProjectionDesiredState: async () => 0,
+    removeDecisionsExceptAndRecordProjectionDesiredState: async () => ({
+      removedIds: [],
+      projectionsEnqueued: 0,
+    }),
   });
   expect(result.isErr()).toBe(true);
   expect(writes).toBe(0);
+});
+
+test("an export missing a required shard is refused before any write", async () => {
+  let writes = 0;
+  const incompleteManifest = {
+    ...exported.manifest,
+    shards: exported.manifest.shards.filter(({ name }) => name !== "citations"),
+  };
+  const result = await importCorpusSlice(incompleteManifest, exported.shards, {
+    upsertAndRecordProjectionDesiredState: async () => {
+      writes += 1;
+      return { changed: 0, projectionsEnqueued: 0 };
+    },
+    removeDecisionsExceptAndRecordProjectionDesiredState: async () => ({
+      removedIds: [],
+      projectionsEnqueued: 0,
+    }),
+  });
+  expect(result.isErr()).toBe(true);
+  expect(writes).toBe(0);
+});
+
+test("object shards exclude keys from supplements outside the slice", () => {
+  const slice = buildCorpusSliceExport({
+    manifest,
+    sources: [{ id: sourceId }],
+    decisions: [{ id: decisionId, sourceId }],
+    supplements: [
+      { decisionId, textS3Key: "included.json" },
+      { decisionId: "excluded", textS3Key: "excluded.json" },
+    ],
+    citations: [],
+  });
+  expect(slice.shards.find(({ name }) => name === "objects")?.ndjson).toBe(
+    JSON.stringify({ key: "included.json" }),
+  );
 });
 
 describe("the database-to-database corpus slice transfer", () => {
@@ -239,7 +303,7 @@ describe("the database-to-database corpus slice transfer", () => {
     astS3Key: keys?.at(2),
   });
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     [sourceClient, targetClient] = await Promise.all([
       createTestPglite(),
       createTestPglite(),
@@ -281,10 +345,47 @@ describe("the database-to-database corpus slice transfer", () => {
         decisionDate: "2025-01-01",
       }),
     );
-  }, 120_000);
+    await targetDb.insert(corpusIndexGenerations).values({
+      family: "case_law",
+      generation: "case_law_v5",
+      cluster: "q09",
+      manifestDigest: corpusIndexManifestDigest(
+        CORPUS_INDEX_MANIFESTS.case_law_v5,
+      ),
+      status: "building",
+    });
+  });
 
   afterAll(async () => {
     await Promise.all([sourceClient.close(), targetClient.close()]);
+  });
+
+  test("a projection failure rolls its batch back and a retry can converge", async () => {
+    await exportCorpusSliceFromDatabase({
+      database: rootHandle(sourceDb, sourceClient),
+      storage,
+      prefix: "round-4",
+      asOf: new Date("2026-10-20T00:00:00.000Z"),
+      batchSize: 1,
+    });
+    expect(
+      await rejectionOf(
+        importCorpusSliceIntoDatabase({
+          prefix: "round-4",
+          storage,
+          ingestionDatabase: ingestionHandle(targetDb),
+          reconcileProjection: async () => {
+            throw new Error("injected projection failure");
+          },
+        }),
+      ),
+    ).toMatchObject({ message: "injected projection failure" });
+    expect(
+      await targetDb.select({ id: caseLawSources.id }).from(caseLawSources),
+    ).toEqual([{ id: staleSourceId }, { id: transferSourceId }]);
+    expect(
+      await targetDb.select({ id: caseLawDecisions.id }).from(caseLawDecisions),
+    ).toEqual([{ id: staleId }]);
   });
 
   test("real execution transfers a complete fixed point and verifies object keys", async () => {
@@ -305,9 +406,7 @@ describe("the database-to-database corpus slice transfer", () => {
     const first = await importCorpusSliceIntoDatabase({
       prefix: "round-4",
       storage,
-      database: rootHandle(targetDb, targetClient),
       ingestionDatabase: ingestionHandle(targetDb),
-      reconcileProjection: async () => undefined,
     });
     expect(first).toMatchObject({ value: { removed: 1 } });
     const manifestBytes = storageObjects.get("round-4/manifest.json");
@@ -331,17 +430,28 @@ describe("the database-to-database corpus slice transfer", () => {
     expect(
       await targetDb.select({ id: caseLawDecisions.id }).from(caseLawDecisions),
     ).toEqual([{ id: includedId }]);
+    expect(
+      await targetDb
+        .select({
+          entityId: corpusIndexProjectionStates.entityId,
+          desiredAction: corpusIndexProjectionStates.desiredAction,
+        })
+        .from(corpusIndexProjectionStates),
+    ).toEqual(
+      expect.arrayContaining([
+        { entityId: includedId, desiredAction: "erase" },
+        { entityId: staleId, desiredAction: "erase" },
+      ]),
+    );
 
     expect(
       await importCorpusSliceIntoDatabase({
         prefix: "round-4",
         storage,
-        database: rootHandle(targetDb, targetClient),
         ingestionDatabase: ingestionHandle(targetDb),
-        reconcileProjection: async () => undefined,
       }),
     ).toMatchObject({
-      value: { changed: 0, removed: 0, projectionsEnqueued: 0 },
+      value: { changed: 0, removed: 0 },
     });
   }, 120_000);
 
@@ -356,7 +466,6 @@ describe("the database-to-database corpus slice transfer", () => {
     const result = await importCorpusSliceIntoDatabase({
       prefix: "round-4",
       storage,
-      database: rootHandle(targetDb, targetClient),
       ingestionDatabase: ingestionHandle(targetDb),
       reconcileProjection: async () => undefined,
     });

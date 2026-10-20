@@ -32,7 +32,6 @@ await runScriptWithErrorOutput(async () => {
           signal: AbortSignal.timeout(300_000),
         }),
     },
-    database: lane.rootDb,
     ingestionDatabase: lane.ingestionDb,
   });
   await lane.release();

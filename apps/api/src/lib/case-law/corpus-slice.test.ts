@@ -95,6 +95,7 @@ describe("the corpus slice census", () => {
   const firstId = createSafeId<"caseLawDecision">();
   const secondId = createSafeId<"caseLawDecision">();
   const extraId = createSafeId<"caseLawDecision">();
+  const replacementId = createSafeId<"caseLawDecision">();
   const asOf = new Date("2026-10-20T12:00:00.000Z");
   const firstRow: CorpusSliceRow = {
     id: firstId,
@@ -185,5 +186,22 @@ describe("the corpus slice census", () => {
       year: { type: "year", year: 2024 },
       held: 1,
     });
+    await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, extraId));
+  });
+
+  test("a same-cell replacement reports a membership mismatch", async () => {
+    await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, firstId));
+    await db
+      .insert(caseLawDecisions)
+      .values(decision({ ...firstRow, id: replacementId }));
+    const census = await corpusSliceCensus(manifest, readDb);
+    expect(census).toMatchObject({
+      verdict: "membership_mismatch",
+      cells: [{ type: "complete" }, { type: "complete" }],
+    });
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, replacementId));
+    await db.insert(caseLawDecisions).values(decision(firstRow));
   });
 });

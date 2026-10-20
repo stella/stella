@@ -988,6 +988,32 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
   };
 };
 
+/** Record erasure state before a canonical corpus row is deleted. */
+export const retireCorpusProjectionDesiredStateTx = async (
+  tx: Transaction,
+  subject: CorpusIndexProjectionSubject,
+): Promise<{ epoch: bigint; generationCount: number }> => {
+  const locked = await lockProjectionInput(tx, subject);
+  const manifests = await projectionManifests(tx, subject.family);
+  if (manifests.length === 0) {
+    return { epoch: locked.epoch, generationCount: 0 };
+  }
+  const epoch = locked.epoch + 1n;
+  await setCanonicalProjectionEpoch(tx, subject, epoch);
+  await writeDesiredStates(
+    tx,
+    manifests.map(({ generation }) =>
+      buildCorpusIndexProjectionDesiredStateValues({
+        subject,
+        generation,
+        epoch,
+        descriptor: { action: "erase" },
+      }),
+    ),
+  );
+  return { epoch, generationCount: manifests.length };
+};
+
 /** Reconcile after a canonical mutation while retaining its source-lock proof. */
 export const synchronizeLockedCorpusProjectionDesiredStateTx = async (
   tx: Transaction,

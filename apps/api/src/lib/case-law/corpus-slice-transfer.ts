@@ -15,6 +15,14 @@ export const CORPUS_SLICE_EXPORT_TABLES = [
   "case_law_citations",
 ] as const;
 
+const REQUIRED_SHARDS = [
+  "sources",
+  "decisions",
+  "supplements",
+  "citations",
+  "objects",
+] as const;
+
 type CorpusSliceTransferRow = Readonly<Record<string, unknown>>;
 
 type CorpusSliceShardName =
@@ -82,7 +90,10 @@ export const buildCorpusSliceExport = ({
     decisions.map((row) => row["sourceId"] ?? row["source_id"]),
   );
   const objectKeys = new Set<string>();
-  for (const row of [...decisions, ...supplements]) {
+  const includedSupplements = supplements.filter((row) =>
+    ids.has(row["decisionId"] ?? row["decision_id"]),
+  );
+  for (const row of [...decisions, ...includedSupplements]) {
     for (const field of [
       "sourceRawS3Key",
       "textS3Key",
@@ -105,12 +116,7 @@ export const buildCorpusSliceExport = ({
       sources.filter((row) => includedSources.has(row["id"])),
     ),
     encodeShard("decisions", decisions),
-    encodeShard(
-      "supplements",
-      supplements.filter((row) =>
-        ids.has(row["decisionId"] ?? row["decision_id"]),
-      ),
-    ),
+    encodeShard("supplements", includedSupplements),
     encodeShard(
       "citations",
       citations.filter(
@@ -153,6 +159,20 @@ const verifyCorpusSliceShards = (
   ReadonlyMap<CorpusSliceShardName, readonly CorpusSliceTransferRow[]>,
   CorpusSliceTransferError
 > => {
+  const manifestNames = manifest.shards.map(({ name }) => name);
+  const suppliedNames = shards.map(({ name }) => name);
+  for (const required of REQUIRED_SHARDS) {
+    if (
+      manifestNames.filter((name) => name === required).length !== 1 ||
+      suppliedNames.filter((name) => name === required).length !== 1
+    ) {
+      return Result.err(
+        new CorpusSliceTransferError({
+          message: `corpus slice required shard is missing or duplicated: ${required}`,
+        }),
+      );
+    }
+  }
   const parsed = new Map<
     CorpusSliceShardName,
     readonly CorpusSliceTransferRow[]
@@ -317,15 +337,44 @@ export const importStoredCorpusSlice = async (
 };
 
 type ImportStore = {
-  upsert: (
+  upsertAndRecordProjectionDesiredState: (
     table: Exclude<CorpusSliceShardName, "objects">,
     rows: readonly CorpusSliceTransferRow[],
-  ) => Promise<number>;
-  removeDecisionsExcept: (ids: ReadonlySet<unknown>) => Promise<number>;
-  enqueueProjectionDesiredState: (ids: ReadonlySet<unknown>) => Promise<number>;
+    projectionIds: ReadonlySet<unknown>,
+  ) => Promise<{ changed: number; projectionsEnqueued: number }>;
+  removeDecisionsExceptAndRecordProjectionDesiredState: (
+    ids: ReadonlySet<unknown>,
+  ) => Promise<{
+    removedIds: readonly unknown[];
+    projectionsEnqueued: number;
+  }>;
 };
 
 const IMPORT_BATCH_SIZE = 500;
+
+const projectionIdsForBatch = (
+  table: Exclude<CorpusSliceShardName, "objects">,
+  rows: readonly CorpusSliceTransferRow[],
+  sliceIds: ReadonlySet<unknown>,
+): ReadonlySet<unknown> => {
+  switch (table) {
+    case "sources":
+      return sliceIds;
+    case "decisions":
+      return new Set(rows.map((row) => row["id"]));
+    case "supplements":
+      return new Set(
+        rows.map((row) => row["decisionId"] ?? row["decision_id"]),
+      );
+    case "citations":
+      return new Set(
+        rows.flatMap((row) => [
+          row["citingDecisionId"] ?? row["citing_decision_id"],
+          row["citedDecisionId"] ?? row["cited_decision_id"],
+        ]),
+      );
+  }
+};
 
 export type CorpusSliceImportResult = {
   changed: number;
@@ -352,6 +401,7 @@ export const importCorpusSlice = async (
   }
   const ids = new Set(decisions.map((row) => row["id"]));
   let changed = 0;
+  let projectionsEnqueued = 0;
   for (const table of [
     "sources",
     "decisions",
@@ -369,16 +419,22 @@ export const importCorpusSlice = async (
       offset < tableRows.length;
       offset += IMPORT_BATCH_SIZE
     ) {
-      changed += await store.upsert(
+      const batchRows = tableRows.slice(offset, offset + IMPORT_BATCH_SIZE);
+      const batch = await store.upsertAndRecordProjectionDesiredState(
         table,
-        tableRows.slice(offset, offset + IMPORT_BATCH_SIZE),
+        batchRows,
+        projectionIdsForBatch(table, batchRows, ids),
       );
+      changed += batch.changed;
+      projectionsEnqueued += batch.projectionsEnqueued;
     }
   }
-  const removed = await store.removeDecisionsExcept(ids);
-  const projectionsEnqueued =
-    changed + removed === 0
-      ? 0
-      : await store.enqueueProjectionDesiredState(ids);
-  return Result.ok({ changed, removed, projectionsEnqueued });
+  const removal =
+    await store.removeDecisionsExceptAndRecordProjectionDesiredState(ids);
+  projectionsEnqueued += removal.projectionsEnqueued;
+  return Result.ok({
+    changed,
+    removed: removal.removedIds.length,
+    projectionsEnqueued,
+  });
 };
