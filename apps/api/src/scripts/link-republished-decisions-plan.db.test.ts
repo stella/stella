@@ -114,6 +114,113 @@ test("dry run is read-only and court authority wins over storage age", async () 
   );
 });
 
+test("apply skips a candidate whose canonical decision was erased after selection", async () => {
+  const selectedCanonicalId = createSafeId<"caseLawDecision">();
+  const selectedRetiredId = createSafeId<"caseLawDecision">();
+  const common = {
+    country: "POL",
+    court: "Erasure fixture court",
+    language: "pl",
+    caseNumber: "E 1/26",
+    docketFamilyKey: "e:1:26",
+    decisionDate: "2026-03-04",
+    decisionType: "wyrok",
+  };
+  await db.insert(caseLawDecisions).values([
+    {
+      ...common,
+      id: selectedCanonicalId,
+      sourceId: courtSource,
+      sourceDocumentId: "erasure-court",
+      createdAt: new Date("2026-03-04"),
+    },
+    {
+      ...common,
+      id: selectedRetiredId,
+      sourceId: republisherSource,
+      sourceDocumentId: "erasure-republisher",
+      createdAt: new Date("2026-03-05"),
+    },
+  ]);
+  await db.insert(caseLawDecisionSourceIdentities).values([
+    {
+      sourceId: courtSource,
+      sourceDocumentId: "erasure-court",
+      decisionId: selectedCanonicalId,
+      rawOwnerDecisionId: selectedCanonicalId,
+    },
+    {
+      sourceId: republisherSource,
+      sourceDocumentId: "erasure-republisher",
+      decisionId: selectedRetiredId,
+      rawOwnerDecisionId: selectedRetiredId,
+    },
+  ]);
+  const candidates = await selectRepublishedDecisionCandidates(db, 100);
+  const candidate = candidates.find(
+    ({ duplicate }) => duplicate.id === selectedRetiredId,
+  );
+  expect(candidate).toBeDefined();
+
+  await db
+    .update(caseLawDecisions)
+    .set({ redactedAt: new Date("2026-03-06") })
+    .where(eq(caseLawDecisions.id, selectedCanonicalId));
+  expect(
+    (await selectRepublishedDecisionCandidates(db, 100)).some(
+      ({ canonical, duplicate }) =>
+        canonical.id === selectedCanonicalId ||
+        duplicate.id === selectedCanonicalId,
+    ),
+  ).toBe(false);
+
+  if (!candidate) {
+    return panic("Erasure fixture must be selected before redaction");
+  }
+  await db.transaction(async (tx) => {
+    expect(
+      await applyRepublishedDecisionBatch(tx, [candidate], async () =>
+        panic("An erased candidate must not be reconciled"),
+      ),
+    ).toEqual([{ type: "skipped_erased", retiredId: selectedRetiredId }]);
+  });
+  expect(
+    await db
+      .select()
+      .from(caseLawDecisionAliases)
+      .where(eq(caseLawDecisionAliases.retiredDecisionId, selectedRetiredId)),
+  ).toEqual([]);
+  expect(
+    await db
+      .select({ decisionId: caseLawDecisionSourceIdentities.decisionId })
+      .from(caseLawDecisionSourceIdentities)
+      .where(
+        inArray(caseLawDecisionSourceIdentities.decisionId, [
+          selectedCanonicalId,
+          selectedRetiredId,
+        ]),
+      ),
+  ).toEqual(
+    expect.arrayContaining([
+      { decisionId: selectedCanonicalId },
+      { decisionId: selectedRetiredId },
+    ]),
+  );
+  await db
+    .delete(caseLawDecisionSourceIdentities)
+    .where(
+      inArray(caseLawDecisionSourceIdentities.decisionId, [
+        selectedCanonicalId,
+        selectedRetiredId,
+      ]),
+    );
+  await db
+    .delete(caseLawDecisions)
+    .where(
+      inArray(caseLawDecisions.id, [selectedCanonicalId, selectedRetiredId]),
+    );
+});
+
 test("apply resolves the retired id and reverse restores identity ownership", async () => {
   const before = await db.select().from(caseLawDecisionSourceIdentities);
   const candidates = await db.transaction(
@@ -133,7 +240,7 @@ test("apply resolves the retired id and reverse restores identity ownership", as
           );
         },
       ),
-    ).toBe(1);
+    ).toEqual([{ type: "linked", retiredId }]);
   });
   const identities = await db.select().from(caseLawDecisionSourceIdentities);
   expect(new Set(identities.map(({ decisionId }) => decisionId))).toEqual(
@@ -481,4 +588,104 @@ test("reverse restores the projection desired state for every repaired pair", as
     [secondCanonicalId]: "upsert",
     [secondRetiredId]: "upsert",
   });
+});
+
+test("reverse prioritizes a reversible pair over an earlier erased pair", async () => {
+  const retiredIds = [
+    createSafeId<"caseLawDecision">(),
+    createSafeId<"caseLawDecision">(),
+  ].toSorted(compareCodeUnit);
+  const erasedRetiredId =
+    retiredIds.at(0) ?? panic("Reverse fixture requires two retired ids");
+  const reversibleRetiredId =
+    retiredIds.at(1) ?? panic("Reverse fixture requires two retired ids");
+  const erasedCanonicalId = createSafeId<"caseLawDecision">();
+  const reversibleCanonicalId = createSafeId<"caseLawDecision">();
+  const pairs = [
+    {
+      canonicalId: erasedCanonicalId,
+      docket: "reverse-erased",
+      retiredId: erasedRetiredId,
+    },
+    {
+      canonicalId: reversibleCanonicalId,
+      docket: "reverse-ready",
+      retiredId: reversibleRetiredId,
+    },
+  ];
+  await db.insert(caseLawDecisions).values(
+    pairs.flatMap((pair, index) => {
+      const { docket } = pair;
+      const common = {
+        country: "POL",
+        court: `Reverse fixture court ${String(index)}`,
+        language: "pl",
+        caseNumber: `RV ${String(index)}/26`,
+        docketFamilyKey: docket,
+        decisionDate: "2026-05-06",
+        decisionType: "wyrok",
+      };
+      return [
+        {
+          ...common,
+          id: pair.canonicalId,
+          sourceId: courtSource,
+          sourceDocumentId: `${docket}-court`,
+        },
+        {
+          ...common,
+          id: pair.retiredId,
+          sourceId: republisherSource,
+          sourceDocumentId: `${docket}-republisher`,
+        },
+      ];
+    }),
+  );
+  await db.insert(caseLawDecisionSourceIdentities).values(
+    pairs.flatMap((pair) => [
+      {
+        sourceId: courtSource,
+        sourceDocumentId: `${pair.docket}-court`,
+        decisionId: pair.canonicalId,
+        rawOwnerDecisionId: pair.canonicalId,
+      },
+      {
+        sourceId: republisherSource,
+        sourceDocumentId: `${pair.docket}-republisher`,
+        decisionId: pair.retiredId,
+        rawOwnerDecisionId: pair.retiredId,
+      },
+    ]),
+  );
+  const candidates = await selectRepublishedDecisionCandidates(db, 100);
+  const reverseCandidates = candidates.filter(({ duplicate }) =>
+    retiredIds.includes(duplicate.id),
+  );
+  expect(reverseCandidates).toHaveLength(2);
+  await db.transaction(async (tx) => {
+    expect(
+      await applyRepublishedDecisionBatch(
+        tx,
+        reverseCandidates,
+        async () => undefined,
+      ),
+    ).toHaveLength(2);
+  });
+  await db
+    .update(caseLawDecisions)
+    .set({ redactedAt: new Date("2026-05-07") })
+    .where(eq(caseLawDecisions.id, erasedCanonicalId));
+
+  expect(
+    await reverseRepublishedDecisionBatch(db, 1, async () => undefined),
+  ).toEqual([{ type: "reversed", retiredId: reversibleRetiredId }]);
+  expect(
+    await reverseRepublishedDecisionBatch(db, 1, async () => undefined),
+  ).toEqual([{ type: "refused_erased", retiredId: erasedRetiredId }]);
+  expect(
+    await db
+      .select({ retiredId: caseLawDecisionAliases.retiredDecisionId })
+      .from(caseLawDecisionAliases)
+      .where(inArray(caseLawDecisionAliases.retiredDecisionId, retiredIds)),
+  ).toEqual([{ retiredId: erasedRetiredId }]);
 });

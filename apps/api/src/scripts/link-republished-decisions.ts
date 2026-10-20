@@ -148,7 +148,7 @@ await runScriptWithErrorOutput(async () => {
     }
     return;
   }
-  const linked = await withAggregateTransaction(
+  const outcomes = await withAggregateTransaction(
     rootDb,
     async (tx) =>
       await applyRepublishedDecisionBatch(tx, candidates, reconcile(tx)),
@@ -163,5 +163,7 @@ await runScriptWithErrorOutput(async () => {
       `source ${source} before=${String(before.bySource.get(source) ?? 0)} after=${String(after.bySource.get(source) ?? 0)}`,
     );
   }
-  console.info(`linked=${String(linked)}`);
+  console.info(
+    `linked=${String(outcomes.filter(({ type }) => type === "linked").length)}`,
+  );
 });

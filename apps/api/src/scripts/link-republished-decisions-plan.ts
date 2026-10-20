@@ -83,6 +83,10 @@ export type RepublishedDecisionCandidate = {
   duplicate: CandidateSide;
 };
 
+export type ApplyRepublishedDecisionOutcome =
+  | { type: "linked"; retiredId: SafeId<"caseLawDecision"> }
+  | { type: "skipped_erased"; retiredId: SafeId<"caseLawDecision"> };
+
 export type ReverseRepublishedDecisionOutcome =
   | { type: "reversed"; retiredId: SafeId<"caseLawDecision"> }
   | { type: "refused_erased"; retiredId: SafeId<"caseLawDecision"> };
@@ -157,6 +161,8 @@ export const selectRepublishedDecisionCandidatesStatement = (
        AND a.decision_date = b.decision_date
        AND lower(a.decision_type) = lower(b.decision_type)
      WHERE a.docket_family_key IS NOT NULL
+       AND a.redacted_at IS NULL
+       AND b.redacted_at IS NULL
        AND a.created_at <= ${until}::timestamptz
        AND b.created_at <= ${until}::timestamptz
        AND a.decision_date IS NOT NULL
@@ -301,23 +307,30 @@ export const applyRepublishedDecisionBatch = async (
   tx: PlanTransaction,
   candidates: readonly RepublishedDecisionCandidate[],
   reconcile: Reconcile,
-): Promise<number> => {
+): Promise<ApplyRepublishedDecisionOutcome[]> => {
   if (candidates.length === 0) {
-    return 0;
+    return [];
   }
   const rows = executedRows(
     await tx.execute(sql`
-      WITH pairs AS MATERIALIZED (
+      WITH requested AS MATERIALIZED (
         SELECT retired_id, canonical_id
           FROM unnest(
             ${decisionIdArray(candidates, "duplicate")},
             ${decisionIdArray(candidates, "canonical")}
           ) AS pair(retired_id, canonical_id)
+      ), pairs AS MATERIALIZED (
+        SELECT requested.retired_id, requested.canonical_id,
+               retired.redacted_at IS NOT NULL OR canonical.redacted_at IS NOT NULL AS erased
+          FROM requested
+          JOIN case_law_decisions retired ON retired.id = requested.retired_id
+          JOIN case_law_decisions canonical ON canonical.id = requested.canonical_id
       ), moved AS (
         UPDATE case_law_decision_source_identities identity
            SET decision_id = pair.canonical_id
           FROM pairs pair
-         WHERE identity.decision_id = pair.retired_id
+         WHERE NOT pair.erased
+           AND identity.decision_id = pair.retired_id
         RETURNING pair.retired_id, pair.canonical_id,
                   identity.source_id, identity.source_document_id
       ), aliases AS (
@@ -334,18 +347,31 @@ export const applyRepublishedDecisionBatch = async (
           JOIN aliases ON aliases.retired_decision_id = moved.retired_id
         RETURNING retired_decision_id
       )
-      SELECT aliases.retired_decision_id AS "retiredId"
-        FROM aliases
+      SELECT pairs.retired_id AS "retiredId", pairs.erased AS "skippedErased"
+        FROM pairs
+        LEFT JOIN aliases ON aliases.retired_decision_id = pairs.retired_id
        WHERE (SELECT count(*) FROM moved_identities) >= 0
-       ORDER BY aliases.retired_decision_id
+         AND (pairs.erased OR aliases.retired_decision_id IS NOT NULL)
+       ORDER BY pairs.retired_id
     `),
   );
   const appliedIds = new Set<string>();
+  const outcomes: ApplyRepublishedDecisionOutcome[] = [];
   for (const row of rows) {
-    if (!isRecord(row) || typeof row["retiredId"] !== "string") {
+    if (
+      !isRecord(row) ||
+      typeof row["retiredId"] !== "string" ||
+      typeof row["skippedErased"] !== "boolean"
+    ) {
       return panic("Republished-decision apply returned an invalid row");
     }
-    appliedIds.add(row["retiredId"]);
+    const retiredId = brandPersistedCaseLawDecisionId(row["retiredId"]);
+    if (row["skippedErased"]) {
+      outcomes.push({ type: "skipped_erased", retiredId });
+      continue;
+    }
+    appliedIds.add(retiredId);
+    outcomes.push({ type: "linked", retiredId });
   }
   const applied = candidates.filter(({ duplicate }) =>
     appliedIds.has(duplicate.id),
@@ -353,7 +379,7 @@ export const applyRepublishedDecisionBatch = async (
   if (applied.length > 0) {
     await reconcile(applied, "apply");
   }
-  return applied.length;
+  return outcomes;
 };
 
 /** Undo aliases in a bounded page and restore identities to their stored owner. */
@@ -379,7 +405,7 @@ export const reverseRepublishedDecisionBatch = async (
        WHERE d.source_id <> c.source_id
          AND EXISTS (SELECT 1 FROM case_law_decision_alias_moved_identities m
                       WHERE m.retired_decision_id = a.retired_decision_id)
-       ORDER BY a.retired_decision_id
+       ORDER BY (c.redacted_at IS NOT NULL), a.retired_decision_id
        LIMIT ${limit}
     ), restored AS (
       UPDATE case_law_decision_source_identities identity
