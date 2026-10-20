@@ -481,7 +481,11 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
     outputs: planner.outputs,
   });
   for (const [name, job] of Object.entries(jobs)) {
-    if (name === "ci-plan" || name === "ci-result") {
+    if (
+      name === "ci-plan" ||
+      name === "ci-result" ||
+      name.endsWith("-cancel")
+    ) {
       continue;
     }
     expect(evaluate(job.if ?? "true", reused), name).toBe(
@@ -1069,7 +1073,7 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
   // Even the wall-clock quick checks skip: the merge group runs them on the
   // queued tree, so an enqueued head starts no job besides the plan and result.
   for (const [name, job] of Object.entries(jobs)) {
-    if (["ci-plan", "ci-result"].includes(name)) {
+    if (["ci-plan", "ci-result"].includes(name) || name.endsWith("-cancel")) {
       continue;
     }
     expect(evaluate(job.if ?? "true", enqueued), name).toBe(false);

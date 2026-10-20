@@ -1,5 +1,19 @@
 # @stll/mcp-kit
 
+## 0.2.2
+
+### Patch Changes
+
+- [#6184](https://github.com/stella/stella/pull/6184) [`b15dc7b`](https://github.com/stella/stella/commit/b15dc7bda66913f908106d46562a6270aa3bd322) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Name suggestions compute their distances without a native dependency.
+
+## 0.2.1
+
+### Patch Changes
+
+- [#6090](https://github.com/stella/stella/pull/6090) [`d27ed17`](https://github.com/stella/stella/commit/d27ed17a2aa17be2b7f7c01d99217691db8ea1a3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Name suggestions count Unicode scalar values, so astral characters count as one edit.
+- Updated dependencies []:
+  - @stll/agent-input@0.1.6
+
 ## 0.2.0
 
 ### Minor Changes

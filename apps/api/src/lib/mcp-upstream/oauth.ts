@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { getDomain } from "tldts";
 import * as v from "valibot";
 
@@ -20,6 +20,7 @@ import {
   mcpResourceMatchesConnector,
   mcpWellKnownProtectedResourceUrls,
 } from "@/api/lib/mcp-upstream/url-safety";
+import { logger } from "@/api/lib/observability/logger";
 import {
   safeOutboundFetchBytes,
   validateOutboundFetchTarget,
@@ -28,13 +29,19 @@ import type {
   SafeOutboundFetchBody,
   SafeOutboundHeaders,
 } from "@/api/lib/safe-outbound-fetch";
-import type { ClientSecret, RefreshToken } from "@/api/lib/secret-brands";
+import type {
+  AccessToken,
+  ClientSecret,
+  RefreshToken,
+} from "@/api/lib/secret-brands";
 
 const OAUTH_FETCH_TIMEOUT_MS = 10_000;
 export const MCP_OAUTH_BINDING_FAILURE_CODE = "mcp_oauth_binding_invalid";
 export const MCP_OAUTH_INVALID_GRANT_CODE = "mcp_oauth_invalid_grant";
 export const MCP_OAUTH_DISCOVERY_TIMEOUT_CODE = "mcp_oauth_discovery_timeout";
 const OAUTH_FETCH_MAX_BYTES = 1_000_000;
+// A revocation response carries no content worth reading (RFC 7009 §2.2).
+const OAUTH_REVOCATION_MAX_BYTES = 64_000;
 const PKCE_VERIFIER_BYTES = 48;
 
 class McpDiscoveryError extends TaggedError("McpDiscoveryError")<{
@@ -261,8 +268,15 @@ export type RegisteredOAuthClient = {
 type McpFetchJsonInit = {
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
+  maxBytes?: number | undefined;
   method?: string | undefined;
 };
+
+/**
+ * Passed as the schema of a call whose answer carries no data: an RFC 7009
+ * revocation succeeds on any 2xx status, and its body is never read.
+ */
+const RESPONSE_BODY_IGNORED = v.unknown();
 
 const fetchJson = async <T>({
   init,
@@ -286,7 +300,7 @@ const fetchJson = async <T>({
       const response = await dependencies.safeOutboundFetchBytes({
         body: init?.body,
         headers,
-        maxBytes: OAUTH_FETCH_MAX_BYTES,
+        maxBytes: init?.maxBytes ?? OAUTH_FETCH_MAX_BYTES,
         method: init?.method,
         permit: dependencies.permit,
         timeoutMs: dependencies.timeoutMs ?? OAUTH_FETCH_TIMEOUT_MS,
@@ -310,6 +324,9 @@ const fetchJson = async <T>({
         });
       }
 
+      if (schema === RESPONSE_BODY_IGNORED) {
+        return v.parse(schema, undefined);
+      }
       return v.parse(
         schema,
         JSON.parse(new TextDecoder().decode(response.value.body)),
@@ -480,6 +497,149 @@ export const getMcpOAuthRedirectUri = (): string => {
 };
 
 export type McpClientRegistrationMode = "cimd" | "dcr" | "unsupported";
+
+export type AuthorizationResponseRegistrationMode =
+  | "cimd"
+  | "dcr"
+  | "pre_registered"
+  | "unknown";
+
+type KnownAuthorizationResponseRegistrationMode = Exclude<
+  AuthorizationResponseRegistrationMode,
+  "unknown"
+>;
+
+export type AuthorizationResponseBinding =
+  | {
+      type: "issuer";
+      expectedIssuer: string;
+      registrationMode: AuthorizationResponseRegistrationMode;
+      issSupportedAdvertised: true;
+    }
+  | {
+      type: "redirect";
+      bindingId: string;
+      expectedIssuer: string;
+      registrationMode: AuthorizationResponseRegistrationMode;
+      issSupportedAdvertised: false;
+    }
+  | {
+      type: "unbound";
+      expectedIssuer: string;
+      reason:
+        | "no_issuer_support_shared_client"
+        | "no_issuer_support_shared_redirect"
+        | "state_without_binding";
+      registrationMode: AuthorizationResponseRegistrationMode;
+      issSupportedAdvertised: false;
+    };
+
+export const createAuthorizationResponseBinding = ({
+  authorizationServer,
+  registrationMode,
+}: {
+  authorizationServer: UpstreamAuthorizationServerMetadata;
+  registrationMode: KnownAuthorizationResponseRegistrationMode;
+}): AuthorizationResponseBinding => {
+  if (
+    authorizationServer.authorization_response_iss_parameter_supported === true
+  ) {
+    return {
+      type: "issuer",
+      expectedIssuer: authorizationServer.issuer,
+      registrationMode,
+      issSupportedAdvertised: true,
+    };
+  }
+
+  return registrationMode === "cimd"
+    ? {
+        type: "unbound",
+        expectedIssuer: authorizationServer.issuer,
+        reason: "no_issuer_support_shared_client",
+        registrationMode,
+        issSupportedAdvertised: false,
+      }
+    : {
+        type: "unbound",
+        expectedIssuer: authorizationServer.issuer,
+        reason: "no_issuer_support_shared_redirect",
+        registrationMode,
+        issSupportedAdvertised: false,
+      };
+};
+
+export type AuthorizationResponseBindingVerdict =
+  | { type: "accepted"; issPresent: boolean; issMatches: boolean | null }
+  | {
+      type: "would_refuse";
+      reason: "issuer_absent" | "issuer_mismatch" | "binding_unavailable";
+      issPresent: boolean;
+      issMatches: boolean | null;
+    };
+
+export const evaluateAuthorizationResponseBinding = (
+  binding: AuthorizationResponseBinding,
+  response: { issuer: string | undefined },
+): AuthorizationResponseBindingVerdict => {
+  const issPresent = response.issuer !== undefined;
+  const issMatches = issPresent
+    ? response.issuer === binding.expectedIssuer
+    : null;
+  switch (binding.type) {
+    case "issuer": {
+      if (!issPresent) {
+        return {
+          type: "would_refuse",
+          reason: "issuer_absent",
+          issPresent,
+          issMatches,
+        };
+      }
+      return issMatches
+        ? { type: "accepted", issPresent, issMatches }
+        : {
+            type: "would_refuse",
+            reason: "issuer_mismatch",
+            issPresent,
+            issMatches,
+          };
+    }
+    case "redirect":
+      return { type: "accepted", issPresent, issMatches };
+    case "unbound":
+      return {
+        type: "would_refuse",
+        reason: "binding_unavailable",
+        issPresent,
+        issMatches,
+      };
+    default: {
+      binding satisfies never;
+      return panic("Unhandled authorization response binding");
+    }
+  }
+};
+
+export const observeAuthorizationResponseBinding = async <T>({
+  binding,
+  exchange,
+  observe,
+  response,
+}: {
+  binding: AuthorizationResponseBinding;
+  exchange: () => Promise<T>;
+  observe: (verdict: AuthorizationResponseBindingVerdict) => void;
+  response: { issuer: string | undefined };
+}): Promise<T> => {
+  const verdict = evaluateAuthorizationResponseBinding(binding, response);
+  if (Result.isError(Result.try(() => observe(verdict)))) {
+    logger.warn("mcp.oauth.binding_observation_failed");
+  }
+
+  // This phase is observe-only: every verdict continues to the token exchange.
+  return exchange();
+};
 
 // Client ID Metadata Documents are the MCP spec's preferred registration
 // mechanism; Dynamic Client Registration is retained for authorization
@@ -806,6 +966,96 @@ export const refreshOAuthToken = async ({
   }
 
   return Result.ok(token.value);
+};
+
+const revocationEndpointSchema = v.pipe(v.string(), v.url());
+
+/**
+ * The RFC 7009 revocation endpoint the authorization server advertises, when
+ * it is HTTPS and on the issuer's domain or an origin the connector's approval
+ * confirmed; tokens are never sent anywhere else. `null` when none qualifies.
+ */
+export const oauthRevocationEndpoint = ({
+  confirmedEndpointOrigins,
+  metadata,
+}: {
+  confirmedEndpointOrigins: readonly string[];
+  metadata: BoundOAuthMetadata;
+}): URL | null => {
+  const advertised = v.safeParse(
+    revocationEndpointSchema,
+    metadata.authorizationServer["revocation_endpoint"],
+  );
+  if (!advertised.success) {
+    return null;
+  }
+  const endpoint = new URL(advertised.output);
+  if (endpoint.protocol !== "https:") {
+    return null;
+  }
+  return oauthDomainsMatch(
+    metadata.authorizationServer.issuer,
+    endpoint.origin,
+  ) || confirmedEndpointOrigins.includes(endpoint.origin)
+    ? endpoint
+    : null;
+};
+
+type RevocableToken =
+  | { token: RefreshToken; tokenTypeHint: "refresh_token" }
+  | { token: AccessToken; tokenTypeHint: "access_token" };
+
+/**
+ * Revoke one token at an RFC 7009 endpoint, authenticating the client the way
+ * the token endpoint calls do (public client id, or `client_secret_post` when
+ * the registration issued a secret).
+ */
+export const revokeOAuthToken = async ({
+  clientId,
+  clientSecret,
+  dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
+  endpoint,
+  permit,
+  revocable,
+}: {
+  clientId: string;
+  clientSecret: ClientSecret | null;
+  dependencies?: OAuthDependencyOverrides;
+  endpoint: URL;
+  permit: ThirdPartyOutboundPermit;
+  revocable: RevocableToken;
+}): Promise<Result<void, HandlerError<502>>> => {
+  const body = new URLSearchParams({
+    token: revocable.token,
+    token_type_hint: revocable.tokenTypeHint,
+    client_id: clientId,
+  });
+  if (clientSecret) {
+    body.set("client_secret", clientSecret);
+  }
+
+  const response = await fetchJson({
+    dependencies: { ...dependencies, permit },
+    init: {
+      body,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      maxBytes: OAUTH_REVOCATION_MAX_BYTES,
+      method: "POST",
+    },
+    schema: RESPONSE_BODY_IGNORED,
+    url: endpoint,
+  });
+  if (Result.isError(response)) {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        code: "upstream_unavailable",
+        message: "MCP token revocation request failed",
+        cause: response.error,
+      }),
+    );
+  }
+  return Result.ok(undefined);
 };
 
 const discoverAuthorizationServer = async (
