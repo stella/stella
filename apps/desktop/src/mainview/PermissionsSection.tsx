@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
@@ -28,30 +28,40 @@ export const PermissionsSection = () => {
   const t = useTranslations("settings");
   const [snapshot, setSnapshot] = useState<PermissionsSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
+  // Polls, focus, visibility and user actions read concurrently; only the
+  // most recently issued read may set the snapshot, so a slow older read
+  // cannot overwrite a newer one.
+  const latestRead = useRef(0);
 
   useEffect(() => {
     let disposed = false;
     let timer: number | undefined;
     const refresh = async () => {
-      window.clearTimeout(timer);
+      latestRead.current += 1;
+      const read = latestRead.current;
       const result = await Result.tryPromise(async () =>
         invoke<unknown>("permissions_get_snapshot"),
       );
       if (disposed) {
         return;
       }
-      if (Result.isError(result) || !isPermissionsSnapshot(result.value)) {
-        reportPermissionsFailure();
-        setFailed(true);
-      } else {
-        setFailed(false);
-        setSnapshot(result.value);
-      }
+      // One pending poll at a time, however many reads overlapped.
+      window.clearTimeout(timer);
       if (document.visibilityState === "visible") {
         timer = window.setTimeout(() => {
           void refresh();
         }, PERMISSION_REFRESH_MS);
       }
+      if (read !== latestRead.current) {
+        return;
+      }
+      if (Result.isError(result) || !isPermissionsSnapshot(result.value)) {
+        reportPermissionsFailure();
+        setFailed(true);
+        return;
+      }
+      setFailed(false);
+      setSnapshot(result.value);
     };
     const onVisible = () => {
       if (document.visibilityState === "visible") {
@@ -76,11 +86,18 @@ export const PermissionsSection = () => {
       setFailed(true);
       return;
     }
+    // Taken once the action has finished, so a poll issued while it ran
+    // (for example during a system prompt) cannot win with the old state.
+    latestRead.current += 1;
+    const read = latestRead.current;
     const next = isPermissionsSnapshot(result.value)
       ? Result.ok(result.value)
       : await Result.tryPromise(async () =>
           invoke<unknown>("permissions_get_snapshot"),
         );
+    if (read !== latestRead.current) {
+      return;
+    }
     if (Result.isOk(next) && isPermissionsSnapshot(next.value)) {
       setSnapshot(next.value);
     }
