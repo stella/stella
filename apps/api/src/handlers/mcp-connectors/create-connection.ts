@@ -10,6 +10,7 @@ import {
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
@@ -35,7 +36,7 @@ const config = {
 
 const createMcpConnection = createSafeRootHandler(
   config,
-  async function* ({ body: input, safeDb, session, user }) {
+  async function* ({ body: input, recordAuditEvent, safeDb, session, user }) {
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -81,55 +82,68 @@ const createMcpConnection = createSafeRootHandler(
     });
 
     const saved = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          // audit: skip — per-user MCP connection bearer-token registration; the connector itself is SOC 2-audited at create-connector / delete-connector.
-          await tx
-            .insert(mcpUserConnections)
-            .values({
-              organizationId: session.activeOrganizationId,
-              connectorId: connector.id,
-              userId: user.id,
+      safeDb(async (tx) => {
+        const upserted = await tx
+          .insert(mcpUserConnections)
+          .values({
+            organizationId: session.activeOrganizationId,
+            connectorId: connector.id,
+            userId: user.id,
+            staticTokenEncrypted: encrypted.ciphertext,
+            staticTokenIv: encrypted.iv,
+            status: "connected",
+            responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+            responseTargetUrl: null,
+            enabled: true,
+            tokenType: "Bearer",
+          })
+          .onConflictDoUpdate({
+            target: [
+              mcpUserConnections.organizationId,
+              mcpUserConnections.connectorId,
+              mcpUserConnections.userId,
+            ],
+            set: {
+              accessTokenEncrypted: null,
+              accessTokenIv: null,
+              expiresAt: null,
+              refreshTokenEncrypted: null,
+              refreshTokenIv: null,
+              resourceUrl: null,
+              authorizationServerUrl: null,
+              scope: null,
               staticTokenEncrypted: encrypted.ciphertext,
               staticTokenIv: encrypted.iv,
+              cachedTools: null,
+              cachedToolsRefreshedAt: null,
               status: "connected",
               responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
               responseTargetUrl: null,
               enabled: true,
               tokenType: "Bearer",
-            })
-            .onConflictDoUpdate({
-              target: [
-                mcpUserConnections.organizationId,
-                mcpUserConnections.connectorId,
-                mcpUserConnections.userId,
-              ],
-              set: {
-                accessTokenEncrypted: null,
-                accessTokenIv: null,
-                expiresAt: null,
-                refreshTokenEncrypted: null,
-                refreshTokenIv: null,
-                resourceUrl: null,
-                authorizationServerUrl: null,
-                scope: null,
-                staticTokenEncrypted: encrypted.ciphertext,
-                staticTokenIv: encrypted.iv,
-                cachedTools: null,
-                cachedToolsRefreshedAt: null,
-                status: "connected",
-                responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
-                responseTargetUrl: null,
-                enabled: true,
-                tokenType: "Bearer",
-                updatedAt: new Date(),
-              },
-            })
-            .returning({
-              id: mcpUserConnections.id,
-              status: mcpUserConnections.status,
-            }),
-      ),
+              updatedAt: new Date(),
+            },
+          })
+          .returning({
+            id: mcpUserConnections.id,
+            status: mcpUserConnections.status,
+          });
+        const row = upserted.at(0);
+        if (row) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.MCP_CONNECTION,
+            resourceId: row.id,
+            workspaceId: null,
+            metadata: {
+              connectorId: connector.id,
+              connectorSlug: input.connectorSlug,
+              credential: "static_token",
+            },
+          });
+        }
+        return upserted;
+      }),
     );
 
     const connection = saved.at(0);

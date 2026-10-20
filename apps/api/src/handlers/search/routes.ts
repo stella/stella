@@ -183,6 +183,7 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
   } satisfies HandlerConfig,
   async function* ({
     body,
+    featureAccessSnapshot,
     getActiveWorkspaceIds,
     safeDb,
     scopedDb,
@@ -200,6 +201,7 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             accessibleWorkspaceIds: activeWorkspaceIds,
             body,
+            featureAccessSnapshot,
             safeDb,
             scopedDb,
             userId: user.id,

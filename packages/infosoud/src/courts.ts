@@ -59,7 +59,9 @@ export const buildCourtMapFromEntries = (
 };
 
 export const normalizeCourtQuery = (value: string): string => {
-  let normalized = stripDiacritics(value.trim().toLocaleLowerCase("cs-CZ"))
+  let normalized = stripDiacritics(
+    value.toWellFormed().trim().toLocaleLowerCase("cs-CZ"),
+  )
     .replaceAll(/(?<letter>[a-z])(?<digit>\d)/gu, "$<letter> $<digit>")
     .replaceAll(/(?<digit>\d)(?<letter>[a-z])/gu, "$<digit> $<letter>")
     .replaceAll(/[-–—,/]+/gu, " ")
@@ -81,7 +83,9 @@ export const normalizeCourtQuery = (value: string): string => {
 };
 
 const detectCourtTypeHint = (value: string): CourtType | null => {
-  const normalized = stripDiacritics(value.trim().toLocaleLowerCase("cs-CZ"))
+  const normalized = stripDiacritics(
+    value.toWellFormed().trim().toLocaleLowerCase("cs-CZ"),
+  )
     .replaceAll(/[-–—,/]+/gu, " ")
     .replaceAll(/\s+/gu, " ");
   const tokens = normalized.split(" ");
