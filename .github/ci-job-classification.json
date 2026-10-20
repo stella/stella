@@ -600,14 +600,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/agent-sandbox-canary.yml",
-      "digest": "ddb20343e4d1ae00cd697129e57e9be41676cf299cfbd640b6f7ec7e29f5198a",
+      "digest": "55e87da54da40af4b83a7c1cc0e52f5b8ccff5cd5cab344c6468fbd47f9f8ce8",
       "references": [],
       "jobs": [
         {
           "id": "real-model-mcp-canary",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "9df689007a486faabaf7778ea0679144bd0c43ed6163c29831e1ef855a0ed7f2"
+          "digest": "a767ee1bc353bffff7a8cefd6a3a8ec4a3dd0f5594f2645fad99ef3b7e29dbfc"
         }
       ],
       "edges": {
@@ -655,20 +655,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/api-test-memory.yml",
-      "digest": "a552467c4928b94167b5592b4edba6f51d3f2131acdbd897ada5a852cad6227c",
+      "digest": "329f63b3454eb531e5c2f67a8ca148703ba07b72a8032e15d891a589a1acbefc",
       "references": [],
       "jobs": [
         {
           "id": "measure",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "31b083ba51e5d4157b2269c2285df7ddd63a6ce78b8dd157eb8fe4c49dc9a54e"
+          "digest": "f4173baff95efe7b04aa8613cab22f8bc6f6c4c06a718779303fe86db563fcab"
         },
         {
           "id": "refresh",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "0e976b116c4cf2bb4ae68063deec1798620906e526df59285c2d366b80eaa19b"
+          "digest": "1323eae77770989bdec506375590eda0e6e5c199163f3120474f863527a4cfcf"
         }
       ],
       "edges": {
@@ -939,266 +939,266 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "defa10315087338dd9704a4be27a3ceda578c59372b71488ea95cd92b3f93ab7",
+      "digest": "ce51bb7b3229a3c0decf4802fbdd9486622572053e2e78d8fe0cb3225ccfa488",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
           "id": "ci-plan",
           "kind": "support",
           "qualifier": "Plans trust, scopes and prerequisites for merge-required checks.",
-          "digest": "f49088725732515bd37e0785e0408582d5ecc5449f7460b2d6c673f323ac5787"
+          "digest": "514afb6ba4a073498358c44dea7fcacbd00e5f30655dc0eabee2d96d08e2e421"
         },
         {
           "id": "generated-sources",
           "kind": "support",
           "qualifier": "Produces generated-source artifacts required by merge-gating package checks.",
-          "digest": "8e9119157b740494f1fbdfc2f0495c526562c262341645c72c15584e95fb0900"
+          "digest": "230abc13dc05de227e25f64ef8280811c1dd487c6d452c0fb3a0e974f046c732"
         },
         {
           "id": "pr-heavy-gate",
           "kind": "support",
           "qualifier": "Gates merge-required heavy suites on successful pull-request quick checks.",
-          "digest": "531a7360af98bd035d87fba9ff69aa3f8104da15d3e0947e4a5e9524197062dd"
+          "digest": "f7d736c311b7ea40a1c80575905e1bd50e0a63657bd181c6e22f09021d47bda5"
         },
         {
           "id": "docker-checks",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "75082fecd6ffcee45bf4b375b5221c851fd27572fc96f21e4731089809dd3e76"
+          "digest": "cef397e747535487957a818dea9151c3387bd7742ae311f42ef51e107e16f45b"
         },
         {
           "id": "ci-checks-generated",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "9348c03a843b2ec15cb1366362db597747ee416e54a8c273864c23013e50d74e"
+          "digest": "899a7defe22f7b7552883a67eb62745c3f044c2e326456753a50bdf88d5cccd3"
         },
         {
           "id": "ci-checks-policy",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "5597bb09ea9c222d35f353be71f4fce5fd75a193a9bcafafc468d1172c6c8978"
+          "digest": "60a3af5f146669513f83769339e4dadbe8c0369f67f6e153a4e966dfdfd854bc"
         },
         {
           "id": "ci-checks-rest",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "203a07e265a367b3db45b90a835f2653c25f402a7ed87d2f86fe36331a671bdb"
+          "digest": "76cd50b6fac1953f9ddd7090ea9b5b1253a10db978ceaec25625659b4983d598"
         },
         {
           "id": "ci-tests",
           "kind": "support",
           "qualifier": "Runs scoped package tests and reports quarantined outcomes for the merge verdict.",
-          "digest": "7577f48628ada5ba51808b8eb8e6a222e42e2609e1cdf4cb6ff4a7601621f686"
+          "digest": "3d05865fef5762d45c3a2c642e59774a9fead9dd75ad03b06b73003fd0e3e32a"
         },
         {
           "id": "api-test-durations",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "b5baf043bfb14ac655773b9d859f23c8ac0594f36648ce7bc6a4d1cd079d0be7"
+          "digest": "1590c0b1afe6be12d7d25a155f3ffef2294c9e65158ff271bc7f0df2e575ba80"
         },
         {
           "id": "ci-browser",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "9c615801b4ad780a6a1da074781e1a3c6e5f09e71aa4e488db578c1f3510e13f"
+          "digest": "f4582cff3f1c5b52cfbef1b683d551c01a3c6169175bc5c0508b3381ff9a4238"
         },
         {
           "id": "code-quality-api",
           "kind": "support",
           "qualifier": "Runs API code-quality checks required by the merge verdict.",
-          "digest": "cafe50be32c301ffd73efbe5e4ce6406a5a85bca953637765736d6360ebd7667"
+          "digest": "6d3c5851284087b57894be0cd8590067ba1cee813b1108daf3d10cbdc3504402"
         },
         {
           "id": "code-quality-api-cancel",
           "kind": "ordinary",
           "qualifier": "Cancels same-repository pull-request runs after API code-quality failure; no publication or deployment.",
-          "digest": "581ffba30c3cc1ca10edd39a9bacd7c4820fad27088854e6cc54a2740f73c1f4"
+          "digest": "a6c097ef666e5052d68d57480daaf8fedfcad46154ec9c4ac3e65827fcfd8274"
         },
         {
           "id": "code-quality-web-rest",
           "kind": "support",
           "qualifier": "Runs web and remaining code-quality checks required by the merge verdict.",
-          "digest": "f8c187fb74ac976e3771882ba038784251986f85b7b263d184b89b316072ad5a"
+          "digest": "fd6b5f853bcff79bbc5d3fc917dafd2e4c123b4fa23201f7e470f8d19779c606"
         },
         {
           "id": "code-quality-web-rest-cancel",
           "kind": "ordinary",
           "qualifier": "Cancels same-repository pull-request runs after web or remaining code-quality failure; no publication or deployment.",
-          "digest": "e5cfd2ebc6d7aa8218882cf0d5af139c17cccf13aafa99e539fc6e1a004d409e"
+          "digest": "86e06d15a246bedf41d9784a83027db2d5c545f456085543def5e30a8efa5245"
         },
         {
           "id": "query-perf",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "90e16fe2bd4a0608885f42fcbe703414b292b4e2ac889de7bb664bcaf4f1c41a"
+          "digest": "3a9c7402f8ec343b1988ffbebcc1feee661ed165441005b35082273a844954c5"
         },
         {
           "id": "postgres-service-suites",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "53ca9253c8758930a168c61d16700bde29f53d068bfaabb3c59abe2a17dd618c"
+          "digest": "3b20d7bb3aa2b278f58c4c9c0f78d624dce33ba3025c3d7418b1a87aa86bd469"
         },
         {
           "id": "service-suites",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "8929dfd8c94221cd7fa2ae9138a23430d6e5f228c162f3d130b9f729e871ee32"
+          "digest": "5d29e01490edcb921c23ae5f0d4da96e964263dfbdb267f748bbdecc7c318139"
         },
         {
           "id": "migration-upgrade-rehearsal",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "72a4598d10cf8e36cf70ca660e0fb3449eb35bef7d09ad31f78cf1457af50ea8"
+          "digest": "463f03f006eceec21879bc750fc5c7f2d322d81813e203b15ff8d8d09fa5eeb9"
         },
         {
           "id": "release-typecheck",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "de9787ba58ff966e589f32c8b4abf99c11fa63fb4e32c051e055960a304a0e80"
+          "digest": "491b7b2350235fff8ad00c5a210071a2773b5b3254264ba862f653e650dc8f37"
         },
         {
           "id": "fix-tests-on-base",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "e90760a3e09fcef4f03091f8052e9998a7d5ef40c6622392f32513f5720315cd"
+          "digest": "98bd0682bc287ffa109f2135fb1767e232df5b71557a3be94808097fb0d09b24"
         },
         {
           "id": "web-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "7d955ff2c7bfb3b0e8288eb4aa24dc376ca9b2cd0df5236b2b2634e5fa14027a"
+          "digest": "d1d0a98e1b46cab119357ae6c7c52b739584c8344adcd33c5a73234ff09aefc7"
         },
         {
           "id": "web-image-smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "f0e5524d69a6d466d5f6ba7fddbc252933ee4fd2594ee1ff6698e6026b810bc5"
+          "digest": "2b427fc076dcc2a9b47a25c7a706fe7648cc9a0567f0282e6bc8f44ff40f0102"
         },
         {
           "id": "mobile-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "b40711893e30d2a38204b86375d2b60412d071f44e255ec25bc5314fd92ed2ba"
+          "digest": "a4373ccc7aa3368c398080de5bb11040e7037f52762dc8a76da2522fe1ee914a"
         },
         {
           "id": "landing-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "52f07274f00f816d2c795f5b06e8f8bf5f2b7587a50c76a22f1a8c70cc905a2c"
+          "digest": "63d16a2eac26bfb2fb82f008f63fcc29539aef392ace23cff51081e03af163d8"
         },
         {
           "id": "heavy-web-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "d926694bc801d8e52270fce41648e884c48cb5f4efa3db5410a17d61da94ea28"
+          "digest": "b87d2ce82f32c4fd5431f8e59d4860d127fc18e9559443cb7dd58e43d63f84be"
         },
         {
           "id": "route-smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "28b5861e393f07afb7dc486199dbaff936074b5630dadbba1b3807fbe43e090e"
+          "digest": "7149c7770d2699e8f64821e5e6dcfc6b0bb9ecf3e8829906bda9beb27d66fb6b"
         },
         {
           "id": "e2e-production-shard",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "fb7a2d08c0ac0cb20ffa06b7b3222b133b234bc608c4bdb22fc5400cb46dd93c"
+          "digest": "a685ff584d451538cf327cba120dc4e1c78c472d79a4fcb0cb26d3b1285a29f3"
         },
         {
           "id": "stack-redaction-browsers",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "4616e8796d7bdeb7d1a262a1b253653c294cf6ed0b225efd945d32942cff8f93"
+          "digest": "58d092822ae2e9802f01630fa668c826947a4ea0e7e1299d5ccbd0dcd64a7b35"
         },
         {
           "id": "e2e-vite-canary",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "ba3fa413a3e26dc1cbde19344e50a299be3fb1a0e59ca50004f82517fd3153a9"
+          "digest": "484cfcb2d2e77a33f9f0c6e3d3445e8e58f15fdd1ad3d3fea3180bae1060979b"
         },
         {
           "id": "e2e-landing",
           "kind": "support",
           "qualifier": "Builds and tests affected landing pages at every CI depth, subject to trust and the pull-request heavy gate.",
-          "digest": "14fb4b7c919efcdbd1eb52f9e3d2c609596d6ceec006b0070bcd96622ef29218"
+          "digest": "65757a6ac78c22d478897f57764bcbc991b5cc3aac016fd9c3b3329efb51511a"
         },
         {
           "id": "marketing-screenshots",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "d57ce2c6190b0bf96e471d0b0ff9ed151b3177e3525896e51c3ee5d0269db2ca"
+          "digest": "0f306bb47c5b9d5bb0253c5788c019cf6c3a14625dada6ad22954ba52aa27d7b"
         },
         {
           "id": "marketing-screenshots-cancel",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "7552841c10dfe576ee095fdcfce982ebcaa52b211d485c2bf671f3bae8b34bdd"
+          "digest": "fcd13703991523c80c07e4d0115781c3c5f1f7844f65216d6c6fa2bb1b9eacb8"
         },
         {
           "id": "e2e-report",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "c80cdfb0cd00512306b98dfd29774525446f1a8cf63a4f26a0668174df5822c1"
+          "digest": "fd3b9dbc0907d10fb52b2ac96303ddbef09cfcb75b774243ab2d354f638cbe43"
         },
         {
           "id": "api-image-smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "44e0d691465293d63eca7943c44a2eb0a94cb889465134db0c9d77971a9d4f45"
+          "digest": "a3e6c1c64f8fd5704d26d3a0d9bdb038814bdbafa8ed401cf0d2cbb890c8fa07"
         },
         {
           "id": "legal-atlas-image",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "472aed78733e552f987f69957952dcb9410a56040b8d42cdc6c217b8973eef8e"
+          "digest": "eee836defff58ae22516340cb538c1eead8a128859d2cbf6a3a6d57e5899a752"
         },
         {
           "id": "desktop-windows-dry-run",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "d0fceac48a8746d34b23f6ba2170d442949bda40b9cf10a2af1e9ba2ab8d37a4"
+          "digest": "73d9b40f4edf4a2ae2f255f377f947c63f73b00c62eff7828dfdec107c479609"
         },
         {
           "id": "windows-scripts",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "5910ab7cc2e7ef6091babbe788ff1a8bdd8235cbda1dbfd7d8cb64121f5589b3"
+          "digest": "5ef921f45047099301c280b28918ba609c77fc965dd529cc11f52cfa190a447e"
         },
         {
           "id": "scan-engine-wasm-drift",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "05052cbc780f0e706b1a7bf10cdf0dba7e04f280401ccc8ed5fad4719fa6d44f"
+          "digest": "ebc8df4406a4dc2170bed631ca508c8f0c8c9f3dd357aed8c850756787c72f19"
         },
         {
           "id": "desktop-rust-tests",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "3d0c9c6afee7ff284e20ddae76599ea5aba220cf731dbf3408fd8dfdba203cc0"
+          "digest": "ae9c49232ab5bac5468f0d62102833c1e0a97d2da3b0db51e592b509817f238f"
         },
         {
           "id": "desktop-rust-lint",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "6179c2894c45f0b3fb6fef42875462d43ae3bee66efd6f5c434d6a1a34d905b8"
+          "digest": "ec6b0bd08b421aaff8cd7e39a5b43267e2627ad4319ad227d838009bf7caad31"
         },
         {
           "id": "dependency-malware",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "9e1ff242302f42a1636fcd7ece71a4880eb9d83abf4b19e866c27039f4be578a"
+          "digest": "05b75ae81d552e69dd74d9fbe279fcdc6818ddca9f37a1e1617eab7af18a235d"
         },
         {
           "id": "ci-quick-checks",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "75eea2e2374c0a5c57a956c38ce6b30c751571f79062b2c071865263d319cc42"
+          "digest": "7f105353e28fce73c43e9dbd476f4bc1b4bbadb4438ac31c93128a82467f3f5f"
         },
         {
           "id": "ci-result",
           "kind": "support",
           "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs.",
-          "digest": "3a893c216435a837d32adae7c25c918862e5b9e2aafc408e3c52b5ea58024a03"
+          "digest": "433e17e998276ca453d3c187022cecdf2be45121f6a443e19baa946b0379cab4"
         }
       ],
       "edges": {
@@ -1336,26 +1336,26 @@
         "type": "checkout"
       },
       "path": ".github/workflows/db-migrations.yml",
-      "digest": "40a9039dcf110f28b9c95e02436ad3a3f471f4f9533d843d20efd32d7a760aa4",
+      "digest": "564b573c115da072ac8506f0af84321d2d75fd348d41178f65acb15f86527b76",
       "references": [],
       "jobs": [
         {
           "id": "scope",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "ad9fee8b5742689d2885d02aa698a2627131de9be7ccc845e5fa0dc587c95201"
+          "digest": "4077868b9296e20b4f21014f26d45a8fc767ee01eb055ebb229014005bb4c56a"
         },
         {
           "id": "check",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "18ee05535d9ec7b07fd2ab82423401f461baa19f788976b236bfa959a889df60"
+          "digest": "6090d33410cb1451969b0b433c696bbad3e14b4191cdff2b3780126e4f070b40"
         },
         {
           "id": "apply-fresh",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "6bd183ff5cf53bbfa8af53ea486d2241163c6ef463e039e63fb4dbaad398d222"
+          "digest": "10c062e13dd7e9bddeefc4c8b5daeb4976d5f32bc75b4b7a768aeb4271319c86"
         }
       ],
       "edges": {
@@ -1506,38 +1506,38 @@
         "type": "checkout"
       },
       "path": ".github/workflows/deploy-staging.yml",
-      "digest": "2be1c60924e921c6f294cd7ece1f8f81a5bb0136aae605254af43b84fafcefb9",
+      "digest": "13fa3685f08fbeec8e066fc57735dbc376c09acce1a6e46b943d56c6d655e8ed",
       "references": [],
       "jobs": [
         {
           "id": "resolve",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "69f9fc243ca519dd7171a21f6ef08d8090388a0df5ab640b8984cb0408a19504"
+          "digest": "55c550f93c201aacca34690a873f8d5bf86c21b5fa350200bf5256516ac940a2"
         },
         {
           "id": "staging-health",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "290da2e9c9706d47792db95d5cde1f97b26ec50082c076fb5684a0c6b33be10b"
+          "digest": "428f32c8be917f1a611cfc17982a350bcba6650af9c78df84be31df59be010b8"
         },
         {
           "id": "build-api",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "03ade74616ebaa48076f8cfad3e93ad880b7eeab40072d5effd47bc2e551ba6d"
+          "digest": "d15320c2d69d8215421029f67aefd4f67756a22988a146dcd9777922984982a5"
         },
         {
           "id": "build-web",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "474ded8c44e40c134eaeaa3a706418da1580c3bdde6a8e3fabdf0061a083618b"
+          "digest": "68693c0c39719496b65b5ec3e439d0dbbd21c613e1d792a97bce949ccb053dd9"
         },
         {
           "id": "promote-staging",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "063c06cead309a7829812207426c013ee33de0dedcf0ec9ed22b7084dc35b2f4"
+          "digest": "47e84f125edd62ae3ea7e5f4c88d5fe575b68a299e5bf9a729690726fddf8a88"
         }
       ],
       "edges": {
@@ -1959,14 +1959,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/mirror-ci-service-images.yml",
-      "digest": "980848ebd013ff835c6d1e9a51a81ea5ca894de167af56d7c4765cbe4e9b3aa5",
+      "digest": "bcbd527a2ead4f315321c21b92be81ec871bbced590170dea1c327843ebddd29",
       "references": [],
       "jobs": [
         {
           "id": "mirror",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "f398e60c72e845df80e585ebf9d02cfc760e63e00206d9a8ac853b902c9eb958"
+          "digest": "2f03bcf1b31c22964a08ca34440d0d975ae7737862995bed706aca74e9365737"
         }
       ],
       "edges": {
@@ -2033,26 +2033,26 @@
         "type": "checkout"
       },
       "path": ".github/workflows/network-baseline-record.yml",
-      "digest": "543b1f9aa764a2a456d0e9864e27c0ca2e284d21b63a3066ef98ae7d0cb30e1a",
+      "digest": "3bccac076dc115d778dc262e9fe0cb8f566afe63e409ced9aafe249deb1fbeb5",
       "references": [],
       "jobs": [
         {
           "id": "build",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "c3c99776c3de2ee849dd2a4f5ceba858a0d3849145c73ab61a78a1fa8702bedf"
+          "digest": "f1c98937749fe5ad41cee14d0130a5ae6b6fecc0e5ac6344fbd055e81b88ba77"
         },
         {
           "id": "record",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "8c21a33fa4508187ba4a9090731748c40b1a4a63f6f419c608ac363783c3f55b"
+          "digest": "3b6a3531e378186a44a253c6ae8af37ce925b38b597301ee1f299223873f6d0f"
         },
         {
           "id": "deliver",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "4407d8d15a201c52c46dc0d89d0d8145360953b5b3336b63bf989f241f08ccf4"
+          "digest": "5b338092d75c67b54f4f908e5ad5e0ab2bec8e8433f4d899b8ebda3b5c8e8ac9"
         }
       ],
       "edges": {
@@ -2096,38 +2096,38 @@
         "type": "checkout"
       },
       "path": ".github/workflows/nightly-property-test.yml",
-      "digest": "91ffc2b758cc282ef0028bbe5f16fed1e0e924ad510577762a56885a0e181026",
+      "digest": "6412255add13ca7af2f163991f5c5e79719528641903f7ceea74d4251b95e28d",
       "references": [],
       "jobs": [
         {
           "id": "provider-request-three-wise",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "b9a8606e6678dfffc4ee2971eff4d5004575e7e070c35174a0516a3f5155e6fe"
+          "digest": "14102fdd6acc341e0c02de3fe6af55057ea62bcd0cadd07c99505a01031eb10b"
         },
         {
           "id": "provider-request-combinations",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "5e6896fbd01a432af9cf888a2706c086d6e10ff9d4621b3d73c8caa7d627f9b6"
+          "digest": "5c9e8b97915f1c2624a7481a72dc0cfe1380f9fcd6a9262b1abe8c04f1573741"
         },
         {
           "id": "turn-outcome-combinations",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "760fff53537b04fd2a5a8826f96d06c7b0345d1d027485d0e82d0ee3d17b09e7"
+          "digest": "aefec2c482b06509674d6f3387675a2857bc0b4e561c4b7a8f774d1b2bd3b4ab"
         },
         {
           "id": "chat-mutation-matrix",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "37c5a94fae725a47f0a9ea0c34774e942118d11c9a442ea5637106502ee23dce"
+          "digest": "cad685b61a2875f7546585aa6a32c5690a2e2dcac9d17b4c0d25d98e3f190bc2"
         },
         {
           "id": "tanstack-drift",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "bfc6f56c1cf8c25cbb3b8975dd38778102e7c391720be250a8b45989c8a161cf"
+          "digest": "b72910fe030bcfffd0a705d0c5768ee72c3880641569417801e55a418d6cd3ba"
         }
       ],
       "edges": {
@@ -2143,68 +2143,68 @@
         "type": "checkout"
       },
       "path": ".github/workflows/nightly-test.yml",
-      "digest": "228b7170fd1f5e4bd39486e57a25e9eb13117e2cfa7c831ea20283eabb41d045",
+      "digest": "4909158bcf6657c8302d641d7051b1ea40cabae4fcad50cb73a7f2063ef361cc",
       "references": [],
       "jobs": [
         {
           "id": "workspace-replay",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "05799112995ace2eccd150508c75e02b181c9a23589be178b46589c9942ba278"
+          "digest": "c03d61e2a649c16dba08ca88244c0b1e28f643191b48c236a39cac67684433f2"
         },
         {
           "id": "full-test-plan",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "e4487d633053aa96259a0f16ae3cb7d595734698b1c17b65d2cb1c5764f7d2c4"
+          "digest": "af3bad78c59acbd80a58ad52fc4b79b1e1a525eea1b50b88bc47bf9db2090d2b"
         },
         {
           "id": "full-test",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "a52fe9f5741df656697c546c600e6adf31a4c42a9aed4aebbb5c573542dc6769"
+          "digest": "6e7292cddbc59906c216930620c2628c8828c7a19e6daf0b177558f2fe49d6aa"
         },
         {
           "id": "web-build-profile",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "296886c8c67169cf13f12715ba0f89863e023971c8d411cd3c83f60c05e39fbf"
+          "digest": "8493854ba870ea27789f5facde61ae9d93e13c6e3d4cef38d8f5e13bc8e5816b"
         },
         {
           "id": "marketing-screenshots",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "6d67181ada303de46e180c8b0c9c4d7d40952ff530b477a4d055929b0b05411b"
+          "digest": "20495e81583f0b1dcd49c8eec808015e47cb9084a4f3e01e4aa23f3115e747af"
         },
         {
           "id": "postgres-suites",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "ac3108997493ee5deb3ce1a5d2a9d6769e62ad29c32c2751dfa3690b28ec57ff"
+          "digest": "d6e185dba443d9390f9d4c0fab9b84240448787dc7ba1b72844f44eaeb8635ca"
         },
         {
           "id": "valkey-suites",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "ef9b8f1faa2979a81b72e0bc0d6dc090a1f4276777894b921b2bfa450ab8b5b5"
+          "digest": "ee7bfb616ea461cc00ca182b89f5e932e2d8a8ff07fa32c533fc76b97261232f"
         },
         {
           "id": "smoke-suite",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "0a39a4b6343e7cf0bf88db060316fbd077b3ea87bebdd38df33497996ef83396"
+          "digest": "1c5d76f400d56c58979a2d774a4b800d0ebe2bd68936fc352d7457e4e2483fb3"
         },
         {
           "id": "migration-exact-base-upgrade",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "5eeb3299afb6f849474ea18cc2e04961f11c2eb473ea3864928e05250a860f9e"
+          "digest": "4a79531686c14b3c43ffcc08c4cdf72569f0ea2b516ef34dcb464b9674d3a861"
         },
         {
           "id": "report-failure",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "2f9b0c93ad03016f2bab3e3d205076989f3d17d506ab16118cb2dea4e87371cd"
+          "digest": "551bda6b1e7427189d8ad37a07c8e0dbb8b83d62be523e0b20f70376124451ed"
         }
       ],
       "edges": {
@@ -2846,20 +2846,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/type-cost-measurement.yml",
-      "digest": "3c5c96d4ab5006da8747e0cc558dc7fd0ca477e0bfbf0df63bb57f9c264039aa",
+      "digest": "9c603bd7c931e6fee26bafac92de112a65ae1fb4b1c83a19b052c45d297b980f",
       "references": [],
       "jobs": [
         {
           "id": "prepare",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "f873abb4eebcfbb8a772537919e8394fc95abf3460ad903cd480b3de5b49fa4e"
+          "digest": "46c0ca0044b6a0e96f387dda7fe908618fe199cc3091080500a8dce436663467"
         },
         {
           "id": "measure",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "73d9a82cdfec0bbb66a895f4849ce699e62aa3470a62f9d431606200891546b0"
+          "digest": "3547ebdddfd171ecff7f197633787f846de9aa298a6281e148e10ed14fa18964"
         }
       ],
       "edges": {
@@ -2901,14 +2901,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/visual-preview.yml",
-      "digest": "37601da18874395cedfe3df13541759074eb27dff3b95297eef41427ebc5b7fb",
+      "digest": "08c27091739beb3e2b574f74527c8b8beb6a9dbdee66f5ce27c90fb8ad89a9e3",
       "references": [],
       "jobs": [
         {
           "id": "preview",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "f67d68f63e803811a2f7aaacc9c18a4ae3b806a2eb1d3c9fa9876ce242671de2"
+          "digest": "83c5158c2586cf56af46d95b54ea914ed7b67060e22b9744405504a8af0d7778"
         }
       ],
       "edges": {
@@ -3421,20 +3421,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/flaky-test-quarantine.yml",
-      "digest": "472cac86aa427eeb341ae00b2d516aeff82928339ee45ddd723189d645594ede",
+      "digest": "3bdd41b9f984653e40d23f5178911623169c2b61ad7fd292be924c209466495f",
       "references": [],
       "jobs": [
         {
           "id": "expiry",
           "kind": "ordinary",
           "qualifier": "Checks quarantine expiry on scheduled or manual default-branch runs; no publication or deployment.",
-          "digest": "ba12b4192b2c1b589ffce6529547c666dd66d1471bd69c9d14a4997ef65c603e"
+          "digest": "9afcf7c1ea60e23f6c1239bb59652c702a5f060f0dfb6470bf5ad7c498365541"
         },
         {
           "id": "propose",
           "kind": "ordinary",
           "qualifier": "Scans flake history and opens or refreshes a review-required quarantine proposal; no release publication or deployment.",
-          "digest": "75bf42372985255a96e34d509733bd660b3c670c17b5679a362f03f523ea1dee"
+          "digest": "65ed396954755118afed6d790f67ed362395ca72bcdb73141e0bbc3069d21977"
         }
       ],
       "edges": {
