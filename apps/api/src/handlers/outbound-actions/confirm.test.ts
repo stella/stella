@@ -80,9 +80,9 @@ const setup = ({
       set: (value: unknown) => ({
         where: () => {
           updates.push(value);
-          return Object.assign(Promise.resolve(), {
+          return {
             returning: async () => (claimSucceeds ? [{ id: actionId }] : []),
-          });
+          };
         },
       }),
     }),
