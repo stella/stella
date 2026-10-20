@@ -607,6 +607,10 @@
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."
   },
+  "candidate:.github/workflows/release-pr.yml/tag-version": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
   "candidate:.github/workflows/release-pr.yml/version": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."
