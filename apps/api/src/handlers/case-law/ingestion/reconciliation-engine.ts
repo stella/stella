@@ -2264,26 +2264,31 @@ export const runReconciliationWorkUnit = async ({
     return { type: "idle" };
   }
 
-  try {
-    return await executeReconciliationUnit({
-      adapterKey,
-      fetchDelayMs,
-      now,
-      reparseStoredRaw,
-      readStoredRaw,
-      reconciliation,
-      scopedDb,
-      signal,
-      sliceIngestBudget,
-      sliceRetries,
-      sleep,
-      sourceId,
-      unit,
-    });
-  } catch (error) {
+  const executed = await Result.tryPromise({
+    try: async () =>
+      await executeReconciliationUnit({
+        adapterKey,
+        fetchDelayMs,
+        now,
+        reparseStoredRaw,
+        readStoredRaw,
+        reconciliation,
+        scopedDb,
+        signal,
+        sliceIngestBudget,
+        sliceRetries,
+        sleep,
+        sourceId,
+        unit,
+      }),
+    catch: (error) => error,
+  });
+  if (Result.isError(executed)) {
     if (isSignalAborted(signal)) {
       return { type: "aborted" };
     }
-    throw error;
+    await Promise.reject.bind(Promise, executed.error)();
+    return panic("Promise rejection unexpectedly resolved");
   }
+  return executed.value;
 };
