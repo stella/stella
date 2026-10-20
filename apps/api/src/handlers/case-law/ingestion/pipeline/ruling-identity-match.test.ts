@@ -308,6 +308,7 @@ describe("cross-source ruling identity lookup", () => {
       },
       sourceUrl: "https://example.invalid/second",
       observedAt: new Date("2026-10-20T00:00:00Z"),
+      observationOrder: 1n,
     });
 
     expect(
@@ -685,7 +686,7 @@ describe("cross-source ruling identity lookup", () => {
     fakeS3.stop();
   });
 
-  test("a late older observation never replaces newer raw provenance", async () => {
+  test("a late older observation never replaces newer raw provenance, even at the same timestamp", async () => {
     const decisionId = createSafeId<"caseLawDecision">();
     const sourceId = sourceAt(1);
     await db.insert(caseLawDecisions).values({
@@ -705,7 +706,9 @@ describe("cross-source ruling identity lookup", () => {
     });
     const scopedDb: ScopedDb = async (callback) =>
       await db.transaction(async (tx) => await callback(asTestRaw(tx)));
-    const record = async (key: string, observedAt: string) =>
+    // Both observations share one timestamp: only the observation order
+    // tells them apart, and the older one finishes last.
+    const record = async (key: string, observationOrder: bigint) =>
       await recordSourceIdentityRaw({
         scopedDb,
         sourceId,
@@ -716,11 +719,12 @@ describe("cross-source ruling identity lookup", () => {
           sourceRawContentType: "application/json",
         },
         sourceUrl: `https://example.invalid/${key}`,
-        observedAt: new Date(observedAt),
+        observedAt: new Date("2026-10-20T12:00:00Z"),
+        observationOrder,
       });
 
-    await record("raw/newer", "2026-10-20T12:00:00Z");
-    await record("raw/older", "2026-10-20T11:00:00Z");
+    await record("raw/newer", 2n);
+    await record("raw/older", 1n);
 
     expect(
       await db
@@ -771,6 +775,7 @@ describe("cross-source ruling identity lookup", () => {
       },
       sourceUrl: "https://example.invalid/redacted",
       observedAt: new Date("2026-10-20T00:00:00Z"),
+      observationOrder: 1n,
     });
 
     expect(

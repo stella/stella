@@ -1325,6 +1325,10 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
     sourceRawContentType: p.varchar("source_raw_content_type", { length: 128 }),
     sourceUrl: p.varchar("source_url", { length: 2048 }),
     sourceObservedAt: timestamptz("source_observed_at"),
+    /** The source's observation order of the provenance above; only a later order replaces it. */
+    sourceObservationOrder: p.bigint("source_observation_order", {
+      mode: "bigint",
+    }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [

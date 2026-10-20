@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, isNull, lt, or } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisionSourceIdentities } from "@/api/db/schema";
@@ -74,6 +74,7 @@ type RecordSourceIdentityRawOptions = {
   };
   sourceUrl: string | undefined;
   observedAt: Date;
+  observationOrder: bigint;
 };
 
 export const recordSourceIdentityRaw = async ({
@@ -84,6 +85,7 @@ export const recordSourceIdentityRaw = async ({
   rawArtifact,
   sourceUrl,
   observedAt,
+  observationOrder,
 }: RecordSourceIdentityRawOptions): Promise<void> => {
   if (sourceDocumentId === undefined) {
     return;
@@ -105,6 +107,7 @@ export const recordSourceIdentityRaw = async ({
         sourceRawContentType: rawArtifact.sourceRawContentType,
         sourceUrl: sourceUrl ?? null,
         sourceObservedAt: observedAt,
+        sourceObservationOrder: observationOrder,
       })
       .where(
         and(
@@ -114,12 +117,13 @@ export const recordSourceIdentityRaw = async ({
             caseLawDecisionSourceIdentities.sourceDocumentId,
             sourceDocumentId,
           ),
-          // An attempt that finishes late must not replace a newer observation.
+          // Ordered by the source's observation order, as decision writes
+          // are: an attempt that finishes late never replaces a later one.
           or(
-            isNull(caseLawDecisionSourceIdentities.sourceObservedAt),
-            lte(
-              caseLawDecisionSourceIdentities.sourceObservedAt,
-              sql`${observedAt.toISOString()}::timestamptz`,
+            isNull(caseLawDecisionSourceIdentities.sourceObservationOrder),
+            lt(
+              caseLawDecisionSourceIdentities.sourceObservationOrder,
+              observationOrder,
             ),
           ),
         ),
@@ -355,17 +359,21 @@ const runDecisionAttempt = async ({
     return sourceRawArtifact.outcome;
   }
   const rawArtifact = sourceRawArtifact.artifact;
-
-  const republishedLink = await settleRepublishedLink({
-    republished,
-    s3UploadFailed: rawArtifact.s3UploadFailed,
+  const provenance = {
     scopedDb,
     sourceId,
-    sourceDocumentId: result.sourceDocumentId,
     decisionId,
     rawArtifact,
     sourceUrl: result.sourceUrl,
     observedAt,
+    observationOrder,
+  };
+
+  const republishedLink = await settleRepublishedLink({
+    ...provenance,
+    republished,
+    s3UploadFailed: rawArtifact.s3UploadFailed,
+    sourceDocumentId: result.sourceDocumentId,
   });
   if (republishedLink !== null) {
     return republishedLink;
@@ -448,13 +456,8 @@ const runDecisionAttempt = async ({
   const { write, writeStatus } = rowWrite.value;
 
   await recordAppliedIdentityRaw(writeStatus, {
-    scopedDb,
-    sourceId,
+    ...provenance,
     sourceDocumentId: identity.persistedSourceDocumentId,
-    decisionId,
-    rawArtifact,
-    sourceUrl: result.sourceUrl,
-    observedAt,
   });
 
   const settled = await settleRowWriteStatus({

@@ -7,7 +7,8 @@ ALTER TABLE "case_law_decision_source_identities"
   ADD COLUMN IF NOT EXISTS "source_raw_s3_key" varchar(512),
   ADD COLUMN IF NOT EXISTS "source_raw_content_type" varchar(128),
   ADD COLUMN IF NOT EXISTS "source_url" varchar(2048),
-  ADD COLUMN IF NOT EXISTS "source_observed_at" timestamptz;--> statement-breakpoint
+  ADD COLUMN IF NOT EXISTS "source_observed_at" timestamptz,
+  ADD COLUMN IF NOT EXISTS "source_observation_order" bigint;--> statement-breakpoint
 
 -- Drizzle wraps migrations in a transaction, but this index covers the live
 -- decisions corpus and must be built without blocking its writers.
