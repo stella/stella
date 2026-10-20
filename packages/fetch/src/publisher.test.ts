@@ -1272,6 +1272,36 @@ describe("publisher scheduler", () => {
     expect(completed.isOk()).toBe(true);
   });
 
+  test("aborting a stalled resource fetch returns a typed refusal promptly", async () => {
+    const controller = new AbortController();
+    let markResourceStarted = () => {};
+    const resourceStarted = new Promise<void>((resolve) => {
+      markResourceStarted = resolve;
+    });
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        if (input.url.pathname === "/robots.txt") {
+          return new Response(null, { status: 404 });
+        }
+        markResourceStarted();
+        return await new Promise<never>(() => {});
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const pending = request("https://publisher.example/resource", {
+      init: { signal: controller.signal },
+    });
+    await resourceStarted;
+    controller.abort();
+    const outcome = await pending;
+
+    expect(Result.isError(outcome) && outcome.error._tag).toBe(
+      "publisher_request_aborted",
+    );
+  });
+
   test("a redirect body whose cancel never settles still ends at the caller deadline", async () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,

@@ -1020,11 +1020,27 @@ const walkPublisherRedirects = async <Target extends PublisherTarget>(
     state.delayAppliedMs += reserved.value;
     const headers = new Headers(state.requestInit?.headers);
     headers.set("User-Agent", PUBLISHER_USER_AGENT);
-    const response = await runtime.fetcher(validated.value, {
-      ...state.requestInit,
-      headers,
-      redirect: "manual",
-    });
+    const fetched = await Result.tryPromise(async () =>
+      raceAbort(
+        runtime.fetcher(validated.value, {
+          ...state.requestInit,
+          headers,
+          redirect: "manual",
+        }),
+        signal,
+      ),
+    );
+    if (Result.isError(fetched)) {
+      return Result.err(
+        new PublisherRequestAbortedError({
+          message: "Publisher request was aborted while fetching the resource",
+          url: state.url.href,
+          origin: state.url.origin,
+          cause: fetched.error.cause,
+        }),
+      );
+    }
+    const response = fetched.value;
     const location = response.headers.get("location");
     if (!isRedirect(response) || !location) {
       return Result.ok({
