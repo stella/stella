@@ -3,6 +3,7 @@ import {
   and,
   eq,
   inArray,
+  isNull,
   isNotNull,
   notExists,
   notInArray,
@@ -654,7 +655,9 @@ export const findRepublishedRulingTx = async (
     .where(
       and(
         eq(caseLawDecisions.country, observed.country),
-        eq(caseLawDecisions.court, observed.court),
+        observed.courtId === undefined
+          ? isNull(caseLawDecisions.courtId)
+          : eq(caseLawDecisions.courtId, observed.courtId),
         eq(caseLawDecisions.docketFamilyKey, docketFamilyKey),
         eq(caseLawDecisions.decisionDate, observed.decisionDate),
         sql`lower(${caseLawDecisions.decisionType}) = lower(${observed.decisionType})`,
@@ -695,7 +698,9 @@ export const findRepublishedRulingTx = async (
       .where(
         and(
           eq(caseLawDecisions.country, observed.country),
-          eq(caseLawDecisions.court, observed.court),
+          observed.courtId === undefined
+            ? isNull(caseLawDecisions.courtId)
+            : eq(caseLawDecisions.courtId, observed.courtId),
           eq(caseLawDecisions.docketFamilyKey, docketFamilyKey),
           notInArray(caseLawDecisions.sourceId, [sourceId]),
           notExists(

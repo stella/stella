@@ -82,6 +82,12 @@ beforeAll(
         decisionId: retiredId,
         sourceRawS3Key: "raw/republisher",
       },
+      {
+        sourceId: republisherSource,
+        sourceDocumentId: "publisher-already-canonical",
+        decisionId: canonicalId,
+        sourceRawS3Key: "raw/already-canonical",
+      },
     ]);
   },
   { timeout: 120_000 },
@@ -100,7 +106,7 @@ test("dry run is read-only and court authority wins over storage age", async () 
   });
   expect(await db.select().from(caseLawDecisionAliases)).toEqual([]);
   expect(await db.select().from(caseLawDecisionSourceIdentities)).toHaveLength(
-    2,
+    3,
   );
 });
 
@@ -151,7 +157,12 @@ test("apply resolves the retired id and reverse restores identity ownership", as
         decisionId,
         sourceRawS3Key,
       }))
-      .toSorted((a, b) => compareCodeUnit(a.sourceId, b.sourceId)),
+      .toSorted((a, b) =>
+        compareCodeUnit(
+          `${a.sourceId}:${a.sourceRawS3Key ?? ""}`,
+          `${b.sourceId}:${b.sourceRawS3Key ?? ""}`,
+        ),
+      ),
   ).toEqual(
     before
       .map(({ sourceId, decisionId, sourceRawS3Key }) => ({
@@ -159,7 +170,12 @@ test("apply resolves the retired id and reverse restores identity ownership", as
         decisionId,
         sourceRawS3Key,
       }))
-      .toSorted((a, b) => compareCodeUnit(a.sourceId, b.sourceId)),
+      .toSorted((a, b) =>
+        compareCodeUnit(
+          `${a.sourceId}:${a.sourceRawS3Key ?? ""}`,
+          `${b.sourceId}:${b.sourceRawS3Key ?? ""}`,
+        ),
+      ),
   );
   expect(reconciled).toContain(`reverse:${retiredId}`);
 });

@@ -283,7 +283,7 @@ export const applyRepublishedDecisionBatch = async (
       UPDATE case_law_decision_source_identities
          SET decision_id = ${candidate.canonical.id}
        WHERE decision_id = ${candidate.duplicate.id}
-      RETURNING decision_id
+      RETURNING source_id AS "sourceId", source_document_id AS "sourceDocumentId"
     `),
     );
     if (identities.length === 0) {
@@ -293,6 +293,21 @@ export const applyRepublishedDecisionBatch = async (
       INSERT INTO case_law_decision_aliases (retired_decision_id, canonical_decision_id)
       VALUES (${candidate.duplicate.id}, ${candidate.canonical.id})
     `);
+    for (const identity of identities) {
+      if (
+        !isRecord(identity) ||
+        typeof identity["sourceId"] !== "string" ||
+        typeof identity["sourceDocumentId"] !== "string"
+      ) {
+        return panic("Republished-decision apply returned an invalid identity");
+      }
+      await tx.execute(sql`
+        INSERT INTO case_law_decision_alias_moved_identities
+          (retired_decision_id, source_id, source_document_id)
+        VALUES
+          (${candidate.duplicate.id}, ${identity["sourceId"]}, ${identity["sourceDocumentId"]})
+      `);
+    }
     await reconcile(candidate, "apply");
     applied++;
   }
@@ -320,11 +335,8 @@ export const reverseRepublishedDecisionBatch = async (
       JOIN case_law_sources ds ON ds.id = d.source_id
       JOIN case_law_sources cs ON cs.id = c.source_id
      WHERE d.source_id <> c.source_id
-       AND EXISTS (
-         SELECT 1 FROM case_law_decision_source_identities i
-          WHERE i.source_id = d.source_id
-            AND i.decision_id = a.canonical_decision_id
-       )
+       AND EXISTS (SELECT 1 FROM case_law_decision_alias_moved_identities m
+                    WHERE m.retired_decision_id = a.retired_decision_id)
      ORDER BY a.retired_decision_id
      LIMIT ${limit}
   `),
@@ -362,7 +374,11 @@ export const reverseRepublishedDecisionBatch = async (
       UPDATE case_law_decision_source_identities
          SET decision_id = ${retiredId}
        WHERE decision_id = ${canonicalId}
-         AND source_id = ${value["sourceId"]}
+         AND (source_id, source_document_id) IN (
+           SELECT source_id, source_document_id
+             FROM case_law_decision_alias_moved_identities
+            WHERE retired_decision_id = ${retiredId}
+         )
     `);
     await tx.execute(
       sql`DELETE FROM case_law_decision_aliases WHERE retired_decision_id = ${retiredId}`,

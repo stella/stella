@@ -270,6 +270,46 @@ describe("cross-source ruling identity lookup", () => {
     });
   });
 
+  test("equal court ids link publications with different court labels", async () => {
+    const canonicalId = createSafeId<"caseLawDecision">();
+    const caseNumber = "21-123";
+    await db.insert(caseLawDecisions).values({
+      id: canonicalId,
+      sourceId: sourceAt(1),
+      sourceDocumentId: "court-id-canonical",
+      country: "USA",
+      court: "Supreme Court of the United States",
+      courtId: "scotus",
+      language: observed.language,
+      caseNumber,
+      docketFamilyKey: docketFamilyKeyOf(caseNumber, "USA"),
+      decisionDate: observed.decisionDate,
+      decisionType: observed.decisionType,
+    });
+
+    expect(
+      await db.transaction(
+        async (tx) =>
+          await findRepublishedRulingTx(
+            asTestRaw<Transaction>(tx),
+            plainTextIngestionResult({
+              ...observed,
+              country: "USA",
+              court: "United States Supreme Court",
+              courtId: "scotus",
+              caseNumber,
+              sourceDocumentId: "court-id-republication",
+              rawHash: "court-id-republication",
+            }),
+            sourceAt(0),
+          ),
+      ),
+    ).toEqual({
+      type: REPUBLISHED_RULING_OUTCOME.LINKED,
+      decisionId: canonicalId,
+    });
+  });
+
   test("republished ruling ingestion persists cross-source identity invariants", async () => {
     let example = 0;
     await assertProperty(
