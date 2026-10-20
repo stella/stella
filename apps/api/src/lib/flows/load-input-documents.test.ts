@@ -188,6 +188,47 @@ describe("loadInputDocuments", () => {
     expect(fake.requests).toEqual([]);
   });
 
+  test("reports unavailable inputs before any document is decrypted", async () => {
+    const [original] = await testDb
+      .select({ ciphertext: extractedContent.ciphertext })
+      .from(extractedContent)
+      .where(eq(extractedContent.entityId, extractedEntityId));
+    // An undecryptable available input: decrypting before the availability
+    // check would surface its decryption error instead of the pending input.
+    await testDb
+      .update(extractedContent)
+      .set({ ciphertext: Buffer.from("not a ciphertext") })
+      .where(eq(extractedContent.entityId, extractedEntityId));
+    try {
+      const workspaceIds = await scopedDb()(async (tx) =>
+        (
+          await authorizedWorkspaceIds(tx, {
+            organizationId,
+            workspaceIds: [workspaceId],
+          })
+        ).unwrap(),
+      );
+      const caught = await loadInputDocuments(
+        scopedDb(),
+        organizationId,
+        workspaceIds,
+        [extractedEntityId, pendingEntityId],
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(caught).toBeInstanceOf(FlowStepError);
+      if (caught instanceof FlowStepError) {
+        expect(caught.message).toContain("Pending doc");
+      }
+    } finally {
+      await testDb
+        .update(extractedContent)
+        .set({ ciphertext: original?.ciphertext })
+        .where(eq(extractedContent.entityId, extractedEntityId));
+    }
+  });
+
   test("includes only live current-version inputs", async () => {
     await createDryScopedQuery(testDb)(
       [workspaceId],

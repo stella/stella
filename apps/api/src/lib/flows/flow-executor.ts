@@ -38,7 +38,10 @@ import {
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveWorkspaceMemberAccess } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
+import {
+  loadCurrentExtractedContents,
+  loadCurrentExtractedSources,
+} from "@/api/lib/document-content-provenance";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -620,18 +623,11 @@ export const loadInputDocuments = async (
     return [];
   }
 
-  // Require the complete selected input set before decrypting document text.
-  const available = await scopedDb(
-    async (tx) =>
-      await loadCurrentExtractedContents(tx, {
-        entityIds,
-        organizationId,
-        workspaceIds,
-      }),
-  );
-  if (available.length < entityIds.length) {
-    const loaded = new Set(available.map((row) => row.entityId));
-    const missingIds = entityIds.filter((id) => !loaded.has(id));
+  const refuseUnavailable = async (loadedIds: ReadonlySet<string>) => {
+    const missingIds = entityIds.filter((id) => !loadedIds.has(id));
+    if (missingIds.length === 0) {
+      return;
+    }
     const missingEntities = await scopedDb((tx) =>
       tx.query.entities.findMany({
         where: { id: { in: missingIds } },
@@ -646,7 +642,29 @@ export const loadInputDocuments = async (
     throw new FlowStepError({
       message: `${missingIds.length} selected input document(s) could not be loaded because their content is not available yet (extraction is still pending or has failed)${named}. Re-run this workflow once the document(s) have finished processing.`,
     });
-  }
+  };
+
+  // Availability is decided from provenance alone; text is decrypted only for
+  // a complete input set, and a document that became unavailable in between
+  // gets the same refusal.
+  const sources = await scopedDb(
+    async (tx) =>
+      await loadCurrentExtractedSources(tx, {
+        entityIds,
+        organizationId,
+        workspaceIds,
+      }),
+  );
+  await refuseUnavailable(new Set(sources.map((row) => row.entityId)));
+  const available = await scopedDb(
+    async (tx) =>
+      await loadCurrentExtractedContents(tx, {
+        entityIds,
+        organizationId,
+        workspaceIds,
+      }),
+  );
+  await refuseUnavailable(new Set(available.map((row) => row.entityId)));
 
   const drained = await drainFanOut({
     items: available,
