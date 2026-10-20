@@ -459,6 +459,24 @@ describe("document conversion input", () => {
             ),
         ),
       ),
+      makeConversionCase(
+        "ooxml|{http://www.w3.org/2001/XMLSchema}schema|targetNamespace",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        async () =>
+          zip(
+            "customXml/item1.xml",
+            '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="https://example.test/schema"/>',
+          ),
+      ),
+      makeConversionCase(
+        "ooxml|{http://www.w3.org/2001/XMLSchema}import|namespace",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        async () =>
+          zip(
+            "customXml/item1.xml",
+            '<xs:import xmlns:xs="http://www.w3.org/2001/XMLSchema" namespace="https://example.test/schema"/>',
+          ),
+      ),
       ...namespaceVariants.map(({ word, officeRelationships }) =>
         makeConversionCase(
           `ooxml|{${word}}hyperlink|{${officeRelationships}}id`,

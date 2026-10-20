@@ -46,6 +46,18 @@ export const REFERENCE_ALLOWLIST = [
     reason: "namespace declaration",
   },
   {
+    format: "ooxml",
+    element: "{http://www.w3.org/2001/XMLSchema}schema",
+    attribute: "targetNamespace",
+    reason: "schema namespace identifier in custom XML schema parts",
+  },
+  {
+    format: "ooxml",
+    element: "{http://www.w3.org/2001/XMLSchema}import",
+    attribute: "namespace",
+    reason: "imported schema namespace identifier",
+  },
+  {
     format: "odf",
     element: "*",
     attribute: "{http://www.w3.org/2000/xmlns/}*",

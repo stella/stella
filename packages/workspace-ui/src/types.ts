@@ -1,8 +1,22 @@
-import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
 import type { KanbanColumnBand } from "@stll/ui/kanban";
 import type { OptionColor } from "@stll/ui/option-color";
 
 export type { OptionColor } from "@stll/ui/option-color";
+
+/**
+ * Why a document could not be converted. Mirrors the API contract type; the
+ * web app asserts both declarations stay equal.
+ */
+export type ConversionRefusal =
+  | { kind: "unsupported_encoding"; encoding: string }
+  | {
+      kind: "unsupported_reference";
+      format: string;
+      element: string;
+      attribute: string;
+    }
+  | { kind: "unsupported_field"; fieldType: string }
+  | { kind: "legacy_format"; replacementExtension: ".xlsx" | ".pptx" };
 
 export type FieldContent =
   | {
