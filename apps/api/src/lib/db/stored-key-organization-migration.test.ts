@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { PGlite } from "@electric-sql/pglite";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 const migration = readFileSync(
@@ -8,6 +9,15 @@ const migration = readFileSync(
   ),
   "utf-8",
 );
+
+const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const ORGANIZATION_ID = "018f0000-0000-7000-8000-000000000001";
+const OTHER_ORGANIZATION_ID = "018f0000-0000-7000-8000-000000000002";
+const USER_ID = "018f0000-0000-7000-8000-000000000003";
+const THREAD_ID = "018f0000-0000-7000-8000-000000000004";
+const LEGACY_FILE_ID = "018f0000-0000-7000-8000-000000000005";
+
+let database: PGlite;
 
 describe("stored object organization key migration", () => {
   test("prechecks every stored-key table before validation", () => {
@@ -48,3 +58,80 @@ describe("stored object organization key migration", () => {
     );
   });
 });
+
+describe.skipIf(!enabled)(
+  "stored object organization key database rules",
+  () => {
+    beforeAll(async () => {
+      database = new PGlite();
+      await database.exec(`
+      CREATE TABLE public.templates (s3_key text NOT NULL, organization_id text NOT NULL);
+      CREATE TABLE public.template_versions (s3_key text NOT NULL, organization_id text NOT NULL);
+      CREATE TABLE public.style_sets (s3_key text NOT NULL, organization_id text NOT NULL);
+      CREATE TABLE public.chat_threads (id uuid PRIMARY KEY, organization_id text NOT NULL);
+      CREATE TABLE public.user_files (
+        id uuid PRIMARY KEY,
+        user_id text NOT NULL,
+        thread_id uuid NOT NULL REFERENCES public.chat_threads(id),
+        s3_key text NOT NULL
+      );
+      INSERT INTO public.chat_threads (id, organization_id)
+        VALUES ('${THREAD_ID}', '${ORGANIZATION_ID}');
+      INSERT INTO public.user_files (id, user_id, thread_id, s3_key)
+        VALUES ('${LEGACY_FILE_ID}', '${USER_ID}', '${THREAD_ID}', '${USER_ID}/${LEGACY_FILE_ID}.pdf');
+    `);
+      await database.exec(migration);
+    });
+
+    afterAll(async () => await database.close());
+
+    test("an existing uploader-owned row survives the migration precheck", async () => {
+      expect(
+        (
+          await database.query<{ s3_key: string }>(
+            "SELECT s3_key FROM public.user_files WHERE id = $1",
+            [LEGACY_FILE_ID],
+          )
+        ).rows,
+      ).toEqual([{ s3_key: `${USER_ID}/${LEGACY_FILE_ID}.pdf` }]);
+    });
+
+    test.each([
+      ["an uploader-owned key", `${USER_ID}/${Bun.randomUUIDv7()}.pdf`],
+      [
+        "a key owned by another organization",
+        `${OTHER_ORGANIZATION_ID}/${Bun.randomUUIDv7()}.pdf`,
+      ],
+    ])("refuses %s on a new row", async (_description, s3Key) => {
+      const rejection = await database
+        .query(
+          "INSERT INTO public.user_files (id, user_id, thread_id, s3_key) VALUES ($1, $2, $3, $4)",
+          [Bun.randomUUIDv7(), USER_ID, THREAD_ID, s3Key],
+        )
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(rejection).toMatchObject({
+        message: expect.stringContaining(
+          "user_files.s3_key must use its organization prefix",
+        ),
+      });
+    });
+
+    test("refuses an update that changes the stored key", async () => {
+      const rejection = await database
+        .query("UPDATE public.user_files SET s3_key = $1 WHERE id = $2", [
+          `${ORGANIZATION_ID}/${Bun.randomUUIDv7()}.pdf`,
+          LEGACY_FILE_ID,
+        ])
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(rejection).toMatchObject({
+        message: expect.stringContaining("user_files.s3_key is immutable"),
+      });
+    });
+  },
+);
