@@ -8,6 +8,7 @@ publish = false
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
+map_err_ignore = "deny"
 undocumented_unsafe_blocks = "deny"
 
 [lints.rustdoc]
