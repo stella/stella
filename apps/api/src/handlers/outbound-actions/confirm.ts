@@ -18,6 +18,8 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -174,36 +176,38 @@ export const createConfirmOutboundActionHandler = (
           }
           // The transition is the claim: it matches only while the action is
           // still pending, unexpired and bound to the confirmed preview.
-          const transitioned = await tx
-            .update(outboundActions)
-            .set({ status: "sending", confirmedAt: now })
-            .where(
-              and(
-                eq(outboundActions.id, actionId),
-                eq(outboundActions.organizationId, organizationId),
-                eq(outboundActions.userId, user.id),
-                eq(outboundActions.status, "pending"),
-                eq(outboundActions.previewHash, previewHash),
-                // Expiry is judged by the database wall clock at the claim
-                // itself (now() would be the transaction start).
-                gt(outboundActions.expiresAt, sql`clock_timestamp()`),
-              ),
-            )
-            .returning({ id: outboundActions.id });
-          if (transitioned.length === 0) {
+          const transitioned = await transitionScopedCount({
+            tx,
+            spec: TRANSITIONS.outboundActions,
+            where: sql`${and(
+              eq(outboundActions.id, actionId),
+              eq(outboundActions.organizationId, organizationId),
+              eq(outboundActions.userId, user.id),
+              eq(outboundActions.previewHash, previewHash),
+              // Use the database wall clock at the claim, not transaction start.
+              gt(outboundActions.expiresAt, sql`clock_timestamp()`),
+            )}`,
+            options: {
+              from: ["pending"],
+              to: "sending",
+              set: { confirmedAt: now, updatedAt: now },
+            },
+            recordTransitionAuditEvent: async (auditTx) =>
+              await recordAuditEvent(auditTx, {
+                action: AUDIT_ACTION.EXECUTE,
+                resourceType: AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION,
+                resourceId: actionId,
+                workspaceId: null,
+                metadata: {
+                  kind: action.kind,
+                  operation: "confirm",
+                  previewHash,
+                },
+              }),
+          });
+          if (transitioned === 0) {
             return conflict("This action was already confirmed");
           }
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.EXECUTE,
-            resourceType: AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION,
-            resourceId: actionId,
-            workspaceId: null,
-            metadata: {
-              kind: action.kind,
-              operation: "confirm",
-              previewHash,
-            },
-          });
           return { executor, kind: action.kind, preview: preview.value };
         }),
       );
@@ -238,27 +242,32 @@ export const createConfirmOutboundActionHandler = (
 
       yield* Result.await(
         safeDb(async (tx) => {
-          await tx
-            .update(outboundActions)
-            .set(settledValues)
-            .where(
-              and(
-                eq(outboundActions.id, actionId),
-                eq(outboundActions.organizationId, organizationId),
-                eq(outboundActions.userId, user.id),
-                eq(outboundActions.status, "sending"),
-              ),
-            );
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.EXECUTE,
-            resourceType: AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION,
-            resourceId: actionId,
-            workspaceId: null,
-            metadata: {
-              kind,
-              operation: settledValues.status,
-              failureCode: settledValues.failureCode,
+          const { status, ...metadata } = settledValues;
+          await transitionScopedCount({
+            tx,
+            spec: TRANSITIONS.outboundActions,
+            where: sql`${and(
+              eq(outboundActions.id, actionId),
+              eq(outboundActions.organizationId, organizationId),
+              eq(outboundActions.userId, user.id),
+            )}`,
+            options: {
+              from: ["sending"],
+              to: status,
+              set: { ...metadata, updatedAt: new Date() },
             },
+            recordTransitionAuditEvent: async (auditTx) =>
+              await recordAuditEvent(auditTx, {
+                action: AUDIT_ACTION.EXECUTE,
+                resourceType: AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION,
+                resourceId: actionId,
+                workspaceId: null,
+                metadata: {
+                  kind,
+                  operation: status,
+                  failureCode: settledValues.failureCode,
+                },
+              }),
           });
         }),
       );

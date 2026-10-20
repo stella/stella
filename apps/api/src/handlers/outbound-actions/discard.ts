@@ -1,5 +1,5 @@
-import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { outboundActions } from "@/api/db/schema";
@@ -7,6 +7,8 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionScopedCount } from "@/api/lib/db/transitions";
 
 const config = {
   contract: "patch",
@@ -28,32 +30,55 @@ const discardOutboundAction = createSafeRootHandler(
   }) {
     const discarded = yield* Result.await(
       safeDb(async (tx) => {
-        const rows = await tx
-          .update(outboundActions)
-          .set({ status: "discarded", completedAt: new Date() })
-          .where(
-            and(
-              eq(outboundActions.id, actionId),
-              eq(outboundActions.organizationId, session.activeOrganizationId),
-              eq(outboundActions.userId, user.id),
-              eq(outboundActions.status, "pending"),
-            ),
-          )
-          .returning({ kind: outboundActions.kind });
-        const row = rows.at(0);
-        if (row) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.CANCEL,
-            resourceType: AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION,
-            resourceId: actionId,
-            workspaceId: null,
-            metadata: { kind: row.kind, operation: "discard" },
-          });
-        }
-        return rows;
+        const now = new Date();
+        return await transitionScopedCount({
+          tx,
+          spec: TRANSITIONS.outboundActions,
+          where: sql`${and(
+            eq(outboundActions.id, actionId),
+            eq(outboundActions.organizationId, session.activeOrganizationId),
+            eq(outboundActions.userId, user.id),
+          )}`,
+          options: {
+            from: ["pending"],
+            to: "discarded",
+            set: { completedAt: now, updatedAt: now },
+          },
+          recordTransitionAuditEvent: async (auditTx) => {
+            // The successful update holds this actor-scoped row until commit.
+            const row = (
+              await auditTx
+                .select({ kind: outboundActions.kind })
+                .from(outboundActions)
+                .where(
+                  and(
+                    eq(outboundActions.id, actionId),
+                    eq(
+                      outboundActions.organizationId,
+                      session.activeOrganizationId,
+                    ),
+                    eq(outboundActions.userId, user.id),
+                  ),
+                )
+                .limit(1)
+            ).at(0);
+            if (!row) {
+              panic(
+                "A discarded outbound action must exist in its transaction",
+              );
+            }
+            await recordAuditEvent(auditTx, {
+              action: AUDIT_ACTION.CANCEL,
+              resourceType: AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION,
+              resourceId: actionId,
+              workspaceId: null,
+              metadata: { kind: row.kind, operation: "discard" },
+            });
+          },
+        });
       }),
     );
-    return Result.ok({ discarded: discarded.length > 0 });
+    return Result.ok({ discarded: discarded > 0 });
   },
 );
 

@@ -1,9 +1,12 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import { getColumns, type SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { OUTBOUND_FAILURE_OUTCOME_UNKNOWN } from "@stll/api-contract/outbound-action";
 import type { OutboundEmailPreview } from "@stll/api-contract/outbound-action";
 
+import { outboundActions } from "@/api/db/schema";
 import { createConfirmOutboundActionHandler } from "@/api/handlers/outbound-actions/confirm";
 import type { OutboundActionExecutor } from "@/api/handlers/outbound-actions/executors";
 import { outboundPreviewHash } from "@/api/handlers/outbound-actions/preview";
@@ -71,21 +74,39 @@ const setup = ({
   const updates: unknown[] = [];
   const audits: unknown[] = [];
   const executed: unknown[] = [];
+  const statements: string[] = [];
+  const dialect = new PgDialect();
   const chain = {
     select: () => chain,
     from: () => chain,
     where: () => chain,
     limit: async () => (action ? [action] : []),
-    update: () => ({
-      set: (value: unknown) => ({
-        where: () => {
-          updates.push(value);
-          return {
-            returning: async () => (claimSucceeds ? [{ id: actionId }] : []),
-          };
-        },
-      }),
-    }),
+    execute: async (statement: SQL) => {
+      const query = dialect.sqlToQuery(statement);
+      const assignments = query.sql.split("SET").at(1)?.split("WHERE").at(0);
+      expect(assignments).toBeDefined();
+      const update = Object.fromEntries(
+        Object.entries(getColumns(outboundActions)).flatMap(([key, column]) => {
+          const parameter = assignments
+            ?.match(new RegExp(`"${column.name}" = \\$(\\d+)`, "u"))
+            ?.at(1);
+          return parameter === undefined
+            ? []
+            : [[key, query.params.at(Number(parameter) - 1)]];
+        }),
+      );
+      updates.push(update);
+      statements.push(
+        query.sql
+          .replace(/\$(\d+)/gu, (_, parameter: string) =>
+            JSON.stringify(query.params.at(Number(parameter) - 1)),
+          )
+          .replace(/\s+/gu, " ")
+          .trim(),
+      );
+      const isClaim = query.params.includes("pending");
+      return [{ count: isClaim && !claimSucceeds ? 0 : 1 }];
+    },
   };
   const recordingExecutor: OutboundActionExecutor | undefined =
     executor === undefined
@@ -115,7 +136,7 @@ const setup = ({
     ),
     route: "/v1/outbound-actions/:actionId/confirm",
   });
-  return { audits, context, executed, handler, updates };
+  return { audits, context, executed, handler, statements, updates };
 };
 
 const sends: OutboundActionExecutor = async () =>
@@ -136,6 +157,28 @@ test("a confirm of the exact preview sends it once with the stored content", asy
       providerMessageId: "provider-message-1",
     }),
   ]);
+  for (const statement of fixture.statements) {
+    expect(statement).toContain(`"outbound_actions"."id" = "${actionId}"`);
+    expect(statement).toContain(
+      `"outbound_actions"."organization_id" = "${organizationId}"`,
+    );
+    expect(statement).toContain('"outbound_actions"."user_id" = "user_1"');
+  }
+  const claim = fixture.statements.find((statement) =>
+    statement.includes('"outbound_actions"."status" IN ("pending")'),
+  );
+  expect(claim).toBeDefined();
+  expect(claim).toContain(
+    `"outbound_actions"."preview_hash" = "${previewHash}"`,
+  );
+  expect(claim).toContain(
+    '"outbound_actions"."expires_at" > clock_timestamp()',
+  );
+  expect(
+    fixture.statements.find((statement) =>
+      statement.includes('SET "status" = "sent"'),
+    ),
+  ).toContain('"outbound_actions"."status" IN ("sending")');
   expect(fixture.audits).toEqual([
     expect.objectContaining({
       resourceType: "outbound_action",
@@ -162,12 +205,12 @@ test("an interrupted provider call stays sending with an unknown outcome, never 
   expect(fixture.executed).toEqual([preview]);
   expect(fixture.updates).toEqual([
     expect.objectContaining({ status: "sending" }),
-    {
+    expect.objectContaining({
       status: "sending",
       providerMessageId: null,
       failureCode: OUTBOUND_FAILURE_OUTCOME_UNKNOWN,
       completedAt: null,
-    },
+    }),
   ]);
 });
 
