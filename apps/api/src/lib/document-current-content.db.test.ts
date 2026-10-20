@@ -13,14 +13,14 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { deleteEntityVersionHandler } from "@/api/handlers/entities/versions/delete";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import {
   isCurrentDeadlineSource,
   loadCurrentDeadlineSource,
   loadCurrentExtractedContents,
   loadCurrentOcrExport,
 } from "@/api/lib/document-content-provenance";
-import { authorizeWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { authorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -48,19 +48,36 @@ afterAll(async () => {
   await releaseTestDb();
 });
 
+const checkedWorkspaceIds = async (
+  tx: TestDatabaseTransaction,
+  workspaceIds: readonly SafeId<"workspace">[],
+) =>
+  (
+    await authorizedWorkspaceIds(tx, {
+      organizationId: ids.orgA,
+      workspaceIds,
+    })
+  ).unwrap();
+
 const readCurrent = async (tx: TestDatabaseTransaction) =>
   await loadCurrentExtractedContents(tx, {
     entityIds: [ids.entityA1, ids.entityA2, ids.entityB1],
     organizationId: ids.orgA,
-    workspaceIds: authorizeWorkspaceIds([ids.wsA1]),
+    workspaceIds: await checkedWorkspaceIds(tx, [ids.wsA1]),
   });
 
-test("owner connection is not a user-facing content reader", () => {
+test("owner connection is not a user-facing content reader", async () => {
+  const workspaceIds = (
+    await authorizedWorkspaceIds(rootDb, {
+      organizationId: ids.orgA,
+      workspaceIds: [],
+    })
+  ).unwrap();
   // @ts-expect-error The owner connection is intentionally not an RLS transaction.
   void loadCurrentExtractedContents(rootDb, {
     entityIds: [],
     organizationId: ids.orgA,
-    workspaceIds: authorizeWorkspaceIds([]),
+    workspaceIds,
   });
 });
 
@@ -76,14 +93,14 @@ test("current content follows organization and matter scope", async () => {
       await loadCurrentExtractedContents(tx, {
         entityIds: [ids.entityA1],
         organizationId: ids.orgA,
-        workspaceIds: authorizeWorkspaceIds([ids.wsA2]),
+        workspaceIds: await checkedWorkspaceIds(tx, [ids.wsA2]),
       }),
     ).toEqual([]);
     expect(
       await loadCurrentExtractedContents(tx, {
         entityIds: [ids.entityA1],
         organizationId: ids.orgB,
-        workspaceIds: authorizeWorkspaceIds([ids.wsA1]),
+        workspaceIds: await checkedWorkspaceIds(tx, [ids.wsA1]),
       }),
     ).toEqual([]);
   });
@@ -98,7 +115,7 @@ test("the required matter list narrows an otherwise authorized transaction", asy
         await loadCurrentExtractedContents(tx, {
           entityIds: [ids.entityA1],
           organizationId: ids.orgA,
-          workspaceIds: authorizeWorkspaceIds([ids.wsA2]),
+          workspaceIds: await checkedWorkspaceIds(tx, [ids.wsA2]),
         }),
       ).toEqual([]);
     },
@@ -118,10 +135,31 @@ test.each([
     const rows = await loadCurrentExtractedContents(tx, {
       entityIds: [ids.entityA1, ids.entityA2],
       organizationId: ids.orgA,
-      workspaceIds: authorizeWorkspaceIds([ids.wsA1]),
+      workspaceIds: await checkedWorkspaceIds(tx, [ids.wsA1]),
     });
     expect(rows.map(({ entityId }) => entityId)).toEqual([ids.entityA1]);
     expect(rows.at(0)?.text).toBe("extracted text a1");
+  });
+});
+
+test.each([
+  "compat search",
+  "compat fetch",
+  "cross-matter read",
+  "template prefill",
+  "flows",
+  "OCR export",
+])("%s drops a requested matter the caller cannot read", async () => {
+  await inMatter(async (tx) => {
+    const workspaceIds = await checkedWorkspaceIds(tx, [ids.wsA2]);
+    expect([...workspaceIds]).toEqual([]);
+    expect(
+      await loadCurrentExtractedContents(tx, {
+        entityIds: [ids.entityA2],
+        organizationId: ids.orgA,
+        workspaceIds,
+      }),
+    ).toEqual([]);
   });
 });
 
@@ -295,7 +333,7 @@ test.each(["exact", "legacy"] as const)(
         })
         .where(eq(extractedContent.entityId, ids.entityA1));
       const exportOptions = {
-        authorizedWorkspaceIds: authorizeWorkspaceIds([ids.wsA1]),
+        authorizedWorkspaceIds: await checkedWorkspaceIds(tx, [ids.wsA1]),
         db: tx,
         fieldId: ids.fileFieldA1,
         organizationId: ids.orgA,

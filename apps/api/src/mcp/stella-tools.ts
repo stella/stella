@@ -148,7 +148,7 @@ import {
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
 import { withTimeout } from "@/api/lib/with-timeout";
-import { authorizeWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { authorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
 import { decisionBlockDeepLink } from "@/api/mcp/case-law-decision-link";
 import {
@@ -1862,16 +1862,19 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     docxOutcome.kind === "markdown"
       ? null
       : (
-          await context.scopedDb(
-            async (tx) =>
-              await loadCurrentExtractedContents(tx, {
-                entityIds: [entityId],
+          await context.scopedDb(async (tx) => {
+            const workspaceIds = (
+              await authorizedWorkspaceIds(tx, {
                 organizationId: context.organizationId,
-                workspaceIds: authorizeWorkspaceIds([
-                  currentDocument.workspaceId,
-                ]),
-              }),
-          )
+                workspaceIds: [currentDocument.workspaceId],
+              })
+            ).unwrap();
+            return await loadCurrentExtractedContents(tx, {
+              entityIds: [entityId],
+              organizationId: context.organizationId,
+              workspaceIds,
+            });
+          })
         ).at(0);
   if (docxOutcome.kind !== "markdown" && !currentExtracted) {
     return structuredErrorResult({

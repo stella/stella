@@ -12,7 +12,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
-import { authorizeWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { authorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
   COMPAT_FETCH_OUTPUT_SCHEMA,
   COMPAT_SEARCH_OUTPUT_SCHEMA,
@@ -96,14 +96,19 @@ const getFetchableEntityMap = async ({
 
   const safeEntityIds = entityIds.map(brandPersistedEntityId);
 
-  const rows = await context.scopedDb(
-    async (tx) =>
-      await loadCurrentExtractedContents(tx, {
-        entityIds: safeEntityIds,
+  const rows = await context.scopedDb(async (tx) => {
+    const workspaceIds = (
+      await authorizedWorkspaceIds(tx, {
         organizationId: context.organizationId,
-        workspaceIds: authorizeWorkspaceIds(context.accessibleWorkspaceIds),
-      }),
-  );
+        workspaceIds: context.accessibleWorkspaceIds,
+      })
+    ).unwrap();
+    return await loadCurrentExtractedContents(tx, {
+      entityIds: safeEntityIds,
+      organizationId: context.organizationId,
+      workspaceIds,
+    });
+  });
   const fetchableEntityMap = new Map<string, FetchableEntity>();
   for (const row of rows) {
     fetchableEntityMap.set(row.entityId, {
@@ -403,12 +408,20 @@ const searchMatterKnowledge = async ({
   cursor: string | undefined;
   query: string;
 }): Promise<MatterSearchPage> => {
+  const workspaceIds = await context.scopedDb(async (tx) =>
+    (
+      await authorizedWorkspaceIds(tx, {
+        organizationId: context.organizationId,
+        workspaceIds: context.accessibleWorkspaceIds,
+      })
+    ).unwrap(),
+  );
   const page = await (
     context.testDependencies?.getSearchReader ?? getSearchReader
   )(context.scopedDb).search({
     query,
     organizationId: context.organizationId,
-    workspaceIds: authorizeWorkspaceIds(context.accessibleWorkspaceIds),
+    workspaceIds,
     limit: normalizeTenantPageLimit(DEFAULT_COMPAT_SEARCH_LIMIT),
     ...(cursor === undefined ? {} : { cursor }),
   });
@@ -558,14 +571,19 @@ const handleCompatFetchTool: McpToolHandler<
   }
 
   const row = (
-    await context.scopedDb(
-      async (tx) =>
-        await loadCurrentExtractedContents(tx, {
-          entityIds: [entityId],
+    await context.scopedDb(async (tx) => {
+      const workspaceIds = (
+        await authorizedWorkspaceIds(tx, {
           organizationId: context.organizationId,
-          workspaceIds: authorizeWorkspaceIds(context.accessibleWorkspaceIds),
-        }),
-    )
+          workspaceIds: context.accessibleWorkspaceIds,
+        })
+      ).unwrap();
+      return await loadCurrentExtractedContents(tx, {
+        entityIds: [entityId],
+        organizationId: context.organizationId,
+        workspaceIds,
+      });
+    })
   ).at(0);
 
   if (!row) {

@@ -40,7 +40,7 @@ import {
   readStoredTemplateFile,
   STORED_TEMPLATE_FILE_COLUMNS,
 } from "@/api/lib/templates/stored-template-file";
-import { authorizeWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { authorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_PASTED_TEXT_CHARS = 100_000;
@@ -332,14 +332,19 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
         Result.tryPromise(async () => await getActiveWorkspaceIds()),
       );
       const contentRows = yield* Result.await(
-        safeDb(
-          async (tx) =>
-            await loadCurrentExtractedContents(tx, {
-              entityIds,
+        safeDb(async (tx) => {
+          const permittedWorkspaceIds = (
+            await authorizedWorkspaceIds(tx, {
               organizationId,
-              workspaceIds: authorizeWorkspaceIds(workspaceIds),
-            }),
-        ),
+              workspaceIds,
+            })
+          ).unwrap();
+          return await loadCurrentExtractedContents(tx, {
+            entityIds,
+            organizationId,
+            workspaceIds: permittedWorkspaceIds,
+          });
+        }),
       );
 
       sources.push(

@@ -27,11 +27,12 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { encryptContent } from "@/api/lib/content-encryption";
 import {
   FlowStepError,
   loadInputDocuments,
 } from "@/api/lib/flows/flow-executor";
-import { authorizeWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { authorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -64,6 +65,7 @@ describe("loadInputDocuments", () => {
 
   beforeAll(async () => {
     fake = startFakeS3();
+    const encrypted = await encryptContent(organizationId, "doc");
     await testDb.insert(organization).values({
       id: organizationId,
       name: "Docs Org",
@@ -134,8 +136,8 @@ describe("loadInputDocuments", () => {
       entityId: extractedEntityId,
       organizationId,
       workspaceId,
-      ciphertext: Buffer.from([1, 2, 3]),
-      iv: Buffer.from([4, 5, 6]),
+      ciphertext: encrypted.ciphertext,
+      iv: encrypted.iv,
       charCount: 3,
       sourceEntityVersionId: versionId,
       sourceFieldId: fieldId,
@@ -155,10 +157,18 @@ describe("loadInputDocuments", () => {
     );
 
   test("fails the step and names inputs whose content is unavailable", async () => {
+    const workspaceIds = await scopedDb()(async (tx) =>
+      (
+        await authorizedWorkspaceIds(tx, {
+          organizationId,
+          workspaceIds: [workspaceId],
+        })
+      ).unwrap(),
+    );
     const caught = await loadInputDocuments(
       scopedDb(),
       organizationId,
-      authorizeWorkspaceIds([workspaceId]),
+      workspaceIds,
       [extractedEntityId, pendingEntityId],
     ).then(
       () => null,
@@ -189,10 +199,16 @@ describe("loadInputDocuments", () => {
             run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
           ) => await run(tx),
         );
+        const workspaceIds = (
+          await authorizedWorkspaceIds(tx, {
+            organizationId,
+            workspaceIds: [workspaceId],
+          })
+        ).unwrap();
         const caught = await loadInputDocuments(
           scoped,
           organizationId,
-          authorizeWorkspaceIds([workspaceId]),
+          workspaceIds,
           [extractedEntityId],
         ).then(
           () => null,

@@ -108,7 +108,7 @@ describe("matter access census", () => {
     }
   });
 
-  test("only the permission owner constructs authorized workspace ids", () => {
+  test("only the checked reader produces authorized workspace ids", () => {
     const violations: string[] = [];
     for (const file of new Glob("apps/api/src/**/*.ts").scanSync({
       cwd: repoRoot,
@@ -120,7 +120,11 @@ describe("matter access census", () => {
         continue;
       }
       const source = readFileSync(path.join(repoRoot, file), "utf-8");
-      if (/new\s+AuthorizedWorkspaceIds\b/u.test(source)) {
+      if (
+        /\bauthorizeWorkspaceIds\b|\bmintAuthorizedWorkspaceIds\b|\bfromPermissionCheck\b|new\s+AuthorizedWorkspaceId(?:s|List)\b/u.test(
+          source,
+        )
+      ) {
         violations.push(file);
       }
     }

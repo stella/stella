@@ -97,7 +97,7 @@ import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligat
 import { settleWorkObligation } from "@/api/lib/work-obligations/settle-work-obligation";
 import { WORK_OBLIGATION_SOURCE_SETTLEMENT } from "@/api/lib/work-obligations/transitions";
 import {
-  authorizeWorkspaceIds,
+  authorizedWorkspaceIds,
   type AuthorizedWorkspaceIds,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -457,7 +457,14 @@ const runAiStep = async ({
     ? await loadInputDocuments(
         scopedDb,
         organizationId,
-        authorizeWorkspaceIds([run.workspaceId]),
+        await scopedDb(async (tx) =>
+          (
+            await authorizedWorkspaceIds(tx, {
+              organizationId,
+              workspaceIds: [run.workspaceId],
+            })
+          ).unwrap(),
+        ),
         run.inputEntityIds,
       )
     : [];
@@ -646,7 +653,7 @@ export const loadInputDocuments = async (
     signal: new AbortController().signal,
     operation: async (row, signal) => {
       signal.throwIfAborted();
-      return Promise.resolve({
+      return await Promise.resolve({
         label: row.name,
         text: row.text,
       });
