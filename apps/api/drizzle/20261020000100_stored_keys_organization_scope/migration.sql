@@ -19,11 +19,25 @@ SET search_path = pg_catalog, public
 AS $$
 DECLARE
   owning_organization_id text;
+  previous_organization_id text;
 BEGIN
   IF TG_OP = 'UPDATE' THEN
     IF NEW.s3_key IS DISTINCT FROM OLD.s3_key THEN
       RAISE EXCEPTION 'user_files.s3_key is immutable'
         USING ERRCODE = 'check_violation';
+    END IF;
+    -- A file stays in its organization: an uploader-prefixed key must not
+    -- follow its row into another organization's thread.
+    IF NEW.thread_id IS DISTINCT FROM OLD.thread_id THEN
+      SELECT organization_id INTO previous_organization_id
+      FROM public.chat_threads
+      WHERE id = OLD.thread_id;
+      IF previous_organization_id IS DISTINCT FROM (
+        SELECT organization_id FROM public.chat_threads WHERE id = NEW.thread_id
+      ) THEN
+        RAISE EXCEPTION 'user_files cannot move to another organization'
+          USING ERRCODE = 'check_violation';
+      END IF;
     END IF;
   END IF;
 

@@ -16,6 +16,8 @@ const OTHER_ORGANIZATION_ID = "018f0000-0000-7000-8000-000000000002";
 const USER_ID = "018f0000-0000-7000-8000-000000000003";
 const THREAD_ID = "018f0000-0000-7000-8000-000000000004";
 const LEGACY_FILE_ID = "018f0000-0000-7000-8000-000000000005";
+const SAME_ORGANIZATION_THREAD_ID = "018f0000-0000-7000-8000-000000000006";
+const OTHER_ORGANIZATION_THREAD_ID = "018f0000-0000-7000-8000-000000000007";
 
 let database: PGlite;
 
@@ -76,7 +78,9 @@ describe.skipIf(!enabled)(
         s3_key text NOT NULL
       );
       INSERT INTO public.chat_threads (id, organization_id)
-        VALUES ('${THREAD_ID}', '${ORGANIZATION_ID}');
+        VALUES ('${THREAD_ID}', '${ORGANIZATION_ID}'),
+          ('${SAME_ORGANIZATION_THREAD_ID}', '${ORGANIZATION_ID}'),
+          ('${OTHER_ORGANIZATION_THREAD_ID}', '${OTHER_ORGANIZATION_ID}');
       INSERT INTO public.user_files (id, user_id, thread_id, s3_key)
         VALUES ('${LEGACY_FILE_ID}', '${USER_ID}', '${THREAD_ID}', '${USER_ID}/${LEGACY_FILE_ID}.pdf');
     `);
@@ -117,6 +121,38 @@ describe.skipIf(!enabled)(
           "user_files.s3_key must use its organization prefix",
         ),
       });
+    });
+
+    test("refuses moving an uploader-owned row to another organization's thread", async () => {
+      const rejection = await database
+        .query("UPDATE public.user_files SET thread_id = $1 WHERE id = $2", [
+          OTHER_ORGANIZATION_THREAD_ID,
+          LEGACY_FILE_ID,
+        ])
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(rejection).toMatchObject({
+        message: expect.stringContaining(
+          "user_files cannot move to another organization",
+        ),
+      });
+    });
+
+    test("keeps an uploader-owned row movable within its organization", async () => {
+      await database.query(
+        "UPDATE public.user_files SET thread_id = $1 WHERE id = $2",
+        [SAME_ORGANIZATION_THREAD_ID, LEGACY_FILE_ID],
+      );
+      expect(
+        (
+          await database.query<{ thread_id: string }>(
+            "SELECT thread_id FROM public.user_files WHERE id = $1",
+            [LEGACY_FILE_ID],
+          )
+        ).rows,
+      ).toEqual([{ thread_id: SAME_ORGANIZATION_THREAD_ID }]);
     });
 
     test("refuses an update that changes the stored key", async () => {
