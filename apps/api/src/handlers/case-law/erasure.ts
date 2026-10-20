@@ -340,17 +340,27 @@ export const redactCaseLawDecision = async ({
     const lockedSubjects = [];
     for (const locked of await Promise.all(pendingSourceLocks)) {
       if (Result.isError(locked.sourceLock)) {
-        return locked.sourceLock.error instanceof
-          CorpusIndexProjectionSubjectMissingError
-          ? { type: "missing" }
-          : { type: "lock-failed", cause: locked.sourceLock.error };
+        if (
+          !(
+            locked.sourceLock.error instanceof
+            CorpusIndexProjectionSubjectMissingError
+          )
+        ) {
+          return { type: "lock-failed", cause: locked.sourceLock.error };
+        }
+        // A retired UUID outlives its row; only the requested row must exist.
+        if (locked.subject.entityId === decisionId) {
+          return { type: "missing" };
+        }
+        continue;
       }
       lockedSubjects.push({
         sourceLock: locked.sourceLock.value,
         subject: locked.subject,
       });
     }
-    await lockCaseLawDecisionErasureRows({ tx, decisionIds });
+    const lockedIds = lockedSubjects.map(({ subject }) => subject.entityId);
+    await lockCaseLawDecisionErasureRows({ tx, decisionIds: lockedIds });
     const decisions = await tx
       .select({
         id: caseLawDecisions.id,
@@ -363,7 +373,7 @@ export const redactCaseLawDecision = async ({
         sourceDocumentId: caseLawDecisions.sourceDocumentId,
       })
       .from(caseLawDecisions)
-      .where(inArray(caseLawDecisions.id, decisionIds));
+      .where(inArray(caseLawDecisions.id, lockedIds));
     if (!decisions.some(({ id }) => id === decisionId)) {
       return { type: "missing" };
     }

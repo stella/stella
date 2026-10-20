@@ -398,6 +398,28 @@ test("erasing a linked decision removes raw objects under both original owners",
   ).toEqual([{ decisionId: canonicalId }]);
 });
 
+test("erasing a canonical decision skips an alias whose retired row is gone", async () => {
+  const { canonicalId, retiredId } = await seedLinkedPair();
+  await db.insert(caseLawDecisionAliases).values({
+    retiredDecisionId: createSafeId<"caseLawDecision">(),
+    canonicalDecisionId: canonicalId,
+  });
+
+  await redact(canonicalId);
+
+  expect(
+    await db
+      .select({ id: caseLawDecisions.id, fulltext: caseLawDecisions.fulltext })
+      .from(caseLawDecisions)
+      .where(sql`${caseLawDecisions.id} IN (${canonicalId}, ${retiredId})`),
+  ).toEqual(
+    expect.arrayContaining([
+      { id: canonicalId, fulltext: null },
+      { id: retiredId, fulltext: null },
+    ]),
+  );
+});
+
 test("a linked decision whose projection lock fails leaves every decision unredacted", async () => {
   const { canonicalId, retiredId } = await seedLinkedPair();
   const lockFailure = new Error("projection source lock failed");
