@@ -2532,12 +2532,12 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
+          fetch-depth: 0
           persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             .github/workflows
             .github/actions
-            .github/ci-job-classification.json
             .github/ci-job-classification-decisions.json
             .github/ci-job-classification-sources.json
             scripts/check-ci-job-classification.ts
@@ -2547,6 +2547,7 @@ jobs:
             packages/sha256/src/types.ts
 
       - name: Check workflow job classifications
+        id: job-classification
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
