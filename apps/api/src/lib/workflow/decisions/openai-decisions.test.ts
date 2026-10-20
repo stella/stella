@@ -23,6 +23,7 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import fixture from "./fixtures/openai-decision.json";
 
@@ -639,7 +640,7 @@ test("expires the idle response read when the transport stops producing data", a
   let attemptSignal: AbortSignal | null | undefined;
   const client = createOpenAIDecisionsClient({
     apiKey: "fixture",
-    timeoutMs: 1,
+    timeoutMs: 1, // timeout under test
     fetcher: async (_url, init) => {
       attemptSignal = init?.signal;
       return new Response(
@@ -673,7 +674,7 @@ test("accepts the response byte ceiling and cancels overflow before JSON parsing
   const makeClient = (body: string) =>
     createOpenAIDecisionsClient({
       apiKey: "fixture",
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       fetcher: async () =>
         new Response(
           new ReadableStream({

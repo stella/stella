@@ -26,6 +26,7 @@ import {
   testOrganizationStateDb,
 } from "@/api/tests/helpers/model-dispatch-admission";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   chatMessageContentFromMessage,
@@ -80,7 +81,10 @@ test("durable SSE delivers a tool start while its provider is waiting", async ()
         }
         return text;
       },
-      { label: "durable tool start delivery", timeoutMs: 1000 },
+      {
+        label: "durable tool start delivery",
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+      },
     );
     expect(received).toContain('"toolCallName":"ask_user"');
     expect(providerReleased).toBe(false);
@@ -92,7 +96,7 @@ test("durable SSE delivers a tool start while its provider is waiting", async ()
     await reader.cancel();
     await withTimeout(async () => await providerFinished.promise, {
       label: "tool start provider cleanup",
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
   }
 });
@@ -271,7 +275,10 @@ describe("chat run admission follows owned settlement", () => {
         }
         const [end, body] = await withTimeout(
           async () => await Promise.all([run.settled, delivered]),
-          { label: "blocked source run settlement", timeoutMs: 1000 },
+          {
+            label: "blocked source run settlement",
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+          },
         );
         expect(end).toBe("stored");
         if (cut === "admission-then-deadline") {
@@ -297,7 +304,7 @@ describe("chat run admission follows owned settlement", () => {
       }
       await withTimeout(async () => await sourceClosed.promise, {
         label: "blocked source cleanup",
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       });
       expect(sourceFinished).toBe(true);
       expect(persisted).toBe(1);

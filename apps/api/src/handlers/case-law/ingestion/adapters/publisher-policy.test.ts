@@ -20,6 +20,7 @@ import {
 import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 describe("the shared publisher gate", () => {
   it("does not validate Redis configuration until a deployed request", () => {
@@ -237,7 +238,7 @@ describe("a publisher's rate-limit refusal", () => {
           fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.AT_COURTS,
           retryPolicy: "publisher-backoff",
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           refusalMode,
         });
         if (refusalMode === "stop-refusal") {

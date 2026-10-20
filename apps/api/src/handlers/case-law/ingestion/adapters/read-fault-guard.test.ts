@@ -86,6 +86,7 @@ import {
   type RefusalOutcome,
 } from "@/api/tests/helpers/read-fault-drivers";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import { readPublisherText } from "./publisher-read";
 
@@ -330,7 +331,7 @@ test("a read through readPublisherText surfaces every fault", async () => {
     const outcome = await readPublisherText(PUBLISHER, {
       adapterKey: ADAPTER_KEYS.CZ_NSS,
       fetchStage: "listing",
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
     return outcome.type === "present"
       ? { fulltext: outcome.value }
@@ -366,7 +367,7 @@ const servedDocumentAndNotice = () => {
 const readInit = {
   adapterKey: ADAPTER_KEYS.CZ_NSS,
   fetchStage: "listing",
-  timeoutMs: 1000,
+  timeoutMs: HAPPY_PATH_TIMEOUT_MS,
 } as const;
 
 const refusalOutcomes = async (
