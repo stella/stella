@@ -761,6 +761,25 @@ const resolveRepublishedIdentityTx = async (
   sourceId: SafeId<"caseLawSource">,
   sameSource: SameSourceIdentity,
 ) => {
+  const existing = sameSource.existing;
+  if (existing !== undefined && sameSource.claimedDecisionId !== undefined) {
+    const canonicalSource = await tx.query.caseLawDecisions.findFirst({
+      where: { id: { eq: existing.id } },
+      columns: { sourceId: true },
+    });
+    if (canonicalSource === undefined) {
+      return panic("Claimed publisher identity lost its decision");
+    }
+    if (canonicalSource.sourceId !== sourceId) {
+      return {
+        existing,
+        republished: {
+          type: REPUBLISHED_RULING_OUTCOME.LINKED,
+          decisionId: existing.id,
+        },
+      };
+    }
+  }
   if (
     sameSource.existing !== undefined ||
     sameSource.claimedDecisionId !== undefined

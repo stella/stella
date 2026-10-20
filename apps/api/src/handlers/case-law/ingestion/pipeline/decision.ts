@@ -131,6 +131,14 @@ const matchRepublishedLink = (
     ? identity.republished
     : undefined;
 
+const resolveNonRepublishedExistingDecisionPolicy = async (
+  republished: ReturnType<typeof matchRepublishedLink>,
+  options: Parameters<typeof resolveExistingDecisionPolicy>[0],
+) =>
+  republished === undefined
+    ? await resolveExistingDecisionPolicy(options)
+    : null;
+
 const settleRepublishedLink = async ({
   republished,
   s3UploadFailed,
@@ -302,20 +310,21 @@ const runDecisionAttempt = async ({
     metadataUrlSchema,
   });
   const shape = classifyObservation({ result, existing });
+  const republished = matchRepublishedLink(identity);
 
-  const existingPolicyOutcome = await resolveExistingDecisionPolicy({
-    scopedDb,
-    existing,
-    result,
-    shape,
-    observedAt,
-    observationOrder,
-    refresh,
-  });
+  const existingPolicyOutcome =
+    await resolveNonRepublishedExistingDecisionPolicy(republished, {
+      scopedDb,
+      existing,
+      result,
+      shape,
+      observedAt,
+      observationOrder,
+      refresh,
+    });
   if (existingPolicyOutcome !== null) {
     return existingPolicyOutcome;
   }
-
   signal?.throwIfAborted();
   const sourceRawArtifact = await acquireSourceRawArtifact({
     ...(signal === undefined ? {} : { signal }),
@@ -340,11 +349,11 @@ const runDecisionAttempt = async ({
   const rawArtifact = sourceRawArtifact.artifact;
 
   const republishedLink = await settleRepublishedLink({
-    republished: matchRepublishedLink(identity),
+    republished,
     s3UploadFailed: rawArtifact.s3UploadFailed,
     scopedDb,
     sourceId,
-    sourceDocumentId: identity.persistedSourceDocumentId,
+    sourceDocumentId: result.sourceDocumentId,
     decisionId,
     rawArtifact,
     sourceUrl: result.sourceUrl,

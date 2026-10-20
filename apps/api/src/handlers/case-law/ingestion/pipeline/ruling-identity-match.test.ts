@@ -6,16 +6,21 @@ import fc from "fast-check";
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
 import { assertProperty } from "@stll/property-testing";
 
+import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
   caseLawSources,
+  relations,
 } from "@/api/db/schema";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import { listAdapterKeys } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { recordSourceIdentityRaw } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import {
+  processDecision,
+  recordSourceIdentityRaw,
+} from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { findRepublishedRulingTx } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -23,6 +28,7 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -118,7 +124,12 @@ describe("cross-source ruling identity", () => {
 
 describe("cross-source ruling identity lookup", () => {
   let client: Awaited<ReturnType<typeof createTestPglite>>;
-  let db: ReturnType<typeof drizzle>;
+  const connect = (database: Awaited<ReturnType<typeof createTestPglite>>) =>
+    drizzle({
+      client: database,
+      relations: { ...relations, ...authRelationsPart },
+    });
+  let db: ReturnType<typeof connect>;
   const sources = Array.from({ length: 20 }, () =>
     createSafeId<"caseLawSource">(),
   );
@@ -149,7 +160,7 @@ describe("cross-source ruling identity lookup", () => {
   beforeAll(
     async () => {
       client = await createTestPglite();
-      db = drizzle({ client });
+      db = connect(client);
       await db.insert(caseLawSources).values([
         ...sources.map((id, index) => ({
           id,
@@ -501,6 +512,123 @@ describe("cross-source ruling identity lookup", () => {
       ),
       { numRuns: 8 },
     );
+  });
+
+  test("real ingestion links a republication and preserves publisher provenance on replay", async () => {
+    const [adapterA, adapterB] = listAdapterKeys();
+    if (adapterA === undefined || adapterB === undefined) {
+      throw new Error("Two registered adapter fixtures are required");
+    }
+    const sourceA = registeredSourceIds.get(adapterA);
+    const sourceB = registeredSourceIds.get(adapterB);
+    if (sourceA === undefined || sourceB === undefined) {
+      throw new Error("Registered adapter source fixture is absent");
+    }
+    const fakeS3 = startFakeS3();
+    const scopedDb: ScopedDb = async (callback) =>
+      await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+    const caseNumber = "II OSK 98765/26";
+    const sourceAUrl = "https://publisher-a.example.invalid/rulings/original";
+    const sourceBUrl =
+      "https://publisher-b.example.invalid/rulings/republication";
+    const first = plainTextIngestionResult({
+      ...observed,
+      caseNumber,
+      sourceDocumentId: "publisher-a-document",
+      sourceRaw: JSON.stringify({ publisher: "A", record: "original" }),
+      sourceUrl: sourceAUrl,
+      rawHash: "publisher-a-raw-hash",
+      fulltext: "Canonical text from publisher A.",
+    });
+    const republished = plainTextIngestionResult({
+      ...first,
+      sourceDocumentId: "publisher-b-document",
+      sourceRaw: JSON.stringify({ publisher: "B", record: "republication" }),
+      sourceUrl: sourceBUrl,
+      rawHash: "publisher-b-raw-hash",
+      fulltext: "Different text from publisher B.",
+    });
+    const decisions = async () =>
+      await db
+        .select({
+          id: caseLawDecisions.id,
+          court: caseLawDecisions.court,
+          decisionDate: caseLawDecisions.decisionDate,
+          decisionType: caseLawDecisions.decisionType,
+          fulltext: caseLawDecisions.fulltext,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.caseNumber, caseNumber));
+    const ingest = async (
+      input: typeof first,
+      sourceId: typeof sourceA,
+      observationOrder: bigint,
+    ) =>
+      await processDecision({
+        input,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-10-20T00:00:00Z"),
+        observationOrder,
+      });
+
+    await ingest(first, sourceA, 1n);
+    const afterFirst = await decisions();
+    expect(afterFirst).toHaveLength(1);
+    const canonical = afterFirst.at(0);
+    if (canonical === undefined) {
+      throw new Error("Canonical decision fixture is absent");
+    }
+    expect(canonical).toMatchObject({
+      court: first.court,
+      decisionDate: first.decisionDate,
+      decisionType: first.decisionType,
+      fulltext: first.fulltext,
+    });
+
+    await ingest(republished, sourceB, 1n);
+    expect(await decisions()).toEqual([canonical]);
+    const identitiesAfterLink = await db
+      .select({
+        sourceId: caseLawDecisionSourceIdentities.sourceId,
+        sourceDocumentId: caseLawDecisionSourceIdentities.sourceDocumentId,
+        sourceRawS3Key: caseLawDecisionSourceIdentities.sourceRawS3Key,
+        sourceUrl: caseLawDecisionSourceIdentities.sourceUrl,
+      })
+      .from(caseLawDecisionSourceIdentities)
+      .where(eq(caseLawDecisionSourceIdentities.decisionId, canonical.id))
+      .orderBy(caseLawDecisionSourceIdentities.sourceDocumentId);
+    expect(identitiesAfterLink).toHaveLength(2);
+    expect(identitiesAfterLink).toEqual([
+      {
+        sourceId: sourceA,
+        sourceDocumentId: first.sourceDocumentId,
+        sourceRawS3Key: expect.any(String),
+        sourceUrl: sourceAUrl,
+      },
+      {
+        sourceId: sourceB,
+        sourceDocumentId: republished.sourceDocumentId,
+        sourceRawS3Key: expect.any(String),
+        sourceUrl: sourceBUrl,
+      },
+    ]);
+
+    await ingest(republished, sourceB, 2n);
+    expect(await decisions()).toEqual([canonical]);
+    expect(
+      await db
+        .select({
+          sourceId: caseLawDecisionSourceIdentities.sourceId,
+          sourceDocumentId: caseLawDecisionSourceIdentities.sourceDocumentId,
+          sourceRawS3Key: caseLawDecisionSourceIdentities.sourceRawS3Key,
+          sourceUrl: caseLawDecisionSourceIdentities.sourceUrl,
+        })
+        .from(caseLawDecisionSourceIdentities)
+        .where(eq(caseLawDecisionSourceIdentities.decisionId, canonical.id))
+        .orderBy(caseLawDecisionSourceIdentities.sourceDocumentId),
+    ).toEqual(identitiesAfterLink);
+    fakeS3.stop();
   });
 
   test("raw provenance is never written to a redacted decision", async () => {
