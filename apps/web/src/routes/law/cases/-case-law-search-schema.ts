@@ -76,6 +76,8 @@ export const searchSchema = v.object({
     ),
     undefined,
   ),
+  rewrite: v.fallback(v.optional(v.picklist(["off"])), undefined),
+  rewrittenFrom: optionalLawSearchQuerySchema,
   sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
   sourceId: optionalUuidSearchSchema,
   strict: optionalStrictSchema,
