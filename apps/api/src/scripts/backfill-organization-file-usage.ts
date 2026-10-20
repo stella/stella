@@ -20,8 +20,7 @@ import {
   openMaintenanceDb,
   openOrganizationFileUsageDb,
 } from "@/api/lib/db/maintenance-db";
-import { createUserFileKey } from "@/api/lib/file-key";
-import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import type { FileUsageInput } from "@/api/lib/files/organization-file-usage";
 import { reconcileOrganizationFileObjects } from "@/api/lib/files/organization-file-usage";
 import {
@@ -32,6 +31,7 @@ import { isMissingS3ObjectError, listS3ObjectPage } from "@/api/lib/s3";
 import { headObject } from "@/api/lib/s3-presign";
 import {
   brandPersistedOrganizationId,
+  brandPersistedUserId,
   brandPersistedUserFileId,
 } from "@/api/lib/safe-id-boundaries";
 import {
@@ -123,14 +123,15 @@ await runScriptWithErrorOutput(async () => {
       const organizationId = brandPersistedOrganizationId(file.organizationId);
       objects.push({ organizationId, objectKey: file.s3Key });
       if (file.thumbnailFileId) {
-        objects.push({
+        const objectKey = createUserFileThumbnailKey({
+          sourceKey: file.s3Key,
+          thumbnailFileId: file.thumbnailFileId,
           organizationId,
-          objectKey: createUserFileKey({
-            fileId: file.thumbnailFileId,
-            mimeType: THUMBNAIL_MIME_TYPE,
-            organizationId,
-          }),
+          uploaderUserId: brandPersistedUserId(file.userId),
         });
+        if (objectKey !== null) {
+          objects.push({ organizationId, objectKey });
+        }
       }
     }
     return { files, imported: await importObjectPage(objects) };

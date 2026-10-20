@@ -99,3 +99,48 @@ export const storedKeyForOrganization = <StoredKey extends string>(
   key: StoredKey,
   organizationId: SafeId<"organization">,
 ): StoredKey | null => (key.startsWith(`${organizationId}/`) ? key : null);
+
+type StoredUserFileKeyProps<StoredKey extends string> = {
+  key: StoredKey;
+  organizationId: SafeId<"organization">;
+  uploaderUserId: SafeId<"user">;
+};
+
+/** Accepts current organization-owned keys and uploader-owned legacy keys. */
+export const storedUserFileKey = <StoredKey extends string>({
+  key,
+  organizationId,
+  uploaderUserId,
+}: StoredUserFileKeyProps<StoredKey>): StoredKey | null =>
+  key.startsWith(`${organizationId}/`) || key.startsWith(`${uploaderUserId}/`)
+    ? key
+    : null;
+
+type CreateUserFileThumbnailKeyProps = Omit<
+  StoredUserFileKeyProps<string>,
+  "key"
+> & {
+  sourceKey: string;
+  thumbnailFileId: string;
+};
+
+export const createUserFileThumbnailKey = ({
+  sourceKey,
+  thumbnailFileId,
+  organizationId,
+  uploaderUserId,
+}: CreateUserFileThumbnailKeyProps): FileKey | null => {
+  if (
+    storedUserFileKey({ key: sourceKey, organizationId, uploaderUserId }) ===
+    null
+  ) {
+    return null;
+  }
+  const ownerId = sourceKey.startsWith(`${organizationId}/`)
+    ? organizationId
+    : uploaderUserId;
+  return v.parse(
+    fileKeySchema,
+    `${ownerId}/${thumbnailFileId}.${getFileExtension("image/webp")}`,
+  );
+};

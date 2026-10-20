@@ -39,7 +39,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { FileKey } from "@/api/lib/file-key";
+import { createUserFileThumbnailKey, type FileKey } from "@/api/lib/file-key";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
@@ -51,6 +51,7 @@ import { createUserFileKey } from "@/api/lib/files/utils";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
 import type { S3PresignError } from "@/api/lib/s3-presign";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { parseUserFileId, toUserFileUrl } from "@/api/lib/user-files/types";
 
@@ -131,6 +132,7 @@ type SourceUserFileRow = {
   sha256Hex: string;
   sizeBytes: number;
   thumbnailFileId: string | null;
+  userId: string;
 };
 
 type UserFileCopy = {
@@ -311,10 +313,11 @@ const prepareUserFileThumbnail = async (
   const thumbnailSource =
     copy.source.thumbnailFileId === null
       ? null
-      : createUserFileKey({
-          fileId: copy.source.thumbnailFileId,
-          mimeType: THUMBNAIL_MIME_TYPE,
+      : createUserFileThumbnailKey({
+          sourceKey: copy.source.s3Key,
+          thumbnailFileId: copy.source.thumbnailFileId,
           organizationId,
+          uploaderUserId: brandPersistedUserId(copy.source.userId),
         });
   const thumbnailHead =
     thumbnailSource !== null &&
@@ -703,6 +706,7 @@ export const createForkThread = ({
                     sha256Hex: userFiles.sha256Hex,
                     sizeBytes: userFiles.sizeBytes,
                     thumbnailFileId: userFiles.thumbnailFileId,
+                    userId: userFiles.userId,
                   })
                   .from(userFiles)
                   .where(

@@ -12,8 +12,9 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
+import { deleteS3Keys } from "@/api/lib/files/utils";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const THREAD_FILE_CLEANUP_BATCH_SIZE = 200;
 
@@ -92,18 +93,21 @@ const deleteThread = createSafeRootHandler(
         userId: string;
       }[],
     ) => {
-      const s3Keys = files.flatMap((file) =>
-        file.thumbnailFileId
-          ? [
-              file.s3Key,
-              createUserFileKey({
-                fileId: file.thumbnailFileId,
-                mimeType: THUMBNAIL_MIME_TYPE,
-                organizationId: thread.organizationId,
-              }),
-            ]
-          : [file.s3Key],
-      );
+      const s3Keys = files
+        .flatMap((file) =>
+          file.thumbnailFileId
+            ? [
+                file.s3Key,
+                createUserFileThumbnailKey({
+                  sourceKey: file.s3Key,
+                  thumbnailFileId: file.thumbnailFileId,
+                  organizationId: thread.organizationId,
+                  uploaderUserId: brandPersistedUserId(file.userId),
+                }),
+              ]
+            : [file.s3Key],
+        )
+        .filter((key) => key !== null);
       const deleted = await deleteS3Keys(s3Keys);
       if (Result.isError(deleted)) {
         return Result.err(

@@ -8,7 +8,8 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { storedKeyForOrganization } from "@/api/lib/file-key";
+import { storedUserFileKey } from "@/api/lib/file-key";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const readUserFileContent = createSafeRootHandler(
   {
@@ -32,6 +33,7 @@ const readUserFileContent = createSafeRootHandler(
           await tx
             .select({
               s3Key: userFiles.s3Key,
+              userId: userFiles.userId,
               workspaceId: chatThreads.workspaceId,
             })
             .from(userFiles)
@@ -56,10 +58,11 @@ const readUserFileContent = createSafeRootHandler(
         if (!file) {
           return null;
         }
-        const s3Key = storedKeyForOrganization(
-          file.s3Key,
-          activeOrganizationId,
-        );
+        const s3Key = storedUserFileKey({
+          key: file.s3Key,
+          organizationId: activeOrganizationId,
+          uploaderUserId: brandPersistedUserId(file.userId),
+        });
         if (s3Key === null) {
           return null;
         }

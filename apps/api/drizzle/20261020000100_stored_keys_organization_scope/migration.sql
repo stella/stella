@@ -20,17 +20,21 @@ AS $$
 DECLARE
   owning_organization_id text;
 BEGIN
-  IF TG_OP = 'UPDATE' AND NEW.s3_key IS DISTINCT FROM OLD.s3_key THEN
-    RAISE EXCEPTION 'user_files.s3_key is immutable'
-      USING ERRCODE = 'check_violation';
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.s3_key IS DISTINCT FROM OLD.s3_key THEN
+      RAISE EXCEPTION 'user_files.s3_key is immutable'
+        USING ERRCODE = 'check_violation';
+    END IF;
   END IF;
 
   SELECT organization_id INTO owning_organization_id
   FROM public.chat_threads
   WHERE id = NEW.thread_id;
 
-  IF owning_organization_id IS NULL
-     OR NOT starts_with(NEW.s3_key, owning_organization_id || '/') THEN
+  IF owning_organization_id IS NULL OR (
+    NOT starts_with(NEW.s3_key, owning_organization_id || '/')
+    AND (TG_OP = 'INSERT' OR NOT starts_with(NEW.s3_key, NEW.user_id || '/'))
+  ) THEN
     RAISE EXCEPTION 'user_files.s3_key must use its organization prefix'
       USING ERRCODE = 'check_violation';
   END IF;
@@ -51,7 +55,10 @@ BEGIN
      OR EXISTS (
        SELECT 1 FROM public.user_files uf
        LEFT JOIN public.chat_threads ct ON ct.id = uf.thread_id
-       WHERE ct.organization_id IS NULL OR NOT starts_with(uf.s3_key, ct.organization_id || '/')
+       WHERE ct.organization_id IS NULL OR (
+         NOT starts_with(uf.s3_key, ct.organization_id || '/')
+         AND NOT starts_with(uf.s3_key, uf.user_id || '/')
+       )
      ) THEN
     RAISE EXCEPTION 'stored object keys must use their organization prefix'
       USING ERRCODE = 'check_violation';
