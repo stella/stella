@@ -101,10 +101,13 @@ if (!isLocalDevOpen()) {
   Object.freeze(envFeatureAccess);
 }
 
-export const startFeatureAccessGrantsRefresh = () => {
+/** Starts the refresh when a grant parameter is configured; returns its stop function, or null when off. */
+export const startFeatureAccessGrantsRefresh = ():
+  | (() => Promise<void>)
+  | null => {
   const parameterName = envBase.API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME;
   if (parameterName === undefined) {
-    return (): Promise<void> => Promise.resolve();
+    return null;
   }
 
   const client = new SSMClient({});

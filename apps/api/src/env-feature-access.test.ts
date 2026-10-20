@@ -37,7 +37,9 @@ class FakeSsmClient {
 const createOwner = (client: FakeSsmClient, failures: unknown[]) =>
   createFeatureAccessGrantsOwner({
     initial: { grants: initialGrants, version: 1 },
-    onRefreshFailure: (error) => failures.push(error),
+    onRefreshFailure: (error) => {
+      failures.push(error);
+    },
     source: client.source,
   });
 
