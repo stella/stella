@@ -533,4 +533,35 @@ describe("decision legal resolution", () => {
       },
     });
   });
+
+  test("opens a Polish decision by its identifier", async () => {
+    const decision = {
+      ...row("III SA/Wa 1234/19"),
+      country: "POL",
+      court: "Wojewódzki Sąd Administracyjny w Warszawie",
+      courtAbbreviation: "WSAW",
+      ecli: null,
+      language: "pl",
+    } satisfies DecisionIdentityRow;
+    const result = await resolveDecision({
+      admission,
+      country: "POL",
+      identifier: "III SA/Wa 1234/19",
+      dependencies: {
+        lookup: async () => [decision],
+        read: readableDecision,
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: {
+        kind: "decision",
+        decisionId: decision.id,
+        country: "POL",
+        identifier: "III SA/Wa 1234/19",
+        language: "pl",
+      },
+    });
+  });
 });

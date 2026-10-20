@@ -40,6 +40,10 @@ describe("public country availability contract", () => {
       caseLaw: "identity_public",
       legislation: "pending_public",
     });
+    expect(PUBLIC_COUNTRY_CAPABILITIES.POL).toEqual({
+      caseLaw: "identity_public",
+      legislation: "pending_public",
+    });
     expect(PUBLIC_COUNTRY_CAPABILITIES.CZE.caseLaw).toBe("admitted");
     expect(PUBLIC_COUNTRY_CAPABILITIES.SVK).toEqual({
       caseLaw: "pages_public",
