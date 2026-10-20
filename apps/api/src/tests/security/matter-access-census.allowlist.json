@@ -40,7 +40,6 @@
       "<module>#rootDb": 1,
       "claimDesktopAccountGrant.db#rootDb": 1,
       "createAuth.auth.databaseHooks.user.create.after#rootDb": 1,
-      "createAuth.auth.hooks.after.dependencies.findPreviousSessions#rootDb": 1,
       "createAuth.auth.plugins.customAccessTokenClaims.row#rootDb": 1,
       "createAuth.auth.plugins.postLogin.shouldRedirect.memberships#rootDb": 1,
       "createAuth.hasSessionMembership#rootDb": 1,

@@ -158,6 +158,7 @@ import {
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
+import { findOtherSessionDevices } from "@/api/lib/auth/session-history";
 import {
   createSessionLifetime,
   SESSION_LIFETIME_FIELDS,
@@ -2272,19 +2273,7 @@ export const createAuth = (
               }
             : null,
           dependencies: {
-            findPreviousSessions: async (validatedUserId, sessionId) =>
-              await rootDb.query.session.findMany({
-                where: {
-                  userId: validatedUserId,
-                  id: { ne: sessionId },
-                },
-                orderBy: { createdAt: "desc" },
-                limit: LIMITS.newDeviceLoginSessionScanLimit,
-                columns: {
-                  ipAddress: true,
-                  userAgent: true,
-                },
-              }),
+            findPreviousSessions: findOtherSessionDevices,
             sendNotice: ({ email, device, ipAddress, createdAt }) => {
               const lang = extractLangFromRequest(ctx.request);
               const formattedTime =
