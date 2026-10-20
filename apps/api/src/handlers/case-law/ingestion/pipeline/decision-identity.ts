@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 
+import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
@@ -10,6 +11,11 @@ import {
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { normalizeDecisionIdentifier } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  matchRepublishedRuling,
+  REPUBLISHED_RULING_OUTCOME,
+  type RepublishedRulingMatch,
+} from "@/api/handlers/case-law/ingestion/pipeline/ruling-identity-match";
 import {
   DECISION_DATE_OUT_OF_BOUNDS,
   DECISION_DOCKET_NOT_CANONICAL,
@@ -594,6 +600,89 @@ const findExistingDecisionTx = async (
   return { claimedDecisionId, existing, ecliIdentity };
 };
 
+const MAX_REPUBLISHED_RULING_CANDIDATES = 16;
+
+const findRepublishedRulingTx = async (
+  tx: Transaction,
+  observed: IngestionResult,
+  sourceId: SafeId<"caseLawSource">,
+) => {
+  const docketFamilyKey = docketFamilyKeyOf(
+    observed.caseNumber,
+    observed.country,
+  );
+  if (docketFamilyKey === null) {
+    return {
+      type: REPUBLISHED_RULING_OUTCOME.SEPARATE_PARTIAL,
+      reason: "signature_absent",
+    } satisfies RepublishedRulingMatch;
+  }
+  const candidates = await tx
+    .select({
+      decisionId: caseLawDecisions.id,
+      country: caseLawDecisions.country,
+      court: caseLawDecisions.court,
+      courtId: caseLawDecisions.courtId,
+      decisionDate: caseLawDecisions.decisionDate,
+      caseNumber: caseLawDecisions.caseNumber,
+      caseNumberType: caseLawDecisions.caseNumberType,
+      ecli: caseLawDecisions.ecli,
+      decisionType: caseLawDecisions.decisionType,
+    })
+    .from(caseLawDecisions)
+    .where(
+      and(
+        eq(caseLawDecisions.country, observed.country),
+        eq(caseLawDecisions.court, observed.court),
+        eq(caseLawDecisions.docketFamilyKey, docketFamilyKey),
+        notInArray(caseLawDecisions.sourceId, [sourceId]),
+      ),
+    )
+    .orderBy(caseLawDecisions.id)
+    .limit(MAX_REPUBLISHED_RULING_CANDIDATES);
+  const match = matchRepublishedRuling(
+    observed,
+    candidates.map(({ decisionId, ...identity }) => ({ decisionId, identity })),
+  );
+  if (match.type !== REPUBLISHED_RULING_OUTCOME.LINKED) {
+    return match;
+  }
+  const candidate = candidates.find(
+    ({ decisionId }) => decisionId === match.decisionId,
+  );
+  if (candidate === undefined) {
+    return panic("Republished ruling match lost its candidate");
+  }
+  return {
+    type: REPUBLISHED_RULING_OUTCOME.LINKED,
+    decisionId: candidate.decisionId,
+  } satisfies RepublishedRulingMatch;
+};
+
+type SameSourceIdentity = Awaited<ReturnType<typeof findExistingDecisionTx>>;
+
+const resolveRepublishedIdentityTx = async (
+  tx: Transaction,
+  observed: IngestionResult,
+  sourceId: SafeId<"caseLawSource">,
+  sameSource: SameSourceIdentity,
+) => {
+  if (
+    sameSource.existing !== undefined ||
+    sameSource.claimedDecisionId !== undefined
+  ) {
+    return { existing: sameSource.existing, republished: undefined };
+  }
+  const republished = await findRepublishedRulingTx(tx, observed, sourceId);
+  if (republished.type !== REPUBLISHED_RULING_OUTCOME.LINKED) {
+    return { existing: undefined, republished };
+  }
+  return {
+    existing: await findIdentityRowTx(tx, republished.decisionId),
+    republished,
+  };
+};
+
 type ResolveDecisionIdentityOptions = ObservedDecision & {
   sourceId: SafeId<"caseLawSource">;
   statedEcliIdentity: StatedEcliIdentity;
@@ -679,17 +768,24 @@ export const resolveDecisionIdentityTx = async (
     repairClaimedDecisionIds.length === 1
       ? repairClaimedDecisionIds.at(0)
       : undefined;
-  const { claimedDecisionId, existing, ecliIdentity } =
-    await findExistingDecisionTx(tx, {
-      exactSourceIdentityCandidates,
-      legacyCaseNumbers,
-      observed,
-      repairSourceIdentityCandidates,
-      sourceId,
-      statedEcliIdentity,
-      exactClaimedDecisionId,
-      repairClaimedDecisionId,
-    });
+  const sameSourceIdentity = await findExistingDecisionTx(tx, {
+    exactSourceIdentityCandidates,
+    legacyCaseNumbers,
+    observed,
+    repairSourceIdentityCandidates,
+    sourceId,
+    statedEcliIdentity,
+    exactClaimedDecisionId,
+    repairClaimedDecisionId,
+  });
+  const { existing, republished } = await resolveRepublishedIdentityTx(
+    tx,
+    observed,
+    sourceId,
+    sameSourceIdentity,
+  );
+  const claimedDecisionId = sameSourceIdentity.claimedDecisionId;
+  const ecliIdentity = sameSourceIdentity.ecliIdentity;
   const decisionId = claimedDecisionId ?? existing?.id ?? proposedDecisionId;
   const existingIdentity = existing?.sourceDocumentId ?? undefined;
   const incomingSupersedesExisting =
@@ -714,7 +810,6 @@ export const resolveDecisionIdentityTx = async (
     // Bind a newly learned canonical identity before any partial or
     // tombstone fast return. An inverse fallback observation never replaces
     // a previously bound canonical ID; the registry resolves it instead.
-    // audit: skip — background identity repair for public case-law data
     await tx
       .update(caseLawDecisions)
       .set({
@@ -789,6 +884,7 @@ export const resolveDecisionIdentityTx = async (
     persistedSourceDocumentId,
     composition,
     ecliIdentity,
+    republished,
   };
 };
 

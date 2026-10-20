@@ -788,6 +788,12 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_docket_family_key_idx")
       .on(t.docketFamilyKey)
       .where(isNotNull(t.docketFamilyKey)),
+    // Bounded cross-publisher ruling lookup: jurisdiction and court first,
+    // then the normalized docket family shared by equivalent publications.
+    p
+      .index("case_law_decisions_republished_ruling_idx")
+      .on(t.country, t.court, t.docketFamilyKey, t.id)
+      .where(isNotNull(t.docketFamilyKey)),
     p
       .index("case_law_decisions_lang_group_idx")
       .on(t.languageGroupKey)
@@ -1314,6 +1320,11 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
       .varchar("source_document_id", { length: 256 })
       .notNull(),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    /** Raw payload for this publisher observation, including republished copies. */
+    sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
+    sourceRawContentType: p.varchar("source_raw_content_type", { length: 128 }),
+    sourceUrl: p.varchar("source_url", { length: 2048 }),
+    sourceObservedAt: timestamptz("source_observed_at"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [

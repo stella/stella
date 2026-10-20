@@ -1,6 +1,8 @@
 import { Result, panic } from "better-result";
+import { and, eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { caseLawDecisionSourceIdentities } from "@/api/db/schema";
 import {
   SUPPLEMENT_ABSORB_FAILED,
   absorbComposedSupplementRows,
@@ -35,6 +37,7 @@ import {
   PROCESS_DECISION_STATUS,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { REPUBLISHED_RULING_OUTCOME } from "@/api/handlers/case-law/ingestion/pipeline/ruling-identity-match";
 import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import type { SourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import {
@@ -57,6 +60,94 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
+
+type RecordSourceIdentityRawOptions = {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+  decisionId: SafeId<"caseLawDecision">;
+  rawArtifact: {
+    sourceRawS3Key: string | null;
+    sourceRawContentType: string | null;
+  };
+  sourceUrl: string | undefined;
+  observedAt: Date;
+};
+
+const recordSourceIdentityRaw = async ({
+  scopedDb,
+  sourceId,
+  decisionId,
+  rawArtifact,
+  sourceUrl,
+  observedAt,
+}: RecordSourceIdentityRawOptions): Promise<void> => {
+  await scopedDb(async (tx) => {
+    // audit: skip - publisher provenance for public case-law data
+    await tx
+      .update(caseLawDecisionSourceIdentities)
+      .set({
+        sourceRawS3Key: rawArtifact.sourceRawS3Key,
+        sourceRawContentType: rawArtifact.sourceRawContentType,
+        sourceUrl: sourceUrl ?? null,
+        sourceObservedAt: observedAt,
+      })
+      .where(
+        and(
+          eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+          eq(caseLawDecisionSourceIdentities.decisionId, decisionId),
+        ),
+      );
+  });
+};
+
+type SettleRepublishedLinkOptions = RecordSourceIdentityRawOptions & {
+  republished: ReturnType<typeof matchRepublishedLink>;
+  s3UploadFailed: boolean;
+};
+
+const matchRepublishedLink = (
+  identity: Awaited<ReturnType<typeof resolveDecisionIdentityTx>>,
+) =>
+  identity.republished?.type === REPUBLISHED_RULING_OUTCOME.LINKED
+    ? identity.republished
+    : undefined;
+
+const settleRepublishedLink = async ({
+  republished,
+  s3UploadFailed,
+  ...raw
+}: SettleRepublishedLinkOptions): Promise<ProcessResult | null> => {
+  if (republished === undefined) {
+    return null;
+  }
+  await recordSourceIdentityRaw(raw);
+  return withSourceRawRetry(s3UploadFailed, {
+    status: PROCESS_DECISION_STATUS.COMPLETE,
+    inserted: false,
+    searchVectorFailed: false,
+    republished,
+  });
+};
+
+const recordAppliedIdentityRaw = async (
+  writeStatus: DecisionRowWriteStatus,
+  options: RecordSourceIdentityRawOptions,
+): Promise<void> => {
+  if (writeStatus === DECISION_ROW_WRITE_STATUS.APPLIED) {
+    await recordSourceIdentityRaw(options);
+  }
+};
+
+const redactedDecisionOutcome = (
+  redactedAt: Date | null | undefined,
+): ProcessResult | null =>
+  redactedAt
+    ? {
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        inserted: false,
+        searchVectorFailed: false,
+      }
+    : null;
 
 type SettleRowWriteStatusOptions = {
   scopedDb: ScopedDb;
@@ -152,7 +243,6 @@ const runDecisionAttempt = async ({
   signal?.throwIfAborted();
   const observation = observeDecision({ input, sourceId, metadataUrlSchema });
   const proposedDecisionId = createSafeId<"caseLawDecision">();
-
   // Opened before the read below that proves the decision is not erased, so
   // every raw write this attempt makes starts within the window of that
   // read, and an erasure's settled sweep comes after all of them.
@@ -160,7 +250,6 @@ const runDecisionAttempt = async ({
     window: openRawSourceWriteWindow(),
     attempted: false,
   };
-
   const identity = await scopedDb(
     async (tx) =>
       await resolveDecisionIdentityTx(tx, {
@@ -171,15 +260,10 @@ const runDecisionAttempt = async ({
       }),
   );
   const { existing, decisionId, composition } = identity;
-
-  if (existing?.redactedAt) {
-    return {
-      status: PROCESS_DECISION_STATUS.COMPLETE,
-      inserted: false,
-      searchVectorFailed: false,
-    };
+  const redacted = redactedDecisionOutcome(existing?.redactedAt);
+  if (redacted !== null) {
+    return redacted;
   }
-
   const composedSupplements =
     composition === null ? [] : composition.supplements;
   const result = composeDecisionWithSupplements({
@@ -224,6 +308,20 @@ const runDecisionAttempt = async ({
     return sourceRawArtifact.outcome;
   }
   const rawArtifact = sourceRawArtifact.artifact;
+
+  const republishedLink = await settleRepublishedLink({
+    republished: matchRepublishedLink(identity),
+    s3UploadFailed: rawArtifact.s3UploadFailed,
+    scopedDb,
+    sourceId,
+    decisionId,
+    rawArtifact,
+    sourceUrl: result.sourceUrl,
+    observedAt,
+  });
+  if (republishedLink !== null) {
+    return republishedLink;
+  }
 
   const attempted = await Result.tryPromise({
     try: async () => {
@@ -301,6 +399,15 @@ const runDecisionAttempt = async ({
   }
   const { write, writeStatus } = rowWrite.value;
 
+  await recordAppliedIdentityRaw(writeStatus, {
+    scopedDb,
+    sourceId,
+    decisionId,
+    rawArtifact,
+    sourceUrl: result.sourceUrl,
+    observedAt,
+  });
+
   const settled = await settleRowWriteStatus({
     scopedDb,
     sourceId,
@@ -323,11 +430,6 @@ const runDecisionAttempt = async ({
   if (flushed !== null) {
     return flushed;
   }
-
-  // Search indexing (tsvector) is handled by a background
-  // backfill loop so the slow to_tsvector + unaccent computation
-  // doesn't block cursor advancement. New decisions become
-  // searchable within ~30s of insertion.
 
   return withSourceRawRetry(rawArtifact.s3UploadFailed, {
     status: PROCESS_DECISION_STATUS.COMPLETE,

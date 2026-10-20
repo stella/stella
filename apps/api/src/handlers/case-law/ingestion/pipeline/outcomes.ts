@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
+import type { RepublishedRulingMatch } from "@/api/handlers/case-law/ingestion/pipeline/ruling-identity-match";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields } from "@/api/lib/errors/utils";
@@ -49,6 +50,7 @@ export type ProcessResult =
       status: typeof PROCESS_DECISION_STATUS.COMPLETE;
       inserted: boolean;
       searchVectorFailed: boolean;
+      republished?: RepublishedRulingMatch;
     }
   | {
       status: typeof PROCESS_DECISION_STATUS.RETRYABLE;
