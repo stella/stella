@@ -1876,7 +1876,16 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
             });
           })
         ).at(0);
-  if (docxOutcome.kind !== "markdown" && !currentExtracted) {
+  // The text must belong to the version this read started from: a version
+  // promoted between the two reads would pair new text with old metadata.
+  const sourceVersionId = currentExtracted?.sourceEntityVersionId;
+  const versionChanged =
+    typeof sourceVersionId === "string" &&
+    sourceVersionId !== currentDocument.currentVersion.id;
+  if (
+    docxOutcome.kind !== "markdown" &&
+    (!currentExtracted || versionChanged)
+  ) {
     return structuredErrorResult({
       code: "conflict",
       message: "Current document content is not ready",
