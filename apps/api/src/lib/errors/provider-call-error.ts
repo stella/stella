@@ -1,4 +1,4 @@
-import type { AIErrorKind } from "@stll/api-contract";
+import type { AIErrorKind, AIFailureCode } from "@stll/api-contract";
 import { declareFailureClass } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 
@@ -50,7 +50,7 @@ export const providerCallErrorCode = (
 type ProviderCallErrorOptions = {
   model: Pick<ResolvedTanStackTextModel, "provider" | "keySource">;
   status: HandlerErrorStatusCode;
-  code?: ProviderCallErrorCode | undefined;
+  code?: ProviderCallErrorCode | AIFailureCode | undefined;
   kind: AIErrorKind;
   facts?: { status: number; isRetryable?: boolean } | undefined;
   requestId?: string | undefined;
@@ -89,7 +89,7 @@ export class ProviderCallError extends HandlerError {
     );
   }
 
-  declare code?: ProviderCallErrorCode | undefined;
+  declare code?: ProviderCallErrorCode | AIFailureCode | undefined;
   readonly provider: ResolvedTanStackTextModel["provider"];
   readonly keySource: ResolvedTanStackTextModel["keySource"];
   readonly providerStatus: number | undefined;

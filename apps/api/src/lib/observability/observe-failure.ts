@@ -35,6 +35,7 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
+import { releaseFailureIdentity } from "@/api/lib/observability/release-failures";
 import {
   getRequestContext,
   recordRequestFailure,
@@ -183,6 +184,8 @@ const observe = (
     grading,
     channel: legacyChannelOf(policy),
     degradation: fingerprintDegradation(evidence),
+    route: undefined,
+    identity: releaseFailureIdentity(evidence),
   });
 
   if (policy.severity === "ERROR") {

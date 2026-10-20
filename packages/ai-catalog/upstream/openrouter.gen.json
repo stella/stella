@@ -199,6 +199,12 @@
       }
     },
     {
+      "id": "deepseek/deepseek-v4.1-flash-1017",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "deepseek/deepseek-v4.1-flash:batch",
       "reasoning": {
         "default_effort": "high"

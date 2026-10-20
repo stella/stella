@@ -73,7 +73,7 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
         class: "advisory",
         owner: "ci",
       },
-      "Install API test planner dependencies": {
+      "Install planner dependencies": {
         class: "advisory",
         owner: "ci",
       },
@@ -121,11 +121,20 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       "Failure-as-empty baseline": { class: "budget", owner: "code-health" },
     },
   },
+  "generated-sources": {
+    class: "correctness",
+    steps: {
+      "Save generated sources": { class: "advisory", owner: "ci" },
+    },
+  },
+  "pr-heavy-gate": { class: "correctness" },
   "ci-tests": { class: "correctness" },
   "api-test-durations": { class: "advisory" },
   "ci-browser": { class: "correctness" },
   "code-quality-api": { class: "correctness" },
+  "code-quality-api-cancel": { class: "advisory" },
   "code-quality-web-rest": { class: "correctness" },
+  "code-quality-web-rest-cancel": { class: "advisory" },
   "query-perf": { class: "correctness" },
   "postgres-service-suites": { class: "correctness" },
   "service-suites": { class: "correctness" },
@@ -248,5 +257,11 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       },
     },
   },
-  "ci-result": { class: "correctness" },
+  "ci-result": {
+    class: "correctness",
+    steps: {
+      "Write required-jobs record": { class: "advisory", owner: "ci" },
+      "Upload required-jobs record": { class: "advisory", owner: "ci" },
+    },
+  },
 };

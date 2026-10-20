@@ -8,7 +8,8 @@ import { panic, Result } from "better-result";
  * The wire values live in @stll/api-contract so producers and consumers are
  * checked against one source.
  */
-import type { AIErrorKind } from "@stll/api-contract";
+import { AI_FAILURE_CODES, isAIFailureCode } from "@stll/api-contract";
+import type { AIErrorKind, AIFailureCode } from "@stll/api-contract";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { classifyFailure, FAILURE_REASON_GRADE } from "@stll/errors";
 import { isNonNullObject } from "@stll/template-conditions/path";
@@ -587,9 +588,11 @@ const aiKindHandlerError = (
   error: unknown,
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
+  const code = AI_FAILURE_CODES[kind];
   switch (kind) {
     case "quota_exhausted":
       return new HandlerError({
+        code,
         status: 429,
         message:
           "The AI provider's quota is exhausted. Try again shortly, or contact your workspace admin.",
@@ -597,6 +600,7 @@ const aiKindHandlerError = (
       });
     case "provider_billing":
       return new HandlerError({
+        code,
         status: 402,
         message:
           "The AI provider reported a billing or credit problem. An administrator should check the provider account.",
@@ -604,6 +608,7 @@ const aiKindHandlerError = (
       });
     case "provider_credentials_rejected":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI provider rejected the configured credentials. An administrator should check the provider API key in organization settings.",
@@ -611,6 +616,7 @@ const aiKindHandlerError = (
       });
     case "model_unavailable":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The configured AI model is no longer available from the provider. An administrator should update the model in organization settings.",
@@ -618,6 +624,7 @@ const aiKindHandlerError = (
       });
     case "provider_unavailable":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI provider is temporarily unavailable. Please try again in a moment.",
@@ -625,6 +632,7 @@ const aiKindHandlerError = (
       });
     case "provider_stream_incomplete":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model's reply was cut off before it finished. Please try again.",
@@ -632,6 +640,7 @@ const aiKindHandlerError = (
       });
     case "output_incomplete":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model's answer was cut off before it was complete. Please try again.",
@@ -639,6 +648,7 @@ const aiKindHandlerError = (
       });
     case "output_invalid":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model's answer did not have the expected structure. Please try again.",
@@ -646,6 +656,7 @@ const aiKindHandlerError = (
       });
     case "output_moderated":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI provider stopped the answer under its content policy. Rephrase the request or choose another model.",
@@ -653,6 +664,7 @@ const aiKindHandlerError = (
       });
     case "deadline_exceeded":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model did not answer in time. Please try again in a moment.",
@@ -660,6 +672,7 @@ const aiKindHandlerError = (
       });
     case "loop_detected":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model repeated the same work and could not recover. Please try again with a narrower request.",
@@ -667,13 +680,14 @@ const aiKindHandlerError = (
       });
     case "empty_completion":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model returned an empty reply. Please try again, or rephrase the request.",
         cause: error,
       });
     case "unknown":
-      return new HandlerError({ ...fallback, cause: error });
+      return new HandlerError({ ...fallback, code, cause: error });
     default: {
       kind satisfies never;
       return panic(`Unhandled kind: ${String(kind)}`);
@@ -703,7 +717,7 @@ export const aiHandlerError = (
       ? new ProviderCallError({
           model: { provider: error.provider, keySource: error.keySource },
           status: mapped.status,
-          code: error.code,
+          code: error.code ?? AI_FAILURE_CODES[kind],
           kind: error.kind,
           requestId: error.requestId,
           providerDiagnostic: error.providerDiagnostic,
@@ -727,7 +741,11 @@ export const aiHandlerError = (
 
 type AIErrorStatusBody = {
   status: HandlerErrorStatusCode;
-  body: { message: string; providerDiagnostic?: ProviderDiagnostic };
+  body: {
+    code: AIFailureCode;
+    message: string;
+    providerDiagnostic?: ProviderDiagnostic;
+  };
 };
 
 /**
@@ -744,6 +762,11 @@ export const aiErrorStatusBody = (
   return {
     status: handlerError.status,
     body: {
+      // A code the handler error already carries (a configuration refusal such
+      // as the managed-provider one) is more precise than the classified kind.
+      code: isAIFailureCode(handlerError.code)
+        ? handlerError.code
+        : AI_FAILURE_CODES[classifyAIError(error)],
       message: handlerError.message,
       ...(handlerError instanceof ProviderCallError &&
       handlerError.providerDiagnostic !== undefined

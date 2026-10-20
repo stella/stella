@@ -13,6 +13,7 @@ import {
   ANONYMIZATION_REFUSAL_SITES,
   buildAnonymizationRefusalRecord,
   buildChatTurnSettlementRecord,
+  buildMcpRequestMetricRecord,
   buildRequestDurationRecord,
   emitActionCostDropMetric,
   emitChatRunLogMetric,
@@ -24,6 +25,76 @@ import {
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import type { RequestClass } from "@/api/lib/observability/request-metrics";
+import {
+  measureMcpPhase,
+  normalizeMcpMetricMethod,
+  observeMcpRequest,
+} from "@/api/mcp/request-metrics";
+
+test("MCP phase records are integral, non-overlapping, and bounded", () => {
+  const freeText = "private caller supplied text";
+  const record = buildMcpRequestMetricRecord({
+    method: normalizeMcpMetricMethod(freeText),
+    mode: "default",
+    overlap: false,
+    path: "modern",
+    phases: {
+      auth: 1.9,
+      context: 2.9,
+      server_build: 3.9,
+      tool_projection: 4.9,
+      dispatch: 5.9,
+    },
+    queryCount: 7,
+    totalMs: 30.1,
+  });
+  expect(record).toEqual({
+    event: "mcp.request.phases",
+    method: "unknown",
+    mode: "default",
+    overlap: false,
+    path: "modern",
+    queryCount: 7,
+    auth: 1,
+    context: 2,
+    server_build: 3,
+    tool_projection: 4,
+    dispatch: 5,
+    total: 31,
+  });
+  const phaseTotal =
+    record.auth +
+    record.context +
+    record.server_build +
+    record.tool_projection +
+    record.dispatch;
+  expect(phaseTotal).toBeLessThanOrEqual(record.total);
+  expect(JSON.stringify(record)).not.toContain(freeText);
+  expect(normalizeMcpMetricMethod("tools/call")).toBe("tools/call");
+});
+
+test("MCP phase overlap never changes the result and is flagged", async () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  const result = await observeMcpRequest({
+    method: "tools/list",
+    mode: "default",
+    run: async () =>
+      await measureMcpPhase(
+        "auth",
+        async () => await measureMcpPhase("context", async () => "served"),
+      ),
+  });
+  expect(result).toBe("served");
+  expect(JSON.parse(lines.at(0) ?? "{}")).toMatchObject({
+    event: "mcp.request.phases",
+    overlap: true,
+    context: 0,
+  });
+  resetMetricLineSinkForTesting();
+});
 
 test("reasoning replay drops emit only bounded provider and reason dimensions", () => {
   const lines: string[] = [];

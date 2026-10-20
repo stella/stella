@@ -12,6 +12,31 @@
       "unknownDevice": "Unknown device"
     }
   },
+  "admin": {
+    "ai": "AI",
+    "backToApp": "Back to app",
+    "billingAndUsage": "Billing and usage",
+    "billingProfiles": "Billing profiles",
+    "deleteDescription": "Permanently delete this organization and its data. This cannot be undone.",
+    "deleteOrganization": "Delete organization",
+    "deleteRefusedSubscription": "This organization has a subscription that renews. Cancel it in Plan and usage first, then delete the organization.",
+    "deleteTypeToConfirm": "Type {name} to confirm.",
+    "firmSetup": "Firm setup",
+    "general": "General",
+    "leaveDescription": "You will lose access to this organization's matters and data.",
+    "leaveOrganization": "Leave organization",
+    "leaveRefusedOnlyOwner": "You are the only owner. Make another member an owner before you leave.",
+    "modelsAndProviders": "Models and providers",
+    "noPlan": "No active plan",
+    "organizationDeleted": "The organization has been deleted.",
+    "organizationId": "Organization ID",
+    "organizationLeft": "You have left the organization.",
+    "overviewDescription": "Manage your organization, people and tools.",
+    "people": "People",
+    "planAndUsage": "Plan and usage",
+    "title": "Organization admin",
+    "toolsDescription": "Enable or disable native tools for everyone in this organization."
+  },
   "agentClaim": {
     "access": "Access it will get",
     "accessReadSearch": "Read and search access",
@@ -984,6 +1009,9 @@
       "saved": "{count, plural, one {# decision} other {# decisions}} saved into {matter}"
     },
     "newestDecisions": "Newest decisions",
+    "noResults": {
+      "hint": "Try other words, improve the query with AI, or ask the question in chat."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Human"
@@ -1056,6 +1084,10 @@
         "medium": "Medium",
         "short": "Short"
       }
+    },
+    "rewritten": {
+      "line": "No exact matches for <bdi>{original}</bdi>; showing results for <bdi>{query}</bdi>",
+      "searchOriginal": "Search my original words"
     },
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.",
     "searchLabel": "Search case law",
@@ -1205,15 +1237,32 @@
     },
     "answerEdit": {
       "acceptFailed": "The change could not be saved. Try again.",
+      "aiKind": "Requested edit",
       "ask": "Request edits",
+      "authorUnknown": "Unknown author",
+      "autolinkLabel": "This text becomes a link automatically. Change the label before removing the link.",
+      "change": "Change {revision}",
+      "editedLabel": "Edited answer",
       "failed": "The change could not be prepared. Try again.",
+      "formatKind": "Formatting",
+      "heading": "Heading {level}",
+      "history": "Answer history",
+      "historyEmpty": "No earlier versions.",
       "instruction": "Describe the change",
       "instructionRequired": "Describe how to change the selected text.",
       "invalidSelection": "This selection cannot be edited. Select continuous text.",
+      "invalidUrl": "Enter a valid HTTP or HTTPS address.",
+      "linkAddress": "Link address",
+      "orderedList": "Numbered list",
       "proposal": "Suggested change",
       "requesting": "Preparing changes…",
+      "restoreRefreshFailed": "The answer was restored, but could not be refreshed. Refresh to load the restored answer.",
+      "revertKind": "Restored version",
       "stale": "This answer changed. Select the text again.",
-      "submit": "Request change"
+      "submit": "Request change",
+      "textStyle": "Text style",
+      "unorderedList": "Bulleted list",
+      "wholeBlockRequired": "Select a whole paragraph or list to change its style."
     },
     "answerQuote": {
       "showInDecision": "Show in decision",
@@ -2620,10 +2669,12 @@
     "api": {
       "badRequest": "The request could not be completed.",
       "caseLawCountryUnavailable": "Case law for this country is not available. Choose another country.",
+      "caseLawIdentityOnly": "Only exact decision lookup and reading are available for this country.",
       "caseLawSearchUnavailable": "Case-law search is not available for this country. You can still read its public decisions.",
       "conflict": "The request conflicts with the current state.",
       "forbidden": "You do not have permission to do this.",
       "legislationCountryUnavailable": "Legislation for this country is not available. Choose another country.",
+      "legislationIdentityOnly": "Only exact legislation lookup and reading are available for this country.",
       "legislationSearchUnavailable": "Legislation search is not available for this country. You can still read its public legislation.",
       "notFound": "We could not find what you requested.",
       "payloadTooLarge": "The request is too large.",
@@ -2646,6 +2697,10 @@
       "aiConfigModelInvalid": "The AI model configuration is invalid. Check the selected models.",
       "aiConfigProviderInvalid": "The AI provider configuration is invalid. Check the provider settings.",
       "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.",
+      "aiOutputInvalid": "The AI answer had an unexpected format. Try again.",
+      "aiOutputModerated": "The AI provider moderated the output. Rephrase the request or choose another model.",
+      "aiProviderTaskUnsupported": "The configured AI provider cannot do this task. Choose a provider that can.",
+      "aiUnknown": "The AI request failed. Try again.",
       "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.",
       "clauseDirectivesInvalidDetails": "Clause {clauseName} in slot {slotName} has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.",
       "clauseDirectivesOverrideInvalidDetails": "The override for clause {clauseName} in slot {slotName} has invalid directives. Correct this fill’s override before filling again.",
@@ -4192,6 +4247,10 @@
     "archivedEmpty": "No archived memory.",
     "archivedToast": "Memory archived",
     "createdToast": "Memory saved",
+    "deleteConfirmation": "Type {confirmation} to confirm",
+    "deleteDescription": "This permanently removes this memory. This action cannot be undone.",
+    "deleteTitle": "Delete memory?",
+    "deletedToast": "Memory deleted",
     "empty": "No memory yet.",
     "kinds": {
       "decision": "Decision",
@@ -5120,6 +5179,8 @@
     "outline": "Contents",
     "outlineJumpLabel": "Jump to a provision",
     "outlineJumpPlaceholder": "§ 10 or a heading",
+    "pendingChanges": "Upcoming amendments",
+    "pendingChangesIncomplete": "The publisher data may not include every upcoming amendment.",
     "provisionAskContextPrompt": "\n\nPassages applying it in the most authoritative decisions:\n{passages}\n\nUse the case-law tools to read any of these decisions in full or to find further decisions citing the provision.",
     "provisionAskPlaceholder": "Ask about this provision",
     "provisionAskQuestionPrompt": "About {subject}: {question}",
@@ -5212,7 +5273,7 @@
       "previewIntroduction": "This agreement is entered into between Example Labs Ltd. (the “Company”) and the investor named on the signature page (the “Investor”).",
       "previewLevel1": "Investment",
       "previewLevel1Second": "Company representations",
-      "previewLevel1Third": "General",
+      "previewLevel1Third": "General provisions",
       "previewLevel2": "Equity financing",
       "previewLevel2Second": "Liquidity event",
       "previewLevel3": "Conversion price",
@@ -6265,7 +6326,6 @@
         }
       },
       "atAGlance": "At a glance",
-      "edited": "edited",
       "getStarted": "Get started by uploading documents or creating your first folder.",
       "matterDetails": "Matter details",
       "membersCount": "{count, plural, one {# member} other {# members}}",
