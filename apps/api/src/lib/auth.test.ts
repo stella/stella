@@ -1153,6 +1153,30 @@ describe("OAuth resource provisioning", () => {
   });
 });
 
+describe("session token responses", () => {
+  test("every auth endpoint answer passes the session token redaction", () => {
+    const plugins = getAuth().options.plugins;
+    const pluginIds = plugins.map((plugin) => plugin.id);
+    const redaction = plugins.find(
+      (plugin) => plugin.id === "stella-session-token-redaction",
+    );
+    const after = redaction?.hooks?.after ?? [];
+    expect(after).toHaveLength(1);
+    // The matcher accepts every endpoint, so no auth response escapes it.
+    expect(
+      after.every(({ matcher }) =>
+        ["/list-sessions", "/get-session", "/organization/list", "/x"].every(
+          (path) => matcher(fakeCtx(path)),
+        ),
+      ),
+    ).toBe(true);
+    // Only the refusal log, which records the final answer, runs after it.
+    expect(
+      pluginIds.slice(pluginIds.indexOf("stella-session-token-redaction") + 1),
+    ).toEqual(["stella-auth-refusal-log"]);
+  });
+});
+
 describe("organization lifecycle hook wiring", () => {
   test("the organization plugin runs the lifecycle hooks against the live analytics sink", async () => {
     // Pins the `...organizationLifecycleHooks` spread inside the plugin
