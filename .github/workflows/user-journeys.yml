@@ -39,7 +39,7 @@ jobs:
       && github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/deploy-staging.yml'
       && github.event.workflow_run.event == 'workflow_dispatch')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
     outputs:
@@ -66,11 +66,13 @@ jobs:
   staging:
     name: Staging journeys
     needs: staging-commit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
       packages: read
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout the deployed commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -92,6 +94,7 @@ jobs:
 
       - name: Login to GitHub Container Registry for browser images
         timeout-minutes: 2
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -127,13 +130,13 @@ jobs:
   local-stack:
     name: Mock-model journeys
     needs: staging-commit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
       contents: read
       packages: read
     env:
-      CI_IMAGE_MIRROR_ENABLED: ${{ github.token != '' }}
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout the deployed commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -170,6 +173,7 @@ jobs:
 
       - name: Login to GitHub Container Registry for browser images
         timeout-minutes: 2
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -223,11 +227,13 @@ jobs:
     if: >-
       github.event_name == 'schedule'
       || (github.event_name == 'workflow_dispatch' && inputs.target == 'scheduled')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
       packages: read
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Resolve the deployed commit
         id: deployed
@@ -272,6 +278,7 @@ jobs:
 
       - name: Login to GitHub Container Registry for browser images
         timeout-minutes: 2
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:

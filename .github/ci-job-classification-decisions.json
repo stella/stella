@@ -687,6 +687,22 @@
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."
   },
+  "candidate:.github/workflows/user-journeys.yml/staging-commit": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/user-journeys.yml/staging": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/user-journeys.yml/local-stack": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/user-journeys.yml/scheduled": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
   "candidate:.github/workflows/visual-preview.yml/preview": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."

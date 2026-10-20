@@ -296,6 +296,10 @@
       "node": "n0086"
     },
     {
+      "path": ".github/workflows/user-journeys.yml",
+      "node": "source-2dd7112581ce7ab7bcc84832d2ca7d7ce735edcbfdcb32dc56b95c926af2814e"
+    },
+    {
       "path": ".github/workflows/visual-preview.yml",
       "node": "n0087"
     }
@@ -2733,14 +2737,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/scheduled-run-alerts.yml",
-      "digest": "968ca4311f101dd65f19fb9f483f7d2559ed3e349858ff10efccc8c3f2796e8a",
+      "digest": "7fb44a82438f512ed055bbeebf9818daf01b9672252919e761608717b6c026ea",
       "references": [],
       "jobs": [
         {
           "id": "notify",
           "kind": "ordinary",
           "qualifier": "Notifies failures of watched workflows, including release health and quarantine maintenance; no release publication or deployment.",
-          "digest": "93f0abb577f41d97d2ccb9a34001bed9eef9fc13b4dc96a7c17fb88446ec3b44"
+          "digest": "f5ca68ca302d3fac326df25f66d94e1c49ff712767054700ef738ed168eed5a5"
         }
       ],
       "edges": {
@@ -3427,6 +3431,51 @@
       "references": ["./.github/actions/merge-target-base"],
       "jobs": [],
       "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "source-2dd7112581ce7ab7bcc84832d2ca7d7ce735edcbfdcb32dc56b95c926af2814e",
+      "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
+      "path": ".github/workflows/user-journeys.yml",
+      "digest": "d3f14e733ac6f00ee7f2e5c4b74b00541ddbd17c314a7d8fcbb3b5d6ef62e5f7",
+      "references": [],
+      "jobs": [
+        {
+          "id": "staging-commit",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "5b7651b82d43187485ec8ac44a2b49abde62b487db8b934f53d46746099a30cc"
+        },
+        {
+          "id": "staging",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "e3e52158063911380ed613b071dac91339e6b6cea574a3809e1d59965ad45a5b"
+        },
+        {
+          "id": "local-stack",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "e26852aa070e0bf2fae7a9edc2ebd7d540dc27fcb93d832f708957ac7897bf0b"
+        },
+        {
+          "id": "scheduled",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "32157e650dec95852d05d20e08b4466d1d6dc4f83a125ec412b16d8e9a549626"
+        }
+      ],
+      "edges": {
+        "./.github/actions/setup-e2e-stack": "n0015",
+        "./.github/actions/setup-playwright": "n0016",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104"
+      }
     },
     {
       "type": "metadata",
