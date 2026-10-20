@@ -177,7 +177,7 @@ type RlsCurrentContentDb = Pick<Transaction, "query" | "rollback">;
 
 export type SystemSweep = "search-indexing" | "deadline-scout";
 
-const loadCurrentExtractedContentsFromDatabase = async (
+const resolveCurrentExtractedRowsFromDatabase = async (
   database: Pick<typeof rootDb, "query">,
   {
     entityIds,
@@ -234,47 +234,65 @@ const loadCurrentExtractedContentsFromDatabase = async (
     },
     limit: entityIds.length,
   });
-  const resolved = await Promise.all(
-    rows.map(async (row) => {
-      const entity = row.entity;
-      const version = entity?.currentVersion;
-      if (
-        !entity ||
-        !version ||
-        version.deletedAt !== null ||
-        entity.workspace?.status === "deleting"
-      ) {
-        return null;
-      }
-      const current = selectCurrentExtractedContent({
-        extracted: row,
-        allowLegacy: entity.versions.at(0)?.id === version.id,
-        currentVersionCreatedAt: version.createdAt,
-        currentVersionId: version.id,
-        fields: version.fields,
-      });
-      if (!current) {
-        return null;
-      }
-      const sourceField = resolveCurrentExtractionFileField({
-        currentVersionId: version.id,
-        extracted: current,
-        fields: version.fields,
-      });
-      if (!sourceField) {
-        return null;
-      }
-      const { ciphertext, iv, ...provenance } = current;
-      return {
-        ...provenance,
-        sourceFieldId: sourceField.id,
-        name: entity.name,
-        text: await decryptContent(organizationId, ciphertext, iv),
-      };
-    }),
-  );
-  return resolved.filter((row) => row !== null);
+  return rows.flatMap((row) => {
+    const entity = row.entity;
+    const version = entity?.currentVersion;
+    if (
+      !entity ||
+      !version ||
+      version.deletedAt !== null ||
+      entity.workspace?.status === "deleting"
+    ) {
+      return [];
+    }
+    const current = selectCurrentExtractedContent({
+      extracted: row,
+      allowLegacy: entity.versions.at(0)?.id === version.id,
+      currentVersionCreatedAt: version.createdAt,
+      currentVersionId: version.id,
+      fields: version.fields,
+    });
+    if (!current) {
+      return [];
+    }
+    const sourceField = resolveCurrentExtractionFileField({
+      currentVersionId: version.id,
+      extracted: current,
+      fields: version.fields,
+    });
+    if (!sourceField) {
+      return [];
+    }
+    return [{ ...current, sourceFieldId: sourceField.id, name: entity.name }];
+  });
 };
+
+const loadCurrentExtractedContentsFromDatabase = async (
+  database: Pick<typeof rootDb, "query">,
+  options: Omit<LoadCurrentExtractedContentsOptions, "workspaceIds"> & {
+    workspaceIds: readonly SafeId<"workspace">[] | null;
+  },
+) =>
+  await Promise.all(
+    (await resolveCurrentExtractedRowsFromDatabase(database, options)).map(
+      async ({ ciphertext, iv, ...provenance }) => ({
+        ...provenance,
+        text: await decryptContent(options.organizationId, ciphertext, iv),
+      }),
+    ),
+  );
+
+/**
+ * The current source of each readable document, without its text: callers
+ * that only need availability or provenance never decrypt.
+ */
+export const loadCurrentExtractedSources = async (
+  database: RlsCurrentContentDb,
+  options: LoadCurrentExtractedContentsOptions,
+) =>
+  (await resolveCurrentExtractedRowsFromDatabase(database, options)).map(
+    ({ ciphertext, iv, ...provenance }) => provenance,
+  );
 
 export const loadCurrentExtractedContents = async (
   database: RlsCurrentContentDb,

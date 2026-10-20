@@ -3,7 +3,10 @@ import * as v from "valibot";
 
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import type { SafeId } from "@/api/lib/branded-types";
-import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
+import {
+  loadCurrentExtractedContents,
+  loadCurrentExtractedSources,
+} from "@/api/lib/document-content-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -103,7 +106,7 @@ const getFetchableEntityMap = async ({
         workspaceIds: context.accessibleWorkspaceIds,
       })
     ).unwrap();
-    return await loadCurrentExtractedContents(tx, {
+    return await loadCurrentExtractedSources(tx, {
       entityIds: safeEntityIds,
       organizationId: context.organizationId,
       workspaceIds,

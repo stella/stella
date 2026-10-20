@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -18,6 +18,7 @@ import {
   isCurrentDeadlineSource,
   loadCurrentDeadlineSource,
   loadCurrentExtractedContents,
+  loadCurrentExtractedSources,
   loadCurrentOcrExport,
 } from "@/api/lib/document-content-provenance";
 import { authorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
@@ -104,6 +105,45 @@ test("current content follows organization and matter scope", async () => {
       }),
     ).toEqual([]);
   });
+});
+
+test("current sources stay available when a document's text cannot be decrypted", async () => {
+  const original =
+    (
+      await database
+        .select({ ciphertext: extractedContent.ciphertext })
+        .from(extractedContent)
+        .where(eq(extractedContent.entityId, ids.entityA1))
+    ).at(0) ?? panic("Fixture extracted content is missing");
+  await database
+    .update(extractedContent)
+    .set({ ciphertext: Buffer.from("not a ciphertext") })
+    .where(eq(extractedContent.entityId, ids.entityA1));
+  try {
+    await inMatter(async (tx) => {
+      const options = {
+        entityIds: [ids.entityA1],
+        organizationId: ids.orgA,
+        workspaceIds: await checkedWorkspaceIds(tx, [ids.wsA1]),
+      };
+      // Availability needs only provenance: it never decrypts.
+      const sources = await loadCurrentExtractedSources(tx, options);
+      expect(sources.map(({ entityId }) => entityId)).toEqual([ids.entityA1]);
+      expect(sources.at(0)).not.toHaveProperty("text");
+      expect(sources.at(0)).not.toHaveProperty("ciphertext");
+      expect(
+        await loadCurrentExtractedContents(tx, options).then(
+          () => "read",
+          () => "refused",
+        ),
+      ).toBe("refused");
+    });
+  } finally {
+    await database
+      .update(extractedContent)
+      .set({ ciphertext: original.ciphertext })
+      .where(eq(extractedContent.entityId, ids.entityA1));
+  }
 });
 
 test("checked matter ids stay immutable", async () => {
