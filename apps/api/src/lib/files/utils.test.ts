@@ -174,7 +174,7 @@ describe("S3 object-key tenant scoping", () => {
       fileId: "file_1",
       mimeType: "text/markdown",
     });
-    expect(key).toBe("user_1/file_1.bin");
+    expect(key).toBe("org_1/file_1.bin");
     expect(key.startsWith("org_1/")).toBe(true);
   });
 
