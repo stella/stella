@@ -568,6 +568,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
       email: string;
     };
     session: {
+      id: string;
       activeOrganizationId: SafeId<"organization">;
     };
     featureAccessSnapshot?: FeatureAccessSnapshot;
@@ -1154,6 +1155,7 @@ const runAdmittedFiniteHandler = async function* <
         }
         const outcome = await admitModelDispatch({
           organizationId: ctx.session.activeOrganizationId,
+          userId: ctx.user.id,
           actionKind,
           organizationStateDb: ctx.scopedDb,
           signal,
