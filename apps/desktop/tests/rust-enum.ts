@@ -11,8 +11,8 @@ const camelCase = (variant: string) =>
 
 /** Variant names of a plain Rust enum, read from its declaration. */
 export const rustEnumVariants = (source: string, name: string) => {
-  const body = source.match(
-    new RegExp(`pub enum ${name} \\{([^}]*)\\}`, "u"),
+  const body = new RegExp(`pub enum ${name} \\{([^}]*)\\}`, "u").exec(
+    source,
   )?.[1];
   if (body === undefined) {
     panic(`Missing enum ${name}`);
