@@ -2524,41 +2524,6 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
-      - name: Checkout workflow classification tooling
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Reads classification tooling at the workflow revision."
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .workflow-tooling
-          fetch-depth: 0
-          persist-credentials: false
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            .github/workflows
-            .github/actions
-            .github/ci-job-classification-decisions.json
-            .github/ci-job-classification-sources.json
-            scripts/check-ci-job-classification.ts
-            scripts/ci-job-classification
-            packages/collation/src/collation.ts
-            packages/sha256/src/node.ts
-            packages/sha256/src/types.ts
-
-      - name: Check workflow job classifications
-        id: job-classification
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
-        # Remove the tooling checkout so later source checks see only the
-        # candidate tree.
-        run: |
-          trap 'rm -rf .workflow-tooling' EXIT
-          bun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling
-
       - name: Compute affected flag
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         id: affected
@@ -6759,6 +6724,54 @@ jobs:
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
+
+      # Workflow job classifications fail more red pull requests than any
+      # other check and take seconds, so they run here, before the heavy
+      # suites wait on this job, under ci-checks-policy's own conditions.
+      - name: Checkout workflow classification tooling
+        if: >-
+          !cancelled() && steps.install.outcome == 'success'
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.run_required != 'false'
+          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+          && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Reads classification tooling at the workflow revision."
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            .github/workflows
+            .github/actions
+            .github/ci-job-classification-decisions.json
+            .github/ci-job-classification-sources.json
+            scripts/check-ci-job-classification.ts
+            scripts/ci-job-classification
+            packages/collation/src/collation.ts
+            packages/sha256/src/node.ts
+            packages/sha256/src/types.ts
+
+      - name: Check workflow job classifications
+        id: job-classification
+        if: >-
+          !cancelled() && steps.install.outcome == 'success'
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.run_required != 'false'
+          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+          && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
+        # Remove the tooling checkout so later source checks see only the
+        # candidate tree.
+        run: |
+          trap 'rm -rf .workflow-tooling' EXIT
+          bun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling
 
       - name: "ci-checks-docs: Check changed Markdown consumers"
         if: >-
