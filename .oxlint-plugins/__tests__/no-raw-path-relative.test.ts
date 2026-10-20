@@ -63,6 +63,7 @@ import { guardEnforcesLine } from ${JSON.stringify(scope)};
 import { repoRelativePath } from ${JSON.stringify(portablePath)};
 export default createPortablePathPlugin((options) => guardEnforcesLine({
   ...options,
+  rollouts: [{ id: "portable-path", type: "changed-lines", expiresAt: "2026-10-20T00:00:00.000Z", check: ["bun", "scripts/check-fixture.ts"] }],
   now: new Date(${JSON.stringify(now)}),
   changedLines: new Map([[repoRelativePath(${JSON.stringify(repository)}, options.file), new Set(${JSON.stringify(changedLines)})]]),
 }));

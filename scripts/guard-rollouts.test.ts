@@ -3,7 +3,26 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import { GUARD_ROLLOUTS } from "./guard-rollout-policy.ts";
-import { changedLineNumbers, guardEnforcesLine } from "./guard-rollouts.ts";
+import {
+  changedLineNumbers,
+  guardEnforcesLine as productionGuardEnforcesLine,
+} from "./guard-rollouts.ts";
+
+const guardEnforcesLine = (
+  options: Parameters<typeof productionGuardEnforcesLine>[0],
+) =>
+  productionGuardEnforcesLine({
+    ...options,
+    rollouts: [
+      {
+        id: "portable-path",
+        type: "changed-lines",
+        expiresAt: "2026-10-20T00:00:00.000Z",
+        check: ["bun", "scripts/check-fixture.ts"],
+      },
+      ...GUARD_ROLLOUTS.filter(({ id }) => id !== "portable-path"),
+    ],
+  });
 
 test("diff scope excludes deletion hunks and includes every inserted line", () => {
   expect([

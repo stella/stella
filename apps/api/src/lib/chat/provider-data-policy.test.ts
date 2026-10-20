@@ -34,6 +34,7 @@ import {
 import {
   createTanStackTextAdapterFactory,
   getTanStackTextModelById,
+  getStructuredOutputFallbackModelId,
   getTanStackTextModelForTask,
   getTanStackTextModelInfoById,
   getTanStackTextModelInfoForTask,
@@ -44,6 +45,9 @@ import {
   findTranscriptProblems,
   providerWireFormatOf,
 } from "@/api/tests/helpers/provider-request-transcript";
+import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const REQUEST_TEXT = "Reply with OK.";
 const REQUEST_API_KEY = "test-request-key";
@@ -530,6 +534,82 @@ describe("provider request policy", () => {
       }
     },
   );
+
+  test("selected structured fallback preserves regional routing and data policy", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; body: unknown }[] = [];
+    testState.setConfig("USE_MOCK_AI", false);
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
+    testState.setConfig("OPENROUTER_API_KEY", REQUEST_API_KEY);
+    globalThis.fetch = Object.assign(
+      async (
+        input: Parameters<typeof globalThis.fetch>[0],
+        init?: RequestInit,
+      ) => {
+        const request =
+          input instanceof Request
+            ? input
+            : new Request(input.toString(), init);
+        requests.push({ url: request.url, body: await request.json() });
+        return new Response(
+          JSON.stringify({
+            error: { code: 400, message: "Request unavailable" },
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        );
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    try {
+      for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
+        requests.length = 0;
+        const policy = { dataClass: "customer", managedAIResidency } as const;
+        const selection = getStructuredOutputFallbackModelId({
+          failedModelId:
+            MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId,
+          orgAIConfig: null,
+          task: "chat",
+          modelTier: MANAGED_MODEL_TIER.standard,
+          ...policy,
+        });
+        expect(selection).not.toBeNull();
+        if (selection === null) {
+          continue;
+        }
+        const model = getTanStackTextModelById(selection, null, {
+          organizationId: null,
+          task: "chat",
+          modelTier: MANAGED_MODEL_TIER.standard,
+          ...policy,
+        });
+        expect(model.provider).toBe("openrouter");
+        expect(model.modelId).not.toBe(
+          MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId,
+        );
+        for await (const _chunk of model.adapter.chatStream({
+          model: model.modelId,
+          logger: resolveDebugOption(false),
+          messages: [{ role: "user", content: REQUEST_TEXT }],
+          modelOptions: {
+            provider: { dataCollection: "allow", zdr: false },
+          },
+        })) {
+          /* consume stream */
+        }
+        expect(requests).toHaveLength(1);
+        expect(requests.at(0)).toMatchObject({
+          url: `https://${managedAIResidency}.openrouter.ai/api/v1/chat/completions`,
+          body: {
+            model: model.modelId,
+            provider: { data_collection: "deny", zdr: true },
+          },
+        });
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 
   test("rejects unsupported managed OpenRouter selections for every data class and residency", () => {
     const previousMock = env.USE_MOCK_AI;

@@ -35,13 +35,17 @@ jobs:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve comparison base
+        id: target-base
+        uses: ./.github/actions/merge-target-base
       - name: Select preview changes
         id: scope
         env:
-          BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          BASE_SHA: ${{ steps.target-base.outputs.base_sha }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ "$EVENT_NAME" != merge_group ]; then
+          # An unresolved merge-group base cannot prove the preview unaffected.
+          if [ "$EVENT_NAME" != merge_group ] || [ -z "$BASE_SHA" ]; then
             echo 'required=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi

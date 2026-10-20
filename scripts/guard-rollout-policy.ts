@@ -12,8 +12,7 @@ export const GUARD_ROLLOUTS: readonly GuardRollout[] = [
   {
     id: "portable-path",
     rules: ["no-raw-path-relative/no-raw-path-relative"],
-    type: "changed-lines",
-    expiresAt: "2026-10-20T00:00:00.000Z",
+    type: "full",
     check: [
       "bun",
       "--bun",
@@ -29,8 +28,7 @@ export const GUARD_ROLLOUTS: readonly GuardRollout[] = [
   },
   {
     id: "central-test-timeout",
-    type: "changed-lines",
-    expiresAt: "2026-10-20T00:00:00.000Z",
+    type: "full",
     check: ["bun", "scripts/check-oxlint-test-timeouts.ts"],
   },
   {

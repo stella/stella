@@ -190,7 +190,10 @@ export const toCallResult = (
   return { content, isError: !outcome.ok };
 };
 
-const editDistance = (a: string, b: string): number => {
+// Over Unicode scalar values, so an astral character is one edit.
+const editDistance = (left: string, right: string): number => {
+  const a = Array.from(left);
+  const b = Array.from(right);
   let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
   for (let i = 1; i <= a.length; i += 1) {
     const current = [i];

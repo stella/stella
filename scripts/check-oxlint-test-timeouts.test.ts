@@ -5,7 +5,22 @@ import path from "node:path";
 
 import { repoRelativePath } from "../packages/portable-path/src/index";
 import { repositoryCustomLintRunnerViolations } from "./check-custom-lint-test-runners";
-import { customLintTestTimeoutViolations as checkTimeouts } from "./check-oxlint-test-timeouts.ts";
+import { customLintTestTimeoutViolations as checkProductionTimeouts } from "./check-oxlint-test-timeouts.ts";
+
+const checkTimeouts = (
+  options: Parameters<typeof checkProductionTimeouts>[0],
+) =>
+  checkProductionTimeouts({
+    ...options,
+    rollouts: [
+      {
+        id: "central-test-timeout",
+        type: "changed-lines",
+        expiresAt: "2026-10-20T00:00:00.000Z",
+        check: ["bun", "scripts/check-oxlint-test-timeouts.ts"],
+      },
+    ],
+  });
 
 const customLintTestTimeoutViolations = (
   options: Parameters<typeof checkTimeouts>[0] = {},

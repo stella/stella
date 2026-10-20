@@ -6,7 +6,7 @@ import {
   isPathInside,
   repoRelativePath,
 } from "../packages/portable-path/src/index.ts";
-import { GUARD_ROLLOUTS } from "./guard-rollout-policy.ts";
+import { GUARD_ROLLOUTS, type GuardRollout } from "./guard-rollout-policy.ts";
 
 export const changedLineNumbers = (diff: string): ReadonlySet<number> => {
   const lines = new Set<number>();
@@ -58,6 +58,7 @@ const changedLinesFor = (file: string): ReadonlySet<number> => {
 
 type GuardLineOptions = {
   guard: string;
+  rollouts?: readonly GuardRollout[];
   file: string;
   line: number;
   now?: Date;
@@ -66,12 +67,13 @@ type GuardLineOptions = {
 
 export const guardEnforcesLine = ({
   guard,
+  rollouts = GUARD_ROLLOUTS,
   file,
   line,
   now = new Date(),
   changedLines,
 }: GuardLineOptions): boolean => {
-  const rollout = GUARD_ROLLOUTS.find(({ id }) => id === guard);
+  const rollout = rollouts.find(({ id }) => id === guard);
   if (rollout === undefined) {
     return panic(`Unregistered guard rollout: ${guard}`);
   }

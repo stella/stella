@@ -86,12 +86,12 @@ type DecisionDateCursor = {
   id: SafeId<"caseLawDecision">;
 };
 
-const encodeDecisionDateCursor = ({
+export const encodeDecisionDateCursor = ({
   decisionDate,
   id,
 }: DecisionDateCursor): string => encodePaginationCursor([decisionDate, id]);
 
-const decodeDecisionDateCursor = (
+export const decodeDecisionDateCursor = (
   cursor: string,
 ): DecisionDateCursor | null => {
   const parts = decodePaginationCursor(cursor);

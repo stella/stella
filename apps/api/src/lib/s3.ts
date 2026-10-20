@@ -10,6 +10,7 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import { S3Client } from "bun";
 import { readFile } from "node:fs/promises";
+import { Readable } from "node:stream";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
@@ -1153,7 +1154,7 @@ export const putS3ObjectWithSignal = async (
  */
 export const putTemporaryS3ObjectWithSignal = async (
   key: string,
-  bytes: Uint8Array,
+  bytes: Uint8Array | Blob,
   mimeType: string,
   signal: AbortSignal,
 ): Promise<void> => {
@@ -1161,7 +1162,10 @@ export const putTemporaryS3ObjectWithSignal = async (
     async () =>
       await getAbortableS3().send(
         new PutObjectCommand({
-          Body: bytes,
+          // Reopen a spooled file on each credential attempt; buffering the
+          // archive here would defeat the publisher's bounded-memory contract.
+          Body: bytes instanceof Blob ? Readable.from(bytes.stream()) : bytes,
+          ContentLength: bytes instanceof Blob ? bytes.size : bytes.byteLength,
           Bucket: envBase.S3_BUCKET,
           ContentType: mimeType,
           Key: key,
@@ -1171,6 +1175,37 @@ export const putTemporaryS3ObjectWithSignal = async (
       ),
   );
 };
+
+/** Stream a server-authorized object without buffering its contents. */
+export const openS3ObjectStreamWithSignal = async (
+  key: string,
+  signal: AbortSignal,
+) =>
+  await documentsCredentials.run(async () => {
+    const response = await getAbortableS3().send(
+      new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+      { abortSignal: signal },
+    );
+    // A successful GetObject always carries a body; the SDK types it optional.
+    const body =
+      response.Body ?? panic("S3 returned an object without a response body");
+    return {
+      body: body.transformToWebStream(),
+      contentLength: response.ContentLength,
+    };
+  });
+
+/**
+ * Stream one object, or `null` when the store confirms it holds no such key.
+ * Every other failure is raised: see {@link isMissingS3ObjectError}.
+ */
+export const openS3ObjectStreamIfPresent = async (
+  key: string,
+  signal: AbortSignal,
+) =>
+  await presentOrNull(
+    async () => await openS3ObjectStreamWithSignal(key, signal),
+  );
 
 type ListS3ObjectKeysOptions = {
   bucket: string;
