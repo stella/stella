@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { createSha256 } from "@stll/sha256/bun";
@@ -66,6 +65,11 @@ const slicePredicate = (asOf: Date, alias: string): string => {
   return `((${alias}.decision_date >= ${sqlString(start)} AND ${alias}.decision_date <= ${sqlString(end)}) OR ${alias}.id = ANY(${pinned}))`;
 };
 
+export const CORPUS_SLICE_SNAPSHOT_ISOLATION =
+  "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ";
+
+type CorpusSliceExportResult = { manifestKey: string };
+
 type ExportExecutionOptions = {
   database: CaseLawRootHandle;
   storage: CorpusSliceTransferStorage;
@@ -80,7 +84,10 @@ const executeCorpusSliceExport = async ({
   prefix,
   asOf,
   batchSize,
-}: ExportExecutionOptions): Promise<void> => {
+}: ExportExecutionOptions): Promise<CorpusSliceExportResult> => {
+  // Every export owns a fresh, time-ordered directory: a rerun or a failed
+  // run can never rewrite shards that an earlier manifest already describes.
+  const generation = `${prefix.replace(/\/$/u, "")}/generations/${Bun.randomUUIDv7()}`;
   const seenSourceIds = new Set<string>();
   const objectKeys = new Set<string>();
   const memberHasher = createSha256();
@@ -89,11 +96,10 @@ const executeCorpusSliceExport = async ({
   const decisionPredicate = slicePredicate(asOf, "t");
 
   const openShard = async (name: string) => {
-    const key = `${prefix.replace(/\/$/u, "")}/${name}.ndjson`;
-    const sink =
-      storage.openWriter === undefined
-        ? panic("corpus slice export storage requires a shard writer")
-        : await storage.openWriter(key, "application/x-ndjson");
+    const sink = await storage.openWriter(
+      `${generation}/${name}.ndjson`,
+      "application/x-ndjson",
+    );
     const hasher = createSha256();
     let rows = 0;
     return {
@@ -253,20 +259,22 @@ const executeCorpusSliceExport = async ({
       return leftKey < rightKey ? -1 : 1;
     }),
   };
+  const manifestKey = `${generation}/manifest.json`;
   await storage.write(
-    `${prefix.replace(/\/$/u, "")}/manifest.json`,
+    manifestKey,
     new TextEncoder().encode(JSON.stringify({ corpus: manifest, shards })),
     "application/json",
   );
+  return { manifestKey };
 };
 
 /** Streams every shard from one read-only, repeatable snapshot. */
 export const exportCorpusSliceFromDatabase = async (
   options: ExportExecutionOptions,
-): Promise<void> =>
+): Promise<CorpusSliceExportResult> =>
   await withAggregateTransaction(options.database, async (tx) => {
-    await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`);
-    await executeCorpusSliceExport({
+    await tx.execute(CORPUS_SLICE_SNAPSHOT_ISOLATION);
+    return await executeCorpusSliceExport({
       ...options,
       database: {
         execute: async (query) => await tx.execute(query),

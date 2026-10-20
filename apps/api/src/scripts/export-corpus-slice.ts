@@ -22,7 +22,7 @@ await runScriptWithErrorOutput(async () => {
     return;
   }
   const session = await openCaseLawReadOnlySession();
-  await exportCorpusSliceFromDatabase({
+  const { manifestKey } = await exportCorpusSliceFromDatabase({
     database: session.rootDb,
     prefix: options.value.prefix,
     asOf: new Date(),
@@ -39,4 +39,5 @@ await runScriptWithErrorOutput(async () => {
         await openCorpusS3Writer({ key, mimeType: contentType }),
     },
   });
+  console.log(JSON.stringify({ mode: "export", manifestKey }));
 });
