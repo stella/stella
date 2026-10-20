@@ -8,6 +8,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   blockingFailures,
+  checkLogText,
   continueOnErrorHolds,
   failedCheckAnnotation,
   planChecks,
@@ -510,7 +511,7 @@ test("every pooled expression reads only contexts the pool provides", () => {
   }
 });
 
-test("the generated manifest guard defers the scan engine only outside PR depth runs", () => {
+test("the generated manifest guard defers the scan engine outside PR depth runs and typecheck coverage to its job", () => {
   const guard = readCheckPool("ci-checks-rest").find(
     ({ name }) => name === "Generated files manifest guard",
   );
@@ -518,7 +519,7 @@ test("the generated manifest guard defers the scan engine only outside PR depth 
   if (guard === undefined) {
     return;
   }
-  const deferred = (inputs: Value) => {
+  const deferred = (inputs: Value, outputs: Record<string, string> = {}) => {
     const [planned] = planChecks(
       [guard],
       context(
@@ -527,7 +528,7 @@ test("the generated manifest guard defers the scan engine only outside PR depth 
         {},
         {
           inputs,
-          outputs: { scan_engine_wasm_required: "true" },
+          outputs: { scan_engine_wasm_required: "true", ...outputs },
         },
       ),
     );
@@ -536,8 +537,37 @@ test("the generated manifest guard defers the scan engine only outside PR depth 
       ? planned.env["GENERATED_CHECKS_IN_OTHER_JOBS"]
       : undefined;
   };
-  expect(deferred({ pr_depth_only: true })).toBe("[]");
-  expect(deferred({ pr_depth_only: false })).toBe('["scan-engine-wasm"]');
+  expect(deferred({ pr_depth_only: true })).toBe('["",""]');
+  expect(deferred({ pr_depth_only: false })).toBe('["scan-engine-wasm",""]');
   // Push and merge-group runs have no inputs: GitHub renders them as null.
-  expect(deferred(null)).toBe('["scan-engine-wasm"]');
+  expect(deferred(null)).toBe('["scan-engine-wasm",""]');
+  // code-quality-web-rest runs the full typecheck coverage in this run.
+  expect(
+    deferred(null, { package_checks_required: "true", trusted: "true" }),
+  ).toBe('["scan-engine-wasm","api-typecheck-projects"]');
+});
+
+test("only a failed check's own error commands reach the job log", () => {
+  const output = [
+    "::error::Release history includes a fixture pull request",
+    "::error file=a.ts,line=1::Expected refusal",
+    "  ::error::already indented",
+    "::warning::advisory note",
+    "::group::nested",
+    "ok",
+  ].join("\n");
+  const neutralized = [
+    " ::error::Release history includes a fixture pull request",
+    " ::error file=a.ts,line=1::Expected refusal",
+    "  ::error::already indented",
+    "::warning::advisory note",
+    " ::group::nested",
+    "ok",
+  ].join("\n");
+  for (const outcome of ["success", "skipped"] as const) {
+    expect(checkLogText(output, outcome)).toBe(neutralized);
+  }
+  expect(checkLogText(output, "failure")).toBe(
+    output.replace("::group::nested", " ::group::nested"),
+  );
 });

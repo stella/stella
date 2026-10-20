@@ -135,7 +135,7 @@
     "setup:mcp": "bun install --cwd .claude/mcp --frozen-lockfile",
     "setup:worktree": "bash scripts/setup-worktree.sh",
     "hooks:install": "lefthook install",
-    "knip": "bun apps/api/scripts/generate-capability-runtime.ts && knip-bun",
+    "knip": "bun scripts/knip-generated-entries.ts && bun apps/api/scripts/generate-capability-runtime.ts && knip-bun",
     "hooks:uninstall": "lefthook uninstall",
     "postinstall": "bun run lint:ws && bun run generate",
     "dependencies:check": "DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies,unlisted",
@@ -147,7 +147,6 @@
     "@gdp-ts/core": "0.1.0",
     "@oxlint/plugins": "catalog:",
     "@shadcn/lint": "catalog:",
-    "@stll/aho-corasick": "catalog:",
     "@stll/collation": "workspace:*",
     "@stll/oxlint-config": "1.4.0",
     "@stll/portable-path": "workspace:*",
@@ -334,7 +333,8 @@
     "@tanstack/ai-mistral@0.6.14": "patches/@tanstack%2Fai-mistral@0.6.14.patch",
     "@tanstack/ai-openrouter@0.21.1": "patches/@tanstack%2Fai-openrouter@0.21.1.patch",
     "@tanstack/ai-mcp@0.8.0": "patches/@tanstack%2Fai-mcp@0.8.0.patch",
-    "@libpdf/core@0.5.2": "patches/@libpdf%2Fcore@0.5.2.patch"
+    "@libpdf/core@0.5.2": "patches/@libpdf%2Fcore@0.5.2.patch",
+    "oxlint-tailwindcss@1.16.0": "patches/oxlint-tailwindcss@1.16.0.patch"
   },
   "trustedDependencies": [
     "lefthook"

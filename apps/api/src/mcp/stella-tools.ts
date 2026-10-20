@@ -35,6 +35,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { locateEuProvisionCitations } from "@stll/legal-atlas/eu-provision-citations";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
 import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
 import {
@@ -776,7 +777,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.nonEmpty(),
         v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
         v.description(
-          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
         ),
       ),
     ),
@@ -2210,6 +2211,43 @@ const resolveSearchProvision = (
   text: string,
   country: string,
 ): SearchProvisionRead => {
+  const citedOn = Temporal.Now.plainDateISO("UTC").toString();
+  const euCitations = locateEuProvisionCitations(text, { citedOn });
+  if (euCitations.length > 1) {
+    return provisionRefusal(
+      "The provision names several provisions or a range",
+      'Pass one EU provision per search, for example "Article 6(1)(a) GDPR".',
+    );
+  }
+  const euCitation = euCitations.at(0);
+  if (euCitation !== undefined) {
+    const before = text.slice(0, euCitation.start).trim();
+    const after = text.slice(euCitation.end).trim();
+    if (before.length > 0 || (after.length > 0 && after !== ".")) {
+      return provisionRefusal(
+        "The provision names several provisions or contains unsupported text",
+        'Pass one complete EU provision per search, for example "Article 6(1)(a) GDPR"; search enumerated provisions separately.',
+      );
+    }
+    const reference = euCitation.reference;
+    return {
+      type: "resolved",
+      provision: {
+        jurisdiction: "EU",
+        work: euCitation.act.celex,
+        unit: reference.unit,
+        section: reference.section,
+        ...(reference.sectionSuffix === null
+          ? {}
+          : { sectionSuffix: reference.sectionSuffix }),
+        ...(reference.subsection === null
+          ? {}
+          : { subsection: reference.subsection }),
+        ...(reference.letter === null ? {} : { letter: reference.letter }),
+        ...(reference.point === null ? {} : { point: reference.point }),
+      },
+    };
+  }
   const profile = provisionCitationProfileFor(country);
   if (profile === null) {
     return provisionRefusal(
@@ -2220,7 +2258,7 @@ const resolveSearchProvision = (
   const read = resolveProvisionCitation({
     text,
     profile,
-    citedOn: Temporal.Now.plainDateISO("UTC").toString(),
+    citedOn,
   });
   switch (read.status) {
     case "resolved":
@@ -3119,6 +3157,20 @@ const decisionStaticFields = ({
     read.source.name.trim().toLowerCase() === read.court.trim().toLowerCase()
       ? null
       : read.source.name;
+  const citationFields: Pick<FoundDecision, "citations"> = {};
+  if (includedFields.has("citations")) {
+    if (publicCountryUnavailable(read.country, SEARCH_ADMISSION) !== null) {
+      citationFields.citations = {
+        status: "unavailable",
+        reason: "country_not_search_admitted",
+        country: read.country,
+      };
+    } else if (digest !== undefined && digest !== null) {
+      citationFields.citations = citationSummaryOutput(digest, (cited) =>
+        caseLawDecisionAppUrlOf(cited),
+      );
+    }
+  }
   return {
     ...(includedFields.has("details")
       ? {
@@ -3152,15 +3204,7 @@ const decisionStaticFields = ({
     ...(includedFields.has("source") && sourceName !== null
       ? { source: sourceName }
       : {}),
-    ...(includedFields.has("citations") &&
-    digest !== undefined &&
-    digest !== null
-      ? {
-          citations: citationSummaryOutput(digest, (cited) =>
-            caseLawDecisionAppUrlOf(cited),
-          ),
-        }
-      : {}),
+    ...citationFields,
   };
 };
 
@@ -3456,7 +3500,7 @@ const handleReadCaseLawDecisionTool: PublicMcpToolHandler<
       // interest counts as demand.
       caller: "attributed",
       documentHydration,
-      surface: "search",
+      surface: "identity",
     });
 
   // The deployment's half of every document-state answer, resolved once for
@@ -3532,9 +3576,8 @@ const handleReadCaseLawDecisionTool: PublicMcpToolHandler<
     reads.set(decisionId, hydrated);
   }
 
-  // The citation summary, for the entries that answer `found` and asked for
-  // it. Its own gated read: the same gate, so a decision the read could not
-  // see has no summary either.
+  // Citation data requires search admission even when the decision itself
+  // is readable by identity. Closed countries receive a typed disposition.
   const readDigest =
     context.testDependencies?.readGatedDecisionCitationDigest ??
     defaultReadGatedDecisionCitationDigest;
@@ -3544,6 +3587,7 @@ const handleReadCaseLawDecisionTool: PublicMcpToolHandler<
         return (
           value !== null &&
           isReadCaseLawDecisionSuccess(value) &&
+          publicCountryUnavailable(value.country, SEARCH_ADMISSION) === null &&
           !isDecisionDocumentPending(value, readsSharedCorpus)
         );
       })
