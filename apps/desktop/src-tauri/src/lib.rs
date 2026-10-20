@@ -53,7 +53,13 @@ mod time_entry_submit;
 mod tray;
 mod types;
 mod updater;
+#[cfg(feature = "webdriver")]
+mod webdriver;
 mod window_placement;
+
+// The WebDriver server lets any local process drive the app's windows.
+#[cfg(all(feature = "webdriver", not(debug_assertions)))]
+compile_error!("the `webdriver` feature is for debug builds only");
 
 include!("command_manifest.rs");
 
@@ -144,6 +150,8 @@ pub fn run() {
     .manage(desktop_telemetry.clone())
     .setup(move |app| {
       let handle = app.handle().clone();
+      #[cfg(feature = "webdriver")]
+      webdriver::start(&handle)?;
       #[cfg(target_os = "macos")]
       if let Ok(mut clipboard) = clipboard_manager.lock()
         && let Err(error) = clipboard.reconcile_image_exports()

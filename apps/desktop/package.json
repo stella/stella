@@ -18,6 +18,7 @@
     "test": "bun test --path-ignore-patterns '**/*.playwright.spec.ts'",
     "test:browser": "playwright test --config playwright.config.ts",
     "test:native": "cargo test --manifest-path src-tauri/Cargo.toml --workspace --test panel_lifecycle --locked",
+    "test:webdriver": "bun tests/webdriver/shortcut-recording-close.e2e.ts",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.test.json"
   },
   "dependencies": {

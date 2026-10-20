@@ -53,6 +53,11 @@ members = [
   "crates/windows-signing",
 ]
 
+[features]
+# Serves a W3C WebDriver endpoint inside the app for end-to-end tests. Debug
+# builds only: `src/lib.rs` refuses to compile it into a release build.
+webdriver = ["dep:tauri-plugin-wdio-webdriver"]
+
 [lints.rustdoc]
 bare_urls = "deny"
 broken_intra_doc_links = "deny"
@@ -83,6 +88,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-process = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-updater = "2"
+tauri-plugin-wdio-webdriver = { version = "1.5.0", optional = true }
 axum = "0.8"
 aes-gcm = "0.11"
 ammonia = "4"
