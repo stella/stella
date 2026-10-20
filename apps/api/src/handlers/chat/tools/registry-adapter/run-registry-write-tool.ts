@@ -8,18 +8,19 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
-import {
-  isMcpDescriptorFeatureEnabled,
-  isMcpFeatureInputEnabled,
-} from "@/api/mcp/feature-access";
+import { isMcpFeatureInputEnabled } from "@/api/mcp/feature-access";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
-import { agentInputValidationError } from "@/api/mcp/input-normalization";
+import {
+  agentInputValidationError,
+  normalizeObjectInputAtBoundary,
+} from "@/api/mcp/input-normalization";
 import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import {
   getStaticMcpToolDefinition,
   invokeStaticMcpTool,
 } from "@/api/mcp/static-tool-definitions";
 import type { AccountOperationCheck } from "@/api/mcp/tool-authority";
+import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
 import type {
@@ -95,6 +96,28 @@ const CHAT_RESOURCE_ADMISSION_FAILURE = failureSink({
   expected: [],
 });
 
+const invocationAvailabilityError = (response: McpToolResponse) => {
+  if (
+    isMcpEgressPlan(response) ||
+    response.status !== "error" ||
+    response.error.type !== "structured"
+  ) {
+    return null;
+  }
+  if (response.error.code === "feature_disabled") {
+    return new ChatToolError({
+      kind: "unavailable",
+      message: "This feature is not enabled on this deployment.",
+    });
+  }
+  return response.error.code === "unknown_tool"
+    ? new ChatToolError({
+        kind: "unavailable",
+        message: "Tool is unavailable.",
+      })
+    : null;
+};
+
 export const runRegistryWriteTool = async (
   { toolName, args, context, refRegistry }: RunRegistryWriteToolProps,
   dependencies: RunRegistryWriteToolDependencies = defaultRunRegistryWriteToolDependencies,
@@ -125,30 +148,6 @@ export const runRegistryWriteTool = async (
     }
   }
 
-  if (
-    !isMcpDescriptorFeatureEnabled({
-      context,
-      kind: "tools",
-      id: staticDefinition.name,
-      featureId: staticDefinition.featureId,
-    })
-  ) {
-    return Result.err(
-      new ChatToolError({
-        kind: "unavailable",
-        message: "Tool is unavailable.",
-      }),
-    );
-  }
-  if (!dependencies.isMcpToolFeatureEnabled(staticDefinition.feature)) {
-    return Result.err(
-      new ChatToolError({
-        kind: "unavailable",
-        message: "This feature is not enabled on this deployment.",
-      }),
-    );
-  }
-
   const dehydrated = dehydrateRefs({
     args,
     inputRefs: entry.inputRefs,
@@ -164,6 +163,14 @@ export const runRegistryWriteTool = async (
       args: dehydrated.value.args,
       toolName,
     }),
+    isFeatureEnabled: dependencies.isMcpToolFeatureEnabled,
+    normalizeInput: ({ access, exactProperties, schema, value }) =>
+      normalizeObjectInputAtBoundary({
+        access,
+        ...(exactProperties === undefined ? {} : { exactProperties }),
+        schema,
+        value,
+      }),
     beforeInvoke: async (normalizedArgs) => {
       if (
         !isMcpFeatureInputEnabled({
@@ -256,6 +263,14 @@ export const runRegistryWriteTool = async (
       ),
     );
   }
+  if (invocation.status === "authority-refused" && invocation.denial === null) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: "This operation is unavailable for this account.",
+      }),
+    );
+  }
   if (
     invocation.status === "authority-refused" ||
     invocation.status === "input-authority-refused"
@@ -263,11 +278,20 @@ export const runRegistryWriteTool = async (
     return Result.err(
       new ChatToolError({
         kind: "unavailable",
-        message: `Your member role does not permit this ${toolName} operation.`,
+        message:
+          invocation.status === "authority-refused" &&
+          (invocation.denial === "visibility" ||
+            staticDefinition.featureId !== undefined)
+            ? `Your member role does not permit ${toolName}.`
+            : `Your member role does not permit this ${toolName} operation.`,
       }),
     );
   }
   const response = invocation.response;
+  const availabilityError = invocationAvailabilityError(response);
+  if (availabilityError !== null) {
+    return Result.err(availabilityError);
+  }
   const finished = await finalizeToolEgress({
     context,
     mode: "default",
@@ -278,10 +302,7 @@ export const runRegistryWriteTool = async (
     return Result.err(toRegistryChatToolError(finished.error));
   }
 
-  // Same single schema-driven pass as the read path: strict parse (an
-  // undeclared field fails closed by construction), then strip, ref
-  // hydration, and the fail-closed UUID invariant in one walk. Failures
-  // carry only paths to telemetry, never values.
+  // Project and hydrate through the shared strict chat boundary.
   return projectForChat({
     dehydration: dehydrated.value,
     payload: finished.data,

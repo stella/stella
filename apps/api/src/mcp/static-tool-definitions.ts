@@ -17,6 +17,10 @@ import {
 } from "@/api/mcp/context";
 import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
+import {
+  isMcpDescriptorFeatureEnabled,
+  isMcpFeatureInputEnabled,
+} from "@/api/mcp/feature-access";
 import { FEEDBACK_TOOL_SET } from "@/api/mcp/feedback-tools";
 import {
   findUndeclaredArguments,
@@ -37,6 +41,7 @@ import {
   mcpToolAuthorityDenial,
   mcpToolInputAuthorityDenial,
 } from "@/api/mcp/tool-authority";
+import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import {
   scopeProseToSurface,
   type ToolVocabulary,
@@ -53,7 +58,11 @@ import {
   PUBLIC_MCP_TOOL_DEFINITION,
   PUBLIC_MCP_TOOL_HANDLER,
 } from "@/api/mcp/tool-types";
-import { structuredErrorResult } from "@/api/mcp/tool-utils";
+import {
+  FEATURE_DISABLED_MESSAGE,
+  featureDisabledHint,
+  structuredErrorResult,
+} from "@/api/mcp/tool-utils";
 
 type DefaultMcpToolSets = readonly [
   typeof COMPAT_TOOL_SET,
@@ -513,7 +522,7 @@ export const getStaticMcpToolHandler = (
 export type StaticMcpToolInvocation =
   | {
       status: "authority-refused";
-      denial: "member-role" | "credential" | null;
+      denial: "member-role" | "credential" | "visibility" | null;
     }
   | { status: "validation-error"; failure: BoundaryNormalizationFailure }
   | {
@@ -535,6 +544,8 @@ export const invokeStaticMcpTool = async ({
   definition,
   mode = "default",
   checkAccountOperation,
+  isFeatureEnabled = isMcpToolFeatureEnabled,
+  normalizeInput = normalizeObjectInputAtBoundary,
 }: {
   args: Record<string, unknown>;
   beforeInvoke?:
@@ -550,10 +561,11 @@ export const invokeStaticMcpTool = async ({
   definition: McpToolDefinition;
   mode?: McpMode;
   checkAccountOperation?: AccountOperationCheck;
+  isFeatureEnabled?: typeof isMcpToolFeatureEnabled;
+  normalizeInput?: typeof normalizeObjectInputAtBoundary;
 }): Promise<StaticMcpToolInvocation> => {
-  const denial = mcpToolAuthorityDenial(context, definition);
-  if (denial !== null) {
-    return { status: "authority-refused", denial };
+  if (!(definition.isVisibleToMemberRole?.(context.memberRole) ?? true)) {
+    return { status: "authority-refused", denial: "visibility" };
   }
   if (
     !isAccountAuthorizedForMcpTool(
@@ -563,6 +575,40 @@ export const invokeStaticMcpTool = async ({
     )
   ) {
     return { status: "authority-refused", denial: null };
+  }
+  const denial = mcpToolAuthorityDenial(context, definition);
+  if (denial !== null) {
+    return { status: "authority-refused", denial };
+  }
+  if (
+    !isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: definition.name,
+      featureId: definition.featureId,
+    }) ||
+    !isMcpFeatureInputEnabled({ context, definition, args })
+  ) {
+    return {
+      status: "invoked",
+      response: structuredErrorResult({
+        code: "unknown_tool",
+        message: `Unknown tool: ${definition.name}`,
+        hint: "Call tools/list for the tools available to this session.",
+      }),
+      inputNotes: [],
+    };
+  }
+  if (!isFeatureEnabled(definition.feature)) {
+    return {
+      status: "invoked",
+      response: structuredErrorResult({
+        code: "feature_disabled",
+        message: FEATURE_DISABLED_MESSAGE,
+        hint: featureDisabledHint(definition.feature),
+      }),
+      inputNotes: [],
+    };
   }
 
   const unknownArgs = findUndeclaredArguments({
@@ -585,7 +631,7 @@ export const invokeStaticMcpTool = async ({
       },
     };
   }
-  const normalized = normalizeObjectInputAtBoundary({
+  const normalized = normalizeInput({
     access: definition.access,
     exactProperties: ["confirm", "validate_only"],
     schema: definition.inputSchema,

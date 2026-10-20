@@ -10,7 +10,10 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
-import { agentInputValidationError } from "@/api/mcp/input-normalization";
+import {
+  agentInputValidationError,
+  normalizeObjectInputAtBoundary,
+} from "@/api/mcp/input-normalization";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -197,6 +200,13 @@ export const runRegistryReadTool = async ({
   let scopedError: ChatToolError | undefined;
   const invocation = await invokeStaticMcpTool({
     args: dehydrated.value.args,
+    normalizeInput: ({ access, exactProperties, schema, value }) =>
+      normalizeObjectInputAtBoundary({
+        access,
+        ...(exactProperties === undefined ? {} : { exactProperties }),
+        schema,
+        value,
+      }),
     scopeArgs: async (normalizedArgs) => {
       const scoped =
         scopeArgs === undefined

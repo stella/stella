@@ -23,10 +23,7 @@ import {
   type McpRequestContext,
 } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
-import {
-  isMcpDescriptorFeatureEnabled,
-  isMcpFeatureInputEnabled,
-} from "@/api/mcp/feature-access";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import type { ExternalGatewayDependencies } from "@/api/mcp/gateway/external-tools";
 import {
@@ -40,6 +37,7 @@ import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
 import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import {
   agentInputValidationError,
+  normalizeObjectInputAtBoundary,
   withInputNotes,
 } from "@/api/mcp/input-normalization";
 import { matterRequiredResult } from "@/api/mcp/matter-requirement";
@@ -62,8 +60,6 @@ import type {
 import { PUBLIC_MCP_TOOL_DEFINITION } from "@/api/mcp/tool-types";
 import {
   confirmationUnavailableResult,
-  FEATURE_DISABLED_MESSAGE,
-  featureDisabledHint,
   MCP_INTERNAL_ERROR_HINT,
   McpOutputContractError,
   notFoundResult,
@@ -298,42 +294,6 @@ const createSurfaceSerializer =
       toolName,
     );
 
-const featureUnavailableToolResult = ({
-  context,
-  mode,
-  toolName,
-  args,
-}: McpToolSurface & { toolName: string; args: Record<string, unknown> }):
-  | CallToolResult
-  | undefined => {
-  const definition = getStaticMcpToolDefinition(toolName, mode);
-  if (
-    isMcpDescriptorFeatureEnabled({
-      context,
-      kind: "tools",
-      id: toolName,
-      featureId: definition?.featureId,
-    })
-  ) {
-    if (
-      definition !== undefined &&
-      !isMcpFeatureInputEnabled({ context, definition, args })
-    ) {
-      return createSurfaceSerializer({ context, mode })(
-        notFoundResult("Not found"),
-      );
-    }
-    return undefined;
-  }
-  return createSurfaceSerializer({ context, mode })(
-    structuredErrorResult({
-      code: "unknown_tool",
-      message: `Unknown tool: ${toolName}`,
-      hint: "Call tools/list for the tools available to this session.",
-    }),
-  );
-};
-
 type McpToolCallArgs = {
   args: Record<string, unknown>;
   context: McpRequestContext;
@@ -450,15 +410,6 @@ const dispatchMcpToolCall = async ({
 }: McpToolCallArgs): Promise<CallToolResult> => {
   const serializeForSurface = createSurfaceSerializer({ context, mode });
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
-  const unavailableResult = featureUnavailableToolResult({
-    args,
-    context,
-    mode,
-    toolName,
-  });
-  if (unavailableResult !== undefined) {
-    return unavailableResult;
-  }
   const gatewayResult = await callGatewayTool({
     args,
     context,
@@ -492,19 +443,6 @@ const dispatchMcpToolCall = async ({
     );
   }
 
-  // Reject a gated-off tool even when the caller names it directly: the list
-  // surface hides it, and this closes the guess-the-name bypass so the gate
-  // holds on both the advertisement and the dispatch path.
-  if (!isMcpToolFeatureEnabled(staticTool.feature)) {
-    return serializeForSurface(
-      structuredErrorResult({
-        code: "feature_disabled",
-        message: FEATURE_DISABLED_MESSAGE,
-        hint: featureDisabledHint(staticTool.feature),
-      }),
-    );
-  }
-
   const handler = getStaticMcpToolHandler(toolName, mode);
   if (!handler && !(PUBLIC_MCP_TOOL_DEFINITION in staticTool)) {
     return serializeForSurface(unknownToolResult(toolName));
@@ -526,6 +464,13 @@ const dispatchMcpToolCall = async ({
         : context;
       const invocation = await invokeStaticMcpTool({
         args,
+        normalizeInput: ({ access, exactProperties, schema, value }) =>
+          normalizeObjectInputAtBoundary({
+            access,
+            ...(exactProperties === undefined ? {} : { exactProperties }),
+            schema,
+            value,
+          }),
         beforeInvoke: async (normalizedArgs) => {
           if (confirmation.required) {
             const unconfirmable = confirmationUnavailableResult({
@@ -556,6 +501,19 @@ const dispatchMcpToolCall = async ({
         mode,
       });
       if (invocation.status === "validation-error") {
+        const firstIssue = invocation.failure.issues.at(0);
+        if (firstIssue?.message.startsWith("Unknown parameter:")) {
+          return serializeForSurface(
+            structuredErrorResult({
+              code: "validation_error",
+              message:
+                firstIssue.message.split(" (did you mean", 1)[0] ??
+                firstIssue.message,
+              issues: [...invocation.failure.issues],
+              hint: invocation.failure.hint,
+            }),
+          );
+        }
         return serializeForSurface(
           agentInputValidationError({
             failure: invocation.failure,
@@ -574,7 +532,12 @@ const dispatchMcpToolCall = async ({
         }
         return serializeForSurface(
           structuredErrorResult(
-            mcpToolAuthorityDenialRefusal(toolName, invocation.denial),
+            mcpToolAuthorityDenialRefusal(
+              toolName,
+              invocation.denial === "visibility"
+                ? "member-role"
+                : invocation.denial,
+            ),
           ),
         );
       }

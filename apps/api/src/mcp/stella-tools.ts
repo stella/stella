@@ -3939,14 +3939,6 @@ export const STELLA_TOOL_HANDLERS = {
   set_practice_jurisdictions: handleSetPracticeJurisdictionsTool,
 };
 
-const STELLA_TENANT_TOOL_HANDLERS = {
-  list_matters: handleListMattersTool,
-  read_contact: handleReadContactTool,
-  read_content_across_matters: handleReadContentAcrossMattersTool,
-  search_across_matters: handleSearchAcrossMattersTool,
-  set_practice_jurisdictions: handleSetPracticeJurisdictionsTool,
-};
-
 export const STELLA_TOOL_DEFINITIONS = [
   RAW_STELLA_TOOL_DEFINITIONS[0],
   RAW_STELLA_TOOL_DEFINITIONS[1],
@@ -3970,7 +3962,7 @@ export const STELLA_TOOL_DEFINITIONS = [
 
 export const STELLA_TOOL_SET = defineMcpToolSet(
   STELLA_TOOL_DEFINITIONS,
-  STELLA_TENANT_TOOL_HANDLERS,
+  STELLA_TOOL_HANDLERS,
   {
     case_law_coverage: defineChatProjectionMcpToolOutput(
       CASE_LAW_COVERAGE_PROJECTION,

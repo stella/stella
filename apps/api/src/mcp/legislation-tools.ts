@@ -1407,7 +1407,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
 
 export const LEGISLATION_TOOL_SET = defineMcpToolSet(
   LEGISLATION_TOOL_DEFINITIONS,
-  {},
+  LEGISLATION_TOOL_HANDLERS,
   {
     search_legislation: defineChatProjectionMcpToolOutput(
       SEARCH_LEGISLATION_PROJECTION,

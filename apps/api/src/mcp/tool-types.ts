@@ -544,7 +544,7 @@ export type InternalToolStructuredError = {
   | { code: Exclude<McpErrorCode, "internal_error"> }
 );
 
-export type InternalToolTextError = {
+type InternalToolTextError = {
   type: "text";
   message: string;
 };

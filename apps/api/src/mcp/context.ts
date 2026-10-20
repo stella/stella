@@ -335,6 +335,7 @@ export type PublicMcpHandlerContext = {
   thirdPartyOutboundPermit?: ThirdPartyOutboundPermit;
   testDependencies?: Pick<
     NonNullable<McpRequestContext["testDependencies"]>,
+    | "admitLawRead"
     | "getLawTextBlock"
     | "caseLawSearchGuidance"
     | "corpusIndexQueryVariant"

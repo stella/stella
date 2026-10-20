@@ -211,7 +211,10 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
 
 export const LAW_COMPAT_TOOL_SET = defineMcpToolSet(
   LAW_COMPAT_TOOL_DEFINITIONS,
-  {},
+  {
+    fetch: handleLawCompatFetchTool,
+    search: handleLawCompatSearchTool,
+  },
   {
     fetch: defineMcpToolOutput(LAW_COMPAT_FETCH_OUTPUT_SCHEMA),
     search: defineMcpToolOutput(COMPAT_SEARCH_OUTPUT_SCHEMA),

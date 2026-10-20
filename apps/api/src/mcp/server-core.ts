@@ -825,7 +825,7 @@ export const createMcpHttpRequestHandler = ({
       context,
       kind: "tools",
       id: toolName,
-      featureId: staticTool?.featureId,
+      featureId: staticTool === undefined ? undefined : staticTool.featureId,
     })
       ? getMcpToolRequiredScopesHint(toolName, mode)
       : undefined;

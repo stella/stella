@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
@@ -16,6 +16,7 @@ import {
   countryInputSchema,
   countryNormalization,
   nullAsAbsent,
+  structuredErrorResult,
   toolDataResult,
   validationErrorResult,
 } from "./tool-utils";
@@ -175,6 +176,16 @@ const handleResolveDecision: PublicMcpToolHandler<ResolveData> = async ({
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
+  const admission = context.testDependencies?.admitLawRead?.({
+    organizationId: context.lawReadAdmission.organizationId,
+  });
+  if (admission !== undefined && Result.isError(admission)) {
+    return structuredErrorResult({
+      code: "feature_disabled",
+      message: "This tool is unavailable on this deployment.",
+      retryable: false,
+    });
+  }
   const { country, identifier } = parsed.output;
   return toolDataResult(
     await (context.testDependencies?.resolveDecision ?? defaultResolveDecision)(
@@ -189,6 +200,16 @@ const handleResolveLaw: PublicMcpToolHandler<ResolveData> = async ({
   const parsed = v.safeParse(resolveLawArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
+  }
+  const admission = context.testDependencies?.admitLawRead?.({
+    organizationId: context.lawReadAdmission.organizationId,
+  });
+  if (admission !== undefined && Result.isError(admission)) {
+    return structuredErrorResult({
+      code: "feature_disabled",
+      message: "This tool is unavailable on this deployment.",
+      retryable: false,
+    });
   }
   const { country, source, section, as_of: asOf } = parsed.output;
   switch (source.type) {
@@ -239,7 +260,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
 ] as const satisfies readonly McpToolDefinition[];
 export const LEGAL_RESOLVE_TOOL_SET = defineMcpToolSet(
   LEGAL_RESOLVE_TOOL_DEFINITIONS,
-  {},
+  LEGAL_RESOLVE_TOOL_HANDLERS,
   {
     resolve_case_law_decision: defineMcpToolOutput(legalResolveResponseSchema),
     resolve_law_citation: defineMcpToolOutput(legalResolveResponseSchema),

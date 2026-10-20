@@ -1074,16 +1074,9 @@ export const RESEARCH_ADMIN_TOOL_HANDLERS = {
   update_organization_settings: handleUpdateOrganizationSettingsTool,
 };
 
-const RESEARCH_ADMIN_TENANT_TOOL_HANDLERS = {
-  list_audit_log: handleListAuditLogTool,
-  add_matter_member: handleAddMatterMemberTool,
-  remove_matter_member: handleRemoveMatterMemberTool,
-  update_organization_settings: handleUpdateOrganizationSettingsTool,
-};
-
 export const RESEARCH_ADMIN_TOOL_SET = defineMcpToolSet(
   RESEARCH_ADMIN_TOOL_DEFINITIONS,
-  RESEARCH_ADMIN_TENANT_TOOL_HANDLERS,
+  RESEARCH_ADMIN_TOOL_HANDLERS,
   {
     list_audit_log: defineMcpToolOutput(LIST_AUDIT_LOG_OUTPUT_SCHEMA),
     add_matter_member: defineChatProjectionMcpToolOutput(

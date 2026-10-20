@@ -372,7 +372,7 @@ export const DECISION_READER_TOOL_SET = defineMcpToolSet(
     definePublicReadTool(READ_DECISION_BLOCKS_TOOL_DEFINITION, blocksTool),
     definePublicReadTool(PREVIEW_CITED_PROVISION_TOOL_DEFINITION, previewTool),
   ] as const satisfies readonly McpToolDefinition[],
-  {},
+  DECISION_READER_TOOL_HANDLERS,
   {
     open_case_law_decision: defineMcpToolOutput(openDecisionOutput),
     read_case_law_decision_blocks: defineMcpToolOutput(blocksDecisionOutput),
