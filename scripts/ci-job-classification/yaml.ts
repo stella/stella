@@ -279,7 +279,9 @@ if data.key?('runs')
 end
 add_action_dependencies(dependencies, ss, relocated_actions)
 shape['jobs'] = jobs.transform_values { |j| j['digest'] } if data.key?('jobs')
-STDOUT.write(JSON.generate({'digest'=>digest(shape),'privileged'=>privileged(shape),'jobs'=>jobs,'dependencies'=>dependencies,'relocatedActions'=>relocated_actions}))
+# A reached document is privileged when its header or any of its jobs is.
+document_privileged = privileged(shape) || jobs.values.any? { |j| privileged(j['shape']) }
+STDOUT.write(JSON.generate({'digest'=>digest(shape),'privileged'=>document_privileged,'jobs'=>jobs,'dependencies'=>dependencies,'relocatedActions'=>relocated_actions}))
 `;
 
 export const parseDocument = (text: string) =>

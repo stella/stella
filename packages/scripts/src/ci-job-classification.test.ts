@@ -1886,6 +1886,20 @@ test("the CLI emits a sensitive annotation and machine output until review is up
   }
 }, 10_000);
 
+test("a reached document is privileged when only one of its jobs is", () => {
+  const reusable = parseDocument(
+    "on: {workflow_call: {}}\njobs: {release: {permissions: {contents: write}, steps: [{run: 'echo release'}]}}",
+  );
+  const ordinary = parseDocument(
+    "on: {workflow_call: {}}\njobs: {check: {permissions: {contents: read}, steps: [{run: 'echo check'}]}}",
+  );
+  if (reusable.isErr() || ordinary.isErr()) {
+    throw new AdmissionError({ message: "reusable fixture parse failed" });
+  }
+  expect(reusable.value.privileged).toBe(true);
+  expect(ordinary.value.privileged).toBe(false);
+});
+
 test("a reviewed publish change in a reachable composite action stays sensitive", () => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-closure-"));
   try {
