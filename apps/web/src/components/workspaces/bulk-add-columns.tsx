@@ -405,7 +405,7 @@ const BulkColumnsForm = ({
         </DialogTitle>
       </header>
 
-      <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto px-5 pt-1 pb-2">
+      <div className="flex max-h-[60dvh] flex-col gap-3 overflow-y-auto px-5 pt-1 pb-2">
         {children}
         {onAddDraft !== undefined && (
           <Button

@@ -130,3 +130,24 @@ case and rejects invented or unreturned citations. The content and the expected
 legal distinction are emitted together for separate review; citation success
 alone does not certify the explanation. These evaluations are operator runs,
 not CI model calls.
+
+## Generated-view selection through local harnesses
+
+`generated-views-local.ts` emits the production `show_visual` description and
+schema alongside English, Czech, Slovak, and Polish visualization requests,
+including the existing court/year treemap request. It never calls a provider.
+From `apps/api`:
+
+```sh
+bun run eval:generated-views prompts > /absolute/path/generated-view-prompts.jsonl
+bun run eval:generated-views score /absolute/path/local-results.jsonl
+```
+
+Give each emitted prompt to a local coding-agent harness and capture its actual
+choice as JSONL: `{caseId, harness, answer, toolCalls: [{name}]}`. Keep prompts
+and results outside the repository. The scorer requires each fixture exactly
+once, a `show_visual` call, and no fenced HTML answer. These are selection
+checks; they do not execute generated HTML or certify visual quality, citations,
+or treemap semantics. The scorer unit tests use explicitly synthetic records
+and prove scoring only. Production model selection and visual quality remain
+NOT COVERED until separately exercised against a live model.

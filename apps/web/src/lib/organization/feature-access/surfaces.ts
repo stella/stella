@@ -13,6 +13,15 @@ const LEGAL_LISTS_FEATURE = {
 
 /** Declared policies require caller decisions; explicit fallbacks use server deployment availability. */
 export const CALLER_FEATURE = {
+  aiMemory: {
+    id: "ai-memory",
+    requires: [],
+    undeclared: { type: "hidden" },
+    routeImports: [
+      "@/routes/_protected.settings/-queries/memories",
+      "@/routes/_protected.settings/-components/account/memory/",
+    ],
+  },
   verification: {
     id: LIST_VERIFICATION_FEATURE_ID,
     // AVT reads list metadata and anchor facts as well as verification runs.

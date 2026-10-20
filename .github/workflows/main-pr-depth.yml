@@ -25,7 +25,7 @@ defaults:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -151,9 +151,6 @@ jobs:
       checks: read
       pull-requests: read
       packages: read
-      # Declared by ci-plan's merge-queue yield, which runs only on
-      # pull_request events and never here.
-      statuses: write
     with:
       depth: fast
       pr_depth_only: true
@@ -165,7 +162,7 @@ jobs:
   status:
     if: always() && needs.validate.result != 'skipped' && needs.validate.outputs.run != 'false' && !needs.validate.outputs.proof
     needs: [validate, suites]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: read

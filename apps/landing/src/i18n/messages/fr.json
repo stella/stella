@@ -569,7 +569,7 @@
           "question": "D’où proviennent les données ?"
         },
         "1": {
-          "answer": "Deux listes, l’une et l’autre en expansion. Les registres connectés couvrent déjà ARES (Tchéquie), Companies House (Royaume-Uni), SEC EDGAR (États-Unis), KRS (Pologne), PRH (Finlande) et VIES (TVA de l’UE). Au-delà des registres, les sources officielles s’ajoutent juridiction par juridiction : la Tchéquie, l’Espagne et Taïwan, par exemple, ont déjà des sources connectées, et le lecteur de jurisprudence est conçu pour parcourir et filtrer par juridiction à mesure que d’autres sources officielles s’ajoutent.",
+          "answer": "Le lecteur de jurisprudence publique donne actuellement accès aux décisions tchèques. Les registres de sociétés connectés comprennent ARES (Tchéquie), Companies House (Royaume-Uni), SEC EDGAR (États-Unis), KRS (Pologne), PRH (Finlande) et VIES (TVA de l’UE).",
           "question": "Quelles juridictions et quels registres sont couverts ?"
         },
         "2": {
@@ -892,9 +892,11 @@
     "bringWorkspaceToFront": "Mettre l’espace de travail stella au premier plan",
     "controlBody": "stella est un logiciel juridique <gh>open source</gh> que vous pouvez auto-héberger : inspectez le code, exécutez-le à votre façon et exportez tout dans des formats standard.",
     "controlTitle": "Gardez le contrôle de votre infrastructure.",
-    "dataBody": "Jurisprudence et registres du commerce chargés directement dans le dossier, dans chaque juridiction où vous exercez. L’anonymisation tient les éléments identifiants à l’écart de l’IA.",
+    "dataBody": "Lisez la jurisprudence tchèque avec des notes de l’IA sur les questions juridiques, des passages surlignés et soulignés, des commentaires d’avocat et des réponses avec citations. Recherchez des sociétés dans les registres officiels connectés et référez-vous aux sources depuis un dossier.",
+    "dataConstitutionalAlt": "Décision de la Cour constitutionnelle tchèque IV.ÚS 1394/24 avec des paragraphes numérotés, une note de l’IA sur la question juridique, un passage surligné, un passage souligné, un commentaire d’avocat et un échange comprenant deux questions et des réponses avec citations.",
     "dataEyebrow": "Données juridiques",
-    "dataMainAlt": "Une décision de justice officielle ouverte dans stella",
+    "dataMainAlt": "Décision de la Cour suprême tchèque 27 Cdo 59/2022 avec des paragraphes numérotés, une note de l’IA sur la question juridique, un passage surligné, un passage souligné, un commentaire d’avocat et un échange comprenant deux questions et des réponses avec citations.",
+    "dataSupremeAlt": "Décision de la Cour suprême tchèque 27 Cdo 1525/2025 avec des paragraphes numérotés, une note de l’IA sur la question juridique, un passage surligné, un passage souligné, un commentaire d’avocat et un échange comprenant deux questions et des réponses avec citations.",
     "dataTitle": "Jurisprudence et registres à portée de main.",
     "exploreAgent": "Découvrir l’agent IA",
     "exploreAnonymization": "Découvrir l’anonymisation",

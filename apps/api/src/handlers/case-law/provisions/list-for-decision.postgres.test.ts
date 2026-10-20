@@ -34,6 +34,8 @@ if (!databaseUrl || !runPostgresTests) {
       const { db: readerDb } = openClient();
       const sourceId = createSafeId<"caseLawSource">();
       const decisionId = createSafeId<"caseLawDecision">();
+      const listingOnlyId = createSafeId<"caseLawDecision">();
+      const redactedId = createSafeId<"caseLawDecision">();
       const language = "cs";
       const [initialScope] = await owner`
         SELECT status FROM case_law_provision_extraction_scopes
@@ -122,6 +124,24 @@ if (!databaseUrl || !runPostgresTests) {
           (id, source_id, country, language, court, case_number, content_hash)
           VALUES (${decisionId}::uuid, ${sourceId}::uuid, 'CZE', ${language},
             'Court', ${decisionId}, ${"a".repeat(64)})`;
+        await owner`INSERT INTO case_law_decisions
+          (id, source_id, country, language, court, case_number, content_hash, metadata, redacted_at)
+          VALUES
+            (${listingOnlyId}::uuid, ${sourceId}::uuid, 'CZE', ${language},
+              'Court', ${listingOnlyId}, ${"b".repeat(64)},
+              '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb, NULL),
+            (${redactedId}::uuid, ${sourceId}::uuid, 'CZE', ${language},
+              'Court', ${redactedId}, NULL, '{}'::jsonb, now())`;
+        for (const id of [listingOnlyId, redactedId]) {
+          expect(
+            await withRedistributableSubject(
+              readDb,
+              "pages",
+              { kind: "id", id },
+              async (subject) => subject.id,
+            ),
+          ).toBeNull();
+        }
         for (const [start, anchor] of [
           [10, "a"],
           [20, "a"],
@@ -224,7 +244,8 @@ if (!databaseUrl || !runPostgresTests) {
         });
       } finally {
         await setStatusGrants(initialGrantMode);
-        await owner`DELETE FROM case_law_decisions WHERE id = ${decisionId}::uuid`;
+        await owner`DELETE FROM case_law_decisions
+          WHERE id IN (${decisionId}::uuid, ${listingOnlyId}::uuid, ${redactedId}::uuid)`;
         await owner`DELETE FROM case_law_sources WHERE id = ${sourceId}::uuid`;
         if (initialScope?.status === "retired") {
           await owner`UPDATE case_law_provision_extraction_scopes

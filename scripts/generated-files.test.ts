@@ -1,7 +1,14 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
@@ -12,14 +19,19 @@ import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capabili
 import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content-facts";
 import { repoRelativePath } from "../packages/portable-path/src/index";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
+import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
+import { CHECK_POOL_JOBS } from "./ci-check-pool-registry";
 import {
   GENERATORS,
   CI_GENERATED_FILES,
+  CI_GENERATED_OUTPUTS,
   allowedOutputs,
   GUARD_A_EXCLUSIONS,
+  derivedPrerequisites,
   generatorsForFiles,
   matchesGeneratedGlob,
   orderGenerators,
+  runGenerators,
 } from "./generated-files";
 import {
   checkRouteGeneratorVersion,
@@ -342,7 +354,12 @@ test("capability shard additions are registered and feed CLI generation", () => 
 });
 
 test("derived runtime outputs have one owner and stay ignored when regenerated", () => {
-  for (const id of ["capability-runtime", "cli-runtime"] as const) {
+  for (const id of [
+    "capability-runtime",
+    "cli-runtime",
+    "mcp-app-contracts",
+    "mcp-app-bundles",
+  ] as const) {
     const outputs = generator(id).outputs;
     for (const output of outputs) {
       expect(
@@ -382,18 +399,27 @@ test("capability runtime cache manifests cover every file the producer writes", 
       nodePath.join(catalog, "matters.list.json"),
       JSON.stringify({ id: "matters.list", featureId: "matters" }),
     );
+    await mkdir(nodePath.join(fixture, "apps/api/src/handlers/workspaces"), {
+      recursive: true,
+    });
     await writeFile(
-      nodePath.join(generated, "capability-dispatch/matters.list.ts"),
-      "export const CAPABILITY_DISPATCH = {};\n",
+      nodePath.join(fixture, "apps/api/src/handlers/workspaces/list.ts"),
+      "export default {};\n",
     );
     await generateCapabilityRuntime(pathToFileURL(`${fixture}/`));
+    expect(ciGeneratedFiles(fixture)).toContain(
+      "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
+    );
+    expect(
+      await readdir(nodePath.join(generated, "capability-dispatch")),
+    ).toEqual(["matters.list.ts"]);
     const outputs = (await readdir(generated))
       .filter((file) => file.endsWith(".ts"))
       .map((file) => `src/mcp/generated/${file}`)
       .toSorted();
     expect(outputs.length).toBeGreaterThan(0);
     expect(outputs.map((file) => `apps/api/${file}`)).toEqual(
-      generator("capability-runtime").outputs.toSorted(),
+      [...CI_GENERATED_OUTPUTS.capabilityRuntime].toSorted(),
     );
     const config = v.parse(
       v.object({
@@ -411,11 +437,16 @@ test("capability runtime cache manifests cover every file the producer writes", 
       ),
     );
     const assertOutputs = (tasks: typeof config.tasks) => {
+      expect(tasks["@stll/api#generate:capability-runtime"]?.outputs).toContain(
+        "src/mcp/generated/capability-dispatch/**",
+      );
       expect(tasks["@stll/api#typecheck"]?.dependsOn).toContain(
         "typecheck:src",
       );
       expect(
-        tasks["@stll/api#generate:capability-runtime"]?.outputs?.toSorted(),
+        tasks["@stll/api#generate:capability-runtime"]?.outputs
+          ?.filter((output) => !output.includes("*"))
+          .toSorted(),
       ).toEqual(outputs);
       for (const output of outputs) {
         expect(tasks["@stll/api#typecheck:src"]?.dependsOn).toContain(
@@ -553,11 +584,18 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
       ({ id }) => id,
     ),
   ).toEqual(["module-ownership", "route-tree"]);
+  // api-typecheck-projects declares the derived CLI and capability runtimes,
+  // which a clean checkout lacks, so they are planned with it.
   expect(
     generatorsForFiles(["scripts/ownership/new-capability.ts"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["api-typecheck-projects", "module-ownership"]);
+  ).toEqual([
+    "capability-runtime",
+    "cli-runtime",
+    "api-typecheck-projects",
+    "module-ownership",
+  ]);
   expect(generatorsForFiles(["docs/unrelated.md"]).map(({ id }) => id)).toEqual(
     [],
   );
@@ -610,6 +648,11 @@ test("autofix selection closes over generated outputs and ordering dependencies"
       expect(ids.has(id), `${file} selects ${id}`).toBe(true);
     }
     for (const upstream of selected) {
+      const generatedOutputFiles = tracked.filter((outputFile) =>
+        upstream.outputs.some((output) =>
+          matchesGeneratedGlob(output, outputFile),
+        ),
+      );
       for (const downstream of GENERATORS.filter(({ autofix }) => autofix)) {
         if (downstream.after.some((id) => id === upstream.id)) {
           expect(
@@ -617,20 +660,16 @@ test("autofix selection closes over generated outputs and ordering dependencies"
             `${upstream.id} feeds ${downstream.id}`,
           ).toBe(true);
         }
-        for (const output of upstream.outputs) {
-          const feedsDownstream = tracked.some(
-            (outputFile) =>
-              matchesGeneratedGlob(output, outputFile) &&
-              downstream.inputs.some((input) =>
-                matchesGeneratedGlob(input, outputFile),
-              ),
-          );
-          if (feedsDownstream) {
-            expect(
-              ids.has(downstream.id),
-              `${output} feeds ${downstream.id}`,
-            ).toBe(true);
-          }
+        const feedsDownstream = generatedOutputFiles.some((outputFile) =>
+          downstream.inputs.some((input) =>
+            matchesGeneratedGlob(input, outputFile),
+          ),
+        );
+        if (feedsDownstream) {
+          expect(
+            ids.has(downstream.id),
+            `${upstream.id} output feeds ${downstream.id}`,
+          ).toBe(true);
         }
       }
     }
@@ -671,9 +710,14 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
     .decode(Bun.spawnSync(["git", "ls-files", "-z"], { stdout: "pipe" }).stdout)
     .split("\0")
     .filter(Boolean);
-  const steps = new Set(
-    [...ci.matchAll(/^\s+- name: (.+)$/gmu)].map((match) => match[1]),
-  );
+  // Pooled checks are steps of their job, so resolve names through them.
+  const workflow: unknown = Bun.YAML.parse(ci);
+  const steps = new Set([
+    ...[...ci.matchAll(/^\s+- name: (.+)$/gmu)].map((match) => match[1]),
+    ...CHECK_POOL_JOBS.flatMap((job) =>
+      workflowJobSteps(workflow, job).map(({ name }) => name),
+    ),
+  ]);
   for (const entry of GENERATORS) {
     for (const glob of entry.inputs) {
       expect(
@@ -899,13 +943,37 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
       .outputs.map((glob) => glob.replace(/\/\*\*$/u, ""))
       .toSorted(),
   );
-  const bundle = ciGeneratedStepRun(
-    "MCP app package bundles and shared assets guard",
+  for (const id of ["mcp-app-contracts", "mcp-app-bundles"] as const) {
+    expect(generator(id).outputKind).toBe("derived");
+    expect(generator(id).check).toEqual([
+      "bun",
+      "scripts/check-mcp-generated-tracking.ts",
+    ]);
+  }
+  const bundle = ciGeneratedStepRun("MCP app derived outputs guard");
+  // Derived outputs are untracked, so a diff would pass on anything: the
+  // guard instead requires every declared output to exist after the build
+  // and runs the tracking check.
+  const declared = (bundle.split("outputs=(\n")[1] ?? "")
+    .split("\n)")[0]
+    ?.split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  expect(declared?.toSorted()).toEqual(
+    [
+      ...generator("mcp-app-contracts").outputs,
+      ...generator("mcp-app-bundles").outputs,
+    ].toSorted(),
   );
-  const bundleOutputs = generator("mcp-app-bundles")
-    .outputs.map((glob) => `"${glob}"`)
-    .join(" ");
-  expect(bundle).toContain(`git diff --exit-code -- ${bundleOutputs}`);
+  expect(bundle).not.toContain("git diff --exit-code");
+  expect(bundle).toContain('test -s "$output"');
+  expect(bundle).toContain("bun scripts/check-mcp-generated-tracking.ts");
+  const preparation = readFileSync(
+    new URL("ci-generated-sources.ts", import.meta.url),
+    "utf-8",
+  );
+  expect(preparation).toContain('from "./check-mcp-generated-tracking"');
+  expect(preparation).toContain("checkMcpGeneratedTracking(");
 });
 
 test("route tree has one derived owner and a cache producer for every consumer", () => {
@@ -958,6 +1026,160 @@ test("route tree has one derived owner and a cache producer for every consumer",
     );
   }
 });
+
+test("web messages have one derived owner and are generated wherever the route tree is", () => {
+  const owner = generator("i18n-messages-web");
+  expect(owner.outputKind).toBe("derived");
+  const output = "apps/web/src/i18n/langs/messages.gen.ts";
+  expect(owner.outputs).toEqual([output]);
+  expect(
+    GENERATORS.filter(({ outputs }) =>
+      outputs.some((file) => file === output),
+    ).map(({ id }) => id),
+  ).toEqual([owner.id]);
+  const ignored = Bun.spawnSync(["git", "check-ignore", "--no-index", output]);
+  expect(ignored.exitCode).toBe(0);
+  const config = v.parse(
+    v.object({
+      tasks: v.record(
+        v.string(),
+        v.looseObject({
+          dependsOn: v.optional(v.array(v.string())),
+          outputs: v.optional(v.array(v.string())),
+        }),
+      ),
+    }),
+    Bun.JSONC.parse(
+      readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+    ),
+  );
+  expect(config.tasks["@stll/web#generate:messages"]?.outputs).toEqual([
+    "src/i18n/langs/messages.gen.ts",
+  ]);
+  expect(
+    generationInputs("generate:messages")
+      .map((input) =>
+        input.startsWith("$TURBO_ROOT$/")
+          ? input.replace("$TURBO_ROOT$/", "")
+          : `apps/web/${input}`,
+      )
+      .toSorted(),
+  ).toEqual([...owner.inputs].toSorted());
+  // Every task that needs the derived route tree reads the web sources, and
+  // those import the message declarations too. API type generation reads the
+  // routes only.
+  for (const [name, task] of Object.entries(config.tasks)) {
+    const dependsOn = task.dependsOn ?? [];
+    if (
+      dependsOn.includes("generate:route-tree") &&
+      name !== "@stll/web#generate:api-types"
+    ) {
+      expect(dependsOn, name).toContain("generate:messages");
+    }
+    if (dependsOn.includes("@stll/web#generate:route-tree")) {
+      expect(dependsOn, name).toContain("@stll/web#generate:messages");
+    }
+  }
+  const manifests = v.parse(
+    v.object({ scripts: v.record(v.string(), v.string()) }),
+    JSON.parse(
+      readFileSync(
+        new URL("../apps/web/package.json", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  // Outside Turbo, scripts generate both through one producer step, a shape
+  // the Docker source closure and the shell parsers recognise.
+  expect(manifests.scripts["generate:web-sources"]).toBe(
+    "bun run generate:route-tree && bun run generate:messages",
+  );
+  for (const [name, script] of Object.entries(manifests.scripts)) {
+    if (name === "generate:web-sources") {
+      continue;
+    }
+    expect(script, name).not.toContain("bun run generate:route-tree");
+    // The fallback is either this producer step or the root generate, which
+    // includes generate:messages (checked below).
+    if (script.includes('[ -n "$TURBO_HASH" ]')) {
+      expect(
+        script.includes(
+          '([ -n "$TURBO_HASH" ] || bun run generate:web-sources)',
+        ) ||
+          /\[ -n "\$TURBO_HASH" \] \|\| bun run (?:--cwd \.\.\/\.\. )?generate\)/u.test(
+            script,
+          ),
+        name,
+      ).toBe(true);
+    }
+  }
+  const root = v.parse(
+    v.object({ scripts: v.object({ generate: v.string() }) }),
+    JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
+    ),
+  );
+  expect(root.scripts.generate).toContain("generate:messages");
+});
+
+// Runs in a copy of the tracked files the checks read, never by deleting the
+// checkout's declarations: other test files read them concurrently.
+test("web catalog checks pass without the derived message declarations", async () => {
+  const repo = new URL("..", import.meta.url).pathname;
+  const tracked = Bun.spawnSync(
+    [
+      "git",
+      "ls-files",
+      "-z",
+      "--",
+      "apps/web/package.json",
+      "apps/web/src",
+      "apps/web/scripts",
+      "apps/web/public/prepaint-init.js",
+      "packages/ai-catalog/src",
+    ],
+    { cwd: repo, stdout: "pipe", stderr: "pipe" },
+  );
+  expect(tracked.exitCode).toBe(0);
+  const files = tracked.stdout.toString().split("\0").filter(Boolean);
+  expect(files).not.toContain("apps/web/src/i18n/langs/messages.gen.ts");
+  const copy = await mkdtemp(nodePath.join(tmpdir(), "web-catalog-check-"));
+  try {
+    for (const file of files) {
+      await mkdir(nodePath.dirname(nodePath.join(copy, file)), {
+        recursive: true,
+      });
+      await writeFile(
+        nodePath.join(copy, file),
+        await Bun.file(nodePath.join(repo, file)).bytes(),
+      );
+    }
+    // Code and dependencies are shared read-only with the checkout.
+    for (const link of [
+      "node_modules",
+      "apps/web/node_modules",
+      "packages/scripts",
+    ]) {
+      if (existsSync(nodePath.join(repo, link))) {
+        await symlink(nodePath.join(repo, link), nodePath.join(copy, link));
+      }
+    }
+    const check = Bun.spawnSync(["bun", "run", "i18n:check"], {
+      cwd: nodePath.join(copy, "apps/web"),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(new TextDecoder().decode(check.stderr)).not.toContain("error");
+    expect(check.exitCode).toBe(0);
+    expect(
+      existsSync(
+        nodePath.join(copy, "apps/web/src/i18n/langs/messages.gen.ts"),
+      ),
+    ).toBe(false);
+  } finally {
+    await rm(copy, { recursive: true, force: true });
+  }
+}, 60_000);
 
 test("long optional runs accept dispatch only", () => {
   for (const file of [
@@ -1101,4 +1323,77 @@ test("cloud setup has one generator owner and checks shared policy output", () =
       "# Generated by stll-cloud-setup.",
     ),
   ).toBe(false);
+});
+
+// A plan runs from a clean checkout, where no derived output exists: every
+// derived output a planned generator reads must come from a generator planned
+// before it, whichever file started the plan.
+test("every plan builds the derived outputs its generators read before running them", () => {
+  const witness = (glob: string) =>
+    glob.replaceAll("**", "example/generated.ts").replaceAll("*", "example");
+  const problems: string[] = [];
+  for (const start of GENERATORS) {
+    for (const glob of [...start.inputs, ...start.outputs]) {
+      const plan = orderGenerators(generatorsForFiles([witness(glob)]));
+      const position = new Map(plan.map(({ id }, index) => [id, index]));
+      for (const planned of plan) {
+        for (const prerequisite of derivedPrerequisites(planned)) {
+          const at = position.get(prerequisite.id);
+          if (at === undefined || at > (position.get(planned.id) ?? -1)) {
+            problems.push(
+              `${glob}: ${planned.id} reads ${prerequisite.id} ${at === undefined ? "unplanned" : "built later"}`,
+            );
+          }
+        }
+        if (!planned.autofix) {
+          problems.push(
+            `${glob}: ${planned.id} is planned but not autofix-eligible`,
+          );
+        }
+      }
+    }
+  }
+  expect([...new Set(problems)]).toEqual([]);
+});
+
+// Building a prerequisite first is useless if the run then skips it: a derived
+// generator's check guards tracking, so it passes on a clean checkout that
+// lacks the outputs. Every check here passes; only committed outputs may skip.
+test("a run writes every derived generator even when its check passes", () => {
+  const spawned: string[] = [];
+  const failed = runGenerators(
+    orderGenerators(GENERATORS.filter(({ autofix }) => autofix)),
+    (command) => {
+      spawned.push(command.join(" "));
+      return 0;
+    },
+    () => undefined,
+  );
+  expect(failed).toBeNull();
+  for (const owner of GENERATORS.filter(({ autofix }) => autofix)) {
+    expect(spawned.includes(owner.write.join(" ")), owner.id).toBe(
+      owner.outputKind === "derived" || owner.check === null,
+    );
+  }
+  expect(
+    runGenerators(
+      [generator("mcp-app-bundles")],
+      () => 1,
+      () => undefined,
+    )?.id,
+  ).toBe("mcp-app-bundles");
+});
+
+test("a CLI registry change plans the MCP app bundles it reads", () => {
+  const ids = orderGenerators(
+    generatorsForFiles(["packages/cli/src/generated/registry-snapshot.json"]),
+  ).map(({ id }) => id);
+  for (const prerequisite of [
+    "mcp-app-contracts",
+    "mcp-app-bundles",
+    "capability-runtime",
+  ]) {
+    expect(ids).toContain(prerequisite);
+    expect(ids.indexOf(prerequisite)).toBeLessThan(ids.indexOf("cli-registry"));
+  }
 });

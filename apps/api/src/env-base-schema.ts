@@ -3,6 +3,7 @@
 // parser-output-unchanged: Minimum public corpus request budgets affect admission only, not parsed records.
 // parser-output-unchanged: Search ranking and query variant configuration do not change ingestion parser output.
 // parser-output-unchanged: Case-law search guidance affects the MCP tool text only, not parsed records.
+// parser-output-unchanged: The derived-AI gate controls post-ingestion analysis only, not parsed records.
 /**
  * Base environment variables shared by all entrypoints
  * (API server, ingestion scripts, CLI tools).
@@ -21,6 +22,7 @@ import {
   DATABASE_COMPONENT_KEYS,
   hasSecureDatabaseTransport,
 } from "@/api/db-url";
+import { CASE_LAW_DERIVED_AI_MODES } from "@/api/lib/case-law/derived-ai-mode";
 import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidance-mode";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
 import {
@@ -215,6 +217,10 @@ export const envBaseServerSchema = {
     v.picklist(CASE_LAW_SEARCH_GUIDANCE_MODES),
     "off",
   ),
+  // Model calls for case-law derived layers (analysis on open, significance).
+  // Off unless the deployment opts in, so local, seeded and CI stacks never
+  // reach a model when they serve a decision.
+  CASE_LAW_DERIVED_AI: v.optional(v.picklist(CASE_LAW_DERIVED_AI_MODES), "off"),
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_Q09_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_S3_BUCKET: v.optional(v.string()),

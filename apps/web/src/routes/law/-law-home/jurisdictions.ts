@@ -33,6 +33,10 @@ const LAW_HOME_EXAMPLES = {
     decisions: ["C-131/12"],
     statutes: [],
   },
+  HUN: {
+    decisions: ["Pfv.21.123/2019/5."],
+    statutes: [],
+  },
   POL: {
     decisions: ["II CSK 123/19"],
     statutes: [],

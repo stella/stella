@@ -140,7 +140,6 @@ beforeAll(
         db,
         async (tx) =>
           await fn({
-            query: tx.query,
             select: tx.select.bind(tx),
             execute: () => panic("This corpus prompt does not execute raw SQL"),
           }),

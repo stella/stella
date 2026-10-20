@@ -23,7 +23,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
-  generateTanStackObjectForRole,
+  generateTanStackObjectForTask,
   resolveTanStackTextModel,
 } from "@/api/lib/tanstack-ai-generate";
 
@@ -35,7 +35,7 @@ import {
 } from "./ai-provider-canary";
 import {
   CANARY_PROVIDERS,
-  modelRoleMaxOutputTokens,
+  modelTaskMaxOutputTokens,
 } from "./ai-provider-canary-config";
 import type { CanaryProvider } from "./ai-provider-canary-config";
 
@@ -201,7 +201,7 @@ export const probeNativeImage = async ({
   });
   const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
-    role: "chat",
+    task: "chat",
     orgAIConfig,
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -211,9 +211,9 @@ export const probeNativeImage = async ({
       message: "Native image probe resolved a different model",
     });
   }
-  const output = await generateTanStackObjectForRole({
+  const output = await generateTanStackObjectForTask({
     dataClass: "public_corpus",
-    role: "chat",
+    task: "chat",
     orgAIConfig,
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -221,7 +221,7 @@ export const probeNativeImage = async ({
     serviceTier: "standard",
     caching: { enabled: false, reason: "org-disabled" },
     abortSignal: signal,
-    maxOutputTokens: modelRoleMaxOutputTokens({ modelId, role: "chat" }),
+    maxOutputTokens: modelTaskMaxOutputTokens({ modelId, task: "chat" }),
     messages: nativeImageMessages(bytes, mimeType),
     outputSchema: v.strictObject({ token: v.string() }),
   });

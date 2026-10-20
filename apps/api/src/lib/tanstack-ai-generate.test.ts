@@ -8,14 +8,14 @@ import * as v from "valibot";
 import {
   BYOK_MODEL_OPTIONS,
   getOutputTokenLimit,
-  MODEL_ROLES,
+  MODEL_TASKS,
   REASONING_EFFORTS,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import type { CachingDecision } from "@/api/lib/ai-config";
+import type { OrgAIConfig, CachingDecision } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -48,19 +48,19 @@ import {
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
   chatTurnOutputTokens,
-  generateTanStackObjectForRole,
-  generateTanStackTextForRole,
+  generateTanStackObjectForTask,
+  generateTanStackTextForTask,
   mergeGenerationOptions,
   outputTokensWithinModelLimit,
   streamTanStackChatRun,
-  streamTanStackObjectForRole,
-  streamTanStackTextForRole,
+  streamTanStackObjectForTask,
+  streamTanStackTextForTask,
   systemPromptsPatch,
   withRecoveredProviderStatus,
 } from "@/api/lib/tanstack-ai-generate";
 import {
   type ResolvedTanStackTextModel,
-  tanStackModelOptionsForRole,
+  tanStackModelOptionsForTask,
 } from "@/api/lib/tanstack-ai-models";
 import {
   projectSchemaInputJsonSchema,
@@ -370,17 +370,17 @@ const testModel = {
 
 const resolveTextModel = () => testModel;
 const generateTextForTestModel = async (
-  options: Parameters<typeof generateTanStackTextForRole>[0],
-) => await generateTanStackTextForRole({ ...options, resolveTextModel });
+  options: Parameters<typeof generateTanStackTextForTask>[0],
+) => await generateTanStackTextForTask({ ...options, resolveTextModel });
 const generateObjectForTestModel = async <TSchema extends v.GenericSchema>(
-  options: Parameters<typeof generateTanStackObjectForRole<TSchema>>[0],
-) => await generateTanStackObjectForRole({ ...options, resolveTextModel });
+  options: Parameters<typeof generateTanStackObjectForTask<TSchema>>[0],
+) => await generateTanStackObjectForTask({ ...options, resolveTextModel });
 const streamTextForTestModel = (
-  options: Parameters<typeof streamTanStackTextForRole>[0],
-) => streamTanStackTextForRole({ ...options, resolveTextModel });
+  options: Parameters<typeof streamTanStackTextForTask>[0],
+) => streamTanStackTextForTask({ ...options, resolveTextModel });
 const streamObjectForTestModel = <TSchema extends v.GenericSchema>(
-  options: Parameters<typeof streamTanStackObjectForRole<TSchema>>[0],
-) => streamTanStackObjectForRole({ ...options, resolveTextModel });
+  options: Parameters<typeof streamTanStackObjectForTask<TSchema>>[0],
+) => streamTanStackObjectForTask({ ...options, resolveTextModel });
 
 const noCaching = {
   enabled: false,
@@ -471,7 +471,7 @@ describe("TanStack AI structured output generation", () => {
         managedAIResidency: "eu" as const,
         orgAIConfig: null,
         prompt: "Reply with the answer.",
-        role: "chat" as const,
+        task: "chat" as const,
         serviceTier: "flex" as const,
         tenantWorkspaceIds: [],
       };
@@ -606,7 +606,7 @@ describe("TanStack AI structured output generation", () => {
       orgAIConfig: null,
       outputSchema: rawSchema,
       prompt: "Extract the answer.",
-      role: "pdf",
+      task: "pdf",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     });
@@ -635,7 +635,7 @@ describe("TanStack AI structured output generation", () => {
       orgAIConfig: null,
       outputSchema: rawSchema,
       prompt: "Extract the answer.",
-      role: "pdf",
+      task: "pdf",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     })) {
@@ -690,7 +690,7 @@ describe("TanStack AI structured output generation", () => {
       orgAIConfig: null,
       outputSchema: overBudgetSchema(),
       prompt: "Extract the answer.",
-      role: "pdf",
+      task: "pdf",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -715,7 +715,7 @@ describe("TanStack AI structured output generation", () => {
         orgAIConfig: null,
         outputSchema: overBudgetSchema(),
         prompt: "Extract the answer.",
-        role: "pdf",
+        task: "pdf",
         serviceTier: "standard",
         tenantWorkspaceIds: [],
       })) {
@@ -746,7 +746,7 @@ describe("TanStack AI structured output generation", () => {
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
-      role: "pdf",
+      task: "pdf",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -784,7 +784,7 @@ describe("TanStack AI structured output generation", () => {
     // Anthropic extended thinking rejects temperature modifications
     // even on models that accept temperature otherwise
     // (claude-sonnet-4-6). The builder deliberately omits temperature
-    // for the reasoning role, and the merge must not re-add the
+    // for the reasoning task, and the merge must not re-add the
     // caller's value on top of `thinking`.
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge test.
@@ -1024,11 +1024,11 @@ describe("TanStack AI structured output generation", () => {
         adapter: {},
         keySource: "byok",
         modelId,
-        modelOptions: tanStackModelOptionsForRole({
+        modelOptions: tanStackModelOptionsForTask({
           modelId,
           organizationId: null,
           provider,
-          role: "fast",
+          task: "short-text",
         }),
         provider,
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
@@ -1073,11 +1073,11 @@ describe("TanStack AI structured output generation", () => {
         adapter: {},
         keySource: "byok",
         modelId: "gemini-3.8-flash",
-        modelOptions: tanStackModelOptionsForRole({
+        modelOptions: tanStackModelOptionsForTask({
           modelId: "gemini-3.8-flash",
           organizationId: null,
           provider: "google",
-          role: "fast",
+          task: "short-text",
         }),
         provider: "google",
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
@@ -1144,7 +1144,7 @@ describe("TanStack AI structured output generation", () => {
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
-      role: "chat",
+      task: "chat",
       serviceTier: "flex",
       tenantWorkspaceIds: [],
     });
@@ -1173,7 +1173,7 @@ describe("TanStack AI structured output generation", () => {
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -1210,7 +1210,7 @@ describe("TanStack AI structured output generation", () => {
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
-      role: "chat",
+      task: "chat",
       serviceTier: "flex",
       tenantWorkspaceIds: [],
     }).then(
@@ -1255,7 +1255,7 @@ describe("TanStack AI structured output generation", () => {
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -1281,7 +1281,7 @@ describe("TanStack AI structured output generation", () => {
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -1321,7 +1321,7 @@ describe("TanStack AI structured output generation", () => {
         orgAIConfig: null,
         outputSchema: v.strictObject({ answer: v.string() }),
         prompt: "Extract the answer.",
-        role: "chat",
+        task: "chat",
         serviceTier: "flex",
         tenantWorkspaceIds: [],
       }).then(
@@ -1363,7 +1363,7 @@ describe("TanStack AI structured output generation", () => {
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
-      role: "pdf",
+      task: "pdf",
       serviceTier: "flex",
       tenantWorkspaceIds: [],
     })) {
@@ -1415,7 +1415,7 @@ describe("TanStack AI model-ingress guard", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: `Summarize https://my.stll.app/workspaces/${tenantWorkspaceId}/matters and decision ${publicDecisionId}`,
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [tenantWorkspaceId],
     });
@@ -1449,7 +1449,7 @@ describe("TanStack AI model-ingress guard", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: `Summarize decision ${publicDecisionId}`,
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       system: "You are stella.",
       tenantWorkspaceIds: [tenantWorkspaceId],
@@ -1477,7 +1477,7 @@ describe("TanStack AI model-ingress guard", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Draft it.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       system: `Document context: workspace ${tenantWorkspaceId}`,
       tenantWorkspaceIds: [tenantWorkspaceId],
@@ -1511,7 +1511,7 @@ describe("TanStack AI model-ingress guard", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Draft it.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       system: `Server scaffold naming ${tenantWorkspaceId}`,
       systemPromptOrigin: "server-built",
@@ -1548,7 +1548,7 @@ describe("model dispatch within its admitted action", () => {
     managedAIResidency: "eu",
     orgAIConfig: null,
     prompt: "Rewrite it.",
-    role: "chat",
+    task: "chat",
     serviceTier: "standard",
     tenantWorkspaceIds: [],
   } as const;
@@ -1620,7 +1620,7 @@ describe("TanStack AI text generation", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -1656,7 +1656,7 @@ describe("TanStack AI text generation", () => {
         managedAIResidency: "eu",
         orgAIConfig: null,
         prompt: "Recap it.",
-        role: "chat",
+        task: "chat",
         serviceTier: "standard",
         tenantWorkspaceIds: [],
       }),
@@ -1682,7 +1682,7 @@ describe("TanStack AI text generation", () => {
         managedAIResidency: "eu",
         orgAIConfig: null,
         prompt: "Recap it.",
-        role: "chat",
+        task: "chat",
         serviceTier: "standard",
         tenantWorkspaceIds: [],
       }),
@@ -1709,7 +1709,7 @@ describe("TanStack AI text generation", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Recap it.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -1743,7 +1743,7 @@ describe("TanStack AI text generation", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -1782,7 +1782,7 @@ describe("TanStack AI text generation", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -1808,7 +1808,7 @@ describe("TanStack AI text generation", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     });
@@ -1830,7 +1830,7 @@ describe("TanStack AI text generation", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     });
@@ -1850,7 +1850,7 @@ describe("TanStack AI text generation", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     });
@@ -1878,7 +1878,7 @@ describe("TanStack AI text generation", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -1907,7 +1907,7 @@ describe("TanStack AI text generation", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -1946,7 +1946,7 @@ describe("TanStack AI text generation", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -1970,7 +1970,7 @@ describe("TanStack AI text generation", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
     }).then(
@@ -1999,7 +1999,7 @@ describe("TanStack AI text generation", () => {
         managedAIResidency: "eu",
         orgAIConfig: null,
         prompt: "Say hello.",
-        role: "chat",
+        task: "chat",
         serviceTier: "standard",
         tenantWorkspaceIds: [],
       })) {
@@ -2165,24 +2165,24 @@ describe("prompt caching at the layer boundaries", () => {
 });
 
 describe("Anthropic extended-thinking budgets", () => {
-  // Two modules decide the halves of one constraint: the role builder picks
+  // Two modules decide the halves of one constraint: the task builder picks
   // `thinking.budget_tokens`, the merge picks `max_tokens`, and a budget that
   // reaches `max_tokens` describes a request Anthropic cannot serve. Walking
-  // every offered model, role, and effort binds them, so a model added to the
+  // every offered model, task, and effort binds them, so a model added to the
   // budget form cannot drift back past the smallest allowance a caller asks
   // for.
   const SMALLEST_CALLER_ALLOWANCE = 1;
 
   test("keeps every emitted budget under the merged max_tokens", () => {
     for (const modelId of BYOK_MODEL_OPTIONS.anthropic) {
-      for (const role of MODEL_ROLES) {
+      for (const task of MODEL_TASKS) {
         for (const reasoningEffort of [undefined, ...REASONING_EFFORTS]) {
-          const modelOptions = tanStackModelOptionsForRole({
+          const modelOptions = tanStackModelOptionsForTask({
             modelId,
             organizationId: null,
             provider: "anthropic",
             reasoningEffort,
-            role,
+            task,
           });
           // SAFETY: mergeGenerationOptions only reads
           // provider/modelOptions/modelId. The adapter is irrelevant for this
@@ -2227,19 +2227,19 @@ describe("Anthropic extended-thinking budgets", () => {
 
   test("keeps every offered model's whole chat request within its output limit", () => {
     for (const modelId of BYOK_MODEL_OPTIONS.anthropic) {
-      for (const role of MODEL_ROLES) {
+      for (const task of MODEL_TASKS) {
         for (const reasoningEffort of [undefined, ...REASONING_EFFORTS]) {
           // SAFETY: the helpers read only provider/modelOptions/modelId.
           const model = {
             adapter: {},
             keySource: "byok",
             modelId,
-            modelOptions: tanStackModelOptionsForRole({
+            modelOptions: tanStackModelOptionsForTask({
               modelId,
               organizationId: null,
               provider: "anthropic",
               reasoningEffort,
-              role,
+              task,
             }),
             provider: "anthropic",
             // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
@@ -2454,7 +2454,7 @@ describe("model output that fails its schema", () => {
     orgAIConfig: null,
     outputSchema: v.strictObject({ answer: v.string() }),
     prompt: "Extract the answer.",
-    role: "chat" as const,
+    task: "chat" as const,
     serviceTier: "standard" as const,
     tenantWorkspaceIds: [],
   };
@@ -2506,7 +2506,7 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
     orgAIConfig: null,
     outputSchema: v.strictObject({ answer: v.string(), page: v.number() }),
     prompt: "Extract the answer.",
-    role: "chat" as const,
+    task: "chat" as const,
     serviceTier: "standard" as const,
     tenantWorkspaceIds: [],
   };
@@ -2567,7 +2567,7 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
     expect(classifyAIError(caught)).toBe("output_invalid");
     expect(providerRequests).toHaveLength(2);
     expect(outcomeLogs()).toEqual([
-      { result: "failed", rung: "output_invalid", issueTypes: "number" },
+      { result: "failed", rung: "fallback_skipped", issueTypes: "number" },
     ]);
     // The outcome line carries paths and types, never the model's values.
     expect(JSON.stringify(logs.records)).not.toContain("three");
@@ -2671,6 +2671,251 @@ describe("a chat run a caller consumes itself", () => {
   });
 });
 
+describe("an unrepaired structured answer falls back once within the approved set", () => {
+  const primaryModelId = BYOK_MODEL_OPTIONS.openai[0];
+  const orgAIConfig = {
+    providers: [{ provider: "openai", apiKey: "fixture-key" }],
+    overrideModels: null,
+    decision: null,
+  } satisfies OrgAIConfig;
+  const options = {
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
+    organizationId: null,
+    orgAIConfig,
+    caching: noCaching,
+    dataClass: "customer",
+    managedAIResidency: "us",
+    outputSchema: v.strictObject({ answer: v.string(), page: v.number() }),
+    prompt: "Extract the answer.",
+    task: "chat",
+    serviceTier: "standard",
+    tenantWorkspaceIds: [],
+  } as const;
+
+  type ResolveOptions = Parameters<
+    NonNullable<
+      Parameters<typeof generateTanStackObjectForTask>[0]["resolveTextModel"]
+    >
+  >[0];
+  const resolver = (request: ResolveOptions) => ({
+    ...testModel,
+    modelId: request.modelId?.split("::").slice(1).join("::") ?? primaryModelId,
+  });
+  const fallbackOutcome = () =>
+    logs.records.findLast(
+      ({ message }) => message === "ai.structured_output.outcome",
+    )?.attributes;
+
+  test("a second approved model gets only the original request and must match the full schema", async () => {
+    queueRun(objectRun({ answer: "SENTINEL_PRIMARY", page: "three" }));
+    queueRun(objectRun({ answer: "SENTINEL_REPAIR", page: "3" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const resolutions: ResolveOptions[] = [];
+    const result = await generateTanStackObjectForTask({
+      ...options,
+      resolveTextModel: (request) => {
+        resolutions.push(request);
+        return resolver(request);
+      },
+    });
+    expect(result).toEqual({ answer: "ok", page: 3 });
+    expect(resolutions).toHaveLength(2);
+    const fallback = resolutions[1];
+    expect(fallback?.modelId).toStartWith("openai::");
+    expect(fallback?.modelId).not.toBe(`openai::${primaryModelId}`);
+    expect(fallback?.admission).toBe(options.admission);
+    expect(fallback).toMatchObject({
+      dataClass: "customer",
+      managedAIResidency: "us",
+    });
+    expect(providerRequests).toHaveLength(3);
+    expect(providerRequests[2]?.messages).toEqual(
+      providerRequests[0]?.messages,
+    );
+    expect(JSON.stringify(providerRequests[2])).not.toContain("SENTINEL_");
+    expect(fallbackOutcome()).toMatchObject({
+      "ai.structured_output.rung": "fallback_model",
+      "ai.structured_output.result": "ok",
+      "ai.structured_output.fallback_model_id": fallback?.modelId,
+    });
+    expect(JSON.stringify(logs.records)).not.toContain("SENTINEL_");
+  });
+
+  test("fallback stays on the assigned provider and reuses live organization admission", async () => {
+    queueRun(objectRun({ answer: "SENTINEL_PRIMARY", page: "three" }));
+    queueRun(objectRun({ answer: "SENTINEL_REPAIR", page: "3" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const organizationId = toSafeId<"organization">("org_structured_fallback");
+    const resolutions: ResolveOptions[] = [];
+    const result = await admitModelDispatch({
+      organizationId,
+      actionKind: "templates.fill",
+      organizationStateDb: testOrganizationStateDb,
+      signal: new AbortController().signal,
+      run: async (admission) =>
+        await generateTanStackObjectForTask({
+          ...options,
+          organizationId,
+          admission,
+          orgAIConfig: {
+            ...orgAIConfig,
+            providers: [
+              ...orgAIConfig.providers,
+              { provider: "google", apiKey: "fixture-google-key" },
+            ],
+          },
+          resolveTextModel: (request) => {
+            resolutions.push(request);
+            expect(request.admission).toBe(admission);
+            expect(admission.signal.aborted).toBe(false);
+            return resolver(request);
+          },
+        }),
+    });
+    expect(result).toEqual({ answer: "ok", page: 3 });
+    expect(resolutions).toHaveLength(2);
+    expect(resolutions[1]?.modelId).toStartWith("openai::");
+    expect(providerRequests[2]?.messages).toEqual(
+      providerRequests[0]?.messages,
+    );
+    expect(JSON.stringify(providerRequests[2])).not.toContain("SENTINEL_");
+  });
+
+  test("a pinned resolver cannot resend the request as a different model", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    queueRun(objectRun({ answer: "ok", page: "4" }));
+    const caught = await rejectionOf(
+      generateTanStackObjectForTask({
+        ...options,
+        resolveTextModel: () => resolver(options),
+      }),
+    );
+    expect(caught).toBeInstanceOf(ModelOutputInvalidError);
+    expect(providerRequests).toHaveLength(2);
+  });
+
+  test("a throttled fallback retries its own request without restarting the ladder", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    queueRun({
+      type: "throw",
+      error: Object.assign(
+        new Error("Rate limit exceeded. Please retry in 1ms."),
+        {
+          status: 429,
+          headers: new Headers({ "retry-after-ms": "1" }),
+        },
+      ),
+    });
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const resolutions: ResolveOptions[] = [];
+    expect(
+      await generateTanStackObjectForTask({
+        ...options,
+        resolveTextModel: (request) => {
+          resolutions.push(request);
+          return resolver(request);
+        },
+      }),
+    ).toEqual({ answer: "ok", page: 3 });
+    expect(resolutions).toHaveLength(2);
+    expect(providerRequests).toHaveLength(4);
+    expect(providerRequests[3]?.messages).toEqual(
+      providerRequests[2]?.messages,
+    );
+    expect(providerRequests[3]?.messages).toEqual(
+      providerRequests[0]?.messages,
+    );
+  });
+
+  test("a repair rejected as invalid structured output still reaches the approved fallback", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(
+      throwingRun(
+        Object.assign(new Error("SENTINEL_INVALID_REPAIR"), {
+          code: "structured-output-validation-failed",
+        }),
+      ),
+    );
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    expect(
+      await generateTanStackObjectForTask({
+        ...options,
+        resolveTextModel: resolver,
+      }),
+    ).toEqual({ answer: "ok", page: 3 });
+    expect(providerRequests).toHaveLength(3);
+    expect(providerRequests[2]?.messages).toEqual(
+      providerRequests[0]?.messages,
+    );
+    expect(JSON.stringify(providerRequests[2])).not.toContain("SENTINEL_");
+    expect(fallbackOutcome()).toMatchObject({
+      "ai.structured_output.rung": "fallback_model",
+    });
+  });
+
+  test("the fallback is never repaired or coerced", async () => {
+    for (const page of ["three", "3", "4"]) {
+      queueRun(objectRun({ answer: "ok", page }));
+    }
+    const caught = await rejectionOf(
+      generateTanStackObjectForTask({
+        ...options,
+        resolveTextModel: resolver,
+      }),
+    );
+    expect(caught).toBeInstanceOf(ModelOutputInvalidError);
+    expect(providerRequests).toHaveLength(3);
+    expect(fallbackOutcome()).toMatchObject({
+      "ai.structured_output.rung": "fallback_model",
+      "ai.structured_output.result": "failed",
+    });
+  });
+
+  test("an organization with no other role model records a skipped fallback", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    const caught = await rejectionOf(
+      generateTanStackObjectForTask({
+        ...options,
+        orgAIConfig: { providers: [], overrideModels: null, decision: null },
+        resolveTextModel: () => resolver(options),
+      }),
+    );
+    expect(caught).toBeInstanceOf(ModelOutputInvalidError);
+    expect(providerRequests).toHaveLength(2);
+    expect(fallbackOutcome()).toMatchObject({
+      "ai.structured_output.rung": "fallback_skipped",
+      "ai.structured_output.result": "failed",
+    });
+  });
+
+  test("fallback resolution shares the original deadline and abort signal", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    const pending = Promise.withResolvers<ResolvedTanStackTextModel>();
+    const signals: (AbortSignal | undefined)[] = [];
+    const caught = await rejectionOf(
+      generateTanStackObjectForTask({
+        ...options,
+        deadlineMs: 40,
+        resolveTextModel: async (request) => {
+          signals.push(request.abortSignal);
+          return request.modelId === undefined
+            ? resolver(options)
+            : await pending.promise;
+        },
+      }),
+    );
+    expect(caught).toBeInstanceOf(ModelDeadlineExceededError);
+    expect(signals).toHaveLength(2);
+    expect(signals[1]).toBe(signals[0]);
+    expect(signals[1]?.aborted).toBe(true);
+    expect(providerRequests).toHaveLength(2);
+  });
+});
+
 // A provider that streams its structured answer natively, as Gemini's adapter
 // does: the engine reads the adapter's own run error codes from this path,
 // which is where a cut-off answer is noticed in production.
@@ -2743,7 +2988,7 @@ const OBJECT_OPTIONS = {
   orgAIConfig: null,
   outputSchema: v.strictObject({ answer: v.string() }),
   prompt: "Extract the answer.",
-  role: "chat",
+  task: "chat",
   serviceTier: "standard",
   tenantWorkspaceIds: [],
 } as const;
@@ -2752,7 +2997,7 @@ const generateObjectWith = async (
   stream: StructuredStream,
   extra: { abortSignal?: AbortSignal; deadlineMs?: number } = {},
 ): Promise<unknown> =>
-  await generateTanStackObjectForRole({
+  await generateTanStackObjectForTask({
     ...OBJECT_OPTIONS,
     ...extra,
     resolveTextModel: () => structuredStreamModel(stream),
@@ -2874,7 +3119,7 @@ describe("a generation bounded by its own deadline", () => {
   test("a run whose model resolution never settles fails as timed out", async () => {
     const pending = Promise.withResolvers<ResolvedTanStackTextModel>();
     const resolveModel = async () => await pending.promise;
-    const object = await generateTanStackObjectForRole({
+    const object = await generateTanStackObjectForTask({
       ...OBJECT_OPTIONS,
       deadlineMs: 40,
       resolveTextModel: resolveModel,
@@ -2882,7 +3127,7 @@ describe("a generation bounded by its own deadline", () => {
       () => undefined,
       (error: unknown) => error,
     );
-    const text = await generateTanStackTextForRole({
+    const text = await generateTanStackTextForTask({
       caching: noCaching,
       deadlineMs: 40,
       finishPolicy: "require-complete",
@@ -2892,7 +3137,7 @@ describe("a generation bounded by its own deadline", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
       resolveTextModel: resolveModel,
@@ -2933,7 +3178,7 @@ describe("a generation bounded by its own deadline", () => {
     const answer = { answer: "on time" };
     const raw = JSON.stringify(answer);
     expect(
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
         ...OBJECT_OPTIONS,
         deadlineMs: 60_000,
         resolveTextModel: () =>
@@ -2964,7 +3209,7 @@ describe("a generation bounded by its own deadline", () => {
         await untilAborted(options.request?.signal ?? undefined);
       },
     };
-    const caught = await generateTanStackTextForRole({
+    const caught = await generateTanStackTextForTask({
       caching: noCaching,
       deadlineMs: 40,
       finishPolicy: "require-complete",
@@ -2974,7 +3219,7 @@ describe("a generation bounded by its own deadline", () => {
       managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
-      role: "chat",
+      task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
       resolveTextModel: () => ({ ...testModel, adapter }),
@@ -3026,7 +3271,7 @@ describe("an output token budget bounded by the model's catalog limit", () => {
     const model = modelFor("openai", "gpt-5.5");
     expect(getOutputTokenLimit("gpt-5.5")).toBeGreaterThan(16_384);
 
-    await generateTanStackObjectForRole({
+    await generateTanStackObjectForTask({
       ...OBJECT_OPTIONS,
       outputTokenBudget: 16_384,
       resolveTextModel: () => ({ ...model, adapter: providerAdapter }),

@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { BYOK_MODEL_OPTIONS, getModelDisplayMetadata } from "@stll/ai-catalog";
 import type { BYOKProvider } from "@stll/ai-catalog";
+import { assertProperty } from "@stll/property-testing";
 
 import { getModelPickerView } from "@/components/chat/chat-model-options-menu.logic";
 import type {
@@ -22,6 +24,9 @@ type Model = {
   unratedReason?: ModelPickerBenchmark["unratedReason"];
   unconfigured?: boolean;
 };
+
+const PROPERTY_TEXT_PARTS_MAX = 24;
+const PROPERTY_MODEL_OPTIONS_MAX = 20;
 
 const valueOf = ({ maker, name, provider }: Model): string =>
   `${provider ?? maker}::${name}`;
@@ -239,6 +244,44 @@ describe("model picker split", () => {
     ]);
   });
 
+  test("trims the query, folds case only, and matches display names rather than providers", () => {
+    const cafe: Model = { maker: "openai", name: "Café" };
+    const cafeWithoutAccent: Model = { maker: "google", name: "Cafe" };
+
+    expect(view([cafe, cafeWithoutAccent], { query: "  CAFE " })).toMatchObject(
+      {
+        type: "all",
+        entries: [{ option: { value: "google::Cafe" } }],
+      },
+    );
+    expect(view([luna, sol], { query: "openai" })).toMatchObject({
+      type: "all",
+      entries: [],
+    });
+  });
+
+  test("keeps every display-name match in catalogue order", () => {
+    const models = Array.from({ length: 60 }, (_, index) => ({
+      maker: "openai" as const,
+      name: `Model ${index}`,
+    }));
+    const result = view(models, { query: "model" });
+
+    expect(result.type).toBe("all");
+    expect(
+      result.type === "all" && result.entries.map(({ option }) => option.value),
+    ).toEqual(models.map(valueOf));
+  });
+
+  test("matches malformed display-name UTF-16 through the replacement character", () => {
+    const malformed: Model = { maker: "openai", name: "A\ud800stra" };
+    const result = view([malformed], { query: "\uFFFD" });
+
+    expect(result.type === "all" && names(result.entries)).toEqual([
+      "openai::A\ud800stra",
+    ]);
+  });
+
   test("stays flat without a recommendation", () => {
     const unrated: Model[] = [
       { maker: "mistral", name: "Large", unratedReason: "floating_alias" },
@@ -287,4 +330,63 @@ describe("the real catalogue", () => {
       "Gemini 3.8 Flash",
     ]);
   });
+});
+
+test("model picker filtering preserves the previous display-name substring rule", () => {
+  const text = fc
+    .array(
+      fc.constantFrom(
+        "a",
+        "A",
+        " ",
+        "\t",
+        "é",
+        "e\u0301",
+        "Ł",
+        "İ",
+        "ı",
+        "ß",
+        "[",
+        ".",
+        "😀",
+        "\ud800",
+        "ع",
+      ),
+      { maxLength: PROPERTY_TEXT_PARTS_MAX },
+    )
+    .map((parts) => parts.join(""));
+
+  assertProperty(
+    "model picker filtering preserves the previous display-name substring rule",
+    fc.property(
+      fc.array(
+        fc.record({
+          displayName: text,
+          iconProvider: text,
+          provider: text,
+          value: text,
+        }),
+        { maxLength: PROPERTY_MODEL_OPTIONS_MAX },
+      ),
+      text,
+      (options, query) => {
+        const result = getModelPickerView({
+          benchmarks: [],
+          lineageOf: () => undefined,
+          options,
+          query,
+          selectedValue: null,
+        });
+        const needle = query.trim().toLowerCase().toWellFormed();
+        const expected = options.filter(({ displayName }) =>
+          displayName.toLowerCase().toWellFormed().includes(needle),
+        );
+
+        expect(result.type).toBe("all");
+        expect(
+          result.type === "all" && result.entries.map(({ option }) => option),
+        ).toEqual(expected);
+      },
+    ),
+  );
 });

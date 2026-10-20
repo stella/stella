@@ -53,7 +53,7 @@ export const LandingLayout = ({
         {children}
       </div>
       {footer !== undefined && (
-        <ScrollArea className="h-auto max-h-[40vh] w-full shrink-0" scrollFade>
+        <ScrollArea className="h-auto max-h-[40dvh] w-full shrink-0" scrollFade>
           {footer}
         </ScrollArea>
       )}

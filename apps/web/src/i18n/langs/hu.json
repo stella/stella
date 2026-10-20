@@ -12,6 +12,31 @@
       "unknownDevice": "Ismeretlen eszköz"
     }
   },
+  "admin": {
+    "ai": "MI",
+    "backToApp": "Vissza az alkalmazáshoz",
+    "billingAndUsage": "Számlázás és használat",
+    "billingProfiles": "Számlázási profilok",
+    "deleteDescription": "Véglegesen törli ezt a szervezetet és az adatait. Ez a művelet nem vonható vissza.",
+    "deleteOrganization": "Szervezet törlése",
+    "deleteRefusedSubscription": "Ennek a szervezetnek megújuló előfizetése van. Először mondja le a Csomag és használat oldalon, majd törölje a szervezetet.",
+    "deleteTypeToConfirm": "A megerősítéshez írja be: {name}.",
+    "firmSetup": "Iroda beállításai",
+    "general": "Általános",
+    "leaveDescription": "Elveszíti a hozzáférést a szervezet ügyeihez és adataihoz.",
+    "leaveOrganization": "Kilépés a szervezetből",
+    "leaveRefusedOnlyOwner": "Ön az egyetlen tulajdonos. Mielőtt kilép, tegyen tulajdonossá egy másik tagot.",
+    "modelsAndProviders": "Modellek és szolgáltatók",
+    "noPlan": "Nincs aktív csomag",
+    "organizationDeleted": "A szervezet törölve lett.",
+    "organizationId": "Szervezetazonosító",
+    "organizationLeft": "Kilépett a szervezetből.",
+    "overviewDescription": "Kezelje szervezetét, a személyeket és az eszközöket.",
+    "people": "Személyek",
+    "planAndUsage": "Csomag és használat",
+    "title": "Szervezet adminisztrációja",
+    "toolsDescription": "Engedélyezze vagy tiltsa le a beépített eszközöket a szervezet minden tagja számára."
+  },
   "agentClaim": {
     "access": "Megkapott hozzáférés",
     "accessReadSearch": "Olvasási és keresési hozzáférés",
@@ -64,6 +89,9 @@
     "runRemainingPage": "Hátralévők futtatása (ezen az oldalon)",
     "runSelectedRows": "Futtatás {count, plural, one {# kijelölt sorra} other {# kijelölt sorra}}",
     "selectedRun": "AI-oszlopok futtatása {count, plural, one {# sorra} other {# sorra}}"
+  },
+  "aiDisclosure": {
+    "caseLaw": "A bírósági határozatokról készült AI-összefoglalókat, -jegyzeteket és -elemzéseket a stella állítja elő; ezeket a bíróságok nem hagyták jóvá, és nem a bíróságok saját érvelését tükrözik. A jogi szakemberek munkáját segítő eszközök; a hiteles forrás továbbra is a határozat szövege."
   },
   "appearance": {
     "calendar": "Naptár",
@@ -981,6 +1009,9 @@
       "saved": "{count, plural, one {# határozat} other {# határozat}} elmentve ide: {matter}"
     },
     "newestDecisions": "Legújabb határozatok",
+    "noResults": {
+      "hint": "Próbáljon más szavakat, javítsa a keresést AI-val, vagy tegye fel a kérdést a csevegésben."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Emberi"
@@ -1054,8 +1085,11 @@
         "short": "Rövid"
       }
     },
+    "rewritten": {
+      "line": "Nincs pontos találat erre: <bdi>{original}</bdi>; találatok erre: <bdi>{query}</bdi>",
+      "searchOriginal": "Az eredeti szavaim keresése"
+    },
     "sameCaseNumber": "{count, plural, one {# határozat viseli} other {# határozat viseli}} ezt az ügyszámot. Válasszon bíróságot.",
-    "searchAskPrompt": "{query} (joggyakorlat, {country})",
     "searchLabel": "Keresés a joggyakorlatban",
     "searchPlaceholder": "Ügyszám, ECLI vagy szavak, pl. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1203,15 +1237,37 @@
     },
     "answerEdit": {
       "acceptFailed": "Nem sikerült menteni a módosítást. Próbálja újra.",
+      "aiKind": "Kért szerkesztés",
       "ask": "Módosítások kérése",
+      "authorUnknown": "Ismeretlen szerző",
+      "autolinkLabel": "Ez a szöveg automatikusan hivatkozássá válik. A hivatkozás eltávolítása előtt módosítsa a címkét.",
+      "change": "Módosítás {revision}",
+      "editedLabel": "Szerkesztett válasz",
       "failed": "Nem sikerült előkészíteni a módosítást. Próbálja újra.",
+      "formatKind": "Formázás",
+      "heading": "Címsor {level}",
+      "history": "Válasz előzményei",
+      "historyEmpty": "Nincsenek korábbi verziók.",
       "instruction": "Írja le a módosítást",
       "instructionRequired": "Írja le, hogyan módosítsuk a kijelölt szöveget.",
       "invalidSelection": "Ez a kijelölés nem szerkeszthető. Jelöljön ki összefüggő szöveget.",
+      "invalidUrl": "Adjon meg érvényes HTTP- vagy HTTPS-címet.",
+      "linkAddress": "Hivatkozás címe",
+      "orderedList": "Számozott lista",
       "proposal": "Javasolt módosítás",
       "requesting": "Módosítások előkészítése…",
+      "restoreRefreshFailed": "A válasz visszaállítása sikerült, de a frissítése nem. Frissítsen a visszaállított válasz betöltéséhez.",
+      "revertKind": "Visszaállított verzió",
       "stale": "Ez a válasz megváltozott. Jelölje ki újra a szöveget.",
-      "submit": "Módosítás kérése"
+      "submit": "Módosítás kérése",
+      "textStyle": "Szövegstílus",
+      "unorderedList": "Felsorolás",
+      "wholeBlockRequired": "A stílus módosításához jelöljön ki egy teljes bekezdést vagy listát."
+    },
+    "answerQuote": {
+      "showInDecision": "Megjelenítés a határozatban",
+      "verified": "Ellenőrzött idézet",
+      "verifiedHint": "Szó szerint: {source}"
     },
     "applyMode": {
       "description": "A Word rögzíti, ki végezte az egyes módosításokat. Megjegyezzük a választását.",
@@ -1397,7 +1453,12 @@
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {
       "category": {
-        "entities": "Ebben az ügyben"
+        "entities": "Ebben az ügyben",
+        "sources": "Források"
+      },
+      "corpus": {
+        "caseLaw": "Joggyakorlat · {country}",
+        "legislation": "Jogszabályok · {country}"
       },
       "loadError": "Az elemek betöltése sikertelen"
     },
@@ -1451,6 +1512,12 @@
       "title": "Beillesztett szöveg"
     },
     "placeholder": "Írja ide a kérdését, / a készségekhez, @ kontextus hozzáadásához",
+    "processSummary": {
+      "analyses": "{count, plural, one {# elemzés} other {# elemzés}}",
+      "changesSaved": "{count, plural, one {# mentett módosítás} other {# mentett módosítás}}",
+      "documentEdits": "{count, plural, one {# dokumentummódosítás} other {# dokumentummódosítás}}",
+      "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Az összetett feladatot sorrendbe rendezett részfeladatokra bontja.",
@@ -1696,6 +1763,7 @@
       "interrupted": "Befejezés előtt megszakadt",
       "output": "Kimenet",
       "sourceCode": "Forráskód",
+      "statusWaiting": "Várakozik",
       "toggleDetails": "Részletek megjelenítése",
       "unrestoredFields": "Anonimizált módban {count, plural, one {# mezőt} other {# mezőt}} nem sikerült valódi értékekkel kitölteni. Ellenőrizze: {fields}"
     },
@@ -1721,7 +1789,8 @@
       "toggleLabel": "Webes keresés",
       "toggleOff": "Webes keresés kikapcsolása",
       "toggleOn": "Webes keresés bekapcsolása"
-    }
+    },
+    "workedFor": "Munkaidő: {duration}"
   },
   "clauses": {
     "addVariant": "Változat hozzáadása",
@@ -2599,11 +2668,16 @@
     "actionFailed": "A művelet sikertelen",
     "api": {
       "badRequest": "A kérést nem sikerült teljesíteni.",
+      "caseLawCountryUnavailable": "Az ország ítélkezési gyakorlata nem érhető el. Válasszon másik országot.",
+      "caseLawIdentityOnly": "Ebben az országban csak a határozatok pontos keresése és olvasása érhető el.",
+      "caseLawSearchUnavailable": "Az ország ítélkezési gyakorlatában nem lehet keresni. Nyilvános határozatait továbbra is olvashatja.",
       "conflict": "A kérés ütközik a jelenlegi állapottal.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
+      "legislationCountryUnavailable": "Az ország jogszabályai nem érhetők el. Válasszon másik országot.",
+      "legislationIdentityOnly": "Ebben az országban csak a jogszabályok pontos keresése és olvasása érhető el.",
+      "legislationSearchUnavailable": "Az ország jogszabályaiban nem lehet keresni. Nyilvános jogszabályait továbbra is olvashatja.",
       "notFound": "A kért elem nem található.",
       "payloadTooLarge": "A kérés túl nagy.",
-      "publicCountryUnavailable": "Az ország jogszabályai és ítélkezési gyakorlata nem érhetők el. Válasszon másik országot.",
       "rateLimited": "Túl sok kérés. Próbálja újra később.",
       "server": "Hiba történt. Próbálja újra.",
       "serviceUnavailable": "A szolgáltatás átmenetileg nem érhető el. Próbálja újra.",
@@ -2623,6 +2697,10 @@
       "aiConfigModelInvalid": "Az AI-modell beállítása érvénytelen. Ellenőrizze a kiválasztott modelleket.",
       "aiConfigProviderInvalid": "Az AI-szolgáltató beállítása érvénytelen. Ellenőrizze a szolgáltató beállításait.",
       "aiConfigProviderValidationFailed": "Az AI-szolgáltató elutasította a beállítást. Ellenőrizze az API-kulcsot és a modellt.",
+      "aiOutputInvalid": "Az AI válasza váratlan formátumú volt. Próbálja újra.",
+      "aiOutputModerated": "Az AI-szolgáltató moderálta a kimenetet. Fogalmazza át a kérést, vagy válasszon másik modellt.",
+      "aiProviderTaskUnsupported": "A beállított AI-szolgáltató nem képes erre a feladatra. Válasszon olyat, amelyik képes rá.",
+      "aiUnknown": "Az AI-kérés sikertelen volt. Próbálja újra.",
       "clauseDirectivesInvalid": "Egy kapcsolt záradék érvénytelen direktívákat tartalmaz. Javítsa a záradékot a sablon kitöltése előtt.",
       "clauseDirectivesInvalidDetails": "A(z) {slotName} mezőben lévő {clauseName} záradék érvénytelen direktívákat tartalmaz. Nyissa meg a záradékszerkesztőt, javítsa ki a megadott bekezdéseket, és töltse ki újra a sablont.",
       "clauseDirectivesOverrideInvalidDetails": "A(z) {clauseName} záradék felülírt szövege a(z) {slotName} mezőben érvénytelen direktívákat tartalmaz. Javítsa ki a szöveget ehhez a kitöltéshez, majd próbálja újra.",
@@ -4169,6 +4247,10 @@
     "archivedEmpty": "Nincs archivált emlék.",
     "archivedToast": "Emlék archiválva",
     "createdToast": "Elmentve a memóriába",
+    "deleteConfirmation": "A megerősítéshez írja be: {confirmation}",
+    "deleteDescription": "Ez véglegesen törli ezt az emléket. A művelet nem vonható vissza.",
+    "deleteTitle": "Törli az emléket?",
+    "deletedToast": "Emlék törölve",
     "empty": "Még nincs semmi a memóriában.",
     "kinds": {
       "decision": "Döntés",
@@ -5097,6 +5179,8 @@
     "outline": "Tartalom",
     "outlineJumpLabel": "Ugrás rendelkezéshez",
     "outlineJumpPlaceholder": "§ 10 vagy cím",
+    "pendingChanges": "Közelgő módosítások",
+    "pendingChangesIncomplete": "Előfordulhat, hogy a közzétevő adatai nem tartalmazzák az összes közelgő módosítást.",
     "provisionAskContextPrompt": "\n\nA rendelkezést alkalmazó részletek a legnagyobb súlyú határozatokból:\n{passages}\n\nAz ítélkezési gyakorlat eszközeivel bármelyik határozatot teljes terjedelmében elolvashatod, vagy további, a rendelkezésre hivatkozó határozatokat kereshetsz.",
     "provisionAskPlaceholder": "Kérdezzen erről a rendelkezésről",
     "provisionAskQuestionPrompt": "{subject} kapcsán: {question}",
@@ -5114,7 +5198,6 @@
     "provisionTextUnavailable": "Ehhez a változathoz nem érhető el szöveg",
     "publisherWindowInconsistent": "Erre a napra nem állapítható meg hatályos szöveg: a kiadó adatai ellentmondásosak.",
     "resolvedAlias": "Felismerve: {label}",
-    "searchAskPrompt": "{query} ({country} jogszabályai)",
     "searchLabel": "Keresés a jogszabályok között",
     "searchPlaceholder": "Szám, rövid név vagy cím, pl. 89/2012 Sb.",
     "showCitedPartOnly": "Csak az idézett rész megjelenítése",
@@ -6243,7 +6326,6 @@
         }
       },
       "atAGlance": "Áttekintés",
-      "edited": "szerkesztette",
       "getStarted": "Kezdje el dokumentumok feltöltésével vagy az első mappa létrehozásával.",
       "matterDetails": "Ügy részletei",
       "membersCount": "{count, plural, one {# tag} other {# tag}}",
