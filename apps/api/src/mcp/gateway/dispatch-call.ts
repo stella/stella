@@ -219,57 +219,57 @@ export const dispatchGatewayToolCall = async ({
   if (refusal !== null) {
     return { type: "internal", result: structuredErrorResult(refusal) };
   }
-  const resourcePath = input.output.resource ?? null;
-  const auditRead = async (outcome: SkillReadOutcome) =>
-    await dependencies.recordSkillReadAudit({
-      reads: [
-        {
-          outcome,
-          path: resourcePath,
-          skill,
-          slug: skill.name,
-          surface: SKILL_READ_SURFACE.mcp,
-        },
-      ],
-      recordAuditEvent: context.recordAuditEvent,
-      safeDb: context.safeDb,
-    });
+  const invoke = async (): Promise<InternalToolResult<SkillToolOutput>> => {
+    const resourcePath = input.output.resource ?? null;
+    const auditRead = async (outcome: SkillReadOutcome) =>
+      await dependencies.recordSkillReadAudit({
+        reads: [
+          {
+            outcome,
+            path: resourcePath,
+            skill,
+            slug: skill.name,
+            surface: SKILL_READ_SURFACE.mcp,
+          },
+        ],
+        recordAuditEvent: context.recordAuditEvent,
+        safeDb: context.safeDb,
+      });
 
-  let read: SkillToolRead | null;
-  try {
-    read = await dependencies.readSkillTool({
-      context,
-      resourcePath: input.output.resource,
-      skill,
-    });
-  } catch (error) {
-    await auditRead(SKILL_READ_OUTCOME.error);
-    return loadFaultResult({ dependencies, error });
-  }
-  if (read === null) {
-    // Disabled or deleted between resolution and this read.
-    await auditRead(SKILL_READ_OUTCOME.error);
-    return { type: "internal", result: unknownToolResult(toolName) };
-  }
-
-  switch (read.type) {
-    case SKILL_TOOL_READ_TYPE.resourceNotFound:
+    let read: SkillToolRead | null;
+    try {
+      read = await dependencies.readSkillTool({
+        context,
+        resourcePath: input.output.resource,
+        skill,
+      });
+    } catch (error) {
       await auditRead(SKILL_READ_OUTCOME.error);
-      return {
-        type: "internal",
-        result: structuredErrorResult({
+      const loadError = dependencies.gatewayLoadErrorResult(error);
+      if (loadError !== null) {
+        return loadError;
+      }
+      throw error;
+    }
+    if (read === null) {
+      // Disabled or deleted between resolution and this read.
+      await auditRead(SKILL_READ_OUTCOME.error);
+      return unknownToolResult(toolName);
+    }
+
+    switch (read.type) {
+      case SKILL_TOOL_READ_TYPE.resourceNotFound:
+        await auditRead(SKILL_READ_OUTCOME.error);
+        return structuredErrorResult({
           code: "not_found",
           message: `This skill has no resource file at ${read.path}.`,
           hint: `Call ${toolName} without \`resource\` to list the skill's resource paths.`,
-        }),
-      };
-    case SKILL_TOOL_READ_TYPE.skill:
-      await auditRead(SKILL_READ_OUTCOME.success);
-      // Bound to the family's shared output contract at compile time; dispatch
-      // validates the served value against the same Valibot source at runtime.
-      return {
-        type: "internal",
-        result: toolDataResult(
+        });
+      case SKILL_TOOL_READ_TYPE.skill:
+        await auditRead(SKILL_READ_OUTCOME.success);
+        // Bound to the family's shared output contract at compile time; dispatch
+        // validates the served value against the same Valibot source at runtime.
+        return toolDataResult(
           projectionPayload(SKILL_TOOL_OUTPUT.outputSchemaSource, {
             type: SKILL_TOOL_OUTPUT_TYPE.skill,
             body: read.skill.body,
@@ -282,13 +282,10 @@ export const dispatchGatewayToolCall = async ({
             resources: read.skill.resources,
             version: read.skill.version,
           }),
-        ),
-      };
-    case SKILL_TOOL_READ_TYPE.resource:
-      await auditRead(SKILL_READ_OUTCOME.success);
-      return {
-        type: "internal",
-        result: toolDataResult(
+        );
+      case SKILL_TOOL_READ_TYPE.resource:
+        await auditRead(SKILL_READ_OUTCOME.success);
+        return toolDataResult(
           projectionPayload(SKILL_TOOL_OUTPUT.outputSchemaSource, {
             type: SKILL_TOOL_OUTPUT_TYPE.resource,
             content: read.content,
@@ -296,13 +293,18 @@ export const dispatchGatewayToolCall = async ({
             name: read.skill.name,
             path: read.path,
           }),
-        ),
-      };
-    default: {
-      read satisfies never;
-      return panic("skill tool read returned an unknown type");
+        );
+      default: {
+        read satisfies never;
+        return panic("skill tool read returned an unknown type");
+      }
     }
-  }
+  };
+  const result =
+    context.admitToolInvocation === undefined
+      ? await invoke()
+      : await context.admitToolInvocation(invoke);
+  return { type: "internal", result };
 };
 
 /**

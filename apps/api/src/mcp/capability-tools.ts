@@ -2172,14 +2172,16 @@ const executeInvoke = async ({
     if (referenceRefusal !== null) {
       return referenceRefusal;
     }
-    const invoke = async () =>
-      untypedStructuredEgressPlan({
-        payload: { valid: true, capability: id },
-        textFields: [],
-      });
-    return context.admitToolInvocation === undefined
-      ? await invoke()
-      : await context.admitToolInvocation(invoke);
+    const validation = untypedStructuredEgressPlan({
+      payload: { valid: true, capability: id },
+      textFields: [],
+    });
+    if (context.admitToolInvocation === undefined) {
+      return validation;
+    }
+    return await context.admitToolInvocation(
+      async () => await Promise.resolve(validation),
+    );
   }
 
   const request = context.request;

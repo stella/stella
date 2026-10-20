@@ -3,10 +3,13 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
 import type { Transaction } from "@/api/db/root";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { recordSkillReadAudit } from "@/api/lib/agent-skills/skill-read-audit";
+import type { LoadedChatSkill } from "@/api/lib/agent-skills/skills";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -20,6 +23,11 @@ import { MCP_MODES, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
+  MCP_DISPATCH_ADMISSION,
+  MCP_DISPATCH_FAMILIES,
+  type McpDispatchFamily,
+} from "@/api/mcp/dispatch-admission";
+import {
   dispatchGatewayToolCall,
   type GatewayDispatchDependencies,
 } from "@/api/mcp/gateway/dispatch-call";
@@ -32,7 +40,10 @@ import {
   externalToolDefinition,
   skillToolDefinition,
 } from "@/api/mcp/gateway/list-tools";
-import { resolveSkillTool } from "@/api/mcp/gateway/skills";
+import {
+  resolveSkillTool,
+  SKILL_TOOL_READ_TYPE,
+} from "@/api/mcp/gateway/skills";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import {
   PUBLIC_MCP_TOOL_DEFINITION,
@@ -83,7 +94,7 @@ const connectorRows = [
 ];
 const skillRows = [
   {
-    id: toSafeId<"agentSkill">("skill_authority_fixture"),
+    id: toSafeId<"agentSkill">("00000000-0000-4000-8000-000000000002"),
     scope: "private" as const,
     userId: "user_fixture",
     slug: "authority_fixture",
@@ -98,6 +109,19 @@ const skillRows = [
     origin: "authored" as const,
   },
 ];
+const loadedSkill = {
+  body: "Read the fixture.",
+  compatibility: null,
+  description: "Fixture skill",
+  id: toSafeId<"agentSkill">("00000000-0000-4000-8000-000000000002"),
+  license: null,
+  metadata: {},
+  name: "authority_fixture",
+  origin: "authored" as const,
+  resources: [],
+  source: "installed" as const,
+  version: "1.0.0",
+} satisfies LoadedChatSkill;
 
 const transactionWithRows = (
   rowsForSelection: (selection: Record<string, unknown>) => readonly unknown[],
@@ -346,6 +370,12 @@ const chatTenantCallNames = new Set([
 ]);
 
 describe("MCP tool authority census", () => {
+  test("every dispatch family declares its admission owner", () => {
+    expect(Object.keys(MCP_DISPATCH_ADMISSION).toSorted()).toEqual(
+      [...MCP_DISPATCH_FAMILIES].toSorted(),
+    );
+  });
+
   test("covers every mode and dynamic family", () => {
     const entries = census();
     for (const mode of MCP_MODES) {
@@ -562,5 +592,132 @@ describe("MCP tool authority census", () => {
         "permission_denied",
       );
     }
+  });
+
+  test("every dispatch family admits authorised calls after authority", async () => {
+    const exercised: Record<McpDispatchFamily, number> = {
+      static: 0,
+      capability: 0,
+      external_mcp: 0,
+      skill: 0,
+    };
+    const admittedContext = contextFor({
+      chat: ["create"],
+      timeEntry: ["read"],
+      workspace: ["read"],
+    });
+    admittedContext.admitToolInvocation = async (invoke) => {
+      exercised.static += 1;
+      return await invoke();
+    };
+    await handleMcpToolCall({
+      args: { matter_id: WORKSPACE_ID },
+      context: admittedContext,
+      mode: "advanced",
+      toolName: "list_time_entries",
+    });
+
+    admittedContext.admitToolInvocation = async (invoke) => {
+      exercised.capability += 1;
+      return await invoke();
+    };
+    const capabilityResult = await handleMcpToolCall({
+      args: {
+        capability: "time-entries.me.list",
+        input: { query: { date: "2026-10-19" } },
+        validate_only: true,
+      },
+      context: admittedContext,
+      mode: "advanced",
+      toolName: MCP_CAPABILITY_EXECUTORS.read,
+    });
+    expect(errorCodeOf(capabilityResult)).not.toBe("validation_error");
+
+    admittedContext.admitToolInvocation = async (invoke) => {
+      exercised.external_mcp += 1;
+      return await invoke();
+    };
+    await call(
+      { mode: "advanced", definition: fixtureConnector },
+      admittedContext,
+    );
+
+    admittedContext.admitToolInvocation = async (invoke) => {
+      exercised.skill += 1;
+      return await invoke();
+    };
+    const skillDependencies = {
+      ...gatewayDependencies,
+      readSkillTool: async () => ({
+        type: SKILL_TOOL_READ_TYPE.skill,
+        skill: loadedSkill,
+      }),
+    } satisfies GatewayDispatchDependencies;
+    await handleMcpToolCall({
+      args: {},
+      context: admittedContext,
+      dependencies: {
+        dispatchGatewayToolCall: async (args) =>
+          await dispatchGatewayToolCall({
+            ...args,
+            dependencies: skillDependencies,
+          }),
+      },
+      mode: "advanced",
+      toolName: SKILL_NAME,
+    });
+
+    expect(exercised).toEqual({
+      capability: 1,
+      external_mcp: 1,
+      skill: 1,
+      static: 1,
+    });
+
+    const refusedContext = contextFor({ chat: [] });
+    refusedContext.admitToolInvocation = async (invoke) => {
+      exercised.static += 1;
+      return await invoke();
+    };
+    await handleMcpToolCall({
+      args: { matter_id: WORKSPACE_ID },
+      context: refusedContext,
+      mode: "advanced",
+      toolName: "list_time_entries",
+    });
+    refusedContext.admitToolInvocation = async (invoke) => {
+      exercised.capability += 1;
+      return await invoke();
+    };
+    await handleMcpToolCall({
+      args: {
+        capability: "time-entries.me.list",
+        input: { query: { date: "2026-10-19" } },
+        validate_only: true,
+      },
+      context: refusedContext,
+      mode: "advanced",
+      toolName: MCP_CAPABILITY_EXECUTORS.read,
+    });
+    refusedContext.admitToolInvocation = async (invoke) => {
+      exercised.external_mcp += 1;
+      return await invoke();
+    };
+    await call(
+      { mode: "advanced", definition: fixtureConnector },
+      refusedContext,
+    );
+    refusedContext.admitToolInvocation = async (invoke) => {
+      exercised.skill += 1;
+      return await invoke();
+    };
+    await call({ mode: "advanced", definition: fixtureSkill }, refusedContext);
+
+    expect(exercised).toEqual({
+      capability: 1,
+      external_mcp: 1,
+      skill: 1,
+      static: 1,
+    });
   });
 });

@@ -23,6 +23,8 @@ type McpHttpToolCallOptions = {
   context: McpRequestContext;
   mode: McpMode;
   toolName: string;
+  getToolDefinition?: typeof getMcpToolDefinition;
+  toolCallHandler?: typeof handleMcpToolCall;
 };
 
 /**
@@ -38,6 +40,8 @@ export const callMcpToolOverHttp = async ({
   context,
   mode,
   toolName,
+  getToolDefinition = getMcpToolDefinition,
+  toolCallHandler = handleMcpToolCall,
 }: McpHttpToolCallOptions): Promise<CallToolResult> => {
   // The session's user is not the demo account, so its budget never counts.
   const demo = createTestDemoActionBudget({
@@ -61,9 +65,9 @@ export const callMcpToolOverHttp = async ({
         }),
       ),
     captureError: () => undefined,
-    getMcpToolDefinition,
+    getMcpToolDefinition: getToolDefinition,
     getMcpToolRequiredScopesHint,
-    handleMcpToolCall,
+    handleMcpToolCall: toolCallHandler,
     listMcpResources: () => [],
     // The static offer only: the dynamic families read the database.
     listMcpTools: async (listContext, listMode = "default") =>

@@ -130,7 +130,10 @@ import type {
 } from "@/api/mcp/template-persistence";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
-import type { McpToolResponse } from "@/api/mcp/tool-types";
+import type {
+  InternalToolErrorResult,
+  McpToolResponse,
+} from "@/api/mcp/tool-types";
 import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-boundary";
 import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
 
@@ -145,9 +148,9 @@ export type McpOperationDatabaseScope = {
 };
 
 export type McpRequestContext = {
-  admitToolInvocation?: (
-    run: () => Promise<McpToolResponse>,
-  ) => Promise<McpToolResponse>;
+  admitToolInvocation?: <Response extends McpToolResponse>(
+    run: () => Promise<Response>,
+  ) => Promise<Response | InternalToolErrorResult>;
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: {

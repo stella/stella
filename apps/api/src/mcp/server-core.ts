@@ -956,7 +956,7 @@ export const createMcpHttpRequestHandler = ({
         organizationStateDb: context.scopedDb,
         periodIdentity: mcpActionPeriodIdentity(consumesServices),
         run: async (signal) => {
-          signal?.throwIfAborted();
+          signal.throwIfAborted();
           return await invoke();
         },
       });

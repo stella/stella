@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -206,6 +206,49 @@ export const callGatewayExternalMcpTool = async ({
     });
   }
 
+  if (context.admitToolInvocation !== undefined) {
+    let admittedResult: CallToolResult | undefined;
+    const refusal = await context.admitToolInvocation(async () => {
+      admittedResult = await callAdmittedGatewayExternalMcpTool({
+        args,
+        context,
+        dependencies,
+        permit,
+        resolved,
+      });
+      return { status: "success", data: {} };
+    });
+    if (admittedResult !== undefined) {
+      return admittedResult;
+    }
+    if ("status" in refusal) {
+      return serializeToolResult(refusal);
+    }
+    return panic("MCP admission returned an execution plan without running");
+  }
+
+  return await callAdmittedGatewayExternalMcpTool({
+    args,
+    context,
+    dependencies,
+    permit,
+    resolved,
+  });
+};
+
+const callAdmittedGatewayExternalMcpTool = async ({
+  args,
+  context,
+  dependencies,
+  permit,
+  resolved,
+}: {
+  args: Record<string, unknown>;
+  context: McpRequestContext;
+  dependencies: ExternalGatewayDependencies;
+  permit: NonNullable<McpRequestContext["thirdPartyOutboundPermit"]>;
+  resolved: ResolvedExternalMcpTool;
+}): Promise<CallToolResult> => {
   const allowed = await consumeMcpGatewayRateLimit({
     connectorSlug: resolved.connectorSlug,
     userId: context.userId,
