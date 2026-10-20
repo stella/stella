@@ -10,12 +10,17 @@
  * each under the mark the body printed for it.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
-import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
+import {
+  hasInlineChildren,
+  plainTextOf,
+  withProjectedPlainText,
+} from "@stll/legal-ast/document-ast";
 import type {
+  Block,
   DocumentAst,
   DocumentAstMetadata,
   DocumentAstSource,
@@ -117,8 +122,10 @@ const markOf = (text: string): string | null =>
 type Footnotes = {
   /** Footnote container to the mark the body printed for it. */
   labels: Map<Element, string>;
-  /** In-page ids a marker link points at, to the footnote's mark. */
-  marks: Map<string, string>;
+  /** Positively identified notes, by publisher fragment. */
+  notes: Map<string, { mark: string; target: Element }>;
+  /** Publisher ids on reference markers, associated with their note. */
+  references: Map<string, Element>;
 };
 
 /**
@@ -207,7 +214,8 @@ const findFootnotes = (
 ): Footnotes => {
   const targets = fragmentTargets($, root);
   const labels = new Map<Element, string>();
-  const marks = new Map<string, string>();
+  const notes = new Map<string, { mark: string; target: Element }>();
+  const references = new Map<string, Element>();
   root.find("a[href^='#']").each((_, link) => {
     const fragment = fragmentOf(link.attribs["href"] ?? "");
     const mark = markOf($(link).text());
@@ -223,9 +231,14 @@ const findFootnotes = (
       return;
     }
     labels.set(target, mark);
-    marks.set(fragment, mark);
+    notes.set(fragment, { mark, target });
+    for (const reference of [link.attribs["id"], link.attribs["name"]]) {
+      if (reference !== undefined) {
+        references.set(reference, target);
+      }
+    }
   });
-  return { labels, marks };
+  return { labels, notes, references };
 };
 
 const noteMarkInline = (mark: string): Inline => ({
@@ -233,39 +246,93 @@ const noteMarkInline = (mark: string): Inline => ({
   children: [{ type: "text", text: mark }],
 });
 
-type ResolveFragmentsOptions = {
-  footnotes: Footnotes;
-  /** Inside a note, a marker-shaped in-page link is the note's back reference. */
-  inNote: boolean;
+type FragmentLinkEvidence = {
+  href: string;
+  note: Element | undefined;
+  explicitBacklink: boolean;
 };
 
-/**
- * In-page links resolved: a marker link becomes its mark in superscript and
- * a note's marker-shaped back reference is dropped (the note carries its
- * mark). Every other in-page link remains an ordinary document link.
- */
+type FragmentLinkResolution =
+  | { type: "noteReference"; mark: string }
+  | { type: "noteBacklink" }
+  | { type: "crossReference"; anchorId: string }
+  | { type: "unresolved" };
+
+const BACKLINK_ROLES = new Set(["doc-backlink"]);
+
+const classifyFragmentLink = (
+  evidence: FragmentLinkEvidence,
+  footnotes: Footnotes,
+  anchorByPublisherId: ReadonlyMap<string, string>,
+): FragmentLinkResolution => {
+  const fragment = fragmentOf(evidence.href);
+  const note = footnotes.notes.get(fragment);
+  if (note !== undefined) {
+    return { type: "noteReference", mark: note.mark };
+  }
+  if (
+    evidence.note !== undefined &&
+    (evidence.explicitBacklink ||
+      footnotes.references.get(fragment) === evidence.note)
+  ) {
+    return { type: "noteBacklink" };
+  }
+  const anchorId = anchorByPublisherId.get(fragment);
+  return anchorId === undefined
+    ? { type: "unresolved" }
+    : { type: "crossReference", anchorId };
+};
+
+type ResolveFragmentsOptions = {
+  evidenceByHref: ReadonlyMap<string, FragmentLinkEvidence>;
+  footnotes: Footnotes;
+  anchorByPublisherId: ReadonlyMap<string, string>;
+};
+
+/** The single disposition point for every publisher fragment link. */
 const resolveFragments = (
   inlines: readonly Inline[],
   options: ResolveFragmentsOptions,
 ): Inline[] => {
   const out: Inline[] = [];
   for (const inline of inlines) {
-    if (inline.type === "link" && inline.href.startsWith("#")) {
-      const mark = options.footnotes.marks.get(fragmentOf(inline.href));
-      if (mark !== undefined && !options.inNote) {
-        out.push(noteMarkInline(mark));
-      } else if (
-        options.inNote &&
-        markOf(plainTextOf(inline.children)) !== null
-      ) {
+    if (inline.type === "link") {
+      const evidence = options.evidenceByHref.get(inline.href);
+      if (evidence !== undefined) {
+        const resolution = classifyFragmentLink(
+          evidence,
+          options.footnotes,
+          options.anchorByPublisherId,
+        );
+        switch (resolution.type) {
+          case "noteReference": {
+            out.push(noteMarkInline(resolution.mark));
+            break;
+          }
+          case "noteBacklink": {
+            break;
+          }
+          case "crossReference": {
+            out.push({
+              ...inline,
+              href: `#${resolution.anchorId}`,
+              children: resolveFragments(inline.children, options),
+            });
+            break;
+          }
+          case "unresolved": {
+            out.push(...resolveFragments(inline.children, options));
+            break;
+          }
+          default: {
+            resolution satisfies never;
+            return panic(
+              `Unhandled fragment resolution: ${String(resolution)}`,
+            );
+          }
+        }
         continue;
-      } else {
-        out.push({
-          ...inline,
-          children: resolveFragments(inline.children, options),
-        });
       }
-      continue;
     }
     if (!hasInlineChildren(inline)) {
       out.push(inline);
@@ -297,6 +364,10 @@ type BuildState = {
   notes: KeyedBlock[];
   /** Notes read so far; numbers each note's `noteId`, whatever its mark. */
   noteCount: number;
+  fragmentEvidence: Map<string, FragmentLinkEvidence>;
+  nextFragmentLink: number;
+  /** Source elements owned by each drafted block, before ids are assigned. */
+  sourceBlocks: Map<Element, KeyedBlock>;
 };
 
 type BlockContext = {
@@ -305,6 +376,7 @@ type BlockContext = {
   note: ParagraphBlock["note"];
   role: ParagraphBlock["role"];
   listDepth: number;
+  noteTarget: Element | undefined;
 };
 
 const POSITIONAL: BlockKey = { type: "positional" };
@@ -318,19 +390,43 @@ const resolvedHref = (baseUrl: string) => (href: string) => {
     : undefined;
 };
 
+const prepareFragmentLinks = (
+  state: BuildState,
+  nodes: cheerio.Cheerio<AnyNode>,
+  context: BlockContext,
+): void => {
+  nodes
+    .find("a[href^='#']")
+    .addBack("a[href^='#']")
+    .each((_, link) => {
+      const href = link.attribs["href"];
+      if (href === undefined) {
+        return;
+      }
+      state.nextFragmentLink += 1;
+      const token = `#__stella_fragment_${String(state.nextFragmentLink)}`;
+      const roles = link.attribs["role"]?.toLowerCase().split(/\s+/u) ?? [];
+      state.fragmentEvidence.set(token, {
+        href,
+        note: context.noteTarget,
+        explicitBacklink: roles.some((role) => BACKLINK_ROLES.has(role)),
+      });
+      link.attribs["href"] = token;
+    });
+};
+
 const inlinesOf = (
   state: BuildState,
   nodes: cheerio.Cheerio<AnyNode>,
   context: BlockContext,
-): Inline[] =>
-  collapseHtmlWhitespace(
-    resolveFragments(
-      walkInlines(state.$, nodes, {
-        sanitizeHref: resolvedHref(state.baseUrl),
-      }),
-      { footnotes: state.footnotes, inNote: context.into === "notes" },
-    ),
+): Inline[] => {
+  prepareFragmentLinks(state, nodes, context);
+  return collapseHtmlWhitespace(
+    walkInlines(state.$, nodes, {
+      sanitizeHref: resolvedHref(state.baseUrl),
+    }),
   );
+};
 
 const listDepthOf = (depth: number): ParagraphListDepth | undefined => {
   const clamped = Math.min(depth, MAX_LIST_DEPTH);
@@ -349,9 +445,9 @@ const pushParagraph = (
   state: BuildState,
   inlines: Inline[],
   context: BlockContext,
-): void => {
+): KeyedBlock | undefined => {
   if (plainTextOf(inlines).trim() === "") {
-    return;
+    return undefined;
   }
   const listDepth = listDepthOf(context.listDepth);
   const block: KeyedBlock = {
@@ -368,6 +464,29 @@ const pushParagraph = (
     },
   };
   state[context.into].push(block);
+  return block;
+};
+
+const registerSource = (
+  state: BuildState,
+  nodes: readonly AnyNode[],
+  block: KeyedBlock | undefined,
+): void => {
+  if (block === undefined) {
+    return;
+  }
+  for (const node of nodes) {
+    if (!isTag(node)) {
+      continue;
+    }
+    state.sourceBlocks.set(node, block);
+    state
+      .$(node)
+      .find("*")
+      .each((_, descendant) => {
+        state.sourceBlocks.set(descendant, block);
+      });
+  }
 };
 
 const tableCellOf = (
@@ -389,7 +508,7 @@ const pushTable = (
   state: BuildState,
   table: Element,
   context: BlockContext,
-): void => {
+): KeyedBlock | undefined => {
   const rows = ownTableRows(state.$(table))
     .toArray()
     .map((row) =>
@@ -401,9 +520,9 @@ const pushTable = (
     )
     .filter((row) => row.length > 0);
   if (rows.every((row) => row.every((cell) => cell.plainText === ""))) {
-    return;
+    return undefined;
   }
-  state[context.into].push({
+  const block: KeyedBlock = {
     key:
       context.note === undefined
         ? POSITIONAL
@@ -415,7 +534,9 @@ const pushTable = (
       // Rejoined from the cells once the document is assembled.
       plainText: "",
     },
-  });
+  };
+  state[context.into].push(block);
+  return block;
 };
 
 const hasBlockChildren = (element: Element): boolean =>
@@ -437,7 +558,12 @@ const walkChildren = (
   const flush = (): void => {
     if (run.length > 0) {
       const wrapper = state.$("<span></span>").append(state.$(run).clone());
-      pushParagraph(state, inlinesOf(state, wrapper, context), context);
+      const block = pushParagraph(
+        state,
+        inlinesOf(state, wrapper, context),
+        context,
+      );
+      registerSource(state, run, block);
       run = [];
     }
   };
@@ -478,15 +604,17 @@ const walkBlock = (
       },
       role: undefined,
       listDepth: 0,
+      noteTarget: element,
     };
     if (hasBlockChildren(element)) {
       walkChildren(state, element, noteContext);
     } else {
-      pushParagraph(
+      const block = pushParagraph(
         state,
         inlinesOf(state, state.$(element), noteContext),
         noteContext,
       );
+      registerSource(state, [element], block);
     }
     return;
   }
@@ -494,7 +622,7 @@ const walkBlock = (
     const inlines = inlinesOf(state, state.$(element), context);
     const text = plainTextOf(inlines).trim();
     if (text !== "") {
-      state.body.push({
+      const block: KeyedBlock = {
         key: headingKeyOf(text),
         block: {
           type: "heading",
@@ -502,12 +630,14 @@ const walkBlock = (
           role: "section-heading",
           ...draftText(inlines),
         },
-      });
+      };
+      state.body.push(block);
+      registerSource(state, [element], block);
     }
     return;
   }
   if (tag === "table") {
-    pushTable(state, element, context);
+    registerSource(state, [element], pushTable(state, element, context));
     return;
   }
   const inner: BlockContext = {
@@ -516,10 +646,94 @@ const walkBlock = (
     listDepth: LIST_TAGS.has(tag) ? context.listDepth + 1 : context.listDepth,
   };
   if (PARAGRAPH_TAGS.has(tag) && !hasBlockChildren(element)) {
-    pushParagraph(state, inlinesOf(state, state.$(element), inner), inner);
+    registerSource(
+      state,
+      [element],
+      pushParagraph(state, inlinesOf(state, state.$(element), inner), inner),
+    );
     return;
   }
   walkChildren(state, element, inner);
+};
+
+const sourceBlockOf = (
+  state: BuildState,
+  target: Element,
+): KeyedBlock | undefined => {
+  let element: Element | undefined = target;
+  while (element !== undefined) {
+    const block = state.sourceBlocks.get(element);
+    if (block !== undefined) {
+      return block;
+    }
+    const parent = state.$(element).parent().get(0);
+    element = parent !== undefined && isTag(parent) ? parent : undefined;
+  }
+  for (const descendant of state.$(target).find("*").toArray()) {
+    const block = state.sourceBlocks.get(descendant);
+    if (block !== undefined) {
+      return block;
+    }
+  }
+  return undefined;
+};
+
+const anchorMapOf = (
+  state: BuildState,
+  root: cheerio.Cheerio<Element>,
+  keyedBlocks: readonly KeyedBlock[],
+  blocks: readonly Block[],
+): Map<string, string> => {
+  const anchorByBlock = new Map(
+    keyedBlocks.map((keyed, index) => [keyed, blocks[index]?.anchorId]),
+  );
+  const anchors = new Map<string, string>();
+  root.find("[id], a[name]").each((_, element) => {
+    const block = sourceBlockOf(state, element);
+    const anchorId = block === undefined ? undefined : anchorByBlock.get(block);
+    if (anchorId === undefined) {
+      return;
+    }
+    for (const publisherId of [
+      element.attribs["id"],
+      element.attribs["name"],
+    ]) {
+      if (publisherId !== undefined) {
+        anchors.set(publisherId, anchorId);
+      }
+    }
+  });
+  return anchors;
+};
+
+const resolveBlockFragments = (
+  block: Block,
+  options: ResolveFragmentsOptions,
+): Block => {
+  switch (block.type) {
+    case "heading":
+    case "paragraph": {
+      return { ...block, inlines: resolveFragments(block.inlines, options) };
+    }
+    case "table": {
+      return {
+        ...block,
+        rows: block.rows.map((row) =>
+          row.map((cell) => ({
+            ...cell,
+            inlines: resolveFragments(cell.inlines, options),
+          })),
+        ),
+      };
+    }
+    case "image": {
+      return block;
+    }
+    default: {
+      block satisfies never;
+      return panic(`Unhandled block: ${String(block)}`);
+    }
+  }
 };
 
 type BuildHtmlDocumentAstOptions = {
@@ -556,16 +770,38 @@ export const buildHtmlDocumentAst = ({
     body: [],
     notes: [],
     noteCount: 0,
+    fragmentEvidence: new Map(),
+    nextFragmentLink: 0,
+    sourceBlocks: new Map(),
   };
   walkChildren(state, rootElement, {
     into: "body",
     note: undefined,
     role: undefined,
     listDepth: 0,
+    noteTarget: undefined,
   });
+  const keyedBlocks = [...state.body, ...state.notes];
   return assembleDocumentAst({
     source,
     metadata,
-    blocks: [...state.body, ...state.notes],
+    blocks: keyedBlocks,
+  }).map((ast) => {
+    const anchorByPublisherId = anchorMapOf(
+      state,
+      $(rootElement),
+      keyedBlocks,
+      ast.blocks,
+    );
+    return withProjectedPlainText({
+      ...ast,
+      blocks: ast.blocks.map((block) =>
+        resolveBlockFragments(block, {
+          evidenceByHref: state.fragmentEvidence,
+          footnotes: state.footnotes,
+          anchorByPublisherId,
+        }),
+      ),
+    });
   });
 };

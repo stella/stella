@@ -95,7 +95,7 @@ describe("the HTML builder", () => {
       <div id="ftn2"><p><a href="#_ftnref2" name="_ftn2">[2]</a> Second note.</p></div>`);
     expect(outline(ast)).toEqual([
       { id: "front_1", type: "paragraph", text: "Body1 and Word style2." },
-      { id: "fn-1", type: "paragraph", text: "First note. ↩", note: "1" },
+      { id: "fn-1", type: "paragraph", text: "First note.", note: "1" },
       { id: "fn-2", type: "paragraph", text: "Second note.", note: "2" },
     ]);
     const [body] = ast.blocks;
@@ -105,7 +105,7 @@ describe("the HTML builder", () => {
     });
   });
 
-  test("keeps a numeric link to a section in the body and outline", () => {
+  test("resolves a body section link to the emitted heading anchor", () => {
     const ast = build(
       `<p>See section <a href="#scope">2</a>.</p><h2 id="scope">2 Scope</h2>`,
     );
@@ -113,12 +113,41 @@ describe("the HTML builder", () => {
       { id: "front_1", type: "paragraph", text: "See section 2." },
       { id: "s-2", type: "heading", text: "2 Scope" },
     ]);
-    const [body] = ast.blocks;
+    const [body, heading] = ast.blocks;
+    expect(heading?.anchorId).toBe("s-2");
     expect(body?.type === "paragraph" ? body.inlines : []).toContainEqual({
       type: "link",
-      href: "#scope",
+      href: `#${heading?.anchorId}`,
       children: [{ type: "text", text: "2" }],
     });
+  });
+
+  test("keeps and resolves a numeric section link inside a footnote", () => {
+    const ast = build(`
+      <p>Body<a href="#fn1" id="ref1">1</a>.</p>
+      <h2 id="scope">2 Scope</h2>
+      <aside id="fn1" role="doc-footnote">See section <a href="#scope">2</a>. <a href="#ref1">Back</a></aside>`);
+    const heading = ast.blocks.find((block) => block.type === "heading");
+    const note = ast.blocks.find(
+      (block) => block.type === "paragraph" && block.note !== undefined,
+    );
+    expect(note?.plainText).toBe("See section 2.");
+    expect(note?.type === "paragraph" ? note.inlines : []).toContainEqual({
+      type: "link",
+      href: `#${heading?.anchorId}`,
+      children: [{ type: "text", text: "2" }],
+    });
+  });
+
+  test("keeps a missing fragment's text without emitting a dead link", () => {
+    const ast = build(`<p>See <a href="#missing">the missing part</a>.</p>`);
+    const [paragraph] = ast.blocks;
+    expect(paragraph?.plainText).toBe("See the missing part.");
+    expect(paragraph?.type === "paragraph" ? paragraph.inlines : []).toEqual([
+      { type: "text", text: "See " },
+      { type: "text", text: "the missing part" },
+      { type: "text", text: "." },
+    ]);
   });
 
   test("reads a malformed fragment escape as printed instead of failing", () => {
