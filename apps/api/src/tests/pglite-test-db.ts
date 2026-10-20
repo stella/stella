@@ -34,6 +34,7 @@ import {
   installPgliteReaderAnswerRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
+  installPgliteAiMemoryActiveUserGuard,
   installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteServiceClientCredentialCascade,
@@ -530,6 +531,11 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT, DELETE ON TABLE "legislation_work_names"
     TO stella_ingestion
   `,
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      "legislation_amendment_snapshots", "legislation_amendments"
+    TO stella_ingestion
+  `,
   // Final-generation state is observable by request code but mutated only by
   // ingestion. A narrowly scoped database function owns retirement deletes.
   `
@@ -793,6 +799,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteServiceClientCredentialCascade(db);

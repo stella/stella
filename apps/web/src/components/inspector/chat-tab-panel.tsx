@@ -280,6 +280,7 @@ export const ChatTabPanel = ({
     turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
+    confirmStoredApprovalGrant,
     handleApprove,
     handleAllowInConversation,
     handleDeny,
@@ -335,6 +336,7 @@ export const ChatTabPanel = ({
 
   const {
     handleAskUserEditingChange,
+    lastMessageId,
     suggestedFollowupPrompt,
     suggestedPrompts,
   } = useSuggestedFollowupPrompts({
@@ -351,6 +353,7 @@ export const ChatTabPanel = ({
   // chat. Thread ref is shared with `chatThreadOptions` above so
   // drafts persist across tab close/open.
   const editorController = useChatEditor({
+    followupAnalytics: { surface: "inspector-chat" },
     placeholder: t("chat.contextPlaceholder", { context: contextLabel }),
     suggestedFollowupPrompt,
     threadRef,
@@ -612,6 +615,7 @@ export const ChatTabPanel = ({
           activeOrganizationId,
           alwaysApprovedTools,
           conversationApprovedTools,
+          confirmStoredApprovalGrant,
           handleAllowInConversation,
           handleAlwaysAllow,
           handleApprove,
@@ -739,6 +743,8 @@ export const ChatTabPanel = ({
             }
             followupChips={
               <SuggestedFollowupChips
+                analyticsSurface="inspector-chat"
+                messageId={lastMessageId}
                 onSelect={(prompt) => {
                   editorController.setContent(composerStoredMarkdown(prompt));
                   detached(
@@ -752,6 +758,7 @@ export const ChatTabPanel = ({
                   );
                 }}
                 prompts={suggestedPrompts}
+                threadId={threadRef.threadId}
               />
             }
             layout="standalone"

@@ -1847,6 +1847,8 @@ const processOneBatch = async ({
       signal.throwIfAborted();
       const verdictOutput = await computeVerdictBatch({
         admission,
+        // One budget for the whole verdict batch (several waves of model
+        // calls), not a per-call deadline: each call would get it afresh.
         abortSignal: AbortSignal.any([
           AbortSignal.timeout(getWorkflowBatchAITimeoutMs(serviceTier)),
           signal,
