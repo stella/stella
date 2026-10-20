@@ -10,6 +10,7 @@ import { panic } from "better-result";
 import {
   formatSeedUuid,
   MARKETING_LOCALE_ACCOUNTS,
+  PRIMARY_MARKETING_LOCALE,
   seedIdHashInput,
 } from "@stll/playwright-tools/marketing-locales";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -20,9 +21,10 @@ import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 // ─── Constants ──────────────────────────────────────────
 
 // The English development firm, which the marketing captures also film.
-export const DEFAULT_USER_ID = MARKETING_LOCALE_ACCOUNTS.en.userId;
+export const DEFAULT_USER_ID =
+  MARKETING_LOCALE_ACCOUNTS[PRIMARY_MARKETING_LOCALE].userId;
 export const DEFAULT_ORG_ID = toSafeId<"organization">(
-  MARKETING_LOCALE_ACCOUNTS.en.organizationId,
+  MARKETING_LOCALE_ACCOUNTS[PRIMARY_MARKETING_LOCALE].organizationId,
 );
 
 export const DEFAULT_SEED_COLLEAGUE_COUNT = 3;

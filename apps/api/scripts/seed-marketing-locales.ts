@@ -16,6 +16,7 @@ import {
   MARKETING_LOCALE_ACCOUNTS,
   MARKETING_LOCALES,
   marketingSeedNamespace,
+  PRIMARY_MARKETING_LOCALE,
 } from "@stll/playwright-tools/marketing-locales";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
@@ -32,7 +33,8 @@ const {
 } = await import("./seed-test-user");
 
 for (const locale of MARKETING_LOCALES) {
-  if (locale === "en") {
+  // db:seed-dev seeds the primary firm before this runs.
+  if (locale === PRIMARY_MARKETING_LOCALE) {
     continue;
   }
   const account = MARKETING_LOCALE_ACCOUNTS[locale];

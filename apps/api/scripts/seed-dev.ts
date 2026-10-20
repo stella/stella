@@ -18,6 +18,10 @@ import { panic } from "better-result";
  * browser session's organization. Override with:
  *   STELLA_SEED_ORG_ID=... STELLA_SEED_USER_ID=...
  *
+ * The content is English unless the organization is a marketing firm of
+ * another locale. Pick a content pack (seed-content/locales.ts) with:
+ *   STELLA_SEED_LOCALE=cs
+ *
  * Prerequisites:
  *   - Database running (bun run docker:dev)
  *   - Test user seeded (bun run db:seed-test-user)
@@ -34,9 +38,15 @@ import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { ConditionNode } from "@stll/conditions";
+import { isCountryCode } from "@stll/country-codes";
+import type { CountryCode } from "@stll/country-codes";
 import { writeZipEntry } from "@stll/docx-utils";
 import { logErrorOutput, printError } from "@stll/errors";
 import { timeEntryAmount } from "@stll/money";
+import {
+  MARKETING_LOCALE_ACCOUNTS,
+  PRIMARY_MARKETING_LOCALE,
+} from "@stll/playwright-tools/marketing-locales";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import {
@@ -109,6 +119,7 @@ import {
   assertSeedLocaleMatches,
   SEED_CONTENT_BY_LOCALE,
   SEED_LOCALE,
+  seedsSharedCorpus,
 } from "./seed-content/locales";
 import {
   ACTIVITY_CODE_KEYS,
@@ -160,6 +171,15 @@ const db = openMaintenanceDb({ readOnly: false });
 // Every name, document and note this run writes, in the target firm's
 // language (seed-content/locales.ts).
 const SEED_CONTENT = SEED_CONTENT_BY_LOCALE[SEED_LOCALE];
+// The country whose law the content is written for: the firm's primary
+// practice jurisdiction.
+const seedCountry = (country: string): CountryCode =>
+  isCountryCode(country) ? country : panic(`Unknown seed country: ${country}`);
+const SEED_COUNTRY = seedCountry(
+  MARKETING_LOCALE_ACCOUNTS[SEED_LOCALE].country,
+);
+// The heavy matter's generated names are English.
+const SEEDS_HEAVY_MATTER = SEED_LOCALE === PRIMARY_MARKETING_LOCALE;
 const SUPPLIER_AGREEMENT = SEED_CONTENT.supplierAgreement;
 const EXPORT_REVIEW_COPY = SEED_CONTENT.exportReview;
 const EXPORT_REVIEW_DOC_NAMES = buildExportReviewDocNames(EXPORT_REVIEW_COPY);
@@ -626,7 +646,7 @@ const workspaceDocNames: Record<string, readonly string[]> = {
   ...SEED_CONTENT.matterDocuments,
   // Key order matters: extra matters pick documents from this table by
   // position.
-  ...(SEED_LOCALE === "en"
+  ...(SEEDS_HEAVY_MATTER
     ? { [HEAVY_MATTER_LABEL]: buildHeavyMatterDocNames() }
     : {}),
   [EXPORT_TABLE_MATTER_LABEL]: EXPORT_REVIEW_DOC_NAMES,
@@ -677,7 +697,7 @@ const seedWorkspaces: readonly SeedWorkspace[] = [
     label,
     ...SEED_CONTENT.matters[label],
   })),
-  ...(SEED_LOCALE === "en"
+  ...(SEEDS_HEAVY_MATTER
     ? [{ label: HEAVY_MATTER_LABEL, ...HEAVY_MATTER }]
     : []),
 ].map(({ label, clientIndex, ...matter }) => ({
@@ -2900,14 +2920,14 @@ export async function seed(organizationId?: string, userId?: string) {
   };
   await seedContacts();
 
-  // 1c. Organization settings: pin the practice jurisdiction (the seeded
-  // cast is a Czech firm) so jurisdiction-derived surfaces, notably the
+  // 1c. Organization settings: pin the practice jurisdiction (the country
+  // the content pack is written for) so jurisdiction-derived surfaces, notably the
   // Knowledge tools catalogue's recommended section that the marketing cli
   // scene films, render identically on every fresh seed instead of
   // depending on whatever settings live dev usage left behind. Re-pinned on
   // conflict; other settings columns stay untouched.
   const practiceJurisdictions: PracticeJurisdiction[] = [
-    { countryCode: "CZ", isPrimary: true },
+    { countryCode: SEED_COUNTRY, isPrimary: true },
   ];
   await db.transaction(
     async (tx) =>
@@ -2923,7 +2943,9 @@ export async function seed(organizationId?: string, userId?: string) {
           set: { practiceJurisdictions },
         }),
   );
-  console.log("  Organization settings: practice jurisdiction CZ pinned");
+  console.log(
+    `  Organization settings: practice jurisdiction ${SEED_COUNTRY} pinned`,
+  );
 
   // 2. Workspaces. lastActivityAt is pinned (never defaultNow()) so the
   // sidebar "Recent matters" ordering the marketing recordings film stays
@@ -3889,9 +3911,9 @@ export async function seed(organizationId?: string, userId?: string) {
   // shared by every organization, so the per-locale marketing firms, seeded
   // after the English one (seed-marketing-locales.ts), only add their own
   // readers and fail loudly when the corpus is missing.
-  let caseLawSeeded = SEED_LOCALE !== "en";
+  let caseLawSeeded = !seedsSharedCorpus(ORG_ID);
   try {
-    if (SEED_LOCALE === "en") {
+    if (seedsSharedCorpus(ORG_ID)) {
       await seedCaseLaw();
       caseLawSeeded = true;
     }

@@ -33,9 +33,9 @@ export const MARKETING_CASE_LAW: Record<
   readonly MarketingCaseLawScenario[]
 > = { en, cs, sk };
 
+// The seeded analysis text is in the firm's language
+// (MARKETING_LOCALE_ACCOUNTS[locale].language).
 type MarketingCaseLawCopy = {
-  /** Language of the seeded analysis text. */
-  analysisLanguage: MarketingLocale;
   issueLabel: string;
   outcomeLabel: string;
   threadTitlePrefix: string;
@@ -43,19 +43,16 @@ type MarketingCaseLawCopy = {
 
 export const MARKETING_CASE_LAW_COPY = {
   en: {
-    analysisLanguage: "en",
     issueLabel: "Legal issue",
     outcomeLabel: "Outcome",
     threadTitlePrefix: "Case review",
   },
   cs: {
-    analysisLanguage: "cs",
     issueLabel: "Právní otázka",
     outcomeLabel: "Závěr soudu",
     threadTitlePrefix: "Rozbor rozhodnutí",
   },
   sk: {
-    analysisLanguage: "sk",
     issueLabel: "Právna otázka",
     outcomeLabel: "Záver súdu",
     threadTitlePrefix: "Rozbor rozhodnutia",

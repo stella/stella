@@ -4,12 +4,34 @@
 // (apps/api/scripts/seed-marketing-locales.ts). The seed and the capture
 // spec both read this module, so the ids, names and ready markers they meet
 // on cannot drift apart.
+//
+// A locale is a market: a UI language plus the country whose law the content
+// is written for. Ids are BCP 47 tags; a second market for a language that
+// already has one carries its region (a German pack for Austria next to one
+// for Germany would be "de-AT" and "de-DE"). Adding a market is one id here,
+// its entries in the records below and its content pack
+// (apps/api/scripts/seed-content); each record is total over the ids, so a
+// missing entry fails typecheck.
 
 export const MARKETING_LOCALES = ["en", "cs", "sk"] as const;
 
 export type MarketingLocale = (typeof MARKETING_LOCALES)[number];
 
+/**
+ * The dev seed's default firm: it keeps the unnamespaced seed ids and the
+ * unsuffixed PNG names, and its run seeds the shared case-law corpus every
+ * other firm reuses.
+ */
+export const PRIMARY_MARKETING_LOCALE = "en" satisfies MarketingLocale;
+
 type MarketingLocaleAccount = {
+  /** UI catalog the firm renders in (apps/web/src/i18n/langs/<language>.json). */
+  language: string;
+  /**
+   * ISO 3166-1 alpha-2 country whose law the content is written for; the
+   * firm's primary practice jurisdiction.
+   */
+  country: string;
   organizationId: string;
   organizationName: string;
   organizationSlug: string;
@@ -24,6 +46,9 @@ type MarketingLocaleAccount = {
 
 export const MARKETING_LOCALE_ACCOUNTS = {
   en: {
+    language: "en",
+    // The English cast practises Czech law, like the case law it films.
+    country: "CZ",
     organizationId: "test-org-stella-dev",
     organizationName: "Harbrook & Partners",
     organizationSlug: "harbrook-partners",
@@ -34,6 +59,8 @@ export const MARKETING_LOCALE_ACCOUNTS = {
     captureSuffix: "",
   },
   cs: {
+    language: "cs",
+    country: "CZ",
     organizationId: "test-org-stella-dev-cs",
     organizationName: "Hartvich & Partneři",
     organizationSlug: "hartvich-partneri",
@@ -44,6 +71,8 @@ export const MARKETING_LOCALE_ACCOUNTS = {
     captureSuffix: "-cs",
   },
   sk: {
+    language: "sk",
+    country: "SK",
     organizationId: "test-org-stella-dev-sk",
     organizationName: "Hrabovský & Partneri",
     organizationSlug: "hrabovsky-partneri",
@@ -70,7 +99,7 @@ export const marketingLocaleForOrganization = (
  * organization's ids are namespaced by its id (apps/api/scripts/seed-utils.ts).
  */
 export const marketingSeedNamespace = (locale: MarketingLocale): string =>
-  locale === "en"
+  locale === PRIMARY_MARKETING_LOCALE
     ? ""
     : `org:${MARKETING_LOCALE_ACCOUNTS[locale].organizationId}`;
 
