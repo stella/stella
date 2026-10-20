@@ -1,4 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -7,6 +8,7 @@ import {
 } from "@stll/api-contract";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -15,6 +17,7 @@ import {
   LOOKUP_DETAIL_DESCRIPTION,
   type RegistryJurisdictionCode,
 } from "@/api/lib/business-registries/dispatch";
+import type { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
@@ -45,6 +48,15 @@ const QUERY_DESCRIPTION_BASE =
   "name search where supported; KRS names are resolved from web candidates " +
   "and verified against the official register.";
 
+/**
+ * Holds one call to the turn's source scope (`scopeBusinessRegistryLookup`):
+ * the registry the call may read, or a refusal the model can act on.
+ */
+export type BusinessRegistryCallScope = (call: {
+  jurisdiction: RegistryJurisdictionCode;
+  registry: BusinessRegistrySlug | undefined;
+}) => Result<BusinessRegistrySlug | undefined, ChatToolError>;
+
 type CreateBusinessRegistryToolsArgs = {
   organizationId: SafeId<"organization">;
   /**
@@ -59,6 +71,8 @@ type CreateBusinessRegistryToolsArgs = {
    */
   enabledHandlers: readonly RegistryHandler[];
   webSearchProvider?: WebSearchProvider | null | undefined;
+  /** The turn's registry chips; absent on an unscoped turn. */
+  scopeCall?: BusinessRegistryCallScope | undefined;
 };
 
 /**
@@ -73,6 +87,7 @@ export const createBusinessRegistryTools = ({
   enabledHandlers,
   organizationId,
   webSearchProvider = null,
+  scopeCall,
 }: CreateBusinessRegistryToolsArgs) => {
   const enabledJurisdictions = [
     ...new Set(enabledHandlers.map(({ country }) => country)),
@@ -162,10 +177,17 @@ export const createBusinessRegistryTools = ({
         organizationId,
         ACTION_COST_CALL_KIND.registryRequest,
       );
+      const scoped =
+        scopeCall === undefined
+          ? Result.ok(registry)
+          : scopeCall({ jurisdiction, registry });
+      if (Result.isError(scoped)) {
+        return raiseChatToolError(scoped.error);
+      }
       const handler = resolveHandler({
         enabledHandlers,
         jurisdiction,
-        registry,
+        registry: scoped.value,
       });
       if (!handler) {
         return {
