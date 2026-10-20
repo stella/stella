@@ -51,8 +51,12 @@ import {
   AGENT_CALL_SURFACE,
   decideAgentCall,
   describeAgentAccess,
+  finalAgentRefusal,
 } from "@/api/mcp/agent-access";
-import type { AgentCallDecision } from "@/api/mcp/agent-access";
+import type {
+  AgentCallDecision,
+  AgentCallRefusal,
+} from "@/api/mcp/agent-access";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
 import type { SynthesizedCapabilityContext } from "@/api/mcp/capability-context";
 import { isCapabilityFeatureEnabled } from "@/api/mcp/capability-feature";
@@ -1625,6 +1629,56 @@ export const invokedCapabilityConsumesServices = async ({
   });
 };
 
+const decideCapabilityCall = ({
+  id,
+  context,
+  confirmed,
+}: {
+  id: string;
+  context: McpRequestContext;
+  confirmed: boolean;
+}): AgentCallDecision =>
+  decideAgentCall({
+    target: { type: "capability", id },
+    context,
+    surface: AGENT_CALL_SURFACE.mcp,
+    subject: `Capability "${id}"`,
+    confirmed,
+  });
+
+/**
+ * The final agent-access refusal for the capability an executor call selects,
+ * answered before action admission so a call a person must run or approve
+ * neither spends the action budget nor gets an admission refusal instead.
+ * `null` for calls dispatch reports itself: invalid arguments, unknown or
+ * unavailable capabilities, and missing confirmations.
+ */
+export const invokedCapabilityAgentRefusal = async ({
+  args,
+  context,
+  access,
+}: CapabilityServiceClassificationOptions): Promise<AgentCallRefusal | null> => {
+  const parsed = v.safeParse(CAPABILITY_ARGUMENT_SCHEMAS[access], args);
+  if (!parsed.success) {
+    return null;
+  }
+  const entry = (await getCatalogById()).get(parsed.output.capability);
+  if (
+    entry === undefined ||
+    entry.access !== access ||
+    !capabilityFeatureEnabled(entry, context)
+  ) {
+    return null;
+  }
+  return finalAgentRefusal(
+    decideCapabilityCall({
+      id: entry.id,
+      context,
+      confirmed: "confirm" in parsed.output && parsed.output.confirm === true,
+    }),
+  );
+};
+
 type InvokeCapabilityOptions = {
   args: Record<string, unknown>;
   context: McpRequestContext;
@@ -1731,18 +1785,10 @@ const invokeCapabilityHandler = async ({
   // 5. Agent access. A missing confirmation is reported only after the
   // target resolves (`capabilityReferenceRefusal`), so it never answers for a
   // resource the caller cannot see; every other refusal is final here.
-  const decision = decideAgentCall({
-    target: { type: "capability", id },
-    context,
-    surface: AGENT_CALL_SURFACE.mcp,
-    subject: `Capability "${id}"`,
-    confirmed: confirm,
-  });
-  if (
-    decision.type === "refuse" &&
-    decision.refusal.code !== "confirmation_required"
-  ) {
-    return structuredErrorResult(decision.refusal);
+  const decision = decideCapabilityCall({ id, context, confirmed: confirm });
+  const finalRefusal = finalAgentRefusal(decision);
+  if (finalRefusal !== null) {
+    return structuredErrorResult(finalRefusal);
   }
   const input: InvokeInput = {
     body: rawInput?.body,

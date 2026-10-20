@@ -2,7 +2,7 @@ import {
   hasLawReadScope,
   LAW_READ_SCOPE,
 } from "@/api/handlers/legal-resolve/scope";
-import { describeAgentAccess } from "@/api/mcp/agent-access";
+import { describeForAgents } from "@/api/mcp/agent-access";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -28,17 +28,18 @@ const withAgentAccessNote = (
   context: McpRequestContext,
   definition: McpToolDefinition,
 ): McpToolDefinition => {
-  const { note } = describeAgentAccess({
+  const description = describeForAgents({
     target: {
       type: "tool",
       name: definition.name,
       access: definition.access,
     },
     context,
+    description: definition.description,
   });
-  return note === null
+  return description === definition.description
     ? definition
-    : { ...definition, description: `${definition.description} ${note}` };
+    : { ...definition, description };
 };
 
 /**

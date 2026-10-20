@@ -31,6 +31,7 @@ const boundary = ({
 }: BoundaryOptions) =>
   createMcpHttpRequestHandler({
     chargeReadBytes,
+    agentAccessRefusal: async () => null,
     actionSizePolicy: () =>
       Result.ok(
         maximum === undefined

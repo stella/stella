@@ -38,6 +38,7 @@ import {
   untypedToolDataResult,
 } from "@/api/mcp/tool-utils";
 import {
+  agentAccessRefusal,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
   handleMcpToolCall,
@@ -497,6 +498,7 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
       const captured: unknown[] = [];
       const handler = createMcpHttpRequestHandler({
         actionSizePolicy: () => Result.ok(undefined),
+        agentAccessRefusal,
         authenticateMcpRequest: async () =>
           Result.ok({
             organizationId: context.organizationId,

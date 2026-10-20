@@ -26,7 +26,11 @@ import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { pickDefined } from "@/api/lib/pick-defined";
-import { AGENT_ACCESS_KIND, describeAgentAccess } from "@/api/mcp/agent-access";
+import {
+  AGENT_ACCESS_KIND,
+  describeAgentAccess,
+  describeForAgents,
+} from "@/api/mcp/agent-access";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ADVANCED_HTTP_PATH,
@@ -48,6 +52,9 @@ import {
 
 type StaticMcpToolDefinition = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number];
 
+// The CLI runs as the person it acts for, so it relays their confirmation.
+const CLI_AGENT_CONTEXT = { toolConfirmation: TOOL_CONFIRMATION.caller };
+
 const deriveCliAnnotation = (
   tool: McpToolDefinition & { name: StaticMcpToolDefinition["name"] },
 ): McpCliToolAnnotation => {
@@ -56,10 +63,9 @@ const deriveCliAnnotation = (
     ...declared,
     ...pickDefined(tool, ["feature", "featureId"]),
   };
-  // The CLI runs as the person it acts for, so it relays their confirmation.
   const { access } = describeAgentAccess({
     target: { type: "tool", name: tool.name, access: tool.access },
-    context: { toolConfirmation: TOOL_CONFIRMATION.caller },
+    context: CLI_AGENT_CONTEXT,
   });
   // The leaf prompts before it runs, and `--yes` pre-approves: a catalog
   // target decides its own access at dispatch, and an outbound send is
@@ -85,7 +91,13 @@ for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
   listings.push({
     cli: deriveCliAnnotation(tool),
     name: tool.name,
-    description: tool.description,
+    // As tools/list serves it to the CLI: generated help must not advertise
+    // a command the server refuses.
+    description: describeForAgents({
+      target: { type: "tool", name: tool.name, access: tool.access },
+      context: CLI_AGENT_CONTEXT,
+      description: tool.description,
+    }),
     inputSchema: tool.inputSchema,
     annotations: tool.annotations,
   });

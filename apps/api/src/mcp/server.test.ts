@@ -97,6 +97,7 @@ const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
 const mcpHandlerDependencies = {
   actionSizePolicy: actionSizePolicyMock,
+  agentAccessRefusal: async () => null,
   authenticateMcpRequest: authenticateMcpRequestMock,
   captureError: (error, context) => {
     captureErrorMock(error, context);
@@ -481,6 +482,52 @@ describe("handleMcpHttpRequest", () => {
       env.FEATURE_ACTION_ADMISSION = previousEnabled;
       env.ACTION_LIMIT_CONTACT_URL = previousContact;
     }
+  });
+
+  test("a call only a person may run is refused before action admission", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:write"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+    getMcpToolDefinitionMock.mockResolvedValue({
+      name: "delete_matter",
+      scope: "stella:write",
+      access: "write",
+      description: "Delete a matter",
+      inputSchema: { type: "object", properties: {} },
+    });
+    const admitAction = mock(async () => Result.err(new Error("unreachable")));
+    const handler = createMcpHttpRequestHandler({
+      ...mcpHandlerDependencies,
+      admitAction,
+      agentAccessRefusal: async () => ({
+        code: "person_only",
+        message: "Only a person can run delete_matter",
+        hint: "Do not retry it.",
+      }),
+    });
+    const response = await handler(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "delete_matter", arguments: {} },
+      }),
+    );
+    const body = await readTestJson<McpJsonResponse<CallToolResult>>(response);
+    const item = body.result.content.at(0);
+    const payload = item?.type === "text" ? JSON.parse(item.text) : undefined;
+    expect(body.result.isError).toBe(true);
+    expect(payload?.error?.code).toBe("person_only");
+    expect(admitAction).not.toHaveBeenCalled();
+    expect(handleMcpToolCallMock).not.toHaveBeenCalled();
   });
 
   test("flags off still count the demo account's tool calls", async () => {

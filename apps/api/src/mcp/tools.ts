@@ -16,7 +16,13 @@ import {
 } from "@/api/lib/mcp-upstream/namespace";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { AGENT_CALL_SURFACE, decideAgentCall } from "@/api/mcp/agent-access";
+import {
+  AGENT_CALL_SURFACE,
+  decideAgentCall,
+  finalAgentRefusal,
+} from "@/api/mcp/agent-access";
+import type { AgentCallRefusal } from "@/api/mcp/agent-access";
+import { invokedCapabilityAgentRefusal } from "@/api/mcp/capability-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   bindApprovedMcpAuditContext,
@@ -271,6 +277,44 @@ const featureUnavailableToolResult = ({
   );
 };
 
+/**
+ * The final agent-access refusal for a tool call, answered before action
+ * admission so a call a person must run or approve neither spends the action
+ * budget nor gets an admission refusal instead. Capability executors answer
+ * for the capability they select. Dispatch decides again and reports a
+ * missing confirmation once the call's references resolve.
+ */
+export const agentAccessRefusal = async ({
+  args,
+  context,
+  mode,
+  toolName,
+}: Omit<McpToolCallArgs, "dependencies">): Promise<AgentCallRefusal | null> => {
+  if (
+    toolName === MCP_CAPABILITY_EXECUTORS.read ||
+    toolName === MCP_CAPABILITY_EXECUTORS.write
+  ) {
+    return await invokedCapabilityAgentRefusal({
+      args,
+      context,
+      access: toolName === MCP_CAPABILITY_EXECUTORS.read ? "read" : "write",
+    });
+  }
+  const staticTool = getStaticMcpToolDefinition(toolName, mode);
+  if (staticTool === undefined) {
+    return null;
+  }
+  return finalAgentRefusal(
+    decideAgentCall({
+      target: { type: "tool", name: toolName, access: staticTool.access },
+      context,
+      surface: AGENT_CALL_SURFACE.mcp,
+      subject: toolName,
+      confirmed: args["confirm"] === true,
+    }),
+  );
+};
+
 type McpToolCallArgs = {
   args: Record<string, unknown>;
   context: McpRequestContext;
@@ -518,11 +562,9 @@ const dispatchMcpToolCall = async ({
     subject: toolName,
     confirmed: normalizedArgs["confirm"] === true,
   });
-  if (
-    decision.type === "refuse" &&
-    decision.refusal.code !== "confirmation_required"
-  ) {
-    return serializeForSurface(structuredErrorResult(decision.refusal));
+  const finalRefusal = finalAgentRefusal(decision);
+  if (finalRefusal !== null) {
+    return serializeForSurface(structuredErrorResult(finalRefusal));
   }
 
   const handler = getStaticMcpToolHandler(toolName, mode);

@@ -44,6 +44,7 @@ import {
 import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
+import type { AgentCallRefusal } from "@/api/mcp/agent-access";
 import {
   isMcpSession,
   type McpAuthenticationFailure,
@@ -186,6 +187,13 @@ const requiredScopesForTool = (
 
 type McpServerDependencies = {
   admitAction?: typeof withActionAdmission;
+  /** Refusals a person's role decides, answered before action admission. */
+  agentAccessRefusal: (call: {
+    args: Record<string, unknown>;
+    context: McpRequestContext;
+    mode?: McpMode;
+    toolName: string;
+  }) => Promise<AgentCallRefusal | null>;
   chargeReadBytes?: typeof chargeMcpReadBytes;
   actionSizePolicy?: typeof getActionSizePolicy;
   authenticateMcpRequest: (
@@ -788,6 +796,7 @@ const boundMcpToolResult = async ({
 
 export const createMcpHttpRequestHandler = ({
   admitAction = withActionAdmission,
+  agentAccessRefusal,
   chargeReadBytes = chargeMcpReadBytes,
   actionSizePolicy = getActionSizePolicy,
   authenticateMcpRequest,
@@ -909,6 +918,15 @@ export const createMcpHttpRequestHandler = ({
     });
     if (authorityRefusal !== null) {
       return mcpStructuredErrorResult(authorityRefusal);
+    }
+    const agentRefusal = await agentAccessRefusal({
+      args: toolRequest.params.arguments ?? {},
+      context,
+      mode,
+      toolName,
+    });
+    if (agentRefusal !== null) {
+      return mcpStructuredErrorResult(agentRefusal);
     }
 
     const resultDisposition = toolResultDisposition(definition.annotations);

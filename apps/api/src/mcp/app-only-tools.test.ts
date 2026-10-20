@@ -45,6 +45,7 @@ const call = async ({ toolName, access }: CallOptions) => {
   let calls = 0;
   const handler = createMcpHttpRequestHandler({
     actionSizePolicy: () => Result.ok(undefined),
+    agentAccessRefusal: async () => null,
     admitAction: async ({ run }) =>
       Result.ok(
         await run(new AbortController().signal, {

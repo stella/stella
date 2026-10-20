@@ -662,7 +662,7 @@ export const AGENT_CALL_SURFACE = {
 type AgentCallSurface =
   (typeof AGENT_CALL_SURFACE)[keyof typeof AGENT_CALL_SURFACE];
 
-type AgentCallRefusal = {
+export type AgentCallRefusal = {
   code: "confirmation_required" | "person_approval_required" | "person_only";
   message: string;
   hint: string;
@@ -672,6 +672,19 @@ export type AgentCallDecision =
   /** `confirmed`: the call runs on a person's relayed approval; audit it so. */
   | { type: "allow"; approval: "none" | "confirmed" }
   | { type: "refuse"; refusal: AgentCallRefusal };
+
+/**
+ * A refusal no confirmation can lift. A missing confirmation is not one: it is
+ * reported only once the call's references resolve, so it never answers for a
+ * resource the caller cannot see.
+ */
+export const finalAgentRefusal = (
+  decision: AgentCallDecision,
+): AgentCallRefusal | null =>
+  decision.type === "refuse" &&
+  decision.refusal.code !== "confirmation_required"
+    ? decision.refusal
+    : null;
 
 const ALLOW = { type: "allow", approval: "none" } as const;
 
@@ -788,4 +801,22 @@ export const describeAgentAccess = ({
 }): AgentAccessDescription => {
   const access = effectiveAgentAccess(target, context);
   return { access, note: agentAccessNote(access) };
+};
+
+/**
+ * An operation's description as agents read it: its agent-access sentence
+ * appended when it has one. Live listings and generated clients share it, so
+ * neither can advertise an operation the server refuses.
+ */
+export const describeForAgents = ({
+  target,
+  context,
+  description,
+}: {
+  target: AgentAccessTarget;
+  context: AgentAccessContext;
+  description: string;
+}): string => {
+  const { note } = describeAgentAccess({ target, context });
+  return note === null ? description : `${description} ${note}`;
 };
