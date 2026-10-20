@@ -59,13 +59,13 @@ import {
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lockUnredactedCitingDecisions } from "@/api/lib/db/aggregate-lock";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
 
 type RecordSourceIdentityRawOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
+  sourceDocumentId: string | undefined;
   decisionId: SafeId<"caseLawDecision">;
   rawArtifact: {
     sourceRawS3Key: string | null;
@@ -75,23 +75,19 @@ type RecordSourceIdentityRawOptions = {
   observedAt: Date;
 };
 
-const recordSourceIdentityRaw = async ({
+export const recordSourceIdentityRaw = async ({
   scopedDb,
   sourceId,
+  sourceDocumentId,
   decisionId,
   rawArtifact,
   sourceUrl,
   observedAt,
 }: RecordSourceIdentityRawOptions): Promise<void> => {
+  if (sourceDocumentId === undefined) {
+    return;
+  }
   await scopedDb(async (tx) => {
-    const writable = await lockUnredactedCitingDecisions({
-      tx,
-      decisionIds: [decisionId],
-      lock: true,
-    });
-    if (!writable.has(decisionId)) {
-      return;
-    }
     // audit: skip - publisher provenance for public case-law data
     await tx
       .update(caseLawDecisionSourceIdentities)
@@ -105,6 +101,10 @@ const recordSourceIdentityRaw = async ({
         and(
           eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
           eq(caseLawDecisionSourceIdentities.decisionId, decisionId),
+          eq(
+            caseLawDecisionSourceIdentities.sourceDocumentId,
+            sourceDocumentId,
+          ),
         ),
       );
   });
@@ -335,6 +335,7 @@ const runDecisionAttempt = async ({
     s3UploadFailed: rawArtifact.s3UploadFailed,
     scopedDb,
     sourceId,
+    sourceDocumentId: identity.persistedSourceDocumentId,
     decisionId,
     rawArtifact,
     sourceUrl: result.sourceUrl,
@@ -423,6 +424,7 @@ const runDecisionAttempt = async ({
   await recordAppliedIdentityRaw(writeStatus, {
     scopedDb,
     sourceId,
+    sourceDocumentId: identity.persistedSourceDocumentId,
     decisionId,
     rawArtifact,
     sourceUrl: result.sourceUrl,

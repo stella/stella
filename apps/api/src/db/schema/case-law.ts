@@ -1370,34 +1370,6 @@ export const caseLawDecisionAliases = p.pgTable(
   ],
 );
 
-/** Exact source identities moved by a reversible decision-alias repair. */
-export const caseLawDecisionAliasMovedIdentities = p.pgTable(
-  "case_law_decision_alias_moved_identities",
-  {
-    retiredDecisionId: safeUuid<"caseLawDecision">(
-      "retired_decision_id",
-    ).notNull(),
-    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
-    sourceDocumentId: p
-      .varchar("source_document_id", { length: 1024 })
-      .notNull(),
-  },
-  (t) => [
-    p.primaryKey({
-      columns: [t.retiredDecisionId, t.sourceId, t.sourceDocumentId],
-      name: "case_law_decision_alias_moved_identities_pk",
-    }),
-    p
-      .foreignKey({
-        name: "case_law_decision_alias_moved_identities_alias_fk",
-        columns: [t.retiredDecisionId],
-        foreignColumns: [caseLawDecisionAliases.retiredDecisionId],
-      })
-      .onDelete("cascade"),
-    ...caseLawIngestionOnlyPolicies(),
-  ],
-);
-
 /**
  * Documents a publisher serves under their own id that belong inside another
  * decision's document: SAOS publishes the written reasons of a ruling apart

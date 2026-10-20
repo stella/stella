@@ -1,3 +1,6 @@
+import { eq, type SQL, sql } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
+
 import {
   rulingGroupKeys,
   rulingKeysOf,
@@ -38,22 +41,46 @@ export type StoredRulingCandidate = {
 };
 
 const sameCourt = (
-  left: RulingIdentityKeys["court"],
-  right: RulingIdentityKeys["court"],
+  left: RulingIdentityInput,
+  right: RulingIdentityInput,
 ): boolean => {
-  if (left.kind !== right.kind) {
-    return false;
+  if (left.courtId && right.courtId) {
+    return left.courtId === right.courtId;
   }
-  if (left.kind === "absent" || right.kind === "absent") {
-    return false;
+  const leftCourt = rulingKeysOf({ ...left, courtId: undefined }).court;
+  const rightCourt = rulingKeysOf({ ...right, courtId: undefined }).court;
+  return (
+    leftCourt.kind === "name" &&
+    rightCourt.kind === "name" &&
+    leftCourt.key === rightCourt.key
+  );
+};
+
+type RepublishedRulingCourtColumns = {
+  court: PgColumn;
+  courtId: PgColumn;
+};
+
+const courtNameKeySql = (court: SQL | PgColumn): SQL => sql`
+  lower(regexp_replace(normalize(${court}, NFKD), '[[:space:]]+', '', 'g'))
+`;
+
+/** The database candidate form of the matcher's court-identity rule. */
+export const republishedRulingCourtPredicate = (
+  observed: RulingIdentityInput,
+  columns: RepublishedRulingCourtColumns,
+): SQL => {
+  const nameMatches = eq(
+    courtNameKeySql(columns.court),
+    courtNameKeySql(sql`${observed.court ?? ""}`),
+  );
+  if (!observed.courtId) {
+    return nameMatches;
   }
-  if (left.kind === "directory" && right.kind === "directory") {
-    return left.id === right.id;
-  }
-  if (left.kind === "name" && right.kind === "name") {
-    return left.key === right.key;
-  }
-  return false;
+  return sql`(
+    ${columns.courtId} = ${observed.courtId}
+    OR (${columns.courtId} IS NULL AND ${nameMatches})
+  )`;
 };
 
 const sharesDocket = (
@@ -97,14 +124,16 @@ export const matchRepublishedRuling = (
   const incomingDate = incoming.date.value;
   const comparable = stored.map(({ decisionId, identity }) => ({
     decisionId,
+    identity,
     keys: rulingKeysOf(identity),
   }));
-  const exact = comparable.filter(({ keys }) => {
+  const exact = comparable.filter(({ identity, keys }) => {
     if (keys.decisionKind.kind === "absent") {
       return false;
     }
     return (
       keys.decisionKind.key === incomingDecisionKind &&
+      sameCourt(identity, incomingInput) &&
       rulingGroupKeys(keys).some((group) =>
         rulingGroupKeys(incoming).includes(group),
       )
@@ -122,9 +151,9 @@ export const matchRepublishedRuling = (
   }
 
   const sameSignature = comparable.filter(
-    ({ keys }) =>
+    ({ keys, identity }) =>
       keys.country === incoming.country &&
-      sameCourt(keys.court, incoming.court) &&
+      sameCourt(identity, incomingInput) &&
       sharesDocket(keys, incoming),
   );
   if (

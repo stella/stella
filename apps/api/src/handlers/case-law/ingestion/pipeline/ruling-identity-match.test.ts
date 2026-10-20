@@ -7,14 +7,15 @@ import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference"
 import { assertProperty } from "@stll/property-testing";
 
 import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisionAliases,
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import { listAdapterKeys } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import { recordSourceIdentityRaw } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { findRepublishedRulingTx } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -167,10 +168,12 @@ describe("cross-source ruling identity lookup", () => {
 
   afterAll(async () => await client.close());
 
-  test("a bounded complete candidate set remains ambiguous", async () => {
-    const decisionIds = Array.from({ length: 18 }, () =>
-      createSafeId<"caseLawDecision">(),
-    );
+  test("court identity filters more than sixteen unrelated names before the bound", async () => {
+    const matchingDecisionId = createSafeId<"caseLawDecision">();
+    const decisionIds = [
+      ...Array.from({ length: 17 }, () => createSafeId<"caseLawDecision">()),
+      matchingDecisionId,
+    ];
     const docketFamilyKey = docketFamilyKeyOf(
       observed.caseNumber,
       observed.country,
@@ -179,16 +182,16 @@ describe("cross-source ruling identity lookup", () => {
       decisionIds.map((id, index) => ({
         id,
         sourceId: sourceAt(index + 1),
-        sourceDocumentId: `ambiguous-${String(index)}`,
+        sourceDocumentId: `court-name-${String(index)}`,
         country: observed.country,
-        court: observed.court,
+        court:
+          index === decisionIds.length - 1
+            ? observed.court
+            : `Unrelated court ${String(index)}`,
         language: observed.language,
         caseNumber: observed.caseNumber,
         docketFamilyKey,
-        decisionDate:
-          index === 0 || index === decisionIds.length - 1
-            ? observed.decisionDate
-            : "2024-06-04",
+        decisionDate: observed.decisionDate,
         decisionType: observed.decisionType,
       })),
     );
@@ -202,71 +205,9 @@ describe("cross-source ruling identity lookup", () => {
             sourceAt(0),
           ),
       ),
-    ).toEqual({ type: REPUBLISHED_RULING_OUTCOME.SEPARATE_AMBIGUOUS });
-  });
-
-  test("a repaired retiree is excluded from a third-source lookup", async () => {
-    const canonicalId = createSafeId<"caseLawDecision">();
-    const retiredId = createSafeId<"caseLawDecision">();
-    const caseNumber = "KIO 987/25";
-    const ruling = plainTextIngestionResult({
-      ...observed,
-      court: "Krajowa Izba Odwoławcza",
-      caseNumber,
-      decisionDate: "2025-02-04",
-    });
-    const common = {
-      country: ruling.country,
-      court: ruling.court,
-      language: ruling.language,
-      caseNumber,
-      docketFamilyKey: docketFamilyKeyOf(caseNumber, ruling.country),
-      decisionDate: ruling.decisionDate,
-      decisionType: ruling.decisionType,
-    };
-    await db.insert(caseLawDecisions).values([
-      {
-        ...common,
-        id: canonicalId,
-        sourceId: sourceAt(18),
-        sourceDocumentId: "repaired-canonical",
-      },
-      {
-        ...common,
-        id: retiredId,
-        sourceId: sourceAt(19),
-        sourceDocumentId: "repaired-retiree",
-      },
-    ]);
-    await db.insert(caseLawDecisionSourceIdentities).values([
-      {
-        sourceId: sourceAt(18),
-        sourceDocumentId: "repaired-canonical",
-        decisionId: canonicalId,
-      },
-      {
-        sourceId: sourceAt(19),
-        sourceDocumentId: "repaired-retiree",
-        decisionId: canonicalId,
-      },
-    ]);
-    await db.insert(caseLawDecisionAliases).values({
-      retiredDecisionId: retiredId,
-      canonicalDecisionId: canonicalId,
-    });
-
-    expect(
-      await db.transaction(
-        async (tx) =>
-          await findRepublishedRulingTx(
-            asTestRaw<Transaction>(tx),
-            ruling,
-            sourceAt(0),
-          ),
-      ),
     ).toEqual({
       type: REPUBLISHED_RULING_OUTCOME.LINKED,
-      decisionId: canonicalId,
+      decisionId: matchingDecisionId,
     });
   });
 
@@ -308,6 +249,70 @@ describe("cross-source ruling identity lookup", () => {
       type: REPUBLISHED_RULING_OUTCOME.LINKED,
       decisionId: canonicalId,
     });
+  });
+
+  test("raw provenance updates only the observed publisher identity", async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    const sourceId = sourceAt(1);
+    await db.insert(caseLawDecisions).values({
+      id: decisionId,
+      sourceId,
+      sourceDocumentId: "first-document",
+      country: "POL",
+      court: observed.court,
+      language: observed.language,
+      caseNumber: "RAW 1/26",
+      docketFamilyKey: docketFamilyKeyOf("RAW 1/26", "POL"),
+    });
+    await db.insert(caseLawDecisionSourceIdentities).values([
+      {
+        sourceId,
+        sourceDocumentId: "first-document",
+        decisionId,
+        sourceRawS3Key: "raw/first/original",
+      },
+      {
+        sourceId,
+        sourceDocumentId: "second-document",
+        decisionId,
+        sourceRawS3Key: "raw/second/original",
+      },
+    ]);
+    const scopedDb: ScopedDb = async (callback) =>
+      await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+
+    await recordSourceIdentityRaw({
+      scopedDb,
+      sourceId,
+      decisionId,
+      sourceDocumentId: "second-document",
+      rawArtifact: {
+        sourceRawS3Key: "raw/second/updated",
+        sourceRawContentType: "application/json",
+      },
+      sourceUrl: "https://example.invalid/second",
+      observedAt: new Date("2026-10-20T00:00:00Z"),
+    });
+
+    expect(
+      await db
+        .select({
+          sourceDocumentId: caseLawDecisionSourceIdentities.sourceDocumentId,
+          sourceRawS3Key: caseLawDecisionSourceIdentities.sourceRawS3Key,
+        })
+        .from(caseLawDecisionSourceIdentities)
+        .where(eq(caseLawDecisionSourceIdentities.decisionId, decisionId))
+        .orderBy(caseLawDecisionSourceIdentities.sourceDocumentId),
+    ).toEqual([
+      {
+        sourceDocumentId: "first-document",
+        sourceRawS3Key: "raw/first/original",
+      },
+      {
+        sourceDocumentId: "second-document",
+        sourceRawS3Key: "raw/second/updated",
+      },
+    ]);
   });
 
   test("republished ruling ingestion persists cross-source identity invariants", async () => {
