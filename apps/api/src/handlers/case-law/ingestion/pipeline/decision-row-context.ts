@@ -17,6 +17,7 @@ import type {
 import type { CaseLawJudgeDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { StoredSupplement } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DecisionDateOutcome } from "@/api/lib/dates";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { logger } from "@/api/lib/observability/logger";
@@ -30,7 +31,7 @@ export type DecisionRowWrite = Omit<DecisionIdentity, "decisionId"> &
     sourceId: SafeId<"caseLawSource">;
     decisionId: SafeId<"caseLawDecision">;
     /** The observation composed with the supplements its document takes in. */
-    result: IngestionResult;
+    result: IngestionResult & { decisionDateOutcome: DecisionDateOutcome };
     composedSupplements: StoredSupplement[];
     observedAt: Date;
     observationOrder: bigint;

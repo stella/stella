@@ -41,6 +41,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import { decisionDateColumns } from "@/api/lib/dates";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
@@ -267,7 +268,6 @@ export const describeRowUpdateTx = async (
     observedAt,
     observationOrder,
     persistedSourceDocumentId,
-    persistedDecisionDate,
     shape: {
       incomingCarriesDocument,
       preservesExistingDetail,
@@ -327,7 +327,7 @@ export const describeRowUpdateTx = async (
         language: result.language,
         sheetNumber: result.sheetNumber,
         languageGroupKey,
-        decisionDate: persistedDecisionDate,
+        ...decisionDateColumns(result.decisionDateOutcome),
         decisionType: result.decisionType,
         sourceUrl: result.sourceUrl,
         documentUrl: result.documentUrl,

@@ -436,12 +436,15 @@ describe("sanitizeResult — decision date bounds", () => {
   // date is unusable is still worth storing, so the date drops and the
   // row survives.
   test("drops a year outside the range a decision can carry", () => {
-    expect(
-      sanitizeResult({
-        ...baseResult(EMPTY_AST),
-        decisionDate: "2944-04-30",
-      }).decisionDate,
-    ).toBeUndefined();
+    const impossible = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      decisionDate: "3013-12-04",
+    });
+    expect(impossible.decisionDate).toBeUndefined();
+    expect(impossible.decisionDateOutcome).toEqual({
+      type: "invalid",
+      published: "3013-12-04",
+    });
 
     expect(
       sanitizeResult({
@@ -477,7 +480,9 @@ describe("sanitizeResult — decision date bounds", () => {
   });
 
   test("leaves an absent date absent", () => {
-    expect(sanitizeResult(baseResult(EMPTY_AST)).decisionDate).toBeUndefined();
+    const absent = sanitizeResult(baseResult(EMPTY_AST));
+    expect(absent.decisionDate).toBeUndefined();
+    expect(absent.decisionDateOutcome).toEqual({ type: "undated" });
   });
 });
 

@@ -26,7 +26,7 @@ import {
   type TextField,
 } from "@/api/lib/case-law/decision-text";
 import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
-import { canonicalDecisionDate } from "@/api/lib/dates";
+import { decisionDateOutcome, type DecisionDateOutcome } from "@/api/lib/dates";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
@@ -280,19 +280,14 @@ export const storedCaseNumberOf = (
 export const sanitizeResult = (
   result: RawIngestionResult,
   metadataUrlSchema?: unknown,
-): IngestionResult => {
+): IngestionResult & { decisionDateOutcome: DecisionDateOutcome } => {
   const strip = (value: string | undefined): string | undefined =>
     value ? stripDangerousChars(value) : undefined;
 
   // A listed document must survive a bad date, so an unusable value is
   // dropped to null instead of failing the row. The bounds are the
   // jurisdiction's own.
-  const boundDecisionDate = (raw: string | undefined): string | undefined => {
-    if (raw === undefined) {
-      return undefined;
-    }
-    return canonicalDecisionDate(raw, result.country) ?? undefined;
-  };
+  const dateOutcome = decisionDateOutcome(result.decisionDate, result.country);
 
   const deepSanitize = (value: unknown): unknown => {
     if (typeof value === "string") {
@@ -427,7 +422,7 @@ export const sanitizeResult = (
   const ecli = strip(result.ecli);
   // The write planner checks aggregate index bytes against its actual language group key.
 
-  return plainTextIngestionResult(
+  const sanitized = plainTextIngestionResult(
     {
       ...result,
       observationDetail,
@@ -456,7 +451,7 @@ export const sanitizeResult = (
         ? collapseSpacedLetters(strip(result.fulltext) ?? "")
         : undefined,
       ecli,
-      decisionDate: boundDecisionDate(result.decisionDate),
+      decisionDate: dateOutcome.type === "dated" ? dateOutcome.date : undefined,
       decisionType,
       sourceUrl: strip(result.sourceUrl),
       documentUrl: strip(result.documentUrl),
@@ -476,4 +471,5 @@ export const sanitizeResult = (
     },
     metadataUrlSchema,
   );
+  return { ...sanitized, decisionDateOutcome: dateOutcome };
 };

@@ -82,6 +82,7 @@ import {
   searchCandidateRowWithinBoundsSql,
 } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import type { ConstantMap } from "@/api/lib/constant-map";
+import { DECISION_DATE_STATES } from "@/api/lib/dates";
 import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
   decisionDateWithinBoundsSql,
@@ -510,6 +511,28 @@ export const caseLawCorpusJurisdictions = p.pgTable(
   () => [...globalCaseLawPolicies()],
 );
 
+const decisionDateStateChecks = (columns: {
+  decisionDate: SQLWrapper;
+  decisionDatePublished: SQLWrapper;
+  decisionDateState: SQLWrapper;
+}) => [
+  p.check(
+    "case_law_decisions_decision_date_state_values",
+    sql`${columns.decisionDateState} IN (${sql.join(
+      DECISION_DATE_STATES.map((state) => sql`${state}`),
+      sql`, `,
+    )})`,
+  ),
+  p.check(
+    "case_law_decisions_decision_date_state_consistent",
+    sql`(
+      (${columns.decisionDateState} = 'dated' AND ${columns.decisionDate} IS NOT NULL AND ${columns.decisionDatePublished} IS NULL)
+      OR (${columns.decisionDateState} = 'undated' AND ${columns.decisionDate} IS NULL AND ${columns.decisionDatePublished} IS NULL)
+      OR (${columns.decisionDateState} = 'invalid' AND ${columns.decisionDate} IS NULL AND ${columns.decisionDatePublished} IS NOT NULL)
+    )`,
+  ),
+];
+
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
@@ -566,6 +589,15 @@ export const caseLawDecisions = p.pgTable(
       length: 512,
     }),
     decisionDate: p.date("decision_date"),
+    /** Why `decisionDate` is present or absent. */
+    decisionDateState: p
+      .text("decision_date_state", { enum: DECISION_DATE_STATES })
+      .default("undated")
+      .notNull(),
+    /** Publisher value retained verbatim when `decisionDateState` is invalid. */
+    decisionDatePublished: p.varchar("decision_date_published", {
+      length: 2048,
+    }),
     decisionType: p.varchar("decision_type", { length: 128 }),
     fulltext: p.text(),
     /** Last reconciliation attempt to re-read a textless listing-only detail. */
@@ -741,6 +773,7 @@ export const caseLawDecisions = p.pgTable(
       CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
       sql`${t.decisionDate} IS NULL OR ${decisionDateWithinBoundsSql(t.decisionDate, t.country)}`,
     ),
+    ...decisionDateStateChecks(t),
     // Added NOT VALID: enforced on every insert and update, so a directory
     // jurisdiction's row cannot be written or changed without its court id.
     p.check(

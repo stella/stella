@@ -24,8 +24,9 @@ import {
 } from "@/api/handlers/case-law/citation-resolution";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
-import { canonicalDecisionDate } from "@/api/lib/dates";
+import { decisionDateColumns, decisionDateOutcome } from "@/api/lib/dates";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { decisionDateRepairTransitionStatement } from "@/api/lib/db/transitions";
 import { decisionDateOutOfBoundsSql } from "@/api/lib/decision-date-bounds-sql";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
@@ -34,6 +35,15 @@ const OUT_OF_BOUNDS = decisionDateOutOfBoundsSql(
   sql.raw("d.decision_date"),
   sql.raw("d.country"),
 );
+const REPAIR_CANDIDATE = sql`(
+  ${OUT_OF_BOUNDS}
+  OR (
+    d.decision_date IS NULL
+    AND d.decision_date_state = 'undated'
+    AND jsonb_typeof(d.metadata->'decisionDate') = 'string'
+    AND btrim(d.metadata->>'decisionDate') <> ''
+  )
+)`;
 
 /**
  * How many out-of-bounds dates each source holds, and the range they span.
@@ -134,7 +144,7 @@ export const selectCorruptDecisionDatesStatement = ({
   WITH corrupt AS MATERIALIZED (
     SELECT d.id
       FROM case_law_decisions d
-     WHERE ${OUT_OF_BOUNDS}
+     WHERE ${REPAIR_CANDIDATE}
      LIMIT ${limit * CORRUPT_SCAN_PAGES}
   ),
   page AS MATERIALIZED (
@@ -166,7 +176,7 @@ export type CorruptDecisionDateRow = {
   country: string;
   id: SafeId<"caseLawDecision">;
   metadataDate: string | null;
-  storedDate: string;
+  storedDate: string | null;
 };
 
 const optionalString = (value: unknown): string | null => {
@@ -208,7 +218,7 @@ export const parseCorruptDecisionDateRow = (
     country: requiredString(row["country"]),
     id: brandPersistedCaseLawDecisionId(requiredString(row["id"])),
     metadataDate: optionalString(row["metadataDate"]),
-    storedDate: requiredString(row["storedDate"]),
+    storedDate: optionalString(row["storedDate"]),
   };
 };
 
@@ -226,6 +236,8 @@ export type DecisionDateRepair = {
   id: SafeId<"caseLawDecision">;
   /** The re-derived date, or `null` where none survives. */
   decisionDate: string | null;
+  decisionDateState: "dated" | "undated" | "invalid";
+  decisionDatePublished: string | null;
   outcome: DecisionDateRepairOutcome;
 };
 
@@ -251,19 +263,23 @@ export const decideDecisionDateRepair = ({
   country,
   id,
   metadataDate,
+  storedDate,
 }: CorruptDecisionDateRow): DecisionDateRepair => {
-  const rederived =
-    metadataDate === null ? null : canonicalDecisionDate(metadataDate, country);
-  if (rederived === null) {
+  const outcome = decisionDateOutcome(
+    metadataDate ?? storedDate ?? undefined,
+    country,
+  );
+  const columns = decisionDateColumns(outcome);
+  if (outcome.type !== "dated") {
     return {
       id,
-      decisionDate: null,
+      ...columns,
       outcome: DECISION_DATE_REPAIR_OUTCOMES.CLEARED,
     };
   }
   return {
     id,
-    decisionDate: rederived,
+    ...columns,
     outcome: DECISION_DATE_REPAIR_OUTCOMES.REDERIVED,
   };
 };
@@ -291,25 +307,7 @@ export const decideDecisionDateRepair = ({
  */
 export const applyDecisionDateRepairsStatement = (
   repairs: readonly DecisionDateRepair[],
-): SQL => {
-  if (repairs.length === 0) {
-    panic("applyDecisionDateRepairsStatement called with no repairs");
-  }
-  // Cast every VALUES row rather than only the first: PostgreSQL infers the
-  // column types from the first row, and a batch whose first date is NULL
-  // would otherwise resolve to `text` and fail the assignment.
-  const rows = repairs.map(
-    ({ decisionDate, id }) => sql`(${id}::uuid, ${decisionDate}::date)`,
-  );
-  return sql`
-    UPDATE case_law_decisions AS d
-       SET decision_date = v.decision_date
-      FROM (VALUES ${sql.join(rows, sql`, `)}) AS v(id, decision_date)
-     WHERE d.id = v.id
-       AND ${OUT_OF_BOUNDS}
-    RETURNING d.id
-  `;
-};
+): SQL => decisionDateRepairTransitionStatement(repairs);
 
 type CitationGraphTx = CitationGraphTransaction;
 

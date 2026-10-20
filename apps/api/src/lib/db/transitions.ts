@@ -15,9 +15,63 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { decisionDateOutOfBoundsSql } from "@/api/lib/decision-date-bounds-sql";
 import { isRecord } from "@/api/lib/type-guards";
 
 const TRANSITION_INSERT_BATCH_SIZE = 128;
+
+type DecisionDateRepairColumns = {
+  id: string;
+  decisionDate: string | null;
+  decisionDateState: "dated" | "undated" | "invalid";
+  decisionDatePublished: string | null;
+};
+
+/** Apply a planned decision-date state transition while rechecking eligibility. */
+export const decisionDateRepairTransitionStatement = (
+  repairs: readonly DecisionDateRepairColumns[],
+): SQL => {
+  if (repairs.length === 0) {
+    panic("decisionDateRepairTransitionStatement called with no repairs");
+  }
+  const rows = repairs.map(
+    ({ decisionDate, decisionDatePublished, decisionDateState, id }) =>
+      sql`(${id}::uuid, ${decisionDate}::date, ${decisionDateState}::text, ${decisionDatePublished}::varchar)`,
+  );
+  const outOfBounds = decisionDateOutOfBoundsSql(
+    sql.raw("d.decision_date"),
+    sql.raw("d.country"),
+  );
+  return sql`
+    UPDATE case_law_decisions AS d
+       SET decision_date = v.decision_date,
+           decision_date_state = v.decision_date_state,
+           decision_date_published = v.decision_date_published
+      FROM (VALUES ${sql.join(rows, sql`, `)}) AS v(id, decision_date, decision_date_state, decision_date_published)
+     WHERE d.id = v.id
+       AND (
+         ${outOfBounds}
+         OR (
+           d.decision_date IS NULL
+           AND d.decision_date_state = 'undated'
+           AND jsonb_typeof(d.metadata->'decisionDate') = 'string'
+           AND btrim(d.metadata->>'decisionDate') <> ''
+         )
+       )
+    RETURNING d.id
+  `;
+};
+
+/** Bounded legacy classification run by the decision-date online repair. */
+export const decisionDateStateBackfillSql = `WITH batch AS MATERIALIZED (
+  SELECT id FROM public.case_law_decisions
+   WHERE decision_date_state IS NULL ORDER BY id LIMIT $1
+)
+UPDATE public.case_law_decisions AS decision
+   SET decision_date_state = CASE WHEN decision.decision_date IS NULL THEN 'undated' ELSE 'dated' END
+  FROM batch
+ WHERE decision.id = batch.id AND decision.decision_date_state IS NULL
+RETURNING decision.id`;
 
 const returnedTransitionRows = (result: unknown) =>
   executedRows(result).map((row) => {

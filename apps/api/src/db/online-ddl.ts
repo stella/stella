@@ -157,6 +157,21 @@ export const validateConstraint = ({
 export const analyzeTable = (tableName: string): LockTakingStatement =>
   lockTaking(tableName, `ANALYZE public.${quoteIdentifier(tableName)}`);
 
+/** Finalize a fully backfilled column after its constraints validate. */
+export const setColumnDefaultAndNotNull = ({
+  tableName,
+  columnName,
+  defaultSql,
+}: {
+  tableName: string;
+  columnName: string;
+  defaultSql: string;
+}): LockTakingStatement =>
+  lockTaking(
+    tableName,
+    `ALTER TABLE public.${quoteIdentifier(tableName)} ALTER COLUMN ${quoteIdentifier(columnName)} SET DEFAULT ${defaultSql}, ALTER COLUMN ${quoteIdentifier(columnName)} SET NOT NULL`,
+  );
+
 /**
  * What gated work sees of its session: catalog and data reads, and the
  * statements it was gated for. No raw `execute`.

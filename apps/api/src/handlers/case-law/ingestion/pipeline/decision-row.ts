@@ -36,6 +36,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { decisionDateColumns } from "@/api/lib/dates";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { lockActiveCorpusProjectionSourceByIdTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -50,7 +51,6 @@ const insertedRowValues = (
     decisionId,
     result,
     persistedSourceDocumentId,
-    persistedDecisionDate,
     observedAt,
     observationOrder,
     shape: { storesUnpublishedWithoutDocument },
@@ -71,7 +71,7 @@ const insertedRowValues = (
   country: result.country,
   language: result.language,
   languageGroupKey,
-  decisionDate: persistedDecisionDate,
+  ...decisionDateColumns(result.decisionDateOutcome),
   decisionType: result.decisionType,
   ...payloadColumns,
   sourceUrl: result.sourceUrl,

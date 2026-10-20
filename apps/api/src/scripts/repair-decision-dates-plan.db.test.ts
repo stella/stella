@@ -43,6 +43,25 @@ const plSourceId = createSafeId<"caseLawSource">();
 const usSourceId = createSafeId<"caseLawSource">();
 
 const currentYear = new Date().getUTCFullYear();
+const stateOf = (date: string | null): "dated" | "undated" =>
+  date === null ? "undated" : "dated";
+
+test("metadata-only impossible dates are retained as invalid", () => {
+  expect(
+    decideDecisionDateRepair({
+      adapterKey: "fixture",
+      citationKey: null,
+      country: "CZE",
+      id: createSafeId<"caseLawDecision">(),
+      metadataDate: "3013-12-04",
+      storedDate: null,
+    }),
+  ).toMatchObject({
+    decisionDate: null,
+    decisionDateState: "invalid",
+    decisionDatePublished: "3013-12-04",
+  });
+});
 
 type Fixture = {
   adapterKey: string;
@@ -231,6 +250,7 @@ beforeAll(
         country: countryOf(fixture),
         language: { CZE: "cs", POL: "pl", USA: "en" }[countryOf(fixture)],
         decisionDate: fixture.decisionDate,
+        decisionDateState: stateOf(fixture.decisionDate),
         metadata: fixture.metadata,
         contentHash: "a".repeat(64),
         slug: `fixture-${String(index)}`,
@@ -444,6 +464,7 @@ test("the batch hands every written id to its projection reconciler", async () =
     country: "CZE",
     language: "cs",
     decisionDate: "1168-01-01",
+    decisionDateState: "dated",
     contentHash: "b".repeat(64),
     slug: "reconciled-fixture",
     languageGroupKey: "reconciled-fixture",
@@ -478,6 +499,7 @@ test("a batch given no reconciler reports the rows it left behind", async () => 
     country: "CZE",
     language: "cs",
     decisionDate: "1168-02-02",
+    decisionDateState: "dated",
     contentHash: "c".repeat(64),
     slug: "unreconciled-fixture",
     languageGroupKey: "unreconciled-fixture",

@@ -3,6 +3,8 @@
 // The grammar and calendar checks these build on live in `@stll/time`, which
 // both apps share.
 
+import { panic } from "better-result";
+
 import {
   type CaseLawJurisdiction,
   isCaseLawJurisdiction,
@@ -126,6 +128,54 @@ export const canonicalDecisionDate = (
     return null;
   }
   return candidate.toString();
+};
+
+export const DECISION_DATE_STATES = ["dated", "undated", "invalid"] as const;
+
+export type DecisionDateOutcome =
+  | { type: "dated"; date: string }
+  | { type: "undated" }
+  | { type: "invalid"; published: string };
+
+/** Classify the publisher's decision date without discarding a rejected value. */
+export const decisionDateOutcome = (
+  raw: string | undefined,
+  country: string,
+): DecisionDateOutcome => {
+  if (raw === undefined) {
+    return { type: "undated" };
+  }
+  const date = canonicalDecisionDate(raw, country);
+  return date === null
+    ? { type: "invalid", published: raw }
+    : { type: "dated", date };
+};
+
+/** The three columns that persist one decision-date outcome atomically. */
+export const decisionDateColumns = (outcome: DecisionDateOutcome) => {
+  switch (outcome.type) {
+    case "dated":
+      return {
+        decisionDate: outcome.date,
+        decisionDateState: outcome.type,
+        decisionDatePublished: null,
+      };
+    case "undated":
+      return {
+        decisionDate: null,
+        decisionDateState: outcome.type,
+        decisionDatePublished: null,
+      };
+    case "invalid":
+      return {
+        decisionDate: null,
+        decisionDateState: outcome.type,
+        decisionDatePublished: outcome.published,
+      };
+    default:
+      outcome satisfies never;
+      return panic("Unhandled decision-date outcome");
+  }
 };
 
 const utcPlainDate = (date: Date): Temporal.PlainDate =>

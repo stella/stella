@@ -6,17 +6,46 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
+import fc from "fast-check";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+import { assertProperty } from "@stll/property-testing";
 import { parseIsoDateLocal } from "@stll/time";
 
 import {
   addUtcDays,
   canonicalDecisionDate,
+  decisionDateColumns,
+  decisionDateOutcome,
   decisionDateMinYear,
   isoCalendarDay,
   toUtcDateString,
 } from "./dates";
+
+test("decision-date outcomes preserve every publisher string and satisfy storage invariants", () => {
+  assertProperty(
+    "decision-date outcomes preserve every publisher string and satisfy storage invariants",
+    fc.property(fc.string(), fc.string(), (raw, country) => {
+      const canonical = canonicalDecisionDate(raw, country);
+      const outcome = decisionDateOutcome(raw, country);
+      const columns = decisionDateColumns(outcome);
+
+      expect(outcome.type === "dated").toBe(canonical !== null);
+      if (canonical === null) {
+        expect(outcome.type).toBe("invalid");
+      }
+      if (outcome.type === "invalid") {
+        expect(outcome.published).toBe(raw);
+      }
+      expect(columns.decisionDate !== null).toBe(
+        columns.decisionDateState === "dated",
+      );
+      expect(columns.decisionDatePublished !== null).toBe(
+        columns.decisionDateState === "invalid",
+      );
+    }),
+  );
+});
 
 // Date's local-time methods read `process.env.TZ` on every call in Bun (and
 // Node), so flipping it around a test reproduces the exact footgun in a

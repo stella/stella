@@ -26,6 +26,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import type { DecisionDateOutcome } from "@/api/lib/dates";
 import {
   STATED_ECLI_IDENTITY,
   type StatedEcliIdentity,
@@ -69,7 +70,7 @@ const caseLawDecisionIdentityWhere = ({
 
 /** The adapter's observation, sanitized, and the publisher identities it names. */
 export type ObservedDecision = {
-  observed: IngestionResult;
+  observed: IngestionResult & { decisionDateOutcome: DecisionDateOutcome };
   /**
    * The decision date the row is written with: the observed date, null when
    * a stated date was unusable, undefined when none was stated.
@@ -129,7 +130,9 @@ export const observeDecision = ({
     return panic(courtId.error.message, courtId.error);
   }
   const rejectedDecisionDate =
-    observed.decisionDate === undefined ? input.decisionDate : undefined;
+    observed.decisionDateOutcome.type === "invalid"
+      ? observed.decisionDateOutcome.published
+      : undefined;
   if (rejectedDecisionDate !== undefined) {
     logger.warn(DECISION_DATE_OUT_OF_BOUNDS, {
       sourceId,
@@ -145,7 +148,9 @@ export const observeDecision = ({
   // unusable one clears the column rather than leaving in place the value it
   // was meant to replace, and an unstated one leaves the row as it is.
   const persistedDecisionDate =
-    rejectedDecisionDate === undefined ? observed.decisionDate : null;
+    observed.decisionDateOutcome.type === "dated"
+      ? observed.decisionDateOutcome.date
+      : null;
   const exactSourceIdentityCandidates = (() => {
     if (!observed.sourceDocumentId) {
       return [];
