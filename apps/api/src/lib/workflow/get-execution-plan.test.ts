@@ -107,9 +107,9 @@ describe("buildDependencyGraph", () => {
   test("builds graph with diamond dependency structure", () => {
     // A -> B, A -> C, B -> D, C -> D
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
-      createProperty("C"),
+      createProperty("C", { tool: manualInputTool }),
       createProperty("D"),
     ];
     const edges: PropertyDependencyEdge[] = [
@@ -146,7 +146,7 @@ describe("buildDependencyGraph", () => {
 
   test("builds graph with duplicate edges (B depends on A twice)", () => {
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
     ];
     const edges: PropertyDependencyEdge[] = [
@@ -165,7 +165,7 @@ describe("buildDependencyGraph", () => {
 
   test("builds graph with dangling edge (dependency references property not in properties)", () => {
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
     ];
     const edges: PropertyDependencyEdge[] = [
@@ -380,23 +380,20 @@ describe("getPropertyExecutionPlan", () => {
     expect(plan).toEqual([]);
   });
 
-  test("returns empty array when properties have no dependencies", () => {
+  test("reports stored computed columns with no dependencies", () => {
     const properties: ExecutionPlanProperty[] = [
       createProperty("p1"),
       createProperty("p2"),
     ];
 
-    const plan = getPropertyExecutionPlan({
-      properties,
-      dependencies: [],
-    });
-
-    expect(plan).toEqual([]);
+    expect(() =>
+      getPropertyExecutionPlan({ properties, dependencies: [] }),
+    ).toThrow("Stored computed columns have no input dependencies");
   });
 
   test("first level does not contain properties without dependencies", () => {
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
       createProperty("C"),
     ];
@@ -415,7 +412,7 @@ describe("getPropertyExecutionPlan", () => {
 
   test("returns single level for simple chain A -> B", () => {
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
     ];
     const dependencies: PropertyDependencyEdge[] = [
@@ -434,7 +431,7 @@ describe("getPropertyExecutionPlan", () => {
 
   test("returns two levels for chain A -> B -> C", () => {
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
       createProperty("C"),
     ];
@@ -459,7 +456,7 @@ describe("getPropertyExecutionPlan", () => {
   test("groups properties with same dependency signature in diamond structure", () => {
     // A -> B, A -> C, B -> D, C -> D
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
       createProperty("C"),
       createProperty("D"),
@@ -551,7 +548,7 @@ describe("getPropertyExecutionPlan", () => {
 
   test("panics when dangling edge references property not in properties", () => {
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
     ];
     const dependencies: PropertyDependencyEdge[] = [

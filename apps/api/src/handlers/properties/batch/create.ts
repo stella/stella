@@ -13,6 +13,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import {
   DOCUMENT_TYPE_CLASSIFIER_ROLE,
   buildPropertyParts,
@@ -78,6 +79,26 @@ const createPropertiesBatch = createSafeHandler(
             status: 400,
             message: "Properties limit reached",
           });
+        }
+
+        for (const { built } of builtItems) {
+          if ("status" in built || built.tool.type !== "ai-model") {
+            continue;
+          }
+          const resolved = requireComputedColumnInputs({
+            candidates: existingRows,
+            inputs: built.dependencies,
+          });
+          if (Result.isError(resolved)) {
+            const error = resolved.error;
+            throw new HandlerError({
+              status: 422,
+              code: error.code,
+              message: error.message,
+              hint: `Candidate file columns: ${error.candidateFileColumnIds.join(", ") || "none"}`,
+            });
+          }
+          built.dependencies = [...resolved.value];
         }
 
         const createsDocumentTypeClassifier = builtItems.filter(

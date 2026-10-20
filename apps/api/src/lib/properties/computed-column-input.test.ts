@@ -1,0 +1,37 @@
+import { describe, expect, test } from "bun:test";
+
+import type { PropertyContent } from "@/api/db/schema-validators";
+import { toSafeId } from "@/api/lib/branded-types";
+
+import {
+  AIColumnInputRequiredError,
+  requireComputedColumnInputs,
+} from "./computed-column-input";
+
+const file = (id: string) => ({
+  id: toSafeId<"property">(id),
+  content: { version: 1, type: "file" } satisfies PropertyContent,
+});
+
+describe("computed column input ownership", () => {
+  test("wires the sole document file column when no input was supplied", () => {
+    expect(
+      requireComputedColumnInputs({ candidates: [file("file")], inputs: [] })
+        .value,
+    ).toEqual([
+      { dependsOnPropertyId: toSafeId<"property">("file"), condition: null },
+    ]);
+  });
+
+  test("refuses ambiguous implicit input and names every candidate", () => {
+    const result = requireComputedColumnInputs({
+      candidates: [file("one"), file("two")],
+      inputs: [],
+    });
+    expect(result.error).toBeInstanceOf(AIColumnInputRequiredError);
+    expect(result.error).toMatchObject({
+      code: "ai-column-input-required",
+      candidateFileColumnIds: ["one", "two"],
+    });
+  });
+});

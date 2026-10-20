@@ -31,6 +31,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import {
   DOCUMENT_TYPE_CLASSIFIER_ROLE,
   isDocumentTypeClassifierProperty,
@@ -292,7 +293,7 @@ const updateProperty = createSafeHandler(
     const tool =
       body.tool.type === "ai-model" ? serializeAITool(body.tool) : body.tool;
 
-    const dependencies =
+    let dependencies =
       body.tool.type === "ai-model" ? body.tool.dependencies : [];
 
     // Strip dependencies from the tool for DB storage
@@ -423,6 +424,25 @@ const updateProperty = createSafeHandler(
               })
             : [];
 
+        if (body.tool.type === "ai-model") {
+          const resolved = requireComputedColumnInputs({
+            candidates: allProperties.filter(({ id }) => id !== propertyId),
+            inputs: dependencies,
+          });
+          if (Result.isError(resolved)) {
+            const error = resolved.error;
+            return {
+              ok: false as const,
+              status: 422 as const,
+              code: error.code,
+              retryable: false,
+              message: error.message,
+              hint: `Candidate file columns: ${error.candidateFileColumnIds.join(", ") || "none"}`,
+            };
+          }
+          dependencies = [...resolved.value];
+        }
+
         const otherTaggedClassifierExists = allProperties.some(
           (property) =>
             property.id !== propertyId &&
@@ -473,9 +493,7 @@ const updateProperty = createSafeHandler(
           hasCircularDependency({
             propertyId,
             allProperties,
-            proposedInputs: body.tool.dependencies.map(
-              (d) => d.dependsOnPropertyId,
-            ),
+            proposedInputs: dependencies.map((d) => d.dependsOnPropertyId),
           })
         ) {
           return {
