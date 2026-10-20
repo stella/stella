@@ -5,7 +5,7 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import type { InvoicingResult } from "./errors";
 import {
-  formatDate,
+  compactPaymentDate,
   parsePaymentAccount,
   validateVariableSymbol,
 } from "./payment-fields";
@@ -61,7 +61,7 @@ export const buildCzechQrPaymentPayload = ({
     fields.push(`X-VS:${symbol.value}`);
   }
   if (dueDate !== undefined) {
-    const date = formatDate(dueDate);
+    const date = compactPaymentDate(dueDate);
     if (date.isErr()) {
       return Result.err(date.error);
     }

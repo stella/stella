@@ -1,12 +1,12 @@
 import { Result } from "better-result";
-import { compress, CRC32_TABLE } from "lzma1";
+import { compress } from "lzma1";
 
 import type { CentsAmount } from "@stll/money";
 import { stripUnicodeMarks } from "@stll/text-normalize";
 
 import { invalidInput, type InvoicingResult } from "./errors";
 import {
-  formatDate,
+  compactPaymentDate,
   parsePaymentAccount,
   validateVariableSymbol,
 } from "./payment-fields";
@@ -79,7 +79,7 @@ export const buildPayBySquarePayload = ({
   }
   let date = "";
   if (dueDate !== undefined) {
-    const validDate = formatDate(dueDate);
+    const validDate = compactPaymentDate(dueDate);
     if (validDate.isErr()) {
       return Result.err(validDate.error);
     }
@@ -120,7 +120,9 @@ export const buildPayBySquarePayload = ({
 const encode = (dataModel: string): string => {
   const text = new TextEncoder().encode(dataModel);
   const checked = new Uint8Array(4 + text.length);
-  new DataView(checked.buffer).setUint32(0, crc32(text), true);
+  // IEEE CRC32. Only the API (Bun) imports this subpath; the web bundle does
+  // not, so Bun's own implementation is available.
+  new DataView(checked.buffer).setUint32(0, Bun.hash.crc32(text), true);
   checked.set(text, 4);
   const body = compress(checked, LZMA_OPTIONS).subarray(LZMA_HEADER_LENGTH);
   const framed = new Uint8Array(4 + body.length);
@@ -128,16 +130,6 @@ const encode = (dataModel: string): string => {
   new DataView(framed.buffer).setUint16(2, checked.length, true);
   framed.set(body, 4);
   return base32hex(framed);
-};
-
-const crc32 = (bytes: Uint8Array): number => {
-  let crc = -1;
-  for (const byte of bytes) {
-    // oxlint-disable-next-line no-bitwise -- CRC32 shifts the register and XORs in the table entry of its low byte.
-    crc = (crc >>> 8) ^ (CRC32_TABLE[(crc ^ byte) & 0xff] ?? 0);
-  }
-  // oxlint-disable-next-line no-bitwise -- CRC32 inverts the final register and reads it unsigned.
-  return (crc ^ -1) >>> 0;
 };
 
 /** RFC 4648 base32hex without padding, as the QR carries it. */

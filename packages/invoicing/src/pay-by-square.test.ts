@@ -51,6 +51,11 @@ const payable = (payload: ReturnType<typeof buildPayBySquarePayload>) => {
 };
 
 describe("PAY by square payload", () => {
+  test("checksums with the standard IEEE CRC32", () => {
+    // The CRC-32 check value: the encoder's checksum is this function.
+    expect(Bun.hash.crc32("123456789")).toBe(0xcb_f4_39_26);
+  });
+
   test("encodes one payment order in the version 1.2.0 data model", () => {
     const decoded = payable(
       buildPayBySquarePayload({

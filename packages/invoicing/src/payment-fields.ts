@@ -74,7 +74,7 @@ export const validateVariableSymbol = (
 };
 
 /** `YYYY-MM-DD` as `YYYYMMDD`, refusing dates that do not exist. */
-export const formatDate = (date: string): InvoicingResult<string> => {
+export const compactPaymentDate = (date: string): InvoicingResult<string> => {
   const match = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u.exec(date);
   if (!match?.groups) {
     return invalidInput("QR payment due date must use YYYY-MM-DD");
