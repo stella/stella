@@ -13,6 +13,7 @@ import { jsonField } from "@/api/db/json-utils";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   cellMetadata,
+  entityVersions,
   type ExtractionRunScope,
   fields,
   justifications,
@@ -1154,6 +1155,7 @@ const handleWorkflowJobFailed = (
         workspaceId: actor.workspaceId,
       });
       if (!isCurrentRequest) {
+        await markPendingPlannedFieldsErrored(actor, data);
         return;
       }
 
@@ -1361,24 +1363,27 @@ const markPendingPlannedFieldsErrored = async (
     return;
   }
 
-  const entityRow = await actor.writeDb((tx) =>
-    tx.query.entities.findFirst({
-      where: { id: { eq: entityId } },
-      columns: { currentVersionId: true },
-    }),
-  );
-  if (!entityRow?.currentVersionId) {
-    return;
-  }
-  const entityVersionId = entityRow.currentVersionId;
-
   await actor.writeDb((tx) =>
     tx
       .update(fields)
-      .set({ content: { type: "error", version: 1 } })
+      .set({
+        content: { type: "error", version: 1 },
+        ownerRunId: null,
+        ownerBatchId: null,
+        deadlineAt: null,
+        attempt: null,
+      })
       .where(
         and(
-          eq(fields.entityVersionId, entityVersionId),
+          eq(fields.workspaceId, actor.workspaceId),
+          eq(fields.ownerRunId, actor.runId),
+          inArray(
+            fields.entityVersionId,
+            tx
+              .select({ id: entityVersions.id })
+              .from(entityVersions)
+              .where(eq(entityVersions.entityId, entityId)),
+          ),
           inArray(fields.propertyId, propertyIds),
           sql`${fields.content}->>'type' = 'pending'`,
         ),
@@ -1489,6 +1494,7 @@ export const processWorkflowEntityRun = async ({
       workspaceId: actor.workspaceId,
     });
     if (!isStillCurrentRequest) {
+      await markPendingPlannedFieldsErrored(actor, data);
       return;
     }
 
@@ -1935,6 +1941,14 @@ const processOneBatch = async ({
       workspaceId,
     });
     if (!isStillCurrentRequest) {
+      await setFieldsStatus({
+        workspaceId,
+        entityVersionId,
+        batch,
+        contentType: "error",
+        ownerRunId: requestId,
+        writeDb: actor.writeDb,
+      });
       return;
     }
 
@@ -1944,6 +1958,7 @@ const processOneBatch = async ({
         entityVersionId,
         batch: { ...batch, properties: erroredProperties },
         contentType: "error",
+        ownerRunId: requestId,
         writeDb: actor.writeDb,
       });
     }
@@ -2001,15 +2016,19 @@ const processOneBatch = async ({
         (id) => !lockedAtWrite.has(id),
       );
 
+      let ownedPropertyIds = new Set<string>();
       if (allPropertyIds.length > 0) {
-        await tx
+        const deleted = await tx
           .delete(fields)
           .where(
             and(
               eq(fields.entityVersionId, entityVersionId),
               inArray(fields.propertyId, allPropertyIds),
+              eq(fields.ownerRunId, requestId),
             ),
-          );
+          )
+          .returning({ propertyId: fields.propertyId });
+        ownedPropertyIds = new Set(deleted.map(({ propertyId }) => propertyId));
       }
 
       const fieldValues = [];
@@ -2018,7 +2037,7 @@ const processOneBatch = async ({
         propertyId,
         content,
       } of processedFields.aiResults) {
-        if (!lockedAtWrite.has(propertyId)) {
+        if (ownedPropertyIds.has(propertyId)) {
           fieldValues.push({
             id: fieldId,
             workspaceId,
@@ -2029,7 +2048,7 @@ const processOneBatch = async ({
         }
       }
       for (const propertyId of processedFields.unsupportedPropertyIds) {
-        if (!lockedAtWrite.has(propertyId)) {
+        if (ownedPropertyIds.has(propertyId)) {
           fieldValues.push({
             id: createSafeId<"field">(),
             workspaceId,
@@ -2047,7 +2066,7 @@ const processOneBatch = async ({
       if (processedFields.aiJustifications.length > 0) {
         const aiResultFieldIdsForLockedProps = new Set<string>();
         for (const { fieldId, propertyId } of processedFields.aiResults) {
-          if (lockedAtWrite.has(propertyId)) {
+          if (!ownedPropertyIds.has(propertyId)) {
             aiResultFieldIdsForLockedProps.add(fieldId);
           }
         }
@@ -2337,6 +2356,7 @@ type SetFieldsStatusArgs = {
 } & (
   | {
       contentType: "pending";
+      ownerRunId?: never;
       owner: {
         runId: string;
         batchId: string;
@@ -2344,7 +2364,11 @@ type SetFieldsStatusArgs = {
         attempt: 0 | 1;
       };
     }
-  | { contentType: "error" | "unsupported"; owner?: never }
+  | {
+      contentType: "error" | "unsupported";
+      owner?: never;
+      ownerRunId: string;
+    }
 );
 
 const setFieldsStatus = async ({
@@ -2353,6 +2377,7 @@ const setFieldsStatus = async ({
   batch,
   contentType,
   owner,
+  ownerRunId,
   writeDb,
 }: SetFieldsStatusArgs) => {
   const propertyIds = batch.properties.map((p) => p.id);
@@ -2389,16 +2414,25 @@ const setFieldsStatus = async ({
       return;
     }
 
-    await tx
+    const deleted = await tx
       .delete(fields)
       .where(
         and(
           eq(fields.entityVersionId, entityVersionId),
           inArray(fields.propertyId, writablePropertyIds),
+          ...(contentType === "pending"
+            ? []
+            : [eq(fields.ownerRunId, ownerRunId)]),
         ),
-      );
+      )
+      .returning({ propertyId: fields.propertyId });
 
-    const fieldValues = writablePropertyIds.map((propertyId) => ({
+    const settledPropertyIds =
+      contentType === "pending"
+        ? writablePropertyIds
+        : deleted.map(({ propertyId }) => propertyId);
+
+    const fieldValues = settledPropertyIds.map((propertyId) => ({
       id: createSafeId<"field">(),
       workspaceId,
       propertyId,
