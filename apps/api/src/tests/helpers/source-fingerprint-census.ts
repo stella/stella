@@ -12,6 +12,8 @@
  * suite using this restores the original in an `afterEach`.
  */
 
+import { sha256Hex } from "@stll/sha256/node";
+
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
@@ -176,7 +178,25 @@ export type FingerprintCensusRow = {
   readonly finding: FingerprintFinding;
   /** Fingerprint of the exact raw fields stored by the fixture. */
   readonly fingerprint: string;
+  /** Stable identity of the stored fields, independent of the fingerprint implementation. */
+  readonly storedInputIdentity: string;
 };
+
+const storedInputIdentity = ({
+  sourceRaw,
+  sourceRawObjects,
+}: {
+  readonly sourceRaw: string;
+  readonly sourceRawObjects?: IngestionResult["sourceRawObjects"];
+}): string =>
+  sha256Hex(
+    JSON.stringify([
+      sourceRaw,
+      ...Object.values(sourceRawObjects ?? {}).map(({ bytes }) =>
+        sha256Hex(bytes),
+      ),
+    ]),
+  );
 
 /** Every driver of every registration, with what its decision's hash covers. */
 export const sourceFingerprintCensus = async (): Promise<
@@ -197,6 +217,13 @@ export const sourceFingerprintCensus = async (): Promise<
           envelope === undefined
             ? decision.rawHash
             : sourceFingerprint({
+                sourceRaw: envelope,
+                sourceRawObjects: decision.sourceRawObjects,
+              }),
+        storedInputIdentity:
+          envelope === undefined
+            ? sha256Hex(decision.rawHash)
+            : storedInputIdentity({
                 sourceRaw: envelope,
                 sourceRawObjects: decision.sourceRawObjects,
               }),

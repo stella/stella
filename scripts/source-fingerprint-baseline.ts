@@ -62,7 +62,11 @@ const BASELINE_SCHEMA = v.object({
   fingerprints: v.optional(
     v.record(
       v.string(),
-      v.object({ fingerprint: v.string(), version: v.number() }),
+      v.object({
+        fingerprint: v.string(),
+        storedInputIdentity: v.optional(v.string(), ""),
+        version: v.number(),
+      }),
     ),
     {},
   ),
@@ -78,7 +82,12 @@ const DRIVER_ROWS = v.array(
 );
 const DRIVER_CENSUS = v.object({
   fingerprints: v.array(
-    v.object({ key: v.string(), fingerprint: v.string(), version: v.number() }),
+    v.object({
+      key: v.string(),
+      fingerprint: v.string(),
+      storedInputIdentity: v.string(),
+      version: v.number(),
+    }),
   ),
   misses: DRIVER_ROWS,
 });
@@ -478,10 +487,12 @@ const write = (): number => {
     comment: previous.comment,
     drivers: reasoned(census.misses, previous.drivers),
     fingerprints: Object.fromEntries(
-      census.fingerprints.map(({ key, fingerprint, version }) => [
-        key,
-        { fingerprint, version },
-      ]),
+      census.fingerprints.map(
+        ({ key, fingerprint, storedInputIdentity, version }) => [
+          key,
+          { fingerprint, storedInputIdentity, version },
+        ],
+      ),
     ),
     files: reasoned(
       fileCensus().map((key) => ({ key, reason: FILE_REASON })),
@@ -522,6 +533,7 @@ export const fingerprintEvolutionFailures = (
       continue;
     }
     if (
+      recorded.storedInputIdentity === previous.storedInputIdentity &&
       recorded.fingerprint !== previous.fingerprint &&
       recorded.version <= previous.version
     ) {
@@ -553,10 +565,12 @@ const check = (args: readonly string[]): number => {
   const failures: string[] = [];
   const census = driverCensus();
   const fingerprints = Object.fromEntries(
-    census.fingerprints.map(({ key, fingerprint, version }) => [
-      key,
-      { fingerprint, version },
-    ]),
+    census.fingerprints.map(
+      ({ key, fingerprint, storedInputIdentity, version }) => [
+        key,
+        { fingerprint, storedInputIdentity, version },
+      ],
+    ),
   );
   if (JSON.stringify(fingerprints) !== JSON.stringify(baseline.fingerprints)) {
     failures.push("Fixture fingerprints are stale (run --write)");

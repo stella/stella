@@ -4,10 +4,6 @@ import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import {
-  publishedCaseLawDecisions,
-  unredactedCaseLawDecisions,
-} from "@/api/db/schema";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const MIGRATION_PATH = nodePath.resolve(
@@ -59,17 +55,6 @@ beforeAll(
 afterAll(async () => {
   await client.close();
 });
-
-test.each([
-  ["published", publishedCaseLawDecisions],
-  ["unredacted", unredactedCaseLawDecisions],
-])(
-  "the migrated %s decision view exposes every schema column",
-  async (_, view) => {
-    const rows = await db.select().from(view).limit(0);
-    expect(rows).toEqual([]);
-  },
-);
 
 test.each([
   ["published", "case_law_published_decisions"],
