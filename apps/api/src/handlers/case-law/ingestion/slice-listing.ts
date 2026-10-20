@@ -8,6 +8,7 @@
 
 import { Result } from "better-result";
 
+import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type {
   ReconciliationListingItem,
@@ -33,27 +34,6 @@ export type ListedSlice = {
   listed: number;
   unidentifiable: number;
   duplicate: number;
-};
-
-const sleepUntilDelayOrAbort = async (
-  sleep: (ms: number) => Promise<void>,
-  ms: number,
-  signal: AbortSignal | undefined,
-): Promise<void> => {
-  if (signal === undefined) {
-    await sleep(ms);
-    return;
-  }
-  await Promise.race([
-    sleep(ms),
-    new Promise<never>((_resolve, reject) => {
-      signal.addEventListener(
-        "abort",
-        () => reject(new Error("Reconciliation sleep aborted")),
-        { once: true },
-      );
-    }),
-  ]);
 };
 
 type ListReconciliationSliceOptions = {
@@ -95,7 +75,7 @@ export const listReconciliationSlice = async ({
   for (let page = 0; ; page += 1) {
     signal?.throwIfAborted();
     if (page > 0) {
-      await sleepUntilDelayOrAbort(sleep, pageDelayMs, signal);
+      await abortableSleep(sleep, pageDelayMs, signal);
       signal?.throwIfAborted();
     }
     const timeoutSignal = AbortSignal.timeout(pageTimeoutMs);

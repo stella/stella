@@ -53,6 +53,7 @@ import {
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
+import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
 import {
   recordSliceCoverage,
   recordSliceWalkFailure,
@@ -341,26 +342,6 @@ export type ReconciliationWorkUnitOptions = {
   /** Stored-raw reader; injectable for bounded repair work. */
   readStoredRaw?: StoredRawResultReader | undefined;
   signal?: AbortSignal | undefined;
-};
-
-export const abortableSleep = async (
-  sleep: (ms: number) => Promise<void>,
-  ms: number,
-  signal: AbortSignal | undefined,
-): Promise<void> => {
-  if (signal === undefined) {
-    await sleep(ms);
-    return;
-  }
-  signal.throwIfAborted();
-  const abort = Promise.withResolvers<never>();
-  const onAbort = (): void => {
-    abort.reject(new Error("Reconciliation sleep aborted"));
-  };
-  signal.addEventListener("abort", onAbort, { once: true });
-  await Promise.race([sleep(ms), abort.promise]).finally(() => {
-    signal.removeEventListener("abort", onAbort);
-  });
 };
 
 const isSignalAborted = (signal: AbortSignal | undefined): boolean =>

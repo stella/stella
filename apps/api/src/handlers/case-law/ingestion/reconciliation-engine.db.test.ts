@@ -27,6 +27,7 @@ import {
   RECONCILIATION_ITEM_STATUS,
   relations,
 } from "@/api/db/schema";
+import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { plTkAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
@@ -38,7 +39,6 @@ import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/recon
 import {
   MAX_SLICE_INGEST_BUDGET,
   RECONCILIATION_INGEST_BUDGET_MS,
-  abortableSleep,
   runReconciliationWorkUnit,
 } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
