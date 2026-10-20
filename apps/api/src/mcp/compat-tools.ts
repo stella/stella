@@ -98,26 +98,32 @@ const getFetchableEntityMap = async ({
   entityIds: string[];
 }) => {
   if (entityIds.length === 0) {
-    return new Map<string, FetchableEntity>();
+    return Result.ok(new Map<string, FetchableEntity>());
   }
 
   const safeEntityIds = entityIds.map(brandPersistedEntityId);
 
-  const rows = await context.scopedDb(async (tx) => {
-    const workspaceIds = (
-      await authorizedWorkspaceIds(tx, {
-        organizationId: context.organizationId,
-        workspaceIds: context.accessibleWorkspaceIds,
-      })
-    ).unwrap("The scoped workspace authorization read must succeed");
-    return await loadCurrentExtractedSources(tx, {
-      entityIds: safeEntityIds,
+  const loaded = await context.scopedDb(async (tx) => {
+    const workspaceIds = await authorizedWorkspaceIds(tx, {
       organizationId: context.organizationId,
-      workspaceIds,
+      workspaceIds: context.accessibleWorkspaceIds,
     });
+    if (workspaceIds.isErr()) {
+      return workspaceIds;
+    }
+    return Result.ok(
+      await loadCurrentExtractedSources(tx, {
+        entityIds: safeEntityIds,
+        organizationId: context.organizationId,
+        workspaceIds: workspaceIds.value,
+      }),
+    );
   });
+  if (loaded.isErr()) {
+    return loaded;
+  }
   const fetchableEntityMap = new Map<string, FetchableEntity>();
-  for (const row of rows) {
+  for (const row of loaded.value) {
     fetchableEntityMap.set(row.entityId, {
       entityId: row.entityId,
       fieldId: row.sourceFieldId,
@@ -125,7 +131,7 @@ const getFetchableEntityMap = async ({
     });
   }
 
-  return fetchableEntityMap;
+  return Result.ok(fetchableEntityMap);
 };
 
 const getCompatSearchHits = (result: unknown): unknown[] => {
@@ -436,10 +442,13 @@ const searchMatterKnowledge = async ({
     context,
     entityIds: getCompatSearchEntityIds(hits),
   });
+  if (fetchableMap.isErr()) {
+    return fetchableMap;
+  }
 
   return Result.ok({
     nextCursor: page.nextCursor,
-    results: mapCompatSearchResults({ fetchableMap, hits }),
+    results: mapCompatSearchResults({ fetchableMap: fetchableMap.value, hits }),
   });
 };
 
@@ -573,21 +582,26 @@ const handleCompatFetchTool: McpToolHandler<
     return errorResult("Document content is unavailable");
   }
 
-  const row = (
-    await context.scopedDb(async (tx) => {
-      const workspaceIds = (
-        await authorizedWorkspaceIds(tx, {
-          organizationId: context.organizationId,
-          workspaceIds: context.accessibleWorkspaceIds,
-        })
-      ).unwrap("The scoped workspace authorization read must succeed");
-      return await loadCurrentExtractedContents(tx, {
+  const loaded = await context.scopedDb(async (tx) => {
+    const workspaceIds = await authorizedWorkspaceIds(tx, {
+      organizationId: context.organizationId,
+      workspaceIds: context.accessibleWorkspaceIds,
+    });
+    if (workspaceIds.isErr()) {
+      return workspaceIds;
+    }
+    return Result.ok(
+      await loadCurrentExtractedContents(tx, {
         entityIds: [entityId],
         organizationId: context.organizationId,
-        workspaceIds,
-      });
-    })
-  ).at(0);
+        workspaceIds: workspaceIds.value,
+      }),
+    );
+  });
+  if (loaded.isErr()) {
+    return internalFailureResult(loaded.error);
+  }
+  const row = loaded.value.at(0);
 
   if (!row) {
     return errorResult("Document content is unavailable");

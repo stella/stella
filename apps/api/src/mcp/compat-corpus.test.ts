@@ -102,9 +102,11 @@ const statuteHit = {
 const createContext = ({
   practiceJurisdictions = null,
   searchProvider = () => ({ search: searchProviderSearchMock }),
+  workspaceReadFails = false,
 }: {
   practiceJurisdictions?: { countryCode: string; isPrimary: boolean }[] | null;
   searchProvider?: () => unknown;
+  workspaceReadFails?: boolean;
 } = {}): McpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock({
     query: {
@@ -165,7 +167,10 @@ const createContext = ({
     selectDistinct: () => ({
       from: () => ({
         innerJoin: () => ({
-          where: async () => await Promise.resolve([{ id: WORKSPACE_ID }]),
+          where: async () =>
+            workspaceReadFails
+              ? await Promise.reject(new Error("workspace read failed"))
+              : await Promise.resolve([{ id: WORKSPACE_ID }]),
         }),
       }),
     }),
@@ -804,6 +809,38 @@ describe("compat search reaching the public corpus", () => {
 
       expect(payload.error?.code).toBe("validation_error");
       expect(payload.error?.issues?.at(0)?.path).toBe("cursor");
+    });
+  });
+});
+
+describe("compat matter reads when the workspace check fails", () => {
+  test("compat search answers with the internal failure envelope", async () => {
+    await withCorpus(async () => {
+      searchProviderSearchMock.mockResolvedValue({
+        hits: [
+          { entityId: ENTITY_ID, workspaceId: WORKSPACE_ID, title: "SPA" },
+        ],
+        nextCursor: null,
+      });
+      const response = await COMPAT_TOOL_HANDLERS.search({
+        args: { query: "promlčení" },
+        context: createContext({ workspaceReadFails: true }),
+      });
+      expect(response).toMatchObject({
+        status: "error",
+        error: { code: "internal_error" },
+      });
+    });
+  });
+
+  test("compat fetch answers with the internal failure envelope", async () => {
+    const response = await COMPAT_TOOL_HANDLERS.fetch({
+      args: { id: ENTITY_ID },
+      context: createContext({ workspaceReadFails: true }),
+    });
+    expect(response).toMatchObject({
+      status: "error",
+      error: { code: "internal_error" },
     });
   });
 });
