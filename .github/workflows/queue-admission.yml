@@ -1,5 +1,9 @@
 name: Queue admission
 
+defaults:
+  run:
+    shell: bash
+
 on:
   workflow_dispatch:
     inputs:
@@ -127,11 +131,8 @@ jobs:
           CLASSIFICATION: ${{ steps.classification.outcome }}
           QUALITY: ${{ steps.quality.outcome }}
         run: |
-          jq -n \
-            --argjson pr "$PR" --arg head "$HEAD" --arg base "$BASE" --arg merge "$MERGE" \
-            --arg manifest "$MANIFEST" --arg parser "$PARSER" \
-            --arg classification "$CLASSIFICATION" --arg quality "$QUALITY" \
-            '{pr:$pr,head:$head,base:$base,merge:$merge,checks:{manifest:$manifest,parser_version:$parser,job_classification:$classification,code_quality:$quality}}' \
+          # Values come from this step's env, so the program needs no shell or jq variables.
+          jq -n 'env | {pr: (.PR | tonumber), head: .HEAD, base: .BASE, merge: .MERGE, checks: {manifest: .MANIFEST, parser_version: .PARSER, job_classification: .CLASSIFICATION, code_quality: .QUALITY}}' \
             > admission.json
           {
             echo '### Machine-readable result'
