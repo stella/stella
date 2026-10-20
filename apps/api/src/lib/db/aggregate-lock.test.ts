@@ -39,13 +39,16 @@ const freshnessSession = (acquired: boolean) => {
   };
 };
 
+/** A database whose transaction runs the read directly. */
+const passThroughDatabase = {
+  transaction: async <Result>(read: (tx: Transaction) => Promise<Result>) =>
+    await read(asTestRaw<Transaction>({})),
+};
+
 describe("case-law freshness session lock", () => {
   test("is released after a read, so a reused session starts unlocked", async () => {
     const session = freshnessSession(true);
-    const database = {
-      transaction: async <Result>(read: (tx: Transaction) => Promise<Result>) =>
-        await read(asTestRaw<Transaction>({})),
-    };
+    const database = passThroughDatabase;
     for (const value of [1, 2]) {
       expect(
         await readUnderCaseLawFreshnessSessionLock({
@@ -63,11 +66,8 @@ describe("case-law freshness session lock", () => {
     const failure = await rejectionOf(
       readUnderCaseLawFreshnessSessionLock({
         connection: session.connection,
-        database: {
-          transaction: async () =>
-            await Promise.reject(new TypeError("read failed")),
-        },
-        read: async () => await Promise.resolve(0),
+        database: passThroughDatabase,
+        read: async () => await Promise.reject(new TypeError("read failed")),
       }),
     );
     expect(failure).toMatchObject({ message: "read failed" });
@@ -79,7 +79,7 @@ describe("case-law freshness session lock", () => {
     expect(
       await readUnderCaseLawFreshnessSessionLock({
         connection: session.connection,
-        database: { transaction: async () => await Promise.resolve(0) },
+        database: passThroughDatabase,
         read: async () => await Promise.resolve(0),
       }),
     ).toEqual({ status: "skipped" });
