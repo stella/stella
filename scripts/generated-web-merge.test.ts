@@ -311,7 +311,10 @@ test("consumer generation prints once while the dedicated check validates identi
     expect(printed.match(/printed in/gu)).toHaveLength(1);
     expect(printed).not.toContain("identity verified");
     const checked = run(directory, [process.execPath, generator, "--check"]);
-    expect(checked.match(/printed in/gu)).toHaveLength(2);
+    // Two independent generations: the first prints, the second prints again and
+    // proves identity against the first's declared form in the same program.
+    expect(checked.match(/printed in/gu)).toHaveLength(1);
+    expect(checked.match(/printed and identity verified in/gu)).toHaveLength(1);
     expect(checked.match(/identity verified/gu)).toHaveLength(1);
     expect(checked).toContain("verified deterministic");
 
