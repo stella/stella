@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
@@ -167,7 +168,7 @@ test("plans skip exactly when no selected shard survives", () => {
         expect(plan.type === "skip").toBe(expectedShards.length === 0);
         if (plan.type === "run") {
           expect(plan.matrix.shard.length).toBeGreaterThan(0);
-          expect(plan.matrix.shard).toEqual(expectedShards);
+          expect([...plan.matrix.shard]).toEqual(expectedShards);
         }
       },
     ),
@@ -175,14 +176,23 @@ test("plans skip exactly when no selected shard survives", () => {
 });
 
 test("every planned matrix job gates on its matching required output", () => {
-  const workflow = Bun.YAML.parse(
-    readFileSync(
-      path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
-      "utf-8",
+  const workflow = v.parse(
+    v.object({
+      jobs: v.record(
+        v.string(),
+        v.object({
+          if: v.optional(v.string()),
+          strategy: v.optional(v.object({ matrix: v.optional(v.unknown()) })),
+        }),
+      ),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
+        "utf-8",
+      ),
     ),
-  ) as {
-    jobs: Record<string, { if?: string; strategy?: { matrix?: string } }>;
-  };
+  );
   const plannedJobs = Object.entries(workflow.jobs).filter(
     ([, job]) =>
       typeof job.strategy?.matrix === "string" &&
@@ -192,11 +202,16 @@ test("every planned matrix job gates on its matching required output", () => {
   );
   expect(plannedJobs.length).toBeGreaterThan(0);
   for (const [name, job] of plannedJobs) {
-    const matrixOutput = job.strategy?.matrix
-      ?.match(/outputs\.([a-z0-9_]+)\)/u)
-      ?.at(1);
+    const matrix = job.strategy?.matrix;
+    const matrixOutput =
+      typeof matrix === "string"
+        ? matrix.match(/outputs\.([a-z0-9_]+)\)/u)?.at(1)
+        : undefined;
+    if (matrixOutput === undefined) {
+      throw new TypeError(`${name} matrix names no ci-plan output`);
+    }
     expect(matrixOutput, `${name} matrix output`).toEndWith("_matrix");
-    const requiredOutput = `${matrixOutput?.slice(0, -"matrix".length)}required`;
+    const requiredOutput = `${matrixOutput.slice(0, -"matrix".length)}required`;
     expect(job.if, `${name} must gate its planned matrix`).toContain(
       `needs.ci-plan.outputs.${requiredOutput} == 'true'`,
     );

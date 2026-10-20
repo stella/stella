@@ -110,7 +110,7 @@ test("the ci-tests matrix runs exactly the declared jobs", () => {
   if (plan.type !== "run") {
     throw new TypeError("Expected full API test plan to run");
   }
-  const declared = plan.matrix.shard;
+  const declared = [...plan.matrix.shard];
   expect(Object.keys(TEST_JOB_SHARDS)).toEqual(declared);
   expect(declared).toEqual(FULL_TEST_JOB_SHARDS);
 });

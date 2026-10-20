@@ -1504,6 +1504,10 @@ test("the result gate evaluates every job in the workflow", () => {
 
 test("each job's plan scope is the ci-plan output its `if:` selects it by", () => {
   const declaredAdditionalScopes = {
+    "ci-tests": [
+      "package_checks_required",
+      "The planned shard matrix only narrows ci-tests; package checks still decide whether it may run.",
+    ],
     "service-suites": [
       "corpus_suites_required",
       "Corpus changes start the shared service job without opting PRs into Postgres or Valkey steps.",
