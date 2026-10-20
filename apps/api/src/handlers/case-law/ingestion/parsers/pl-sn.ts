@@ -34,7 +34,11 @@ import type { PdfSpan } from "@/api/lib/legal-search/parsers/libpdf-utils";
 const PL_SN_SOURCE_SYSTEM = "sn.pl";
 
 /** A run of characters sharing one font weight. */
-export type PlSnRun = { text: string; bold: boolean };
+export type PlSnRun = {
+  text: string;
+  bold: boolean;
+  footnoteReference?: string | undefined;
+};
 
 /**
  * One typeset line: its runs, and whether the publisher indented it.
@@ -48,6 +52,9 @@ export type PlSnLine =
       readonly type: "text";
       readonly runs: readonly PlSnRun[];
       readonly indented: boolean;
+      readonly footnote?:
+        | { readonly label: string; readonly noteId: string }
+        | undefined;
     }
   | { readonly type: "blank" };
 
@@ -176,6 +183,9 @@ const bodyFontSizeOf = (lines: readonly PageFurnitureLine[]): number => {
 export const withoutRaisedReferenceMarkers = (
   line: PageFurnitureLine,
   bodySize: number,
+  footnoteLabels: ReadonlySet<string> = new Set(
+    line.spans.map(({ text }) => text.trim()),
+  ),
 ): PageFurnitureLine => {
   const bodySpans = line.spans.filter(
     ({ fontSize }) => fontSize > bodySize * SMALL_TYPE_RATIO,
@@ -184,7 +194,7 @@ export const withoutRaisedReferenceMarkers = (
   const markerSpans = new Set(
     line.spans.filter(
       ({ bbox, fontSize, text }) =>
-        /^\d+$/u.test(text.trim()) &&
+        footnoteLabels.has(text.trim()) &&
         fontSize <= bodySize * SMALL_TYPE_RATIO &&
         bbox.y > bodyY + bodySize * 0.2,
     ),
@@ -216,47 +226,6 @@ export const withoutRaisedReferenceMarkers = (
     spans: line.spans.filter((span) => !markerSpans.has(span)),
     text,
   };
-};
-
-/** Remove layout-only matter before paragraph assembly. */
-const separatePageFurniture = (
-  lines: readonly PageFurnitureLine[],
-  pageHeight: number,
-): PageFurnitureLine[] => {
-  const bodySize = bodyFontSizeOf(lines);
-
-  /*
-   * Measured in the two ÚOHS captures: body 9.96pt, notes 8.04pt and
-   * references 6pt; their footer ends at y=47.4 on an 841.92pt page. The
-   * recorded UOKiK PDF uses 12pt body, 10.02pt notes, 6.48/7.98pt references,
-   * and a page counter at y=35.6 on an 842pt page. Thus 86% separates both
-   * note faces from body, 25% bounds their observed bottom-page zone, and 6%
-   * contains both publishers' running furniture without reaching body text.
-   */
-  return lines
-    .filter((line) => {
-      if (
-        line.bbox.y < pageHeight * PAGE_MARGIN_RATIO ||
-        line.bbox.y > pageHeight * (1 - PAGE_MARGIN_RATIO)
-      ) {
-        return false;
-      }
-      const nonBlankSpans = line.spans.filter(
-        ({ text }) => text.trim().length > 0,
-      );
-      const isSmall =
-        nonBlankSpans.length > 0 &&
-        nonBlankSpans.every(
-          ({ fontSize }) => fontSize <= bodySize * SMALL_TYPE_RATIO,
-        );
-      if (isSmall && line.bbox.y < pageHeight * FOOTNOTE_ZONE_RATIO) {
-        return false;
-      }
-      return !(
-        isSmall && /^\d+(?:\s+\d+)*$/u.test(normalizeSpanText(line.text))
-      );
-    })
-    .map((line) => withoutRaisedReferenceMarkers(line, bodySize));
 };
 
 /**
@@ -328,6 +297,156 @@ const readPage = (
   );
 };
 
+type SeparatedPdfContent = {
+  body: PlSnLine[];
+  notes: PlSnLine[];
+};
+
+/** Keep notes and their references while discarding only margin furniture. */
+const readPagesWithFootnotes = (
+  pages: readonly {
+    height: number;
+    lines: readonly PageFurnitureLine[];
+  }[],
+  paragraphStart: PlPdfParagraphStart,
+): SeparatedPdfContent => {
+  const labels = new Set<string>();
+  const noteLabelLines = new Set<PageFurnitureLine>();
+  for (const { height, lines } of pages) {
+    const bodySize = bodyFontSizeOf(lines);
+    for (const [index, line] of lines.entries()) {
+      const label = normalizeSpanText(line.text).trim();
+      const next = lines
+        .slice(index + 1)
+        .find(({ text }) => text.trim().length > 0);
+      if (
+        /^\d+$/u.test(label) &&
+        line.bbox.y >= height * PAGE_MARGIN_RATIO &&
+        line.bbox.y < height * FOOTNOTE_ZONE_RATIO &&
+        line.spans.every(
+          ({ fontSize }) => fontSize <= bodySize * SMALL_TYPE_RATIO,
+        ) &&
+        next !== undefined &&
+        next.spans.every(
+          ({ fontSize }) => fontSize <= bodySize * SMALL_TYPE_RATIO,
+        )
+      ) {
+        labels.add(label);
+        noteLabelLines.add(line);
+      }
+    }
+  }
+
+  const bodyLines: (ExtractedLine & { markers?: string[] })[] = [];
+  const notes: PlSnLine[] = [];
+  let currentNote: { label: string; noteId: string } | undefined;
+
+  for (const { height, lines } of pages) {
+    const bodySize = bodyFontSizeOf(lines);
+    for (const original of lines) {
+      if (
+        original.bbox.y < height * PAGE_MARGIN_RATIO ||
+        original.bbox.y > height * (1 - PAGE_MARGIN_RATIO)
+      ) {
+        continue;
+      }
+      const text = normalizeSpanText(original.text);
+      const nonBlank = original.spans.filter(
+        ({ text: spanText }) => spanText.trim().length > 0,
+      );
+      const small =
+        nonBlank.length > 0 &&
+        nonBlank.every(
+          ({ fontSize }) => fontSize <= bodySize * SMALL_TYPE_RATIO,
+        );
+
+      if (
+        noteLabelLines.has(original) ||
+        (small &&
+          currentNote !== undefined &&
+          original.bbox.y < height * FOOTNOTE_ZONE_RATIO &&
+          !/^\d+(?:\s+\d+)*$/u.test(text.trim()))
+      ) {
+        const label = text.trim();
+        if (labels.has(label)) {
+          currentNote = { label, noteId: `footnote-${label}` };
+        } else if (currentNote !== undefined) {
+          notes.push({
+            type: "text",
+            runs: runsOfLine({
+              spans: original.spans,
+              text,
+              x: original.bbox.x,
+            }),
+            indented: false,
+            footnote: currentNote,
+          });
+        }
+        continue;
+      }
+
+      if (small) {
+        const markers = text.trim().split(/\s+/u);
+        if (
+          markers.length > 0 &&
+          markers.every((marker) => labels.has(marker))
+        ) {
+          const previous = bodyLines.findLast(
+            ({ text: bodyText }) => bodyText.trim().length > 0,
+          );
+          if (previous !== undefined) {
+            previous.markers = [...(previous.markers ?? []), ...markers];
+          }
+          continue;
+        }
+      }
+
+      const markerSpans = original.spans.filter(
+        ({ bbox, fontSize, text: spanText }) =>
+          labels.has(spanText.trim()) &&
+          fontSize <= bodySize * SMALL_TYPE_RATIO &&
+          bbox.y > original.bbox.y + bodySize * 0.2,
+      );
+      const cleaned =
+        markerSpans.length === 0
+          ? original
+          : withoutRaisedReferenceMarkers(original, bodySize, labels);
+      bodyLines.push({
+        spans: cleaned.spans,
+        text: normalizeSpanText(cleaned.text),
+        x: cleaned.bbox.x,
+        ...(markerSpans.length > 0
+          ? { markers: markerSpans.map(({ text: marker }) => marker.trim()) }
+          : {}),
+      });
+    }
+  }
+
+  const documentBodyMargin = bodyMarginOf(
+    bodyLines.filter(({ text }) => text.length > 0).map(({ x }) => x),
+    paragraphStart === PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+  );
+  const body = readPage(bodyLines, paragraphStart, documentBodyMargin).map(
+    (line, index): PlSnLine => {
+      const markers = bodyLines.at(index)?.markers;
+      return line.type !== "text" || markers === undefined
+        ? line
+        : {
+            ...line,
+            runs: [
+              ...line.runs,
+              ...markers.map((label) => ({
+                text: label,
+                bold: false,
+                footnoteReference: label,
+              })),
+            ],
+          };
+    },
+  );
+  return { body, notes };
+};
+
 /**
  * Join typeset lines back into the paragraphs they were broken from.
  *
@@ -345,7 +464,11 @@ export const assemblePlSnParagraphs = (
 
   // Copied rather than shared: joining a broken word rewrites the run it
   // lands in, and the lines handed in are the caller's to keep.
-  const copyRun = ({ bold, text }: PlSnRun): PlSnRun => ({ bold, text });
+  const copyRun = ({ bold, text, footnoteReference }: PlSnRun): PlSnRun => ({
+    bold,
+    text,
+    ...(footnoteReference === undefined ? {} : { footnoteReference }),
+  });
 
   for (const line of lines) {
     if (line.type === "blank") {
@@ -374,7 +497,11 @@ export const assemblePlSnParagraphs = (
       previous.text = previous.text.slice(0, -1);
     }
     const separator = brokenWord ? "" : " ";
-    if (previous.bold === head.bold) {
+    if (
+      previous.bold === head.bold &&
+      previous.footnoteReference === undefined &&
+      head.footnoteReference === undefined
+    ) {
       previous.text += separator + head.text;
     } else {
       current.push({ text: separator + head.text, bold: head.bold });
@@ -429,22 +556,28 @@ export const extractPlSnLines = async (
 
   const pages = pdf.getPages().map((page) => {
     const { height, lines } = page.extractText();
-    return separatePageFurniture(lines, height).map((line) => ({
-      spans: line.spans,
-      text: normalizeSpanText(line.text),
-      x: line.bbox.x,
-    }));
+    return { height, lines };
   });
-  const documentBodyMargin = bodyMarginOf(
-    pages
-      .flat()
-      .filter(({ text }) => text.length > 0)
-      .map(({ x }) => x),
-    paragraphStart === PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
-  );
-  return pages.flatMap((contentLines) =>
-    readPage(contentLines, paragraphStart, documentBodyMargin),
-  );
+  const { body, notes } = readPagesWithFootnotes(pages, paragraphStart);
+  return notes.length === 0 ? body : [...body, { type: "blank" }, ...notes];
+};
+
+export type PlPdfSeparatedContent = {
+  body: PlSnLine[];
+  notes: PlSnLine[];
+};
+
+/** Structured form for adapters that emit linked footnote blocks. */
+export const extractPlPdfSeparatedContent = async (
+  pdfBytes: Uint8Array,
+  paragraphStart: PlPdfParagraphStart,
+): Promise<PlPdfSeparatedContent> => {
+  const pdf = await PDF.load(pdfBytes);
+  const pages = pdf.getPages().map((page) => {
+    const { height, lines } = page.extractText();
+    return { height, lines };
+  });
+  return readPagesWithFootnotes(pages, paragraphStart);
 };
 
 type ParsePlSnDecisionInput = {

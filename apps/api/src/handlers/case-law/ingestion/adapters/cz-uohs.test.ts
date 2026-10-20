@@ -29,6 +29,26 @@ afterEach(() => {
 
 const records = async () => parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING);
 
+const CAPTURED_FOOTNOTES = {
+  "cz-uohs-2026-R0137.pdf": [
+    "Ve správním spise se nachází pod položkou č. 16.",
+    "Ve správním spise se nachází pod položkou č. 17.",
+    "Ve správním spise se nachází pod položkou č. 19.",
+    "Ve správním spise se nachází pod položkou č. 20.",
+    "Ve správním spise se nachází pod položkou č. 1.",
+    "Pro posouzení zákonnosti postupu zadavatele je rozhodné znění zákona k okamžiku zahájení zadávacího řízení, a to vyjma ustanovení upravených zákonem č. 69/2025 Sb., a zákonem č. 238/2024 Sb. Postup ve správním řízení se řídí právními předpisy účinnými ke dni zahájení správního řízení.",
+    "Ve správním spise se nachází pod položkou č. 18.",
+    "Ve správním spise se nachází pod položkou č. 22.",
+  ],
+  "cz-uohs-2026-S0383.pdf": [
+    ...[11, 33, 60, 75, 148, 76, 77, 78, 79, 80, 81, 82, 83, 84].map(
+      (number) =>
+        `Pozn. Úřadu: logový záznam č. ${number} ve výpisu z „Access logu“.`,
+    ),
+    "https://portal-vz.cz/elektronicke-zadavani-verejnych-zakazek/seznam-certifikovanych-el-nastroju-dle-zakona-c-134-2016- sb/",
+  ],
+} as const;
+
 describe("ÚOHS JSON-LD", () => {
   test("maps every stated field and discriminates collections without a default", async () => {
     const listed = await records();
@@ -102,9 +122,12 @@ describe("ÚOHS JSON-LD", () => {
     );
   });
 
-  test.each(["cz-uohs-2026-R0137.pdf", "cz-uohs-2026-S0383.pdf"])(
+  test.each([
+    ["cz-uohs-2026-R0137.pdf", CAPTURED_FOOTNOTES["cz-uohs-2026-R0137.pdf"]],
+    ["cz-uohs-2026-S0383.pdf", CAPTURED_FOOTNOTES["cz-uohs-2026-S0383.pdf"]],
+  ] as const)(
     "reads %s without page furniture and emits increasing paragraph numbers",
-    async (fixture) => {
+    async (fixture, expectedFootnotes) => {
       const bytes = new Uint8Array(
         await Bun.file(
           new URL(`__fixtures__/${fixture}`, import.meta.url),
@@ -121,14 +144,39 @@ describe("ÚOHS JSON-LD", () => {
           : [],
       );
       expect(numbers.slice(0, 3)).toEqual([1, 2, 3]);
-      expect(
-        numbers.every(
-          (number, index) => index === 0 || number > numbers[index - 1]!,
-        ),
-      ).toBe(true);
-      const text = ast.blocks.map(({ plainText }) => plainText).join("\n");
-      expect(text).not.toContain("1/12 třída Kpt. Jaroše");
-      expect(text).not.toContain("Ve správním spise se nachází pod položkou");
+      expect(numbers).toEqual(numbers.map((_, index) => index + 1));
+
+      const notes = ast.blocks.filter(
+        (block) =>
+          block.type === "paragraph" && block.note?.type === "footnote",
+      );
+      const body = ast.blocks.filter(
+        (block) => !(block.type === "paragraph" && block.note !== undefined),
+      );
+      const bodyJson = JSON.stringify(body);
+      expect(notes.length).toBeGreaterThan(0);
+      expect(notes.map(({ plainText }) => plainText)).toEqual([
+        ...expectedFootnotes,
+      ]);
+      expect(notes.map(({ anchorId }) => anchorId).toSorted()).toEqual(
+        [...bodyJson.matchAll(/"href":"#([^"]+)"/gu)]
+          .map((match) => match[1]!)
+          .toSorted(),
+      );
+      expect(new Set(notes.map(({ plainText }) => plainText)).size).toBe(
+        notes.length,
+      );
+      for (const note of notes) {
+        expect(note.plainText.length).toBeGreaterThan(0);
+        expect(
+          body.some(({ plainText }) => plainText.includes(note.plainText)),
+        ).toBe(false);
+      }
+      const bodyText = body.map(({ plainText }) => plainText).join("\n");
+      expect(bodyText).not.toContain("1/12 třída Kpt. Jaroše");
+      expect(bodyText).not.toContain(
+        "Ve správním spise se nachází pod položkou",
+      );
     },
   );
 

@@ -170,6 +170,15 @@ describe("raised reference markers", () => {
       " a zahájil řízení.",
     ]);
   });
+
+  test("a raised digit without a matching footnote stays as text", () => {
+    const line = {
+      spans: [span("m", 0, 100, 10), span("2", 5, 104, 6)],
+      text: "m2",
+      bbox: { x: 0, y: 100 },
+    };
+    expect(withoutRaisedReferenceMarkers(line, 10, new Set()).text).toBe("m2");
+  });
 });
 
 describe("reading recorded PDF lines", () => {
@@ -183,17 +192,21 @@ describe("reading recorded PDF lines", () => {
     );
   });
 
-  test("the opt-in reader removes the UOKiK footnote zone", async () => {
+  test("the opt-in reader retains the UOKiK footnote zone as typed lines", async () => {
     const bytes = new Uint8Array(await Bun.file(UOKIK_PDF).arrayBuffer());
     const lines = await extractPlSnLines(bytes, undefined, {
       pageFurniture: PL_PDF_PAGE_FURNITURE.SEPARATE,
     });
-    const text = lines
-      .flatMap((line) =>
-        line.type === "blank" ? [] : line.runs.map((run) => run.text),
-      )
+    const notes = lines.filter(
+      (line) => line.type === "text" && line.footnote !== undefined,
+    );
+    const text = notes
+      .flatMap(({ runs }) => runs.map((run) => run.text))
       .join(" ");
 
-    expect(text).not.toContain("B. Turno, Komentarz do art. 105d");
+    expect(text).toContain("B. Turno, Komentarz do art. 105d");
+    expect(notes.every(({ footnote }) => footnote?.label.length !== 0)).toBe(
+      true,
+    );
   });
 });

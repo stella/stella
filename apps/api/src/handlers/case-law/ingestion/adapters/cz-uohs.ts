@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -27,10 +27,10 @@ import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { normalizeDecisionIdentifierValue } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   assemblePlSnParagraphs,
-  extractPlSnLines,
-  PL_PDF_PAGE_FURNITURE,
+  extractPlPdfSeparatedContent,
   PL_PDF_PARAGRAPH_START,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+import type { PlSnRun } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
   absentDecisionTextFields,
@@ -169,36 +169,50 @@ type CzUohsPdf = {
   /** The text layer line by line, letterhead first. */
   text: string;
   /** The typeset lines joined back into the paragraphs they were broken from. */
-  paragraphs: string[];
+  paragraphs: PlSnRun[][];
+  notes: { label: string; noteId: string; runs: PlSnRun[] }[];
 };
 
 // The office numbers its reasoning with a hanging indent ("1.  Úřad obdržel").
 const readCzUohsPdf = async (bytes: Uint8Array): Promise<CzUohsPdf> => {
-  const lines = await extractPlSnLines(
+  const { body, notes } = await extractPlPdfSeparatedContent(
     bytes,
     PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
-    { pageFurniture: PL_PDF_PAGE_FURNITURE.SEPARATE },
   );
+  const noteGroups = new Map<
+    string,
+    { label: string; noteId: string; lines: typeof notes }
+  >();
+  for (const line of notes) {
+    if (line.type !== "text" || line.footnote === undefined) {
+      continue;
+    }
+    const group = noteGroups.get(line.footnote.noteId) ?? {
+      ...line.footnote,
+      lines: [],
+    };
+    group.lines.push(line);
+    noteGroups.set(line.footnote.noteId, group);
+  }
   return {
-    text: lines
+    text: body
       .map((line) =>
         line.type === "blank" ? "" : line.runs.map(({ text }) => text).join(""),
       )
       .join("\n")
       .trim(),
-    paragraphs: assemblePlSnParagraphs(lines)
-      .map((runs) =>
-        runs
-          .map(({ text }) => text)
-          .join("")
-          .trim(),
-      )
-      .filter((paragraph) => paragraph.length > 0),
+    paragraphs: assemblePlSnParagraphs(body),
+    notes: [...noteGroups.values()].map(({ label, noteId, lines }) => ({
+      label,
+      noteId,
+      runs: assemblePlSnParagraphs(lines).flat(),
+    })),
   };
 };
 
 type CzUohsDocumentInput = {
-  paragraphs: readonly string[];
+  paragraphs: readonly PlSnRun[][];
+  notes: readonly { label: string; noteId: string; runs: PlSnRun[] }[];
   caseNumber: string;
   court: string;
   decisionDate: string | undefined;
@@ -213,6 +227,7 @@ type CzUohsDocumentInput = {
  */
 export const czUohsDocumentAst = ({
   paragraphs,
+  notes,
   caseNumber,
   court,
   decisionDate,
@@ -223,19 +238,52 @@ export const czUohsDocumentAst = ({
   // The unnumbered letterhead and operative part precede the numbered
   // reasoning; keeping them out of the body-numbering candidate set prevents
   // their typeset paragraphs from counting as an implausibly long lead-in.
-  const numberedReasoningStart = paragraphs.findIndex((text) =>
-    /^1\.\s+\p{Lu}/u.test(text),
+  const textOf = (runs: readonly PlSnRun[]) =>
+    runs
+      .map(({ text }) => text)
+      .join("")
+      .trim();
+  const inlinesOf = (runs: readonly PlSnRun[]): Inline[] =>
+    runs.flatMap(({ text, footnoteReference }) =>
+      footnoteReference === undefined
+        ? [{ type: "text" as const, text }]
+        : [
+            {
+              type: "link" as const,
+              href: `#footnote-${footnoteReference}`,
+              children: [
+                {
+                  type: "superscript" as const,
+                  children: [{ type: "text" as const, text }],
+                },
+              ],
+            },
+          ],
+    );
+  const numberedReasoningStart = paragraphs.findIndex((runs) =>
+    /^1\.\s+\p{Lu}/u.test(textOf(runs)),
   );
-  const blocks: Block[] = paragraphs.map((text, index) => ({
+  const blocks: Block[] = paragraphs.map((runs, index) => ({
     id: `b${index + 1}`,
     anchorId: `p-${index + 1}`,
     type: "paragraph",
     ...(numberedReasoningStart !== -1 && index < numberedReasoningStart
       ? { role: "holding" as const }
       : {}),
-    inlines: [{ type: "text", text }],
-    plainText: text,
+    inlines: inlinesOf(runs),
+    plainText: textOf(runs),
   }));
+  for (const { label, noteId, runs } of notes) {
+    const plainText = textOf(runs);
+    blocks.push({
+      id: `b${blocks.length + 1}`,
+      anchorId: noteId,
+      type: "paragraph",
+      note: { type: "footnote", label, noteId },
+      inlines: inlinesOf(runs),
+      plainText,
+    });
+  }
   return {
     version: 1,
     source: {
@@ -271,6 +319,7 @@ const decisionDocumentAst = (
     : czUohsDocumentAst({
         ...identity,
         paragraphs: canonical.paragraphs,
+        notes: canonical.notes,
         documentUrl: canonical.url,
       });
 
@@ -283,6 +332,7 @@ export const parseCzUohsDocumentPdf = async (
   return czUohsDocumentAst({
     ...identity,
     paragraphs: read.paragraphs,
+    notes: read.notes,
     court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
     decisionDate: czUohsLetterheadDate(read.text),
     decisionType: undefined,
