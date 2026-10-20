@@ -22,10 +22,10 @@ import type { ChatToolError } from "@/api/lib/errors/tagged-errors";
  * also mention a matter, and so do tools that read no outside source.
  */
 
-/** A connector as discovery loaded it: its slug and the tools it offers. */
+/** A connector as discovery loaded it: its slug and the names chat exposes its tools under. */
 export type ScopedExternalConnector = {
   slug: string;
-  toolNames: readonly string[];
+  exposedToolNames: readonly string[];
 };
 
 /** A business registry the turn may read, with the jurisdiction it serves. */
@@ -105,8 +105,8 @@ type SourceScopeToolsInput = {
  *   argument, so it cannot be held to the named sources. A screening is asked
  *   for without chips.
  * - Every external MCP tool that is not one of a named connector's tools.
- *   Tools are matched through each connector's own `toolNames`, never by
- *   reading a connector out of a tool's name.
+ *   Tools are matched through each connector's own `exposedToolNames` (the
+ *   names chat offers), never by reading a connector out of a tool's name.
  */
 export const sourceScopeDroppedTools = ({
   scopes,
@@ -119,7 +119,7 @@ export const sourceScopeDroppedTools = ({
   }
   const keptExternal = new Set(
     scopedExternalConnectors(scopes, connectors).flatMap(
-      (connector) => connector.toolNames,
+      (connector) => connector.exposedToolNames,
     ),
   );
   return [

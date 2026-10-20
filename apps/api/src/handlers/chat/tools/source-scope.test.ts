@@ -17,6 +17,7 @@ import {
 } from "@/api/handlers/chat/tools/source-scope";
 import type { ScopedRegistry } from "@/api/handlers/chat/tools/source-scope";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 const ARES: ScopedRegistry = { slug: "ares", country: "CZ" };
@@ -26,17 +27,21 @@ const BRREG: ScopedRegistry = { slug: "brreg", country: "NO" };
 const ENABLED = [ARES, ORSR, RPO, BRREG];
 
 const LEGAL_SEARCH: LoadedExternalMcpConnector = {
+  connectorId: toSafeId<"mcpConnector">("11111111-1111-4111-8111-111111111111"),
   slug: "legal-search",
   displayName: "Legal Search",
   description: "Searches foreign case law.",
+  toolNames: ["find", "lookup_any"],
   // Deliberately not named after the slug: tools map by the connector's list.
-  toolNames: ["mcp__legal-search__find", "lookup_any"],
+  exposedToolNames: ["mcp__legal-search__find", "lookup_any"],
 };
 const NOTES: LoadedExternalMcpConnector = {
+  connectorId: toSafeId<"mcpConnector">("22222222-2222-4222-8222-222222222222"),
   slug: "notes",
   displayName: "Notes",
   description: "The user's notes.",
-  toolNames: ["mcp__notes__read"],
+  toolNames: ["read"],
+  exposedToolNames: ["mcp__notes__read"],
 };
 const CONNECTORS = [LEGAL_SEARCH, NOTES];
 
@@ -52,7 +57,10 @@ const toolMap = (names: readonly string[]): ChatToolMap =>
     ]),
   );
 
-const EXTERNAL_TOOL_NAMES = [...LEGAL_SEARCH.toolNames, ...NOTES.toolNames];
+const EXTERNAL_TOOL_NAMES = [
+  ...LEGAL_SEARCH.exposedToolNames,
+  ...NOTES.exposedToolNames,
+];
 const TOOLS = toolMap([
   "execute_typescript",
   "list_matters_direct",
