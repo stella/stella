@@ -41,14 +41,23 @@ type ResolveParagraphReferenceOptions = {
 export const paragraphRangeIndices = (
   blocks: readonly Block[],
   { startAnchorId, endAnchorId }: AnalysisAnchorRange,
-): { startIndex: number; endIndex: number } | null => {
+): {
+  endBlock: Block;
+  endIndex: number;
+  startBlock: Block;
+  startIndex: number;
+} | null => {
   const startIndex = blocks.findIndex(
     (block) => block.anchorId === startAnchorId,
   );
   const endIndex = blocks.findIndex((block) => block.anchorId === endAnchorId);
-  return startIndex === -1 || endIndex < startIndex
+  const startBlock = blocks[startIndex];
+  const endBlock = blocks[endIndex];
+  return startBlock === undefined ||
+    endBlock === undefined ||
+    endIndex < startIndex
     ? null
-    : { startIndex, endIndex };
+    : { endBlock, endIndex, startBlock, startIndex };
 };
 
 export const resolveParagraphReference = ({
@@ -61,14 +70,10 @@ export const resolveParagraphReference = ({
     return null;
   }
   const { startAnchorId, endAnchorId } = range;
-  const { startIndex, endIndex } = indices;
+  const { startBlock, startIndex, endBlock, endIndex } = indices;
 
-  const startNumber = paragraphNumber(
-    blocks[startIndex],
-    startIndex,
-    formatNumber,
-  );
-  const endNumber = paragraphNumber(blocks[endIndex], endIndex, formatNumber);
+  const startNumber = paragraphNumber(startBlock, startIndex, formatNumber);
+  const endNumber = paragraphNumber(endBlock, endIndex, formatNumber);
   return {
     startAnchorId,
     endAnchorId,

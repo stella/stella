@@ -426,6 +426,7 @@ const renderTopMatter = ({
               analysis === undefined ? null : (
                 <AiHeadnotes
                   analysis={analysis}
+                  blocks={documentAst?.blocks ?? []}
                   onAnchorClick={() => undefined}
                 />
               )
