@@ -1,10 +1,19 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { documentProcessingRuns, extractedContent } from "@/api/db/schema";
+import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  createTestIds,
+  setupRlsTestData,
+} from "@/api/tests/security/rls-helpers";
+import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import { readOcrExport } from "./ocr-export";
 
@@ -90,5 +99,86 @@ describe("OCR text export", () => {
       expect(response.code).toBe(404);
     }
     expect(audited).toBe(false);
+  });
+});
+
+describe("OCR text export matter access", () => {
+  const ids = createTestIds();
+  let database: TestDatabase;
+
+  beforeAll(async () => {
+    database = await getTestDb();
+    await setupRlsTestData(database, ids);
+    const ocrRunId = toSafeId<"documentProcessingRun">(Bun.randomUUIDv7());
+    await database.insert(documentProcessingRuns).values({
+      id: ocrRunId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      entityId: ids.entityA1,
+      entityVersionId: ids.entityVersionA1,
+      fieldId: ids.fileFieldA1,
+      sourceFileId: ids.fileObjectA1,
+      sourceSha256Hex: "a".repeat(64),
+      kind: "ocr",
+      requestSource: "upload",
+      status: "succeeded",
+    });
+    await database
+      .update(extractedContent)
+      .set({
+        ocrRunId,
+        ocrPayloadCiphertext: Buffer.from("page geometry"),
+        ocrPayloadIv: Buffer.alloc(12),
+      })
+      .where(eq(extractedContent.entityId, ids.entityA1));
+  }, 120_000);
+
+  afterAll(async () => {
+    await releaseTestDb();
+  });
+
+  const read = async ({
+    userId,
+    workspaceIds,
+  }: {
+    userId: typeof ids.userA1;
+    workspaceIds: (typeof ids.wsA1)[];
+  }) =>
+    await readOcrExport({
+      fieldId: ids.fileFieldA1,
+      format: "text",
+      organizationId: ids.orgA,
+      recordAuditEvent: async () => undefined,
+      scopedDb: asTestRaw<ScopedDb>(
+        createMembershipScopedDb(markRlsDatabase(database), {
+          organizationId: ids.orgA,
+          serverValidatedWorkspaceIds: workspaceIds,
+          userId,
+        }),
+      ),
+      workspaceId: ids.wsA1,
+    });
+
+  test("exports a readable matter and returns not found for an unreadable matter", async () => {
+    const readable = await read({
+      userId: ids.userA1,
+      workspaceIds: [ids.wsA1],
+    });
+    expect(readable).toBeInstanceOf(Response);
+    if (readable instanceof Response) {
+      expect(await readable.text()).toBe("extracted text a1");
+    }
+
+    const unreadable = await read({
+      userId: ids.userA2,
+      workspaceIds: [ids.wsA2],
+    });
+    expect(unreadable).toBeInstanceOf(ElysiaCustomStatusResponse);
+    if (unreadable instanceof ElysiaCustomStatusResponse) {
+      expect(unreadable.code).toBe(404);
+      expect(JSON.stringify(unreadable.response)).not.toContain(
+        "extracted text a1",
+      );
+    }
   });
 });

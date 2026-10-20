@@ -65,7 +65,10 @@ describe("loadInputDocuments", () => {
 
   beforeAll(async () => {
     fake = startFakeS3();
-    const encrypted = await encryptContent(organizationId, "doc");
+    const encrypted = await encryptContent(
+      organizationId,
+      "readable flow marker",
+    );
     await testDb.insert(organization).values({
       id: organizationId,
       name: "Docs Org",
@@ -138,7 +141,7 @@ describe("loadInputDocuments", () => {
       workspaceId,
       ciphertext: encrypted.ciphertext,
       iv: encrypted.iv,
-      charCount: 3,
+      charCount: 20,
       sourceEntityVersionId: versionId,
       sourceFieldId: fieldId,
       sourceFileId: fileId,
@@ -219,6 +222,65 @@ describe("loadInputDocuments", () => {
           expect(caught.message).toContain("Available doc");
         }
         expect(fake.requests).toEqual([]);
+      },
+      userId,
+    );
+  });
+
+  test("loads a readable document and reports an unreadable matter document as unavailable", async () => {
+    await createDryScopedQuery(testDb)(
+      [workspaceId],
+      organizationId,
+      async (tx) => {
+        const scoped = asTestRaw<Parameters<typeof loadInputDocuments>[0]>(
+          async (
+            run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
+          ) => await run(tx),
+        );
+        const readableIds = (
+          await authorizedWorkspaceIds(tx, {
+            organizationId,
+            workspaceIds: [workspaceId],
+          })
+        ).unwrap();
+        expect(
+          await loadInputDocuments(scoped, organizationId, readableIds, [
+            extractedEntityId,
+          ]),
+        ).toEqual([{ label: "Available doc", text: "readable flow marker" }]);
+      },
+      userId,
+    );
+
+    await createDryScopedQuery(testDb)(
+      [],
+      organizationId,
+      async (tx) => {
+        const scoped = asTestRaw<Parameters<typeof loadInputDocuments>[0]>(
+          async (
+            run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
+          ) => await run(tx),
+        );
+        const unreadableIds = (
+          await authorizedWorkspaceIds(tx, {
+            organizationId,
+            workspaceIds: [workspaceId],
+          })
+        ).unwrap();
+        const caught = await loadInputDocuments(
+          scoped,
+          organizationId,
+          unreadableIds,
+          [extractedEntityId],
+        ).then(
+          () => null,
+          (error: unknown) => error,
+        );
+        expect(caught).toBeInstanceOf(FlowStepError);
+        if (caught instanceof FlowStepError) {
+          expect(caught.message).toContain("content is not available");
+          expect(caught.message).not.toContain("readable flow marker");
+        }
       },
       userId,
     );
