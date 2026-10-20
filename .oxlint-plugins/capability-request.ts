@@ -26,6 +26,12 @@
  */
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import {
+  EDEN_CLIENT_EXPORTS,
+  EDEN_CLIENT_MODULES,
+  EDEN_WRITE_METHODS,
+  EDEN_WRITE_OPTIONS_INDEX,
+} from "./eden-client.ts";
 import type { AstNode, ImportedFromOptions } from "./utils.ts";
 import {
   getPropertyName,
@@ -42,21 +48,6 @@ import {
 
 type Context = ImportedFromOptions["context"];
 
-const WRITE_METHODS = new Set(["post", "put", "patch", "delete"]);
-const CLIENT_MODULES = [
-  "@/lib/api",
-  "@/lib/eden-client",
-  "apps/web/src/lib/api",
-  "apps/web/src/lib/eden-client",
-];
-const CLIENT_EXPORTS = new Set([
-  "api",
-  "linkIconsApi",
-  "correspondenceApi",
-  "memoriesApi",
-  "myTimeEntriesApi",
-  "publicFeedbackApi",
-]);
 const INVOKE_MODULES = [
   "@/lib/capabilities/capability-request",
   "apps/web/src/lib/capabilities/capability-request",
@@ -87,8 +78,8 @@ const isClientRooted = (
     isImportedFrom({
       context,
       node,
-      modules: CLIENT_MODULES,
-      names: CLIENT_EXPORTS,
+      modules: EDEN_CLIENT_MODULES,
+      names: EDEN_CLIENT_EXPORTS,
     })
   ) {
     return true;
@@ -115,7 +106,7 @@ const isEdenWrite = (context: Context, call: AstNode): boolean => {
   const method = memberPropertyName(callee);
   return (
     method !== null &&
-    WRITE_METHODS.has(method) &&
+    EDEN_WRITE_METHODS.has(method) &&
     isClientRooted(context, callee.object)
   );
 };
@@ -173,7 +164,7 @@ const capabilityRequestParam = (
 
 const passesRequest = (call: AstNode, request: string): boolean => {
   const options = Array.isArray(call.arguments)
-    ? unwrapExpression(call.arguments.at(-1))
+    ? unwrapExpression(call.arguments.at(EDEN_WRITE_OPTIONS_INDEX))
     : null;
   if (options === null) {
     return false;

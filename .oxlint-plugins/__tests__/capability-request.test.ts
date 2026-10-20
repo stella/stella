@@ -22,6 +22,20 @@ useCapabilityMutation({ capability: name, mutationFn: async (vars, request) => a
   ).toEqual([5, 6, 7, 9, 10, 11]);
 });
 
+test("reads the request from the options position, not the body", async () => {
+  expect(
+    await lintSingleRule(
+      "capability-request",
+      `import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+await invokeCapability("x.delete", async (request) => await api.x({ id }).delete(request));
+await invokeCapability("x.create", async (request) => await api.x.post(request));
+await invokeCapability("x.delete", async (request) => await api.x({ id }).delete(undefined, request));
+`,
+    ),
+  ).toEqual([3, 4]);
+});
+
 test("rejects a forwarded request whose headers are replaced after the spread", async () => {
   expect(
     await lintSingleRule(

@@ -3,34 +3,36 @@
 // A web write runs through `invokeCapability(id, (request) => ...)` or the
 // `mutationFn` of `useCapabilityMutation({ capability: id, ... })`, which send
 // the declared capability with the request. Every other Eden write
-// (`post`/`put`/`patch`/`delete` on a client imported from `@/lib/api` or
-// `@/lib/eden-client`, followed through same-file aliases) is counted
+// (`post`/`put`/`patch`/`delete` on a client imported from the Eden client
+// modules under any specifier, followed through same-file aliases) is counted
 // here; the ratchet keeps each file's count from growing. The capability-request
-// lint rule checks the shape of the declared writes.
+// lint rule checks the shape of the declared writes and shares its client
+// definition (`.oxlint-plugins/eden-client.ts`).
 import ts from "typescript";
 
+import {
+  EDEN_CLIENT_EXPORTS,
+  EDEN_CLIENT_MODULES,
+  EDEN_WRITE_METHODS,
+} from "../.oxlint-plugins/eden-client.ts";
+import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 import { parseSource } from "./parse-memo";
 
-const CLIENT_MODULES = new Set(["@/lib/api", "@/lib/eden-client"]);
-const CLIENT_EXPORTS = new Set([
-  "api",
-  "linkIconsApi",
-  "correspondenceApi",
-  "memoriesApi",
-  "myTimeEntriesApi",
-  "publicFeedbackApi",
-]);
-const WRITE_METHODS = new Set(["post", "put", "patch", "delete"]);
 const INVOKE_CAPABILITY = "invokeCapability";
 const USE_CAPABILITY_MUTATION = "useCapabilityMutation";
+// A cheap text test before parsing: every specifier of a client module ends
+// in one of its file names, whether aliased or relative.
+const MAY_IMPORT_CLIENT = /["'](?:[^"']*\/)?(?:api|eden-client)["']/u;
 
-const clientImports = (source: ts.SourceFile): Set<string> => {
+const clientImports = (source: ts.SourceFile, file: string): Set<string> => {
   const names = new Set<string>();
   for (const statement of source.statements) {
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
-      !CLIENT_MODULES.has(statement.moduleSpecifier.text)
+      !EDEN_CLIENT_MODULES.includes(
+        canonicalModuleId(statement.moduleSpecifier.text, file),
+      )
     ) {
       continue;
     }
@@ -40,7 +42,7 @@ const clientImports = (source: ts.SourceFile): Set<string> => {
     }
     for (const element of bindings.elements) {
       const imported = (element.propertyName ?? element.name).text;
-      if (CLIENT_EXPORTS.has(imported)) {
+      if (EDEN_CLIENT_EXPORTS.has(imported)) {
         names.add(element.name.text);
       }
     }
@@ -65,8 +67,8 @@ const chainRoot = (expression: ts.Expression): ts.Identifier | null => {
 };
 
 // Same-file `const` names whose initializer is rooted at a client import.
-const clientNames = (source: ts.SourceFile): Set<string> => {
-  const names = clientImports(source);
+const clientNames = (source: ts.SourceFile, file: string): Set<string> => {
+  const names = clientImports(source, file);
   if (names.size === 0) {
     return names;
   }
@@ -140,11 +142,11 @@ export const countUndeclaredEdenWrites = (
   content: string,
   file: string,
 ): number => {
-  if (![...CLIENT_MODULES].some((module) => content.includes(module))) {
+  if (!MAY_IMPORT_CLIENT.test(content)) {
     return 0;
   }
   const source = parseSource({ fileName: file, text: content });
-  const clients = clientNames(source);
+  const clients = clientNames(source, file);
   if (clients.size === 0) {
     return 0;
   }
@@ -152,12 +154,14 @@ export const countUndeclaredEdenWrites = (
   // `client.items.post(...)` and `client.items["post"](...)` alike.
   const writeTarget = (callee: ts.Expression): ts.Expression | null => {
     if (ts.isPropertyAccessExpression(callee)) {
-      return WRITE_METHODS.has(callee.name.text) ? callee.expression : null;
+      return EDEN_WRITE_METHODS.has(callee.name.text)
+        ? callee.expression
+        : null;
     }
     if (
       ts.isElementAccessExpression(callee) &&
       ts.isStringLiteralLike(callee.argumentExpression) &&
-      WRITE_METHODS.has(callee.argumentExpression.text)
+      EDEN_WRITE_METHODS.has(callee.argumentExpression.text)
     ) {
       return callee.expression;
     }

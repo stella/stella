@@ -12,3 +12,25 @@ await api.items[method](body);
 `;
   expect(countUndeclaredEdenWrites(source, "apps/web/src/example.ts")).toBe(2);
 });
+
+test("recognises the client under relative and aliased specifiers alike", () => {
+  const write = "await api.items.post(body);";
+  expect(
+    countUndeclaredEdenWrites(
+      `import { api } from "./api";\n${write}`,
+      "apps/web/src/lib/example.ts",
+    ),
+  ).toBe(1);
+  expect(
+    countUndeclaredEdenWrites(
+      `import { api } from "../lib/eden-client";\n${write}`,
+      "apps/web/src/hooks/example.ts",
+    ),
+  ).toBe(1);
+  expect(
+    countUndeclaredEdenWrites(
+      `import { api } from "./api";\n${write}`,
+      "apps/web/src/lib/errors/example.ts",
+    ),
+  ).toBe(0);
+});
