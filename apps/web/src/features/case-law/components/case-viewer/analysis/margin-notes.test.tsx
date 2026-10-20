@@ -192,7 +192,7 @@ test("an expanding provision card pushes the following gutter note below its new
     const anchor = this.dataset["anchor"];
     const top = anchor === "p-2" ? 20 : 0;
     const width = this.classList.contains("inset-0") ? 300 : 0;
-    return DOMRect.fromRect({ top, width });
+    return DOMRect.fromRect({ y: top, width });
   };
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
@@ -240,6 +240,9 @@ test("an expanding provision card pushes the following gutter note below its new
         '[data-margin-note="annotation"] > *',
       );
       expect(element?.style.top).toBe("56px");
+      if (element === null) {
+        throw new Error("The following gutter note is not rendered");
+      }
       return element;
     });
     const card = mounted.container.querySelector<HTMLElement>(
