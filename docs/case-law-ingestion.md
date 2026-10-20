@@ -10,5 +10,5 @@ needed. A `features` scope limits the re-parse to its named stored decisions.
 Feature-scoped replay is valid only after each feature has dedicated storage
 and existing rows have been backfilled. Register that table, column or JSONB
 path, storage state, and backfill state in `PARSER_REPARSE_FEATURES` first. The
-parser-version guard rejects version mismatches, unknown features, and features
-that are not both stored and backfilled.
+compiler rejects version mismatches, unknown features, and features that are
+not both stored and backfilled.

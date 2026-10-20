@@ -92,27 +92,51 @@ export const PARSER_VERSIONS = {
  */
 export const PARSER_REPARSE_FEATURES = {} as const satisfies Record<
   string,
-  {
-    table: string;
-    column: string;
-    jsonbPath?: readonly [string, ...string[]];
-    stored: boolean;
-    backfilled: boolean;
-  }
+  ParserReparseFeatureDefinition
 >;
 
-export type ParserReparseFeature = keyof typeof PARSER_REPARSE_FEATURES;
+type ParserReparseFeatureDefinition = {
+  table: string;
+  column: string;
+  jsonbPath?: readonly [string, ...string[]];
+  stored: boolean;
+  backfilled: boolean;
+};
 
-export type ParserReparseScope =
+type StoredBackfilledFeature<
+  Registry extends Record<string, ParserReparseFeatureDefinition>,
+> = {
+  [Feature in keyof Registry]: Registry[Feature] extends {
+    stored: true;
+    backfilled: true;
+  }
+    ? Feature
+    : never;
+}[keyof Registry] &
+  string;
+
+export type ParserReparseScope<
+  Registry extends Record<string, ParserReparseFeatureDefinition> =
+    typeof PARSER_REPARSE_FEATURES,
+> =
   | { type: "all"; reason: string }
   | {
       type: "features";
-      features: readonly [ParserReparseFeature, ...ParserReparseFeature[]];
+      features: readonly [
+        StoredBackfilledFeature<Registry>,
+        ...StoredBackfilledFeature<Registry>[],
+      ];
     };
 
-type ParserVersionScope = {
-  version: number;
-  scope: ParserReparseScope;
+export type ParserVersionScopes<
+  Versions extends Record<string, number>,
+  Registry extends Record<string, ParserReparseFeatureDefinition> =
+    typeof PARSER_REPARSE_FEATURES,
+> = {
+  [Key in keyof Versions]: {
+    version: Versions[Key];
+    scope: ParserReparseScope<Registry>;
+  };
 };
 
 export const PARSER_VERSION_SCOPES = {
@@ -319,7 +343,7 @@ export const PARSER_VERSION_SCOPES = {
       reason: "scope declarations start with this contract",
     },
   },
-} as const satisfies Record<keyof typeof PARSER_VERSIONS, ParserVersionScope>;
+} as const satisfies ParserVersionScopes<typeof PARSER_VERSIONS>;
 
 /**
  * Capacity bound for a complete `case_law_sources` read, and nothing more.

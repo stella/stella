@@ -8,9 +8,6 @@ const PARSERS = `${INGESTION}parsers/`;
 
 type FixtureOptions = {
   versions?: Partial<Record<"A" | "B" | "C", number>>;
-  scopeVersions?: Partial<Record<"A" | "B" | "C", number>>;
-  scopes?: Partial<Record<"A" | "B" | "C", string>>;
-  featureRegistry?: string;
   adapters?: readonly ("A" | "B" | "C")[];
   parserSources?: Partial<Record<"A" | "B" | "C", string>>;
   helperSource?: string;
@@ -21,9 +18,6 @@ type FixtureOptions = {
 
 const fixture = ({
   versions = {},
-  scopeVersions = versions,
-  scopes = {},
-  featureRegistry = "",
   adapters = ["A", "B"],
   parserSources = {},
   helperSource = "export const helper = () => 'base';\n",
@@ -43,12 +37,6 @@ const fixture = ({
   const versionEntries = adapters
     .map((key) => `[ADAPTER_KEYS.${key}]: ${versions[key] ?? 1}`)
     .join(",\n  ");
-  const scopeEntries = adapters
-    .map(
-      (key) =>
-        `[ADAPTER_KEYS.${key}]: { version: ${scopeVersions[key] ?? versions[key] ?? 1}, scope: ${scopes[key] ?? '{ type: "all", reason: "fixture scope" }'} }`,
-    )
-    .join(",\n  ");
   const files = new Map<string, string>([
     [
       `${ADAPTERS}adapter-registry.ts`,
@@ -65,8 +53,6 @@ const fixture = ({
         'export const ADAPTER_KEYS = { A: "test-a", B: "test-b", C: "test-c" };',
         "export const IMPORT_SOURCE_KEYS = {};",
         `export const PARSER_VERSIONS = {\n  ${versionEntries},\n};`,
-        `export const PARSER_REPARSE_FEATURES = {${featureRegistry}};`,
-        `export const PARSER_VERSION_SCOPES = {\n  ${scopeEntries},\n};`,
         ...(bareVersion
           ? [`export const A_PARSER_VERSION = ${versions.A ?? 1};`]
           : []),
@@ -114,56 +100,6 @@ test("a parser change passes when its registered adapter version increases", () 
   const head = fixture({
     versions: { A: 2 },
     parserSources: { A: "export const parseA = () => 'changed';\n" },
-  });
-
-  expect(changed(base, head)).toEqual([]);
-});
-
-test("a version bump must update its re-parse scope declaration", () => {
-  const base = fixture();
-  const head = fixture({ versions: { A: 2 }, scopeVersions: { A: 1 } });
-
-  expect(changed(base, head)).toContain(
-    "test-a: scope version 1 must equal parser version 2",
-  );
-});
-
-test("a scope version must always equal its parser version", () => {
-  const tree = fixture({ scopeVersions: { A: 2 } });
-
-  expect(changed(tree, tree)).toContain(
-    "test-a: scope version 2 must equal parser version 1",
-  );
-});
-
-test("feature scopes reject unregistered and not-backfilled features", () => {
-  const base = fixture();
-  const unregistered = fixture({
-    scopes: {
-      A: '{ type: "features", features: ["citations"] }',
-    },
-  });
-  const notBackfilled = fixture({
-    featureRegistry:
-      'citations: { table: "decisions", column: "metadata", stored: true, backfilled: false }',
-    scopes: {
-      A: '{ type: "features", features: ["citations"] }',
-    },
-  });
-
-  expect(changed(base, unregistered)).toContain(
-    "test-a: re-parse feature citations is not registered",
-  );
-  expect(changed(base, notBackfilled)).toContain(
-    "test-a: re-parse feature citations must be stored and backfilled",
-  );
-});
-
-test("an all scope with a reason is valid", () => {
-  const base = fixture();
-  const head = fixture({
-    versions: { A: 2 },
-    scopes: { A: '{ type: "all", reason: "rebuild every parsed value" }' },
   });
 
   expect(changed(base, head)).toEqual([]);
