@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 
 import en from "../src/i18n/langs/en.json";
 import {
@@ -16,27 +14,9 @@ import {
   shortcutKeycaps,
 } from "../src/shared/shortcut-keys";
 import type { ShortcutKeys } from "../src/shared/shortcut-keys";
+import { readNativeSource, rustEnumVariants } from "./rust-enum";
 
-const NATIVE_SHORTCUT = readFileSync(
-  path.join(import.meta.dir, "../src-tauri/src/clipboard_shortcut.rs"),
-  "utf-8",
-);
-
-const camelCase = (variant: string) =>
-  `${variant.charAt(0).toLowerCase()}${variant.slice(1)}`;
-
-/** Variant names of a plain Rust enum, read from its declaration. */
-const rustEnumVariants = (source: string, name: string) => {
-  const body = source.match(
-    new RegExp(`pub enum ${name} \\{([^}]*)\\}`, "u"),
-  )?.[1];
-  if (body === undefined) {
-    throw new TypeError(`Missing enum ${name}`);
-  }
-  return [...body.matchAll(/^\s*(\w+),/gmu)].map((match) =>
-    camelCase(match[1] ?? ""),
-  );
-};
+const NATIVE_SHORTCUT = readNativeSource("clipboard_shortcut.rs");
 
 const DEFAULT_KEYS = {
   code: "KeyV",
@@ -144,16 +124,16 @@ describe("shortcut keys from events", () => {
 
 describe("native shortcut contract", () => {
   test("reserved actions match the native enum and each has a name", () => {
-    expect([...RESERVED_ACTIONS]).toEqual(
-      rustEnumVariants(NATIVE_SHORTCUT, "ReservedAction"),
-    );
+    expect(rustEnumVariants(NATIVE_SHORTCUT, "ReservedAction")).toEqual([
+      ...RESERVED_ACTIONS,
+    ]);
     expect(Object.keys(en.shortcut.action)).toEqual([...RESERVED_ACTIONS]);
   });
 
   test("modifier names match the native enum", () => {
-    expect([...SHORTCUT_MODIFIERS]).toEqual(
-      rustEnumVariants(NATIVE_SHORTCUT, "ShortcutModifier"),
-    );
+    expect(rustEnumVariants(NATIVE_SHORTCUT, "ShortcutModifier")).toEqual([
+      ...SHORTCUT_MODIFIERS,
+    ]);
   });
 
   test("the guards accept the native shapes and reject drifted ones", () => {

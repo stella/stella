@@ -36,7 +36,7 @@ export const RESERVED_ACTIONS = [
   "taskManager",
 ] as const;
 
-export type ReservedAction = (typeof RESERVED_ACTIONS)[number];
+type ReservedAction = (typeof RESERVED_ACTIONS)[number];
 
 export type ShortcutRejection =
   | { reason: "needsModifier" }
@@ -45,7 +45,7 @@ export type ShortcutRejection =
   | { reason: "windowsKeyReserved" }
   | { reason: "taken" };
 
-export type ShortcutRegistration = "active" | "paused" | "unavailable";
+type ShortcutRegistration = "active" | "paused" | "unavailable";
 
 export type ClipboardShortcutSnapshot = {
   defaultKeys: ShortcutKeys;

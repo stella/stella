@@ -231,6 +231,13 @@ fn accessibility_status() -> PermissionStatus {
 }
 
 /// The OS settings page for a permission, where the user changes it.
+#[cfg_attr(
+  target_os = "macos",
+  allow(
+    clippy::unnecessary_wraps,
+    reason = "every macOS permission has a page; other platforms have permissions without one"
+  )
+)]
 fn settings_url(app: &AppHandle, permission: Permission) -> Option<String> {
   #[cfg(target_os = "macos")]
   {

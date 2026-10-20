@@ -1,8 +1,8 @@
 import { cn } from "@stll/ui/utils";
 
-export type KeycapState = "idle" | "down" | "done" | "wrong";
+type KeycapState = "idle" | "down" | "done" | "wrong";
 
-export type Keycap = {
+type Keycap = {
   /** Stable within one row: the modifier name, `key`, or `extra`. */
   id: string;
   label: string;
@@ -35,7 +35,7 @@ export const Keycaps = ({ caps, className, size = "sm" }: KeycapsProps) => (
     {caps.map((cap) => (
       <kbd
         className={cn(
-          "inline-grid place-items-center border font-sans font-semibold tabular-nums transition-colors motion-reduce:transition-none",
+          "inline-grid place-items-center border font-sans font-semibold tabular-nums",
           SIZE_CLASSES[size],
           STATE_CLASSES[cap.state ?? "idle"],
         )}
