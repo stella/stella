@@ -16,7 +16,10 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
-import { lockCaseLawDecisionErasureRows } from "@/api/lib/db/aggregate-lock";
+import {
+  lockCaseLawDecisionErasureRows,
+  lockCaseLawRepublication,
+} from "@/api/lib/db/aggregate-lock";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   cancelCaseLawCorpusUploadIntents,
@@ -312,26 +315,13 @@ export const redactCaseLawDecision = async ({
   Result<RedactCaseLawDecisionOutcome, DatabaseError>
 > => {
   const fenced = await scopedDb(async (tx): Promise<RedactionFence> => {
-    await lockCaseLawDecisionErasureRows({ tx, decisionIds: [decisionId] });
-    const lockRetiredAliases = async (
-      lockedIds: ReadonlySet<SafeId<"caseLawDecision">>,
-    ): Promise<ReadonlySet<SafeId<"caseLawDecision">>> => {
-      const aliases = await tx
-        .select({ id: caseLawDecisionAliases.retiredDecisionId })
-        .from(caseLawDecisionAliases)
-        .where(eq(caseLawDecisionAliases.canonicalDecisionId, decisionId));
-      const discovered = aliases
-        .map(({ id }) => id)
-        .filter((id) => !lockedIds.has(id))
-        .toSorted();
-      if (discovered.length === 0) {
-        return lockedIds;
-      }
-      await lockCaseLawDecisionErasureRows({ tx, decisionIds: discovered });
-      return await lockRetiredAliases(new Set([...lockedIds, ...discovered]));
-    };
-    const lockedIds = await lockRetiredAliases(new Set([decisionId]));
-    const decisionIds = [...lockedIds].toSorted();
+    await lockCaseLawRepublication({ tx, mode: "shared" });
+    const aliases = await tx
+      .select({ id: caseLawDecisionAliases.retiredDecisionId })
+      .from(caseLawDecisionAliases)
+      .where(eq(caseLawDecisionAliases.canonicalDecisionId, decisionId));
+    const decisionIds = [decisionId, ...aliases.map(({ id }) => id)].toSorted();
+    await lockCaseLawDecisionErasureRows({ tx, decisionIds });
     const decisions = await tx
       .select({
         id: caseLawDecisions.id,

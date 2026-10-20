@@ -12,6 +12,7 @@ import {
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { applyRepublishedDecisionBatch } from "@/api/scripts/link-republished-decisions-plan";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -25,21 +26,21 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("republished decision erasure locking (postgres)", () => {
-    test("linking and erasure serialize on every decision row", async () => {
+    test("linking and erasure coordinate when the retired id sorts first", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const owner = openClient();
         const linker = openClient();
         const eraser = openClient();
         const canonicalSource = createSafeId<"caseLawSource">();
         const republisherSource = createSafeId<"caseLawSource">();
-        const decisionIds = [
-          createSafeId<"caseLawDecision">(),
-          createSafeId<"caseLawDecision">(),
-        ];
-        const canonicalId =
-          decisionIds.at(0) ?? panic("Lock fixture requires a canonical id");
-        const retiredId =
-          decisionIds.at(1) ?? panic("Lock fixture requires a retired id");
+        const retiredId = brandPersistedCaseLawDecisionId(
+          "00000000-0000-4000-8000-000000000001",
+        );
+        const canonicalId = brandPersistedCaseLawDecisionId(
+          "ffffffff-ffff-4fff-bfff-ffffffffffff",
+        );
+        const decisionIds = [retiredId, canonicalId];
+        expect(retiredId < canonicalId).toBe(true);
         const candidate = {
           canonical: {
             adapterKey: ADAPTER_KEYS.PL_TK,
@@ -172,6 +173,7 @@ if (!databaseUrl || !enabled) {
           .where(inArray(caseLawDecisions.id, decisionIds));
         let releaseErasure: (() => void) | undefined;
         let markErasureReady: (() => void) | undefined;
+        let holdFirstTransaction = true;
         const erasureReady = new Promise<void>((resolve) => {
           markErasureReady = resolve;
         });
@@ -179,10 +181,13 @@ if (!databaseUrl || !enabled) {
           async (operation: (tx: typeof eraser.db) => Promise<unknown>) =>
             await eraser.db.transaction(async (tx) => {
               const result = await operation(asTestRaw(tx));
-              markErasureReady?.();
-              await new Promise<void>((resolve) => {
-                releaseErasure = resolve;
-              });
+              if (holdFirstTransaction) {
+                holdFirstTransaction = false;
+                markErasureReady?.();
+                await new Promise<void>((resolve) => {
+                  releaseErasure = resolve;
+                });
+              }
               return result;
             }),
         );
