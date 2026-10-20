@@ -7,6 +7,7 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import {
   createPrivateTaskSink,
@@ -61,7 +62,7 @@ const entry = {
   id: "example",
   kind: "release-age-exclusion",
   expiresAt: "2026-10-15T00:00:00.000Z",
-  probe: { command: ["bun", "probe"], attempts: 3 },
+  probe: { command: [bunExecutable(), "probe"], attempts: 3 },
 } as const satisfies DatedWaiver;
 const evidence = {
   attempts: 3,

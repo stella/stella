@@ -36,6 +36,7 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import { BASELINE_PATHS } from "./baseline-paths";
 import {
   DESIGN_LINT_BACKLOG_RULES,
@@ -164,7 +165,15 @@ const lint = (paths: readonly string[]): DesignLintBacklog => {
   const reportDirectory = mkdtempSync(path.join(tmpdir(), "design-lint-"));
   const reportPath = path.join(reportDirectory, "report.json");
   const result = Bun.spawnSync(
-    ["bun", "--bun", "oxlint", "-c", CONFIG_PATH, "--format=json", ...paths],
+    [
+      bunExecutable(),
+      "--bun",
+      "oxlint",
+      "-c",
+      CONFIG_PATH,
+      "--format=json",
+      ...paths,
+    ],
     { cwd: REPOSITORY_ROOT, stdout: Bun.file(reportPath), stderr: "pipe" },
   );
   const report = readFileSync(reportPath, "utf-8");

@@ -9,6 +9,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import apiManifest from "../apps/api/package.json" with { type: "json" };
 import { isDbTest } from "../apps/api/scripts/test-batch-plan";
@@ -149,7 +150,7 @@ export const selectTargets = ({
         file,
         cwd,
         command: [
-          process.execPath,
+          bunExecutable(),
           gate ? gate[1].runner : "scripts/run-tests.ts",
           `./${relative}`,
         ],
@@ -163,7 +164,7 @@ export const selectTargets = ({
         file,
         cwd,
         command: [
-          process.execPath,
+          bunExecutable(),
           "scripts/run-tests.ts",
           `./${repoRelativePath(cwd, absolute)}`,
         ],
@@ -187,7 +188,7 @@ export const selectTargets = ({
       file,
       cwd,
       command: [
-        process.execPath,
+        bunExecutable(),
         "test",
         ...parsed.flags,
         `./${repoRelativePath(cwd, absolute)}`,

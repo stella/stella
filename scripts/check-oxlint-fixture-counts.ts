@@ -36,6 +36,7 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import { repositoryRules } from "./check-oxlint-rule-coverage.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -229,7 +230,7 @@ const lintMirror = (
   const reportPath = path.join(mirror, "oxlint-report.json");
   const result = Bun.spawnSync(
     [
-      "bun",
+      bunExecutable(),
       "--bun",
       "oxlint",
       "-c",

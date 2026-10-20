@@ -9,6 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 const WEB_ROOT_PATH = fileURLToPath(new URL("../", import.meta.url));
 const DIST_PATH = path.join(WEB_ROOT_PATH, "dist");
@@ -96,7 +97,7 @@ export const sourcemapProcessCommand = (
   clientRoot: string,
 ): SourcemapProcessCommand => ({
   cmd: [
-    "bun",
+    bunExecutable(),
     "x",
     POSTHOG_CLI_PACKAGE,
     "sourcemap",

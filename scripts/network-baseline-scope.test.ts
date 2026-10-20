@@ -11,6 +11,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import { isCanonicalFailureCancellation } from "./ci-cancellation-contract";
 import {
   prepareComparisonBaseline,
@@ -128,7 +129,7 @@ describe("network baseline scope", () => {
           JSON.stringify({ "/": { ...entry(1), [field]: { "GET /gone": 1 } } }),
         );
         const result = Bun.spawnSync([
-          "bun",
+          bunExecutable(),
           "scripts/network-baseline-scope.ts",
           "validate",
           file,
@@ -205,7 +206,7 @@ describe("network baseline scope", () => {
         { file: symlinkPath, message: "must not be a symlink" },
       ]) {
         const result = Bun.spawnSync([
-          "bun",
+          bunExecutable(),
           "scripts/network-baseline-scope.ts",
           "validate",
           file,
@@ -519,7 +520,7 @@ describe("reviewed network budgets", () => {
     (...declarations) => {
       const result = Bun.spawnSync(
         [
-          "bun",
+          bunExecutable(),
           "-e",
           `import { readFileSync } from "node:fs"; import { prepareComparisonBaseline } from "./scripts/network-baseline-scope.ts"; prepareComparisonBaseline(JSON.parse(readFileSync(0, "utf-8")));`,
         ],
@@ -555,7 +556,7 @@ describe("reviewed network budgets", () => {
       writeFileSync(changed, "apps/web/e2e/network-baseline.json\n");
       const result = Bun.spawnSync(
         [
-          "bun",
+          bunExecutable(),
           "scripts/network-baseline-scope.ts",
           "prepare",
           "--base",

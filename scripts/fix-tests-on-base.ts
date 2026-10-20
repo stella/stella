@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-
+import { panic } from "better-result";
 // A fix's tests must fail without the fix. A test that passes on the base
 // source guards nothing: it would have been green before the bug was fixed,
 // and it stays green if the fix is reverted.
@@ -35,14 +35,13 @@
 // To check a commit older than this file, copy the file into that checkout
 // and run it there; a squashed commit's message stands in for the title and
 // body: `bun scripts/fix-tests-on-base.ts --base <commit>^`.
-
-import { panic } from "better-result";
 import { appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 const CHECK = "fix-tests-on-base";
 
@@ -129,7 +128,7 @@ const apiRunner: TestRunner = {
     // suite depends on are the same as in CI.
     const result = Bun.spawnSync(
       [
-        process.execPath,
+        bunExecutable(),
         "run",
         "test",
         repoRelativePath(API_ROOT, file),

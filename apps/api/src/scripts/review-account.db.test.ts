@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 if (!runPostgresTests) {
@@ -12,7 +14,7 @@ if (!runPostgresTests) {
     // this account's configuration out of the other gated suites' process.
     const child = Bun.spawn({
       cmd: [
-        process.execPath,
+        bunExecutable(),
         "test",
         "--preload",
         "./src/tests/setup-env.ts",

@@ -2,6 +2,8 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 const API_ROOT = path.resolve(import.meta.dirname, "../../../api");
 
 export const CORRESPONDENCE_SMOKE_SUBJECT = "Route smoke correspondence";
@@ -12,7 +14,7 @@ export const createTestCorrespondence = async (workspaceId: string) => {
   const correspondenceId = randomUUID();
   await new Promise<undefined>((resolve, reject) => {
     execFile(
-      "bun",
+      bunExecutable(),
       [
         "scripts/seed-route-smoke-correspondence.ts",
         workspaceId,

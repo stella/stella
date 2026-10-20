@@ -10,6 +10,7 @@ import {
   APP_RESOLVE_STATUS_FIXTURES,
   APP_SEARCH_FIXTURE,
 } from "@stll/api-contract/mcp-app.fixtures";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -39,7 +40,7 @@ let countryFixture: string | undefined;
 /** Built once per worker; the build takes seconds. */
 const countryFixtureBundle = (): string =>
   (countryFixture ??= execFileSync(
-    "bun",
+    bunExecutable(),
     [
       fileURLToPath(
         new URL(

@@ -291,7 +291,7 @@ describe("test subject reachability", () => {
 
   test("classifies a spawned source entry", () => {
     const input = fixture(
-      "test('cli', () => Bun.spawn(['bun', 'apps/example/src/widget.ts']));\n",
+      "test('cli', () => Bun.spawn([bunExecutable(), 'apps/example/src/widget.ts']));\n",
     );
     expect(
       analyzeTestSubjectReachability({
@@ -335,7 +335,7 @@ describe("test subject reachability", () => {
     {
       title: "a spawn in an uncalled module helper",
       source:
-        "const unused = () => Bun.spawn(['bun', 'apps/example/src/widget.ts']);\ntest('state', () => expect(standIn()).toBe('fake'));\n",
+        "const unused = () => Bun.spawn([bunExecutable(), 'apps/example/src/widget.ts']);\ntest('state', () => expect(standIn()).toBe('fake'));\n",
       attempted: REACHABILITY_CATEGORIES,
     },
     {
@@ -390,7 +390,7 @@ describe("test subject reachability", () => {
     {
       title: "a spawn in a called module helper",
       source:
-        "const runCli = () => Bun.spawn(['bun', 'apps/example/src/widget.ts']);\ntest('cli', () => runCli());\n",
+        "const runCli = () => Bun.spawn([bunExecutable(), 'apps/example/src/widget.ts']);\ntest('cli', () => runCli());\n",
     },
   ] as const;
 

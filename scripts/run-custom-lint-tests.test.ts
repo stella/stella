@@ -6,6 +6,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { customLintRunnerViolations } from "./check-custom-lint-test-runners";
 import {
@@ -66,7 +67,7 @@ for (const args of [
   test(`the runner retains its budget for ${JSON.stringify(args)}`, () => {
     const command = customLintTestCommand(args);
     expect(command.slice(0, 4)).toEqual([
-      process.execPath,
+      bunExecutable(),
       "test",
       "--timeout",
       "30000",
@@ -262,7 +263,7 @@ for (const [filename, source] of [
   ["ci.yml", `jobs:\n  check:\n    steps:\n      - run: bun test ${TARGET}`],
   [
     "scripts/check.ts",
-    `Bun.spawnSync([process.execPath, "test", "${TARGET}"]);`,
+    `Bun.spawnSync([bunExecutable(), "test", "${TARGET}"]);`,
   ],
   [
     "scripts/check.ts",
@@ -270,11 +271,11 @@ for (const [filename, source] of [
   ],
   [
     "scripts/check.ts",
-    `const target = "${TARGET}"; Bun.spawnSync([process.execPath, "test", target]);`,
+    `const target = "${TARGET}"; Bun.spawnSync([bunExecutable(), "test", target]);`,
   ],
   [
     "scripts/check.ts",
-    `Bun.spawn({ cmd: [process.execPath, "test", "${TARGET}"] });`,
+    `Bun.spawn({ cmd: [bunExecutable(), "test", "${TARGET}"] });`,
   ],
 ] as const) {
   test(`${filename} rejects a planted runner bypass`, () => {
@@ -318,7 +319,7 @@ test("the CLI budget reaches every sequential file and its removal fails", () =>
     const passing = Bun.spawnSync(command);
     expect(passing.exitCode).toBe(0);
     expect(passing.stderr.toString()).toContain("2 pass");
-    const mutation = Bun.spawnSync([process.execPath, "test", ...files]);
+    const mutation = Bun.spawnSync([bunExecutable(), "test", ...files]);
     expect(mutation.exitCode).toBe(1);
     expect(mutation.stderr.toString()).toContain("timed out after 5000ms");
   } finally {

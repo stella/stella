@@ -4,6 +4,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 const directory = mkdtempSync(path.join(tmpdir(), "selection-toolbar-"));
 const fixture = { bundle: "" };
 test.use({
@@ -13,7 +15,7 @@ test.use({
 test.beforeAll(() => {
   const output = path.join(directory, "fixture.js");
   execFileSync(
-    "bun",
+    bunExecutable(),
     [
       "build",
       path.resolve(

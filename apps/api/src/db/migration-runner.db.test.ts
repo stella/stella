@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import { assertMigrationHistory } from "../lib/db/migration-history";
@@ -885,7 +886,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           writeFileSync(emptyEnvironment, "");
           const child = Bun.spawn({
             cmd: [
-              "bun",
+              bunExecutable(),
               "run",
               `--env-file=${emptyEnvironment}`,
               nodePath.join(import.meta.dir, "migrate.ts"),

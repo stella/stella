@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 // Nightly TanStack AI drift report.
 //
 // We stay on TanStack AI's future versions, so every patch under patches/
@@ -19,8 +20,6 @@
 //   bun scripts/tanstack-drift.ts --write-package   (step 1 + rewrite)
 //   bun scripts/tanstack-drift.ts --write-package --dry-run   (step 1 only)
 //   bun scripts/tanstack-drift.ts --report          (step 2, after bun install)
-
-import { panic } from "better-result";
 import {
   appendFileSync,
   mkdirSync,
@@ -33,6 +32,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { RECORDED_CONVERSATION_SUITES } from "../apps/api/src/tests/helpers/recorded-conversation-suites";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -43,7 +44,7 @@ const REGISTRY = "https://registry.npmjs.org";
 type Suite = { command: readonly string[]; directory: string; file: string };
 
 const apiSuite = (file: string): Suite => ({
-  command: ["bun", "run", "test", file],
+  command: [bunExecutable(), "run", "test", file],
   directory: "apps/api",
   file,
 });
@@ -63,7 +64,7 @@ const SUITES: readonly Suite[] = [
   apiSuite("src/handlers/chat/tool-call-end-arguments.test.ts"),
   {
     command: [
-      "bun",
+      bunExecutable(),
       "test",
       "--isolate",
       "src/components/chat/recorded-conversations.dom.test.tsx",

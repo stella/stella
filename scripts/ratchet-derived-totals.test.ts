@@ -12,6 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import {
   allowanceAdjustmentCommand,
   allowanceRemovalCommand,
@@ -85,7 +87,7 @@ const succeed = (cwd: string, command: readonly string[]) => {
 };
 const git = (cwd: string, ...args: string[]) => succeed(cwd, ["git", ...args]);
 const ratchet = (cwd: string, ...args: string[]) =>
-  succeed(cwd, [process.execPath, "scripts/ratchet.ts", ...args]);
+  succeed(cwd, [bunExecutable(), "scripts/ratchet.ts", ...args]);
 type WriteOptions = { root: string; relative: string; contents: string };
 const write = ({ root, relative, contents }: WriteOptions) => {
   mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
@@ -164,7 +166,7 @@ test("a metric increase fails even with a forged committed budget", () => {
     });
     commit(root, "raise with forged budget");
     const rejected = run(root, [
-      process.execPath,
+      bunExecutable(),
       "scripts/ratchet.ts",
       "--check",
     ]);
@@ -182,7 +184,7 @@ test("a metric increase fails even with a forged committed budget", () => {
     expect(mutant).not.toBe(original);
     writeFileSync(script, mutant);
     const bypassed = run(root, [
-      process.execPath,
+      bunExecutable(),
       "scripts/ratchet.ts",
       "--check",
     ]);
@@ -223,7 +225,7 @@ test("the measured base overrides stale headroom and explicit merge-group bases"
     git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
     write({ root, relative: FIRST, contents: casts(2) });
     const rejected = run(root, [
-      process.execPath,
+      bunExecutable(),
       "scripts/ratchet.ts",
       "--check",
     ]);
@@ -233,7 +235,7 @@ test("the measured base overrides stale headroom and explicit merge-group bases"
       "ratchet --check: OK",
     );
     const badBase = run(root, [
-      process.execPath,
+      bunExecutable(),
       "scripts/ratchet.ts",
       "--check",
       "--base",
@@ -312,7 +314,7 @@ test("--head measures a commit as data with that commit's allowances", () => {
     git(root, "checkout", "--quiet", base);
     const headCheck = (head: string) =>
       run(root, [
-        process.execPath,
+        bunExecutable(),
         "scripts/ratchet.ts",
         "--check",
         "--base",
@@ -407,7 +409,7 @@ test("CI selects the merge base on PRs and the target-branch base on merge group
         `RATCHET_BASE_REF=${eventBase || newBase}\n`,
       );
       const checked = Bun.spawnSync(
-        [process.execPath, "scripts/ratchet.ts", "--check"],
+        [bunExecutable(), "scripts/ratchet.ts", "--check"],
         {
           cwd: root,
           env: { ...process.env, RATCHET_BASE_REF: eventBase || newBase },
@@ -424,7 +426,7 @@ test("CI selects the merge base on PRs and the target-branch base on merge group
 describe("ratchet command-line usage", () => {
   for (const flag of ["--help", "-h"]) {
     test(`${flag} prints usage successfully`, () => {
-      const result = run(ROOT, [process.execPath, "scripts/ratchet.ts", flag]);
+      const result = run(ROOT, [bunExecutable(), "scripts/ratchet.ts", flag]);
       expect(result.code).toBe(0);
       expect(result.output).toContain("Usage: bun scripts/ratchet.ts");
       expect(result.output).toContain("--check");
@@ -435,7 +437,7 @@ describe("ratchet command-line usage", () => {
 
   for (const flag of ["--write", "-x"]) {
     test(`${flag} prints usage and fails`, () => {
-      const result = run(ROOT, [process.execPath, "scripts/ratchet.ts", flag]);
+      const result = run(ROOT, [bunExecutable(), "scripts/ratchet.ts", flag]);
       expect(result.code).not.toBe(0);
       expect(result.output).toContain(`unsupported ratchet option: ${flag}`);
       expect(result.output).toContain("Usage: bun scripts/ratchet.ts");
@@ -444,7 +446,7 @@ describe("ratchet command-line usage", () => {
 
   test("the supported self-test mode retains its behavior", () => {
     const result = run(ROOT, [
-      process.execPath,
+      bunExecutable(),
       "scripts/ratchet.ts",
       "--self-test",
     ]);
@@ -463,7 +465,7 @@ test("the lint planner inherits only result-boundary debt measured in the base t
     write({ root, relative: legacy, contents: "export const clean = 1;\n" });
     write({ root, relative: fresh, contents: 'throw new Error("fresh");\n' });
     const measured = succeed(root, [
-      process.execPath,
+      bunExecutable(),
       "--eval",
       'import { measureResultBoundaryDebt } from "./scripts/ratchet"; console.log(JSON.stringify([...measureResultBoundaryDebt(process.argv.at(-1) ?? "")]));',
       base,
@@ -476,7 +478,7 @@ const ALLOWANCE = "scripts/ratchet-allowances/fixture-increase.json";
 const fund = (root: string, allowance: unknown, relative = ALLOWANCE) =>
   write({ root, relative, contents: `${JSON.stringify(allowance)}\n` });
 const check = (root: string, ...args: string[]) =>
-  run(root, [process.execPath, "scripts/ratchet.ts", "--check", ...args]);
+  run(root, [bunExecutable(), "scripts/ratchet.ts", "--check", ...args]);
 
 for (const { name, count, delta, code, diagnostic } of [
   {

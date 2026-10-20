@@ -12,6 +12,8 @@ import {
 import os from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { generateRevisionRouteTree } from "./network-baseline-route-tree";
 
 const fixture = () => {
@@ -111,7 +113,7 @@ test.each(["virtual", "symlink"])(
       }
       const revision = commit();
       const result = Bun.spawnSync([
-        "bun",
+        bunExecutable(),
         path.join(import.meta.dirname, "network-baseline-route-tree.ts"),
         repository,
         revision,

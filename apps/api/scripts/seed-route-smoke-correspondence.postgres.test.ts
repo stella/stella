@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { organization, member, user } from "@/api/db/auth-schema";
 import {
@@ -130,7 +131,7 @@ describe.skipIf(!runPostgresTests)(
 
           const child = Bun.spawn({
             cmd: [
-              process.execPath,
+              bunExecutable(),
               "scripts/seed-route-smoke-correspondence.ts",
               workspaceId,
               correspondenceId,

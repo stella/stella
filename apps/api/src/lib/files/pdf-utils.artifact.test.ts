@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "../../../../..");
 
 describe("PDF worker runtime artifact", () => {
@@ -48,7 +50,7 @@ if (!result.cause.message.includes("pdf-worker error")) {
       expect(parentBuild.success).toBe(true);
 
       const result = Bun.spawnSync({
-        cmd: ["bun", path.join(parentDir, "entrypoint.js")],
+        cmd: [bunExecutable(), path.join(parentDir, "entrypoint.js")],
         env: {
           PATH: process.env["PATH"] ?? "",
           STELLA_WORKER_DIR: workerDir,

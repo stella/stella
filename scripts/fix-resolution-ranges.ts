@@ -16,6 +16,7 @@
 
 import path from "node:path";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import {
   analyzeResolutionRanges,
   applyOverridePins,
@@ -43,7 +44,13 @@ class ResolutionFixError extends Error {
  */
 const installLockfileOnly = (root: string): void => {
   const result = Bun.spawnSync(
-    ["bun", "--no-env-file", "install", "--lockfile-only", "--ignore-scripts"],
+    [
+      bunExecutable(),
+      "--no-env-file",
+      "install",
+      "--lockfile-only",
+      "--ignore-scripts",
+    ],
     { cwd: root, stdout: "inherit", stderr: "inherit" },
   );
   if (result.exitCode !== 0) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-
+import { panic, Result } from "better-result";
 // Dead-export budget, one decrease-only count per workspace.
 //
 // knip's `exports`/`types`/`nsExports` checks were enforced on packages/cli
@@ -26,12 +26,11 @@
 //   bun scripts/knip-exports-ratchet.ts --write   regenerate the baseline
 //   bun scripts/knip-exports-ratchet.ts --write --allow-increase
 //                                                 record a justified rise
-
-import { panic, Result } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { BASELINE_PATHS } from "./baseline-paths";
 
@@ -310,7 +309,7 @@ const readBaseline = (): Summary => {
 const runKnip = (): unknown => {
   const knip = Bun.spawnSync({
     cmd: [
-      "bun",
+      bunExecutable(),
       "--no-env-file",
       "run",
       "knip",

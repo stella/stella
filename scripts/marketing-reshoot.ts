@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-
+import nodePath from "node:path";
 // Re-records only the product-story marketing captures that
 // scripts/check-marketing-recordings.ts finds stale, so a release reshoot
 // never pays for re-recording the whole matrix when a handful of scenes
@@ -8,7 +8,7 @@
 // automates, and that file's "Refreshing the images" section for the
 // underlying manual steps.
 
-import nodePath from "node:path";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import {
   computeProvenanceVerdicts,
@@ -153,17 +153,20 @@ const runRecorder = (staleIds: readonly string[]) => {
   process.stdout.write(
     `marketing-reshoot: running:\n  ${reshootCommand(staleIds)}\n\n`,
   );
-  const result = Bun.spawnSync(["bun", "run", "capture:product-story"], {
-    cwd: nodePath.join(ROOT_DIR, "apps/web"),
-    env: {
-      ...process.env,
-      E2E_API_URL: API_URL,
-      E2E_WEB_URL: WEB_URL,
-      MARKETING_CAPTURE: staleIds.join(","),
+  const result = Bun.spawnSync(
+    [bunExecutable(), "run", "capture:product-story"],
+    {
+      cwd: nodePath.join(ROOT_DIR, "apps/web"),
+      env: {
+        ...process.env,
+        E2E_API_URL: API_URL,
+        E2E_WEB_URL: WEB_URL,
+        MARKETING_CAPTURE: staleIds.join(","),
+      },
+      stderr: "inherit",
+      stdout: "inherit",
     },
-    stderr: "inherit",
-    stdout: "inherit",
-  });
+  );
   if (!result.success) {
     throw new MarketingReshootError(
       `capture:product-story exited with code ${String(result.exitCode)}`,

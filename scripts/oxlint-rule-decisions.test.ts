@@ -9,6 +9,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import config from "../oxlint.config.ts";
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import {
   SEVERITY,
   declaredBaseRules,
@@ -54,7 +55,16 @@ const useBeforeDefineFindings = async (
     );
     await Bun.write(input, lines.join("\n"));
     const lint = Bun.spawn(
-      ["bun", "--bun", "oxlint", "-c", configPath, "--format", "json", input],
+      [
+        bunExecutable(),
+        "--bun",
+        "oxlint",
+        "-c",
+        configPath,
+        "--format",
+        "json",
+        input,
+      ],
       { cwd: repositoryRoot, stdout: "pipe", stderr: "pipe" },
     );
     const [stdout] = await Promise.all([

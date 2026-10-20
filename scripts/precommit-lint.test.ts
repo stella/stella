@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import {
   RECEIVER_TYPED_AUTOFIX_RULES,
   lintCommand,
@@ -145,7 +146,17 @@ describe("pre-commit lint", () => {
     for (const [rule, body] of Object.entries(RECEIVER_FIXTURES)) {
       const file = writeFixture(`control-${rule}`, body);
       Bun.spawnSync(
-        ["bun", "--bun", "oxlint", "--fix", "-A", "all", "-D", rule, file],
+        [
+          bunExecutable(),
+          "--bun",
+          "oxlint",
+          "--fix",
+          "-A",
+          "all",
+          "-D",
+          rule,
+          file,
+        ],
         { cwd: ROOT, stdout: "ignore", stderr: "ignore" },
       );
       expect(read(file), rule).not.toBe(`${body}\n`);

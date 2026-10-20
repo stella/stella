@@ -3,6 +3,8 @@ import { mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import packageJson from "../package.json" with { type: "json" };
 import {
   CACHE_SCHEMA_VERSION,
@@ -22,7 +24,7 @@ const spawnIsolated = (args: readonly string[]) => {
     ...env
   } = process.env;
   return Bun.spawnSync({
-    cmd: ["bun", CLI_ENTRYPOINT, ...args],
+    cmd: [bunExecutable(), CLI_ENTRYPOINT, ...args],
     env: {
       ...env,
       HOME: home,
@@ -149,7 +151,7 @@ describe("stella CLI: offline registry projection", () => {
       ...env
     } = process.env;
     return Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, ...args],
+      cmd: [bunExecutable(), CLI_ENTRYPOINT, ...args],
       env: {
         ...env,
         HOME: home,
@@ -238,7 +240,7 @@ describe("stella CLI: deployment command discovery", () => {
       ...env
     } = process.env;
     const result = Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, ...args],
+      cmd: [bunExecutable(), CLI_ENTRYPOINT, ...args],
       env: {
         ...env,
         HOME: home,

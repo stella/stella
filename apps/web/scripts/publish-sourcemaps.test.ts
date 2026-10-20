@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import {
   assertChunksInjected,
@@ -97,7 +98,7 @@ describe("sourcemapProcessCommand", () => {
     }
     expect(sourcemapProcessCommand(plan, "/app/dist/client")).toEqual({
       cmd: [
-        "bun",
+        bunExecutable(),
         "x",
         "@posthog/cli@0.18.0",
         "sourcemap",

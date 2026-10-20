@@ -14,6 +14,8 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import {
   type CompilerInputStamp,
   compilerInputStampSchema,
@@ -160,7 +162,7 @@ test("portable stamps preserve directory names and relative compiler globs", asy
   // meaning even when cwd could resolve them into paths under the root.
   const recorded = Bun.spawnSync(
     [
-      "bun",
+      bunExecutable(),
       "-e",
       `
       import ts from ${JSON.stringify(Bun.resolveSync("typescript", import.meta.dir))};

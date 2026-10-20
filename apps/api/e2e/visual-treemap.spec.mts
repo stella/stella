@@ -9,6 +9,7 @@ import * as v from "valibot";
 
 import { generatedVisualPageSchema } from "@stll/api-contract/generated-visual";
 import { VISUAL_SANDBOX_PATH } from "@stll/api-contract/visual-sandbox";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import type * as TreemapHelpers from "./visual-treemap.helpers";
 
@@ -52,7 +53,7 @@ const isTreemapHelpers = (value: unknown): value is typeof TreemapHelpers =>
 test.beforeAll(async () => {
   const bundleDir = mkdtempSync(path.join(tmpdir(), "visual-treemap-"));
   const helpersBundle = path.join(bundleDir, "helpers.mjs");
-  execFileSync("bun", [
+  execFileSync(bunExecutable(), [
     "build",
     fileURLToPath(new URL("visual-treemap.helpers.ts", import.meta.url)),
     "--target=node",
@@ -66,7 +67,7 @@ test.beforeAll(async () => {
   loaded.helpers = bundle;
   rmSync(bundleDir, { force: true, recursive: true });
   harness.source = execFileSync(
-    "bun",
+    bunExecutable(),
     [
       "build",
       fileURLToPath(

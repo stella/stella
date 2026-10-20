@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 const repo = path.resolve(import.meta.dir, "../..");
 const inheritedPath = process.env["PATH"];
@@ -39,7 +40,7 @@ describe("documentation MCP startup", () => {
             },
           );
         }
-        const child = Bun.spawn([process.execPath, "run", "stella-docs.ts"], {
+        const child = Bun.spawn([bunExecutable(), "run", "stella-docs.ts"], {
           cwd: directory,
           env: {
             ...process.env,

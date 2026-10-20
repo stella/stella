@@ -237,7 +237,7 @@ export const runGatedTests = async ({
     { generator: "generate:capability-runtime", cwd: apiRoot },
   ]) {
     const generationProcess = Bun.spawn({
-      cmd: [process.execPath, "run", generator],
+      cmd: [bunExecutable(), "run", generator],
       cwd,
       stdin: "inherit",
       stdout: "inherit",

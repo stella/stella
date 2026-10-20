@@ -7,6 +7,8 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
+
 class DesktopReleaseStepError extends Error {
   override name = "DesktopReleaseStepError";
   readonly _tag = "DesktopReleaseStepError";
@@ -126,7 +128,7 @@ export const desktopArtifacts = (directory: string): string[] => {
 
 const runTauriSigner: CommandRunner = (cwd, file) => {
   const result = Bun.spawnSync(
-    ["bun", "x", "@tauri-apps/cli", "signer", "sign", file],
+    [bunExecutable(), "x", "@tauri-apps/cli", "signer", "sign", file],
     { cwd, stdout: "inherit", stderr: "inherit" },
   );
   if (result.exitCode !== 0) {

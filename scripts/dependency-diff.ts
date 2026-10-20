@@ -1,4 +1,6 @@
 #!/usr/bin/env bun
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 
 // Force dependency review to name both published versions. Bun's one-argument
@@ -27,10 +29,13 @@ if (
   process.exit(2);
 }
 
-const child = Bun.spawn(["bun", "--no-env-file", "pm", "diff", ...args], {
-  stderr: "inherit",
-  stdin: "inherit",
-  stdout: "inherit",
-});
+const child = Bun.spawn(
+  [bunExecutable(), "--no-env-file", "pm", "diff", ...args],
+  {
+    stderr: "inherit",
+    stdin: "inherit",
+    stdout: "inherit",
+  },
+);
 await child.exited;
 process.exit(childExitStatus(child));

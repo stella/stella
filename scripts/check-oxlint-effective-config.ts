@@ -24,6 +24,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import config from "../oxlint.config.ts";
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { isRecord, repoRoot } from "./oxlint-config-scopes.ts";
 import {
@@ -49,7 +50,7 @@ const printConfig = (): unknown => {
   const directory = mkdtempSync(path.join(tmpdir(), "oxlint-print-config-"));
   const output = path.join(directory, "config.json");
   const result = Bun.spawnSync(
-    ["bun", "--bun", "oxlint", "-c", CONFIG_FILE, "--print-config"],
+    [bunExecutable(), "--bun", "oxlint", "-c", CONFIG_FILE, "--print-config"],
     { cwd: repoRoot, stdout: Bun.file(output), stderr: "inherit" },
   );
   const text = result.success ? readFileSync(output, "utf-8") : undefined;

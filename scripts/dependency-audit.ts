@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 // Dependency vulnerability guard.
 //
 // `bun audit` checks the lockfile against the npm advisory database, but it
@@ -26,13 +27,12 @@
 // A baseline entry may be temporary: `expiresOn` and `untilPatched` make the
 // acceptance lapse (and --check fail) after a date or once a patched release
 // is published; see scripts/dependency-audit-acceptance.ts.
-
-import { panic, Result } from "better-result";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { BASELINE_PATHS } from "./baseline-paths";
 import {
@@ -245,7 +245,7 @@ const gatedAdvisoriesFromAuditResult = ({
 // Runs `bun audit --json` in the repo root and returns the distinct gated
 // (high/critical) advisories. `bun audit` groups advisories by package name.
 const collectGatedAdvisories = async (): Promise<Advisory[]> => {
-  const proc = Bun.spawn(["bun", "audit", "--json"], {
+  const proc = Bun.spawn([bunExecutable(), "audit", "--json"], {
     cwd: REPO_ROOT,
     stdout: "pipe",
     stderr: "pipe",

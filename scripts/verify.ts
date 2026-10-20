@@ -2,6 +2,8 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import {
   admitLocal,
   BOTH_GATES_REFUSED,
@@ -234,7 +236,7 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
           `${added.join("\0")}\0`,
         );
         const plan = Bun.spawnSync(
-          [process.execPath, "scripts/autofix-plan.ts", "plan"],
+          [bunExecutable(), "scripts/autofix-plan.ts", "plan"],
           {
             cwd: repo,
             stdin: new TextEncoder().encode(

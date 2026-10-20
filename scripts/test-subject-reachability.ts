@@ -5,6 +5,7 @@ import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
@@ -921,7 +922,7 @@ if (import.meta.main) {
       // CI runs this beside other checks; the slowest fixture test took
       // 6.4 s there, so allow about 2.5 times that instead of Bun's 5 s.
       [
-        "bun",
+        bunExecutable(),
         "test",
         "--timeout",
         "15000",

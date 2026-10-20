@@ -13,6 +13,7 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import {
   MANUAL_WORKFLOW_CHECKS,
   validateManualCheckInput,
@@ -190,7 +191,10 @@ test("result writer emits the stable result shape and first twenty errors", () =
   writeFileSync(exit, "7\n");
   writeFileSync(start, `${Math.floor(Date.now() / 1000) - 2}\n`);
   const run = Bun.spawnSync(
-    ["bun", new URL("write-manual-check-result.ts", import.meta.url).pathname],
+    [
+      bunExecutable(),
+      new URL("write-manual-check-result.ts", import.meta.url).pathname,
+    ],
     {
       cwd: directory,
       env: {
@@ -240,7 +244,10 @@ const writeResult = (files: WriteResultFiles) => {
     }
   }
   const run = Bun.spawnSync(
-    ["bun", new URL("write-manual-check-result.ts", import.meta.url).pathname],
+    [
+      bunExecutable(),
+      new URL("write-manual-check-result.ts", import.meta.url).pathname,
+    ],
     {
       cwd: directory,
       env: {
@@ -314,7 +321,7 @@ test("test-files runs exactly the listed files, not files sharing a path suffix"
       testFile(marker(dir)),
     );
   }
-  const run = Bun.spawnSync(["bun", runner], {
+  const run = Bun.spawnSync([bunExecutable(), runner], {
     cwd: directory,
     env: { ...process.env, CHECK_TARGET: "apps/x.test.ts" },
   });
@@ -322,7 +329,7 @@ test("test-files runs exactly the listed files, not files sharing a path suffix"
   expect(existsSync(marker("apps"))).toBe(true);
   expect(existsSync(marker("fixtures/apps"))).toBe(false);
   // The hazard the ./ prefix avoids: a bare path filters by suffix.
-  const bare = Bun.spawnSync(["bun", "test", "apps/x.test.ts"], {
+  const bare = Bun.spawnSync([bunExecutable(), "test", "apps/x.test.ts"], {
     cwd: directory,
   });
   expect(bare.exitCode).toBe(0);
@@ -353,7 +360,7 @@ test("test-files runs package tests through the owning package's test script", (
     { directory: "packages/fixture", files: ["./src/one.test.ts"] },
     { directory: ".", files: ["./root.test.ts"] },
   ]);
-  const run = Bun.spawnSync(["bun", runner], {
+  const run = Bun.spawnSync([bunExecutable(), runner], {
     cwd: directory,
     env: { ...process.env, CHECK_TARGET: "packages/fixture/src/one.test.ts" },
   });

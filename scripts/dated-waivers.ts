@@ -7,6 +7,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import {
   DOC_SOURCE_EXCLUSIONS,
@@ -119,7 +120,7 @@ export const collectWaivers = ({
     checkedAt: entry.checkedAt,
     probe: {
       command: [
-        "bun",
+        bunExecutable(),
         "scripts/dated-waiver-probes.ts",
         "--doc-url",
         /https:\/\/[^\s()]+\/llms\.txt\b/u.exec(entry.explanation)?.at(0) ?? "",
@@ -141,7 +142,7 @@ export const collectWaivers = ({
         kind: "release-age-exclusion",
         probe: {
           command: [
-            "bun",
+            bunExecutable(),
             "scripts/check-lockfile-release-ages.ts",
             "--all",
             "--package",
@@ -164,7 +165,7 @@ export const collectWaivers = ({
       id: entry.id,
       kind: "dependency-audit",
       probe: {
-        command: ["bun", "run", "security:audit"],
+        command: [bunExecutable(), "run", "security:audit"],
         attempts: NETWORK_ATTEMPTS,
       },
       expiresAt: entry.expiresOn,
@@ -186,7 +187,7 @@ export const collectWaivers = ({
       kind: "suppression-waiver",
       probe: {
         command: [
-          "bun",
+          bunExecutable(),
           "--bun",
           "oxlint",
           "-c",
@@ -220,7 +221,11 @@ export const collectWaivers = ({
       id: command,
       kind: "release-age-exception",
       probe: {
-        command: ["bun", "scripts/check-lockfile-release-ages.ts", "--all"],
+        command: [
+          bunExecutable(),
+          "scripts/check-lockfile-release-ages.ts",
+          "--all",
+        ],
         attempts: NETWORK_ATTEMPTS,
       },
     });

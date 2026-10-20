@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { propertyConfig } from "@stll/property-testing";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import {
   canonicalJson,
@@ -487,7 +488,7 @@ describe("catalog storage layout preserves the release contract", () => {
         'import { readHeadSurface } from "./scripts/check-cli-release-coupling";\n' +
           'process.stdout.write(readHeadSurface(import.meta.dirname)["capability-catalog.json"]);\n',
       );
-      const result = Bun.spawnSync([process.execPath, "read-surface.ts"], {
+      const result = Bun.spawnSync([bunExecutable(), "read-surface.ts"], {
         cwd: root,
         stdout: "pipe",
         stderr: "pipe",
@@ -562,7 +563,7 @@ test("release contract reads committed data without installed dependencies or de
       'import { readHeadSurface } from "./scripts/check-cli-release-coupling";\n' +
         "process.stdout.write(JSON.stringify(readHeadSurface(import.meta.dirname)));\n",
     );
-    const result = spawnSync(process.execPath, ["read-surface.ts"], {
+    const result = spawnSync(bunExecutable(), ["read-surface.ts"], {
       cwd: root,
       encoding: "utf-8",
       timeout: 10_000,
@@ -603,7 +604,7 @@ test("an advancing base does not turn an unchanged PR into a release", () => {
     git("add", "feature.txt");
     git("commit", "-m", "fixture feature");
     const result = Bun.spawnSync(
-      [process.execPath, SCRIPT, "--base", "advanced-base"],
+      [bunExecutable(), SCRIPT, "--base", "advanced-base"],
       {
         cwd: root,
         stdout: "pipe",

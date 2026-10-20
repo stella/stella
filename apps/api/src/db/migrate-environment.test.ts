@@ -3,6 +3,8 @@ import { copyFile, mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import nodeOs from "node:os";
 import nodePath from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 /**
  * The migrate entrypoint runs with a database-only environment.
  *
@@ -86,7 +88,7 @@ const runMigrateEntrypoint = async (environment: Record<string, string>) => {
   );
   try {
     const migrate = Bun.spawn({
-      cmd: ["bun", "run", `--env-file=${EMPTY_ENV_FILE}`, entrypoint],
+      cmd: [bunExecutable(), "run", `--env-file=${EMPTY_ENV_FILE}`, entrypoint],
       env: {
         DATABASE_URL: UNREACHABLE_DATABASE_URL,
         HOME: "/tmp",
@@ -153,7 +155,7 @@ for (const scenario of [
     );
     const child = Bun.spawn({
       cmd: [
-        "bun",
+        bunExecutable(),
         `--env-file=${EMPTY_ENV_FILE}`,
         "--eval",
         `const { setSharedQueryTimeouts } = await import(${JSON.stringify(modulePath)});
@@ -190,7 +192,7 @@ for (const failure of [
     const runtimePath = nodePath.join(import.meta.dir, "backfill-runtime.ts");
     const child = Bun.spawn({
       cmd: [
-        "bun",
+        bunExecutable(),
         `--env-file=${EMPTY_ENV_FILE}`,
         "--eval",
         `const { createDatabaseLoadVerdictReader } = await import(${JSON.stringify(runtimePath)});

@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import { waiverKey } from "./dated-waiver-fix-task";
 import {
   collectWaivers,
@@ -173,7 +174,7 @@ test("an elapsed flaky-test quarantine annotates the change gate instead of fail
       line: 4,
       probe: {
         command: [
-          "bun",
+          bunExecutable(),
           "--cwd=packages/example",
           "run",
           "test",
@@ -317,7 +318,7 @@ test("adjacent literal skipped tests declare twenty samples and lapse at expiry"
   expect(entries).toHaveLength(1);
   expect(entries.at(0)?.probe).toEqual({
     command: [
-      "bun",
+      bunExecutable(),
       "--cwd=packages/example",
       "run",
       "test",
@@ -470,7 +471,7 @@ test("check consumes validated tracked files without spawning under the offline 
 
     const checked = Bun.spawnSync(
       [
-        "bun",
+        bunExecutable(),
         "--preload",
         "./scripts/offline-network-preload.ts",
         "scripts/dated-waivers.ts",
@@ -489,7 +490,7 @@ test("check consumes validated tracked files without spawning under the offline 
 
 test("check requires an explicit tracked-files input", () => {
   const checked = Bun.spawnSync(
-    ["bun", "scripts/dated-waivers.ts", "--check"],
+    [bunExecutable(), "scripts/dated-waivers.ts", "--check"],
     {
       cwd: path.resolve(import.meta.dir, ".."),
     },
@@ -508,7 +509,7 @@ test("tracked-files input rejects absolute and parent paths", () => {
       writeFileSync(trackedFiles, `${invalid}\0`);
       const checked = Bun.spawnSync(
         [
-          "bun",
+          bunExecutable(),
           "scripts/dated-waivers.ts",
           "--check",
           "--tracked-files",

@@ -11,6 +11,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "./bun-executable";
+
 const root = path.resolve(import.meta.dir, "../../..");
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -296,7 +298,7 @@ test("web sources generate once across compiler tasks and restore until source i
     run([...command.slice(0, 2), ...consumers, ...command.slice(3)]);
     const executions = readFileSync(path.join(directory, "runs.log"), "utf-8");
     expect(executions.trim().split("\n")).toHaveLength(3);
-    run([process.execPath, "--cwd=apps/api", "run", "gen:web-api-types"]);
+    run([bunExecutable(), "--cwd=apps/api", "run", "gen:web-api-types"]);
     expect(readFileSync(path.join(directory, "runs.log"), "utf-8")).toBe(
       executions,
     );
@@ -347,7 +349,7 @@ test("web sources generate once across compiler tasks and restore until source i
         .split("\n"),
     ).toHaveLength(7);
     run([
-      process.execPath,
+      bunExecutable(),
       "--cwd=apps/api",
       "run",
       "gen:web-api-types",
@@ -392,7 +394,7 @@ test("web sources generate once across compiler tasks and restore until source i
       "scripts/prepare-mcp-apps.ts",
       [
         "import path from 'node:path';",
-        "const build = Bun.spawnSync([process.execPath, 'run', 'build'], { cwd: path.resolve(import.meta.dir, '../packages/mcp-apps'), stdout: 'inherit', stderr: 'inherit' });",
+        "const build = Bun.spawnSync([bunExecutable(), 'run', 'build'], { cwd: path.resolve(import.meta.dir, '../packages/mcp-apps'), stdout: 'inherit', stderr: 'inherit' });",
         "process.exit(build.exitCode);",
       ].join("\n"),
     );
@@ -415,7 +417,7 @@ test("web sources generate once across compiler tasks and restore until source i
     ).toBe(path.join(bin, "bun"));
     const prepare = () =>
       Bun.spawnSync(
-        [process.execPath, "scripts/ci-generated-sources.ts", "prepare"],
+        [bunExecutable(), "scripts/ci-generated-sources.ts", "prepare"],
         { cwd: directory, env: prepareEnv, stdout: "pipe", stderr: "pipe" },
       );
     write(

@@ -9,6 +9,8 @@ import {
 import os from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import {
   NETWORK_DEPTH_METHOD,
   diffNetworkBaseline,
@@ -207,7 +209,7 @@ test("mutation proof: scoped-route growth still fails its budget assertion", () 
       );
     writeFileSync(file, relocated);
     const result = Bun.spawnSync([
-      "bun",
+      bunExecutable(),
       "-e",
       `import {expect} from "bun:test"; import {diffNetworkBaseline} from ${JSON.stringify(file)}; const fixture = ${JSON.stringify(fixture)}; expect(diffNetworkBaseline(fixture.baseline, new Map([["/chat", fixture.observed]]), {changedRoutes: ["/chat"]}).problems).not.toEqual([]);`,
     ]);

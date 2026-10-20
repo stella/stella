@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 /**
  * Reproduces the runner image's filesystem layout for the OCR worker and
  * executes the bundle inside it with Bun's install cache disabled.
@@ -14,11 +15,11 @@
  * a checkout without them. The image build's smoke stage runs the same
  * probe against the real image as the enforced backstop.
  */
-
-import { describe, expect, test } from "bun:test";
 import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { RUNTIME_WORKER_NATIVE_LOOKUPS } from "@/api/lib/runtime-worker-path";
@@ -51,7 +52,7 @@ describe.skipIf(!modelsPresent)("ocr-local-worker image layout", () => {
 
       const build = Bun.spawn(
         [
-          "bun",
+          bunExecutable(),
           "build",
           "--target",
           "bun",
@@ -84,7 +85,12 @@ describe.skipIf(!modelsPresent)("ocr-local-worker image layout", () => {
       const emptyBunInstall = path.join(root, "empty-bun-install");
       await mkdir(emptyBunInstall, { recursive: true });
       const subprocess = Bun.spawn(
-        ["bun", "run", path.join(workersDir, "ocr-local-worker.js"), MODEL_DIR],
+        [
+          bunExecutable(),
+          "run",
+          path.join(workersDir, "ocr-local-worker.js"),
+          MODEL_DIR,
+        ],
         {
           cwd: root,
           stdin: new Blob([BLANK_PAGE_PDF]),

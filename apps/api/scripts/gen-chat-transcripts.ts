@@ -1,3 +1,4 @@
+import path from "node:path";
 // Records the chat conversations the web app replays through its rendered
 // chat (apps/web/src/components/chat/__fixtures__/recorded-conversations):
 // each scenario in the recorded-conversation integration suites
@@ -13,8 +14,7 @@
 // posted a message is refused and the committed file kept, and a recording
 // whose scenario no longer exists is removed.
 
-import path from "node:path";
-
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
@@ -23,7 +23,7 @@ const API_ROOT = path.resolve(import.meta.dir, "..");
 
 const check = process.argv.includes("--check");
 for (const recorder of Object.values(RECORDED_CONVERSATION_SUITES)) {
-  const child = Bun.spawn(["bun", "run", "test", recorder], {
+  const child = Bun.spawn([bunExecutable(), "run", "test", recorder], {
     cwd: API_ROOT,
     env: { ...process.env, ...(check ? {} : { CHAT_TRANSCRIPTS_WRITE: "1" }) },
     stderr: "inherit",

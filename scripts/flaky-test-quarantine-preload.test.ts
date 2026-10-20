@@ -15,6 +15,7 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { isPathInside } from "@stll/portable-path";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import {
   QUARANTINE_REGISTRY_ENV,
@@ -87,7 +88,7 @@ if (reportDir && registry.entries.length > 0 && !existsSync(reportDir)) {
   throw new Error("quarantine preload did not initialize in the package runner");
 }
 const result = Bun.spawnSync({
-  cmd: [process.execPath, "test", "./${FIXTURE}"],
+  cmd: [bunExecutable(), "test", "./${FIXTURE}"],
   stdout: "inherit",
   stderr: "inherit",
 });
@@ -139,7 +140,7 @@ const run = ({
   const result = Bun.spawnSync({
     // CI loads the preload into a package runner through BUN_OPTIONS; that
     // runner then spawns the actual Bun test process.
-    cmd: [process.execPath, "runner.ts"],
+    cmd: [bunExecutable(), "runner.ts"],
     cwd: root,
     env: {
       ...inherited,

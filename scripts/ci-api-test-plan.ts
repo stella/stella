@@ -3,6 +3,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import {
   allApiTests,
   selectApiTestImpact,
@@ -119,7 +120,7 @@ if (import.meta.main) {
       const comparisonBase =
         process.env["COMPARISON_BASE"] ?? panic("Missing COMPARISON_BASE");
       const scopeResult = Bun.spawnSync(
-        ["bun", "scripts/test-scope.ts", "--base", comparisonBase],
+        [bunExecutable(), "scripts/test-scope.ts", "--base", comparisonBase],
         { cwd: root, stderr: "pipe", stdout: "pipe" },
       );
       if (scopeResult.exitCode !== 0) {
@@ -129,7 +130,7 @@ if (import.meta.main) {
       const scopeArgs = testScope.split(/\s+/u).filter(Boolean);
       const dryRun = Bun.spawnSync(
         [
-          "bun",
+          bunExecutable(),
           "run",
           "test",
           "--",

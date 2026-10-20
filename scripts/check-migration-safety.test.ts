@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { checkMigrationSources } from "./check-migration-safety";
 
@@ -23,7 +24,7 @@ SET LOCAL statement_timeout = '30s';
 
 const runCheckerOn = (...args: string[]): CheckerResult => {
   const result = Bun.spawnSync([
-    "bun",
+    bunExecutable(),
     "scripts/check-migration-safety.ts",
     ...args,
   ]);

@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
-
 import { panic } from "better-result";
+
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
@@ -20,7 +21,7 @@ if (files.length === 0) {
 }
 
 const generated = Bun.spawnSync([
-  "bun",
+  bunExecutable(),
   "scripts/ci-generated-sources.ts",
   "prepare",
 ]);

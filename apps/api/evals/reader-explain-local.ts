@@ -4,6 +4,8 @@ import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { readerExplainCases } from "./lib/reader-explain-cases";
 import {
   explainCorpusCaptureSchema,
@@ -45,7 +47,7 @@ if (mode === "prompts") {
         tool: {
           name: "fetch_related_decision_excerpts",
           command: [
-            "bun",
+            bunExecutable(),
             "run",
             path.join(import.meta.dir, "reader-explain-local.ts"),
             "tool",

@@ -2,11 +2,13 @@ import { expect, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 const harness = { source: "" };
 
 test.beforeAll(() => {
   harness.source = execFileSync(
-    "bun",
+    bunExecutable(),
     [
       "build",
       fileURLToPath(

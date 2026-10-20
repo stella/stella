@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
+
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const wideningCode = "no-known-value-widening(no-known-value-widening)";
 const rejectionCode = "no-swallowed-rejection(require-rejection-parameter)";
@@ -34,7 +36,16 @@ const lint = async (source: string) => {
     );
     await Bun.write(input, source);
     const process = Bun.spawn(
-      ["bun", "--bun", "oxlint", "-c", config, "--format", "json", input],
+      [
+        bunExecutable(),
+        "--bun",
+        "oxlint",
+        "-c",
+        config,
+        "--format",
+        "json",
+        input,
+      ],
       {
         cwd: repositoryRoot,
         stderr: "pipe",

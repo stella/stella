@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import {
   SubprocessError,
   SUBPROCESS_TERMINATION_REASON,
@@ -157,7 +159,7 @@ const watchWorkerTermination = ({
 };
 
 const spawn = ({ args, stdin, workerPath }: SpawnWorkerProcessOptions) =>
-  Bun.spawn(["bun", "run", "--no-env-file", workerPath, ...args], {
+  Bun.spawn([bunExecutable(), "run", "--no-env-file", workerPath, ...args], {
     stdin,
     stdout: "pipe",
     stderr: "pipe",

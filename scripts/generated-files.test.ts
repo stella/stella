@@ -15,6 +15,8 @@ import { pathToFileURL } from "node:url";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
 import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content-facts";
 import { repoRelativePath } from "../packages/portable-path/src/index";
@@ -682,11 +684,14 @@ test("the planned allowlist is exactly the selected committed output union", () 
     "packages/api-contract/src/mcp-tool.ts\n",
     "docs/unrelated.md\n",
   ]) {
-    const plan = Bun.spawnSync(["bun", "scripts/autofix-plan.ts", "plan"], {
-      stdin: new TextEncoder().encode(paths),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const plan = Bun.spawnSync(
+      [bunExecutable(), "scripts/autofix-plan.ts", "plan"],
+      {
+        stdin: new TextEncoder().encode(paths),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     expect(plan.exitCode).toBe(0);
     const values = Object.fromEntries(
       new TextDecoder()
@@ -805,10 +810,13 @@ test("the plan alone never authorizes the ratchet baseline", () => {
 });
 
 test("autofix refuses an empty selected-generator handoff", () => {
-  const run = Bun.spawnSync(["bun", "scripts/autofix-plan.ts", "allowed", ""], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const run = Bun.spawnSync(
+    [bunExecutable(), "scripts/autofix-plan.ts", "allowed", ""],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
   expect(run.exitCode).toBe(1);
   expect(new TextDecoder().decode(run.stderr)).toContain(
     "Autofix plan has no selected generators",
@@ -1164,7 +1172,7 @@ test("web catalog checks pass without the derived message declarations", async (
         await symlink(nodePath.join(repo, link), nodePath.join(copy, link));
       }
     }
-    const check = Bun.spawnSync(["bun", "run", "i18n:check"], {
+    const check = Bun.spawnSync([bunExecutable(), "run", "i18n:check"], {
       cwd: nodePath.join(copy, "apps/web"),
       stdout: "pipe",
       stderr: "pipe",

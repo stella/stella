@@ -1,3 +1,4 @@
+import { PDF, StandardFonts } from "@libpdf/core";
 /**
  * End-to-end test of the local OCR worker subprocess on a synthetic PDF
  * with known text. Requires the pinned ONNX models, so it skips on a
@@ -5,10 +6,10 @@
  * additionally spawns the bundled worker in its smoke stage, which keeps
  * the shipped artifact covered even where this suite skips.
  */
-
-import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
+
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { parseOcrPage } from "@/api/lib/document-processing-ocr-result";
@@ -34,11 +35,14 @@ const buildTextPdf = async (): Promise<Uint8Array> => {
 };
 
 const runWorker = async (pdfBytes: Uint8Array): Promise<string> => {
-  const subprocess = Bun.spawn(["bun", "run", WORKER_PATH, MODEL_DIR], {
-    stdin: new Blob([pdfBytes.slice().buffer]),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const subprocess = Bun.spawn(
+    [bunExecutable(), "run", WORKER_PATH, MODEL_DIR],
+    {
+      stdin: new Blob([pdfBytes.slice().buffer]),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
   const [output, exitCode] = await Promise.all([
     new Response(subprocess.stdout).text(),
     subprocess.exited,
@@ -87,11 +91,14 @@ describe.skipIf(!modelsPresent)("ocr-local-worker", () => {
   }, 120_000);
 
   test("rejects a non-PDF input with a failure exit code", async () => {
-    const subprocess = Bun.spawn(["bun", "run", WORKER_PATH, MODEL_DIR], {
-      stdin: new Blob([new TextEncoder().encode("not a pdf")]),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const subprocess = Bun.spawn(
+      [bunExecutable(), "run", WORKER_PATH, MODEL_DIR],
+      {
+        stdin: new Blob([new TextEncoder().encode("not a pdf")]),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     expect(await subprocess.exited).toBe(1);
   }, 60_000);
 });

@@ -163,7 +163,7 @@ test("finds retry flags passed through actual TS process invocations", () => {
         `
           const args = ["bun", "test", "--retry", "2"] as const;
           Bun.spawn(args);
-          spawn("bun", ["test", "--retries", getRetryCount()]);
+          spawn(bunExecutable(), ["test", "--retries", getRetryCount()]);
           Bun.spawn(["curl", "--retry", "2"]);
         `,
       ],

@@ -3,6 +3,7 @@ import type { ReservedSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import { defaultConfig, type Signal } from "@stll/db-load-gate/health";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 import { waitFor } from "@stll/test-kit";
 
 import type { OnlineIndexConfig } from "../env-online-index";
@@ -818,7 +819,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       await blockBuild(fixture);
       const child = Bun.spawn({
         cmd: [
-          process.execPath,
+          bunExecutable(),
           "test",
           "--preload",
           "./src/tests/setup-env.ts",

@@ -25,6 +25,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import oxlintConfig from "../oxlint.config.ts";
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import { runLedgerMembershipGuard } from "./ledger-membership.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -265,7 +266,7 @@ export const runPluginBudgetLedger = ({
     try {
       const result = Bun.spawnSync(
         [
-          "bun",
+          bunExecutable(),
           "--bun",
           "oxlint",
           "-c",

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import {
   BASELINE_REASON,
   buildBaseline,
@@ -441,7 +443,9 @@ describe("baseline", () => {
     const script = new URL("deployment-feature-guard.ts", import.meta.url)
       .pathname;
     for (const args of [["--base", ""], ["--base"], ["--base", "--report"]]) {
-      const run = Bun.spawnSync(["bun", script, ...args], { stderr: "pipe" });
+      const run = Bun.spawnSync([bunExecutable(), script, ...args], {
+        stderr: "pipe",
+      });
       expect(run.exitCode).not.toBe(0);
       expect(run.stderr.toString()).toContain("--base needs a revision");
     }

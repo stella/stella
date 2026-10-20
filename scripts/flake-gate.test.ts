@@ -9,6 +9,8 @@ import {
 import os from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import apiManifest from "../apps/api/package.json" with { type: "json" };
 import { parseGatedTestSelection } from "../apps/api/scripts/gated-test-selection";
 import { restrictApiTestFiles } from "../apps/api/scripts/test-file-shards";
@@ -92,7 +94,7 @@ const targetFor = (root: string, file = "fixture.test.ts") =>
   ({
     file,
     cwd: root,
-    command: [process.execPath, "test", `./${file}`],
+    command: [bunExecutable(), "test", `./${file}`],
     env: {},
     runner: "bun",
   }) satisfies Target;
@@ -152,7 +154,7 @@ test("diff selection repeats changed tests only and preserves package runners an
       throw new TypeError("Expected selected API unit runner");
     }
     expect(selectedUnit.command).toEqual([
-      process.execPath,
+      bunExecutable(),
       "scripts/run-tests.ts",
       "./src/unit.test.ts",
     ]);
@@ -173,7 +175,7 @@ test("diff selection repeats changed tests only and preserves package runners an
       throw new TypeError("Expected selected Postgres runner");
     }
     expect(withDb.command).toEqual([
-      process.execPath,
+      bunExecutable(),
       apiManifest.ciGateTestRunners["test:postgres"].runner,
       "./src/db.test.ts",
     ]);
@@ -220,7 +222,7 @@ test("the real API manifest selects unit and Postgres files through their exact 
     }
     expect(target.cwd).toBe(path.join(root, "apps/api"));
     expect(target.command).toEqual([
-      process.execPath,
+      bunExecutable(),
       isPostgres
         ? apiManifest.ciGateTestRunners["test:postgres"].runner
         : "scripts/run-tests.ts",
@@ -277,7 +279,7 @@ test("the web entry retains file scoping and its DOM isolation with seeded trial
       throw new TypeError("Expected web runner");
     }
     expect(target.command).toEqual([
-      process.execPath,
+      bunExecutable(),
       "scripts/run-tests.ts",
       "./src/selected.dom.test.tsx",
     ]);
@@ -322,7 +324,7 @@ test.each(["api", "web"] as const)(
       write(root, "empty.ts", 'console.log("0 pass");');
       expect(
         await runOnce({
-          target: { ...target, command: [process.execPath, "empty.ts"] },
+          target: { ...target, command: [bunExecutable(), "empty.ts"] },
           seed: 11,
           timeoutMs: 10_000,
         }),
@@ -379,11 +381,7 @@ test("mixed runtime packages select their Bun-only command", async () => {
     if (!target || target.runner !== "bun") {
       throw new TypeError("Expected Bun-only target");
     }
-    expect(target.command).toEqual([
-      process.execPath,
-      "test",
-      "./unit.test.ts",
-    ]);
+    expect(target.command).toEqual([bunExecutable(), "test", "./unit.test.ts"]);
     expect(await runOnce({ target, seed: 1, timeoutMs: 10_000 })).toMatchObject(
       { type: "executed", passed: true },
     );
@@ -727,7 +725,7 @@ test("native flag probe", () => appendFileSync("executions.txt", "x"));
     );
     const child = Bun.spawn(
       [
-        process.execPath,
+        bunExecutable(),
         "test",
         "--rerun-each",
         String(REPEATS),
@@ -774,7 +772,7 @@ test("owning runner deadlines release sockets held by detached test descendants"
     write(
       root,
       "packages/runner/runner.ts",
-      `const child = Bun.spawn([process.execPath, "test", "--timeout=3000", "./hang.test.ts"], { detached: true, stdout: "inherit", stderr: "inherit" });
+      `const child = Bun.spawn([bunExecutable(), "test", "--timeout=3000", "./hang.test.ts"], { detached: true, stdout: "inherit", stderr: "inherit" });
 await child.exited;
 `,
     );
@@ -820,7 +818,7 @@ test("the CLI emits a JSON error report and report/blocking exit codes on an unr
     for (const blocking of [false, true]) {
       const child = Bun.spawn(
         [
-          process.execPath,
+          bunExecutable(),
           path.join(import.meta.dir, "flake-gate.ts"),
           ...(blocking ? ["--blocking"] : []),
         ],

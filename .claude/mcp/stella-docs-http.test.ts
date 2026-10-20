@@ -5,6 +5,8 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { afterEach, describe, expect, test } from "bun:test";
 import { connect, createServer } from "node:net";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 const children = new Set<ReturnType<typeof Bun.spawn>>();
 const UNBOUNDED_UPLOAD_ITERATIONS = 200;
 const DECLARED_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -54,7 +56,7 @@ const getSessionCount = async (baseUrl: string) => {
 
 const startHttpServer = async () => {
   const port = await getFreePort();
-  const child = Bun.spawn([process.execPath, "run", "stella-docs-http.ts"], {
+  const child = Bun.spawn([bunExecutable(), "run", "stella-docs-http.ts"], {
     cwd: import.meta.dir,
     env: { ...process.env, STELLA_DOCS_PORT: String(port) },
     stdin: "ignore",
@@ -385,7 +387,7 @@ describe("shared documentation MCP HTTP server", () => {
   });
 
   test("refuses to bind to a non-loopback host", async () => {
-    const child = Bun.spawn([process.execPath, "run", "stella-docs-http.ts"], {
+    const child = Bun.spawn([bunExecutable(), "run", "stella-docs-http.ts"], {
       cwd: import.meta.dir,
       env: { ...process.env, STELLA_DOCS_HOST: "0.0.0.0" },
       stdin: "ignore",

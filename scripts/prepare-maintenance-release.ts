@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-
 import { Result } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
@@ -11,6 +10,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import nodePath from "node:path";
+
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { RECORDINGS_MANIFEST_PATH } from "../apps/web/e2e/marketing/captures";
 import { parseChangesetEntry } from "./changeset-entry";
@@ -362,7 +363,7 @@ export const withFileRollback = <T>({
  * changelogs and delete consumed entries the same way.
  */
 const runChangesetVersion = (rootDir: string) => {
-  const result = Bun.spawnSync(["bun", "run", "changeset:version"], {
+  const result = Bun.spawnSync([bunExecutable(), "run", "changeset:version"], {
     cwd: rootDir,
     env: changesetVersionEnv(process.env, githubToken()),
     stderr: "inherit",

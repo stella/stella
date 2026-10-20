@@ -4,6 +4,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import packageJson from "../package.json" with { type: "json" };
 import { CLI_REQUIRED_RESOURCE_SCOPES } from "./auth/constants.js";
 import { checkServerCompatibility } from "./compatibility.js";
@@ -79,7 +81,7 @@ const runCompatibilityCli = async (serverUrl: string) => {
   tempDirs.push(configHome);
   const process = Bun.spawn({
     cmd: [
-      "bun",
+      bunExecutable(),
       CLI_ENTRYPOINT,
       "compatibility",
       "check",

@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
@@ -104,7 +106,7 @@ test("killing a multi-page batch resumes its durable checkpoint without duplicat
       const spawnWorker = (pause: typeof config.pauseAt | "none") =>
         Bun.spawn({
           cmd: [
-            process.execPath,
+            bunExecutable(),
             "run",
             path.join(
               import.meta.dir,

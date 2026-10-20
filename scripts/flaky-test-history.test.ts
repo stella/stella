@@ -4,6 +4,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
 import type { FailureRecord } from "./ci-failure-digest";
 import {
@@ -752,7 +754,7 @@ test("the job summary reports an unreadable record as a warning and never fails 
     );
     const run = Bun.spawnSync(
       [
-        process.execPath,
+        bunExecutable(),
         "scripts/flaky-test-history.ts",
         "job-summary",
         "--reports",

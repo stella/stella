@@ -14,6 +14,7 @@ import * as v from "valibot";
 
 import { propertyConfig } from "@stll/property-testing";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import {
   checkChangesetPackages,
   decideChangesetGate,
@@ -387,7 +388,7 @@ describe("changeset package relevance", () => {
       const check = () =>
         Bun.spawnSync(
           [
-            "bun",
+            bunExecutable(),
             "scripts/changeset-guard.ts",
             "--base",
             base,

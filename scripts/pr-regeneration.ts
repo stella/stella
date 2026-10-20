@@ -2,6 +2,8 @@ import { existsSync, lstatSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 type GeneratorDefinition = {
   command: readonly string[];
   environment: Readonly<Record<string, string>>;
@@ -13,7 +15,7 @@ type GeneratorDefinition = {
 export const PR_GENERATORS = {
   "query-plan-contracts": {
     command: [
-      "bun",
+      bunExecutable(),
       "--no-env-file",
       "--cwd=apps/api",
       "test",

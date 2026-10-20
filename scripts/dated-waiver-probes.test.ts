@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import {
   removeWaiver,
   runWaiverProbe,
@@ -34,7 +36,7 @@ const waiver = (
   expiresAt: "2026-10-05T00:00:00.000Z",
   probe: {
     command: [
-      "bun",
+      bunExecutable(),
       "scripts/dated-waiver-probes.ts",
       "--doc-url",
       "https://example.com/llms.txt",
@@ -51,7 +53,10 @@ test("green needs every stress sample and one red remains red without early exit
       let calls = 0;
       const entry = {
         ...waiver("dependency-audit", "baseline.json"),
-        probe: { command: ["bun", "run", "security:audit"], attempts },
+        probe: {
+          command: [bunExecutable(), "run", "security:audit"],
+          attempts,
+        },
       };
       const evidence = await runWaiverProbe(entry, {
         run: async () => ({
@@ -467,7 +472,10 @@ test("twenty sequential command timeouts fit one global phase deadline", async (
   const timeouts: number[] = [];
   const entry = {
     ...waiver("dependency-audit", "baseline.json"),
-    probe: { command: ["bun", "run", "security:audit"], attempts: 20 },
+    probe: {
+      command: [bunExecutable(), "run", "security:audit"],
+      attempts: 20,
+    },
   };
   const evidence = await runWaiverProbe(entry, {
     run: async (command) =>

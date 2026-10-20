@@ -12,6 +12,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
 import {
   contextFromNested,
@@ -1316,7 +1317,7 @@ test("the planner emits the canonical thin set only when derived planning is sel
     }
   }
   const result = Bun.spawnSync(
-    ["bun", "scripts/main-heavy-plan.ts", ".github/workflows/ci.yml"],
+    [bunExecutable(), "scripts/main-heavy-plan.ts", ".github/workflows/ci.yml"],
     { cwd: root },
   );
   expect(result.exitCode).toBe(0);

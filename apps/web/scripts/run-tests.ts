@@ -2,6 +2,7 @@ import { statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 import {
   createProcessMemoryReader,
@@ -60,7 +61,7 @@ for (const run of runs) {
       .join(", ") || `${run.label} suite (before first file)`;
   const { child, windowsProcesses } = spawnTestProcess({
     limitBytes,
-    command: ["bun", "--smol", "test", ...run.args],
+    command: [bunExecutable(), "--smol", "test", ...run.args],
     options: {
       cwd: WEB_ROOT_PATH,
       stdin: "inherit",

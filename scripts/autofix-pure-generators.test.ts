@@ -9,6 +9,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { buildImportGraph } from "./api-test-impact";
 import {
   AUTOFIX_PROTECTED_PATHS,
@@ -181,7 +183,7 @@ test("message type generation is byte-stable without any environment", () => {
     const typegen = (...args: string[]) =>
       Bun.spawnSync(
         [
-          process.execPath,
+          bunExecutable(),
           "packages/scripts/src/i18n-typegen.ts",
           directory,
           ...args,

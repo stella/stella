@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
-
 import { panic } from "better-result";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const OUTPUTS = [
@@ -13,7 +14,7 @@ const OUTPUTS = [
 
 const generate = () => {
   const result = spawnSync(
-    process.execPath,
+    bunExecutable(),
     ["packages/cli/src/codegen.ts", "--runtime-only"],
     { cwd: REPO_ROOT, stdio: "inherit" },
   );

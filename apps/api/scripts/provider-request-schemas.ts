@@ -29,6 +29,7 @@ import {
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -848,7 +849,7 @@ const writeAll = async () => {
   // upstream change leaves no diff.
   const formatted = Bun.spawnSync(
     [
-      "bun",
+      bunExecutable(),
       "--bun",
       "oxfmt",
       "-c",

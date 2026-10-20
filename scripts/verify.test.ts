@@ -14,6 +14,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import {
   CHECK_POOL_JOBS,
   checkPoolRegistryPath,
@@ -470,7 +472,7 @@ for (const conflict of [false, true]) {
       );
       const result = Bun.spawnSync(
         [
-          process.execPath,
+          bunExecutable(),
           "scripts/verify.ts",
           "--fix-only",
           "--base",
@@ -611,7 +613,7 @@ printf '%s\\0' "$@" > "$ADMISSION_RECEIPT"
       installer: [path.join(fixture, "serial installer.sh")],
     };
     const run = (mode: "admit" | "config") =>
-      Bun.spawnSync([process.execPath, "host-config-fixture.ts", mode], {
+      Bun.spawnSync([bunExecutable(), "host-config-fixture.ts", mode], {
         cwd: fixture,
         env: {
           ...process.env,

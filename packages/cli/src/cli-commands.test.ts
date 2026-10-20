@@ -8,6 +8,8 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
@@ -237,7 +239,7 @@ const runCli = async ({
   }
 
   const proc = Bun.spawn({
-    cmd: ["bun", "--preload", FETCH_PRELOAD, CLI_ENTRYPOINT, ...args],
+    cmd: [bunExecutable(), "--preload", FETCH_PRELOAD, CLI_ENTRYPOINT, ...args],
     env: {
       ...process.env,
       XDG_CONFIG_HOME: configHome,

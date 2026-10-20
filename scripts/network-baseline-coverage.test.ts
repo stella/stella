@@ -23,6 +23,7 @@ import {
 } from "../apps/web/e2e/helpers/smoke-route-coverage";
 import { SMOKE_ROUTE_DEFS } from "../apps/web/e2e/helpers/smoke-route-defs";
 import { generateRouteTree } from "../apps/web/scripts/generate-route-tree";
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import {
   networkBudgetDeclarationProblem,
   prepareComparisonBaseline,
@@ -206,7 +207,7 @@ test("CLI checks the real route inventory and baseline schema", () => {
   const run = () =>
     Bun.spawnSync(
       [
-        "bun",
+        bunExecutable(),
         "scripts/network-baseline-scope.ts",
         "validate",
         file,
@@ -255,7 +256,7 @@ test("declarations reject duplicate routes, unknown fields and unrecorded reques
   ]) {
     const result = Bun.spawnSync(
       [
-        "bun",
+        bunExecutable(),
         "--eval",
         `import { networkBudgetDeclarationProblem } from "./scripts/network-baseline-scope.ts"; networkBudgetDeclarationProblem(${JSON.stringify({ baseline: baseline(), expectedKeys: SMOKE_ROUTE_DEFS.map(networkBaselineKey), declarations })});`,
       ],
@@ -445,7 +446,7 @@ test("validation accepts a checkout without a network budget declaration directo
   writeFileSync(path.join(repository, "context.json"), "[]");
   const result = Bun.spawnSync(
     [
-      "bun",
+      bunExecutable(),
       path.resolve(import.meta.dirname, "network-baseline-scope.ts"),
       "validate",
       file,

@@ -3,6 +3,8 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import {
   buildQuery,
   evaluateRelease,
@@ -333,7 +335,7 @@ describe("command line", () => {
     writeFileSync(summaryFile, "");
 
     const result = Bun.spawnSync([
-      "bun",
+      bunExecutable(),
       path.join(import.meta.dir, "release-health.ts"),
       "evaluate",
       "--release",

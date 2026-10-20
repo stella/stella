@@ -2,6 +2,7 @@
 import { panic } from "better-result";
 import path from "node:path";
 
+import { bunExecutable } from "./bun-executable";
 import { childExitStatus } from "./child-exit-status";
 import { writeTurboTypecheckInputs } from "./turbo-typecheck-inputs";
 import {
@@ -12,17 +13,25 @@ import {
 } from "./typecheck-cache-contract";
 
 export const API_TYPECHECK_REGENERATION_COMMANDS = [
-  ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
-  ["bun", "--cwd=apps/api", "run", "generate:capability-runtime"],
+  [bunExecutable(), "--cwd=packages/cli", "run", "codegen:runtime"],
+  [bunExecutable(), "--cwd=apps/api", "run", "generate:capability-runtime"],
   [
-    "bun",
+    bunExecutable(),
     "--cwd=apps/api",
     "run",
     "generate:typecheck-declarations",
     "--write-surface",
   ],
-  ["bun", "packages/scripts/src/api-typecheck-partition.ts", "--write"],
-  ["bun", "packages/scripts/src/api-typecheck-partition.ts", "--resolved"],
+  [
+    bunExecutable(),
+    "packages/scripts/src/api-typecheck-partition.ts",
+    "--write",
+  ],
+  [
+    bunExecutable(),
+    "packages/scripts/src/api-typecheck-partition.ts",
+    "--resolved",
+  ],
 ] as const;
 
 if (import.meta.main) {

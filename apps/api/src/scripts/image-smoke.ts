@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Runtime-asset smoke for the compiled API image.
  *
@@ -12,8 +13,6 @@
  * the real loader; the sanctions probe spawns the same worker path used by
  * the compiled API and checks both cold and cached matching.
  */
-
-import { panic } from "better-result";
 import path from "node:path";
 
 import {
@@ -22,6 +21,7 @@ import {
 } from "@stll/anonymize";
 import { validateIco } from "@stll/business-registries/ares";
 import { DEFAULT_CUTOFF, buildScreeningIndex, screen } from "@stll/sanctions";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { yaraRuleFileCount, yaraScanner } from "@/api/lib/file-scan/yara";
@@ -135,7 +135,7 @@ await probe("local ocr worker", async () => {
   ].join("\n");
   const subprocess = Bun.spawn(
     [
-      "bun",
+      bunExecutable(),
       "run",
       path.join(workerDir, RUNTIME_WORKER_FILES.ocrLocal),
       modelDir,

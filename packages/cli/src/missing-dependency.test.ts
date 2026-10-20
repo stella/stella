@@ -3,6 +3,8 @@ import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { missingDependencyMessage } from "./missing-dependency.js";
 
 const moduleNotFound = (message: string) =>
@@ -60,7 +62,12 @@ describe("the entry point without installed packages", () => {
     const proc = Bun.spawn({
       // No auto-install: a checkout has a node_modules, so Bun never
       // fetches a missing package there; outside one it would.
-      cmd: ["bun", "--no-install", path.join(dir, "cli.ts"), "--help"],
+      cmd: [
+        bunExecutable(),
+        "--no-install",
+        path.join(dir, "cli.ts"),
+        "--help",
+      ],
       cwd: dir,
       stdout: "pipe",
       stderr: "pipe",

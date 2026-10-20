@@ -3,6 +3,8 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { queryPerfDependencies, queryPerfRequired } from "./query-perf-scope";
 
 const roots: string[] = [];
@@ -116,7 +118,7 @@ test("the real registry import closure resolves completely", () => {
 
 test("an unknown full diff succeeds closed even without its path-list file", () => {
   const result = Bun.spawnSync({
-    cmd: ["bun", "scripts/query-perf-scope.ts"],
+    cmd: [bunExecutable(), "scripts/query-perf-scope.ts"],
     env: {
       PATH: Bun.env["PATH"] ?? "",
       QUERY_PERF_CHANGED_PATHS: "/path/that/does/not/exist",

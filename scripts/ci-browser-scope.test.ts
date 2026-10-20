@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import {
   browserSuiteInputs,
   ciBrowserScopePredicate,
@@ -413,7 +414,12 @@ test("the desktop browser scope passes through the plan's emitted value", () => 
   }
   const plan = (file: string) =>
     Bun.spawnSync(
-      ["bun", "scripts/ci-package-scope.ts", "--desktop-browser", file],
+      [
+        bunExecutable(),
+        "scripts/ci-package-scope.ts",
+        "--desktop-browser",
+        file,
+      ],
       { cwd: ROOT, env: scrubbedEnvironment, stderr: "ignore" },
     )
       .stdout.toString()

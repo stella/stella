@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import {
   changedPaths,
   descendantPids,
@@ -71,7 +72,13 @@ describe("pre-push affected checks", () => {
 
   test("a missing base ref means the checks could not run, not that they failed", () => {
     const result = Bun.spawnSync(
-      ["bun", script, "--base", "refs/missing/pre-push-base", "--dry-run"],
+      [
+        bunExecutable(),
+        script,
+        "--base",
+        "refs/missing/pre-push-base",
+        "--dry-run",
+      ],
       { stdout: "pipe", stderr: "pipe" },
     );
     expect(result.exitCode).toBe(PRE_PUSH_EXIT.unavailable);
@@ -79,7 +86,7 @@ describe("pre-push affected checks", () => {
   });
 
   test("a push with no changes against its base passes without running checks", () => {
-    const result = Bun.spawnSync(["bun", script, "--base", "HEAD"], {
+    const result = Bun.spawnSync([bunExecutable(), script, "--base", "HEAD"], {
       stdout: "pipe",
       stderr: "pipe",
     });

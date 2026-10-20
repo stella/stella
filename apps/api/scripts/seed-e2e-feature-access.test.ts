@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 test.each([
   {
     optIn: "",
@@ -15,7 +17,7 @@ test.each([
   async ({ optIn, message }) => {
     const apiRoot = path.resolve(import.meta.dirname, "..");
     const child = Bun.spawn(
-      [process.execPath, "scripts/seed-e2e-feature-access.ts"],
+      [bunExecutable(), "scripts/seed-e2e-feature-access.ts"],
       {
         cwd: apiRoot,
         env: {

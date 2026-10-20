@@ -41,6 +41,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { printError } from "@stll/errors";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { CHAT_ORACLE } from "../src/tests/helpers/chat-oracles";
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
@@ -235,7 +236,7 @@ const scenarioCommand = (
   return scenario.file.startsWith(WEB_PREFIX)
     ? {
         command: [
-          "bun",
+          bunExecutable(),
           "test",
           "--timeout",
           String(SCENARIO_TIMEOUT_MS),
@@ -246,7 +247,7 @@ const scenarioCommand = (
         cwd: WEB_ROOT,
       }
     : {
-        command: ["bun", "run", "test", scenario.file, "-t", pattern],
+        command: [bunExecutable(), "run", "test", scenario.file, "-t", pattern],
         cwd: API_ROOT,
       };
 };
@@ -425,7 +426,7 @@ const selfTest = async (): Promise<number> => {
       writeFileSync(file, "original\n");
       const child = Bun.spawn(
         [
-          "bun",
+          bunExecutable(),
           import.meta.path,
           "--hold",
           file,

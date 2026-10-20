@@ -11,6 +11,7 @@ import {
 import type { FolioCollabSnapshotLoadResponse } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { createCollabServer } from "./server";
 
@@ -507,7 +508,7 @@ const spawnRedisBackedCollabProcess = async ({
   apiUrl: string;
   redisUrl: string;
 }): Promise<RedisBackedCollabProcess> => {
-  const subprocess = Bun.spawn(["bun", "server-test-process.ts"], {
+  const subprocess = Bun.spawn([bunExecutable(), "server-test-process.ts"], {
     cwd: import.meta.dirname,
     env: {
       ...process.env,

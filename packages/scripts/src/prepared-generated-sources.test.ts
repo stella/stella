@@ -16,6 +16,7 @@ import path from "node:path";
 
 import { createSha256, sha256Hex as nodeSha256Hex } from "@stll/sha256/node";
 
+import { bunExecutable } from "./bun-executable";
 import { ciGeneratedFiles } from "./generated-file-inventory";
 import {
   generatedFileHash,
@@ -163,7 +164,7 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
       CI_GENERATED_SOURCES_MANIFEST: preparedManifestPath(root),
     };
     const prepared = Bun.spawnSync(
-      [process.execPath, "packages/scripts/src/prepare-cli-runtime.ts"],
+      [bunExecutable(), "packages/scripts/src/prepare-cli-runtime.ts"],
       { cwd: root, env },
     );
     expect(prepared.exitCode, prepared.stderr.toString()).toBe(0);
@@ -173,7 +174,7 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
     const ordinaryEnv = { ...process.env };
     delete ordinaryEnv["CI_GENERATED_SOURCES_MANIFEST"];
     const ordinary = Bun.spawnSync(
-      [process.execPath, "packages/scripts/src/prepare-cli-runtime.ts"],
+      [bunExecutable(), "packages/scripts/src/prepare-cli-runtime.ts"],
       { cwd: root, env: ordinaryEnv },
     );
     expect(ordinary.exitCode).toBe(81);
@@ -402,7 +403,7 @@ test("API runtime generation works with only packaged sources and rejects a root
     );
     const run = () =>
       Bun.spawnSync(
-        [process.execPath, "apps/api/scripts/generate-capability-runtime.ts"],
+        [bunExecutable(), "apps/api/scripts/generate-capability-runtime.ts"],
         { cwd: root, env },
       );
     const generated = run();

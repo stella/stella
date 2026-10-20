@@ -14,6 +14,7 @@ import {
   type ModelDefaultQuality,
   type ModelTask,
 } from "../packages/ai-catalog/src/model-defaults-ledger";
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
   parseReasonedLedger,
@@ -334,7 +335,7 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
   if (args.includes("--self-test")) {
     const result = Bun.spawnSync(
-      ["bun", "test", "scripts/check-model-defaults-ledger.test.ts"],
+      [bunExecutable(), "test", "scripts/check-model-defaults-ledger.test.ts"],
       { cwd: REPO_ROOT, stdout: "inherit", stderr: "inherit" },
     );
     process.exit(childExitStatus(result));

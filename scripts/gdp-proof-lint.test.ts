@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
+
 const reportSchema = v.object({
   diagnostics: v.array(v.object({ message: v.string() })),
 });
@@ -52,7 +54,16 @@ const lint = async (
       })};`,
     );
     const child = Bun.spawn(
-      ["bun", "--bun", "oxlint", "-c", config, "--format", "json", input],
+      [
+        bunExecutable(),
+        "--bun",
+        "oxlint",
+        "-c",
+        config,
+        "--format",
+        "json",
+        input,
+      ],
       {
         cwd: path.resolve(import.meta.dir, ".."),
         stdin: "ignore",

@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import { checkMigrationIndexBuilds } from "./check-migration-safety";
 import findingsSnapshot from "./migration-index-findings.json" with { type: "json" };
 
@@ -503,12 +504,16 @@ describe("high-volume index-build migration rule", () => {
     );
     try {
       const relative = Bun.spawnSync(
-        ["bun", path.resolve("scripts/check-migration-safety.ts"), file],
+        [
+          bunExecutable(),
+          path.resolve("scripts/check-migration-safety.ts"),
+          file,
+        ],
         { cwd: directory },
       );
       const absolute = Bun.spawnSync(
         [
-          "bun",
+          bunExecutable(),
           path.resolve("scripts/check-migration-safety.ts"),
           path.join(directory, file),
         ],
@@ -539,7 +544,11 @@ describe("high-volume index-build migration rule", () => {
       mkdirSync(path.dirname(fixture), { recursive: true });
       writeFileSync(fixture, sql);
       return Bun.spawnSync(
-        ["bun", path.resolve("scripts/check-migration-safety.ts"), target],
+        [
+          bunExecutable(),
+          path.resolve("scripts/check-migration-safety.ts"),
+          target,
+        ],
         { cwd: directory },
       );
     };
@@ -695,7 +704,7 @@ describe("high-volume index-build migration rule", () => {
 
   it("cannot be cleared by an acknowledgement", () => {
     const result = Bun.spawnSync([
-      "bun",
+      bunExecutable(),
       "scripts/check-migration-safety.ts",
       "scripts/fixtures/migration-index-builds/create-index/acknowledged.sql",
     ]);
@@ -707,12 +716,12 @@ describe("high-volume index-build migration rule", () => {
 
   it("refuses unknown CLI REINDEX targets and allows a known small table", () => {
     const unknown = Bun.spawnSync([
-      "bun",
+      bunExecutable(),
       "scripts/check-migration-safety.ts",
       "scripts/fixtures/migration-index-builds/reindex/unknown.sql",
     ]);
     const ordinary = Bun.spawnSync([
-      "bun",
+      bunExecutable(),
       "scripts/check-migration-safety.ts",
       "scripts/fixtures/migration-index-builds/reindex/ordinary-table.sql",
     ]);

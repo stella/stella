@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
 
-// The root config only scopes Oxc discovery (files: []); it has no references.
-// Compare the explicit projects used by every Bun typecheck task instead.
 import { panic } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { repoRelativePath } from "../packages/portable-path/src/index";
+// The root config only scopes Oxc discovery (files: []); it has no references.
+// Compare the explicit projects used by every Bun typecheck task instead.
+import { bunxCommand } from "../packages/scripts/src/bun-executable";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -77,12 +78,11 @@ for (const [cwd, command] of [
 }
 console.log(`Typecheck parity: ${projects.size} repository projects`);
 const child = Bun.spawn(
-  [
-    "bunx",
+  bunxCommand([
     "--no-install",
     "stll-typecheck-parity",
     ...[...projects].toSorted().flatMap((project) => ["--project", project]),
-  ],
+  ]),
   { cwd: root, stdout: "inherit", stderr: "inherit", env: process.env },
 );
 await child.exited;

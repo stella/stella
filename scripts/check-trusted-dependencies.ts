@@ -5,6 +5,7 @@
 
 import path from "node:path";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -33,7 +34,7 @@ if (expected.length !== configured.length) {
 }
 
 const result = Bun.spawnSync(
-  ["bun", "--no-env-file", "pm", "ls", "--trusted"],
+  [bunExecutable(), "--no-env-file", "pm", "ls", "--trusted"],
   {
     cwd: REPO_ROOT,
     stderr: "pipe",

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 // Enumerate the members of the source-fingerprint guard and hold them to a
 // shrink-only, reasoned baseline (scripts/source-fingerprint-baseline.json).
 //
@@ -26,8 +27,6 @@
 // `--write` regenerates every section from the tree, keeps the reasons of
 // surviving rows, and fills a generated reason for a new one; the membership
 // check then refuses any row the base does not already have.
-
-import { panic } from "better-result";
 import {
   mkdirSync,
   mkdtempSync,
@@ -41,6 +40,7 @@ import ts from "typescript";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 
 import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { addedEntries, runLedgerMembershipGuard } from "./ledger-membership.ts";
@@ -374,7 +374,7 @@ const fileCensus = (): string[] => {
   );
   const result = Bun.spawnSync(
     [
-      process.execPath,
+      bunExecutable(),
       "--bun",
       path.join(ROOT, "node_modules/oxlint/bin/oxlint"),
       "-c",
@@ -409,7 +409,7 @@ const driverCensus = (): { key: string; reason: string }[] => {
   const directory = mkdtempSync(path.join(tmpdir(), "source-fingerprint-"));
   const out = path.join(directory, "drivers.json");
   const result = Bun.spawnSync(
-    [process.execPath, "scripts/run-tests.ts", GUARD_TEST],
+    [bunExecutable(), "scripts/run-tests.ts", GUARD_TEST],
     {
       cwd: path.join(ROOT, "apps/api"),
       env: { ...process.env, [CENSUS_OUT_ENV]: out },

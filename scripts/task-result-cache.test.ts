@@ -10,6 +10,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { checkTestInputCoverage } from "./check-test-input-coverage";
 import { contextFromNested, evaluate } from "./github-expression";
 
@@ -193,7 +195,7 @@ test("the input census rejects an executed read outside declared inputs", () => 
       'console.log(require("node:fs").readFileSync(require("node:path").resolve("scripts/policy.json"), "utf8"));',
     );
     const execute = () =>
-      Bun.spawnSync([process.execPath, "packages/example/read.test.ts"], {
+      Bun.spawnSync([bunExecutable(), "packages/example/read.test.ts"], {
         cwd: directory,
       });
     expect(execute().stdout.toString().trim()).toBe("first");

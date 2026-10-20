@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import { rewriteFixture } from "./check-oxlint-fixture-counts.ts";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
@@ -45,7 +46,16 @@ test("the JSON import fixture reports exactly its marked runtime imports", async
       })};`,
     );
     const process = Bun.spawn(
-      ["bun", "--bun", "oxlint", "-c", config, "--format", "json", input],
+      [
+        bunExecutable(),
+        "--bun",
+        "oxlint",
+        "-c",
+        config,
+        "--format",
+        "json",
+        input,
+      ],
       { cwd: repositoryRoot, stdout: "pipe", stderr: "pipe" },
     );
     const [stdout, stderr, exitCode] = await Promise.all([

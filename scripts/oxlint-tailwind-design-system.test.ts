@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
+
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const diagnosticReport = v.object({
   diagnostics: v.array(
@@ -62,7 +64,16 @@ test("an unavailable Tailwind design system fails as one typed error per rule an
       );
     }
     const child = Bun.spawn(
-      ["bun", "--bun", "oxlint", "-c", config, "--format", "json", ...inputs],
+      [
+        bunExecutable(),
+        "--bun",
+        "oxlint",
+        "-c",
+        config,
+        "--format",
+        "json",
+        ...inputs,
+      ],
       { cwd: repositoryRoot, stdout: "pipe", stderr: "pipe" },
     );
     const [stdout, stderr, exitCode] = await Promise.all([

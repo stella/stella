@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "../packages/scripts/src/bun-executable";
 import {
   CODE_CHECK_LEGS,
   ownsCodeCheckPath,
@@ -808,7 +809,7 @@ exec "$CHECK_REAL_BUN" "$@"
     try {
       const result = Bun.spawnSync(
         [
-          process.execPath,
+          bunExecutable(),
           "scripts/code-check-affected.ts",
           "--all",
           "--dry-run",
@@ -860,7 +861,12 @@ process.exit(childExitStatus(result));
         throw new Error("PATH is required to run the code-check command");
       }
       const result = Bun.spawnSync(
-        ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
+        [
+          bunExecutable(),
+          "scripts/code-check-affected.ts",
+          "--all",
+          "--dry-run",
+        ],
         {
           env: {
             ...process.env,
@@ -910,7 +916,12 @@ process.exit(childExitStatus(result));
       expect(reference.exitCode).toBe(1);
       expect(Boolean(reference.signalCode)).toBe(false);
       const result = Bun.spawnSync(
-        ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
+        [
+          bunExecutable(),
+          "scripts/code-check-affected.ts",
+          "--all",
+          "--dry-run",
+        ],
         {
           env: {
             ...process.env,
@@ -941,7 +952,7 @@ process.exit(childExitStatus(result));
     writeFileSync(file, "export const untracked = true;\n");
     try {
       const result = Bun.spawnSync([
-        "bun",
+        bunExecutable(),
         "scripts/code-check-affected.ts",
         "--all",
         "--dry-run",
@@ -1307,7 +1318,7 @@ describe("parallel code-quality legs", () => {
 
   test("a 16 GiB machine plans the full check with typecheck before lint", () => {
     const result = Bun.spawnSync(
-      ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
+      [bunExecutable(), "scripts/code-check-affected.ts", "--all", "--dry-run"],
       {
         env: {
           ...process.env,
@@ -1494,7 +1505,7 @@ describe("parallel code-quality legs", () => {
   test("only the configured concurrency reads CODE_CHECK_CONCURRENCY", () => {
     const probe = Bun.spawnSync(
       [
-        "bun",
+        bunExecutable(),
         "-e",
         `const m = await import(${JSON.stringify(path.join(import.meta.dirname, "code-check-affected.ts"))});
 console.log(m.configuredCodeCheckConcurrency(), m.codeCheckConcurrency(12 * 1024 ** 3));`,
@@ -1676,7 +1687,7 @@ describe("check failure reporting", () => {
         timeoutMs: 1000,
         stallMs: 1000,
         command: [
-          process.execPath,
+          bunExecutable(),
           "-e",
           "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);",
         ],
@@ -1712,7 +1723,7 @@ describe("check failure reporting", () => {
         timeoutMs: 1000,
         stallMs: 1000,
         command: [
-          process.execPath,
+          bunExecutable(),
           "-e",
           "console.log(JSON.stringify({packages:{items:[{path:'apps/web'}]}}))",
         ],
@@ -1728,7 +1739,7 @@ describe("check failure reporting", () => {
         cwd: directory,
         timeoutMs: 1000,
         stallMs: 1000,
-        command: [process.execPath, "-e", "process.exit(7)"],
+        command: [bunExecutable(), "-e", "process.exit(7)"],
         report: () => {},
       });
       expect(failed.isErr()).toBe(true);
@@ -1924,7 +1935,7 @@ esac
       writeFileSync(log, "");
       const result = Bun.spawnSync(
         [
-          process.execPath,
+          bunExecutable(),
           "--no-env-file",
           path.join(import.meta.dir, "code-check-affected.ts"),
           "--all",

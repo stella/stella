@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { waiverKey } from "./dated-waiver-fix-task";
@@ -264,7 +265,7 @@ const healingPublication = async ({
     id: "fixture",
     kind: "release-age-exclusion",
     expiresAt: "2026-10-15T00:00:00.000Z",
-    probe: { command: ["bun", "probe"], attempts: 3 },
+    probe: { command: [bunExecutable(), "probe"], attempts: 3 },
   } as const satisfies DatedWaiver;
   const actions = {
     openRemoval: async ({ outcome }) =>
@@ -424,7 +425,7 @@ describe("the complete removal proposal inventory", () => {
       id: "present",
       kind: "release-age-exclusion",
       expiresAt: "2026-10-15T00:00:00.000Z",
-      probe: { command: ["bun", "probe"], attempts: 3 },
+      probe: { command: [bunExecutable(), "probe"], attempts: 3 },
     } as const satisfies DatedWaiver;
     const inventory = [
       owner,

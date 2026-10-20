@@ -11,6 +11,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const cases = [
@@ -120,7 +122,7 @@ test.each(cases)(
       }
       const finding = Bun.spawnSync(
         [
-          process.execPath,
+          bunExecutable(),
           "--bun",
           "oxlint",
           "-c",
@@ -348,7 +350,7 @@ test.each(projectCases)("autofix $name", ({ name, layout, invalid }) => {
 import { appendFileSync } from "node:fs";
 appendFileSync("compiler-projects", process.argv.at(-1) + "\\n");
 const result = Bun.spawnSync([
-  process.execPath,
+  bunExecutable(),
   new URL("./tsc-native-real.ts", import.meta.url).pathname,
   ...process.argv.slice(2),
 ], { stdout: "inherit", stderr: "inherit" });
@@ -444,7 +446,7 @@ process.exit(result.exitCode);
     }
     const result = Bun.spawnSync(
       [
-        process.execPath,
+        bunExecutable(),
         "scripts/typecheck-coverage.ts",
         "--autofix",
         // A change that touches only an included fixture must still compile.

@@ -15,6 +15,8 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
 
+import { bunExecutable } from "@stll/scripts/src/bun-executable";
+
 import { lintSingleRule } from "../.oxlint-plugins/__tests__/lint-single-rule.ts";
 import {
   MEMBER_RUN_QUEUES,
@@ -100,7 +102,7 @@ describe("ownership file loading", () => {
 
   test("loads the same registry under the CI lint runtime", () => {
     const output = run(repoRoot, [
-      process.execPath,
+      bunExecutable(),
       "--input-type=module",
       "-e",
       'const { OWNERSHIP } = await import("./scripts/ownership.ts"); console.log(JSON.stringify(OWNERSHIP));',
@@ -153,7 +155,7 @@ test("independent row additions merge cleanly and pass the production check", ()
     );
     const git = (...args: string[]) => run(root, ["git", ...args]);
     const ownership = (mode: string) =>
-      run(root, [process.execPath, "scripts/ownership.ts", mode]);
+      run(root, [bunExecutable(), "scripts/ownership.ts", mode]);
     const commit = () => {
       git("add", ".");
       git("commit", "-m", "fixture");
@@ -189,7 +191,7 @@ test("independent row additions merge cleanly and pass the production check", ()
     expect(printed).toContain("`adjacent-b`");
     write("docs/module-ownership/adjacent-a.md", "stale\n");
     const stale = Bun.spawnSync(
-      [process.execPath, "scripts/ownership.ts", "--check"],
+      [bunExecutable(), "scripts/ownership.ts", "--check"],
       { cwd: root },
     );
     expect(stale.exitCode).toBe(1);
@@ -199,7 +201,7 @@ test("independent row additions merge cleanly and pass the production check", ()
     ownership("--write");
     write("docs/module-ownership/orphan.md", "orphan\n");
     const orphan = Bun.spawnSync(
-      [process.execPath, "scripts/ownership.ts", "--check"],
+      [bunExecutable(), "scripts/ownership.ts", "--check"],
       { cwd: root },
     );
     expect(orphan.exitCode).toBe(1);

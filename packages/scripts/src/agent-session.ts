@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { panic, Result } from "better-result";
 // A signed-in local stack in one blocking command, for agents and scripts.
 //
 //   bun run agent:up       start (or reuse) this checkout's seeded stack
@@ -13,8 +14,6 @@
 // it writes once every service is ready, then mints a machine API key for the
 // seeded owner through the same HTTP route a person would use. Everything it
 // produces lives in `.stella-dev/` (gitignored) and is local-only data.
-
-import { panic, Result } from "better-result";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
@@ -45,6 +44,7 @@ import {
   parseSealStatus,
   verifyAttachment,
 } from "./agent-evidence";
+import { bunExecutable } from "./bun-executable";
 import { childExitStatus } from "./child-exit-status";
 import {
   DEV_SESSION_ID_ENV,
@@ -186,7 +186,7 @@ const spawnRunner = async ({ root, skipInstall }: StartRunnerOptions) => {
   const log = openSync(devStatePath(root, RUNNER_LOG_FILE), "w");
   const sessionId = randomUUID();
   const child = spawn(
-    process.execPath,
+    bunExecutable(),
     [
       path.join(root, RUNNER_SCRIPT),
       "dev",
@@ -509,7 +509,7 @@ const printStatus = (root: string, runtime: DevRuntime) => {
 
 const up = async (root: string, args: readonly string[]) => {
   const generation = Bun.spawn({
-    cmd: [process.execPath, "run", "generate"],
+    cmd: [bunExecutable(), "run", "generate"],
     cwd: root,
     stdio: ["inherit", "inherit", "inherit"],
   });
@@ -714,7 +714,7 @@ const drive = async (root: string, args: readonly string[]) => {
 
   const before = checkSeal(root, runtime);
   const child = Bun.spawn({
-    cmd: [process.execPath, path.join(root, DRIVE_SCRIPT), ...args],
+    cmd: [bunExecutable(), path.join(root, DRIVE_SCRIPT), ...args],
     env: { ...process.env, ...env, STELLA_AGENT_CAPTURE_LOG: captureLog },
     stderr: "inherit",
     stdin: "inherit",
@@ -839,7 +839,7 @@ type PassThroughOptions = {
 
 const passThrough = async ({ args, env, script }: PassThroughOptions) => {
   const child = Bun.spawn({
-    cmd: [process.execPath, script, ...args],
+    cmd: [bunExecutable(), script, ...args],
     env: { ...process.env, ...env },
     stderr: "inherit",
     stdin: "inherit",
