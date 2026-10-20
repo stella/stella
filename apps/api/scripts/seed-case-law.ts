@@ -44,17 +44,18 @@ import type {
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { syntheticCaseLawFixtures } from "./seed-case-law-synthetic";
-import { seedId } from "./seed-utils";
+import { globalSeedId } from "./seed-utils";
 
 const FIXTURES_DIR = path.join(import.meta.dir, "__fixtures__", "case-law");
 
+// The corpus is global, so its ids are the same from every organization's run.
 export const sourceIdFor = (adapterKey: string) =>
-  seedId(`case-law-source-${adapterKey}`);
+  globalSeedId(`case-law-source-${adapterKey}`);
 const decisionIdFor = (
   adapterKey: string,
   caseNumber: string,
   language: string,
-) => seedId(`case-law-dec-${adapterKey}-${caseNumber}-${language}`);
+) => globalSeedId(`case-law-dec-${adapterKey}-${caseNumber}-${language}`);
 
 type FixtureSource = {
   adapter_key: string;
