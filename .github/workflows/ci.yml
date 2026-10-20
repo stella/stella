@@ -364,6 +364,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           TARGET_REF: ${{ github.event.merge_group.base_ref }}
         run: bash "$RUNNER_TEMP/merge-target-base.sh"
 
@@ -2236,7 +2237,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
           STELLA_VERIFY: check
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only
 
       - name: Changeset present for published package changes
@@ -3689,11 +3690,10 @@ jobs:
       - name: Select statute recall base from the target branch
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         env:
-          MERGE_GROUP_BASE_SHA: ${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}
-          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          TARGET_BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
-          base="${MERGE_GROUP_BASE_SHA:-${PULL_REQUEST_BASE_SHA:-$PUSH_BEFORE_SHA}}"
+          base="${TARGET_BASE_SHA:-$PUSH_BEFORE_SHA}"
           if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
             git fetch --no-tags --depth=1 origin main
             base="$(git rev-parse FETCH_HEAD)"
