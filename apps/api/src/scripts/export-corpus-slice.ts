@@ -4,11 +4,7 @@ import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { exportCorpusSliceFromDatabase } from "@/api/lib/case-law/corpus-slice-transfer-execution";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
-import {
-  openCorpusS3Writer,
-  putCorpusS3ObjectWithSignal,
-  readCorpusS3Bytes,
-} from "@/api/lib/s3";
+import { openCorpusS3Writer, putCorpusS3ObjectWithSignal } from "@/api/lib/s3";
 import {
   CORPUS_SLICE_TRANSFER_BATCH_SIZE,
   parseExportCorpusSliceArguments,
@@ -32,8 +28,6 @@ await runScriptWithErrorOutput(async () => {
     asOf: new Date(),
     batchSize: CORPUS_SLICE_TRANSFER_BATCH_SIZE,
     storage: {
-      read: async (key) =>
-        await readCorpusS3Bytes(key, AbortSignal.timeout(300_000)),
       write: async (key, bytes, contentType) =>
         await putCorpusS3ObjectWithSignal({
           key,
