@@ -415,6 +415,7 @@ test("an aborted unit stops a pending publisher fetch without another request", 
   const sourceId = await seedSource();
   const controller = new AbortController();
   let fetches = 0;
+  const listingStarted = Promise.withResolvers<boolean>();
   const reconciliation: SourceReconciliation = {
     ...stubReconciliation,
     listSlicePage: async ({ signal }) => {
@@ -428,6 +429,7 @@ test("an aborted unit stops a pending publisher fetch without another request", 
           () => reject(new Error("Listing aborted")),
           { once: true },
         );
+        listingStarted.resolve(true);
       });
       return panic("aborted listing fetch resolved");
     },
@@ -438,7 +440,7 @@ test("an aborted unit stops a pending publisher fetch without another request", 
     reconciliation,
     signal: controller.signal,
   });
-  await Bun.sleep(10);
+  await listingStarted.promise;
   controller.abort();
 
   expect(await pending).toEqual({ type: "aborted" });
