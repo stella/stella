@@ -25,6 +25,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
 import { mcpHandoffRedeemResultSchema } from "@stll/api-contract/mcp-web-handoff";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
@@ -463,15 +464,16 @@ describe("MCP link sign-in", () => {
     });
     expect(read?.session.activeOrganizationId).toBe(fixture.organizationId);
     expect(read?.session.originConsentId).toBe(fixture.consentId);
-    const listed = await auth.api.listSessions({
-      headers: { cookie: cookieOf(response) },
-    });
-    expect(listed.find(({ id }) => id === read?.session.id)).toMatchObject({
-      originConsentId: fixture.consentId,
-    });
+    // Session listing returns every session token, so a handoff never reads it.
+    expect(
+      await rejectionOf(
+        auth.api.listSessions({ headers: { cookie: cookieOf(response) } }),
+      ),
+    ).toMatchObject({ body: { code: "step_up_required" } });
     const stored = (
       await db.select().from(session).where(eq(session.id, read!.session.id))
     ).at(0);
+    expect(stored?.originConsentId).toBe(fixture.consentId);
     expect(stored?.handoffAbsoluteExpiresAt?.getTime()).toBeGreaterThan(
       Date.now() + 43_190_000,
     );

@@ -32,7 +32,6 @@ const WEB_HANDOFF_ENDPOINT_FAILURE_SINK = failureSink({
   expected: [],
 });
 
-export { MCP_HANDOFF_REDEEM_PATH };
 type WebHandoffService = ReturnType<typeof createWebHandoffService>;
 type HandoffPluginOptions = {
   service: () => WebHandoffService;

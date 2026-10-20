@@ -103,6 +103,7 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
     ["/link-social", noSession("authenticated account linking")],
     ["/list-accounts", noSession("authenticated account listing")],
     ["/list-sessions", noSession("authenticated session listing")],
+    ["/mcp-handoff/sessions", noSession("handed-off session client listing")],
     ["/ok", noSession("authentication status response")],
     ["/refresh-token", noSession("access-token refresh")],
     ["/request-password-reset", noSession("password reset request")],
