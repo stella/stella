@@ -50,14 +50,16 @@ import {
 } from "@/api/lib/file-scan/scan-upload";
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
-import { LIMITS } from "@/api/lib/limits";
-import { logger } from "@/api/lib/observability/logger";
+import {
+  admitWork,
+  type WorkAdmission,
+  WorkRefusal,
+} from "@/api/lib/load/work-admission";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { getS3, readS3ObjectBounded } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { headObject } from "@/api/lib/s3-presign";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
-import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { promoteTmpObjectWithUsage } from "@/api/lib/uploads/promote-tmp-object";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
@@ -203,39 +205,43 @@ const finalizeUpload = createSafeHandler(
     // comes before the claim: waiting for capacity never runs the reclaim
     // clock, and a request that is not admitted in time leaves the row as it
     // was, so the retry can claim it at once.
-    const release = await UPLOAD_FINALIZE_ADMISSION.acquire(
-      pending.declaredSize,
-      LIMITS.uploadFinalizeAdmissionWaitMs,
-    );
-    if (release === null) {
+    const admitted = await admitWork({
+      pool: "upload",
+      kind: "upload-finalize",
+      bytes: pending.declaredSize,
+      run: async (admission) =>
+        await Result.gen(() =>
+          claimAndFinalize({
+            admission,
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+            userId: user.id,
+            memberRole,
+            uploadId,
+            safeDb,
+            recordAuditEvent,
+          }),
+        ),
+    });
+    if (Result.isError(admitted)) {
+      if (!WorkRefusal.is(admitted.error)) {
+        return Result.err(admitted.error);
+      }
       return Result.err(
         new HandlerError({
-          status: 500,
+          status: 503,
           message: "Upload processing is busy; retry shortly",
+          retryable: true,
+          retryAfterMs: admitted.error.retryAfterMs,
         }),
       );
     }
-    try {
-      logger.info("uploads.finalize_admitted", {
-        declaredBytes: pending.declaredSize,
-        inFlightBytes: UPLOAD_FINALIZE_ADMISSION.inUseBytes(),
-      });
-      return yield* claimAndFinalize({
-        organizationId: session.activeOrganizationId,
-        workspaceId,
-        userId: user.id,
-        memberRole,
-        uploadId,
-        safeDb,
-        recordAuditEvent,
-      });
-    } finally {
-      release();
-    }
+    return admitted.value;
   },
 );
 
 type ClaimAndFinalizeProps = {
+  admission: WorkAdmission;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
@@ -252,6 +258,7 @@ type ClaimAndFinalizeProps = {
  * @yields SafeDb errors out to the safe-handler runner.
  */
 const claimAndFinalize = async function* ({
+  admission,
   organizationId,
   workspaceId,
   userId,
@@ -363,6 +370,7 @@ const claimAndFinalize = async function* ({
   // the row to a terminal status; `scanning` left behind would
   // block re-claim until the timeout.
   const finalizeResult = yield* runFinalize({
+    admission,
     claimed,
     organizationId,
     workspaceId,
@@ -433,6 +441,7 @@ const claimAndFinalize = async function* ({
 };
 
 type RunFinalizeProps = {
+  admission: WorkAdmission;
   claimed: ClaimedRow;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -506,6 +515,7 @@ const deleteStagedUploadObjects = async ({
  *   errors that escape are the typed `UploadFinalizeError` cases.
  */
 const runFinalize = async function* ({
+  admission,
   claimed,
   organizationId,
   workspaceId,
@@ -563,7 +573,10 @@ const runFinalize = async function* ({
     bucket: envBase.S3_BUCKET,
     key: tmpKey,
     maxBytes: claimed.declaredSize,
-    signal: AbortSignal.timeout(FINALIZE_CLAIM_TIMEOUT_MS),
+    signal: AbortSignal.any([
+      admission.signal,
+      AbortSignal.timeout(FINALIZE_CLAIM_TIMEOUT_MS),
+    ]),
   });
   if (!head.checksumSHA256) {
     const uploadedSha256 = hashSha256Hex(uploadBytes);

@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { ElysiaCustomStatusResponse } from "elysia";
 import JSZip from "jszip";
 
 import {
@@ -26,8 +27,8 @@ import { envBase } from "@/api/env-base";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { admitWork, readWorkPoolMetrics } from "@/api/lib/load/work-admission";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { legacyTmpUploadKey } from "@/api/lib/uploads/runtime";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -44,6 +45,32 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 import presignUpload from "./create";
 import abortUpload from "./delete";
 import finalizeUpload from "./update";
+
+// Holds `bytes` of the upload pool until the returned release runs.
+const holdUploadPool = async (bytes: number) => {
+  let release: () => void = () => undefined;
+  let started: () => void = () => undefined;
+  const startedPromise = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const running = admitWork({
+    pool: "upload",
+    kind: "upload-finalize-test-hold",
+    bytes,
+    run: async () => {
+      started();
+      await held;
+    },
+  });
+  await startedPromise;
+  return () => {
+    release();
+    void running;
+  };
+};
 
 setDefaultTimeout(120_000);
 
@@ -368,17 +395,13 @@ describe("presigned upload mutation flow", () => {
         headers: grant.headers,
       });
       expect(staged.status).toBe(200);
+      const storageRead = fake.holdNext({
+        method: "GET",
+        keyIncludes: uploadId,
+      });
 
       // Fill the whole budget so the finalization below has to wait.
-      const holdBudget = await UPLOAD_FINALIZE_ADMISSION.acquire(
-        LIMITS.uploadFinalizeInFlightBytes,
-        0,
-      );
-      if (holdBudget === null) {
-        throw new Error(
-          "Expected the idle admission budget to admit the hold.",
-        );
-      }
+      const holdBudget = await holdUploadPool(LIMITS.workPoolUploadBytes);
       let finalizeSettled = false;
       const finalizing = finalizeUpload
         .handler(
@@ -399,11 +422,6 @@ describe("presigned upload mutation flow", () => {
         await Bun.sleep(200);
         expect(finalizeSettled).toBe(false);
         expect(
-          recording.records.filter(
-            ({ message }) => message === "uploads.finalize_admitted",
-          ),
-        ).toEqual([]);
-        expect(
           await testDb.query.pendingUploads.findFirst({
             where: { id: { eq: uploadId } },
             columns: {
@@ -421,34 +439,22 @@ describe("presigned upload mutation flow", () => {
         holdBudget();
       }
 
+      await storageRead.reached;
+      expect(readWorkPoolMetrics().upload).toMatchObject({
+        inFlight: 1,
+        bytesInFlight: bytes.byteLength,
+      });
+      storageRead.release();
+
       const finalized = await finalizing;
       expect(finalized).toMatchObject({ code: 422 });
-      expect(UPLOAD_FINALIZE_ADMISSION.inUseBytes()).toBe(0);
-      expect(
-        recording.records.filter(
-          ({ message }) => message === "uploads.finalize_admitted",
-        ),
-      ).toEqual([
-        {
-          severityText: "INFO",
-          message: "uploads.finalize_admitted",
-          attributes: {
-            declaredBytes: bytes.byteLength,
-            inFlightBytes: bytes.byteLength,
-          },
-        },
-      ]);
+      expect(readWorkPoolMetrics().upload).toMatchObject({
+        inFlight: 0,
+        bytesInFlight: 0,
+      });
 
       // The stored result replays at once even while the budget is full.
-      const holdAgain = await UPLOAD_FINALIZE_ADMISSION.acquire(
-        LIMITS.uploadFinalizeInFlightBytes,
-        0,
-      );
-      if (holdAgain === null) {
-        throw new Error(
-          "Expected the idle admission budget to admit the hold.",
-        );
-      }
+      const holdAgain = await holdUploadPool(LIMITS.workPoolUploadBytes);
       try {
         const startedAt = performance.now();
         const replayed = await finalizeUpload.handler(
@@ -462,19 +468,57 @@ describe("presigned upload mutation flow", () => {
           ),
         );
         expect(replayed).toEqual(finalized);
-        expect(
-          recording.records.filter(
-            ({ message }) => message === "uploads.finalize_admitted",
-          ),
-        ).toHaveLength(1);
         expect(performance.now() - startedAt).toBeLessThan(
-          LIMITS.uploadFinalizeAdmissionWaitMs,
+          LIMITS.workPoolUploadMaxWaitMs,
         );
       } finally {
         holdAgain();
       }
     } finally {
       recording.restore();
+    }
+  });
+
+  test("maps finalize admission refusal to retry advice for capability clients", async () => {
+    const bytes = new TextEncoder().encode("busy upload");
+    const presignResult = await presignUpload.handler(
+      asTestRaw<PresignCtx>(
+        createContext({
+          body: {
+            purpose: "entity_version",
+            entityId: ids.entityA1,
+            name: "busy.txt",
+            mimeType: "text/plain",
+            size: bytes.byteLength,
+            sha256Hex: hashSha256Hex(bytes),
+          },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    const uploadId = getUploadId(presignResult);
+    seededUploadIds.push(uploadId);
+    const release = await holdUploadPool(LIMITS.workPoolUploadBytes);
+    try {
+      const handlerResult = await finalizeUpload.handler(
+        asTestRaw<FinalizeCtx>(
+          createContext({
+            params: { workspaceId: ids.wsA1, uploadId },
+            workspaceId: ids.wsA1,
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
+        ),
+      );
+      if (!(handlerResult instanceof ElysiaCustomStatusResponse)) {
+        throw new Error("Expected a finalize refusal response");
+      }
+      expect(handlerResult.response.retryable).toBe(true);
+      expect(handlerResult.response.retryAfterMs).toBeGreaterThan(0);
+    } finally {
+      release();
     }
   });
 
@@ -624,6 +668,7 @@ const createContext = ({
     recordAuditEvent: async () => undefined,
     request: new Request(`https://example.test/workspaces/${workspaceId}`),
     route: "/test/uploads",
+    set: { headers: {} },
     safeDb,
     scopedDb,
     session: { activeOrganizationId: organizationId },

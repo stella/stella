@@ -226,6 +226,11 @@ export const uploadCommand: Command<Context> = buildCommand<
       dependencies: createUploadDocumentDependencies({
         serverUrl: this.serverUrl,
         token: this.token,
+        onFinalizeRetry: ({ attempt, delayMs }) => {
+          writers.stderr(
+            `server busy, retrying finalize in ${Math.ceil(delayMs / 1000)} s (attempt ${attempt}/5)\n`,
+          );
+        },
       }),
       input: {
         filePath: flags.file,

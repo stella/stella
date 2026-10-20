@@ -5983,6 +5983,7 @@
       "downloadFailed": "Sťahovanie zlyhalo",
       "downloadPdf": "Stiahnuť ako PDF",
       "downloadSearchablePdf": "Prehľadávateľné PDF",
+      "finalizeBusy": "Server je zaneprázdnený; ďalší pokus o {seconds, number} s (pokus {attempt, number})",
       "includeReferenceNumber": "Pridať referenčné číslo",
       "itemLimitReached": "Tento spis dosiahol limit položiek.",
       "maxEntitiesReached": "Dosiahnutý maximálny počet položiek",

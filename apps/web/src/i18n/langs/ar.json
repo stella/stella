@@ -5983,6 +5983,7 @@
       "downloadFailed": "فشل التنزيل",
       "downloadPdf": "تنزيل بصيغة PDF",
       "downloadSearchablePdf": "ملف PDF قابل للبحث",
+      "finalizeBusy": "الخادم مشغول؛ ستتم إعادة المحاولة خلال {seconds, number} ث (المحاولة {attempt, number})",
       "includeReferenceNumber": "تضمين الرقم المرجعي",
       "itemLimitReached": "بلغ هذا الملف القانوني حد العناصر.",
       "maxEntitiesReached": "تم بلوغ الحد الأقصى لعدد العناصر",

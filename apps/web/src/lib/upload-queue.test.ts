@@ -253,6 +253,73 @@ describe("terminal state is reached exactly once", () => {
   });
 });
 
+test.each([false, true])(
+  "finalize-busy is cleared after settlement (failure: %s)",
+  async (shouldFail) => {
+    const states: string[] = [];
+    const events: { retryAfterS: number; attempt: number }[] = [];
+    const queue = new UploadQueue<string>(
+      async (_file, _signal, reportFinalizeBusy) => {
+        reportFinalizeBusy({ retryAfterS: 1, attempt: 1 });
+        await Promise.resolve();
+        if (shouldFail) {
+          throw httpError(400);
+        }
+        return "uploaded";
+      },
+    );
+    queue.on("state-change", (state) => {
+      states.push(state);
+    });
+    queue.on("finalize-busy", (event) => {
+      events.push(event);
+    });
+
+    queue.enqueue(makeFiles("document.docx"));
+    await flush();
+
+    expect(events).toEqual([{ retryAfterS: 1, attempt: 1 }]);
+    expect(states).toContain("finalize-busy");
+    expect(queue.getState()).toBe("done");
+    expect(queue.getProgress()).toEqual({
+      completed: shouldFail ? 0 : 1,
+      failed: shouldFail ? 1 : 0,
+      total: 1,
+    });
+  },
+);
+
+test("a finalize retry never overrides a pause", async () => {
+  let reportBusy:
+    | ((event: { retryAfterS: number; attempt: number } | null) => void)
+    | undefined;
+  let settle: (() => void) | undefined;
+  const settled = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  const queue = new UploadQueue<string>(
+    async (_file, _signal, reportFinalizeBusy) => {
+      reportBusy = reportFinalizeBusy;
+      reportFinalizeBusy({ retryAfterS: 1, attempt: 1 });
+      await settled;
+      return "uploaded";
+    },
+  );
+  queue.enqueue(makeFiles("first.docx", "second.docx"));
+  await flush();
+  expect(queue.getState()).toBe("finalize-busy");
+
+  queue.pause();
+  expect(queue.getState()).toBe("paused");
+  reportBusy?.({ retryAfterS: 2, attempt: 2 });
+  expect(queue.getState()).toBe("paused");
+  reportBusy?.(null);
+  settle?.();
+  await flush();
+
+  expect(queue.getState()).toBe("paused");
+});
+
 describe("no double upload", () => {
   test("a completed file is never uploaded again during the batch", async () => {
     const uploader = new ScriptedUploader();

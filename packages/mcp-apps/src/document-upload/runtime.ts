@@ -8,6 +8,8 @@ import {
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { advisedRetry } from "@stll/concurrency/retry-advised";
+import { sleep } from "@stll/concurrency/sleep";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
@@ -28,6 +30,8 @@ const UPLOAD_TIMEOUT_MS = 1_800_000;
 
 class UploadAppError extends TaggedError("UploadAppError")<{
   message: string;
+  retryable?: boolean | undefined;
+  retryAfterMs?: number | undefined;
 }> {}
 
 type UploadError = UploadAppError | LocalizedAppError;
@@ -64,6 +68,7 @@ type UploadSelectedFileOptions = {
     },
     UploadError
   >;
+  waitForFinalizeRetry: (delayMs: number) => Promise<void>;
 };
 const uploadSelectedFile = async ({
   app,
@@ -74,6 +79,7 @@ const uploadSelectedFile = async ({
   t,
   callCapability,
   parseReservation,
+  waitForFinalizeRetry,
 }: UploadSelectedFileOptions): Promise<void> => {
   const file = getSnapshot().file;
   const uploadTarget = targetController.snapshot();
@@ -124,7 +130,7 @@ const uploadSelectedFile = async ({
     }
 
     setStatus(() => t("scanningSaving"), "idle");
-    const finalized = await callCapability(
+    let finalized = await callCapability(
       app,
       DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,
       buildUploadFinalizeInput({
@@ -132,6 +138,34 @@ const uploadSelectedFile = async ({
         workspaceId: uploadTarget.workspaceId,
       }),
     );
+    for (
+      let attempt = 1;
+      Result.isError(finalized) &&
+      finalized.error instanceof UploadAppError &&
+      finalized.error.retryable === true;
+      attempt += 1
+    ) {
+      const decision = advisedRetry({
+        attempt,
+        advisedDelayMs:
+          finalized.error instanceof UploadAppError
+            ? finalized.error.retryAfterMs
+            : undefined,
+      });
+      if (decision.type === "give-up") {
+        break;
+      }
+      setStatus(() => t("busyRetrying"), "idle");
+      await waitForFinalizeRetry(decision.delayMs);
+      finalized = await callCapability(
+        app,
+        DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,
+        buildUploadFinalizeInput({
+          uploadId,
+          workspaceId: uploadTarget.workspaceId,
+        }),
+      );
+    }
     if (Result.isError(finalized)) {
       return Result.err(finalized.error);
     }
@@ -172,7 +206,10 @@ const uploadSelectedFile = async ({
 
 export const createDocumentUploadRuntime = (
   app = new App({ name: "stella document upload", version: "1.0.0" }),
+  options?: { waitForFinalizeRetry?: (delayMs: number) => Promise<void> },
 ) => {
+  const waitForFinalizeRetry =
+    options?.waitForFinalizeRetry ?? (async (delayMs) => await sleep(delayMs));
   let locale = appLocale(undefined);
   const t = createUploadTranslator(() => locale);
   const { notify, subscribe } = createUploadSubscriptions();
@@ -231,13 +268,24 @@ export const createDocumentUploadRuntime = (
     const result = called.value;
     if (result.isError === true) {
       const message = result.content.find((part) => part.type === "text")?.text;
+      const payload = parseAppToolPayload(result);
+      const envelope = isUploadRecord(payload) ? payload["error"] : undefined;
       return Result.err(
         message === undefined
           ? new LocalizedAppError({
               key: "capabilityFailed",
               values: { capability },
             })
-          : new UploadAppError({ message }),
+          : new UploadAppError({
+              message,
+              ...(isUploadRecord(envelope) && envelope["retryable"] === true
+                ? { retryable: true }
+                : {}),
+              ...(isUploadRecord(envelope) &&
+              typeof envelope["retryAfterMs"] === "number"
+                ? { retryAfterMs: envelope["retryAfterMs"] }
+                : {}),
+            }),
       );
     }
     const payload = parseAppToolPayload(result);
@@ -339,6 +387,7 @@ export const createDocumentUploadRuntime = (
             t,
             callCapability,
             parseReservation,
+            waitForFinalizeRetry,
           }),
       );
       if (Result.isError(uploaded)) {

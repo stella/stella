@@ -5983,6 +5983,7 @@
       "downloadFailed": "Pobieranie nie powiodło się",
       "downloadPdf": "Pobierz jako PDF",
       "downloadSearchablePdf": "Przeszukiwalny PDF",
+      "finalizeBusy": "Serwer jest zajęty; ponowna próba za {seconds, number} s (próba {attempt, number})",
       "includeReferenceNumber": "Dołącz numer referencyjny",
       "itemLimitReached": "Ta sprawa osiągnęła limit elementów.",
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę elementów",

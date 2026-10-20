@@ -5983,6 +5983,7 @@
       "downloadFailed": "Error al descargar",
       "downloadPdf": "Descargar como PDF",
       "downloadSearchablePdf": "PDF con texto buscable",
+      "finalizeBusy": "El servidor está ocupado; reintentando en {seconds, number} s (intento {attempt, number})",
       "includeReferenceNumber": "Incluir número de referencia",
       "itemLimitReached": "Este asunto ha alcanzado su límite de elementos.",
       "maxEntitiesReached": "Se ha alcanzado el número máximo de elementos",

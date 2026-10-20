@@ -15,7 +15,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { extractOfficeEvidence } from "@/api/lib/files/extract-office-evidence";
-import { createOfficeEvidenceAdmission } from "@/api/lib/files/office-evidence-admission";
 import {
   OFFICE_EVIDENCE_LIMITS,
   OFFICE_EVIDENCE_STATUS,
@@ -30,6 +29,11 @@ import {
   type OfficeEvidencePayload,
 } from "@/api/lib/files/office-evidence-types";
 import { createFileKey } from "@/api/lib/files/utils";
+import {
+  admitWork,
+  type WorkAdmission,
+  WorkRefusal,
+} from "@/api/lib/load/work-admission";
 import { OBJECT_READ_TIMEOUT_MS, readS3ArrayBuffer } from "@/api/lib/s3";
 import { normalizeMimeType } from "@/api/lib/search/extractable-mime-types";
 import { PPTX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
@@ -65,7 +69,6 @@ const OFFICE_EVIDENCE_CLAIM_MS =
   OBJECT_READ_TIMEOUT_MS +
   OFFICE_EVIDENCE_LIMITS.workerTimeoutMs +
   OFFICE_EVIDENCE_FINALIZATION_GRACE_MS;
-const officeEvidenceAdmission = createOfficeEvidenceAdmission(1);
 
 const evidenceRowSelection = {
   blockCount: officeFileEvidence.blockCount,
@@ -391,10 +394,12 @@ const captureAndAbandonOfficeEvidence = async ({
 };
 
 type CreateClaimedOfficeEvidenceOptions = ClaimOfficeEvidenceOptions & {
+  admission: WorkAdmission;
   claimToken: string;
 };
 
 const createClaimedOfficeEvidence = async ({
+  admission,
   claimToken,
   format,
   organizationId,
@@ -418,6 +423,7 @@ const createClaimedOfficeEvidence = async ({
           organizationId,
           workspaceId,
         }),
+        admission.signal,
       ),
     catch: (cause) => cause,
   });
@@ -429,7 +435,11 @@ const createClaimedOfficeEvidence = async ({
     });
   }
 
-  const extraction = await extractOfficeEvidence(readResult.value, format);
+  const extraction = await extractOfficeEvidence(
+    readResult.value,
+    format,
+    admission.signal,
+  );
   if (Result.isError(extraction)) {
     return await captureAndAbandonOfficeEvidence({
       ...claim,
@@ -556,28 +566,43 @@ export const loadOfficeEvidence = async ({
     return null;
   }
 
-  const releaseAdmission = officeEvidenceAdmission.tryAcquire();
-  if (!releaseAdmission) {
-    const abandoned = await abandonOfficeEvidenceClaim({
+  const admitted = await admitWork({
+    pool: "heavy-sidecar",
+    kind: "office-evidence",
+    run: async (admission) =>
+      await createClaimedOfficeEvidence({
+        admission,
+        claimToken: claim.claimToken,
+        format,
+        organizationId,
+        safeDb,
+        source,
+        workspaceId,
+      }),
+  });
+  if (Result.isError(admitted)) {
+    if (!WorkRefusal.is(admitted.error)) {
+      captureError(admitted.error, { operation: "office-evidence-admission" });
+    }
+    return await abandonRefusedOfficeEvidence({
       claimToken: claim.claimToken,
       organizationId,
       safeDb,
       source,
       workspaceId,
     });
-    if (Result.isError(abandoned)) {
-      captureError(abandoned.error, { operation: "office-evidence-abandon" });
-    }
-    return null;
   }
-  return await createClaimedOfficeEvidence({
-    claimToken: claim.claimToken,
-    format,
-    organizationId,
-    safeDb,
-    source,
-    workspaceId,
-  }).finally(releaseAdmission);
+  return admitted.value;
+};
+
+const abandonRefusedOfficeEvidence = async (
+  scope: AbandonOfficeEvidenceClaimOptions,
+): Promise<null> => {
+  const abandoned = await abandonOfficeEvidenceClaim(scope);
+  if (Result.isError(abandoned)) {
+    captureError(abandoned.error, { operation: "office-evidence-abandon" });
+  }
+  return null;
 };
 
 type FindOfficeEvidenceBlockOptions = OfficeEvidenceScope & {

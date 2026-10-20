@@ -1,7 +1,10 @@
 import { sleep } from "@stll/concurrency/sleep";
 
 import { detached } from "@/lib/detached";
-import { transformUnknownError } from "@/lib/errors/client";
+import {
+  TerminalUploadError,
+  transformUnknownError,
+} from "@/lib/errors/client";
 
 const HTTP_TOO_MANY_REQUESTS = 429;
 const HTTP_SERVER_ERROR_MIN = 500;
@@ -14,10 +17,17 @@ type UploadState =
   | "running"
   | "paused"
   | "rate-limited"
+  | "finalize-busy"
   | "cancelled"
   | "done";
 
-type UploadFn<T> = (file: File, signal: AbortSignal) => Promise<T>;
+export type FinalizeBusyEvent = { retryAfterS: number; attempt: number };
+
+type UploadFn<T> = (
+  file: File,
+  signal: AbortSignal,
+  reportFinalizeBusy: (event: FinalizeBusyEvent | null) => void,
+) => Promise<T>;
 
 type FailedUpload = {
   file: File;
@@ -50,6 +60,7 @@ type EventMap<T> = {
     cancelled: boolean;
   };
   "rate-limited": { retryAfterS: number };
+  "finalize-busy": FinalizeBusyEvent;
   resumed: null;
   "state-change": UploadState;
 };
@@ -93,6 +104,7 @@ export class UploadQueue<T> {
     done: new Set(),
     progress: new Set(),
     "rate-limited": new Set(),
+    "finalize-busy": new Set(),
     resumed: new Set(),
     "state-change": new Set(),
   };
@@ -167,7 +179,8 @@ export class UploadQueue<T> {
   /** Pause processing. In-flight requests complete; pending
    *  files are held until `resume()`. Not yet wired to UI. */
   pause() {
-    if (this.state !== "running") {
+    // A finalize retry countdown is part of a running queue: it pauses too.
+    if (this.state !== "running" && this.state !== "finalize-busy") {
       return;
     }
     this.setState("paused");
@@ -287,8 +300,30 @@ export class UploadQueue<T> {
       this.state === "cancelled" || this.runId !== admittedRunId;
 
     try {
-      const result = await this.uploadFn(file, controller.signal);
+      const result = await this.uploadFn(file, controller.signal, (event) => {
+        if (isStaleSettlement()) {
+          return;
+        }
+        if (event === null) {
+          if (this.state === "finalize-busy") {
+            this.setState("running");
+          }
+          return;
+        }
+        // Only a running queue shows the retry countdown: a paused or
+        // rate-limited queue keeps its state, so settling the retry can never
+        // resume uploads the user paused.
+        if (this.state !== "running" && this.state !== "finalize-busy") {
+          return;
+        }
+        this.setState("finalize-busy");
+        this.emit("finalize-busy", event);
+      });
       this.inflight.delete(file);
+
+      if (this.state === "finalize-busy") {
+        this.setState("running");
+      }
 
       if (isStaleSettlement()) {
         // Belongs to a superseded run: drop it from accounting, but still
@@ -304,6 +339,10 @@ export class UploadQueue<T> {
       this.pump();
     } catch (error) {
       this.inflight.delete(file);
+
+      if (this.state === "finalize-busy") {
+        this.setState("running");
+      }
 
       if (isStaleSettlement()) {
         this.pump();
@@ -321,7 +360,9 @@ export class UploadQueue<T> {
 
       // Retry on server errors and network failures
       // (status 0 = no HTTP response, e.g. DNS/connection)
-      const isRetryable = status >= HTTP_SERVER_ERROR_MIN || status === 0;
+      const isRetryable =
+        !TerminalUploadError.is(error) &&
+        (status >= HTTP_SERVER_ERROR_MIN || status === 0);
       if (isRetryable && attempt < MAX_RETRIES) {
         const delay = RETRY_BACKOFF_MS[attempt] ?? 4000;
         this.retrying++;
@@ -433,7 +474,7 @@ const getErrorStatus = (error: unknown): number => {
  * carries a `headers` property (e.g., Eden treaty error
  * responses include a `response: Response` field).
  */
-const getRetryAfterSeconds = (error: unknown): number | null => {
+export const getRetryAfterSeconds = (error: unknown): number | null => {
   if (
     error !== null &&
     typeof error === "object" &&

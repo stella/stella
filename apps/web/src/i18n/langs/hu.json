@@ -5983,6 +5983,7 @@
       "downloadFailed": "A letöltés sikertelen",
       "downloadPdf": "Letöltés PDF-ként",
       "downloadSearchablePdf": "Kereshető PDF",
+      "finalizeBusy": "A kiszolgáló foglalt; újrapróbálkozás {seconds, number} mp múlva ({attempt, number}. próbálkozás)",
       "includeReferenceNumber": "Hivatkozási szám hozzáadása",
       "itemLimitReached": "Ez az ügy elérte az elemek korlátját.",
       "maxEntitiesReached": "Elérte a maximális elemszámot",

@@ -5983,6 +5983,7 @@
       "downloadFailed": "Nepavyko atsisiųsti",
       "downloadPdf": "Atsisiųsti kaip PDF",
       "downloadSearchablePdf": "PDF su paieškos tekstu",
+      "finalizeBusy": "Serveris užimtas; kartojama po {seconds, number} sek. ({attempt, number} bandymas)",
       "includeReferenceNumber": "Įtraukti nuorodos numerį",
       "itemLimitReached": "Šioje byloje pasiektas elementų limitas.",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",

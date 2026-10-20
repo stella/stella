@@ -135,7 +135,7 @@ describe("event-loop delay monitoring", () => {
           rssBytes: 10,
           heapUsedBytes: 5,
           arrayBuffersBytes: 2,
-          uploadFinalizeInFlightBytes: 0,
+          workPools: {},
         }),
       onReport: (report) => {
         reports.push(report);
@@ -201,7 +201,7 @@ describe("event-loop delay monitoring", () => {
       rssBytes: 1_500_000_000,
       heapUsedBytes: 400_000_000,
       arrayBuffersBytes: 300_000_000,
-      uploadFinalizeInFlightBytes: 50_000_000,
+      workPools: {},
     });
 
     expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
@@ -211,7 +211,6 @@ describe("event-loop delay monitoring", () => {
         rssBytes: 1_500_000_000,
         heapUsedBytes: 400_000_000,
         arrayBuffersBytes: 300_000_000,
-        uploadFinalizeInFlightBytes: 50_000_000,
       },
     ]);
     expect(lines.at(0)?.length).toBeLessThan(300);

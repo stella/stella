@@ -19,7 +19,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
-import { ClientOperationError } from "@/lib/errors/client";
+import { ClientOperationError, TerminalUploadError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { withActiveUpload } from "@/lib/files/active-uploads";
 import {
@@ -28,8 +28,9 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
+import { retryRefusedFinalize } from "@/lib/files/finalize-retry";
 import { toSafeId } from "@/lib/safe-id";
-import { UploadQueue } from "@/lib/upload-queue";
+import { type FinalizeBusyEvent, UploadQueue } from "@/lib/upload-queue";
 import {
   buildDroppedFolderUploadPlan,
   type DroppedFolderUploadPlan,
@@ -236,6 +237,10 @@ type UploadSingleFileOptions = {
   propertyId: string;
   parentId?: string | null | undefined;
   signal: AbortSignal;
+  onFinalizeBusy?: ((event: FinalizeBusyEvent | null) => void) | undefined;
+  finalizeWait?:
+    | ((delayMs: number, signal?: AbortSignal) => Promise<void>)
+    | undefined;
 };
 
 type PrepareSingleFileEntityUploadOptions = UploadSingleFileOptions;
@@ -286,6 +291,10 @@ type UploadPreparedFileEntityOptions = {
   workspaceId: string;
   preparedUpload: PreparedFileEntityUpload;
   signal: AbortSignal;
+  onFinalizeBusy?: ((event: FinalizeBusyEvent | null) => void) | undefined;
+  finalizeWait?:
+    | ((delayMs: number, signal?: AbortSignal) => Promise<void>)
+    | undefined;
 };
 
 const uploadPreparedFileEntity = async ({
@@ -293,6 +302,8 @@ const uploadPreparedFileEntity = async ({
   workspaceId,
   preparedUpload,
   signal,
+  onFinalizeBusy,
+  finalizeWait,
 }: UploadPreparedFileEntityOptions): Promise<UploadResult> => {
   const { uploadId, url, headers } = preparedUpload;
   const wsClient = api.uploads({
@@ -342,12 +353,29 @@ const uploadPreparedFileEntity = async ({
   }
 
   // 4. Finalize.
-  const finalize = await wsClient({ uploadId }).finalize.post(undefined, {
-    fetch: { signal },
+  const finalize = await retryRefusedFinalize({
+    finalize: async () => {
+      const next = await wsClient({ uploadId }).finalize.post(undefined, {
+        fetch: { signal },
+      });
+      if (next.error) {
+        return next;
+      }
+      return next;
+    },
+    refusalResponse: (result) =>
+      result.error && result.response.status === 503 ? result.response : null,
+    signal,
+    onBusy: onFinalizeBusy,
+    wait: finalizeWait,
   });
   if (finalize.error) {
     const error = toAPIError(finalize.error);
     attachResponseForRetry(error, finalize.response);
+    if (finalize.response.status === 503) {
+      await abortUpload(workspaceId, uploadId);
+      throw new TerminalUploadError({ message: error.message, cause: error });
+    }
     // Finalize owns the pending row once called. 422s are terminal
     // rejections, 409/5xx may still be in-flight or retryable.
     throw error;
@@ -371,7 +399,7 @@ const uploadPreparedFileEntity = async ({
   };
 };
 
-const uploadSingleFile = async (
+export const uploadFileEntity = async (
   options: UploadSingleFileOptions,
 ): Promise<UploadResult> => {
   const preparedUpload = await prepareSingleFileEntityUpload(options);
@@ -380,6 +408,8 @@ const uploadSingleFile = async (
     workspaceId: options.workspaceId,
     preparedUpload,
     signal: options.signal,
+    onFinalizeBusy: options.onFinalizeBusy,
+    finalizeWait: options.finalizeWait,
   });
 };
 
@@ -392,6 +422,7 @@ type BatchUploadLabels = {
   partial: (failed: number, total: number) => string;
   renamed: (count: number) => string;
   rateLimited: (seconds: number) => string;
+  finalizeBusy: (seconds: number, attempt: number) => string;
   cancel: string;
   retryFailed: (count: number) => string;
 };
@@ -418,6 +449,8 @@ export const useBatchUploadLabels = (): BatchUploadLabels => {
         count,
       }),
     rateLimited: (seconds) => t("workspaces.files.rateLimited", { seconds }),
+    finalizeBusy: (seconds, attempt) =>
+      t("workspaces.files.finalizeBusy", { seconds, attempt }),
     cancel: t("common.cancel"),
     retryFailed: (count) => t("workspaces.files.retryFailed", { count }),
   };
@@ -468,35 +501,40 @@ const runUploadBatch = async ({
 }: BatchUploadOptions): Promise<UploadResult[]> =>
   await new Promise<UploadResult[]>((resolve) => {
     const completedFiles = new Set<File>();
-    const queue = new UploadQueue<UploadResult>(async (file, signal) => {
-      const preparedUpload = preparedUploadForFile?.(file);
-      if (preparedUpload) {
-        try {
-          const result = await uploadPreparedFileEntity({
-            file,
-            workspaceId,
-            preparedUpload,
-            signal,
-          });
-          completedFiles.add(file);
-          return result;
-        } catch (error) {
-          await onPreparedUploadFailed?.(file, preparedUpload);
-          throw error;
+    const queue = new UploadQueue<UploadResult>(
+      async (file, signal, reportFinalizeBusy) => {
+        const preparedUpload = preparedUploadForFile?.(file);
+        if (preparedUpload) {
+          try {
+            const result = await uploadPreparedFileEntity({
+              file,
+              workspaceId,
+              preparedUpload,
+              signal,
+              onFinalizeBusy: reportFinalizeBusy,
+            });
+            completedFiles.add(file);
+            return result;
+          } catch (error) {
+            await onPreparedUploadFailed?.(file, preparedUpload);
+            throw error;
+          }
         }
-      }
 
-      const fileParentId = parentIdForFile?.(file);
-      const result = await uploadSingleFile({
-        file,
-        workspaceId,
-        propertyId,
-        parentId: fileParentId === undefined ? parentId : fileParentId,
-        signal,
-      });
-      completedFiles.add(file);
-      return result;
-    }, MAX_PARALLEL_FILE_UPLOADS);
+        const fileParentId = parentIdForFile?.(file);
+        const result = await uploadFileEntity({
+          file,
+          workspaceId,
+          propertyId,
+          parentId: fileParentId === undefined ? parentId : fileParentId,
+          signal,
+          onFinalizeBusy: reportFinalizeBusy,
+        });
+        completedFiles.add(file);
+        return result;
+      },
+      MAX_PARALLEL_FILE_UPLOADS,
+    );
 
     const initialTotal = files.length;
     const showProgress = initialTotal > 1;
@@ -526,6 +564,12 @@ const runUploadBatch = async ({
     queue.on("rate-limited", ({ retryAfterS }) => {
       stellaToast.update(toastId, {
         description: labels.rateLimited(retryAfterS),
+      });
+    });
+
+    queue.on("finalize-busy", ({ retryAfterS, attempt }) => {
+      stellaToast.update(toastId, {
+        description: labels.finalizeBusy(retryAfterS, attempt),
       });
     });
 

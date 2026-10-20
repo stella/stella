@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { advisedRetry as sharedAdvisedRetry } from "@stll/concurrency/retry-advised";
+
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
 import type {
@@ -13,6 +15,7 @@ import {
   DOCUMENT_UPLOAD_POLICY,
   uploadDocument,
 } from "./upload-document.js";
+import { advisedRetry } from "./upload-retry.js";
 
 type InvocationCall = {
   capability: string;
@@ -46,16 +49,31 @@ const reservation = {
   },
 };
 
+test("local advised retry policy matches the shared policy", () => {
+  const advisedDelays = [undefined, 0, 1, 999, 1000, 5000, 30_000, 60_000];
+  for (let attempt = 0; attempt <= 8; attempt += 1) {
+    for (const advisedDelayMs of advisedDelays) {
+      expect(advisedRetry({ attempt, advisedDelayMs })).toEqual(
+        sharedAdvisedRetry({ attempt, advisedDelayMs }),
+      );
+    }
+  }
+});
+
 const createDependencies = ({
   invoke,
   put = async () => Result.ok(undefined),
+  onFinalizeRetry,
 }: {
   invoke: UploadDocumentDependencies["invoke"];
   put?: UploadDocumentDependencies["put"];
+  onFinalizeRetry?: UploadDocumentDependencies["onFinalizeRetry"];
 }): UploadDocumentDependencies => ({
   invoke,
   put,
   readLocalFile: async () => Result.ok(localFile),
+  onFinalizeRetry,
+  waitForFinalizeRetry: async () => {},
 });
 
 test("upload timeout covers a maximum-size file at the supported slow rate", () => {
@@ -446,5 +464,87 @@ describe("document upload state machine", () => {
       );
     }
     expect(capabilities).toEqual(["uploads.create", "uploads.update"]);
+  });
+
+  test("retries a refused finalize with the same staged upload", async () => {
+    let finalizeCalls = 0;
+    const waits: { attempt: number; delayMs: number }[] = [];
+    const dependencies = createDependencies({
+      onFinalizeRetry: (wait) => {
+        waits.push(wait);
+      },
+      invoke: async (capability) => {
+        if (capability === "uploads.create") {
+          return { status: "ok", payload: reservation };
+        }
+        finalizeCalls += 1;
+        if (finalizeCalls === 1) {
+          return {
+            status: "tool-error",
+            result: {
+              isError: true,
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    error: { retryable: true, retryAfterMs: 1000 },
+                  }),
+                },
+              ],
+            },
+          };
+        }
+        return { status: "ok", payload: { finalizedResult: {} } };
+      },
+    });
+
+    const result = await uploadDocument({
+      dependencies,
+      input: { ...uploadInput, propertyId: "file-property" },
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(finalizeCalls).toBe(2);
+    expect(waits).toEqual([{ attempt: 1, delayMs: 1000 }]);
+  });
+
+  test("preserves the upload id when refused finalize retries are exhausted", async () => {
+    let finalizeCalls = 0;
+    const dependencies = createDependencies({
+      invoke: async (capability) => {
+        if (capability === "uploads.create") {
+          return { status: "ok", payload: reservation };
+        }
+        finalizeCalls += 1;
+        return {
+          status: "tool-error",
+          result: {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  error: { retryable: true, retryAfterMs: 1000 },
+                }),
+              },
+            ],
+          },
+        };
+      },
+    });
+
+    const result = await uploadDocument({
+      dependencies,
+      input: { ...uploadInput, propertyId: "file-property" },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        type: "finalize",
+        uploadId: "upload-1",
+      });
+    }
+    expect(finalizeCalls).toBe(5);
   });
 });

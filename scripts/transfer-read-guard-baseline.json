@@ -602,20 +602,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/entities/zip/download.ts",
-    "function": "module/downloadZipHandler/fetchFile",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/entities/zip/download.ts",
-    "function": "module/downloadZipHandler/fetchFile",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/api/src/handlers/entity-views/create.ts",
     "function": "module/createSafeRootHandler[1]",
     "kind": "constant-limit",

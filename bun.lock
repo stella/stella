@@ -860,6 +860,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@stll/concurrency": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },
@@ -1088,6 +1089,7 @@
         "@stll/agent-input": "workspace:*",
         "@stll/api-contract": "workspace:*",
         "@stll/collation": "workspace:*",
+        "@stll/concurrency": "workspace:*",
         "@stll/decision-reader": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/fetch": "workspace:*",

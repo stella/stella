@@ -5983,6 +5983,7 @@
       "downloadFailed": "Lejupielāde neizdevās",
       "downloadPdf": "Lejupielādēt kā PDF",
       "downloadSearchablePdf": "Meklējams PDF",
+      "finalizeBusy": "Serveris ir aizņemts; atkārtots mēģinājums pēc {seconds, number} s ({attempt, number}. mēģinājums)",
       "includeReferenceNumber": "Iekļaut atsauces numuru",
       "itemLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums.",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
