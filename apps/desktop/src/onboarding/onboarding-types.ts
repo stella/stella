@@ -11,6 +11,11 @@ export const ONBOARDING_STEPS = [
 
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
+/** The inputs the window sends; the native `Input` also has the shortcut. */
+export const ONBOARDING_NAVIGATION = ["continue", "back"] as const;
+
+export type OnboardingNavigation = (typeof ONBOARDING_NAVIGATION)[number];
+
 export type DocumentApp = {
   iconDataUrl: string | null;
   name: string;

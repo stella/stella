@@ -17,7 +17,11 @@ import {
   isOnboardingSnapshot,
   ONBOARDING_CHANGED_EVENT,
 } from "./onboarding-types";
-import type { OnboardingSnapshot } from "./onboarding-types";
+import type {
+  OnboardingNavigation,
+  OnboardingSnapshot,
+  OnboardingStep,
+} from "./onboarding-types";
 import { PermissionsStep } from "./PermissionsStep";
 import { TryItStep } from "./TryItStep";
 import { WelcomeStep } from "./WelcomeStep";
@@ -82,9 +86,11 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
     };
   }, []);
 
-  const advance = async (input: "continue" | "back") => {
+  // `from` lets the native flow ignore a repeated or stale click instead of
+  // moving twice.
+  const advance = async (from: OnboardingStep, input: OnboardingNavigation) => {
     const result = await Result.tryPromise(async () =>
-      invoke<unknown>("onboarding_advance", { input }),
+      invoke<unknown>("onboarding_advance", { from, input }),
     );
     if (Result.isError(result) || !isOnboardingSnapshot(result.value)) {
       reportOnboardingFailure();
@@ -150,10 +156,10 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
   function stepContent(snapshot: OnboardingSnapshot) {
     const props = {
       onBack: () => {
-        void advance("back");
+        void advance(snapshot.step, "back");
       },
       onContinue: () => {
-        void advance("continue");
+        void advance(snapshot.step, "continue");
       },
       snapshot,
     };

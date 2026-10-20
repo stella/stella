@@ -93,6 +93,26 @@ pub fn next_step(current: Step, input: Input, context: FlowContext) -> Step {
   }
 }
 
+/// Applies `input` only when it was sent from the step the flow is on, so a
+/// repeated or stale input (a double click, a click racing a refresh) is a
+/// no-op rather than a second move.
+pub fn resolve(current: Step, from: Step, input: Input, context: FlowContext) -> Step {
+  if from != current {
+    return current;
+  }
+  next_step(current, input, context)
+}
+
+/// The step the flow is on. The step a window last showed stays, even when it
+/// stopped applying (Connect, once linked), so the user sees it succeed and
+/// leaves it with their own input; any other resume point settles first.
+pub fn on_screen(stored: Step, shown: Option<Step>, context: FlowContext) -> Step {
+  if shown == Some(stored) {
+    return stored;
+  }
+  settle(stored, context)
+}
+
 /// A stored resume point may name a step that no longer applies (the account
 /// was linked since); settle on the first visible step at or after it.
 pub fn settle(stored: Step, context: FlowContext) -> Step {
@@ -113,6 +133,8 @@ pub enum Progress {
 
 pub struct Onboarding {
   progress: Progress,
+  /// The step the last snapshot reported; kept for this run only.
+  shown: Option<Step>,
   preference: DevicePreference,
 }
 
@@ -130,6 +152,7 @@ impl Onboarding {
       });
     Self {
       progress,
+      shown: None,
       preference,
     }
   }
@@ -193,11 +216,12 @@ async fn snapshot(app: &AppHandle) -> Result<OnboardingSnapshot, String> {
   let state = app.state::<OnboardingState>();
   let step = {
     let mut onboarding = locked(&state)?;
-    let settled = settle(onboarding.step(), context);
-    if settled != onboarding.step() && onboarding.progress != Progress::Completed {
-      onboarding.save(Progress::InProgress { resume: settled });
+    let step = on_screen(onboarding.step(), onboarding.shown, context);
+    if step != onboarding.step() && onboarding.progress != Progress::Completed {
+      onboarding.save(Progress::InProgress { resume: step });
     }
-    settled
+    onboarding.shown = Some(step);
+    step
   };
   let document_app = tauri::async_runtime::spawn_blocking(document_app)
     .await
@@ -274,7 +298,7 @@ pub fn show(app: &AppHandle) {
       let handle = app.clone();
       window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Destroyed) {
-          crate::clipboard_shortcut::resume(&handle);
+          crate::clipboard_shortcut::resume_after_window_closed(&handle);
         }
       });
     }
@@ -292,25 +316,32 @@ fn close_window(app: &AppHandle) {
   }
 }
 
-/// Called by the shortcut handler. Advances Try it; any other step ignores it.
+/// Called by the shortcut handler. Only an open setup window on Try it takes
+/// the press; with setup closed the shortcut is ordinary use, not the tour.
 pub fn shortcut_pressed(app: &AppHandle) {
+  if app.get_webview_window(ONBOARDING_WINDOW_LABEL).is_none() {
+    return;
+  }
   let app = app.clone();
   tauri::async_runtime::spawn(async move {
-    if apply(&app, Input::ShortcutPressed).await.is_ok() {
+    if apply(&app, Step::TryIt, Input::ShortcutPressed)
+      .await
+      .is_ok()
+    {
       let _ = app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ());
     }
   });
 }
 
-async fn apply(app: &AppHandle, input: Input) -> Result<(), String> {
+async fn apply(app: &AppHandle, from: Step, input: Input) -> Result<(), String> {
   let context = flow_context(app).await;
   let state = app.state::<OnboardingState>();
   let mut onboarding = locked(&state)?;
   if onboarding.progress == Progress::Completed {
     return Ok(());
   }
-  let current = settle(onboarding.step(), context);
-  let next = next_step(current, input, context);
+  let current = on_screen(onboarding.step(), onboarding.shown, context);
+  let next = resolve(current, from, input, context);
   if next != onboarding.step() {
     onboarding.save(Progress::InProgress { resume: next });
   }
@@ -324,12 +355,14 @@ pub async fn onboarding_get_snapshot(
   snapshot(&app).await
 }
 
+/// `from` is the step the window showed when the user acted.
 #[tauri::command]
 pub async fn onboarding_advance(
   app: AppHandle,
+  from: Step,
   input: Input,
 ) -> Result<OnboardingSnapshot, String> {
-  apply(&app, input).await?;
+  apply(&app, from, input).await?;
   snapshot(&app).await
 }
 
@@ -502,10 +535,45 @@ mod tests {
       has_permission_rows: true,
     };
     assert!(visible_steps(linked, Step::Connect).contains(&Step::Connect));
+    let current = on_screen(Step::Connect, Some(Step::Connect), linked);
+    assert_eq!(current, Step::Connect);
     assert_eq!(
-      next_step(Step::Connect, Input::Continue, linked),
+      resolve(current, Step::Connect, Input::Continue, linked),
       Step::HowItWorks
     );
+    // A resume point no window has shown in this run still settles past it.
+    assert_eq!(on_screen(Step::Connect, None, linked), Step::HowItWorks);
+  }
+
+  #[test]
+  fn a_repeated_or_stale_input_never_moves_the_flow_twice() {
+    for context in CONTEXTS {
+      for walk in walks(6) {
+        let mut step = Step::Welcome;
+        for input in walk {
+          let from = step;
+          step = resolve(step, from, input, context);
+          assert_eq!(resolve(step, from, input, context), step, "{context:?}");
+        }
+      }
+    }
+  }
+
+  #[test]
+  fn the_shortcut_moves_the_flow_only_from_try_it() {
+    for context in CONTEXTS {
+      for step in Step::ALL {
+        let expected = if step == Step::TryIt {
+          Step::Done
+        } else {
+          step
+        };
+        assert_eq!(
+          resolve(step, Step::TryIt, Input::ShortcutPressed, context),
+          expected
+        );
+      }
+    }
   }
 
   #[test]
