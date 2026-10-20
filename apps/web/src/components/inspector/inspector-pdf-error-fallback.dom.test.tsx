@@ -1,7 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, expectTypeOf, test } from "bun:test";
 
 import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
+import type { FileConversionRefusal } from "@stll/workspace-ui/types";
 
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import messages from "@/i18n/langs/en.json";
@@ -122,4 +123,8 @@ test("shows a document reference refusal from file data", () => {
       "This document refers to an external resource in style text, so it can't be converted.",
     ),
   ).toBeTruthy();
+});
+
+test("the published file refusal type matches the API refusal", () => {
+  expectTypeOf<FileConversionRefusal>().toEqualTypeOf<ConversionRefusal>();
 });

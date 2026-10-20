@@ -7,7 +7,7 @@ export type { OptionColor } from "@stll/ui/option-color";
  * Why a document could not be converted. Mirrors the API contract type; the
  * web app asserts both declarations stay equal.
  */
-export type ConversionRefusal =
+export type FileConversionRefusal =
   | { kind: "unsupported_encoding"; encoding: string }
   | {
       kind: "unsupported_reference";
@@ -61,7 +61,7 @@ export type FieldContent =
         | {
             status: "failed";
             reason?: "enqueue" | "processing" | "too-large" | undefined;
-            conversionRefusal?: ConversionRefusal | undefined;
+            conversionRefusal?: FileConversionRefusal | undefined;
           }
         | undefined;
     }

@@ -469,6 +469,15 @@ describe("document conversion input", () => {
           ),
       ),
       makeConversionCase(
+        "ooxml|{http://www.w3.org/2001/XMLSchema}import|schemaLocation",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        async () =>
+          zip(
+            "customXml/item1.xml",
+            '<xs:import xmlns:xs="http://www.w3.org/2001/XMLSchema" schemaLocation="https://example.test/schema.xsd"/>',
+          ),
+      ),
+      makeConversionCase(
         "ooxml|{http://www.w3.org/2001/XMLSchema}import|namespace",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         async () =>

@@ -58,6 +58,13 @@ export const REFERENCE_ALLOWLIST = [
     reason: "imported schema namespace identifier",
   },
   {
+    format: "ooxml",
+    element: "{http://www.w3.org/2001/XMLSchema}import",
+    attribute: "schemaLocation",
+    reason:
+      "schema location hint in custom XML schema parts; document conversion does not load XML Schema imports",
+  },
+  {
     format: "odf",
     element: "*",
     attribute: "{http://www.w3.org/2000/xmlns/}*",
