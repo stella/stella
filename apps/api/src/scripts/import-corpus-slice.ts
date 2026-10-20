@@ -1,13 +1,11 @@
-import { Result, TaggedError } from "better-result";
+import { Result } from "better-result";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
+import { importCorpusSliceIntoDatabase } from "@/api/lib/case-law/corpus-slice-transfer-execution";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import { putCorpusS3ObjectWithSignal, readCorpusS3Bytes } from "@/api/lib/s3";
 import { parseImportCorpusSliceArguments } from "@/api/scripts/import-corpus-slice-plan";
-
-class ImportCorpusSliceExecutionError extends TaggedError(
-  "ImportCorpusSliceExecutionError",
-)<{ message: string }> {}
 
 await runScriptWithErrorOutput(async () => {
   const options = parseImportCorpusSliceArguments(process.argv.slice(2));
@@ -21,8 +19,25 @@ await runScriptWithErrorOutput(async () => {
     return;
   }
   const lane = await enterCaseLawMaintenanceLane();
+  const result = await importCorpusSliceIntoDatabase(
+    options.value.prefix,
+    {
+      read: async (key) =>
+        await readCorpusS3Bytes(key, AbortSignal.timeout(300_000)),
+      write: async (key, bytes, contentType) =>
+        await putCorpusS3ObjectWithSignal({
+          key,
+          bytes,
+          mimeType: contentType,
+          signal: AbortSignal.timeout(300_000),
+        }),
+    },
+    lane.rootDb,
+    lane.ingestionDb,
+  );
   await lane.release();
-  throw new ImportCorpusSliceExecutionError({
-    message: "Corpus slice execution requires an object-storage adapter",
-  });
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+  console.log(JSON.stringify({ mode: "import", ...result.value }));
 });

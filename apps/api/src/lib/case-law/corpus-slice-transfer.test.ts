@@ -5,7 +5,9 @@ import { corpusSliceManifest } from "@/api/lib/case-law/corpus-slice";
 import {
   buildCorpusSliceExport,
   CORPUS_SLICE_EXPORT_TABLES,
+  importStoredCorpusSlice,
   importCorpusSlice,
+  writeCorpusSliceExport,
 } from "@/api/lib/case-law/corpus-slice-transfer";
 
 const decisionId = createSafeId<"caseLawDecision">();
@@ -104,6 +106,30 @@ test("a tampered shard is refused before any write", async () => {
       enqueueProjectionDesiredState: async () => 0,
     },
   );
+  expect(result.isErr()).toBe(true);
+  expect(writes).toBe(0);
+});
+
+test("stored transfer verifies every shard before opening the write path", async () => {
+  const objects = new Map<string, Uint8Array>();
+  const storage = {
+    read: async (key: string) => objects.get(key) ?? null,
+    write: async (key: string, bytes: Uint8Array) => {
+      objects.set(key, bytes);
+    },
+  };
+  await writeCorpusSliceExport("round-3", exported, storage);
+  const shardKey = "round-3/decisions.ndjson";
+  objects.set(shardKey, new TextEncoder().encode("tampered"));
+  let writes = 0;
+  const result = await importStoredCorpusSlice("round-3", storage, {
+    upsert: async () => {
+      writes += 1;
+      return 0;
+    },
+    removeDecisionsExcept: async () => 0,
+    enqueueProjectionDesiredState: async () => 0,
+  });
   expect(result.isErr()).toBe(true);
   expect(writes).toBe(0);
 });

@@ -1,27 +1,42 @@
-import { Result, TaggedError } from "better-result";
+import { Result } from "better-result";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
+import { exportCorpusSliceFromDatabase } from "@/api/lib/case-law/corpus-slice-transfer-execution";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
-import { parseExportCorpusSliceArguments } from "@/api/scripts/export-corpus-slice-plan";
-
-class ExportCorpusSliceExecutionError extends TaggedError(
-  "ExportCorpusSliceExecutionError",
-)<{ message: string }> {}
+import { putCorpusS3ObjectWithSignal, readCorpusS3Bytes } from "@/api/lib/s3";
+import {
+  CORPUS_SLICE_TRANSFER_BATCH_SIZE,
+  parseExportCorpusSliceArguments,
+} from "@/api/scripts/export-corpus-slice-plan";
 
 await runScriptWithErrorOutput(async () => {
   const options = parseExportCorpusSliceArguments(process.argv.slice(2));
   if (Result.isError(options)) {
     throw options.error;
   }
-  await openCaseLawReadOnlySession();
   if (options.value.mode === "dry-run") {
     console.log(
       JSON.stringify({ mode: "dry-run", prefix: options.value.prefix }),
     );
     return;
   }
-  throw new ExportCorpusSliceExecutionError({
-    message: "Corpus slice execution requires an object-storage adapter",
+  const session = await openCaseLawReadOnlySession();
+  await exportCorpusSliceFromDatabase({
+    database: session.rootDb,
+    prefix: options.value.prefix,
+    asOf: new Date(),
+    batchSize: CORPUS_SLICE_TRANSFER_BATCH_SIZE,
+    storage: {
+      read: async (key) =>
+        await readCorpusS3Bytes(key, AbortSignal.timeout(300_000)),
+      write: async (key, bytes, contentType) =>
+        await putCorpusS3ObjectWithSignal({
+          key,
+          bytes,
+          mimeType: contentType,
+          signal: AbortSignal.timeout(300_000),
+        }),
+    },
   });
 });
