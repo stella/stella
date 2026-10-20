@@ -520,6 +520,11 @@ export type StaticMcpToolInvocation =
     };
 
 /** The sole execution seam for a registered static tool. */
+const withoutAdmission = ({
+  admitToolInvocation: _admitted,
+  ...rest
+}: McpRequestContext): McpRequestContext => rest;
+
 export const invokeStaticMcpTool = async ({
   args,
   beforeInvoke,
@@ -646,6 +651,13 @@ export const invokeStaticMcpTool = async ({
     return { status: "input-authority-refused", denial: inputDenial };
   }
 
+  const admitsHere =
+    context.admitToolInvocation !== undefined &&
+    definition.name !== MCP_CAPABILITY_EXECUTORS.read &&
+    definition.name !== MCP_CAPABILITY_EXECUTORS.write;
+  // One admission per tool call: work nested inside an admitted call shares it.
+  const handlerContext = admitsHere ? withoutAdmission(context) : context;
+
   const invoke = async (): Promise<McpToolResponse> => {
     const earlyResponse = await beforeInvoke?.(scoped.args);
     if (earlyResponse !== undefined && earlyResponse !== null) {
@@ -673,15 +685,13 @@ export const invokeStaticMcpTool = async ({
         message: `Tool ${definition.name} is unavailable.`,
       });
     }
-    return await handler({ args: scoped.args, context });
+    return await handler({ args: scoped.args, context: handlerContext });
   };
 
   const response =
-    context.admitToolInvocation === undefined ||
-    definition.name === MCP_CAPABILITY_EXECUTORS.read ||
-    definition.name === MCP_CAPABILITY_EXECUTORS.write
-      ? await invoke()
-      : await context.admitToolInvocation(invoke);
+    admitsHere && context.admitToolInvocation !== undefined
+      ? await context.admitToolInvocation(invoke)
+      : await invoke();
   return {
     status: "invoked",
     response,
