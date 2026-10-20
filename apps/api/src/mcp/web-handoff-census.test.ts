@@ -59,8 +59,8 @@ describe("MCP web link census", () => {
         fields,
       );
     }
+    // Reader outputs carry one `url` field (the app link); it must be covered.
     expect(fields.has("url")).toBe(true);
-    expect(fields.has("appUrl")).toBe(true);
     const links = Object.fromEntries(
       [...fields].map((field, index) => [
         field,

@@ -28,10 +28,6 @@ export const DOC_SOURCES = {
     dependencies: ["@anthropic-ai/sdk"],
     url: "https://platform.claude.com/llms.txt",
   },
-  Mistral: {
-    dependencies: ["@mistralai/mistralai"],
-    url: "https://docs.mistral.ai/llms.txt",
-  },
   OpenAI: {
     dependencies: ["openai"],
     url: "https://developers.openai.com/llms.txt",
@@ -309,7 +305,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@formatjs/icu-messageformat-parser",
   "@google/genai",
   "@happy-dom/global-registrator",
-  "@hyzyla/pdfium",
   "@jitl/quickjs-wasmfile-release-asyncify",
   "@libpdf/core",
   "@litko/yara-x",
@@ -409,6 +404,22 @@ export const DOC_SOURCE_EXCLUSIONS = [
           reason: "no-llms-txt",
         }) satisfies NoLlmsTxtExclusion,
     ),
+    {
+      checkedAt: "2026-10-17T00:00:00.000Z",
+      dependency: "@embedpdf/pdfium",
+      explanation:
+        "The package ships no llms.txt and its README links none. The functions it wraps are PDFium's public C API; read the headers at https://pdfium.googlesource.com/pdfium/+/refs/heads/main/public/ directly.",
+      expiresAt: "2026-11-16T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-17T00:00:00.000Z",
+      dependency: "@types/emscripten",
+      explanation:
+        "Type declarations for the Emscripten runtime that @embedpdf/pdfium's module extends; they have no documentation site of their own. Use the Emscripten API reference at https://emscripten.org/docs/api_reference/ and the declarations directly.",
+      expiresAt: "2026-11-16T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
     {
       checkedAt: "2026-10-13T00:00:00.000Z",
       dependency: "@myriaddreamin/typst-ts-renderer",

@@ -1,11 +1,5 @@
 [
   {
-    "source": "apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard.test.ts",
-    "operation": "writeFileSync",
-    "destination": "apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json",
-    "reason": "Explicit READ_FAULT_BASELINE=write regeneration updates the committed read-fault baseline; normal test runs never write it."
-  },
-  {
     "source": "apps/api/src/tests/helpers/provider-request-cache.ts",
     "operation": "writeFileSync",
     "destination": "apps/api/src/tests/fixtures/provider-request-schemas/chat-prompt-baseline.json",
@@ -22,17 +16,5 @@
     "operation": "writeFileSync",
     "destination": "apps/web/src/components/chat/__fixtures__/recorded-conversations/__dynamic__.gen.json",
     "reason": "Explicit CHAT_TRANSCRIPTS_WRITE=1 regeneration writes committed scenario recordings through gen:chat-transcripts; normal test runs only compare them."
-  },
-  {
-    "source": "apps/api/src/tests/query-plans/query-plans.db.test.ts",
-    "operation": "write",
-    "destination": "apps/api/src/tests/query-plans/contracts.json",
-    "reason": "Explicit STELLA_UPDATE_PLAN_CONTRACTS=1 regeneration updates committed query-plan contracts; normal test runs never write them."
-  },
-  {
-    "source": "apps/api/src/tests/query-plans/query-plans.db.test.ts",
-    "operation": "write",
-    "destination": "apps/api/src/tests/query-plans/workspace-rls-plan.fixture.json",
-    "reason": "Explicit STELLA_UPDATE_PLAN_CONTRACTS=1 regeneration updates the committed RLS plan fixture; normal test runs never write it."
   }
 ]

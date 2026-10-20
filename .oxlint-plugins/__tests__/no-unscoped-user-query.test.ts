@@ -8,6 +8,22 @@ const SOURCE = [
   "",
 ].join("\n");
 
+test("schema metadata does not exempt database reads in the same module", async () => {
+  const source = [
+    'import { user } from "@/api/db/auth-schema";',
+    'import { getTableConfig } from "drizzle-orm/pg-core";',
+    "const name = getTableConfig(user).name;",
+    'const owner = text("user_id").references(() => user.id);',
+    "export const read = db.select().from(user);",
+  ].join("\n");
+  expect(
+    await lintSingleRule("no-unscoped-user-query", source, {
+      plugin: "security-guards",
+      sourcePath: "apps/api/src/db/schema/account-export-fixture.ts",
+    }),
+  ).toEqual([5]);
+});
+
 const lint = async (
   sourcePath: string,
   allowedFiles?: readonly { file: string; reason: string }[],

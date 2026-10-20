@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 15,
+  "reason": "The text-search engine migration moves hand-written string scanning in apps/api, apps/web, apps/landing, apps/legal-atlas-runner, packages/agent-input, packages/api-contract, packages/infosoud, packages/mcp-kit and the root scripts onto the first-party @stll/aho-corasick, @stll/regex-set and @stll/fuzzy-search engines (browser builds use the -wasm entries). Declaring them once, through the catalog, lets every migration PR land on one shared dependency set instead of each funding its own increase."
+}

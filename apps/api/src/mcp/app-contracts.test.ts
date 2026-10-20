@@ -61,7 +61,6 @@ const PROVISION_HISTORY_FIXTURE = v.parse(READ_PROVISION_HISTORY_PROJECTION, {
   anchor: "par_1",
   items: [
     {
-      appUrl: null,
       url: null,
       documentId: "history-version-found",
       resourceName:
@@ -77,7 +76,6 @@ const PROVISION_HISTORY_FIXTURE = v.parse(READ_PROVISION_HISTORY_PROJECTION, {
       truncated: false,
     },
     {
-      appUrl: null,
       url: null,
       documentId: "history-version-withheld",
       resourceName:
@@ -99,7 +97,6 @@ const STATUTE_PROVISIONS_FIXTURE = v.parse(READ_STATUTE_PROVISIONS_PROJECTION, {
     {
       eli: "cz:act:2012:89",
       anchor: "par_1",
-      appUrl: null,
       url: null,
       documentId: "provision-version-found",
       resourceName:
@@ -114,7 +111,6 @@ const STATUTE_PROVISIONS_FIXTURE = v.parse(READ_STATUTE_PROVISIONS_PROJECTION, {
     {
       eli: "cz:act:2012:89",
       anchor: "par_1",
-      appUrl: null,
       url: null,
       status: "text_withheld",
       message: "The source does not permit displaying this wording.",
@@ -431,7 +427,7 @@ describe("MCP app registry and contracts", () => {
       throw new Error("Expected search view");
     }
     expect(view.results.at(0)).not.toHaveProperty("citationAuthority");
-    expect(view.results.at(0)).not.toHaveProperty("url");
+    expect(view.results.at(0)).not.toHaveProperty("appUrl");
     expect(resolveView(APP_RESOLVE_FIXTURE)).not.toHaveProperty("resourceName");
   });
   test("publisher headnotes survive the MCP projection and absence is explicit", () => {
@@ -501,7 +497,7 @@ describe("MCP app registry and contracts", () => {
       }
       expect(view.results).toHaveLength(1);
       expect(view.results.at(0)?.headnote).toEqual({ type: expected });
-      expect(view.results.at(0)?.appUrl).toBe(first.appUrl);
+      expect(view.results.at(0)?.url).toBe(first.url);
     },
   );
   test("decision actions use only HTTP links from their own contract fields", () => {
@@ -515,7 +511,7 @@ describe("MCP app registry and contracts", () => {
         results: [
           {
             ...first,
-            appUrl: `${scheme}:invalid`,
+            url: `${scheme}:invalid`,
             source_url: `${scheme}:invalid`,
           },
         ],
@@ -523,7 +519,7 @@ describe("MCP app registry and contracts", () => {
       if (view.type !== "search") {
         throw new Error("Expected search view");
       }
-      expect(view.results.at(0)?.appUrl).toBeNull();
+      expect(view.results.at(0)?.url).toBeNull();
       expect(view.results.at(0)?.source_url).toBeUndefined();
     }
     const view = searchView({
@@ -531,7 +527,7 @@ describe("MCP app registry and contracts", () => {
       results: [
         {
           ...first,
-          appUrl: null,
+          url: null,
           source_url: "http://example.org/original",
         },
       ],
@@ -539,7 +535,7 @@ describe("MCP app registry and contracts", () => {
     if (view.type !== "search") {
       throw new Error("Expected search view");
     }
-    expect(view.results.at(0)?.appUrl).toBeNull();
+    expect(view.results.at(0)?.url).toBeNull();
     expect(view.results.at(0)?.source_url).toBe("http://example.org/original");
   });
   test("filter changes restart the search without discarding unrelated filters", () => {

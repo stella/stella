@@ -837,6 +837,53 @@ export default eslintCompatPlugin({
           );
         };
 
+        const isSchemaMetadata = (node: AstNode): boolean => {
+          const parent = node.parent;
+          if (isAstNode(parent) && parent.type === "CallExpression") {
+            const callee = unwrapExpression(parent.callee);
+            const binding =
+              callee === null ? null : resolveImport(context, callee);
+            if (
+              binding !== null &&
+              ((binding.moduleId === "drizzle-orm/pg-core" &&
+                binding.imported === "getTableConfig") ||
+                (binding.moduleId === "drizzle-orm" &&
+                  ["getTableName", "getColumns"].includes(binding.imported)))
+            ) {
+              return true;
+            }
+          }
+          // A column-only FK callback describes a schema; it cannot perform a
+          // read. Calls inside the callback still pass through query checks.
+          if (
+            isAstNode(parent) &&
+            parent.type === "MemberExpression" &&
+            parent.object === node
+          ) {
+            const callback = parent.parent;
+            if (
+              isAstNode(callback) &&
+              callback.type === "ArrowFunctionExpression" &&
+              callback.body === parent
+            ) {
+              const declaration = callback.parent;
+              if (
+                isAstNode(declaration) &&
+                declaration.type === "CallExpression"
+              ) {
+                const callee = unwrapExpression(declaration.callee);
+                if (
+                  callee?.type === "MemberExpression" &&
+                  memberPropertyName(callee) === "references"
+                ) {
+                  return true;
+                }
+              }
+            }
+          }
+          return false;
+        };
+
         const checkTableReference = (node: unknown): void => {
           if (
             !isAstNode(node) ||
@@ -845,30 +892,8 @@ export default eslintCompatPlugin({
           ) {
             return;
           }
-          // Only a concise foreign-key column reference declares schema metadata.
-          if (
-            repoRelativeFilename(context).startsWith("apps/api/src/db/schema/")
-          ) {
-            const column = node.parent;
-            const callback = isAstNode(column) ? column.parent : null;
-            const call = isAstNode(callback) ? callback.parent : null;
-            if (
-              isAstNode(column) &&
-              column.type === "MemberExpression" &&
-              column.object === node &&
-              isAstNode(callback) &&
-              callback.type === "ArrowFunctionExpression" &&
-              callback.body === column &&
-              isAstNode(call) &&
-              call.type === "CallExpression" &&
-              Array.isArray(call.arguments) &&
-              call.arguments.at(0) === callback &&
-              isAstNode(call.callee) &&
-              call.callee.type === "MemberExpression" &&
-              memberPropertyName(call.callee) === "references"
-            ) {
-              return;
-            }
+          if (isSchemaMetadata(node)) {
+            return;
           }
           const chain = queryChainRoot(node);
           if (isInsertTarget(node) && !readsInsertedRows(chain)) {

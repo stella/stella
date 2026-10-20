@@ -13,6 +13,31 @@
       "unknownDevice": "Neznámé zařízení"
     }
   },
+  "admin": {
+    "ai": "AI",
+    "backToApp": "Zpět do aplikace",
+    "billingAndUsage": "Fakturace a využití",
+    "billingProfiles": "Fakturační profily",
+    "deleteDescription": "Trvale smažete tuto organizaci a její data. Tuto akci nelze vrátit zpět.",
+    "deleteOrganization": "Smazat organizaci",
+    "deleteRefusedSubscription": "Tato organizace má předplatné, které se obnovuje. Nejprve ho zrušte v sekci Tarif a využití, poté organizaci smažte.",
+    "deleteTypeToConfirm": "Pro potvrzení zadejte {name}.",
+    "firmSetup": "Nastavení kanceláře",
+    "general": "Obecné",
+    "leaveDescription": "Ztratíte přístup ke spisům a datům této organizace.",
+    "leaveOrganization": "Opustit organizaci",
+    "leaveRefusedOnlyOwner": "Jste jediný vlastník. Než organizaci opustíte, udělejte vlastníkem jiného člena.",
+    "modelsAndProviders": "Modely a poskytovatelé",
+    "noPlan": "Žádný aktivní tarif",
+    "organizationDeleted": "Organizace byla smazána.",
+    "organizationId": "ID organizace",
+    "organizationLeft": "Opustili jste organizaci.",
+    "overviewDescription": "Spravujte organizaci, lidi a nástroje.",
+    "people": "Lidé",
+    "planAndUsage": "Tarif a využití",
+    "title": "Správa organizace",
+    "toolsDescription": "Zapněte nebo vypněte vestavěné nástroje pro všechny v této organizaci."
+  },
   "agentClaim": {
     "access": "Získá přístup",
     "accessReadSearch": "Přístup pro čtení a vyhledávání",
@@ -359,6 +384,12 @@
       "attentionComplete": "<strong>Všechna tvrzení vyžadující úsudek byla vyřízena.</strong> {count, plural, one {Zbývající # rutinní závěr nevyžaduje samostatnou kontrolu.} few {Zbývající # rutinní závěry nevyžadují samostatnou kontrolu.} other {Zbývajících # rutinních závěrů nevyžaduje samostatnou kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrzení vyžaduje} few {# tvrzení vyžadují} other {# tvrzení vyžaduje}} váš úsudek</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.} few {Zbývající # tvrzení jsou rutinní a nevyžadují samostatné schválení.} other {Zbývajících # tvrzení je rutinních a nevyžaduje samostatné schválení.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} other {}})",
+      "documentView": {
+        "label": "Zobrazení dokumentu",
+        "original": "Originál",
+        "reading": "Text ke čtení"
+      },
+      "notLocated": "{count, plural, one {# tvrzení se v originálu nepodařilo najít} few {# tvrzení se v originálu nepodařilo najít} other {# tvrzení se v originálu nepodařilo najít}}",
       "selectClaim": "Vyberte tvrzení a prohlédněte si související záznamy.",
       "showQueue": "Zobrazit frontu",
       "stats": {
@@ -988,6 +1019,9 @@
       "saved": "Do spisu {matter} {count, plural, one {bylo uloženo # rozhodnutí} few {byla uložena # rozhodnutí} other {bylo uloženo # rozhodnutí}}"
     },
     "newestDecisions": "Nejnovější rozhodnutí",
+    "noResults": {
+      "hint": "Zkuste jiná slova, vylepšete dotaz pomocí AI, nebo se zeptejte v chatu."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Lidské"
@@ -1061,8 +1095,11 @@
         "short": "Krátký"
       }
     },
+    "rewritten": {
+      "line": "Pro <bdi>{original}</bdi> nic přesně neodpovídá; zobrazujeme výsledky pro <bdi>{query}</bdi>",
+      "searchOriginal": "Hledat moje původní slova"
+    },
     "sameCaseNumber": "{count, plural, one {# rozhodnutí nese} few {# rozhodnutí nesou} other {# rozhodnutí nese}} tuto spisovou značku. Vyberte soud.",
-    "searchAskPrompt": "{query} (judikatura, {country})",
     "searchLabel": "Hledat v judikatuře",
     "searchPlaceholder": "Spisová značka, ECLI nebo slova, např. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1210,15 +1247,32 @@
     },
     "answerEdit": {
       "acceptFailed": "Úpravu se nepodařilo uložit. Zkuste to znovu.",
+      "aiKind": "Úprava na požádání",
       "ask": "Požádat o úpravy",
+      "authorUnknown": "Neznámý autor",
+      "autolinkLabel": "Tento text se automaticky změní na odkaz. Před odebráním odkazu změňte jeho popisek.",
+      "change": "Změna {revision}",
+      "editedLabel": "Upravená odpověď",
       "failed": "Úpravu se nepodařilo připravit. Zkuste to znovu.",
+      "formatKind": "Formátování",
+      "heading": "Nadpis {level}",
+      "history": "Historie odpovědi",
+      "historyEmpty": "Žádné starší verze.",
       "instruction": "Popište úpravu",
       "instructionRequired": "Popište, jak upravit vybraný text.",
       "invalidSelection": "Výběr nelze upravit, vyberte souvislý text.",
+      "invalidUrl": "Zadejte platnou adresu HTTP nebo HTTPS.",
+      "linkAddress": "Adresa odkazu",
+      "orderedList": "Číslovaný seznam",
       "proposal": "Navržená úprava",
       "requesting": "Příprava úprav…",
+      "restoreRefreshFailed": "Odpověď byla obnovena, ale nepodařilo se načíst její aktuální stav. Obnovte ji a načtěte obnovenou odpověď.",
+      "revertKind": "Obnovená verze",
       "stale": "Odpověď se změnila. Vyberte text znovu.",
-      "submit": "Požádat o úpravu"
+      "submit": "Požádat o úpravu",
+      "textStyle": "Styl textu",
+      "unorderedList": "Seznam s odrážkami",
+      "wholeBlockRequired": "Pro změnu stylu vyberte celý odstavec nebo seznam."
     },
     "answerQuote": {
       "showInDecision": "Zobrazit v rozhodnutí",
@@ -1409,7 +1463,12 @@
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mention": {
       "category": {
-        "entities": "V tomto spisu"
+        "entities": "V tomto spisu",
+        "sources": "Zdroje"
+      },
+      "corpus": {
+        "caseLaw": "Judikatura · {country}",
+        "legislation": "Právní předpisy · {country}"
       },
       "loadError": "Nepodařilo se načíst položky"
     },
@@ -2620,10 +2679,12 @@
     "api": {
       "badRequest": "Požadavek se nepodařilo dokončit.",
       "caseLawCountryUnavailable": "Judikatura této země není dostupná. Vyberte jinou zemi.",
+      "caseLawIdentityOnly": "Pro tuto zemi je dostupné pouze přesné vyhledání a čtení rozhodnutí.",
       "caseLawSearchUnavailable": "Vyhledávání judikatury této země není dostupné. Její veřejná rozhodnutí si můžete nadále číst.",
       "conflict": "Požadavek je v konfliktu s aktuálním stavem.",
       "forbidden": "K této akci nemáte oprávnění.",
       "legislationCountryUnavailable": "Právní předpisy této země nejsou dostupné. Vyberte jinou zemi.",
+      "legislationIdentityOnly": "Pro tuto zemi je dostupné pouze přesné vyhledání a čtení právních předpisů.",
       "legislationSearchUnavailable": "Vyhledávání právních předpisů této země není dostupné. Její veřejné právní předpisy si můžete nadále číst.",
       "notFound": "Požadovanou položku se nepodařilo najít.",
       "payloadTooLarge": "Požadavek je příliš velký.",
@@ -2646,6 +2707,10 @@
       "aiConfigModelInvalid": "Konfigurace modelu AI je neplatná. Zkontrolujte vybrané modely.",
       "aiConfigProviderInvalid": "Konfigurace poskytovatele AI je neplatná. Zkontrolujte nastavení poskytovatele.",
       "aiConfigProviderValidationFailed": "Poskytovatel AI konfiguraci odmítl. Zkontrolujte klíč API a model.",
+      "aiOutputInvalid": "Odpověď AI měla neočekávaný formát. Zkuste to znovu.",
+      "aiOutputModerated": "Poskytovatel AI výstup zablokoval. Přeformulujte požadavek nebo zvolte jiný model.",
+      "aiProviderTaskUnsupported": "Nastavený poskytovatel AI tuto úlohu nezvládá. Zvolte poskytovatele, který ji zvládá.",
+      "aiUnknown": "Požadavek AI se nezdařil. Zkuste to znovu.",
       "clauseDirectivesInvalid": "Propojené ustanovení obsahuje neplatné direktivy. Před vyplněním vzoru ustanovení opravte.",
       "clauseDirectivesInvalidDetails": "Ustanovení {clauseName} na pozici {slotName} obsahuje neplatné direktivy. Otevřete editor ustanovení, opravte uvedené odstavce a znovu vyplňte vzor.",
       "clauseDirectivesOverrideInvalidDetails": "Přepsané ustanovení {clauseName} na pozici {slotName} obsahuje neplatné direktivy. Před dalším vyplněním opravte přepsané znění v tomto vyplnění.",
@@ -4192,6 +4257,10 @@
     "archivedEmpty": "Žádné archivované paměti.",
     "archivedToast": "Paměť byla archivována",
     "createdToast": "Uloženo do paměti",
+    "deleteConfirmation": "Pro potvrzení napište {confirmation}",
+    "deleteDescription": "Tímto tuto paměť trvale odstraníte. Tuto akci nelze vrátit zpět.",
+    "deleteTitle": "Smazat paměť?",
+    "deletedToast": "Paměť byla smazána",
     "empty": "Zatím žádná paměť.",
     "kinds": {
       "decision": "Rozhodnutí",
@@ -5120,6 +5189,8 @@
     "outline": "Obsah",
     "outlineJumpLabel": "Přejít na ustanovení",
     "outlineJumpPlaceholder": "§ 10 nebo název",
+    "pendingChanges": "Nadcházející novelizace",
+    "pendingChangesIncomplete": "Údaje vydavatele nemusí zahrnovat všechny nadcházející novelizace.",
     "provisionAskContextPrompt": "\n\nPasáže, které toto ustanovení aplikují v nejvlivnějších rozhodnutích:\n{passages}\n\nPomocí nástrojů pro judikaturu si můžeš přečíst kterékoli z těchto rozhodnutí celé nebo dohledat další rozhodnutí, která ustanovení citují.",
     "provisionAskPlaceholder": "Zeptejte se na toto ustanovení",
     "provisionAskQuestionPrompt": "K {subject}: {question}",
@@ -5137,7 +5208,6 @@
     "provisionTextUnavailable": "Text není pro toto znění k dispozici",
     "publisherWindowInconsistent": "K tomuto dni nelze určit účinné znění: údaje vydavatele si odporují.",
     "resolvedAlias": "Rozpoznáno jako {label}",
-    "searchAskPrompt": "{query} (právní předpisy: {country})",
     "searchLabel": "Hledat v právních předpisech",
     "searchPlaceholder": "Číslo, zkratka nebo název, např. 89/2012 Sb.",
     "showCitedPartOnly": "Zobrazit jen citovanou část",
@@ -6266,7 +6336,6 @@
         }
       },
       "atAGlance": "Přehled",
-      "edited": "upravil(a)",
       "getStarted": "Začněte nahráním dokumentů nebo vytvořením první složky.",
       "matterDetails": "Podrobnosti spisu",
       "membersCount": "{count, plural, one {# člen} few {# členové} other {# členů}}",

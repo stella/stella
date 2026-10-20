@@ -2416,6 +2416,7 @@ const logAndCaptureSafeError = ({
     sink: SHADOW_SINKS.handler,
     channel: legacyChannelOf({ severity, capture: telemetry === "capture" }),
     request,
+    route,
     requestState: { answeredStatus: statusCode },
   });
 

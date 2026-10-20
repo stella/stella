@@ -43,7 +43,7 @@ const metadata = {
   country: "CZE",
   date: "2024-04-15",
   ecli: null,
-  appUrl: "https://stella.example/case-law/fixture",
+  url: "https://stella.example/case-law/fixture",
 } as const satisfies ReaderPage["metadata"];
 const OPEN = {
   status: "available",
@@ -172,7 +172,7 @@ const LINK_PAGES = [
           end: "Cited decision".length,
           citationId: "linked-citation",
           decisionId: citedDecisionId,
-          appUrl: citedDecisionUrl,
+          url: citedDecisionUrl,
         },
       ],
     },
@@ -189,7 +189,7 @@ const LINK_PAGES = [
           start: linkedText.indexOf("cited provision"),
           end: linkedText.indexOf("cited provision") + "cited provision".length,
           provision,
-          appUrl: provisionUrl,
+          url: provisionUrl,
         },
       ],
     },
@@ -201,7 +201,7 @@ const CITED_OPEN = {
     ...metadata,
     decisionId: citedDecisionId,
     caseNumber: "II. ÚS 456/24",
-    appUrl: citedDecisionUrl,
+    url: citedDecisionUrl,
   },
 } satisfies ReaderOpen;
 const CITED_PAGE = {
@@ -214,7 +214,7 @@ const PREVIEW = {
   language: "cs",
   anchorId: provision.anchor,
   citedAnchorId: provision.cited_anchor,
-  appUrl: provisionUrl,
+  url: provisionUrl,
   headings: [],
   heading: null,
   blocks: [
@@ -244,9 +244,9 @@ const RESULT_FIXTURE = {
       index === RESULT_TARGET_INDEX
         ? metadata.caseNumber
         : `Fixture result ${index + 1}`,
-    appUrl:
+    url:
       index === RESULT_TARGET_INDEX
-        ? `${metadata.appUrl}#par=48-49`
+        ? `${metadata.url}#par=48-49`
         : `https://stella.example/law/cze/cases/fixture/result-${index + 1}`,
   })),
 } satisfies SearchResults;
@@ -626,7 +626,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       paragraphs: "48-49",
       open: {
         ...OPEN,
-        metadata: { ...metadata, appUrl: `${metadata.appUrl}#par=48-49` },
+        metadata: { ...metadata, url: `${metadata.url}#par=48-49` },
       },
       revision: "updated",
     });
@@ -758,7 +758,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       .click();
     await expect
       .poll(async () => (await history(page)).links)
-      .toEqual([metadata.appUrl]);
+      .toEqual([metadata.url]);
     const recorded = await history(page);
     expect(recorded.toolResponses).toHaveLength(2);
     expect(
@@ -785,7 +785,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       paragraphs: "48-49",
       open: {
         ...OPEN,
-        metadata: { ...metadata, appUrl: `${metadata.appUrl}#par=48-49` },
+        metadata: { ...metadata, url: `${metadata.url}#par=48-49` },
       },
     });
     await expect(app.locator("#para48[data-reader-landing]")).toBeVisible();
@@ -804,7 +804,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       .click();
     await expect
       .poll(async () => (await history(page)).links)
-      .toEqual([`${metadata.appUrl}#par=48-49`]);
+      .toEqual([`${metadata.url}#par=48-49`]);
     expect(
       (await history(page)).calls.map(({ arguments: args }) => args["cursor"]),
     ).toEqual([undefined, "fixture-page-2"]);
@@ -833,8 +833,8 @@ for (const host of ["ChatGPT", "Claude"] as const) {
         .poll(async () => (await history(page)).links)
         .toEqual([
           handoff === "minted"
-            ? `${metadata.appUrl}#sh=sh1_fixture`
-            : metadata.appUrl,
+            ? `${metadata.url}#sh=sh1_fixture`
+            : metadata.url,
         ]);
       expect((await history(page)).calls).toEqual([
         {
@@ -843,7 +843,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
         },
         {
           name: MCP_WEB_HANDOFF_TOOL_NAME,
-          arguments: { url: metadata.appUrl },
+          arguments: { url: metadata.url },
         },
       ]);
     });
@@ -1000,11 +1000,11 @@ for (const host of ["ChatGPT", "Claude"] as const) {
         ...readerPage.content,
         citationAnchors: readerPage.content.citationAnchors.map((anchor) => ({
           ...anchor,
-          appUrl: null,
+          url: null,
         })),
         provisionAnchors: readerPage.content.provisionAnchors.map((anchor) => ({
           ...anchor,
-          appUrl: null,
+          url: null,
         })),
       },
     })) satisfies ReaderPage[];
@@ -1078,7 +1078,7 @@ test("reader reassembles fragmented blocks and consumes anchor-only pages", asyn
             start: 0,
             end: 9,
             citationId: "fixture-citation",
-            appUrl: citedDecisionUrl,
+            url: citedDecisionUrl,
             decisionId: "00000000-0000-4000-8000-000000000002",
           },
         ],
@@ -1120,7 +1120,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       surface: "results",
       open: {
         ...OPEN,
-        metadata: { ...metadata, appUrl: `${metadata.appUrl}#par=48-49` },
+        metadata: { ...metadata, url: `${metadata.url}#par=48-49` },
       },
     });
     const rows = app.locator("tbody tr");
@@ -1143,7 +1143,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       .click();
     await expect
       .poll(async () => (await history(page)).links)
-      .toEqual([`${metadata.appUrl}#par=48-49`]);
+      .toEqual([`${metadata.url}#par=48-49`]);
     await expect(page.locator("iframe")).toHaveCount(1);
     await expect
       .poll(async () => (await history(page)).calls)
@@ -1175,9 +1175,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     expect(
       await opener.evaluate(() => document.scrollingElement?.scrollTop),
     ).toBe(scrollBefore);
-    expect((await history(page)).links).toEqual([
-      `${metadata.appUrl}#par=48-49`,
-    ]);
+    expect((await history(page)).links).toEqual([`${metadata.url}#par=48-49`]);
     await expect(page.locator("iframe")).toHaveCount(1);
   });
 }

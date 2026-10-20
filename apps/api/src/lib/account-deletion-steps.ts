@@ -35,6 +35,7 @@ import {
   bufferObjectCleanupIntents,
   accountDeletionEffectChunks,
   accountDeletionRequests,
+  accountExports,
   agentSkills,
   aiMemories,
   chatThreads,
@@ -77,6 +78,7 @@ import {
   buildAccountDeletionTaskReassignmentTargets,
   validateAccountDeletionTaskReassignmentTargets,
 } from "@/api/lib/account-deletion-reassignment";
+import { ACCOUNT_EXPORT_LIMITS } from "@/api/lib/account-export/constants";
 import { arrayOrEmpty } from "@/api/lib/array";
 import {
   AUDIT_ACTION,
@@ -1174,12 +1176,13 @@ export const deleteFileComparisonUploads = async ({
 
 export type DeleteUserFilesParams = {
   tx: Transaction;
-  currentUserId: string;
+  currentUserId: SafeId<"user">;
   s3KeysToDelete: string[];
 };
 
 export const DELETE_USER_FILES_TABLES = [
   userFiles,
+  accountExports,
 ] as const satisfies readonly PgTable[];
 
 /**
@@ -1191,7 +1194,35 @@ export const deleteUserFiles = async ({
   tx,
   currentUserId,
   s3KeysToDelete,
-}: DeleteUserFilesParams): Promise<void> => {
+}: DeleteUserFilesParams): Promise<Date | null> => {
+  // audit: skip - The enclosing account-deletion request records file and export erasure in this transaction.
+  // The account lock held by erasure fences claims and completion. Reclaimed
+  // ledger rows hold no object keys and leave without a result set.
+  await tx
+    .delete(accountExports)
+    .where(
+      and(
+        eq(accountExports.userId, currentUserId),
+        sql`jsonb_array_length(${accountExports.attemptObjectKeys}) = 0`,
+      ),
+    );
+  // Rows that still name attempted objects are bounded by the request budget
+  // over one reclamation window; their keys join the durable cleanup request.
+  // Claims cannot outlive their absolute lease, so reclamation waits until
+  // every possible publication has stopped, storage cancellation included.
+  const exportObjects = await tx
+    .delete(accountExports)
+    .where(eq(accountExports.userId, currentUserId))
+    .returning({
+      keys: accountExports.attemptObjectKeys,
+      notBefore:
+        sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.leaseMs + ACCOUNT_EXPORT_LIMITS.publicationCancellationMarginMs} * INTERVAL '1 millisecond')`.mapWith(
+          accountExports.createdAt,
+        ),
+    });
+  for (const { keys } of exportObjects) {
+    s3KeysToDelete.push(...keys);
+  }
   const files = await tx
     .select({
       id: userFiles.id,
@@ -1220,6 +1251,7 @@ export const deleteUserFiles = async ({
   }
 
   await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
+  return exportObjects.at(0)?.notBefore ?? null;
 };
 
 export const DELETE_CHAT_THREADS_TABLES = [
@@ -1384,6 +1416,7 @@ export type RecordAccountDeletionRequestParams = {
   workspaceIds: SafeId<"workspace">[];
   taskReassignmentCount: number;
   s3KeysToDelete: string[];
+  storageCleanupNotBefore?: Date | null;
 };
 
 /**
@@ -1399,6 +1432,7 @@ export const recordAccountDeletionRequest = async ({
   workspaceIds,
   taskReassignmentCount,
   s3KeysToDelete,
+  storageCleanupNotBefore,
 }: RecordAccountDeletionRequestParams): Promise<void> => {
   const effectChunks = createS3DeletionEffectChunks(s3KeysToDelete);
   await tx.insert(accountDeletionRequests).values({
@@ -1408,7 +1442,13 @@ export const recordAccountDeletionRequest = async ({
     workspaceIds,
     taskReassignmentCount,
     status: s3KeysToDelete.length > 0 ? "pending" : "completed",
-    storageCleanup: { s3Keys: s3KeysToDelete },
+    storageCleanup: {
+      s3Keys: s3KeysToDelete,
+      ...(storageCleanupNotBefore === undefined ||
+      storageCleanupNotBefore === null
+        ? {}
+        : { notBefore: storageCleanupNotBefore.toISOString() }),
+    },
     completedAt: s3KeysToDelete.length > 0 ? null : new Date(),
   });
 

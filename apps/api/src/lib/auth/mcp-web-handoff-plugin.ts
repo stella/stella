@@ -16,6 +16,7 @@ import {
   webHandoffFailure,
   WEB_HANDOFF_CODE_PATTERN,
 } from "@/api/lib/auth/mcp-web-handoff";
+import { MCP_HANDOFF_REDEEM_PATH } from "@/api/lib/auth/mcp-web-handoff-paths";
 import { completeHandoffSession } from "@/api/lib/auth/mcp-web-handoff-session";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -31,7 +32,7 @@ const WEB_HANDOFF_ENDPOINT_FAILURE_SINK = failureSink({
   expected: [],
 });
 
-export const MCP_HANDOFF_REDEEM_PATH = "/mcp-handoff/redeem";
+export { MCP_HANDOFF_REDEEM_PATH };
 type WebHandoffService = ReturnType<typeof createWebHandoffService>;
 type HandoffPluginOptions = {
   service: () => WebHandoffService;

@@ -13,6 +13,31 @@
       "unknownDevice": "Dispositivo desconocido"
     }
   },
+  "admin": {
+    "ai": "IA",
+    "backToApp": "Volver a la aplicación",
+    "billingAndUsage": "Facturación y uso",
+    "billingProfiles": "Perfiles de facturación",
+    "deleteDescription": "Elimina permanentemente esta organización y sus datos. Esta acción no se puede deshacer.",
+    "deleteOrganization": "Eliminar organización",
+    "deleteRefusedSubscription": "Esta organización tiene una suscripción que se renueva. Cancélala primero en Plan y uso y, después, elimina la organización.",
+    "deleteTypeToConfirm": "Escribe {name} para confirmar.",
+    "firmSetup": "Configuración del despacho",
+    "general": "Configuración general",
+    "leaveDescription": "Perderás el acceso a los asuntos y datos de esta organización.",
+    "leaveOrganization": "Salir de la organización",
+    "leaveRefusedOnlyOwner": "Eres el único propietario. Haz propietario a otro miembro antes de salir.",
+    "modelsAndProviders": "Modelos y proveedores",
+    "noPlan": "Sin plan activo",
+    "organizationDeleted": "La organización se ha eliminado.",
+    "organizationId": "ID de la organización",
+    "organizationLeft": "Has salido de la organización.",
+    "overviewDescription": "Gestiona tu organización, las personas y las herramientas.",
+    "people": "Personas",
+    "planAndUsage": "Plan y uso",
+    "title": "Administración de la organización",
+    "toolsDescription": "Activa o desactiva las herramientas integradas para todas las personas de esta organización."
+  },
   "agentClaim": {
     "access": "Acceso que obtendrá",
     "accessReadSearch": "Acceso de lectura y búsqueda",
@@ -359,6 +384,12 @@
       "attentionComplete": "<strong>Se han resuelto todas las afirmaciones que requerían una valoración.</strong> {count, plural, one {La # determinación rutinaria no requiere revisión individual.} other {Las # determinaciones rutinarias no requieren revisión individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# afirmación requiere} other {# afirmaciones requieren}} su valoración</strong>: conflictos e interpretaciones cuestionadas. {routineCount, plural, one {La otra # es rutinaria y no requiere aprobación individual.} other {Las otras # son rutinarias y no requieren aprobación individual.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, cuestionada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, impugnada} other {}})",
+      "documentView": {
+        "label": "Vista del documento",
+        "original": "Original",
+        "reading": "Vista de lectura"
+      },
+      "notLocated": "{count, plural, one {# afirmación no se ha localizado en el original} other {# afirmaciones no se han localizado en el original}}",
       "selectClaim": "Seleccione una afirmación para examinar el registro.",
       "showQueue": "Mostrar cola",
       "stats": {
@@ -988,6 +1019,9 @@
       "saved": "{count, plural, one {# resolución guardada} other {# resoluciones guardadas}} en {matter}"
     },
     "newestDecisions": "Resoluciones más recientes",
+    "noResults": {
+      "hint": "Pruebe otras palabras, mejore la consulta con IA o haga la pregunta en el chat."
+    },
     "notesFilter": {
       "ai": "IA",
       "human": "Humanas"
@@ -1061,8 +1095,11 @@
         "short": "Corto"
       }
     },
+    "rewritten": {
+      "line": "No hay coincidencias exactas para <bdi>{original}</bdi>; se muestran resultados para <bdi>{query}</bdi>",
+      "searchOriginal": "Buscar mis palabras originales"
+    },
     "sameCaseNumber": "{count, plural, one {# resolución lleva} other {# resoluciones llevan}} este número de asunto. Elija el tribunal.",
-    "searchAskPrompt": "{query} (jurisprudencia de {country})",
     "searchLabel": "Buscar jurisprudencia",
     "searchPlaceholder": "Número de asunto, ECLI o palabras, p. ej. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1210,15 +1247,32 @@
     },
     "answerEdit": {
       "acceptFailed": "No se pudo guardar el cambio. Inténtelo de nuevo.",
+      "aiKind": "Edición solicitada",
       "ask": "Solicitar cambios",
+      "authorUnknown": "Autor desconocido",
+      "autolinkLabel": "Este texto se convierte automáticamente en un enlace. Cambia la etiqueta antes de quitar el enlace.",
+      "change": "Cambio {revision}",
+      "editedLabel": "Respuesta editada",
       "failed": "No se pudo preparar el cambio. Inténtelo de nuevo.",
+      "formatKind": "Formato",
+      "heading": "Encabezado {level}",
+      "history": "Historial de la respuesta",
+      "historyEmpty": "No hay versiones anteriores.",
       "instruction": "Describa el cambio",
       "instructionRequired": "Describa cómo cambiar el texto seleccionado.",
       "invalidSelection": "Esta selección no se puede editar. Seleccione un fragmento continuo.",
+      "invalidUrl": "Introduzca una dirección HTTP o HTTPS válida.",
+      "linkAddress": "Dirección del enlace",
+      "orderedList": "Lista numerada",
       "proposal": "Cambio propuesto",
       "requesting": "Preparando cambios…",
+      "restoreRefreshFailed": "La respuesta se restauró, pero no se pudo actualizar. Actualízala para cargar la respuesta restaurada.",
+      "revertKind": "Versión restaurada",
       "stale": "Esta respuesta ha cambiado. Vuelva a seleccionar el texto.",
-      "submit": "Solicitar cambio"
+      "submit": "Solicitar cambio",
+      "textStyle": "Estilo de texto",
+      "unorderedList": "Lista con viñetas",
+      "wholeBlockRequired": "Seleccione un párrafo o una lista completos para cambiar su estilo."
     },
     "answerQuote": {
       "showInDecision": "Ver en la resolución",
@@ -1409,7 +1463,12 @@
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
     "mention": {
       "category": {
-        "entities": "En este asunto"
+        "entities": "En este asunto",
+        "sources": "Fuentes"
+      },
+      "corpus": {
+        "caseLaw": "Jurisprudencia · {country}",
+        "legislation": "Legislación · {country}"
       },
       "loadError": "Error al cargar elementos"
     },
@@ -2620,10 +2679,12 @@
     "api": {
       "badRequest": "No se pudo completar la solicitud.",
       "caseLawCountryUnavailable": "La jurisprudencia de este país no está disponible. Elige otro país.",
+      "caseLawIdentityOnly": "Para este país solo están disponibles la búsqueda exacta y la lectura de resoluciones.",
       "caseLawSearchUnavailable": "La búsqueda de jurisprudencia de este país no está disponible. Puedes seguir consultando sus resoluciones públicas.",
       "conflict": "La solicitud entra en conflicto con el estado actual.",
       "forbidden": "No tienes permiso para hacer esto.",
       "legislationCountryUnavailable": "La legislación de este país no está disponible. Elige otro país.",
+      "legislationIdentityOnly": "Para este país solo están disponibles la búsqueda exacta y la lectura de legislación.",
       "legislationSearchUnavailable": "La búsqueda de legislación de este país no está disponible. Puedes seguir consultando su legislación pública.",
       "notFound": "No pudimos encontrar lo solicitado.",
       "payloadTooLarge": "La solicitud es demasiado grande.",
@@ -2646,6 +2707,10 @@
       "aiConfigModelInvalid": "La configuración del modelo de IA no es válida. Revisa los modelos seleccionados.",
       "aiConfigProviderInvalid": "La configuración del proveedor de IA no es válida. Revisa los ajustes del proveedor.",
       "aiConfigProviderValidationFailed": "El proveedor de IA rechazó la configuración. Revisa la clave de API y el modelo.",
+      "aiOutputInvalid": "La respuesta de IA tenía un formato inesperado. Inténtalo de nuevo.",
+      "aiOutputModerated": "El proveedor de IA moderó la respuesta. Reformula la solicitud o elige otro modelo.",
+      "aiProviderTaskUnsupported": "El proveedor de IA configurado no puede realizar esta tarea. Elige uno que sí pueda.",
+      "aiUnknown": "La solicitud de IA ha fallado. Inténtalo de nuevo.",
       "clauseDirectivesInvalid": "Una cláusula vinculada contiene directivas no válidas. Corrija la cláusula antes de rellenar la plantilla.",
       "clauseDirectivesInvalidDetails": "La cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Abra el editor de cláusulas, corrija los párrafos indicados y vuelva a rellenar la plantilla.",
       "clauseDirectivesOverrideInvalidDetails": "La sustitución de la cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Corrija la sustitución de este formulario antes de volver a rellenarlo.",
@@ -4192,6 +4257,10 @@
     "archivedEmpty": "No hay recuerdos archivados.",
     "archivedToast": "Recuerdo archivado",
     "createdToast": "Guardado en la memoria",
+    "deleteConfirmation": "Escriba {confirmation} para confirmar",
+    "deleteDescription": "Esto elimina este recuerdo de forma permanente. Esta acción no se puede deshacer.",
+    "deleteTitle": "¿Eliminar el recuerdo?",
+    "deletedToast": "Recuerdo eliminado",
     "empty": "Aún no hay nada en la memoria.",
     "kinds": {
       "decision": "Decisión",
@@ -5120,6 +5189,8 @@
     "outline": "Índice",
     "outlineJumpLabel": "Ir a una disposición",
     "outlineJumpPlaceholder": "§ 10 o un título",
+    "pendingChanges": "Próximas modificaciones",
+    "pendingChangesIncomplete": "Es posible que los datos del editor no incluyan todas las próximas modificaciones.",
     "provisionAskContextPrompt": "\n\nPasajes que aplican la disposición en las resoluciones de mayor autoridad:\n{passages}\n\nUsa las herramientas de jurisprudencia para leer íntegramente cualquiera de estas resoluciones o para encontrar otras que citen la disposición.",
     "provisionAskPlaceholder": "Pregunte sobre este precepto",
     "provisionAskQuestionPrompt": "Sobre {subject}: {question}",
@@ -5137,7 +5208,6 @@
     "provisionTextUnavailable": "Texto no disponible para esta versión",
     "publisherWindowInconsistent": "No se puede determinar la versión vigente en esta fecha: los datos del editor son incoherentes.",
     "resolvedAlias": "Reconocido como {label}",
-    "searchAskPrompt": "{query} (legislación de {country})",
     "searchLabel": "Buscar en la legislación",
     "searchPlaceholder": "Número, nombre o título, p. ej. 89/2012 Sb.",
     "showCitedPartOnly": "Mostrar solo la parte citada",
@@ -6266,7 +6336,6 @@
         }
       },
       "atAGlance": "De un vistazo",
-      "edited": "editó",
       "getStarted": "Empiece subiendo documentos o creando su primera carpeta.",
       "matterDetails": "Detalles del asunto",
       "membersCount": "{count, plural, one {# miembro} other {# miembros}}",
