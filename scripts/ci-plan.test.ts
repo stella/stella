@@ -4876,7 +4876,7 @@ test("only the dedicated malware gate activates Safe Chain and keeps Bun package
   ).toBe(true);
 });
 
-test("every browser suite belongs to exactly one required matrix leg", () => {
+test("every browser suite runs on its required matrix legs, the playground on every shard leg", () => {
   const browser = v.parse(
     v.object({
       strategy: v.object({
@@ -4899,8 +4899,14 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
       values: { "github.event_name": "merge_group" },
     }),
   );
-  expect(new Set(matrixSuites)).toEqual(new Set(["desktop", "ui"]));
-  expect(matrixSuites).toHaveLength(2);
+  const playgroundLegs = matrixSuites.filter((leg) =>
+    leg.startsWith("playground-"),
+  );
+  expect(new Set(matrixSuites)).toEqual(
+    new Set(["desktop", "ui", ...playgroundLegs]),
+  );
+  expect(matrixSuites).toHaveLength(2 + playgroundLegs.length);
+  expect(playgroundLegs.length).toBeGreaterThan(1);
   expect(
     evaluate(browser.strategy.matrix.suite, {
       values: { "github.event_name": "pull_request" },
@@ -4921,7 +4927,17 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
     const legs = matrixSuites.filter((leg) =>
       suite.if?.includes(`matrix.suite == '${leg}'`),
     );
-    expect(legs, suite.name).toHaveLength(1);
+    // The playground suite is the only sharded one: it runs on every
+    // playground leg, each taking one Playwright shard of as many as there
+    // are legs, so a leg can neither be dropped nor duplicate another's tests.
+    if (suite.name === "Test UI playground visuals") {
+      expect(legs, suite.name).toEqual(playgroundLegs);
+      expect(suite.run, suite.name).toContain(
+        `--shard="\${SUITE#playground-}/${String(playgroundLegs.length)}"`,
+      );
+    } else {
+      expect(legs, suite.name).toHaveLength(1);
+    }
     expect(suite.if, suite.name).toContain("outputs.required == 'true'");
   }
   expect(resultJob.needs).toContain("ci-browser");

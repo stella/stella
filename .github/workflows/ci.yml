@@ -3366,7 +3366,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: ${{ github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui"]') }}
+        # The UI playground suite runs alone in three Playwright shards: on one
+        # runner its dev-server page loads made it the longest merge-group job.
+        suite: ${{ github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui","playground-1","playground-2","playground-3"]') }}
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
       credentials: ${{ startsWith(needs.ci-plan.outputs.playwright_image, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
@@ -3553,10 +3555,13 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test UI playground visuals
-        if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
+        if: (matrix.suite == 'playground-1' || matrix.suite == 'playground-2' || matrix.suite == 'playground-3') && steps.ui-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-playground-visuals.json
-        run: bun --filter @stll/web test:e2e:ui-playground
+          SUITE: ${{ matrix.suite }}
+        run: |
+          cd apps/web
+          bun run test:e2e:ui-playground --shard="${SUITE#playground-}/3"
 
       - name: Test extension browser boundary
         if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
