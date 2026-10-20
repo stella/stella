@@ -706,7 +706,8 @@ test("the real changed-file step preserves paths and fails closed on git failure
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-});
+  // Five planner processes; two build the repository's service graph cold.
+}, 30_000);
 
 // The planner selects every check, so a change to it or any module it imports
 // runs at least what an unknown scope runs.

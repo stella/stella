@@ -173,15 +173,6 @@ const directlyRequired = (file: string, suite: ServiceSuite) => {
   );
 };
 
-const canEnterServiceGraph = (file: string) =>
-  [
-    ".oxlint-plugins/",
-    "apps/api/",
-    "apps/collab/",
-    "packages/",
-    "scripts/",
-  ].some((prefix) => file.startsWith(prefix));
-
 // A derived module is never committed: it exists only once its generator runs,
 // so the generator's declared inputs stand in for it in the import graph.
 // Keyed by plain paths: lookups come from arbitrary import specifiers.
@@ -430,12 +421,6 @@ export const planServiceSuites = (
   const required = (suite: ServiceSuite): boolean => {
     if (files.some((file) => directlyRequired(file, suite))) {
       return true;
-    }
-    // Local imports can only enter through these first-party roots. Rejecting
-    // unrelated paths here also avoids constructing the repository graph for
-    // changes that cannot occur in it.
-    if (!files.some(canEnterServiceGraph)) {
-      return false;
     }
     const graph = cachedForRepository(suiteGraphs, { root, key: suite }, () =>
       serviceSuiteDependencies(root, suite),

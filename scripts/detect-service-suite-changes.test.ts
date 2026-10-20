@@ -247,7 +247,9 @@ test("each suite follows its own import closure without planning unrelated sibli
       'const gate = "STELLA_RUN_CORPUS_ENGINE_TESTS"; import "./corpus-only";',
     "apps/api/src/valkey.test.ts":
       'const gate = "STELLA_RUN_VALKEY_TESTS"; import "./valkey-only";',
-    "apps/api/src/postgres-only.ts": "",
+    // A first-party helper outside the app and package roots.
+    "apps/api/src/postgres-only.ts": 'import "../../../tools/service-helper";',
+    "tools/service-helper.ts": "",
     "apps/api/src/corpus-only.ts": "",
     "apps/api/src/valkey-only.ts": "",
     "apps/collab/src/server.test.ts": 'import "@stll/collaboration-only";',
@@ -257,11 +259,11 @@ test("each suite follows its own import closure without planning unrelated sibli
   try {
     for (const [file, source] of Object.entries(sources)) {
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
-      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       writeFileSync(path.join(root, file), source);
     }
     for (const [suite, file] of [
       ["postgres", "apps/api/src/postgres-only.ts"],
+      ["postgres", "tools/service-helper.ts"],
       ["corpus", "apps/api/src/corpus-only.ts"],
       ["valkey", "apps/api/src/valkey-only.ts"],
       ["collab", "packages/collaboration-only/src/new.ts"],
