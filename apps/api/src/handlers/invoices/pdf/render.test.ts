@@ -223,6 +223,26 @@ describe("invoice QR payment", () => {
     });
   });
 
+  test("a Slovak account gets PAY by square, which Slovak banking apps read", () => {
+    const slovak = {
+      ...options,
+      invoice: { ...options.invoice, currency: "EUR" },
+      seller: { ...options.seller, iban: "SK96 1100 0000 0029 1859 9669" },
+    } satisfies RenderInvoicePdfOptions;
+    const payment = buildInvoicePaymentPayload(slovak)?.unwrap();
+    expect(payment?.status).toBe("payable");
+    // The header bytes 0x02 0x00 (pay, version 1.2.0) read "080" in base32hex.
+    expect(payment?.status === "payable" && payment.payload).toMatch(
+      /^080[0-9A-V]+$/u,
+    );
+    expect(
+      buildInvoicePaymentPayload({
+        ...slovak,
+        seller: { ...slovak.seller, legalName: " " },
+      })?.isErr(),
+    ).toBe(true);
+  });
+
   test("skips QR for zero, negative, credit notes or missing IBAN", () => {
     for (const grossAmountMinor of [cents(0), cents(-1)]) {
       expect(

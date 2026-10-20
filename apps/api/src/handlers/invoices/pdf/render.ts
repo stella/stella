@@ -13,12 +13,13 @@ import { panic, Result } from "better-result";
 import { encode } from "uqr";
 
 import type { InvoiceStatus } from "@stll/api-contract";
-import { buildCzechQrPaymentPayload } from "@stll/invoicing";
+import { buildCzechQrPaymentPayload, normalizeIban } from "@stll/invoicing";
 import type {
   InvoiceDocumentType,
   InvoiceTotals,
   VatTreatment,
 } from "@stll/invoicing";
+import { buildPayBySquarePayload } from "@stll/invoicing/pay-by-square";
 import { formatMoneyCents } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
 
@@ -453,7 +454,7 @@ export const buildInvoicePaymentPayload = ({
   ) {
     return null;
   }
-  return buildCzechQrPaymentPayload({
+  const payment = {
     documentType: invoice.documentType,
     iban: seller.iban,
     amountMinor: totals.grossAmountMinor,
@@ -465,7 +466,18 @@ export const buildInvoicePaymentPayload = ({
     ...(invoice.status === "draft" || invoice.invoiceNumber === null
       ? {}
       : { message: invoice.invoiceNumber }),
-  });
+  };
+  // The payer scans with a banking app of the account's country, and Slovak
+  // apps read PAY by square, not the Czech SPD code. The address country is
+  // free text, so the IBAN's country code decides.
+  if (normalizeIban(seller.iban)?.startsWith("SK") === true) {
+    return buildPayBySquarePayload({
+      ...payment,
+      ...(seller.bic === null ? {} : { bic: seller.bic }),
+      beneficiaryName: seller.legalName,
+    });
+  }
+  return buildCzechQrPaymentPayload(payment);
 };
 
 const PAGE_WIDTH = 595.28;

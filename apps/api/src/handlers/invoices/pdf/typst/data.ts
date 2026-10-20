@@ -65,7 +65,7 @@ type InvoiceTemplateData = {
   payment: {
     fields: Field[];
     accountNumber: string | null;
-    /** SVG markup of the SPAYD QR code, or null when nothing is payable. */
+    /** SVG markup of the payment QR code (SPAYD, or PAY by square for a Slovak account), or null when nothing is payable. */
     qrSvg: string | null;
   } | null;
   notes: string | null;

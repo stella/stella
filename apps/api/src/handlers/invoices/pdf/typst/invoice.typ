@@ -134,7 +134,7 @@
 }))
 #v(16pt)
 
-// Payment block with the SPAYD QR code.
+// Payment block with the payment QR code (SPAYD or PAY by square).
 #if data.payment != none {
   block(breakable: false, grid(
     columns: if data.payment.qrSvg != none { (1fr, 32mm) } else { (1fr,) },
