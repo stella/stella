@@ -15,7 +15,7 @@ test("every CLI API request carries the shared client identity", async () => {
   globalThis.fetch = Object.assign(
     mock(async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       observed = new Headers(init?.headers);
-      return Promise.resolve(new Response());
+      return new Response();
     }),
     { preconnect: originalFetch.preconnect },
   );

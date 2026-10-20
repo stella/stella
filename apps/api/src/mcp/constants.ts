@@ -103,10 +103,14 @@ export {
   ROOT_MCP_DISCOVERY_PATH,
 };
 
-export const MCP_ALLOWED_HEADERS = [
+export const MCP_DISCOVERY_ALLOWED_HEADERS = [
   "Authorization",
   "Content-Type",
   "MCP-Protocol-Version",
+] as const;
+
+export const MCP_ALLOWED_HEADERS = [
+  ...MCP_DISCOVERY_ALLOWED_HEADERS,
   LOCAL_CLIENT_IDENTITY_HEADER,
 ] as const;
 

@@ -295,7 +295,6 @@ export type RefreshOutcome =
     };
 
 type FetchRaw = () => Promise<Result<RawToolsList, McpClientError>>;
-type LegacyTestLatestVersion = () => Promise<string | undefined>;
 
 const cachedVersionPolicy = (raw: RawToolsList) => ({
   ...(raw.cliMinimum === undefined ? {} : { cliMinimum: raw.cliMinimum }),
@@ -317,7 +316,6 @@ export const refreshRegistryCache = async ({
   ttlSeconds = DEFAULT_TTL_SECONDS,
   currentVersion = CLI_VERSION,
   fetchRaw,
-  fetchLatestVersion: _fetchLatestVersion,
   bakedListings,
 }: {
   serverOrigin: string;
@@ -328,8 +326,6 @@ export const refreshRegistryCache = async ({
   ttlSeconds?: number;
   currentVersion?: string;
   fetchRaw?: FetchRaw;
-  /** @deprecated Test compatibility only; production latest comes from the server. */
-  fetchLatestVersion?: LegacyTestLatestVersion;
   bakedListings?: readonly RegistryToolListing[];
 }): Promise<RefreshOutcome> => {
   const filePath = cachePathFor(serverOrigin, env);

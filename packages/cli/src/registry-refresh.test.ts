@@ -220,7 +220,6 @@ describe("resolveCommandTree (S5.3)", () => {
       token: "admitted-caller",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       bakedListings: snapshot.listings,
       fetchRaw: okFetch(
         JSON.stringify({
@@ -580,7 +579,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       serverOrigin: ORIGIN,
       token: "t",
       env,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"])),
       bakedListings: [listing("list_matters")],
     });
@@ -610,7 +608,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters", "list_widgets"]), {
         grantedScopes: ["stella:read", "stella:search"],
         scopeOmittedTools: ["save_filled_template"],
@@ -646,7 +643,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"]), {
         grantedScopes: ["stella:read", "stella:search"],
         scopeOmittedTools: [],
@@ -694,7 +690,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"])),
       bakedListings: [listing("list_matters"), listing("search_case_law")],
     });
@@ -715,7 +710,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"])),
       bakedListings: [listing("list_matters")],
     });
@@ -729,7 +723,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["Bad Name"])), // invalid tool name
       bakedListings: [listing("list_matters")],
     });
@@ -744,7 +737,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: errFetch(),
       bakedListings: [listing("list_matters")],
     });
@@ -761,7 +753,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters", "list_widgets"])),
       bakedListings: [listing("list_matters")],
     });

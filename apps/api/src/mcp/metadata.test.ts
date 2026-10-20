@@ -8,6 +8,7 @@ import {
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_DISCOVERY_ALLOWED_HEADERS,
   MCP_LAW_RESOURCE_SCOPES,
   MCP_STATELESS_ALLOW_HEADER,
   STELLA_API_CONTRACT,
@@ -155,7 +156,7 @@ describe("MCP protected resource metadata", () => {
     expect(headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(headers.get("Access-Control-Allow-Methods")).toBe("GET, OPTIONS");
     expect(headers.get("Access-Control-Allow-Headers")).toBe(
-      "Authorization, Content-Type, MCP-Protocol-Version",
+      MCP_DISCOVERY_ALLOWED_HEADERS.join(", "),
     );
     expect(headers.get("Access-Control-Expose-Headers")).toBe(
       "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-cli-latest, x-stella-organization, x-stella-scopes, x-stella-scope-omitted-tools, x-stella-feature-omitted-tools, x-stella-feature-omitted-capabilities, x-request-id",
