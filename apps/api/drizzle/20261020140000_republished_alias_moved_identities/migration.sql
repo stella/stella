@@ -12,5 +12,8 @@ CREATE TABLE "case_law_decision_alias_moved_identities" (
 --> statement-breakpoint
 ALTER TABLE "case_law_decision_alias_moved_identities" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "case_law_decision_alias_moved_identities" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "case_law_ingestion_access" ON "case_law_decision_alias_moved_identities"
+  FOR ALL TO stella_ingestion USING (true) WITH CHECK (true);--> statement-breakpoint
+REVOKE ALL ON TABLE "case_law_decision_alias_moved_identities" FROM PUBLIC;--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "case_law_decision_alias_moved_identities" FROM stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_decision_alias_moved_identities" TO stella_ingestion;--> statement-breakpoint

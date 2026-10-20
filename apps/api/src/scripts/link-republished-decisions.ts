@@ -11,7 +11,7 @@ import { runScriptWithErrorOutput } from "@stll/errors/script-error";
  * default and writes nothing; apply and reverse use resumable bounded batches.
  *
  *   bun run src/scripts/link-republished-decisions.ts --dry-run
- *   bun run src/scripts/link-republished-decisions.ts --apply --limit 5000 --until 2026-10-20T00:00:00Z
+ *   bun run src/scripts/link-republished-decisions.ts --apply --limit 5000 --until <iso-instant>
  *   bun run src/scripts/link-republished-decisions.ts --reverse --limit 5000
  */
 
