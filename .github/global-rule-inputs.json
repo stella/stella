@@ -23,6 +23,8 @@
     "packages/scripts/src/result-consumption.ts",
     "packages/scripts/src/workspace-hygiene.ts",
     "scripts/api-test-durations-workflow.test.ts",
+    "scripts/api-test-timeout-guard.test.ts",
+    "scripts/api-test-timeout-guard.ts",
     "scripts/autofix-protected-paths.test.ts",
     "scripts/autofix-ratchet-boundary.test.ts",
     "scripts/autofix-type-aware.test.ts",
