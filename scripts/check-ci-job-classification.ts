@@ -100,28 +100,32 @@ const escapeAnnotation = (value: string) =>
   value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
 type CliOptions = { root: string; base?: string };
-const parseCli = (args: string[]): CliOptions => {
-  if (args.length === 0) {
-    return { root: "." };
-  }
-  if (args.length === 1 && !args[0]?.startsWith("--")) {
-    return { root: args[0] ?? "." };
-  }
-  if (args.length === 2 && args[0] === "--base" && args[1]) {
-    return { root: ".", base: args[1] };
-  }
-  if (
-    args.length === 3 &&
-    !args[0]?.startsWith("--") &&
-    args[1] === "--base" &&
-    args[2]
-  ) {
-    return { root: args[0], base: args[2] };
-  }
-  throw new AdmissionError({
+const usageError = () =>
+  new AdmissionError({
     message:
       "usage: bun scripts/check-ci-job-classification.ts [ROOT] [--base REF]",
   });
+const parseCli = (args: string[]): CliOptions => {
+  const [first, second, third, ...rest] = args;
+  if (rest.length > 0) {
+    throw usageError();
+  }
+  if (first === undefined) {
+    return { root: "." };
+  }
+  if (first === "--base" && second !== undefined && third === undefined) {
+    return { root: ".", base: second };
+  }
+  if (first.startsWith("--")) {
+    throw usageError();
+  }
+  if (second === undefined) {
+    return { root: first };
+  }
+  if (second === "--base" && third !== undefined) {
+    return { root: first, base: third };
+  }
+  throw usageError();
 };
 
 if (import.meta.main) {
@@ -143,9 +147,10 @@ if (import.meta.main) {
   } else if (result.isOk()) {
     privilegedJobs = result.value.privilegedJobs;
   }
-  if (process.env.GITHUB_OUTPUT) {
+  const githubOutput = process.env["GITHUB_OUTPUT"];
+  if (githubOutput) {
     appendFileSync(
-      process.env.GITHUB_OUTPUT,
+      githubOutput,
       `privileged_classification_change=${privilegedJobs.length > 0}\n`,
     );
   }
