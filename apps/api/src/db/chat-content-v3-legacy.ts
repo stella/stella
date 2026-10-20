@@ -157,10 +157,21 @@ const normalizeLegacyMessagePartsToTanStack = (
       normalized.push(converted);
       continue;
     }
+    // An AI SDK step boundary carries nothing but its type, and v3 has no
+    // step concept: dropping the bare marker loses no content. A marker with
+    // any other field is not this shape and still rejects the message.
+    if (isLegacyStepStartPart(part)) {
+      continue;
+    }
     invalidLegacyPart();
   }
   return { metadata, parts: normalized };
 };
+
+const isLegacyStepStartPart = (part: unknown) =>
+  isRecord(part) &&
+  part["type"] === "step-start" &&
+  Object.keys(part).length === 1;
 
 const DECIMAL_LITERAL = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/u;
 

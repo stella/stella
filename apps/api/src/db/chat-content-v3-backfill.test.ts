@@ -302,6 +302,31 @@ test("malformed parts of every supported type and unknown types reject the whole
   }
 });
 
+// The one part that is dropped rather than preserved: a step boundary carries
+// no content. A marker carrying anything else is not that shape.
+test("v1 step-start markers are dropped and a marker with any other field rejects the message", () => {
+  const text = { type: "text", text: "retained" };
+  expect(
+    deepEquals(
+      convertLegacyChatContent({
+        version: 1,
+        data: [{ type: "step-start" }, text, { type: "step-start" }, text],
+      }),
+      {
+        version: 3,
+        data: [
+          { type: "text", content: "retained" },
+          { type: "text", content: "retained" },
+        ],
+      },
+    ),
+  ).toBe(true);
+  expectPartFailure({
+    version: 1,
+    parts: [{ type: "step-start", stepId: "s1" }, text],
+  });
+});
+
 test("every legacy input part is preserved in order or causes a typed whole-message failure", () => {
   assertProperty(
     "every legacy input part is preserved in order or causes a typed whole-message failure",
