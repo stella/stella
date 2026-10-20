@@ -666,6 +666,13 @@ test("reverse prioritizes a reversible pair and refuses erased or unrestorable p
       },
     ]),
   );
+  // A second republisher identity: reverse must restore both or neither.
+  await db.insert(caseLawDecisionSourceIdentities).values({
+    sourceId: republisherSource,
+    sourceDocumentId: "reverse-unrestorable-republisher-mirror",
+    decisionId: unrestorableRetiredId,
+    rawOwnerDecisionId: unrestorableRetiredId,
+  });
   const candidates = await selectRepublishedDecisionCandidates(db, 100);
   const reverseCandidates = candidates.filter(({ duplicate }) =>
     retiredIds.includes(duplicate.id),
@@ -719,4 +726,15 @@ test("reverse prioritizes a reversible pair and refuses erased or unrestorable p
     { retiredId: erasedRetiredId },
     { retiredId: unrestorableRetiredId },
   ]);
+  expect(
+    await db
+      .select({ decisionId: caseLawDecisionSourceIdentities.decisionId })
+      .from(caseLawDecisionSourceIdentities)
+      .where(
+        eq(
+          caseLawDecisionSourceIdentities.sourceDocumentId,
+          "reverse-unrestorable-republisher-mirror",
+        ),
+      ),
+  ).toEqual([{ decisionId: unrestorableCanonicalId }]);
 });

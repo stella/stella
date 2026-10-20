@@ -402,7 +402,19 @@ export const reverseRepublishedDecisionBatch = async (
              d.created_at AS retired_created_at,
              cs.adapter_key AS canonical_adapter_key,
              c.created_at AS canonical_created_at,
-             (c.redacted_at IS NOT NULL OR d.redacted_at IS NOT NULL) AS either_erased
+             (c.redacted_at IS NOT NULL OR d.redacted_at IS NOT NULL) AS either_erased,
+             -- All or nothing: one moved identity removed or reassigned since
+             -- apply leaves the pair aliased, with its recovery record intact.
+             EXISTS (SELECT 1
+                       FROM case_law_decision_alias_moved_identities m
+                      WHERE m.retired_decision_id = a.retired_decision_id
+                        AND NOT EXISTS (
+                          SELECT 1
+                            FROM case_law_decision_source_identities i
+                           WHERE i.source_id = m.source_id
+                             AND i.source_document_id = m.source_document_id
+                             AND i.decision_id = a.canonical_decision_id
+                        )) AS unrestorable
         FROM case_law_decision_aliases a
         JOIN case_law_decisions d ON d.id = a.retired_decision_id
         JOIN case_law_decisions c ON c.id = a.canonical_decision_id
@@ -411,21 +423,14 @@ export const reverseRepublishedDecisionBatch = async (
        WHERE d.source_id <> c.source_id
          AND EXISTS (SELECT 1 FROM case_law_decision_alias_moved_identities m
                       WHERE m.retired_decision_id = a.retired_decision_id)
-       ORDER BY (c.redacted_at IS NOT NULL OR d.redacted_at IS NOT NULL),
-                NOT EXISTS (SELECT 1
-                              FROM case_law_decision_alias_moved_identities m
-                              JOIN case_law_decision_source_identities i
-                                ON i.source_id = m.source_id
-                               AND i.source_document_id = m.source_document_id
-                             WHERE m.retired_decision_id = a.retired_decision_id
-                               AND i.decision_id = a.canonical_decision_id),
-                a.retired_decision_id
+       ORDER BY either_erased, unrestorable, a.retired_decision_id
        LIMIT ${limit}
     ), restored AS (
       UPDATE case_law_decision_source_identities identity
          SET decision_id = selected.retired_decision_id
         FROM selected
        WHERE NOT selected.either_erased
+         AND NOT selected.unrestorable
          AND identity.decision_id = selected.canonical_decision_id
          AND (identity.source_id, identity.source_document_id) IN (
            SELECT moved.source_id, moved.source_document_id
@@ -478,8 +483,8 @@ export const reverseRepublishedDecisionBatch = async (
       outcomes.push({ type: "refused_erased", retiredId });
       continue;
     }
-    // Only a deleted alias is a reversal; a pair whose moved identities were
-    // removed or reassigned keeps its alias and must not be reconciled as live.
+    // Only a deleted alias is a reversal; an unrestorable pair keeps its alias
+    // and must not be reconciled as live.
     if (value["aliasDeleted"] !== true) {
       outcomes.push({ type: "refused_unrestorable", retiredId });
       continue;

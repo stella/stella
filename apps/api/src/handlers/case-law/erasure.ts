@@ -154,6 +154,8 @@ type RedactInput = {
   deleteCorpus?: typeof deleteCorpusDocument;
   /** Test seam; production sweeps through the documents bucket client. */
   sweepRaw?: typeof sweepCaseLawRawDecision;
+  /** Test seam; production locks the decision's projection source. */
+  lockSource?: typeof lockActiveCorpusProjectionSourceTx;
 };
 
 /** How the publisher's own payloads and files were reached. */
@@ -311,6 +313,7 @@ export const redactCaseLawDecision = async ({
   scopedDb,
   deleteCorpus = deleteCorpusDocument,
   sweepRaw = sweepCaseLawRawDecision,
+  lockSource = lockActiveCorpusProjectionSourceTx,
 }: RedactInput): Promise<
   Result<RedactCaseLawDecisionOutcome, DatabaseError>
 > => {
@@ -339,25 +342,37 @@ export const redactCaseLawDecision = async ({
       return { type: "missing" };
     }
 
-    const pendingFenceResults = [];
+    // Every projection lock is taken before any row changes: a failure
+    // returned from this callback commits, so it must find nothing mutated.
+    const pendingSourceLocks = [];
     for (const decision of decisions) {
+      const subject = { family: "case_law", entityId: decision.id } as const;
+      pendingSourceLocks.push(
+        Result.tryPromise({
+          try: async () => await lockSource(tx, subject),
+          catch: (cause) => cause,
+        }).then((sourceLock) => ({ decision, sourceLock, subject })),
+      );
+    }
+    const lockedDecisions = [];
+    for (const locked of await Promise.all(pendingSourceLocks)) {
+      if (Result.isError(locked.sourceLock)) {
+        return locked.sourceLock.error instanceof
+          CorpusIndexProjectionSubjectMissingError
+          ? { type: "missing" }
+          : { type: "lock-failed", cause: locked.sourceLock.error };
+      }
+      lockedDecisions.push({
+        decision: locked.decision,
+        sourceLock: locked.sourceLock.value,
+        subject: locked.subject,
+      });
+    }
+
+    const pendingFenceResults = [];
+    for (const { decision, sourceLock, subject } of lockedDecisions) {
       pendingFenceResults.push(
         (async () => {
-          const subject = {
-            family: "case_law",
-            entityId: decision.id,
-          } as const;
-          const sourceLock = await Result.tryPromise({
-            try: async () =>
-              await lockActiveCorpusProjectionSourceTx(tx, subject),
-            catch: (cause) => cause,
-          });
-          if (Result.isError(sourceLock)) {
-            return sourceLock.error instanceof
-              CorpusIndexProjectionSubjectMissingError
-              ? { type: "missing" as const }
-              : { type: "lock-failed" as const, cause: sourceLock.error };
-          }
           // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
           await tx
             .update(caseLawDecisions)
@@ -432,32 +447,20 @@ export const redactCaseLawDecision = async ({
             decisionId: decision.id,
             tx,
           });
-          if (sourceLock.value !== null) {
+          if (sourceLock !== null) {
             await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-              lock: sourceLock.value,
+              lock: sourceLock,
               subject,
             });
           }
           await runDecisionWriteExtension(tx, decision.id);
-          return {
-            type: "decision" as const,
-            value: { cancelledIntents, decision, supplementRawKeys },
-          };
+          return { cancelledIntents, decision, supplementRawKeys };
         })(),
       );
     }
-    const fenceResults = await Promise.all(pendingFenceResults);
-    const failedFence = fenceResults.find(
-      (result) => result.type !== "decision",
-    );
-    if (failedFence !== undefined) {
-      return failedFence;
-    }
     return {
       type: "fenced",
-      decisions: fenceResults.flatMap((result) =>
-        result.type === "decision" ? [result.value] : [],
-      ),
+      decisions: await Promise.all(pendingFenceResults),
     };
   });
 

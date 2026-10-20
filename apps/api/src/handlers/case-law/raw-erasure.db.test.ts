@@ -65,6 +65,7 @@ import {
   enqueueCaseLawRawSweepTx,
   reconcileCaseLawRawSweeps,
 } from "@/api/lib/legal-search/case-law-raw-sweeps";
+import { lockActiveCorpusProjectionSourceTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { decodeSourceRawEnvelopeObjects } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -277,7 +278,7 @@ const drainSweeps = async (): Promise<void> => {
   });
 };
 
-test("erasing a linked decision removes raw objects under both original owners", async () => {
+const seedLinkedPair = async () => {
   const canonicalSource = createSafeId<"caseLawSource">();
   const republisherSource = createSafeId<"caseLawSource">();
   const canonicalId = createSafeId<"caseLawDecision">();
@@ -330,11 +331,6 @@ test("erasing a linked decision removes raw objects under both original owners",
       rawOwnerDecisionId: retiredId,
     },
   ]);
-  const canonicalKey = `${prefixOf(canonicalSource, canonicalId)}payloads/canonical`;
-  const retiredKey = `${prefixOf(republisherSource, retiredId)}payloads/retired`;
-  fake.put(envBase.S3_BUCKET, canonicalKey, "canonical");
-  fake.put(envBase.S3_BUCKET, retiredKey, "retired");
-
   await db.transaction(async (tx) => {
     await applyRepublishedDecisionBatch(
       tx,
@@ -355,6 +351,17 @@ test("erasing a linked decision removes raw objects under both original owners",
       async () => undefined,
     );
   });
+  return { canonicalId, canonicalSource, retiredId, republisherSource };
+};
+
+test("erasing a linked decision removes raw objects under both original owners", async () => {
+  const { canonicalId, canonicalSource, retiredId, republisherSource } =
+    await seedLinkedPair();
+  const canonicalKey = `${prefixOf(canonicalSource, canonicalId)}payloads/canonical`;
+  const retiredKey = `${prefixOf(republisherSource, retiredId)}payloads/retired`;
+  fake.put(envBase.S3_BUCKET, canonicalKey, "canonical");
+  fake.put(envBase.S3_BUCKET, retiredKey, "retired");
+
   await redact(canonicalId);
   await drainSweeps();
 
@@ -389,6 +396,41 @@ test("erasing a linked decision removes raw objects under both original owners",
       .from(caseLawDecisionSourceIdentities)
       .where(eq(caseLawDecisionSourceIdentities.sourceId, republisherSource)),
   ).toEqual([{ decisionId: canonicalId }]);
+});
+
+test("a linked decision whose projection lock fails leaves every decision unredacted", async () => {
+  const { canonicalId, retiredId } = await seedLinkedPair();
+  const lockFailure = new Error("projection source lock failed");
+
+  const outcome = await redactCaseLawDecision({
+    decisionId: canonicalId,
+    scopedDb,
+    lockSource: async (tx, subject) =>
+      subject.entityId === retiredId
+        ? await Promise.reject(lockFailure)
+        : await lockActiveCorpusProjectionSourceTx(tx, subject),
+  });
+
+  expect(Result.isError(outcome)).toBe(true);
+  expect(
+    await db
+      .select({
+        id: caseLawDecisions.id,
+        fulltext: caseLawDecisions.fulltext,
+        redactedAt: caseLawDecisions.redactedAt,
+      })
+      .from(caseLawDecisions)
+      .where(sql`${caseLawDecisions.id} IN (${canonicalId}, ${retiredId})`),
+  ).toEqual(
+    expect.arrayContaining([
+      {
+        id: canonicalId,
+        fulltext: "canonical retained payload",
+        redactedAt: null,
+      },
+      { id: retiredId, fulltext: "retired retained payload", redactedAt: null },
+    ]),
+  );
 });
 
 type LegacyDecision = {
