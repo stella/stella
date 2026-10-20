@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
+import { createPortal } from "react-dom";
 
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -21,6 +22,7 @@ import {
   UnderlineIcon,
   WavesIcon,
 } from "@stll/ui/icons";
+import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -161,6 +163,7 @@ export const AnnotationToolbar = ({
 }: AnnotationToolbarProps) => {
   const t = useTranslations();
   const barRef = useRef<HTMLDivElement | null>(null);
+  const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const attachBar = (node: HTMLDivElement | null) => {
     barRef.current = node;
   };
@@ -175,9 +178,8 @@ export const AnnotationToolbar = ({
   const [copyPreviewMode, setCopyPreviewMode] = useState<ReaderCopyMode | null>(
     null,
   );
-  // The dropdown is hand-rolled (a portal menu would collapse the text
-  // selection), so it does its own collision handling: open upward when
-  // the space below the trigger cannot fit the menu.
+  // Preserve the text selection while positioning the portaled menu in the
+  // viewport; open upward when the space below the trigger cannot fit it.
   const [copyMenuBox, setCopyMenuBox] = useState<ReaderCopyMenuBox | null>(
     null,
   );
@@ -349,7 +351,11 @@ export const AnnotationToolbar = ({
       readerDragActive =
         event.button === 0 && pressed instanceof Node && root.contains(pressed);
       readerSelectionSnapshot = null;
-      if (!(pressed instanceof Node) || barRef.current?.contains(pressed)) {
+      if (
+        !(pressed instanceof Node) ||
+        barRef.current?.contains(pressed) ||
+        copyMenuRef.current?.contains(pressed)
+      ) {
         return;
       }
       clearActive();
@@ -390,7 +396,8 @@ export const AnnotationToolbar = ({
       onPointerCancel();
       if (
         event.target instanceof Node &&
-        barRef.current?.contains(event.target)
+        (barRef.current?.contains(event.target) ||
+          copyMenuRef.current?.contains(event.target))
       ) {
         return;
       }
@@ -718,85 +725,92 @@ export const AnnotationToolbar = ({
             {t("common.copy")}
             <ChevronDownIcon className="size-3" />
           </Button>
-          {copyOpen && (
-            <div
-              className="bg-popover text-popover-foreground fixed z-10 rounded-md border p-1 shadow-md"
-              style={copyMenuBox ?? undefined}
-            >
-              <MenuPreviewLayout
-                preview={
-                  // The submenu paints over the pane rather than in it, so its
-                  // floor is the viewport's, not the pane's.
-                  <PreviewPane className="min-w-0 flex-1">
-                    {copyPreviewMode !== null && (
-                      <p className="text-foreground text-2xs leading-snug whitespace-pre-wrap">
-                        {copyTextFor({
-                          mode: copyPreviewMode,
-                          selected: {
-                            cleanText:
-                              selected.cleanText.length > 220
-                                ? `${selected.cleanText.slice(0, 220)}…`
-                                : selected.cleanText,
-                            locator: selected.locator,
-                          },
-                          target,
-                        }).segments.map((segment) =>
-                          segment.emphasis ? (
-                            <em key={`emphasis:${segment.text}`}>
-                              {segment.text}
-                            </em>
-                          ) : (
-                            <span key={`plain:${segment.text}`}>
-                              {segment.text}
-                            </span>
-                          ),
-                        )}
-                      </p>
-                    )}
-                  </PreviewPane>
-                }
+          {copyOpen &&
+            doc !== null &&
+            createPortal(
+              <div
+                className={cn(
+                  "bg-popover text-popover-foreground fixed rounded-md border p-1 shadow-md",
+                  OVERLAY_LAYER_CLASS_NAMES.popup,
+                )}
+                ref={copyMenuRef}
+                style={copyMenuBox ?? undefined}
               >
-                {READER_COPY_MODES.map((copyMode) => (
-                  <button
-                    className="hover:bg-accent block w-full rounded-sm px-2 py-1.5 text-start text-xs whitespace-nowrap"
-                    key={copyMode}
-                    onClick={() => {
-                      const text = copyTextFor({
-                        mode: copyMode,
-                        selected,
-                        target,
-                      });
-                      detached(
-                        (async () => {
-                          const copied = await copyRichToClipboard(text);
-                          if (Result.isError(copied)) {
-                            notifyUserError(
-                              copied.error,
-                              t("errors.actionFailed"),
-                            );
-                            return;
-                          }
-                          stellaToast.add({
-                            title: t("common.copied"),
-                            type: "success",
-                          });
-                        })(),
-                        "legal-reader.selection-copy",
-                      );
-                      setCopyOpen(false);
-                      clearSelection();
-                    }}
-                    onFocus={() => setCopyPreviewMode(copyMode)}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onMouseEnter={() => setCopyPreviewMode(copyMode)}
-                    type="button"
-                  >
-                    {t(`legalReader.copyMenu.${copyMode}`)}
-                  </button>
-                ))}
-              </MenuPreviewLayout>
-            </div>
-          )}
+                <MenuPreviewLayout
+                  preview={
+                    // The submenu paints over the pane rather than in it, so its
+                    // floor is the viewport's, not the pane's.
+                    <PreviewPane className="min-w-0 flex-1">
+                      {copyPreviewMode !== null && (
+                        <p className="text-foreground text-2xs leading-snug whitespace-pre-wrap">
+                          {copyTextFor({
+                            mode: copyPreviewMode,
+                            selected: {
+                              cleanText:
+                                selected.cleanText.length > 220
+                                  ? `${selected.cleanText.slice(0, 220)}…`
+                                  : selected.cleanText,
+                              locator: selected.locator,
+                            },
+                            target,
+                          }).segments.map((segment) =>
+                            segment.emphasis ? (
+                              <em key={`emphasis:${segment.text}`}>
+                                {segment.text}
+                              </em>
+                            ) : (
+                              <span key={`plain:${segment.text}`}>
+                                {segment.text}
+                              </span>
+                            ),
+                          )}
+                        </p>
+                      )}
+                    </PreviewPane>
+                  }
+                >
+                  {READER_COPY_MODES.map((copyMode) => (
+                    <button
+                      className="hover:bg-accent block w-full rounded-sm px-2 py-1.5 text-start text-xs whitespace-nowrap"
+                      key={copyMode}
+                      onClick={() => {
+                        const text = copyTextFor({
+                          mode: copyMode,
+                          selected,
+                          target,
+                        });
+                        detached(
+                          (async () => {
+                            const copied = await copyRichToClipboard(text);
+                            if (Result.isError(copied)) {
+                              notifyUserError(
+                                copied.error,
+                                t("errors.actionFailed"),
+                              );
+                              return;
+                            }
+                            stellaToast.add({
+                              title: t("common.copied"),
+                              type: "success",
+                            });
+                          })(),
+                          "legal-reader.selection-copy",
+                        );
+                        setCopyOpen(false);
+                        clearSelection();
+                      }}
+                      onFocus={() => setCopyPreviewMode(copyMode)}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onMouseEnter={() => setCopyPreviewMode(copyMode)}
+                      type="button"
+                    >
+                      {t(`legalReader.copyMenu.${copyMode}`)}
+                    </button>
+                  ))}
+                </MenuPreviewLayout>
+              </div>,
+              doc.body,
+            )}
         </div>
         {mode === "authenticated" && (
           <>
