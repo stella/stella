@@ -19,6 +19,7 @@ import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapt
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { SOURCE_FINGERPRINT_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
+import { plCourtsSearchFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
   FINGERPRINT_FINDING_REASONS,
   fingerprintFinding,
@@ -88,6 +89,26 @@ test("every registration's rawHash is the fingerprint of what it stores, or a li
     misses.map(({ key }) => key),
     "New misses fail; a conforming row must leave the baseline (--write)",
   ).toEqual(await recordedDrivers());
+}, 120_000);
+
+test("the census records the emitted hash for an allowlisted partial-hash adapter", async () => {
+  const decision = await plCourtsSearchFixture().buildDecision();
+  const row = (await sourceFingerprintCensus()).find(
+    ({ key }) => key === "pl-courts::search",
+  );
+  const { sourceRaw } = decision;
+
+  expect(row?.fingerprint).toBe(decision.rawHash);
+  expect(sourceRaw).toBeDefined();
+  if (sourceRaw === undefined) {
+    return;
+  }
+  expect(row?.fingerprint).not.toBe(
+    sourceFingerprint({
+      sourceRaw,
+      sourceRawObjects: decision.sourceRawObjects,
+    }),
+  );
 }, 120_000);
 
 // ── self-test: the check rejects identity hashes ──────────────────────────

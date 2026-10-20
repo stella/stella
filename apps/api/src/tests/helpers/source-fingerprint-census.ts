@@ -176,7 +176,7 @@ export type FingerprintCensusRow = {
   /** `<registration>::<driver>`; no line numbers, so it survives edits. */
   readonly key: string;
   readonly finding: FingerprintFinding;
-  /** Fingerprint of the exact raw fields stored by the fixture. */
+  /** Adapter fingerprint persisted and compared by ingestion. */
   readonly fingerprint: string;
   /** Stable identity of the stored fields, independent of the fingerprint implementation. */
   readonly storedInputIdentity: string;
@@ -213,13 +213,7 @@ export const sourceFingerprintCensus = async (): Promise<
       rows.push({
         key: `${registration}::${name}`,
         finding: fingerprintFinding(decision),
-        fingerprint:
-          envelope === undefined
-            ? decision.rawHash
-            : sourceFingerprint({
-                sourceRaw: envelope,
-                sourceRawObjects: decision.sourceRawObjects,
-              }),
+        fingerprint: decision.rawHash,
         storedInputIdentity:
           envelope === undefined
             ? sha256Hex(decision.rawHash)

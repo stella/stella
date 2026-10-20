@@ -21,22 +21,22 @@ test("accepts a fingerprint change over changed stored bytes without a version b
   ).toEqual([]);
 });
 
-test("rejects a fingerprint change over unchanged stored bytes without a version bump", () => {
+test("rejects an allowlisted adapter hash change over unchanged stored bytes without a version bump", () => {
   expect(
     fingerprintEvolutionFailures(
-      { "cz-ns::decision": fingerprint("new", "same-input", 0) },
-      { "cz-ns::decision": fingerprint("old", "same-input", 0) },
+      { "pl-courts::search": fingerprint("new", "same-input", 0) },
+      { "pl-courts::search": fingerprint("old", "same-input", 0) },
     ),
   ).toEqual([
-    "cz-ns::decision: fixture fingerprint changed without a version bump",
+    "pl-courts::search: fixture fingerprint changed without a version bump",
   ]);
 });
 
-test("accepts a fingerprint change over unchanged stored bytes with a version bump", () => {
+test("accepts an allowlisted adapter hash change over unchanged stored bytes with a version bump", () => {
   expect(
     fingerprintEvolutionFailures(
-      { "cz-ns::decision": fingerprint("new", "same-input", 1) },
-      { "cz-ns::decision": fingerprint("old", "same-input", 0) },
+      { "pl-courts::search": fingerprint("new", "same-input", 1) },
+      { "pl-courts::search": fingerprint("old", "same-input", 0) },
     ),
   ).toEqual([]);
 });
