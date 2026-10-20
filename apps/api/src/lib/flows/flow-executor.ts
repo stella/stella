@@ -605,7 +605,7 @@ export const loadInputDocuments = async (
   }
 
   // Require the complete selected input set before decrypting document text.
-  const available = await scopedDb((tx) =>
+  const available = await scopedDb(async (tx) =>
     loadCurrentExtractedContents(tx, { entityIds, organizationId }),
   );
   if (available.length < entityIds.length) {

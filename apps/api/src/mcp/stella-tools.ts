@@ -1862,7 +1862,7 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     docxOutcome.kind === "markdown"
       ? null
       : (
-          await context.scopedDb((tx) =>
+          await context.scopedDb(async (tx) =>
             loadCurrentExtractedContents(tx, {
               entityIds: [entityId],
               organizationId: context.organizationId,

@@ -328,7 +328,7 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
 
     if (entityIds.length > 0) {
       const contentRows = yield* Result.await(
-        safeDb((tx) =>
+        safeDb(async (tx) =>
           loadCurrentExtractedContents(tx, { entityIds, organizationId }),
         ),
       );

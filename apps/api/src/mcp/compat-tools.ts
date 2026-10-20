@@ -96,7 +96,7 @@ const getFetchableEntityMap = async ({
 
   const safeEntityIds = entityIds.map(brandPersistedEntityId);
 
-  const rows = await context.scopedDb((tx) =>
+  const rows = await context.scopedDb(async (tx) =>
     loadCurrentExtractedContents(tx, {
       entityIds: safeEntityIds,
       organizationId: context.organizationId,
@@ -557,7 +557,7 @@ const handleCompatFetchTool: McpToolHandler<
   }
 
   const row = (
-    await context.scopedDb((tx) =>
+    await context.scopedDb(async (tx) =>
       loadCurrentExtractedContents(tx, {
         entityIds: [entityId],
         organizationId: context.organizationId,
