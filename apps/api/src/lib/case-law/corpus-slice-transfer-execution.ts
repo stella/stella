@@ -145,20 +145,7 @@ export const exportCorpusSliceFromDatabase = async ({
       return;
     }
     const ids = page.map((row) => v.parse(v.string(), field(row, "id", "id")));
-    const sourceIds = [
-      ...new Set(
-        page.map((row) =>
-          v.parse(v.string(), field(row, "sourceId", "source_id")),
-        ),
-      ),
-    ];
-    const [pageSources, pageSupplements, pageCitations] = await Promise.all([
-      readRows(
-        database,
-        "sources",
-        `t.id = ANY(${sqlUuidArray(sourceIds)})`,
-        "t.id",
-      ),
+    const [pageSupplements, pageCitations] = await Promise.all([
       readRows(
         database,
         "supplements",
@@ -172,6 +159,21 @@ export const exportCorpusSliceFromDatabase = async ({
         "t.citing_decision_id, t.id",
       ),
     ]);
+    // A supplement can belong to another source than its decision; both are
+    // exported so a clean target can insert every row of the page.
+    const sourceIds = [
+      ...new Set(
+        [...page, ...pageSupplements].map((row) =>
+          v.parse(v.string(), field(row, "sourceId", "source_id")),
+        ),
+      ),
+    ];
+    const pageSources = await readRows(
+      database,
+      "sources",
+      `t.id = ANY(${sqlUuidArray(sourceIds)})`,
+      "t.id",
+    );
     const newSources = pageSources.filter((source) => {
       const id = v.parse(v.string(), field(source, "id", "id"));
       if (seenSourceIds.has(id)) {
@@ -433,7 +435,7 @@ const importStore = (
       const removedSupplements = rowsOf(
         await tx.execute(
           sql.raw(
-            `DELETE FROM case_law_decision_supplements current WHERE current.decision_id = ANY(${retainedSql}) AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::case_law_decision_supplements, ${supplementRows}::text::jsonb) desired WHERE desired.source_id = current.source_id AND desired.source_document_id = current.source_document_id) RETURNING 1`,
+            `DELETE FROM case_law_decision_supplements current WHERE current.decision_id = ANY(${retainedSql}) AND NOT EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::case_law_decision_supplements, ${supplementRows}::text::jsonb) desired WHERE desired.source_id = current.source_id AND desired.source_document_id = current.source_document_id AND desired.kind = current.kind) RETURNING 1`,
           ),
         ),
       );
