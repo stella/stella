@@ -2,13 +2,21 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-const migration = readFileSync(
+const scopeMigration = readFileSync(
   new URL(
     "../../../drizzle/20261020000100_stored_keys_organization_scope/migration.sql",
     import.meta.url,
   ),
   "utf-8",
 );
+const validationMigration = readFileSync(
+  new URL(
+    "../../../drizzle/20261020000200_stored_keys_organization_scope_validate/migration.sql",
+    import.meta.url,
+  ),
+  "utf-8",
+);
+const migration = `${scopeMigration}\n${validationMigration}`;
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const ORGANIZATION_ID = "018f0000-0000-7000-8000-000000000001";
