@@ -162,7 +162,7 @@ export const emitCaseLawFreshnessReport = (
 
 type TickSession = {
   tryLock: () => Promise<boolean>;
-  read: () => Promise<CaseLawFreshnessReport>;
+  read: () => CaseLawFreshnessReport;
 };
 
 export const runCaseLawFreshnessMetricTick = async (
@@ -172,7 +172,7 @@ export const runCaseLawFreshnessMetricTick = async (
     if (!(await session.tryLock())) {
       return;
     }
-    emitCaseLawFreshnessReport(await session.read());
+    emitCaseLawFreshnessReport(session.read());
   });
 };
 
@@ -200,11 +200,9 @@ const runProductionTick = async (): Promise<void> => {
             result = locked.value;
             return true;
           },
-          read: async () =>
-            Promise.resolve(
-              result ??
-                panic("Case-law freshness report was not read under its lock"),
-            ),
+          read: () =>
+            result ??
+            panic("Case-law freshness report was not read under its lock"),
         });
       },
     );
@@ -213,7 +211,7 @@ const runProductionTick = async (): Promise<void> => {
 
 export const startCaseLawFreshnessMetricLoop = (): (() => Promise<void>) => {
   if (isLocalTestRun()) {
-    return async () => Promise.resolve();
+    return () => Promise.resolve();
   }
   return startNonOverlappingInterval({
     intervalMs: REPORT_INTERVAL_MS,

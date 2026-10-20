@@ -81,7 +81,7 @@ test("two loop instances sharing the advisory lock emit once", async () => {
   const openSession = async (
     work: (session: {
       tryLock: () => Promise<boolean>;
-      read: () => Promise<typeof report>;
+      read: () => typeof report;
     }) => Promise<void>,
   ) => {
     await work({
@@ -92,7 +92,7 @@ test("two loop instances sharing the advisory lock emit once", async () => {
         held = true;
         return true;
       },
-      read: async () => Promise.resolve(report),
+      read: () => report,
     });
   };
 
