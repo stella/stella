@@ -1,18 +1,12 @@
-import { and, eq, isNull } from "drizzle-orm";
 import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import {
-  entities,
-  entityVersions,
-  extractedContent,
-  fields,
-} from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { loadCurrentOcrExport } from "@/api/lib/document-content-provenance";
 import { createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -47,51 +41,9 @@ export const readOcrExport = async ({
   scopedDb,
   workspaceId,
 }: ReadOcrExportOptions) => {
-  const rows = await scopedDb((tx) =>
-    tx
-      .select({
-        ciphertext: extractedContent.ciphertext,
-        entityId: entities.id,
-        content: fields.content,
-        iv: extractedContent.iv,
-        ocrRunId: extractedContent.ocrRunId,
-      })
-      .from(extractedContent)
-      .innerJoin(
-        entities,
-        and(
-          eq(entities.id, extractedContent.entityId),
-          eq(entities.workspaceId, workspaceId),
-          eq(entities.currentVersionId, extractedContent.sourceEntityVersionId),
-        ),
-      )
-      .innerJoin(
-        entityVersions,
-        and(
-          eq(entityVersions.id, extractedContent.sourceEntityVersionId),
-          eq(entityVersions.entityId, entities.id),
-          eq(entityVersions.workspaceId, workspaceId),
-          isNull(entityVersions.deletedAt),
-        ),
-      )
-      .innerJoin(
-        fields,
-        and(
-          eq(fields.id, fieldId),
-          eq(fields.id, extractedContent.sourceFieldId),
-          eq(fields.entityVersionId, entityVersions.id),
-          eq(fields.workspaceId, workspaceId),
-        ),
-      )
-      .where(
-        and(
-          eq(extractedContent.organizationId, organizationId),
-          eq(extractedContent.workspaceId, workspaceId),
-        ),
-      )
-      .limit(1),
+  const row = await scopedDb((tx) =>
+    loadCurrentOcrExport({ db: tx, fieldId, organizationId, workspaceId }),
   );
-  const row = rows.at(0);
   if (!row || row.content.type !== "file" || row.ocrRunId === null) {
     return status(404);
   }

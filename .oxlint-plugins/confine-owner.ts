@@ -649,6 +649,46 @@ const isOwnedRelation = ({
   );
 };
 
+const nestedRelationSelectsOwnedColumns = ({
+  context,
+  entry,
+  value,
+  seen = new Set<unknown>(),
+}: TableReadOptions): boolean => {
+  const options = stableValue(context, value);
+  if (options === null || seen.has(options)) {
+    return false;
+  }
+  seen.add(options);
+  const relations = stableValue(context, objectProperty(options, "with"));
+  if (
+    relations?.type !== "ObjectExpression" ||
+    !Array.isArray(relations.properties)
+  ) {
+    return false;
+  }
+  return relations.properties.some((property) => {
+    if (!isAstNode(property) || property.type !== "Property") {
+      return false;
+    }
+    const key = property.computed
+      ? staticStringValue(property.key)
+      : getPropertyName(property.key);
+    const selection = stableValue(context, property.value);
+    if (selection?.type === "Literal" && selection.value === false) {
+      return false;
+    }
+    return key === entry.table
+      ? relationSelectsOwnedColumns({ context, entry, value: selection })
+      : nestedRelationSelectsOwnedColumns({
+          context,
+          entry,
+          value: selection,
+          seen,
+        });
+  });
+};
+
 const patternReadsOwnedColumns = (
   pattern: unknown,
   columns: readonly string[],
@@ -707,8 +747,13 @@ const isImplicitOwnedRead = ({
   const method = memberPropertyName(callee);
   if (method === "findFirst" || method === "findMany") {
     return (
-      isOwnedRelation({ context, entry, value: callee.object }) &&
-      relationSelectsOwnedColumns({
+      (isOwnedRelation({ context, entry, value: callee.object }) &&
+        relationSelectsOwnedColumns({
+          context,
+          entry,
+          value: call.arguments.at(0),
+        })) ||
+      nestedRelationSelectsOwnedColumns({
         context,
         entry,
         value: call.arguments.at(0),

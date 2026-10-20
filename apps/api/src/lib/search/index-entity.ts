@@ -15,7 +15,7 @@ import { decryptContent } from "@/api/lib/content-encryption";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
-import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
+import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage, iterateCursorPages } from "@/api/lib/pagination";
@@ -183,9 +183,7 @@ const buildSearchDocument = async (
       },
       extractedContent: {
         columns: {
-          ciphertext: true,
           extractedAt: true,
-          iv: true,
           language: true,
           sourceEntityVersionId: true,
           sourceFieldId: true,
@@ -223,7 +221,6 @@ const buildSearchDocument = async (
       cursorForItem: (row) => String(row.versionNumber),
     });
   });
-  let latestVersionId: SafeId<"entityVersion"> | undefined;
 
   const fieldTexts: string[] = [];
   let title = entity.name;
@@ -260,7 +257,6 @@ const buildSearchDocument = async (
   // way it stops resolving everywhere else.
   const stampTexts = new Set<string>();
   for await (const versions of versionPages) {
-    latestVersionId ??= versions.at(0)?.id;
     for (const { deletedAt, stamp } of versions) {
       if (deletedAt || !stamp) {
         continue;
@@ -280,13 +276,13 @@ const buildSearchDocument = async (
   let language: string | null = null;
 
   const extractedContentRow = entity.extractedContent;
-  const currentExtractedContent = selectCurrentExtractedContent({
-    extracted: extractedContentRow,
-    allowLegacy: latestVersionId === version.id,
-    currentVersionCreatedAt: version.createdAt,
-    currentVersionId: version.id,
-    fields: version.fields,
-  });
+  const currentExtractedContent = (
+    await loadCurrentExtractedContents(database, {
+      entityIds: [entityId],
+      organizationId: workspace.organizationId,
+      workspaceIds: [entity.workspaceId],
+    })
+  ).at(0);
   if (currentExtractedContent) {
     const { ciphertext, iv } = currentExtractedContent;
     language = isoToRegconfig(currentExtractedContent.language);

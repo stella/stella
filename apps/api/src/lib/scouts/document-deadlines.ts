@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import {
@@ -14,7 +14,6 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entities,
-  extractedContent,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -25,6 +24,10 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { decryptContent } from "@/api/lib/content-encryption";
+import {
+  isCurrentDeadlineSource,
+  loadCurrentDeadlineSource,
+} from "@/api/lib/document-content-provenance";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -218,49 +221,6 @@ const extractDeadlines = async ({
     throw error;
   }
   return admitted.value;
-};
-
-const currentSourceWhere = (run: ClaimedRun) =>
-  and(
-    eq(extractedContent.entityId, run.entityId),
-    eq(extractedContent.organizationId, run.organizationId),
-    eq(extractedContent.workspaceId, run.workspaceId),
-    eq(extractedContent.sourceEntityVersionId, run.entityVersionId),
-    eq(extractedContent.sourceFieldId, run.fieldId),
-    eq(extractedContent.sourceFileId, run.sourceFileId),
-    eq(extractedContent.sourceSha256Hex, run.sourceSha256Hex),
-    run.kind === "ocr"
-      ? eq(extractedContent.ocrRunId, run.id)
-      : isNull(extractedContent.ocrRunId),
-    eq(entities.currentVersionId, run.entityVersionId),
-    eq(workspaces.status, "active"),
-  );
-
-const loadCurrentSource = async (db: DeadlineScoutDb, run: ClaimedRun) => {
-  const rows = await db
-    .select({
-      ciphertext: extractedContent.ciphertext,
-      entityName: entities.name,
-      iv: extractedContent.iv,
-    })
-    .from(extractedContent)
-    .innerJoin(
-      entities,
-      and(
-        eq(entities.id, extractedContent.entityId),
-        eq(entities.workspaceId, extractedContent.workspaceId),
-      ),
-    )
-    .innerJoin(
-      workspaces,
-      and(
-        eq(workspaces.id, extractedContent.workspaceId),
-        eq(workspaces.organizationId, extractedContent.organizationId),
-      ),
-    )
-    .where(currentSourceWhere(run))
-    .limit(1);
-  return rows.at(0) ?? null;
 };
 
 /**
@@ -457,7 +417,7 @@ export const runDocumentDeadlineScout = async ({
           organizationId: run.organizationId,
           scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
           observe: async () => {
-            const source = await loadCurrentSource(db, run);
+            const source = await loadCurrentDeadlineSource(db, run);
             if (!source) {
               return [];
             }
@@ -557,31 +517,7 @@ export const runDocumentDeadlineScout = async ({
               };
             });
           },
-          validate: async (tx) => {
-            const current = await tx
-              .select({ entityId: extractedContent.entityId })
-              .from(extractedContent)
-              .innerJoin(
-                entities,
-                and(
-                  eq(entities.id, extractedContent.entityId),
-                  eq(entities.workspaceId, extractedContent.workspaceId),
-                ),
-              )
-              .innerJoin(
-                workspaces,
-                and(
-                  eq(workspaces.id, extractedContent.workspaceId),
-                  eq(
-                    workspaces.organizationId,
-                    extractedContent.organizationId,
-                  ),
-                ),
-              )
-              .where(currentSourceWhere(run))
-              .limit(1);
-            return current.length === 1;
-          },
+          validate: async (tx) => await isCurrentDeadlineSource(tx, run),
         }),
       );
     }),

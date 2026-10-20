@@ -1,9 +1,7 @@
 import { Result } from "better-result";
-import { and, eq, inArray, ne } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import { entities, extractedContent, workspaces } from "@/api/db/schema";
 import {
   buildPrefillTargets,
   mapPrefillResults,
@@ -26,6 +24,7 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
+import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
@@ -328,39 +327,9 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
     }
 
     if (entityIds.length > 0) {
-      // Stored extracted text (the search pipeline's output), scoped to the
-      // caller's organization and accessible workspaces — the same gate the
-      // chat document tools apply.
       const contentRows = yield* Result.await(
         safeDb((tx) =>
-          tx
-            .select({
-              ciphertext: extractedContent.ciphertext,
-              iv: extractedContent.iv,
-              name: entities.name,
-            })
-            .from(extractedContent)
-            .innerJoin(
-              entities,
-              and(
-                eq(entities.id, extractedContent.entityId),
-                eq(entities.workspaceId, extractedContent.workspaceId),
-              ),
-            )
-            .innerJoin(
-              workspaces,
-              eq(workspaces.id, extractedContent.workspaceId),
-            )
-            .where(
-              and(
-                inArray(extractedContent.entityId, entityIds),
-                eq(extractedContent.organizationId, organizationId),
-                ne(workspaces.status, "deleting"),
-              ),
-            )
-            // One extractedContent row per entity, and entityIds is capped at
-            // MAX_PICKED_ENTITIES above, so the result set stays bounded.
-            .limit(MAX_PICKED_ENTITIES),
+          loadCurrentExtractedContents(tx, { entityIds, organizationId }),
         ),
       );
 

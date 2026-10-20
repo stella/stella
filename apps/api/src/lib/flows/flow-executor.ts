@@ -39,6 +39,7 @@ import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveWorkspaceMemberAccess } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -603,18 +604,9 @@ export const loadInputDocuments = async (
     return [];
   }
 
-  // Detect unavailable inputs before reading or decrypting any content. A
-  // selected input without an `extracted_content` row (extraction still pending
-  // or failed, or a non-extraction entity that the summaries picker surfaced)
-  // would otherwise drop out silently and let the step generate legal output
-  // from an incomplete document set. Fail the step, naming the unavailable
-  // inputs, instead of proceeding with fewer documents.
+  // Require the complete selected input set before decrypting document text.
   const available = await scopedDb((tx) =>
-    tx.query.extractedContent.findMany({
-      where: { entityId: { in: entityIds } },
-      columns: { entityId: true },
-      limit: entityIds.length,
-    }),
+    loadCurrentExtractedContents(tx, { entityIds, organizationId }),
   );
   if (available.length < entityIds.length) {
     const loaded = new Set(available.map((row) => row.entityId));
@@ -635,22 +627,13 @@ export const loadInputDocuments = async (
     });
   }
 
-  const rows = await scopedDb((tx) =>
-    tx.query.extractedContent.findMany({
-      where: { entityId: { in: entityIds } },
-      columns: { ciphertext: true, iv: true },
-      with: { entity: { columns: { name: true } } },
-      limit: entityIds.length,
-    }),
-  );
-
   const drained = await drainFanOut({
-    items: rows,
+    items: available,
     signal: new AbortController().signal,
     operation: async (row, signal) => {
       signal.throwIfAborted();
       return {
-        label: row.entity?.name ?? "Document",
+        label: row.name,
         text: await decryptContent(organizationId, row.ciphertext, row.iv),
       };
     },

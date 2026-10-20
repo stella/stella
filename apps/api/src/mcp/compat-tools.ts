@@ -1,11 +1,10 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { entities, extractedContent, fields } from "@/api/db/schema";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -98,46 +97,17 @@ const getFetchableEntityMap = async ({
   const safeEntityIds = entityIds.map(brandPersistedEntityId);
 
   const rows = await context.scopedDb((tx) =>
-    tx
-      .select({
-        entityId: extractedContent.entityId,
-        workspaceId: extractedContent.workspaceId,
-        fieldId: fields.id,
-      })
-      .from(extractedContent)
-      .innerJoin(
-        entities,
-        and(
-          eq(entities.id, extractedContent.entityId),
-          eq(entities.workspaceId, extractedContent.workspaceId),
-        ),
-      )
-      .leftJoin(
-        fields,
-        and(
-          eq(fields.entityVersionId, entities.currentVersionId),
-          sql`(${fields.content} ->> 'type') = 'file'`,
-        ),
-      )
-      .where(
-        and(
-          eq(extractedContent.organizationId, context.organizationId),
-          inArray(extractedContent.entityId, safeEntityIds),
-        ),
-      ),
+    loadCurrentExtractedContents(tx, {
+      entityIds: safeEntityIds,
+      organizationId: context.organizationId,
+      workspaceIds: context.accessibleWorkspaceIds,
+    }),
   );
-
   const fetchableEntityMap = new Map<string, FetchableEntity>();
-
   for (const row of rows) {
-    const existing = fetchableEntityMap.get(row.entityId);
-    if (existing && existing.fieldId !== null) {
-      continue;
-    }
-
     fetchableEntityMap.set(row.entityId, {
       entityId: row.entityId,
-      fieldId: row.fieldId,
+      fieldId: row.sourceFieldId,
       workspaceId: brandPersistedWorkspaceId(row.workspaceId),
     });
   }
@@ -586,25 +556,17 @@ const handleCompatFetchTool: McpToolHandler<
     return errorResult("Document content is unavailable");
   }
 
-  const row = await context.scopedDb((tx) =>
-    tx.query.extractedContent.findFirst({
-      where: {
-        entityId: { eq: entityId },
-        organizationId: { eq: context.organizationId },
-        workspaceId: { in: context.accessibleWorkspaceIds },
-      },
-      with: {
-        entity: {
-          columns: {
-            name: true,
-            workspaceId: true,
-          },
-        },
-      },
-    }),
-  );
+  const row = (
+    await context.scopedDb((tx) =>
+      loadCurrentExtractedContents(tx, {
+        entityIds: [entityId],
+        organizationId: context.organizationId,
+        workspaceIds: context.accessibleWorkspaceIds,
+      }),
+    )
+  ).at(0);
 
-  if (!row?.entity) {
+  if (!row) {
     return errorResult("Document content is unavailable");
   }
 
@@ -619,10 +581,10 @@ const handleCompatFetchTool: McpToolHandler<
   // boundary and leak its prefix).
   const result = {
     charCount: row.charCount,
-    name: row.entity.name,
+    name: row.name,
     text,
     truncated: false,
-    workspaceId: row.entity.workspaceId,
+    workspaceId: row.workspaceId,
   };
 
   const fetchPayload = getCompatFetchPayload({ entityId: rawEntityId, result });

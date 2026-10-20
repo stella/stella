@@ -111,7 +111,7 @@ import { decryptContent } from "@/api/lib/content-encryption";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import {
   resolveCurrentFileSourceField,
-  selectCurrentExtractedContent,
+  loadCurrentExtractedContents,
   type ExtractedContentSourceProvenance,
 } from "@/api/lib/document-content-provenance";
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
@@ -1858,48 +1858,18 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     });
   }
 
-  const projection =
+  const currentExtracted =
     docxOutcome.kind === "markdown"
       ? null
-      : await context.scopedDb(
-          async (tx) =>
-            await Promise.all([
-              tx.query.extractedContent.findFirst({
-                where: {
-                  entityId: { eq: entityId },
-                  organizationId: { eq: context.organizationId },
-                  workspaceId: { eq: currentDocument.workspaceId },
-                },
-                columns: {
-                  ciphertext: true,
-                  extractedAt: true,
-                  iv: true,
-                  sourceEntityVersionId: true,
-                  sourceFieldId: true,
-                  sourceFileId: true,
-                  sourceSha256Hex: true,
-                },
-              }),
-              // Provenance fence: include tombstones so a rollback cannot make
-              // a withdrawn version's legacy extraction readable again.
-              tx.query.entityVersions.findFirst({
-                where: {
-                  entityId: { eq: entityId },
-                  workspaceId: { eq: currentDocument.workspaceId },
-                },
-                columns: { id: true },
-                orderBy: { versionNumber: "desc", id: "desc" },
-              }),
-            ]),
-        );
-
-  const currentExtracted = selectCurrentExtractedContent({
-    extracted: projection?.[0],
-    allowLegacy: projection?.[1]?.id === currentDocument.currentVersion.id,
-    currentVersionCreatedAt: currentDocument.currentVersion.createdAt,
-    currentVersionId: currentDocument.currentVersion.id,
-    fields: currentDocument.currentVersion.fields,
-  });
+      : (
+          await context.scopedDb((tx) =>
+            loadCurrentExtractedContents(tx, {
+              entityIds: [entityId],
+              organizationId: context.organizationId,
+              workspaceIds: [currentDocument.workspaceId],
+            }),
+          )
+        ).at(0);
   if (docxOutcome.kind !== "markdown" && !currentExtracted) {
     return structuredErrorResult({
       code: "conflict",
