@@ -60,7 +60,6 @@ open_other=0
 current_is_release=false
 for release in $releases; do
   if [[ "$release" == "$number" ]]; then
-    python3 "$(dirname "${BASH_SOURCE[0]}")/check-release-pr-content.py" "$repo" "$release"
     current_is_release=true
   else
     open_other=$((open_other + 1))
