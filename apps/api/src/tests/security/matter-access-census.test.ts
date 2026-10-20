@@ -39,6 +39,7 @@ const EXTRACTED_CONTENT_OWNER =
   "apps/api/src/lib/document-content-provenance.ts";
 const EXTRACTED_PAYLOAD_COLUMN =
   /\b(?:ciphertext|iv|ocrPayloadCiphertext|ocrPayloadIv)\b/u;
+const INCLUSION_COLUMNS = /^\s*(?:[A-Za-z_$][\w$]*\s*:\s*true\s*,?\s*)+$/u;
 const METADATA_COLUMNS_ONLY = /^\{\s*columns\s*:\s*\{([^{}]*)\}\s*,?\s*\}$/u;
 
 /** The balanced `{...}` block starting at `start`, or null when unbalanced. */
@@ -73,9 +74,11 @@ const selectsExtractedRelationPayload = (source: string): boolean =>
         (match.index ?? 0) + match[0].length - 1,
       );
       const columns = block === null ? null : METADATA_COLUMNS_ONLY.exec(block);
+      // Only an inclusion list is metadata-only: a `false` entry makes Drizzle
+      // return every other column, the payload included.
       return (
         columns === null ||
-        (columns[1] ?? "").includes("...") ||
+        !INCLUSION_COLUMNS.test(columns[1] ?? "") ||
         EXTRACTED_PAYLOAD_COLUMN.test(columns[1] ?? "")
       );
     },
@@ -199,6 +202,11 @@ describe("matter access census", () => {
     expect(
       selectsExtractedRelationPayload(
         "const r = { extractedContent: { with: { entity: true } } };",
+      ),
+    ).toBe(true);
+    expect(
+      selectsExtractedRelationPayload(
+        "export const relations = { extractedContent: { columns: { entityId: false } } };",
       ),
     ).toBe(true);
     expect(
