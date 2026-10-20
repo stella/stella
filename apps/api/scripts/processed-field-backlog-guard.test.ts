@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  admittedNewSourcePairs,
   backlogPairs,
+  declaredNewSourcePairs,
   grownPairs,
   PROCESSED_FIELD_BACKLOG_FILE,
   referencePairs,
@@ -17,6 +19,66 @@ const baseline = {
   },
   unrecorded: { "pl-sn": ["court-paragraph-numbers"] },
 };
+
+const NEW_SOURCE_PAIR =
+  "skipped:not-extracted|new-source|court-paragraph-numbers";
+
+const declaring = (declaration: unknown) => ({
+  ...baseline,
+  newSourceDeclarations: { "new-source": declaration },
+});
+
+const DECLARED = declaredNewSourcePairs(
+  declaring({
+    owner: "pr-closer-org",
+    followUp: "stella#1",
+    pairs: ["skipped:not-extracted|court-paragraph-numbers"],
+  }),
+  "test",
+);
+
+describe("new-source declarations", () => {
+  test("a source the base does not register enters with the debt it declares", () => {
+    expect(
+      admittedNewSourcePairs({
+        grown: [NEW_SOURCE_PAIR],
+        declared: DECLARED,
+        isRegisteredAtBase: () => false,
+      }),
+    ).toEqual([NEW_SOURCE_PAIR]);
+  });
+
+  test("a source the base registers never grows, declared or not", () => {
+    expect(
+      admittedNewSourcePairs({
+        grown: [NEW_SOURCE_PAIR],
+        declared: DECLARED,
+        isRegisteredAtBase: () => true,
+      }),
+    ).toEqual([]);
+  });
+
+  test("an undeclared pair of a new source is still growth", () => {
+    expect(
+      admittedNewSourcePairs({
+        grown: ["unrecorded|new-source|court-paragraph-numbers"],
+        declared: DECLARED,
+        isRegisteredAtBase: () => false,
+      }),
+    ).toEqual([]);
+  });
+
+  test("a declaration names its owner and its follow-up", () => {
+    expect(() =>
+      declaredNewSourcePairs(
+        declaring({ owner: "pr-closer-org", pairs: [] }),
+        "test",
+      ),
+    ).toThrow(
+      "newSourceDeclarations.new-source needs owner, followUp and pairs",
+    );
+  });
+});
 
 describe("processed-field backlog guard", () => {
   test("reads every pair, keyed by the list it is on", () => {
@@ -98,9 +160,18 @@ describe("processed-field backlog guard", () => {
       ),
     );
     const current = backlogPairs(committed, PROCESSED_FIELD_BACKLOG_FILE);
-    expect(grownPairs({ current, base: referencePairs(undefined) })).toEqual(
-      [],
-    );
+    // Past the bootstrap list, only what a new source declared it enters with.
+    const declared = [
+      ...declaredNewSourcePairs(
+        committed,
+        PROCESSED_FIELD_BACKLOG_FILE,
+      ).values(),
+    ].flat();
+    expect(
+      grownPairs({ current, base: referencePairs(undefined) }).filter(
+        (pair) => !declared.includes(pair),
+      ),
+    ).toEqual([]);
     expect(
       grownPairs({
         current: [

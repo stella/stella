@@ -1,3 +1,4 @@
+// parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
 // parser-output-unchanged: Text and publication absence sidecars change metadata only; canonical documents and replay comparison inputs are unchanged.
 import { panic } from "better-result";
 

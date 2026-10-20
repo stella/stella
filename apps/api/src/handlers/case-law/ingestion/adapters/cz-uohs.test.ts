@@ -13,6 +13,7 @@ import {
   czUohsDecisionIdentifiers,
   czUohsLetterheadDate,
   encodeCzUohsCursor,
+  parseCzUohsDocumentPdf,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
@@ -97,6 +98,43 @@ describe("ÚOHS JSON-LD", () => {
     expect(JSON.stringify(decision.metadata["decisionDateAvailability"])).toBe(
       JSON.stringify({ status: "not-published-by-source" }),
     );
+  });
+
+  test.each(["cz-uohs-2026-R0137.pdf", "cz-uohs-2026-S0383.pdf"])(
+    "reads %s as paragraphs and emits no paragraph number it cannot vouch for",
+    async (fixture) => {
+      const bytes = new Uint8Array(
+        await Bun.file(
+          new URL(`__fixtures__/${fixture}`, import.meta.url),
+        ).arrayBuffer(),
+      );
+      const ast = await parseCzUohsDocumentPdf(bytes, {
+        caseNumber: fixture,
+        sourceUrl: fixture,
+      });
+      expect(ast.blocks.length).toBeGreaterThan(10);
+      // Footnotes and the running footer interleave the numbered reasoning in
+      // the text layer, so the shared reader rejects the numbering: no number
+      // is emitted until the page-furniture layer separates them.
+      expect(
+        ast.blocks.some(
+          (block) => block.type === "paragraph" && block.number !== undefined,
+        ),
+      ).toBe(false);
+    },
+  );
+
+  test("a document without numbered paragraphs gets no paragraph numbers", async () => {
+    const ast = await parseCzUohsDocumentPdf(czUohsSyntheticPdf(), {
+      caseNumber: "synthetic",
+      sourceUrl: "synthetic",
+    });
+    expect(ast.blocks.length).toBeGreaterThan(0);
+    expect(
+      ast.blocks.some(
+        (block) => block.type === "paragraph" && block.number !== undefined,
+      ),
+    ).toBe(false);
   });
 
   test("only the labelled letterhead date is the issue date", () => {

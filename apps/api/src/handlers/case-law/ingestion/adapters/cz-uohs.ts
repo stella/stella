@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -25,6 +26,7 @@ import {
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { normalizeDecisionIdentifierValue } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
+  assemblePlSnParagraphs,
   extractPlSnLines,
   PL_PDF_PARAGRAPH_START,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
@@ -47,6 +49,7 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -161,17 +164,106 @@ export const czUohsDecisionIdentifiers = (
   ] as const;
 };
 
-const pdfText = async (bytes: Uint8Array): Promise<string> => {
+type CzUohsPdf = {
+  /** The text layer line by line, letterhead first. */
+  text: string;
+  /** The typeset lines joined back into the paragraphs they were broken from. */
+  paragraphs: string[];
+};
+
+// The office numbers its reasoning with a hanging indent ("1.  Úřad obdržel").
+const readCzUohsPdf = async (bytes: Uint8Array): Promise<CzUohsPdf> => {
   const lines = await extractPlSnLines(
     bytes,
     PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
   );
-  return lines
-    .map((line) =>
-      line.type === "blank" ? "" : line.runs.map(({ text }) => text).join(""),
-    )
-    .join("\n")
-    .trim();
+  return {
+    text: lines
+      .map((line) =>
+        line.type === "blank" ? "" : line.runs.map(({ text }) => text).join(""),
+      )
+      .join("\n")
+      .trim(),
+    paragraphs: assemblePlSnParagraphs(lines)
+      .map((runs) =>
+        runs
+          .map(({ text }) => text)
+          .join("")
+          .trim(),
+      )
+      .filter((paragraph) => paragraph.length > 0),
+  };
+};
+
+type CzUohsDocumentInput = {
+  paragraphs: readonly string[];
+  caseNumber: string;
+  court: string;
+  decisionDate: string | undefined;
+  decisionType: string | undefined;
+  sourceUrl: string;
+  documentUrl: string | undefined;
+};
+
+/**
+ * The decision as a document: one paragraph block per printed paragraph, with
+ * the office's own "N." numbering moved into the block by the shared reader.
+ */
+export const czUohsDocumentAst = ({
+  paragraphs,
+  caseNumber,
+  court,
+  decisionDate,
+  decisionType,
+  sourceUrl,
+  documentUrl,
+}: CzUohsDocumentInput): DocumentAst => {
+  const blocks: Block[] = paragraphs.map((text, index) => ({
+    id: `b${index + 1}`,
+    anchorId: `p-${index + 1}`,
+    type: "paragraph",
+    inlines: [{ type: "text", text }],
+    plainText: text,
+  }));
+  return {
+    version: 1,
+    source: {
+      system: "uohs.gov.cz",
+      documentId: sourceUrl,
+      webUrl: sourceUrl,
+      printUrl: documentUrl ?? "",
+    },
+    metadata: {
+      caseNumber,
+      ecli: null,
+      court,
+      decisionDate: decisionDate ?? null,
+      decisionType: decisionType ?? null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: courtParagraphNumbers(blocks, {
+      parser: ADAPTER_KEYS.CZ_UOHS,
+      caseNumber,
+      url: sourceUrl,
+    }),
+  };
+};
+
+/** One recorded decision PDF as the adapter reads it, for evidence checks. */
+export const parseCzUohsDocumentPdf = async (
+  bytes: Uint8Array,
+  identity: Pick<CzUohsDocumentInput, "caseNumber" | "sourceUrl">,
+): Promise<DocumentAst> => {
+  const read = await readCzUohsPdf(bytes);
+  return czUohsDocumentAst({
+    ...identity,
+    paragraphs: read.paragraphs,
+    court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
+    decisionDate: czUohsLetterheadDate(read.text),
+    decisionType: undefined,
+    documentUrl: undefined,
+  });
 };
 
 /**
@@ -244,7 +336,7 @@ export const buildCzUohsDecision = async (
     url: string;
   }[] = [];
   let documentReadOutcome: StoredReadOutcome | undefined;
-  let fulltext: string | undefined;
+  let canonical: CzUohsPdf | undefined;
   for (const [index, document] of record.dokument.entries()) {
     const part = index === 0 ? "document" : `document-${index}`;
     const documentUrl = document.url;
@@ -300,10 +392,10 @@ export const buildCzUohsDecision = async (
       { url: documentUrl, sha256: sha256Hex(documentBytes) },
     ]);
     const extracted = await Result.tryPromise({
-      try: async () => await pdfText(documentBytes),
+      try: async () => await readCzUohsPdf(documentBytes),
       catch: String,
     });
-    if (Result.isError(extracted) || extracted.value.length === 0) {
+    if (Result.isError(extracted) || extracted.value.text.length === 0) {
       documentFailures.push({
         index,
         type: "parse-failed",
@@ -313,7 +405,7 @@ export const buildCzUohsDecision = async (
     } else {
       // The first successfully parsed document in publisher order is the
       // canonical decision text; every document is still retained below.
-      fulltext ??= extracted.value;
+      canonical ??= extracted.value;
     }
   }
   const sourceRawObjects = Object.fromEntries(rawObjectEntries);
@@ -330,6 +422,7 @@ export const buildCzUohsDecision = async (
       documents: documentProvenance,
     }),
   });
+  const fulltext = canonical?.text;
   const identifiers = czUohsDecisionIdentifiers(record);
   // The date comes from the decision's own text; a text without a letterhead
   // date is a source that publishes none. An unread document says neither.
@@ -395,7 +488,18 @@ export const buildCzUohsDecision = async (
         : { sourceRawObjects }),
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS],
-    documentAst: EMPTY_AST,
+    documentAst:
+      canonical === undefined
+        ? EMPTY_AST
+        : czUohsDocumentAst({
+            paragraphs: canonical.paragraphs,
+            caseNumber: identifiers[0].value,
+            court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
+            decisionDate,
+            decisionType: record.typ_rozhodnutí.at(0),
+            sourceUrl: record.iri,
+            documentUrl: primaryDocumentUrl,
+          }),
     sourceRaw,
     ...(Object.keys(sourceRawObjects).length === 0 ? {} : { sourceRawObjects }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,

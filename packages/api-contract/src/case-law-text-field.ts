@@ -1,3 +1,4 @@
+// parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
 import { panic } from "better-result";
 
 // parser-output-unchanged: Publication provenance and its schema checks affect metadata only, not canonical document payloads.
