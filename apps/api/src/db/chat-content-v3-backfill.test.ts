@@ -109,6 +109,11 @@ test("rejected SDK input, text provider metadata and non-reproducible arguments 
         arguments: '{"query":"draft"}',
         input: { query: "final" },
       },
+      {
+        type: "text",
+        content: "Answer",
+        providerMetadata: { openai: { itemId: "item_2" } },
+      },
     ],
   };
   const convertedV2 = convertLegacyChatContent(v2);
@@ -119,6 +124,10 @@ test("rejected SDK input, text provider metadata and non-reproducible arguments 
   expect(reloadedV2.at(0)).toMatchObject({
     arguments: '{"query":"draft"}',
     input: { query: "final" },
+  });
+  expect(reloadedV2.at(1)).toMatchObject({
+    type: "text",
+    providerMetadata: { openai: { itemId: "item_2" } },
   });
 });
 

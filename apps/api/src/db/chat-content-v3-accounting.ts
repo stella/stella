@@ -112,7 +112,7 @@ const CANONICAL_FIELDS = {
     "reasoning",
   ],
   subagent: [],
-  text: ["content"],
+  text: ["content", "providerMetadata"],
   thinking: [
     "content",
     "signature",

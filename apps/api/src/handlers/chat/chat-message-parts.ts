@@ -260,8 +260,10 @@ const persistedV3PartToChatPart = ({
     const candidate: unknown = {
       ...(part.approval === undefined ? {} : { approval: part.approval }),
       arguments:
-        persistedInput.rawArguments ??
-        stringifyPersistedJsonValue(persistedInput.value),
+        persistedInput.status === "raw"
+          ? persistedInput.rawArguments
+          : (persistedInput.rawArguments ??
+            stringifyPersistedJsonValue(persistedInput.value)),
       id: part.id,
       ...(input === undefined ? {} : { input }),
       ...(part.metadata === undefined ? {} : { metadata: part.metadata }),

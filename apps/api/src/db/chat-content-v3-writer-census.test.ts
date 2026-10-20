@@ -186,7 +186,7 @@ const v2AllFields = {
     errorMessage: "synthetic",
   },
   subagent: v2Baselines.subagent,
-  text: v2Baselines.text,
+  text: { ...v2Baselines.text, providerMetadata },
   thinking: {
     ...v2Baselines.thinking,
     stepId: "step",
@@ -332,7 +332,7 @@ const v2FieldDispositions = {
     errorMessage: "mapped",
   },
   subagent: { type: "refuse", subagent: "refuse" },
-  text: { type: "implied", content: "mapped" },
+  text: { type: "implied", content: "mapped", providerMetadata: "mapped" },
   thinking: {
     type: "implied",
     content: "mapped",
