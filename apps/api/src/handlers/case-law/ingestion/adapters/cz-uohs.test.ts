@@ -111,7 +111,9 @@ describe("ÚOHS JSON-LD", () => {
       globalThis.fetch = asFetchMock(async () => new Response(bytes));
       const decision = await buildCzUohsDecision((await records())[0]!);
       expect(decision.decisionDate).toBe(issued);
-      expect(String(decision.metadata["decisionDateSource"])).toBe("document");
+      expect(decision.metadata).toMatchObject({
+        decisionDateSource: "document",
+      });
       expect(decision.metadata["decisionDateAvailability"]).toBeUndefined();
     },
   );
@@ -146,7 +148,7 @@ describe("ÚOHS JSON-LD", () => {
       expect(ast.blocks.length).toBeGreaterThan(10);
       const numbers = ast.blocks.flatMap((block) =>
         block.type === "paragraph" && block.number !== undefined
-          ? [Number(block.number)]
+          ? [block.number]
           : [],
       );
       expect(numbers.slice(0, 3)).toEqual([1, 2, 3]);

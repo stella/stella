@@ -376,8 +376,7 @@ const readPagesWithFootnotes = (
         line.spans.every(
           ({ fontSize }) => fontSize <= bodySize * SMALL_TYPE_RATIO,
         ) &&
-        next !== undefined &&
-        next.spans.every(
+        next?.spans.every(
           ({ fontSize }) => fontSize <= bodySize * SMALL_TYPE_RATIO,
         )
       ) {
