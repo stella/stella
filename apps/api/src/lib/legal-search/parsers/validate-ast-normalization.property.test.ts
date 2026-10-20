@@ -6,7 +6,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import { validateAst } from "./validate-ast";
-import { validateAstReference } from "./validate-ast.reference.test";
+import { validateAstReference } from "./validate-ast.reference.test-helper";
 
 const token = fc
   .tuple(

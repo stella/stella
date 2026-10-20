@@ -70,6 +70,14 @@ type ValidationSourcePolicy = {
   markupResidueIn: (text: string) => MarkupResidue | undefined;
 };
 
+type ValidationOptions = {
+  minRetainedPct?: number;
+  maxMissingWords?: number;
+  /** Source words with explicit inline breaks; never used for retention. */
+  wordComparisonText?: string;
+  sourcePolicy?: ValidationSourcePolicy;
+};
+
 /** Source markup found in one block, named by the anchor that holds it. */
 type BlockMarkupResidue = MarkupResidue & { anchorId: string };
 
@@ -272,42 +280,19 @@ const collapseWhitespace = (text: string): string =>
 const MARKUP_RESIDUE = "MARKUP_RESIDUE";
 const BOUNDARY_WHITESPACE = "BOUNDARY_WHITESPACE";
 
-// ── Validator ──────────────────────────────────────────────
-
-export const validateAstReference = (
+const collectSourceText = (
   html: string,
-  blocks: Block[],
-  options?: {
-    minRetainedPct?: number;
-    maxMissingWords?: number;
-    /** Source words with explicit inline breaks; never used for retention. */
-    wordComparisonText?: string;
-    sourcePolicy?: ValidationSourcePolicy;
-  },
-): ValidationResult => {
-  const { minRetainedPct = 90, maxMissingWords = 15 } = options ?? {};
-
-  const issues: Issue[] = [];
-
-  // ── 1. Content completeness ────────────────────────────
-
+  sourcePolicy: ValidationSourcePolicy | undefined,
+): {
+  originalText: string;
+  work: ValidationResult["stats"]["work"];
+} => {
   const $ = cheerio.load(html);
   $("div[style*='-aw-headerfooter-type']").remove();
-  // <br> is a word boundary in the rendered document, but cheerio's
-  // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →
-  // "wrazz") and producing phantom MISSING_WORDS reports against a
-  // correct AST. Make it a space before extracting reference text.
   $("br").replaceWith(" ");
 
-  // Extract text from content elements, but skip nested
-  // elements whose text is already included by a parent
-  // (e.g., <td> inside <td> in NALUS HTML).
   const seen = new Set<string>();
   const originalParts: string[] = [];
-  // Stringifying a node visits its whole subtree, and the ancestor check
-  // below runs it for every ancestor of every content element — quadratic
-  // on flat many-paragraph documents. Each node's normalized text is
-  // computed once and reused.
   const normalizedTextCache = new WeakMap<object, string>();
   const work = { textComputations: 0, textCharacters: 0, ancestorChecks: 0 };
   const normalizedText = (el: Parameters<typeof $>[0] & object): string => {
@@ -318,9 +303,7 @@ export const validateAstReference = (
     work.textComputations += 1;
     const sourceText = visibleHtmlText($(el));
     const value = (
-      options?.sourcePolicy
-        ? options.sourcePolicy.projectSourceText(sourceText)
-        : sourceText
+      sourcePolicy ? sourcePolicy.projectSourceText(sourceText) : sourceText
     )
       .replace(/\s+/gu, " ")
       .trim();
@@ -328,26 +311,12 @@ export const validateAstReference = (
     normalizedTextCache.set(el, value);
     return value;
   };
-  // Queried from the document root, never as `.find()` on a node: cheerio
-  // dedupes a `.find()` context of N children pairwise, which is quadratic on
-  // a body or wrapper holding tens of thousands of paragraphs.
+
   $(`body :is(${CONTENT_SELECTOR})`).each((_, el) => {
     const $el = $(el);
-
-    // Skip <div> wrappers that contain child content
-    // elements — those children are matched separately.
     if (el.name === "div" && hasContentDescendant(el.children)) {
       return;
     }
-
-    // Skip if any ancestor in our selector already captured this
-    // text. Checking every ancestor rather than just the nearest one
-    // matters for sources that nest content two or more levels deep
-    // (Cellar quotes legislation as a table inside the cell of the
-    // numbered paragraph that introduces it): with only the nearest
-    // ancestor checked, the inner text is counted once inside the
-    // outer cell and again on its own, and the inflated original
-    // length reads as content loss in an otherwise complete AST.
     const capturedByAncestor = $el
       .parents(CONTENT_SELECTOR)
       .toArray()
@@ -365,8 +334,6 @@ export const validateAstReference = (
     }
   });
 
-  // Also collect <img> alt text (some courts embed
-  // meaningful text in alt attributes).
   $("body img[alt]").each((_, el) => {
     const alt = $(el).attr("alt")?.trim();
     if (alt && !seen.has(alt)) {
@@ -375,7 +342,106 @@ export const validateAstReference = (
     }
   });
 
-  const originalText = normalize(originalParts.join(" "));
+  return { originalText: normalize(originalParts.join(" ")), work };
+};
+
+type BlockInspection = Pick<
+  ValidationResult["stats"],
+  | "blockTypeCounts"
+  | "tinyBlocks"
+  | "hugeBlocks"
+  | "duplicateBlocks"
+  | "markupResidue"
+>;
+
+const inspectBlocks = (
+  blocks: Block[],
+  sourcePolicy: ValidationSourcePolicy | undefined,
+  issues: Issue[],
+): BlockInspection => {
+  const typeCounts = new Map<string, number>();
+  let tinyBlocks = 0;
+  let hugeBlocks = 0;
+  let duplicateBlocks = 0;
+  let prevText = "";
+  const markupResidue: BlockMarkupResidue[] = [];
+
+  for (const block of blocks) {
+    const key =
+      block.type === "paragraph" && block.role !== undefined
+        ? `paragraph-${block.role}`
+        : block.type;
+    typeCounts.set(key, (typeCounts.get(key) ?? 0) + 1);
+
+    const text = block.plainText.trim();
+    const residue = sourcePolicy
+      ? sourcePolicy.markupResidueIn(text)
+      : markupResidueIn(text);
+    if (residue) {
+      markupResidue.push({ ...residue, anchorId: block.anchorId });
+    }
+    if (
+      text.length > 0 &&
+      text.length < 5 &&
+      block.type !== "heading" &&
+      block.type !== "image"
+    ) {
+      tinyBlocks += 1;
+    }
+    if (text.length > 5000) {
+      hugeBlocks += 1;
+    }
+    if (text === prevText && text.length > 10) {
+      duplicateBlocks += 1;
+    }
+    prevText = text;
+
+    if (block.type !== "heading" && block.type !== "paragraph") {
+      continue;
+    }
+    const inlineLen = (
+      sourcePolicy
+        ? sourcePolicy.projectInlineText(block.inlines)
+        : collapseWhitespace(inlineText(block.inlines))
+    ).length;
+    const plainLen = collapseWhitespace(block.plainText).length;
+    if (
+      Math.abs(inlineLen - plainLen) > 5 &&
+      Math.abs(inlineLen - plainLen) > plainLen * 0.05
+    ) {
+      issues.push({
+        code: "INLINE_PLAINTEXT_MISMATCH",
+        message:
+          `Block "${text.slice(0, 40)}..." inline length ` +
+          `(${inlineLen}) != plainText length (${plainLen})`,
+        severity: "warning",
+      });
+    }
+  }
+
+  return {
+    blockTypeCounts: Object.fromEntries(typeCounts),
+    tinyBlocks,
+    hugeBlocks,
+    duplicateBlocks,
+    markupResidue,
+  };
+};
+
+// ── Validator ──────────────────────────────────────────────
+
+export const validateAstReference = (
+  html: string,
+  blocks: Block[],
+  options?: ValidationOptions,
+): ValidationResult => {
+  const { minRetainedPct = 90, maxMissingWords = 15 } = options ?? {};
+
+  const issues: Issue[] = [];
+
+  // ── 1. Content completeness ────────────────────────────
+
+  const { originalText, work } = collectSourceText(html, options?.sourcePolicy);
 
   const astText = normalize(
     blocks.flatMap((b) => (b.plainText ? [b.plainText] : [])).join(" "),
@@ -463,18 +529,9 @@ export const validateAstReference = (
     });
   }
 
-  // Block type distribution
-  const typeCounts: Record<string, number> = {};
-  for (const b of blocks) {
-    const key =
-      b.type === "paragraph" && b.role !== undefined
-        ? `paragraph-${b.role}`
-        : b.type;
-    typeCounts[key] = (typeCounts[key] ?? 0) + 1;
-  }
-
-  // Must have at least one heading
-  const headingCount = blocks.filter((b) => b.type === "heading").length;
+  const headingCount = blocks.filter(
+    (block) => block.type === "heading",
+  ).length;
   if (headingCount === 0) {
     issues.push({
       code: "NO_HEADINGS",
@@ -483,78 +540,13 @@ export const validateAstReference = (
     });
   }
 
-  // ── 3. Block-level anomalies ──────────────────────────
-
-  let tinyBlocks = 0;
-  let hugeBlocks = 0;
-  let duplicateBlocks = 0;
-  let prevText = "";
-  const markupResidue: BlockMarkupResidue[] = [];
-
-  for (const block of blocks) {
-    const text = block.plainText.trim();
-
-    // Source markup that survived into the text. Completeness class, like
-    // CONTENT_LOSS: the reader prints it, search indexes it and the model
-    // is prompted with it, and none of them can tell it from the court's
-    // words. It also inflates the retention ratio, so a parse carrying
-    // residue is the one whose CONTENT_LOSS reading cannot be trusted.
-    const residue = options?.sourcePolicy
-      ? options.sourcePolicy.markupResidueIn(text)
-      : markupResidueIn(text);
-    if (residue) {
-      markupResidue.push({ ...residue, anchorId: block.anchorId });
-    }
-
-    // Tiny blocks. A heading is legitimately short, and an image's text
-    // is its alt text — a figure with a two-word label is not a parse
-    // that lost the paragraph around it.
-    if (
-      text.length > 0 &&
-      text.length < 5 &&
-      block.type !== "heading" &&
-      block.type !== "image"
-    ) {
-      tinyBlocks++;
-    }
-
-    // Huge blocks
-    if (text.length > 5000) {
-      hugeBlocks++;
-    }
-
-    // Consecutive duplicates
-    if (text === prevText && text.length > 10) {
-      duplicateBlocks++;
-    }
-    prevText = text;
-
-    // ── 4. Inline-plainText consistency ─────────────────
-
-    if (block.type === "heading" || block.type === "paragraph") {
-      // Parsers normalize plainText while inlines keep source spacing;
-      // compare whitespace-collapsed forms so padding never flags.
-      const inlineLen = (
-        options?.sourcePolicy
-          ? options.sourcePolicy.projectInlineText(block.inlines)
-          : collapseWhitespace(inlineText(block.inlines))
-      ).length;
-      const plainLen = collapseWhitespace(block.plainText).length;
-      // Allow some tolerance for whitespace differences
-      if (
-        Math.abs(inlineLen - plainLen) > 5 &&
-        Math.abs(inlineLen - plainLen) > plainLen * 0.05
-      ) {
-        issues.push({
-          code: "INLINE_PLAINTEXT_MISMATCH",
-          message:
-            `Block "${text.slice(0, 40)}..." inline length ` +
-            `(${inlineLen}) != plainText length (${plainLen})`,
-          severity: "warning",
-        });
-      }
-    }
-  }
+  const {
+    blockTypeCounts,
+    tinyBlocks,
+    hugeBlocks,
+    duplicateBlocks,
+    markupResidue,
+  } = inspectBlocks(blocks, options?.sourcePolicy, issues);
 
   if (tinyBlocks > blocks.length * 0.3) {
     issues.push({
@@ -607,7 +599,7 @@ export const validateAstReference = (
       blockCount: blocks.length,
       missingWords,
       boundaryWhitespaceWords,
-      blockTypeCounts: typeCounts,
+      blockTypeCounts,
       tinyBlocks,
       hugeBlocks,
       duplicateBlocks,
