@@ -4,7 +4,7 @@ import apiPackage from "../apps/api/package.json" with { type: "json" };
 import {
   STELLA_API_CONTRACT,
   STELLA_MCP_API_CONTRACT_VERSION,
-} from "../apps/api/src/mcp/constants";
+} from "../apps/api/src/mcp/stella-api-contract";
 import cliPackage from "../packages/cli/package.json" with { type: "json" };
 import {
   CLI_DEFAULT_SCOPES,
