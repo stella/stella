@@ -1,14 +1,10 @@
 import { Result } from "better-result";
-import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
-import {
-  createGitProvider,
-  resolveGitHead,
-  SOURCE_CONFIG,
-} from "./git-provider";
+import { createGitProvider, resolveGitHead } from "./git-provider";
+import type { SOURCE_CONFIG } from "./git-provider";
 import {
   METADATA_ORIGIN,
   metadataReferenceIdentity,
@@ -384,41 +380,3 @@ export const createCandidateMetadataReader = (
     read: provider.read,
   };
 };
-if (import.meta.main) {
-  try {
-    const [repository, manifestPath, configPath, ...extra] =
-      process.argv.slice(2);
-    if (!repository || !manifestPath || !configPath || extra.length) {
-      reject(
-        "usage: bun public-metadata.ts ROOT_REPOSITORY MANIFEST PUBLIC_GIT_SOURCES",
-      );
-    }
-    const manifest = v.parse(
-      PUBLIC_METADATA,
-      JSON.parse(readFileSync(manifestPath, "utf-8")),
-    );
-    if (manifest.repository !== repository) {
-      reject("candidate repository identity mismatch");
-    }
-    const result = verifyPublicMetadata({
-      manifest,
-      reader: createCandidateMetadataReader(
-        v.parse(SOURCE_CONFIG, JSON.parse(readFileSync(configPath, "utf-8"))),
-        repository,
-      ),
-    });
-    if (result.isErr()) {
-      process.stderr.write(`${result.error.message}\n`);
-      process.exitCode = 1;
-    } else {
-      process.stdout.write(
-        `${JSON.stringify({ mode: "public-metadata", ...result.value })}\n`,
-      );
-    }
-  } catch (error) {
-    process.stderr.write(
-      `${error instanceof Error ? error.message : "metadata census failed"}\n`,
-    );
-    process.exitCode = 1;
-  }
-}
