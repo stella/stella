@@ -2215,6 +2215,77 @@ for (const scenario of [
   );
 }
 
+test("downgrading a priority decision with an unchanged digest is a sensitive change", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "classification-kind-"));
+  try {
+    mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
+    const workflow = "jobs: {check: {steps: []}}";
+    const parsed = parseDocument(workflow);
+    const job = parsed.isOk() ? parsed.value.jobs["check"] : undefined;
+    if (!job) {
+      throw new AdmissionError({ message: "kind fixture parse failed" });
+    }
+    const decisionsPath = path.join(
+      root,
+      ".github/ci-job-classification-decisions.json",
+    );
+    const decide = (kind: (typeof CLASSIFICATIONS)[number]) =>
+      JSON.stringify({
+        "candidate:.github/workflows/ci.yml/check": {
+          kind,
+          qualifier: "Reviewed",
+          reviewedDigest: job.digest,
+        },
+      });
+    writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
+    writeFileSync(
+      path.join(root, ".github/ci-job-classification-sources.json"),
+      "{}",
+    );
+    writeFileSync(decisionsPath, decide(CLASSIFICATIONS[2]));
+    const git = (args: string[]) => Bun.spawnSync(["git", "-C", root, ...args]);
+    expect(git(["init", "--quiet"]).exitCode).toBe(0);
+    expect(git(["add", "."]).exitCode).toBe(0);
+    expect(
+      git([
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "--quiet",
+        "-m",
+        "base",
+      ]).exitCode,
+    ).toBe(0);
+    const base = new TextDecoder()
+      .decode(git(["rev-parse", "HEAD"]).stdout)
+      .trim();
+    writeFileSync(decisionsPath, decide(ORDINARY));
+    const output = path.join(root, "output");
+    const result = Bun.spawnSync(
+      [
+        process.execPath,
+        path.join(repositoryRoot, "scripts/check-ci-job-classification.ts"),
+        root,
+        "--base",
+        base,
+      ],
+      {
+        env: { ...process.env, GITHUB_OUTPUT: output },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(result.exitCode).toBe(0);
+    expect(readFileSync(output, "utf-8")).toBe(
+      "privileged_classification_change=true\n",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 10_000);
+
 test("decisions for removed jobs fail without changing sibling job digests", () => {
   const f = fixture();
   const options = fixtureGenerationOptions(f);

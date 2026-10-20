@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { deepEquals } from "bun";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
 
@@ -29,14 +30,26 @@ const generateWithJobs = (inputs: ClassificationInputs) => {
   return { jobs, result, workflowCount: inputs.reader.workflows().length };
 };
 
-const sensitiveChanges = (
-  head: ReturnType<typeof generateWithJobs>,
-  base: ReturnType<typeof generateWithJobs>,
-  baseDecisions: ClassificationInputs["decisions"],
-) =>
+type SensitiveChangesOptions = {
+  head: ReturnType<typeof generateWithJobs>;
+  headDecisions: ClassificationInputs["decisions"];
+  base: ReturnType<typeof generateWithJobs>;
+  baseDecisions: ClassificationInputs["decisions"];
+};
+// A job is unchanged only when its shape and its whole reviewed decision
+// (kind, qualifier and digest) match the base; anything else is a change.
+const sensitiveChanges = ({
+  head,
+  headDecisions,
+  base,
+  baseDecisions,
+}: SensitiveChangesOptions) =>
   [...head.jobs.entries()].flatMap(([key, current]) => {
     const previousDecision = baseDecisions[key];
-    if (previousDecision?.reviewedDigest === current.digest) {
+    if (
+      previousDecision?.reviewedDigest === current.digest &&
+      deepEquals(previousDecision, headDecisions[key])
+    ) {
       return [];
     }
     return current.privileged || base.jobs.get(key)?.privileged ? [key] : [];
@@ -45,7 +58,8 @@ const sensitiveChanges = (
 export const checkJobClassification = (root: string, base?: string) =>
   Result.try({
     try: () => {
-      const head = generateWithJobs(readClassificationInputs(root));
+      const headInputs = readClassificationInputs(root);
+      const head = generateWithJobs(headInputs);
       const privilegedJobs = base
         ? (() => {
             const baseInputs = readClassificationInputsAtRevision(root, base);
@@ -56,7 +70,12 @@ export const checkJobClassification = (root: string, base?: string) =>
             ) {
               throw baseGeneration.result.error;
             }
-            return sensitiveChanges(head, baseGeneration, baseInputs.decisions);
+            return sensitiveChanges({
+              head,
+              headDecisions: headInputs.decisions,
+              base: baseGeneration,
+              baseDecisions: baseInputs.decisions,
+            });
           })()
         : [];
       if (head.result.isErr()) {
