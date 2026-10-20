@@ -203,6 +203,16 @@ describe("document conversion input", () => {
     ['<img src="data:text/html,%3Cp%3EDocument%3C/p%3E">', "img", "src"],
     ['<img src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E">', "img", "src"],
     [
+      '<iframe src="da&#9;ta:text/html,%3Cimg src=https://example.test/a.png%3E"></iframe>',
+      "iframe",
+      "src",
+    ],
+    [
+      '<iframe src="&#10;data:text/html,%3Cimg src=https://example.test/a.png%3E"></iframe>',
+      "iframe",
+      "src",
+    ],
+    [
       '<div style="background:url(data:image/svg+xml,%3Csvg%3E%3C/svg%3E)"></div>',
       "div",
       "style",

@@ -318,7 +318,9 @@ const FETCHABLE_SCHEME_NAMES: ReadonlySet<string> = new Set<FetchableScheme>(
   FETCHABLE_SCHEMES.map(({ scheme }) => scheme),
 );
 
-const isExternalReference = (value: string): boolean => {
+// URL parsers drop control characters (tab, newline) anywhere in a URL and
+// trim the ends, so every reference check classifies the value they load.
+const normalizeUrlValue = (value: string): string => {
   let normalized = "";
   for (const character of value) {
     const code = character.codePointAt(0) ?? 0;
@@ -326,7 +328,11 @@ const isExternalReference = (value: string): boolean => {
       normalized += character;
     }
   }
-  normalized = normalized.trim().toLowerCase();
+  return normalized.trim().toLowerCase();
+};
+
+const isExternalReference = (value: string): boolean => {
+  const normalized = normalizeUrlValue(value);
   if (
     normalized.startsWith("#") ||
     normalized.startsWith("data:") ||
@@ -362,7 +368,7 @@ const RASTER_DATA_MEDIA_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 const isUnsupportedDataUrl = (value: string): boolean => {
-  const normalized = value.trim().toLowerCase();
+  const normalized = normalizeUrlValue(value);
   if (!normalized.startsWith("data:")) {
     return false;
   }

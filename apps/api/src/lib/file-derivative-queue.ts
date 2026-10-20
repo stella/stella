@@ -1,9 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { DelayedError } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -651,10 +652,29 @@ const refuseDerivative = async ({
 
 type FileFieldContent = Extract<FieldContent, { type: "file" }>;
 
-type DisplayableConversionRefusal = Extract<
-  ConversionInputErrorReason,
-  { kind: "legacy_format" | "unsupported_field" | "unsupported_reference" }
->;
+type DisplayableConversionRefusal = ConversionRefusal;
+
+/** Every refusal the user can act on is shown; a new kind must choose. */
+const displayableConversionRefusal = (
+  reason: ConversionInputErrorReason,
+): DisplayableConversionRefusal | undefined => {
+  switch (reason.kind) {
+    case "unsupported_encoding":
+    case "unsupported_reference":
+    case "unsupported_field":
+    case "legacy_format": {
+      return reason;
+    }
+    case "external_reference":
+    case "inspection_failed": {
+      return undefined;
+    }
+    default: {
+      reason satisfies never;
+      return panic("Unclassified conversion refusal");
+    }
+  }
+};
 
 type DerivativeBuild<T> =
   | { type: "built"; value: T }
@@ -700,12 +720,9 @@ const buildPdfDerivative = async (
   const conversion = await convertToPdf(source.source, { retry: "caller" });
   if (Result.isError(conversion)) {
     if (conversion.error instanceof ConversionInputError) {
-      const conversionRefusal =
-        conversion.error.reason.kind === "unsupported_field" ||
-        conversion.error.reason.kind === "legacy_format" ||
-        conversion.error.reason.kind === "unsupported_reference"
-          ? conversion.error.reason
-          : undefined;
+      const conversionRefusal = displayableConversionRefusal(
+        conversion.error.reason,
+      );
       return {
         type: "refused",
         reason: DERIVATIVE_FAILURE_REASON.PROCESSING,

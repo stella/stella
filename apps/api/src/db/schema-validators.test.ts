@@ -91,6 +91,7 @@ test.each([
     attribute: "src",
   },
   { kind: "legacy_format", replacementExtension: ".xlsx" },
+  { kind: "unsupported_encoding", encoding: "windows-1252" },
 ] as const)(
   "a conversion refusal is preserved in file state",
   async (refusal) => {

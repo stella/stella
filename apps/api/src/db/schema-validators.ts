@@ -268,6 +268,10 @@ export type DerivativeFailureReason =
 
 const conversionRefusalSchema = t.Union([
   t.Object({
+    kind: t.Literal("unsupported_encoding"),
+    encoding: t.String({ minLength: 1, maxLength: 256 }),
+  }),
+  t.Object({
     kind: t.Literal("unsupported_reference"),
     format: t.String({ minLength: 1, maxLength: 256 }),
     element: t.String({ minLength: 1, maxLength: 512 }),
