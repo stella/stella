@@ -1619,6 +1619,9 @@
         "team": "Komandas prasmes"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Arī aplūkoti ({count, number})"
+    },
     "sourcePlaceholder": "Tērzēt par {title}",
     "sourcePlaceholderAction": "Tērzēt par",
     "sources": "Avoti:",

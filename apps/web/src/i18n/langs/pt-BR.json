@@ -1619,6 +1619,9 @@
         "team": "Habilidades de IA da equipe"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Também consultadas ({count, number})"
+    },
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
     "sources": "Fontes:",

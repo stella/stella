@@ -1619,6 +1619,9 @@
         "team": "Týmové dovednosti"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Také konzultováno ({count, number})"
+    },
     "sourcePlaceholder": "Chatovat o {title}",
     "sourcePlaceholderAction": "Chatovat o",
     "sources": "Zdroje:",

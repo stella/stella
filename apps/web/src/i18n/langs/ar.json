@@ -1619,6 +1619,9 @@
         "team": "مهارات الفريق"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "تمت مراجعتها أيضًا ({count, number})"
+    },
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",
     "sources": "المصادر:",

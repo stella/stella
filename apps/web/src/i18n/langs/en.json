@@ -1619,6 +1619,9 @@
         "team": "Team skills"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Also consulted ({count, number})"
+    },
     "sourcePlaceholder": "Chat about {title}",
     "sourcePlaceholderAction": "Chat about",
     "sources": "Sources:",
