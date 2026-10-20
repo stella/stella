@@ -83,10 +83,17 @@ const fixtureEnvironment = (inherited: NodeJS.ProcessEnv) => {
   };
 };
 
+// The host-wide generated-output store is shared across checkouts on purpose;
+// each fixture gets its own so one run cannot restore another's printout.
+const generatorEnvironment = (directory: string) => ({
+  ...fixtureEnvironment(process.env),
+  STELLA_GENERATED_STORE: path.join(directory, ".cache/generated-store"),
+});
+
 const run = (directory: string, command: string[]) => {
   const result = Bun.spawnSync(command, {
     cwd: directory,
-    env: fixtureEnvironment(process.env),
+    env: generatorEnvironment(directory),
   });
   expect({
     exitCode: result.exitCode,
@@ -290,6 +297,7 @@ test("API determinism check rejects output that changes between generation passe
     );
     const result = Bun.spawnSync([process.execPath, generator, "--check"], {
       cwd: directory,
+      env: generatorEnvironment(directory),
     });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toMatch(
@@ -336,6 +344,7 @@ test("consumer generation prints once while the dedicated check validates identi
     );
     const result = Bun.spawnSync([process.execPath, generator, "--check"], {
       cwd: directory,
+      env: generatorEnvironment(directory),
     });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain(
