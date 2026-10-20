@@ -67,7 +67,7 @@ pub(crate) fn on_main_thread<T: Send + 'static>(
   let (sender, receiver) = std::sync::mpsc::sync_channel(1);
   if app
     .run_on_main_thread(move || {
-      let _ = sender.send(f());
+      crate::logging::best_effort(sender.send(f()), "main-thread result had no waiter");
     })
     .is_err()
   {

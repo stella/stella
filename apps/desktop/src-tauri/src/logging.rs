@@ -185,8 +185,13 @@ where
     }
     line.push('\n');
     if let Ok(mut writer) = self.writer.lock() {
-      let _ = writer.write_all(line.as_bytes());
-      let _ = writer.flush();
+      #[expect(
+        clippy::let_underscore_must_use,
+        reason = "the log writer has nowhere to report its own failure"
+      )]
+      let _ = writer
+        .write_all(line.as_bytes())
+        .and_then(|()| writer.flush());
     }
   }
 }
@@ -283,6 +288,14 @@ fn open_append(path: &Path) -> io::Result<File> {
     options.mode(0o600);
   }
   options.open(path)
+}
+
+/// Logs a step whose failure must not stop the flow around it, such as an
+/// event for windows that may be gone or a call on a closing window.
+pub fn best_effort<T, E: std::fmt::Display>(result: Result<T, E>, what: &'static str) {
+  if let Err(error) = result {
+    tracing::warn!(error = %error, "{what}");
+  }
 }
 
 #[cfg(test)]

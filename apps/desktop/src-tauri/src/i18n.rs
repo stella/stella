@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -228,7 +229,10 @@ fn write_language_file(path: &Path, locale: &str) -> Result<(), String> {
     uuid::Uuid::new_v4()
   ));
   if let Err(error) = fs::write(&temp_path, locale) {
-    let _ = fs::remove_file(&temp_path);
+    best_effort(
+      fs::remove_file(&temp_path),
+      "temporary language file was not removed",
+    );
     return Err(format!("saved language write failed: {error}"));
   }
   #[cfg(unix)]
@@ -238,12 +242,18 @@ fn write_language_file(path: &Path, locale: &str) -> Result<(), String> {
     if let Err(error) =
       fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600))
     {
-      let _ = fs::remove_file(&temp_path);
+      best_effort(
+        fs::remove_file(&temp_path),
+        "temporary language file was not removed",
+      );
       return Err(format!("saved language permissions failed: {error}"));
     }
   }
   if let Err(error) = fs::rename(&temp_path, path) {
-    let _ = fs::remove_file(&temp_path);
+    best_effort(
+      fs::remove_file(&temp_path),
+      "temporary language file was not removed",
+    );
     return Err(format!("saved language replace failed: {error}"));
   }
   Ok(())

@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use std::{
   sync::Mutex,
   time::{Duration, Instant},
@@ -134,8 +135,14 @@ fn position_window(app: &AppHandle, window: &WebviewWindow) {
     return;
   };
   let frame = docked_frame(work_area);
-  let _ = window.set_size(LogicalSize::new(frame.width, frame.height));
-  let _ = window.set_position(LogicalPosition::new(frame.x, frame.y));
+  best_effort(
+    window.set_size(LogicalSize::new(frame.width, frame.height)),
+    "clipboard window size was not applied",
+  );
+  best_effort(
+    window.set_position(LogicalPosition::new(frame.x, frame.y)),
+    "clipboard window position was not applied",
+  );
 }
 
 /// Runs `f` on the main thread and waits for its result; `default` when the

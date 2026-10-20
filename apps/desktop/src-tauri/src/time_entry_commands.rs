@@ -1,4 +1,5 @@
 //! The activity window's explicit confirmation boundary. Block references stay local.
+use crate::logging::best_effort;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
@@ -208,7 +209,10 @@ pub async fn time_entry_submit_batch_confirmed(
         .cancel_pending_batch(day, &batch.idempotency_key)
         .map_err(|_| SubmitError::Uncertain)?;
       drop(manager);
-      let _ = app.emit(activity::CHANGED_EVENT, ());
+      best_effort(
+        app.emit(activity::CHANGED_EVENT, ()),
+        "activity change was not announced",
+      );
       return Err(SubmitError::Rejected);
     }
     Err(_) => return Err(SubmitError::Uncertain),
@@ -236,7 +240,10 @@ pub async fn time_entry_submit_batch_confirmed(
       .map_err(|_| SubmitError::Uncertain)?;
     manager.finish_batch(day, markers).is_ok()
   };
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  best_effort(
+    app.emit(activity::CHANGED_EVENT, ()),
+    "activity change was not announced",
+  );
   Ok(SubmitResult {
     entries: created.entries,
     marker_saved,
@@ -260,7 +267,10 @@ pub async fn time_entry_discard_pending_batch_confirmed(
   manager.require_caller(&caller)?;
   manager.cancel_pending_batch(date, &idempotency_key)?;
   drop(manager);
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  best_effort(
+    app.emit(activity::CHANGED_EVENT, ()),
+    "activity change was not announced",
+  );
   Ok(())
 }
 

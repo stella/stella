@@ -12,6 +12,7 @@
 //! length of one flow: it is never persisted, never logged, and never reaches
 //! the webview.
 
+use crate::logging::best_effort;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -273,8 +274,9 @@ fn cancel_dialog() {
     .lock()
     .unwrap_or_else(|e| e.into_inner())
     .take()
+    && bridge.choice.send(DialogChoice::Cancel).is_err()
   {
-    let _ = bridge.choice.send(DialogChoice::Cancel);
+    tracing::debug!("PDF signing dialog choice had no waiter");
   }
 }
 
@@ -626,8 +628,10 @@ pub async fn redeem_and_sign(
         | DialogState::Ready => REASON_USER_CANCELLED,
       };
       session.cancel(reason).await;
-      let _ = outcome_sender.send(PdfSignResult::Cancelled);
-      let _ = window.close();
+      if outcome_sender.send(PdfSignResult::Cancelled).is_err() {
+        tracing::debug!("PDF signing outcome had no waiter");
+      }
+      best_effort(window.close(), "PDF signing window could not be closed");
       return Ok(());
     }
   };
@@ -637,10 +641,15 @@ pub async fn redeem_and_sign(
     .find(|identity| identity.id == identity_id)
   else {
     session.cancel(REASON_USER_CANCELLED).await;
-    let _ = outcome_sender.send(PdfSignResult::failed(
-      SigningErrorCode::KeyNotFound.as_str(),
-      None,
-    ));
+    if outcome_sender
+      .send(PdfSignResult::failed(
+        SigningErrorCode::KeyNotFound.as_str(),
+        None,
+      ))
+      .is_err()
+    {
+      tracing::debug!("PDF signing outcome had no waiter");
+    }
     // The dialog already shows the failure it was sent.
     return Err(crate::handoff::Stop::Presented(
       "stella desktop no longer has the chosen certificate.".into(),
@@ -651,8 +660,10 @@ pub async fn redeem_and_sign(
     crate::deep_link::recheck_handoff_account(&app_handle, &account).await
   {
     session.cancel(REASON_USER_CANCELLED).await;
-    let _ = outcome_sender.send(PdfSignResult::Cancelled);
-    let _ = window.close();
+    if outcome_sender.send(PdfSignResult::Cancelled).is_err() {
+      tracing::debug!("PDF signing outcome had no waiter");
+    }
+    best_effort(window.close(), "PDF signing window could not be closed");
     return Err(error);
   }
 
@@ -669,12 +680,17 @@ pub async fn redeem_and_sign(
   loop {
     let error = match finalize(&session, &signature).await {
       Ok(version_number) => {
-        let _ = outcome_sender.send(PdfSignResult::Signed { version_number });
+        if outcome_sender
+          .send(PdfSignResult::Signed { version_number })
+          .is_err()
+        {
+          tracing::debug!("PDF signing outcome had no waiter");
+        }
         // The dialog is the receipt: it stays up long enough to be read,
         // then Rust takes it down. A webview cannot close a window it did
         // not open.
         tokio::time::sleep(SIGNED_DIALOG_LINGER).await;
-        let _ = window.close();
+        best_effort(window.close(), "PDF signing window could not be closed");
         return Ok(());
       }
       Err(error) => error,
@@ -710,7 +726,12 @@ pub async fn redeem_and_sign(
       return Ok(());
     }
     tracing::warn!(error = %error.detail, attempt, "PDF signing will be retried");
-    let _ = outcome_sender.send(PdfSignResult::failed(&error.code, Some(retry_window)));
+    if outcome_sender
+      .send(PdfSignResult::failed(&error.code, Some(retry_window)))
+      .is_err()
+    {
+      tracing::debug!("PDF signing outcome had no waiter");
+    }
     outcome_sender = next_outcome_sender;
 
     match tokio::time::timeout(retry_window, choice_receiver).await {
@@ -718,8 +739,10 @@ pub async fn redeem_and_sign(
       Ok(_) => {
         cancel_dialog();
         session.cancel(REASON_USER_CANCELLED).await;
-        let _ = outcome_sender.send(PdfSignResult::Cancelled);
-        let _ = window.close();
+        if outcome_sender.send(PdfSignResult::Cancelled).is_err() {
+          tracing::debug!("PDF signing outcome had no waiter");
+        }
+        best_effort(window.close(), "PDF signing window could not be closed");
         return Ok(());
       }
       // The window ran out: the dialog, told how long it had, already says
@@ -745,7 +768,12 @@ async fn report_failure(
     session.cancel(REASON_USER_CANCELLED).await;
   }
   tracing::warn!(code = %error.code, error = %error.detail, "PDF signing failed");
-  let _ = outcome_sender.send(PdfSignResult::failed(&error.code, None));
+  if outcome_sender
+    .send(PdfSignResult::failed(&error.code, None))
+    .is_err()
+  {
+    tracing::debug!("PDF signing outcome had no waiter");
+  }
 }
 
 struct SigningSession {
@@ -1114,7 +1142,7 @@ fn open_dialog(
   let prompt_owner = PromptOwner::new(native_handle(&window), {
     let window = window.clone();
     move || {
-      let _ = window.close();
+      best_effort(window.close(), "PDF signing window could not be closed");
     }
   });
   let events_owner = prompt_owner.clone();
@@ -1134,7 +1162,10 @@ fn open_dialog(
     }
     _ => {}
   });
-  let _ = window.set_focus();
+  best_effort(
+    window.set_focus(),
+    "PDF signing window could not be focused",
+  );
   Ok((window, prompt_owner))
 }
 
@@ -1146,7 +1177,7 @@ fn encode_json<T: serde::Serialize>(value: &T) -> Result<String, String> {
 
 /// Percent-encode a string for use in a URL hash parameter.
 fn percent_encode(value: &str) -> String {
-  use std::fmt::Write;
+  const HEX: &[u8; 16] = b"0123456789ABCDEF";
 
   let mut encoded = String::with_capacity(value.len());
   for byte in value.bytes() {
@@ -1155,7 +1186,9 @@ fn percent_encode(value: &str) -> String {
         encoded.push(byte as char);
       }
       _ => {
-        let _ = write!(encoded, "%{byte:02X}");
+        encoded.push('%');
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 0x0F)]));
       }
     }
   }
@@ -1165,6 +1198,16 @@ fn percent_encode(value: &str) -> String {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn percent_encoding_spells_every_other_byte_as_uppercase_hex() {
+    assert_eq!(percent_encode("Az09-._~"), "Az09-._~");
+    for character in ['\0', ' ', '%', '/', '\u{7f}', 'é', '€', '😀'] {
+      let text = character.to_string();
+      let expected: String = text.bytes().map(|byte| format!("%{byte:02X}")).collect();
+      assert_eq!(percent_encode(&text), expected);
+    }
+  }
 
   #[test]
   fn a_release_build_does_not_let_a_local_api_ask_for_a_signature() {
