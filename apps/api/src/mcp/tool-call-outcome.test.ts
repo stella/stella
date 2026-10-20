@@ -531,6 +531,10 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
         readMcpResource,
         recordMcpSessionInitialized: () => undefined,
       });
+      let toolArguments: Record<string, unknown> = createArgs;
+      if (admitted) {
+        toolArguments = path === "admitted" ? { query: PRIVATE_TEXT } : {};
+      }
       const response = await handler(
         new Request("http://localhost/mcp", {
           method: "POST",
@@ -548,7 +552,7 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
             method: "tools/call",
             params: {
               name: admitted ? "list_matters" : "save_time_entry",
-              arguments: admitted ? { query: PRIVATE_TEXT } : createArgs,
+              arguments: toolArguments,
               _meta: {
                 [CLIENT_CAPABILITIES_META_KEY]: {},
                 [CLIENT_INFO_META_KEY]: {

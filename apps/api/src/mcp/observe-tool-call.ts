@@ -51,11 +51,7 @@ export const observeMcpToolCall = async ({
   run,
 }: ObserveMcpToolCallOptions): Promise<CallToolResult> => {
   const active = activeCall.getStore();
-  if (
-    active?.context === context &&
-    active.mode === mode &&
-    active.toolName === toolName
-  ) {
+  if (active?.mode === mode && active.toolName === toolName) {
     return await run();
   }
   return await activeCall.run({ context, mode, toolName }, async () => {

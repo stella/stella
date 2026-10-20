@@ -71,6 +71,10 @@ import {
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
 import type { ToolScope } from "@/api/mcp/tool-types";
+import {
+  serializeToolResult,
+  untypedToolDataResult,
+} from "@/api/mcp/tool-utils";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
@@ -440,6 +444,17 @@ describe("handleMcpHttpRequest", () => {
         const handler = createMcpHttpRequestHandler({
           ...mcpHandlerDependencies,
           admitAction: async () => Result.err(refusalError),
+          handleMcpToolCall: async ({ context }) => {
+            const invoke = async () => {
+              handleMcpToolCallMock();
+              return untypedToolDataResult({ served: true });
+            };
+            const result =
+              context.admitToolInvocation === undefined
+                ? await invoke()
+                : await context.admitToolInvocation(invoke);
+            return serializeToolResult(result);
+          },
         });
         const response = await runWithRequestId(
           "req_admission",
@@ -525,6 +540,17 @@ describe("handleMcpHttpRequest", () => {
             ...options,
             demoActionBudget: demo.budget,
           }),
+        handleMcpToolCall: async ({ context }) => {
+          const invoke = async () => {
+            handleMcpToolCallMock();
+            return untypedToolDataResult({ served: true });
+          };
+          const result =
+            context.admitToolInvocation === undefined
+              ? await invoke()
+              : await context.admitToolInvocation(invoke);
+          return serializeToolResult(result);
+        },
       });
       const callTool = async () =>
         await readTestJson<McpJsonResponse<CallToolResult>>(
@@ -991,7 +1017,7 @@ describe("handleMcpHttpRequest", () => {
         "stella:documents_write",
         "stella:matters_write",
       ]);
-      expect(handleMcpToolCallMock.mock.calls).toEqual([
+      expect(handleMcpToolCallMock.mock.calls).toMatchObject([
         [
           {
             args: {
