@@ -21,12 +21,19 @@ import {
   WORKSPACE_TYPECHECK_CACHE_INPUTS,
   CommandFailedError,
   codeCheckConcurrency,
+  configuredCodeCheckConcurrency,
   discoverAffectedWorkspaces,
   prioritizeWebLint,
   DEPENDENCY_CACHE_INPUTS,
   failureExitCode,
   formatCheckFailure,
   LINT_ONLY_CACHE_INPUTS,
+  lintAllTrace,
+  matchedLintAllInputs,
+  cgroupMemoryLimitFiles,
+  cgroupMounts,
+  memoryLimitBytes,
+  separateApiLintFromTypecheck,
   executeCheckCommands,
   planCheck,
   planningCommandTimeout,
@@ -42,6 +49,11 @@ import {
 } from "./code-check-affected";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
+import { rootScriptLintPaths } from "./root-script-lint";
+
+// Subprocess runs that assert on the plan pin a large machine; the plan
+// otherwise depends on the host's memory.
+const LARGE_MACHINE = { CODE_CHECK_MEMORY_BYTES: String(64 * 1024 ** 3) };
 
 const WORKSPACES = new Set([
   "apps/api",
@@ -87,6 +99,12 @@ describe("changed-file result boundary lint", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  test("names the matched shared input in the lint-all trace", () => {
+    expect(lintAllTrace(["scripts/design-lint-baseline.json"])).toBe(
+      "code-check: lint all shared inputs: $TURBO_ROOT$/scripts/design-lint-baseline.json\n",
+    );
   });
 
   test("reuses the affected scope's merge base when measuring candidate debt", () => {
@@ -176,14 +194,13 @@ describe("changed-file result boundary lint", () => {
     ]);
   });
 
-  test("skips measured debt, boundaries, generated output, tests, and unrelated source", () => {
+  test("skips measured debt, boundaries, tests, and unrelated source", () => {
     expect(
       resultBoundaryLintCommand(
         [
           "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
           "apps/api/src/lib/document-processing-queue.ts",
           "apps/api/src/lib/document-processing-queue.test.ts",
-          "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
           "packages/start-runtime/src/runtime.ts",
           "packages/ssr-testkit/src/assert-document.ts",
           "apps/web/src/server.ts",
@@ -281,7 +298,7 @@ describe("affected code-check planning", () => {
       "run",
       "lint",
       "typecheck",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -295,7 +312,7 @@ describe("affected code-check planning", () => {
       "turbo",
       "run",
       "typecheck:repo",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -320,6 +337,45 @@ describe("affected code-check planning", () => {
     expect(oxc).toContain("--type-check");
     expect(oxc?.at(-1)).toBe("scripts/guard.ts");
   });
+
+  test("runs the real type-aware lint only for changed root scripts", () => {
+    const fixture = "scripts/code-check-affected-type-aware.fixture.ts";
+    const unchanged = "scripts/generate-cloud-setup.test.ts";
+    writeFileSync(
+      fixture,
+      [
+        "const unsafe: unknown = {};\n",
+        "console.log(`value: $",
+        "{unsafe}`);\n",
+      ].join(""),
+    );
+    try {
+      expect(rootScriptLintPaths([unchanged, fixture])).toEqual([
+        fixture,
+        unchanged,
+      ]);
+      const planned = plan([fixture], []);
+      if (planned.type !== "scoped") {
+        throw new Error("Expected a scoped code-check plan");
+      }
+      const command = scopedCommands(planned).find((candidate) =>
+        candidate.includes("oxlint"),
+      );
+      expect(command).toBeDefined();
+      expect(command).toContain(fixture);
+      expect(command).not.toContain(unchanged);
+      const result = Bun.spawnSync(command ?? [], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode).not.toBe(0);
+      expect(
+        `${result.stdout.toString()}${result.stderr.toString()}`,
+      ).toContain("Invalid type used in template literal expression");
+    } finally {
+      rmSync(fixture, { force: true });
+    }
+  }, 30_000);
 
   test("checks configured adapter paths without trying to lint a deleted source", () => {
     expect(plan(["packages/ui/src/removed.ts"], ["packages/ui"], [])).toEqual({
@@ -425,6 +481,51 @@ describe("affected code-check planning", () => {
   });
 
   test.each([
+    "apps/api/drizzle/20261016000000_example/migration.sql",
+    "apps/api/drizzle/20261016000000_example/cutover.sql",
+    "apps/api/src/lib/db/status-tables.gen.ts",
+  ])("keeps workspace-local lint input %s scoped to the API", (changedPath) => {
+    const planned = plan([changedPath], ["apps/api"]);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({
+      type: "targets",
+      targets: ["apps/api"],
+    });
+  });
+
+  test("a status-table change relints the plugin fixtures that read it", () => {
+    const planned = plan(
+      ["apps/api/src/lib/db/status-tables.gen.ts"],
+      ["apps/api"],
+    );
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.rootChecks).toContain("plugin-fixtures");
+  });
+
+  test.each([
+    "scripts/design-lint-baseline.json",
+    "scripts/ownership/status-transition.ts",
+  ])("retains cross-workspace lint input %s", (changedPath) => {
+    const planned = plan([changedPath], []);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(matchedLintAllInputs([changedPath])).toContain(
+      changedPath === "scripts/design-lint-baseline.json"
+        ? "$TURBO_ROOT$/scripts/design-lint-baseline.json"
+        : "$TURBO_ROOT$/scripts/ownership/*.ts",
+    );
+  });
+
+  test.each([
     ["scripts/check-oxlint-plugin-registry.ts", "plugin-registry"],
     ["scripts/lint-oxlint-fixtures.sh", "plugin-fixtures"],
     ["scripts/oxlint-safe-fixers.test.ts", "plugin-fixtures"],
@@ -480,7 +581,7 @@ describe("affected code-check planning", () => {
       "turbo",
       "run",
       "lint",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -492,7 +593,7 @@ describe("affected code-check planning", () => {
       "turbo",
       "run",
       "typecheck",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -532,7 +633,7 @@ describe("affected code-check planning", () => {
       "run",
       "lint",
       "typecheck",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -715,6 +816,7 @@ exec "$CHECK_REAL_BUN" "$@"
         {
           env: {
             ...process.env,
+            ...LARGE_MACHINE,
             PATH: `${directory}:${process.env["PATH"] ?? ""}`,
             CHECK_REAL_BUN: process.execPath,
           },
@@ -759,7 +861,13 @@ process.exit(childExitStatus(result));
       }
       const result = Bun.spawnSync(
         ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
-        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
+        {
+          env: {
+            ...process.env,
+            ...LARGE_MACHINE,
+            PATH: `${directory}:${environmentPath}`,
+          },
+        },
       );
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr.toString()).toContain(
@@ -791,13 +899,25 @@ process.exit(childExitStatus(result));
       }
       const reference = Bun.spawnSync(
         ["git", "rev-parse", "--verify", "--quiet", "origin/main^{commit}"],
-        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
+        {
+          env: {
+            ...process.env,
+            ...LARGE_MACHINE,
+            PATH: `${directory}:${environmentPath}`,
+          },
+        },
       );
       expect(reference.exitCode).toBe(1);
       expect(Boolean(reference.signalCode)).toBe(false);
       const result = Bun.spawnSync(
         ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
-        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
+        {
+          env: {
+            ...process.env,
+            ...LARGE_MACHINE,
+            PATH: `${directory}:${environmentPath}`,
+          },
+        },
       );
       expect(result.exitCode, result.stderr.toString()).toBe(0);
       expect(result.stderr.toString()).not.toContain("Panic");
@@ -868,7 +988,7 @@ process.exit(childExitStatus(result));
       "run",
       "lint",
       "typecheck",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -1088,14 +1208,38 @@ const workspaceManifests = (): WorkspaceManifest[] =>
   );
 
 describe("parallel code-quality legs", () => {
-  test("quality steps use the job timeout as their only outer deadline", () => {
+  // A healthy run may take its whole warning budget, so a step never stops
+  // before it; a stalled run must not hold the job, and with it a merge group,
+  // until the job's own timeout.
+  test("quality steps stop between their warning budget and their job timeout", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
-    const steps = workflow
-      .split(/\n {6}- name: /u)
-      .filter((step) => /^Code quality(?: \((?:web|rest)\))?\n/u.test(step));
-    expect(steps).toHaveLength(3);
-    for (const step of steps) {
-      expect(step).not.toMatch(/^ {8}timeout-minutes:/mu);
+    const minutes = (text: string, indent: number) =>
+      Number(
+        new RegExp(`^ {${indent}}timeout-minutes: (\\d+)$`, "mu").exec(
+          text,
+        )?.[1] ?? Number.NaN,
+      );
+    for (const [job, names] of [
+      ["code-quality-api", ["Code quality"]],
+      ["code-quality-web-rest", ["Code quality (web)", "Code quality (rest)"]],
+    ] as const) {
+      const block =
+        workflow.split(new RegExp(`\\n  ${job}:\\n`, "u")).at(1) ??
+        panic(`Missing job ${job}`);
+      const jobBlock = block.split(/\n {2}[\w-]+:\n/u).at(0) ?? block;
+      const jobMinutes = minutes(jobBlock, 4);
+      for (const name of names) {
+        const step =
+          jobBlock
+            .split(/\n {6}- name: /u)
+            .find((candidate) => candidate.startsWith(`${name}\n`)) ??
+          panic(`Missing step ${name}`);
+        const stepMinutes = minutes(step, 8);
+        expect(stepMinutes * 60_000, name).toBeGreaterThanOrEqual(
+          CODE_CHECK_EXECUTION_BUDGET_MS,
+        );
+        expect(stepMinutes, name).toBeLessThan(jobMinutes);
+      }
     }
   });
 
@@ -1141,6 +1285,251 @@ describe("parallel code-quality legs", () => {
     }
     expect(codeCheckConcurrency(8 * 1024 ** 3)).toBe(2);
     expect(codeCheckConcurrency(12 * 1024 ** 3)).toBe(3);
+  });
+
+  test("a container memory limit below the machine's is the limit the checks get", () => {
+    const GiB = 1024 ** 3;
+    const reads = (files: Record<string, string>) => (file: string) =>
+      files[file];
+    // A cloud sandbox: 64 GiB host, 16 GiB cgroup v2 limit.
+    expect(
+      memoryLimitBytes({
+        total: 64 * GiB,
+        read: reads({ "/sys/fs/cgroup/memory.max": `${16 * GiB}\n` }),
+        requested: "",
+      }),
+    ).toBe(16 * GiB);
+    // cgroup v1 with no effective limit reports a huge number.
+    expect(
+      memoryLimitBytes({
+        total: 32 * GiB,
+        requested: "",
+        read: reads({
+          "/sys/fs/cgroup/memory.max": "max\n",
+          "/sys/fs/cgroup/memory/memory.limit_in_bytes": "9223372036854771712",
+        }),
+      }),
+    ).toBe(32 * GiB);
+    // No cgroup files (macOS) or an unreadable file keep the machine's.
+    expect(
+      memoryLimitBytes({
+        total: 48 * GiB,
+        read: () => undefined,
+        requested: "",
+      }),
+    ).toBe(48 * GiB);
+    expect(
+      memoryLimitBytes({
+        total: 48 * GiB,
+        requested: "",
+        read: () => {
+          throw new Error("EACCES");
+        },
+      }),
+    ).toBe(48 * GiB);
+  });
+
+  test("a 16 GiB machine plans the full check with typecheck before lint", () => {
+    const result = Bun.spawnSync(
+      ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
+      {
+        env: {
+          ...process.env,
+          CODE_CHECK_MEMORY_BYTES: String(16 * 1024 ** 3),
+        },
+      },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    const output = result.stdout.toString();
+    expect(output).not.toContain("turbo run lint typecheck");
+    const typecheckAt = output.indexOf("turbo run typecheck --concurrency");
+    const lintAt = output.indexOf("turbo run lint --concurrency");
+    expect(typecheckAt).toBeGreaterThan(-1);
+    expect(lintAt).toBeGreaterThan(typecheckAt);
+  }, 30_000);
+
+  test("a nested cgroup limit counts although the mount root reports max", () => {
+    const GiB = 1024 ** 3;
+    const files: Record<string, string> = {
+      "/proc/self/cgroup": "0::/user.slice/ci.scope/job\n",
+      "/sys/fs/cgroup/memory.max": "max\n",
+      "/sys/fs/cgroup/user.slice/memory.max": "max\n",
+      "/sys/fs/cgroup/user.slice/ci.scope/memory.max": `${12 * GiB}\n`,
+      "/sys/fs/cgroup/user.slice/ci.scope/job/memory.max": "max\n",
+    };
+    expect(
+      memoryLimitBytes({
+        total: 64 * GiB,
+        read: (file) => files[file],
+        requested: "",
+      }),
+    ).toBe(12 * GiB);
+    expect(cgroupMemoryLimitFiles("4:cpu,memory:/docker/abc\n")).toEqual([
+      "/sys/fs/cgroup/memory/docker/abc/memory.limit_in_bytes",
+      "/sys/fs/cgroup/memory/docker/memory.limit_in_bytes",
+      "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+      "/sys/fs/cgroup/memory.max",
+    ]);
+  });
+
+  // A v1 memory controller can be mounted anywhere, combined with others,
+  // and a container sees its own cgroup as the mount root.
+  test("a cgroup v1 limit is found through the actual memory mount", () => {
+    const GiB = 1024 ** 3;
+    const mountinfo = [
+      "30 25 0:26 / /sys/fs/cgroup/cpu,cpuacct rw - cgroup cgroup rw,cpu,cpuacct",
+      "31 25 0:27 /docker/abc /mnt/cg/cpu,memory rw,nosuid - cgroup cgroup rw,cpu,memory",
+    ].join("\n");
+    expect(cgroupMounts(mountinfo)).toEqual([
+      { version: 1, root: "/docker/abc", mountpoint: "/mnt/cg/cpu,memory" },
+    ]);
+    const files: Record<string, string> = {
+      "/proc/self/cgroup": "4:cpu,memory:/docker/abc/job\n",
+      "/proc/self/mountinfo": mountinfo,
+      "/mnt/cg/cpu,memory/job/memory.limit_in_bytes": "9223372036854771712\n",
+      "/mnt/cg/cpu,memory/memory.limit_in_bytes": `${10 * GiB}\n`,
+    };
+    expect(
+      memoryLimitBytes({
+        total: 64 * GiB,
+        read: (file) => files[file],
+        requested: "",
+      }),
+    ).toBe(10 * GiB);
+    // The conventional path alone would have missed it.
+    expect(
+      memoryLimitBytes({
+        total: 64 * GiB,
+        read: (file) => (file === "/proc/self/mountinfo" ? "" : files[file]),
+        requested: "",
+      }),
+    ).toBe(64 * GiB);
+  });
+
+  // A cgroup namespace reports `/` while the mount keeps the host root.
+  test("a namespaced cgroup v1 limit is read at the mount root", () => {
+    const GiB = 1024 ** 3;
+    const files: Record<string, string> = {
+      "/proc/self/cgroup": "4:cpu,memory:/\n",
+      "/proc/self/mountinfo":
+        "31 25 0:27 /docker/abc /mnt/cg/cpu,memory rw,nosuid - cgroup cgroup rw,cpu,memory",
+      "/mnt/cg/cpu,memory/memory.limit_in_bytes": `${16 * GiB}\n`,
+    };
+    expect(
+      memoryLimitBytes({
+        total: 64 * GiB,
+        read: (file) => files[file],
+        requested: "",
+      }),
+    ).toBe(16 * GiB);
+  });
+
+  test("a namespaced child cgroup limit is read below the mount root", () => {
+    const GiB = 1024 ** 3;
+    const files: Record<string, string> = {
+      "/proc/self/cgroup": "4:cpu,memory:/job\n",
+      "/proc/self/mountinfo":
+        "31 25 0:27 /docker/abc /mnt/cg/cpu,memory rw,nosuid - cgroup cgroup rw,cpu,memory",
+      "/mnt/cg/cpu,memory/memory.limit_in_bytes": "9223372036854771712\n",
+      "/mnt/cg/cpu,memory/job/memory.limit_in_bytes": `${16 * GiB}\n`,
+    };
+    expect(
+      memoryLimitBytes({
+        total: 64 * GiB,
+        read: (file) => files[file],
+        requested: "",
+      }),
+    ).toBe(16 * GiB);
+  });
+
+  test("an explicit memory size replaces detection", () => {
+    expect(
+      memoryLimitBytes({ total: 8, read: () => "4", requested: "64" }),
+    ).toBe(64);
+    for (const requested of ["0", "-1", "lots", ""]) {
+      expect(memoryLimitBytes({ total: 8, read: () => "4", requested })).toBe(
+        4,
+      );
+    }
+  });
+
+  test("below 24 GiB the API typecheck and type-aware API lint never run together", () => {
+    const GiB = 1024 ** 3;
+    const turbo = (...rest: string[]) => [
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "lint",
+      "typecheck",
+      "--concurrency=3",
+      ...rest,
+    ];
+    const typecheckOnly = (...rest: string[]) => [
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "typecheck",
+      "--concurrency=3",
+      ...rest,
+    ];
+    const lintOnly = (...rest: string[]) => [
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "lint",
+      "--concurrency=3",
+      ...rest,
+    ];
+    const css = ["bun", "run", "lint:css"];
+    for (const scope of [
+      [],
+      ["--filter=./apps/api", "--filter=./packages/time"],
+    ]) {
+      expect(
+        separateApiLintFromTypecheck([css, turbo(...scope)], 16 * GiB),
+      ).toEqual([css, typecheckOnly(...scope), lintOnly(...scope)]);
+    }
+    // Enough memory, or no API in the command: lint and typecheck overlap.
+    expect(separateApiLintFromTypecheck([turbo()], 24 * GiB)).toEqual([
+      turbo(),
+    ]);
+    for (const scope of [["--filter=./apps/web"], ["--filter=!./apps/api"]]) {
+      expect(separateApiLintFromTypecheck([turbo(...scope)], 16 * GiB)).toEqual(
+        [turbo(...scope)],
+      );
+    }
+    // A command with only one of the two is already separate.
+    expect(separateApiLintFromTypecheck([lintOnly()], 16 * GiB)).toEqual([
+      lintOnly(),
+    ]);
+  });
+
+  test("a requested concurrency lowers the task count; invalid requests keep the memory default", () => {
+    expect(codeCheckConcurrency(12 * 1024 ** 3, "1")).toBe(1);
+    expect(codeCheckConcurrency(8 * 1024 ** 3, "100")).toBe(2);
+    for (const requested of ["0", "-1", "1.5", "many", ""]) {
+      expect(codeCheckConcurrency(12 * 1024 ** 3, requested)).toBe(3);
+    }
+  });
+
+  test("only the configured concurrency reads CODE_CHECK_CONCURRENCY", () => {
+    const probe = Bun.spawnSync(
+      [
+        "bun",
+        "-e",
+        `const m = await import(${JSON.stringify(path.join(import.meta.dirname, "code-check-affected.ts"))});
+console.log(m.configuredCodeCheckConcurrency(), m.codeCheckConcurrency(12 * 1024 ** 3));`,
+      ],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, CODE_CHECK_CONCURRENCY: "1" },
+      },
+    );
+    expect(probe.stdout.toString().trim()).toBe("1 3");
   });
 
   test("runs result consumption with the same plan scope and owner in every leg", () => {
@@ -1570,6 +1959,7 @@ esac
           cwd: path.resolve(import.meta.dir, ".."),
           env: {
             ...process.env,
+            ...LARGE_MACHINE,
             PATH: `${directory}:${process.env["PATH"] ?? ""}`,
             CHECK_COMMAND_LOG: log,
             CHECK_REAL_GIT: realGit,
@@ -1615,7 +2005,7 @@ const TURBO_LINT_TYPECHECK = [
   "run",
   "lint",
   "typecheck",
-  `--concurrency=${codeCheckConcurrency()}`,
+  `--concurrency=${configuredCodeCheckConcurrency()}`,
 ];
 
 const failure = (command: readonly string[], lines: readonly string[]) =>

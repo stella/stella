@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { POSTGRES_TEST_SHARD_IDS } from "../apps/api/scripts/postgres-test-shards";
+import {
+  POSTGRES_CERTIFIABLE_SHARD_COUNTS,
+  POSTGRES_TEST_SHARD_IDS,
+} from "../apps/api/scripts/postgres-test-shards";
 import {
   formatPostgresSelectorMisses,
   fullPostgresRunSha,
@@ -177,4 +180,29 @@ test("legacy service jobs and repeated shards cannot certify full Postgres cover
       POSTGRES_TEST_SHARD_IDS.map(() => repeatedShard),
     ),
   ).toBeFalse();
+});
+
+test("historical runs are certified by the shard topology they ran with", () => {
+  const steps = [
+    { name: "Run Postgres-gated API suites", conclusion: "success" },
+  ];
+  const run = (shards: readonly number[], failed?: number) =>
+    shards.map((shard) => ({
+      name: `postgres-service-suites (${shard})`,
+      conclusion: shard === failed ? "failure" : "success",
+      steps,
+    }));
+  for (const count of POSTGRES_CERTIFIABLE_SHARD_COUNTS) {
+    const shards = Array.from({ length: count }, (_, index) => index + 1);
+    expect(hasSuccessfulPostgresShards(run(shards))).toBeTrue();
+    for (const shard of shards) {
+      expect(hasSuccessfulPostgresShards(run(shards, shard))).toBeFalse();
+    }
+  }
+  // A failed third shard of a three-shard run never passes as a two-shard run.
+  expect(hasSuccessfulPostgresShards(run([1, 2, 3], 3))).toBeFalse();
+  expect(hasSuccessfulPostgresShards(run([1]))).toBeFalse();
+  expect(hasSuccessfulPostgresShards(run([1, 3]))).toBeFalse();
+  expect(hasSuccessfulPostgresShards(run([2, 3]))).toBeFalse();
+  expect(hasSuccessfulPostgresShards(run([1, 2, 3, 4]))).toBeFalse();
 });

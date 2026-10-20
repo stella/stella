@@ -128,7 +128,7 @@ describe("list verification route admission", () => {
     expect(handlers).toHaveLength(
       routeFor({ verificationEnabled: false }).routes.length,
     );
-    expect(handlers).toHaveLength(8);
+    expect(handlers).toHaveLength(9);
   });
 
   test.each([

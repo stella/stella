@@ -1,12 +1,13 @@
-import { sql } from "drizzle-orm";
+import { panic } from "better-result";
+import { sql, type SQL } from "drizzle-orm";
 
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
+import { caseLawSearchDocuments } from "@/api/db/schema";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import type { LegalSearchEngine } from "@/api/lib/legal-search/types";
 
 /**
- * The public gate for the raw pg-fts queries, which all join
- * `case_law_decisions d`: the source may be redistributed and the row is not
- * listing-only.
+ * The source gate for raw pg-fts queries. The base decision comes from the
+ * published view, which applies its own visibility condition.
  *
  * Both halves are query-time as well as index-time. The projection is gated
  * when it is written, so this keeps out rows indexed before a source turned
@@ -18,7 +19,6 @@ export const publicCaseLawDecisionJoin = sql`
   JOIN case_law_sources
     ON case_law_sources.id = d.source_id
    AND ${redistributableCaseLawSource}
-   AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
 `;
 
 export const bodyPreviewJoin = sql`
@@ -38,3 +38,22 @@ export const bodyPreviewJoin = sql`
       AND nullif(section_item.value ->> 'text', '') IS NOT NULL
   ) body_preview ON true
 `;
+
+/** SQL serving membership for a decision already admitted by the published view. */
+export const servedCaseLawSearchDocumentFor = (
+  decisionAlias: string,
+  engine: LegalSearchEngine,
+): SQL | null => {
+  switch (engine) {
+    case "pg-fts":
+      return sql`EXISTS (
+        SELECT 1 FROM ${caseLawSearchDocuments}
+        WHERE ${caseLawSearchDocuments.decisionId} = ${sql.identifier(decisionAlias)}.id
+      )`;
+    case "corpus-index":
+      return null;
+    default:
+      engine satisfies never;
+      return panic("Unhandled serving provider");
+  }
+};

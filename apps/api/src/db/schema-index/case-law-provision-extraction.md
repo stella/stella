@@ -83,29 +83,30 @@ case_law_provision_extractions.jurisdiction                 varchar      not nul
 case_law_provision_extractions.desired_input_digest         bytea        not null          case-law-provision-extraction.ts:300
 case_law_provision_extractions.lane                         text         not null          case-law-provision-extraction.ts:301
 case_law_provision_extractions.due_at                       timestamptz  null              case-law-provision-extraction.ts:302
-case_law_provision_extractions.enqueue_reason               text         null              case-law-provision-extraction.ts:303
-case_law_provision_extractions.work_status                  text         default,not null  case-law-provision-extraction.ts:306
-case_law_provision_extractions.retry_not_before             timestamptz  null              case-law-provision-extraction.ts:310
-case_law_provision_extractions.failure_attempts             integer      default,not null  case-law-provision-extraction.ts:311
-case_law_provision_extractions.transient_attempts           integer      default,not null  case-law-provision-extraction.ts:312
-case_law_provision_extractions.last_failure_kind            varchar      null              case-law-provision-extraction.ts:313
-case_law_provision_extractions.last_failure_message         varchar      null              case-law-provision-extraction.ts:314
-case_law_provision_extractions.blocked_input_digest         bytea        null              case-law-provision-extraction.ts:315
-case_law_provision_extractions.lease_token                  uuid         null              case-law-provision-extraction.ts:316
-case_law_provision_extractions.lease_expires_at             timestamptz  null              case-law-provision-extraction.ts:317
-case_law_provision_extractions.generation                   bigint       default,not null  case-law-provision-extraction.ts:318
-case_law_provision_extractions.outcome                      text         null              case-law-provision-extraction.ts:319
-case_law_provision_extractions.terminal_reason              text         null              case-law-provision-extraction.ts:320
-case_law_provision_extractions.published_input_digest       bytea        null              case-law-provision-extraction.ts:323
-case_law_provision_extractions.published_jurisdiction       varchar      null              case-law-provision-extraction.ts:324
-case_law_provision_extractions.published_revision           integer      null              case-law-provision-extraction.ts:325
-case_law_provision_extractions.published_projection_digest  bytea        null              case-law-provision-extraction.ts:326
-case_law_provision_extractions.payload_class                text         null              case-law-provision-extraction.ts:327
-case_law_provision_extractions.payload_class_input_digest   bytea        null              case-law-provision-extraction.ts:330
-case_law_provision_extractions.row_count                    integer      null              case-law-provision-extraction.ts:331
-case_law_provision_extractions.rows_digest                  varchar      null              case-law-provision-extraction.ts:332
-case_law_provision_extractions.unresolved_counts            jsonb        null              case-law-provision-extraction.ts:333
-case_law_provision_extractions.published_at                 timestamptz  null              case-law-provision-extraction.ts:335
-case_law_provision_extractions.created_at                   timestamptz  default,not null  case-law-provision-extraction.ts:336
-case_law_provision_extractions.updated_at                   timestamptz  default,not null  case-law-provision-extraction.ts:337
+case_law_provision_extractions.pending_since                timestamptz  null              case-law-provision-extraction.ts:303
+case_law_provision_extractions.enqueue_reason               text         null              case-law-provision-extraction.ts:304
+case_law_provision_extractions.work_status                  text         default,not null  case-law-provision-extraction.ts:307
+case_law_provision_extractions.retry_not_before             timestamptz  null              case-law-provision-extraction.ts:311
+case_law_provision_extractions.failure_attempts             integer      default,not null  case-law-provision-extraction.ts:312
+case_law_provision_extractions.transient_attempts           integer      default,not null  case-law-provision-extraction.ts:313
+case_law_provision_extractions.last_failure_kind            varchar      null              case-law-provision-extraction.ts:314
+case_law_provision_extractions.last_failure_message         varchar      null              case-law-provision-extraction.ts:315
+case_law_provision_extractions.blocked_input_digest         bytea        null              case-law-provision-extraction.ts:316
+case_law_provision_extractions.lease_token                  uuid         null              case-law-provision-extraction.ts:317
+case_law_provision_extractions.lease_expires_at             timestamptz  null              case-law-provision-extraction.ts:318
+case_law_provision_extractions.generation                   bigint       default,not null  case-law-provision-extraction.ts:319
+case_law_provision_extractions.outcome                      text         null              case-law-provision-extraction.ts:320
+case_law_provision_extractions.terminal_reason              text         null              case-law-provision-extraction.ts:321
+case_law_provision_extractions.published_input_digest       bytea        null              case-law-provision-extraction.ts:324
+case_law_provision_extractions.published_jurisdiction       varchar      null              case-law-provision-extraction.ts:325
+case_law_provision_extractions.published_revision           integer      null              case-law-provision-extraction.ts:326
+case_law_provision_extractions.published_projection_digest  bytea        null              case-law-provision-extraction.ts:327
+case_law_provision_extractions.payload_class                text         null              case-law-provision-extraction.ts:328
+case_law_provision_extractions.payload_class_input_digest   bytea        null              case-law-provision-extraction.ts:331
+case_law_provision_extractions.row_count                    integer      null              case-law-provision-extraction.ts:332
+case_law_provision_extractions.rows_digest                  varchar      null              case-law-provision-extraction.ts:333
+case_law_provision_extractions.unresolved_counts            jsonb        null              case-law-provision-extraction.ts:334
+case_law_provision_extractions.published_at                 timestamptz  null              case-law-provision-extraction.ts:336
+case_law_provision_extractions.created_at                   timestamptz  default,not null  case-law-provision-extraction.ts:337
+case_law_provision_extractions.updated_at                   timestamptz  default,not null  case-law-provision-extraction.ts:338
 ```

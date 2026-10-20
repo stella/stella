@@ -108,6 +108,7 @@ const counts = (
 const digestOf = (
   overrides: Partial<DecisionCitationDigest> = {},
 ): DecisionCitationDigest => ({
+  doctrineSummary: { status: "unavailable" },
   summary: {
     incoming: counts(),
     outgoing: counts(),
@@ -257,12 +258,16 @@ describe("citation summary", () => {
       appUrlOf,
     );
     expect(summary.citedBy).toEqual({
+      doctrineCounts: { status: "unavailable" },
       count: 50,
       top: { precision: "exact", items: [] },
       capped: true,
       polarity: { negative: 1, positive: 2, unclassified: 47 },
     });
-    expect(summary.cites).toEqual({ count: 3 });
+    expect(summary.cites).toEqual({
+      doctrineCounts: { status: "unavailable" },
+      count: 3,
+    });
   });
 
   test("exact counts omit bounded count markers", () => {
@@ -278,17 +283,25 @@ describe("citation summary", () => {
       appUrlOf,
     );
     expect(summary.citedBy).toEqual({
+      doctrineCounts: { status: "unavailable" },
       count: 51,
       top: { precision: "exact", items: [] },
       polarity: { positive: 51 },
     });
-    expect(summary.cites).toEqual({ count: 3 });
+    expect(summary.cites).toEqual({
+      doctrineCounts: { status: "unavailable" },
+      count: 3,
+    });
   });
 
   test("an uncited decision says so in one field", () => {
     expect(citationSummaryOutput(digestOf(), appUrlOf)).toEqual({
-      citedBy: { count: 0, top: { precision: "exact", items: [] } },
-      cites: { count: 0 },
+      citedBy: {
+        doctrineCounts: { status: "unavailable" },
+        count: 0,
+        top: { precision: "exact", items: [] },
+      },
+      cites: { doctrineCounts: { status: "unavailable" }, count: 0 },
     });
   });
 
@@ -367,6 +380,7 @@ describe("citation summary", () => {
       citationText,
       textWithheldReason: null,
       sectionIndex: n,
+      doctrine: "unread" as const,
       treatment: "unclassified" as const,
       decision,
     });
@@ -406,6 +420,7 @@ describe("citation summary", () => {
             citationText: null,
             textWithheldReason: "source_licence",
             sectionIndex: null,
+            doctrine: "unread" as const,
             treatment: "unclassified",
             decision: null,
           },

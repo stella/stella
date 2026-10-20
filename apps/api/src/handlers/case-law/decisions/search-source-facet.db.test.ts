@@ -160,7 +160,7 @@ beforeAll(
       await withPublicLawReaderRole(db, async (tx) => {
         const result = await tx.execute(sql`
       SELECT d.source_id::text AS value, count(distinct coalesce(d.language_group_key, d.id::text))::int AS count
-      FROM case_law_decisions d
+      FROM case_law_published_decisions d
       JOIN case_law_search_documents sd ON sd.decision_id = d.id
       WHERE sd.tsv @@ plainto_tsquery('simple', 'facetword')
         ${language === undefined ? sql`` : sql`AND d.language = ${language}`}

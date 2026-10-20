@@ -140,6 +140,7 @@ const CZECHIA: CaseLawCoverageCountry = {
 };
 
 const COVERAGE: CaseLawCoverage = {
+  provisionProcessing: [],
   generatedAt: "2026-09-19T08:00:00.000Z",
   totals: {
     searchable: 4_200_000,

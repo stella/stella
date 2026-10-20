@@ -3,12 +3,13 @@ import * as v from "valibot";
 
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
 import launchReadiness from "./launch-readiness.json" with { type: "json" };
-import { ADMITTED_PUBLIC_COUNTRIES } from "./public-country-capability";
+import { publicCountriesFor } from "./public-country-capability";
 
 /** Countries the public case-law browser has a complete routing/display model for. */
 export const CASE_LAW_BROWSER_COUNTRIES = [
   "CZE",
   "EU",
+  "HUN",
   "POL",
   "SVK",
 ] as const satisfies readonly CaseLawJurisdiction[];
@@ -19,6 +20,7 @@ export type CaseLawBrowserCountry = (typeof CASE_LAW_BROWSER_COUNTRIES)[number];
 export const CASE_LAW_REGION_BY_COUNTRY = {
   CZE: "CZ",
   EU: "EU",
+  HUN: "HU",
   POL: "PL",
   SVK: "SK",
 } as const satisfies Record<CaseLawBrowserCountry, string>;
@@ -68,11 +70,17 @@ export const parseCaseLawLaunchReadiness = (
   return countries;
 };
 
-/** Countries the public case-law surfaces may enumerate or query. */
+const ADMITTED_CASE_LAW_COUNTRIES = publicCountriesFor("caseLaw", "search");
+const CASE_LAW_PAGE_COUNTRIES = publicCountriesFor("caseLaw", "pages");
+
 const servingReceipts = parseCaseLawLaunchReadiness(launchReadiness);
 
 /** Every admitted country must have a receipt, and receipts cannot admit independently. */
-export const PUBLIC_CASE_LAW_COUNTRIES = ADMITTED_PUBLIC_COUNTRIES.map(
+/**
+ * Countries admitted to case-law search, the API search surfaces and MCP.
+ * Pages, sitemaps and crawl use `PUBLIC_CASE_LAW_PAGE_COUNTRIES` instead.
+ */
+export const PUBLIC_CASE_LAW_COUNTRIES = ADMITTED_CASE_LAW_COUNTRIES.map(
   (country) => {
     const receipt = servingReceipts.find((candidate) => candidate === country);
     if (receipt === undefined) {
@@ -86,7 +94,7 @@ export const PUBLIC_CASE_LAW_COUNTRIES = ADMITTED_PUBLIC_COUNTRIES.map(
 if (
   servingReceipts.some(
     (country) =>
-      !ADMITTED_PUBLIC_COUNTRIES.some((candidate) => candidate === country),
+      !ADMITTED_CASE_LAW_COUNTRIES.some((candidate) => candidate === country),
   )
 ) {
   panic(
@@ -99,7 +107,41 @@ export const isPublicCaseLawCountry = (
 ): country is PublicCaseLawCountry =>
   PUBLIC_CASE_LAW_COUNTRIES.some((candidate) => candidate === country);
 
-/** Canonicalize and admit a country at the public case-law boundary. */
+/**
+ * A country whose pages open must have a case-law routing and display model:
+ * opening one without it does not compile, so its pages, sitemaps and crawl
+ * paths can never be dropped silently.
+ */
+const PAGES_PUBLIC_BROWSER_COUNTRIES: readonly CaseLawBrowserCountry[] =
+  CASE_LAW_PAGE_COUNTRIES;
+
+/**
+ * Countries whose decision pages are served, listed in sitemaps and open to
+ * crawlers: the pages-public countries plus the search-admitted ones. A page
+ * country needs no serving receipt; the receipt gates search admission only.
+ */
+export const PUBLIC_CASE_LAW_PAGE_COUNTRIES: readonly PublicCaseLawCountry[] =
+  PAGES_PUBLIC_BROWSER_COUNTRIES.map((country) => {
+    const parsed = v.safeParse(launchReadinessCountrySchema, country);
+    return parsed.success
+      ? parsed.output
+      : panic("A pages-public country needs a case-law browser model.");
+  });
+
+export const isPublicCaseLawPageCountry = (
+  country: string,
+): country is PublicCaseLawCountry =>
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES.some((candidate) => candidate === country);
+
+/** Canonicalize a country at the public case-law page boundary. */
+export const publicCaseLawPageCountry = (
+  country: string,
+): PublicCaseLawCountry | null => {
+  const canonical = country.toUpperCase();
+  return isPublicCaseLawPageCountry(canonical) ? canonical : null;
+};
+
+/** Canonicalize and admit a country at the public case-law search boundary. */
 export const publicCaseLawCountry = (
   country: string,
 ): PublicCaseLawCountry | null => {

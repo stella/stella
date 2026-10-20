@@ -84,6 +84,9 @@ const TopBarCaseLawCountry = ({ route }: { route: "home" | "cases" }) => {
           ...previous,
           ...clearedCaseLawFilters(),
           country: next,
+          // A rewrite was judged against the previous corpus, not this one.
+          rewrite: undefined,
+          rewrittenFrom: undefined,
         }),
         replace: true,
       }),

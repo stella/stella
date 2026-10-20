@@ -1,4 +1,4 @@
-import { Suspense, useId, useRef, useState } from "react";
+import { Suspense, useId, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -25,6 +25,7 @@ import { emptyQuickEntryValues } from "@/components/quick-entry.logic";
 import { MatterCombobox } from "@/components/workspaces/matter-combobox";
 import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
@@ -56,7 +57,7 @@ const QuickEntryDialog = () => {
   );
   const createTime = useCreateTimeEntry();
   const createExpense = useCreateExpense();
-  const submitting = useRef(false);
+  const submitOnce = useSingleFlight();
   const matterId = useId();
   const [matter, setMatter] = useState<MatterOption | null>(null);
   const [matterBaseline, setMatterBaseline] = useState<MatterOption | null>(
@@ -74,10 +75,9 @@ const QuickEntryDialog = () => {
     values: ManualTimeEntryValues,
     action: SaveAction,
   ) => {
-    if (matter === null || step.type !== "time" || submitting.current) {
+    if (matter === null || step.type !== "time") {
       return;
     }
-    submitting.current = true;
     setError(null);
     const result = await Result.tryPromise(async () =>
       createTime.mutateAsync({
@@ -86,7 +86,6 @@ const QuickEntryDialog = () => {
         timezoneId: user.timezoneId,
       }),
     );
-    submitting.current = false;
     if (Result.isError(result)) {
       setError(result.error);
       return;
@@ -132,17 +131,16 @@ const QuickEntryDialog = () => {
   };
 
   const saveAndClose = async (values: ManualTimeEntryValues) =>
-    await saveTime(values, "close");
+    await submitOnce.run(async () => await saveTime(values, "close"));
   const saveAndNew = async (values: ManualTimeEntryValues) =>
-    await saveTime(values, "new");
+    await submitOnce.run(async () => await saveTime(values, "new"));
   const saveAndAddExpense = async (values: ManualTimeEntryValues) =>
-    await saveTime(values, "expense");
+    await submitOnce.run(async () => await saveTime(values, "expense"));
 
-  const saveExpense = async (values: ExpenseFormValues) => {
-    if (step.type !== "expense" || submitting.current) {
+  const createExpenseOnce = async (values: ExpenseFormValues) => {
+    if (step.type !== "expense") {
       return;
     }
-    submitting.current = true;
     setError(null);
     const result = await Result.tryPromise(async () =>
       createExpense.mutateAsync({
@@ -151,7 +149,6 @@ const QuickEntryDialog = () => {
         timezoneId: user.timezoneId,
       }),
     );
-    submitting.current = false;
     if (Result.isError(result)) {
       setError(result.error);
       return;
@@ -166,6 +163,8 @@ const QuickEntryDialog = () => {
     });
     closeDialog();
   };
+  const saveExpense = async (values: ExpenseFormValues) =>
+    await submitOnce.run(async () => await createExpenseOnce(values));
 
   return (
     <Dialog

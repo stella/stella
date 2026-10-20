@@ -19,9 +19,9 @@ import {
 } from "@/api/lib/db-query-counter";
 import {
   elysiaErrorAnswer,
+  elysiaErrorBody,
   elysiaFailureReason,
 } from "@/api/lib/errors/elysia-error";
-import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
 import { identityFields } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -138,10 +138,11 @@ export const answerRequestError = ({
 
   const path = getRequestPath(request);
   const reqCtx = getRequestContext(request);
-  const { status: statusCode, message: errorMessage } = elysiaErrorAnswer(
-    code,
-    error,
-  );
+  const {
+    status: statusCode,
+    message: errorMessage,
+    issues,
+  } = elysiaErrorAnswer(code, error);
   const logged = shouldLogRequest(path);
   const captured = statusCode >= 500;
   const loggedSeverity = captured ? "ERROR" : "WARN";
@@ -153,6 +154,7 @@ export const answerRequestError = ({
       capture: captured,
     }),
     request,
+    route: getRouteName(route),
     requestState: {
       answeredStatus: statusCode,
       framework: elysiaFailureReason(code, error),
@@ -222,7 +224,7 @@ export const answerRequestError = ({
   // Elysia's default would serialize error.message, which
   // may contain DB internals, file names, or document content.
   set.status = statusCode;
-  return httpError(errorMessage);
+  return elysiaErrorBody({ status: statusCode, message: errorMessage, issues });
 };
 
 type RequestCompletionContext = {
@@ -257,9 +259,13 @@ export const withFinalResponseCompletion = async (
 // The completion record grades its answer by the failure the request
 // observed. A 5xx with none observed (a handler that returned the status
 // itself) is counted as such, at the severity it always had.
-const completionFailure = (request: Request, statusCode: number) =>
+const completionFailure = (
+  request: Request,
+  statusCode: number,
+  route: string | undefined,
+) =>
   getRequestFailure(request) ??
-  (statusCode >= 500 ? observeUnobserved5xx() : undefined);
+  (statusCode >= 500 ? observeUnobserved5xx(getRouteName(route)) : undefined);
 
 /** The server's `onAfterHandle` hook: the completion record and flush. */
 export const completeRequest = async ({
@@ -294,7 +300,9 @@ export const completeRequest = async ({
       reqCtx,
     });
     const failure =
-      statusCode >= 400 ? completionFailure(request, statusCode) : undefined;
+      statusCode >= 400
+        ? completionFailure(request, statusCode, route)
+        : undefined;
 
     if (statusCode >= 500) {
       logger.request({
@@ -321,7 +329,8 @@ export const completeRequest = async ({
     // Streaming responses (e.g. POST /v1/chat) settle this hook when the
     // stream object is returned, not when generation ends, so their
     // duration here understates the wall-clock. That is acceptable: the
-    // class is `ai` either way, which is excluded from the CRUD p95 SLO.
+    // declared stream class excludes setup time from the CRUD p95 SLO,
+    // even when no model has started yet.
     emitRequestDurationMetric({
       durationMs,
       requestClass: requestClassAtCompletion({

@@ -14,6 +14,7 @@ import {
   statedDecisionTypesOf,
 } from "@/api/lib/case-law/decision-type-kind";
 import { COURT_PARTITION_FIELD } from "@/api/lib/legal-search/corpus-index-group-contract";
+import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   type CorpusProvisionMention,
   readCorpusProvisionMentions,
@@ -1043,11 +1044,21 @@ type CaseLawCorpusFilters = {
   courtPartitions?: readonly string[] | undefined;
   dateFrom?: string | undefined;
   dateTo?: string | undefined;
+  /**
+   * The only decisions the query may return, as an id-set filter on the
+   * documents' decision id. Every chunk of a decision carries its id, so the
+   * engine's totals and facets count within the set.
+   */
+  decisionIds?: readonly string[] | undefined;
   documentType?: string | undefined;
   jurisdiction?: string | undefined;
   language?: string | undefined;
   source?: string | undefined;
 };
+
+/** Typed against the manifests, so a renamed id field cannot drift from here. */
+const DECISION_ID_FIELD: CorpusIndexManifest["projection"]["documentIdField"] =
+  "document_id";
 
 export type CaseLawCorpusQueryOptions = {
   queryVariant?: CorpusIndexQueryVariant | undefined;
@@ -1068,8 +1079,9 @@ export type CaseLawCorpusQueryOptions = {
  * The one assembler for a case-law corpus-index query. Both read paths (the
  * public search handler and the shared search provider) go through it, so
  * there is a single answer to what the engine sees and a single escaping rule
- * to audit. Null when the free text carries no searchable term: callers return
- * an empty page rather than querying the engine.
+ * to audit. Null when the free text carries no searchable term or the id-set
+ * filter is empty: callers return an empty page rather than querying the
+ * engine.
  */
 export const caseLawCorpusQuery = ({
   text,
@@ -1084,6 +1096,10 @@ export const caseLawCorpusQuery = ({
   legalAlternatives,
   legacyStemming,
 }: CaseLawCorpusQueryOptions): string | null => {
+  // An empty id set admits nothing: the page is empty without asking.
+  if (filters.decisionIds?.length === 0) {
+    return null;
+  }
   const freeText = corpusFreeTextClause(text, {
     jurisdiction,
     queryVariant,
@@ -1134,6 +1150,11 @@ export const caseLawCorpusQuery = ({
   if (filters.dateFrom || filters.dateTo) {
     clauses.push(
       `decision_date:[${filters.dateFrom ?? "*"} TO ${filters.dateTo ?? "*"}]`,
+    );
+  }
+  if (filters.decisionIds !== undefined) {
+    clauses.push(
+      `${DECISION_ID_FIELD}: IN [${filters.decisionIds.map(quoteCorpusValue).join(" ")}]`,
     );
   }
   return clauses.join(" AND ");

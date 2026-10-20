@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import type { DocxCompatibility } from "@stll/folio-react";
@@ -35,14 +35,23 @@ export const useDocxEditorBindings = ({
 }: UseDocxEditorBindingsOptions) => {
   const [isCollaborationPublishable, setIsCollaborationPublishable] =
     useState(false);
+  // The hosted editor has loaded its document (it reports compatibility once
+  // parsed) or failed: what a restored viewer waits for before settling.
+  const [isDocumentReady, setIsDocumentReady] = useState(false);
 
-  const handleScrollTopChange = (scrollTop: number) => {
-    setDocxScrollTopByTab((prev) => {
-      const next = new Map(prev);
-      next.set(tabId, scrollTop);
-      return next;
-    });
-  };
+  const handleScrollTopChange = useCallback(
+    (scrollTop: number) => {
+      setDocxScrollTopByTab((prev) => {
+        if (prev.get(tabId) === scrollTop) {
+          return prev;
+        }
+        const next = new Map(prev);
+        next.set(tabId, scrollTop);
+        return next;
+      });
+    },
+    [setDocxScrollTopByTab, tabId],
+  );
 
   // The hosted editor lives above this panel, so what it reports back travels
   // through the claim. Stable for the tab's lifetime: a claim rewritten on
@@ -55,6 +64,7 @@ export const useDocxEditorBindings = ({
   });
   const handleCompatibilityChange = useLatestCallback(
     (compatibility: DocxCompatibility) => {
+      setIsDocumentReady(true);
       setDocxCompatibilityByTab((prev) => {
         if (prev.get(tabId) === compatibility) {
           return prev;
@@ -93,7 +103,10 @@ export const useDocxEditorBindings = ({
   const handleCollaborationPublishableChange = useLatestCallback(
     setIsCollaborationPublishable,
   );
-  const handleError = useLatestCallback(onError);
+  const handleError = useLatestCallback((error: unknown) => {
+    setIsDocumentReady(true);
+    onError(error);
+  });
   const bindings = useMemo(
     () =>
       ({
@@ -118,7 +131,20 @@ export const useDocxEditorBindings = ({
     ],
   );
 
-  return { bindings, handleScrollTopChange, isCollaborationPublishable };
+  return useMemo(
+    () => ({
+      bindings,
+      handleScrollTopChange,
+      isCollaborationPublishable,
+      isDocumentReady,
+    }),
+    [
+      bindings,
+      handleScrollTopChange,
+      isCollaborationPublishable,
+      isDocumentReady,
+    ],
+  );
 };
 
 export type DocxEditorBindings = ReturnType<typeof useDocxEditorBindings>;

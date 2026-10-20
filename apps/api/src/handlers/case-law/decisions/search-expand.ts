@@ -48,20 +48,30 @@ import {
 } from "@/api/lib/legal-search/public-law-country";
 import type { PublicCountryUnavailableAnswer } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 /**
  * How long a search waits for alternatives. Past this the reader gets the
- * search they typed, which is a search, rather than a slow one.
+ * search they typed, which is a search, rather than a slow one. It covers a
+ * short structured answer from a fast model on every offered provider: a
+ * deadline under that never sees an answer, yet still spends the usage.
+ * `maxOutputTokens` sizes the reply only; reasoning is reserved on top of it.
+ * Read by the structured-output request settings test.
+ *
+ * @public
  */
-const EXPANSION_TIMEOUT_MS = 1500;
+export const EXPANSION_REQUEST = {
+  maxOutputTokens: 200,
+  deadlineMs: 4000,
+} as const;
 
 /** How long one answer is reused for the same query, language and org. */
 const EXPANSION_CACHE_TTL_MS = 60 * 60_000;
 const EXPANSION_CACHE_MAX_ENTRIES = 2000;
 
-const EXPANSION_SYSTEM = `You propose legal-vocabulary alternatives for a case-law search.
+/** Read by the structured-output role contract test. @public */
+export const EXPANSION_SYSTEM = `You propose legal-vocabulary alternatives for a case-law search.
 
 The search runs over court decisions of one jurisdiction and requires every word of the query. For each word that is an everyday or colloquial term, give the words the statutes and courts of that jurisdiction use for the same concept, in corpusLanguage (or in the query's language when corpusLanguage is null).
 
@@ -71,7 +81,7 @@ Rules:
 - Skip words that are already the legal term, and function words.
 - At most ${String(LEGAL_ALTERNATIVES_LIMITS.perTerm)} alternatives per word, one to ${String(LEGAL_ALTERNATIVES_LIMITS.words)} words each. Return an empty list when nothing applies.
 
-Example (CZE, cs): "vrácení kauce" gives [{"term":"kauce","alternatives":["jistota"]}]`;
+Example (CZE, cs): "vrácení kauce" gives {"alternatives":[{"term":"kauce","alternatives":["jistota"]}]}`;
 
 /**
  * The shape only, not the bounds. A model that returns one alternative too
@@ -79,7 +89,8 @@ Example (CZE, cs): "vrácení kauce" gives [{"term":"kauce","alternatives":["jis
  * enforces every bound, dropping what exceeds it, and `maxOutputTokens` caps
  * what can arrive at all.
  */
-const expansionOutputSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const expansionOutputSchema = v.strictObject({
   alternatives: v.array(
     v.strictObject({
       term: v.string(),
@@ -165,7 +176,7 @@ const config = {
     query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
     country: tPublicLawCountry,
   }),
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "search-expand" },
 } satisfies HandlerConfig;
 
 const expandCaseLawSearch = createSafeRootHandler(
@@ -183,7 +194,9 @@ const expandCaseLawSearch = createSafeRootHandler(
     user,
   }): SafeHandlerGenerator<ExpansionAnswer | PublicCountryUnavailableAnswer> {
     const countryRead = readPublicLawCountry(body.country, {
+      domain: "caseLaw",
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
+      surface: "search",
     });
     if (countryRead.kind === "unavailable") {
       return Result.ok(countryRead.answer);
@@ -218,11 +231,11 @@ const expandCaseLawSearch = createSafeRootHandler(
     }
 
     // No AI for this organization means no expansion, not a failed search.
-    const available = requireTanStackAIAvailableForRole({
+    const available = requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "search-expand",
     });
     if (available.isErr()) {
       return Result.ok(NO_ALTERNATIVES);
@@ -260,7 +273,7 @@ const expandCaseLawSearch = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "case-law.search.expand",
-      modelRole: "fast",
+      modelTask: "search-expand",
       orgAIConfig,
       modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId, jurisdiction: country },
@@ -268,10 +281,10 @@ const expandCaseLawSearch = createSafeRootHandler(
     });
     const generated = await Result.tryPromise({
       try: async () =>
-        await generateTanStackObjectForRole({
+        await generateTanStackObjectForTask({
           dataClass: "customer",
           admission: configuredModelAdmission({ modelAdmission }),
-          role: "fast",
+          task: "search-expand",
           serviceTier: "standard",
           orgAIConfig,
           managedAIResidency,
@@ -280,7 +293,7 @@ const expandCaseLawSearch = createSafeRootHandler(
           analytics,
           caching: resolveCaching({
             promptCachingEnabled,
-            role: "fast",
+            task: "search-expand",
             scopeKey: null,
           }),
           system: EXPANSION_SYSTEM,
@@ -290,11 +303,8 @@ const expandCaseLawSearch = createSafeRootHandler(
             query: formatCorpusQueryTokens(required),
           }),
           outputSchema: expansionOutputSchema,
-          maxOutputTokens: 200,
-          abortSignal: AbortSignal.any([
-            request.signal,
-            AbortSignal.timeout(EXPANSION_TIMEOUT_MS),
-          ]),
+          ...EXPANSION_REQUEST,
+          abortSignal: request.signal,
         }),
       catch: (error: unknown) => error,
     });

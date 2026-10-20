@@ -11,6 +11,7 @@ import type {
   SanctionsEntry,
 } from "./entry";
 import {
+  cloneNameIndexWithoutCache,
   matchNames,
   MAX_SCREENING_WORK,
   nameIndexSteps,
@@ -112,6 +113,14 @@ function* screeningIndexSteps(
 export const buildScreeningIndex = (
   lists: readonly ParsedList[],
 ): ScreeningIndex => runSteps(screeningIndexSteps(lists));
+
+/** Returns an index sharing immutable storage but with empty screening caches. */
+export const cloneScreeningIndexWithoutCache = (
+  index: ScreeningIndex,
+): ScreeningIndex => ({
+  ...index,
+  names: cloneNameIndexWithoutCache(index.names),
+});
 
 /**
  * The same index as {@link buildScreeningIndex}, built one entry at a time:
@@ -286,12 +295,17 @@ const workLimit = () =>
     }),
   );
 
+/** Deterministic work a completed screening spent against its budget. */
+export type ScreeningWorkUsage = { spent: number; limit: number };
+
 type ScreenOptions = {
   /** Minimum score (0..1) for an entry to be reported as a possible match. */
   cutoff: number;
   limit?: number;
   /** Optional tighter budget; callers cannot exceed the global work bound. */
   maxWork?: number;
+  /** Receives the work a completed screening spent, for headroom monitoring. */
+  onWork?: (usage: ScreeningWorkUsage) => void;
 };
 
 const validBirthDate = ({ year, month, day }: QueryBirthDate): boolean => {
@@ -600,6 +614,7 @@ export const screen = (
     cutoff,
     limit = DEFAULT_LIMIT,
     maxWork = MAX_SCREENING_WORK,
+    onWork,
   }: ScreenOptions,
 ): Result<ScreeningResult, ScreeningQueryError | ScreeningWorkLimitError> => {
   if (!(cutoff >= 0 && cutoff <= 1)) {
@@ -725,6 +740,7 @@ export const screen = (
     evidence: match.evidence,
     entry: index.entryStorage.hydrate(match.entryIndex),
   }));
+  onWork?.({ spent: maxWork - work.remaining, limit: maxWork });
   return Result.ok({
     cutoff,
     versions: index.versions,

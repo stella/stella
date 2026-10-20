@@ -7,6 +7,10 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  aggregateExecutionRows,
+  aggregateFences as fences,
+} from "@/api/tests/fixtures/aggregate-lock-order";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -17,10 +21,6 @@ import {
   withAutomatedFlowRunCapLock,
   withSkipLockedBatch,
 } from "./aggregate-lock";
-import {
-  aggregateExecutionRows,
-  aggregateFences as fences,
-} from "./aggregate-lock-order.fixture";
 
 test("the flow cap owner opens one transaction and awaits its fence before running the decision", async () => {
   const events: string[] = [];

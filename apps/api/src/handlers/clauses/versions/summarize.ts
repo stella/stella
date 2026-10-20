@@ -35,7 +35,7 @@ const config = {
   },
   access: "write",
   params: clauseVersionSummarizeParamsSchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 /**

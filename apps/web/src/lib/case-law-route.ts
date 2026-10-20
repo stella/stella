@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 
-import { CASE_LAW_REGION_BY_JURISDICTION } from "@stll/api-contract/case-law-jurisdictions";
 import {
   isPublicCaseLawCountry,
   publicCaseLawCountry,
@@ -13,10 +12,8 @@ import type {
 import type { UiLocale } from "@stll/locales";
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import { caseLawCountryRegion } from "@/features/case-law/case-law-jurisdiction";
 import type { useFormatter } from "@/i18n/formatting-context";
-
-const CASE_LAW_REGIONS: Readonly<Record<string, string>> =
-  CASE_LAW_REGION_BY_JURISDICTION;
 
 /**
  * A corpus country as a reader names it ("Czechia"). One helper, because the
@@ -28,8 +25,8 @@ export const caseLawCountryName = (
   format: ReturnType<typeof useFormatter>,
   code: string,
 ): string => {
-  const region = CASE_LAW_REGIONS[code.toUpperCase()];
-  return region === undefined
+  const region = caseLawCountryRegion(code);
+  return region === null
     ? code
     : format.displayName(region, { type: "region" });
 };
@@ -42,7 +39,7 @@ const DEFAULT_COUNTRY_BY_LOCALE = {
   es: null,
   et: null,
   fr: null,
-  hu: null,
+  hu: "HUN",
   lt: null,
   lv: null,
   pl: "POL",

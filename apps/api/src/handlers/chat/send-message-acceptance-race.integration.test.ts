@@ -6,7 +6,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  toChatMessageContent,
+  toPersistedChatMessageContentV3,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { persistAcceptedMessageWithClaim } from "@/api/handlers/chat/chat-message-persistence";
@@ -236,9 +236,8 @@ describe("a regeneration of the latest user turn", () => {
       role: "assistant" | "user";
     }) => {
       await testDb.insert(chatMessages).values({
-        content: toChatMessageContent({
+        content: toPersistedChatMessageContentV3({
           data: [{ content: `message ${offset}`, type: "text" }],
-          version: 2,
         }),
         createdAt: new Date(Date.parse("2026-08-03T12:00:00.000Z") + offset),
         id,

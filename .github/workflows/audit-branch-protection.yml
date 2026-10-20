@@ -6,7 +6,9 @@ defaults:
 
 on:
   schedule:
-    - cron: "0 8 * * 1" # Monday 08:00 UTC
+    # Daily: settings changed through the API must not drift from the
+    # checked-in rulesets for long, since the next sync would revert them.
+    - cron: "0 8 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -49,7 +51,7 @@ jobs:
   # workflow code, so drift would not show up in review; fail when it
   # is loosened.
   audit-fork-approval:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
     steps:

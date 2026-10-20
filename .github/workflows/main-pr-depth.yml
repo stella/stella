@@ -25,11 +25,12 @@ defaults:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
       statuses: read
+      checks: read
       pull-requests: read
       issues: read
       actions: read
@@ -47,6 +48,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           sparse-checkout: scripts
+
+      # Bun runs the release queue history check the health gate needs before
+      # a merge-group receipt may stand in for the heavy statuses.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .release-proof/package.json
+          no-cache: true
 
       - name: Reuse completed release proof
         id: reuse
@@ -153,7 +162,7 @@ jobs:
   status:
     if: always() && needs.validate.result != 'skipped' && needs.validate.outputs.run != 'false' && !needs.validate.outputs.proof
     needs: [validate, suites]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: read

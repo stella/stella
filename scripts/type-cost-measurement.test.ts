@@ -97,6 +97,14 @@ test("compiler measurements only dispatch manually and serialize individual trac
         "cancel-in-progress": v.boolean(),
       }),
       jobs: v.looseObject({
+        prepare: v.looseObject({
+          steps: v.array(
+            v.looseObject({
+              run: v.optional(v.string()),
+              "working-directory": v.optional(v.string()),
+            }),
+          ),
+        }),
         measure: v.looseObject({
           "runs-on": v.string(),
           strategy: v.looseObject({ "max-parallel": v.number() }),
@@ -112,7 +120,7 @@ test("compiler measurements only dispatch manually and serialize individual trac
     group: "type-cost-measurement",
     "cancel-in-progress": false,
   });
-  expect(workflow.jobs.measure["runs-on"]).toBe("ubuntu-latest");
+  expect(workflow.jobs.measure["runs-on"]).toBe("ubuntu-24.04");
   expect(workflow.jobs.measure.strategy["max-parallel"]).toBe(1);
   const runs = workflow.jobs.measure.steps
     .flatMap(({ run }) => (run ? [run] : []))
@@ -123,4 +131,11 @@ test("compiler measurements only dispatch manually and serialize individual trac
   expect(runs).toContain('/usr/bin/time -v -o "$output/rss.txt"');
   expect(runs).toContain('exit "$status"');
   expect(runs).not.toMatch(/\$\{\{\s*(?:inputs|matrix)\./u);
+  const extensionPreparation = workflow.jobs.prepare.steps.filter(({ run }) =>
+    run?.includes("wxt prepare"),
+  );
+  expect(extensionPreparation).toHaveLength(1);
+  for (const step of extensionPreparation) {
+    expect(step["working-directory"]).toBe("apps/extension");
+  }
 });

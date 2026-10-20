@@ -9,6 +9,7 @@ export const VAT_TREATMENTS = [
   "domestic_vat",
   "not_vat_payer",
   "reverse_charge",
+  "outside_scope",
   "exempt",
 ] as const satisfies readonly VatTreatment[];
 

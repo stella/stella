@@ -26,6 +26,7 @@ import {
   summarizeOperation,
 } from "@/components/ai-suggestions/review-suggestion-builder";
 import type { SnapshotBlock } from "@/components/ai-suggestions/review-suggestion-builder";
+import { withBlockTextHashes } from "@/components/ai-suggestions/snapshot-blocks";
 import { parsePersistedDocxOperation } from "@/components/docx/operation-payload";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -105,7 +106,7 @@ export const useSyncDocxSuggestions = ({
     // above bumps `snapshotReadyTick` once a snapshot appears, re-running
     // this effect so the skipped rows hydrate against the ready editor.
     const snapshot = editorRef.current?.createAIEditSnapshot() ?? null;
-    const snapshotBlocks = snapshot ? snapshot.blocks : [];
+    const snapshotBlocks = snapshot ? withBlockTextHashes(snapshot) : [];
     const blocksById = new Map<string, SnapshotBlock>(
       snapshotBlocks.map((block) => [block.id, block]),
     );

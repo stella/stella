@@ -288,7 +288,7 @@ const saveMatterArgsSchema = nullAsAbsent(
       ),
       client_id: v.optional(
         uuidInputSchema(
-          "Contact ID to attach in the client role. Only valid when creating a matter.",
+          "Contact ID of the matter's client. On create it makes a client matter; on update it attaches a client to a personal matter or replaces the client.",
         ),
       ),
       reference: v.optional(
@@ -327,8 +327,7 @@ const saveMatterArgsSchema = nullAsAbsent(
       ),
       ["name"],
     ),
-    // reference, billing_reference, status, and client_id apply to existing
-    // matters or to creation respectively; keep the two modes from mixing.
+    // reference, billing_reference and status apply to an existing matter.
     v.partialCheck(
       [["matter_id"], ["reference"], ["billing_reference"], ["status"]],
       ({ matter_id, reference, billing_reference, status }) =>
@@ -338,31 +337,24 @@ const saveMatterArgsSchema = nullAsAbsent(
           status === undefined),
       "reference, billing_reference, and status apply to an existing matter; pass matter_id",
     ),
-    v.forward(
-      v.partialCheck(
-        [["matter_id"], ["client_id"]],
-        ({ matter_id, client_id }) =>
-          matter_id === undefined || client_id === undefined,
-        "client_id can only be set when creating a matter",
-      ),
-      ["client_id"],
-    ),
     // An update must request at least one change.
     v.partialCheck(
       [
         ["matter_id"],
         ["name"],
+        ["client_id"],
         ["reference"],
         ["billing_reference"],
         ["status"],
       ],
-      ({ matter_id, name, reference, billing_reference, status }) =>
+      ({ matter_id, name, client_id, reference, billing_reference, status }) =>
         matter_id === undefined ||
         name !== undefined ||
+        client_id !== undefined ||
         reference !== undefined ||
         billing_reference !== undefined ||
         status !== undefined,
-      "Provide at least one change: name, reference, billing_reference, or status",
+      "Provide at least one change: name, client_id, reference, billing_reference, or status",
     ),
   ),
 );
@@ -449,6 +441,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     const isPureUnarchive =
       input.status === "active" &&
       input.name === undefined &&
+      input.client_id === undefined &&
       input.reference === undefined &&
       input.billing_reference === undefined;
     if (!isPureUnarchive) {
@@ -463,18 +456,21 @@ const handleSaveMatterTool: TypedMcpToolHandler<
 
   if (
     input.name !== undefined ||
+    input.client_id !== undefined ||
     input.reference !== undefined ||
     input.billing_reference !== undefined
   ) {
     const updated = await Result.gen(() =>
       updateWorkspaceHandler({
-        userEmail: context.userEmail,
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         workspaceId,
         recordAuditEvent,
         body: {
           ...(input.name === undefined ? {} : { name: input.name }),
+          ...(input.client_id === undefined
+            ? {}
+            : { clientId: brandPersistedContactId(input.client_id) }),
           ...(input.reference === undefined
             ? {}
             : { reference: input.reference }),
@@ -2563,13 +2559,13 @@ export const MATTER_TOOL_DEFINITIONS = [
       "records), not-registered (no record; not a clearance), unavailable " +
       "(no answer: NOT cleared) or not-covered (cannot screen this " +
       "subject, or needs the tax ID). The sanctions check returns one " +
-      "outcome per list in `lists`, with whether it binds the firm: clear " +
-      "or possible-match (resembling entries with score and conflicting " +
-      "fields; each needs human review, none is confirmed), naming " +
-      "the edition screened; or unavailable (stale, not loaded, or the " +
-      "company name unreadable: NOT cleared), whose edition fields name " +
-      "the latest edition on file, not one screened. Top-level status is " +
-      "clear only when every list is. Person matches rest on name and " +
+      "outcome per list in `lists`, with whether it binds the firm: clear; " +
+      "possible-match (resembling entries with score and conflicting " +
+      "fields; each needs human review, none confirmed); incomplete (only " +
+      "a bounded subset screened, nothing matched: NOT cleared); or " +
+      "unavailable (stale, not loaded, or company name unreadable: NOT " +
+      "cleared, edition not screened). Top level is clear only if every " +
+      "list was fully screened clear. Person matches rest on name and " +
       "birth date: compare the record first.",
     inputSchema: CHECK_COUNTERPARTY_ARGS_SCHEMA,
     inputNormalization: {

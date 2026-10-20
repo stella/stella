@@ -22,8 +22,8 @@ export {
   SKILL_RESOURCE_PATH_PATTERN,
 } from "./agent-skills";
 export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
-export { AI_ERROR_KINDS } from "./ai-errors";
-export type { AIErrorKind } from "./ai-errors";
+export { AI_ERROR_KINDS, AI_FAILURE_CODES, isAIFailureCode } from "./ai-errors";
+export type { AIErrorKind, AIFailureCode } from "./ai-errors";
 export {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_KEY_SOURCES,
@@ -59,6 +59,8 @@ export type {
 } from "./browser-control";
 export {
   BILLING_STATUS,
+  DEFAULT_INVOICE_DUE_DAYS,
+  INVOICE_DUE_DAY_PRESETS,
   EXPENSE_CATEGORIES,
   INVOICE_LINE_SOURCE,
   INVOICE_LINE_SOURCES,
@@ -328,6 +330,7 @@ export type {
 export {
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  API_VALIDATION_CONSTRAINTS,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
@@ -339,6 +342,7 @@ export {
   MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
   parseApiErrorValue,
+  parseApiValidationIssues,
 } from "./error";
 export type {
   ApiErrorInput,
@@ -347,7 +351,9 @@ export type {
   ApiFileSecurityIssue,
   ApiFileSecurityRejection,
   ApiFileSecurityRejectionDetails,
+  ApiValidationConstraint,
   ApiValidationErrorValue,
+  ApiValidationIssue,
   FileSecurityRemediation,
   NormalizedApiError,
 } from "./error";
@@ -388,6 +394,7 @@ export {
   CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
   CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX,
+  CLAUSE_NUMBERING_LEVEL_LIMITS,
   DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
   DOCX_SUGGESTIONS_PENDING_MAX,
   ENTITIES_PER_WORKSPACE_MAX,

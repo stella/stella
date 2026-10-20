@@ -25,6 +25,8 @@ import { detached } from "@/lib/detached";
 import { templatesOptions } from "@/lib/knowledge/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
+import { filterTemplatesByName } from "./new-document-from-template-dialog.logic";
+
 /**
  * "New document from template" inside a matter: pick a saved template
  * (filterable list), fill it — with optional AI prefill from this matter's
@@ -80,7 +82,7 @@ const NewDocumentFromTemplateDialogBody = ({
             : t("templates.pickTemplate")}
         </DialogDescription>
       </DialogHeader>
-      <DialogPanel className="flex max-h-[70vh] min-h-48 flex-col overflow-hidden p-0">
+      <DialogPanel className="flex max-h-[70dvh] min-h-48 flex-col overflow-hidden p-0">
         {picked === null ? (
           <TemplatePickList onPick={setPicked} />
         ) : (
@@ -141,13 +143,7 @@ const TemplatePickList = ({
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const templates = data ? data.pages.flatMap((page) => page.items) : [];
-  const query = search.trim().toLowerCase();
-  const visibleTemplates =
-    query === ""
-      ? templates
-      : templates.filter((template) =>
-          template.name.toLowerCase().includes(query),
-        );
+  const visibleTemplates = filterTemplatesByName(templates, search);
 
   if (isLoading) {
     return (

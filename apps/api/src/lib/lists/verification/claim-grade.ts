@@ -67,7 +67,10 @@ const rawGradeSchema = v.strictObject({
   ),
 });
 
-const gradingSchema = v.strictObject({ grades: v.array(rawGradeSchema) });
+/** Read by the structured-output role contract test. @public */
+export const gradingSchema = v.strictObject({
+  grades: v.array(rawGradeSchema),
+});
 
 type RawGrade = v.InferOutput<typeof rawGradeSchema>;
 

@@ -11,8 +11,12 @@ const { useInspectorTabsStore } =
   await import("@/components/inspector/inspector-tabs-store");
 const { mentionTagAttrs, referenceFromMentionAttrs } =
   await import("@/components/references/reference.logic");
-const { claimQueuedChatSend } =
-  await import("@/features/chat/queued-chat-sends");
+const {
+  claimQueuedChatSend,
+  hasQueuedChatSend,
+  settleQueuedChatSend,
+  subscribeQueuedChatSend,
+} = await import("@/features/chat/queued-chat-sends");
 
 afterAll(async () => {
   await unregisterDomEnvironment();
@@ -30,8 +34,15 @@ const openedThreadIds = () =>
     .getState()
     .tabs.flatMap((tab) => (tab.type === "chat" ? [tab.id] : []));
 
-const claim = (threadId: ChatThreadId) =>
-  claimQueuedChatSend({ scope: "global", threadId });
+// The tab takes the question and sends it: claim, then report it sent.
+const claim = (threadId: ChatThreadId) => {
+  const threadRef = { scope: "global", threadId } as const;
+  const html = claimQueuedChatSend(threadRef);
+  if (html !== null) {
+    settleQueuedChatSend(threadRef, "sent");
+  }
+  return html;
+};
 
 beforeEach(() => {
   useInspectorTabsStore.setState({ tabs: [] });
@@ -77,5 +88,28 @@ describe("asking a search's question in chat", () => {
     expect(new Set(threadIds).size).toBe(1);
     const [threadId] = threadIds;
     expect(threadId === undefined ? null : claim(threadId)).not.toBeNull();
+  });
+
+  test("a press while the chat holds an unsent question asks the open tab to retry", () => {
+    askPublicLawInChat(ASK);
+    const [threadId] = openedThreadIds();
+    if (threadId === undefined) {
+      throw new Error("Expected a chat tab");
+    }
+    const threadRef = { scope: "global", threadId } as const;
+    // The tab's AI check failed: it never claimed the question.
+    let retries = 0;
+    const unsubscribe = subscribeQueuedChatSend(threadRef, () => {
+      retries += 1;
+    });
+
+    askPublicLawInChat(ASK);
+    unsubscribe();
+
+    expect(retries).toBe(1);
+    expect(openedThreadIds()).toEqual([threadId]);
+    expect(hasQueuedChatSend(threadRef)).toBe(true);
+    expect(claim(threadId)).not.toBeNull();
+    expect(hasQueuedChatSend(threadRef)).toBe(false);
   });
 });

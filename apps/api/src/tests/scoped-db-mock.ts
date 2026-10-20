@@ -69,6 +69,7 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
     from: () => ({
       where,
       innerJoin: () => ({ where }),
+      leftJoin: () => ({ where }),
     }),
   };
 };

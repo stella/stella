@@ -1,0 +1,5 @@
+{
+  "metric": "as-casts",
+  "delta": 1,
+  "reason": "brand minted once in invocation.ts after the filter"
+}

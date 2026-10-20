@@ -489,7 +489,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             onOpenChat={openChat}
             onSetMinimized={setMinimized}
             tabs={tabs}
-            workspaceId={workspaceId}
           />
         </div>
 

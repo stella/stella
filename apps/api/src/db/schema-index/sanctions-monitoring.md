@@ -57,43 +57,43 @@ sanctions_contact_screenings.contact_fingerprint  text                not null  
 sanctions_contact_screenings.checked_at           timestamptz         not null     sanctions-monitoring.ts:216
 ```
 
-## sanctions_contact_matches · `sanctionsContactMatches` · sanctions-monitoring.ts:250
+## sanctions_contact_matches · `sanctionsContactMatches` · sanctions-monitoring.ts:254
 
 ```text
-sanctions_contact_matches.organization_id               safeOrganizationId  fk,not null       sanctions-monitoring.ts:253
-sanctions_contact_matches.contact_id                    safeUuid            not null          sanctions-monitoring.ts:256
-sanctions_contact_matches.source_id                     text                fk,not null       sanctions-monitoring.ts:257
-sanctions_contact_matches.source_entry_id               text                not null          sanctions-monitoring.ts:261
-sanctions_contact_matches.edition_id                    safeUuid            fk,not null       sanctions-monitoring.ts:262
-sanctions_contact_matches.state                         text                not null          sanctions-monitoring.ts:265
-sanctions_contact_matches.disposition                   text                default,not null  sanctions-monitoring.ts:266
-sanctions_contact_matches.reviewed_by                   text                fk,null           sanctions-monitoring.ts:270
-sanctions_contact_matches.review_reason                 text                null              sanctions-monitoring.ts:273
-sanctions_contact_matches.reviewed_at                   timestamptz         null              sanctions-monitoring.ts:274
-sanctions_contact_matches.reviewed_contact_fingerprint  text                null              sanctions-monitoring.ts:275
-sanctions_contact_matches.reviewed_entry_hash           text                null              sanctions-monitoring.ts:276
-sanctions_contact_matches.contact_fingerprint           text                not null          sanctions-monitoring.ts:277
-sanctions_contact_matches.entry_hash                    text                not null          sanctions-monitoring.ts:278
-sanctions_contact_matches.match                         jsonb               not null          sanctions-monitoring.ts:279
-sanctions_contact_matches.updated_at                    timestamptz         not null          sanctions-monitoring.ts:280
+sanctions_contact_matches.organization_id               safeOrganizationId  fk,not null       sanctions-monitoring.ts:257
+sanctions_contact_matches.contact_id                    safeUuid            not null          sanctions-monitoring.ts:260
+sanctions_contact_matches.source_id                     text                fk,not null       sanctions-monitoring.ts:261
+sanctions_contact_matches.source_entry_id               text                not null          sanctions-monitoring.ts:265
+sanctions_contact_matches.edition_id                    safeUuid            fk,not null       sanctions-monitoring.ts:266
+sanctions_contact_matches.state                         text                not null          sanctions-monitoring.ts:269
+sanctions_contact_matches.disposition                   text                default,not null  sanctions-monitoring.ts:270
+sanctions_contact_matches.reviewed_by                   text                fk,null           sanctions-monitoring.ts:274
+sanctions_contact_matches.review_reason                 text                null              sanctions-monitoring.ts:277
+sanctions_contact_matches.reviewed_at                   timestamptz         null              sanctions-monitoring.ts:278
+sanctions_contact_matches.reviewed_contact_fingerprint  text                null              sanctions-monitoring.ts:279
+sanctions_contact_matches.reviewed_entry_hash           text                null              sanctions-monitoring.ts:280
+sanctions_contact_matches.contact_fingerprint           text                not null          sanctions-monitoring.ts:281
+sanctions_contact_matches.entry_hash                    text                not null          sanctions-monitoring.ts:282
+sanctions_contact_matches.match                         jsonb               not null          sanctions-monitoring.ts:283
+sanctions_contact_matches.updated_at                    timestamptz         not null          sanctions-monitoring.ts:284
 ```
 
-## sanctions_screening_events · `sanctionsScreeningEvents` · sanctions-monitoring.ts:328 · rls
+## sanctions_screening_events · `sanctionsScreeningEvents` · sanctions-monitoring.ts:332 · rls
 
 ```text
-sanctions_screening_events.id                   pUuid               pk,not null  sanctions-monitoring.ts:331
-sanctions_screening_events.organization_id      safeOrganizationId  fk,not null  sanctions-monitoring.ts:332
-sanctions_screening_events.contact_id           safeUuid            not null     sanctions-monitoring.ts:335
-sanctions_screening_events.source_id            text                fk,not null  sanctions-monitoring.ts:336
-sanctions_screening_events.source_entry_id      text                not null     sanctions-monitoring.ts:340
-sanctions_screening_events.type                 text                not null     sanctions-monitoring.ts:341
-sanctions_screening_events.old_edition_id       safeUuid            null         sanctions-monitoring.ts:342
-sanctions_screening_events.new_edition_id       safeUuid            not null     sanctions-monitoring.ts:343
-sanctions_screening_events.reason               text                not null     sanctions-monitoring.ts:344
-sanctions_screening_events.reviewer_id          text                null         sanctions-monitoring.ts:345
-sanctions_screening_events.contact_fingerprint  text                null         sanctions-monitoring.ts:346
-sanctions_screening_events.entry_hash           text                null         sanctions-monitoring.ts:347
-sanctions_screening_events.old_match            jsonb               null         sanctions-monitoring.ts:348
-sanctions_screening_events.new_match            jsonb               null         sanctions-monitoring.ts:349
-sanctions_screening_events.created_at           timestamptz         not null     sanctions-monitoring.ts:350
+sanctions_screening_events.id                   pUuid               pk,not null  sanctions-monitoring.ts:335
+sanctions_screening_events.organization_id      safeOrganizationId  fk,not null  sanctions-monitoring.ts:336
+sanctions_screening_events.contact_id           safeUuid            not null     sanctions-monitoring.ts:339
+sanctions_screening_events.source_id            text                fk,not null  sanctions-monitoring.ts:340
+sanctions_screening_events.source_entry_id      text                not null     sanctions-monitoring.ts:344
+sanctions_screening_events.type                 text                not null     sanctions-monitoring.ts:345
+sanctions_screening_events.old_edition_id       safeUuid            null         sanctions-monitoring.ts:346
+sanctions_screening_events.new_edition_id       safeUuid            not null     sanctions-monitoring.ts:347
+sanctions_screening_events.reason               text                not null     sanctions-monitoring.ts:348
+sanctions_screening_events.reviewer_id          text                null         sanctions-monitoring.ts:349
+sanctions_screening_events.contact_fingerprint  text                null         sanctions-monitoring.ts:350
+sanctions_screening_events.entry_hash           text                null         sanctions-monitoring.ts:351
+sanctions_screening_events.old_match            jsonb               null         sanctions-monitoring.ts:352
+sanctions_screening_events.new_match            jsonb               null         sanctions-monitoring.ts:353
+sanctions_screening_events.created_at           timestamptz         not null     sanctions-monitoring.ts:354
 ```

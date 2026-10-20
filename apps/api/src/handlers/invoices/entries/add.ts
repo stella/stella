@@ -4,6 +4,7 @@ import { type Static, t } from "elysia";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
 import {
@@ -14,12 +15,11 @@ import {
 } from "@/api/db/schema";
 import {
   ATTACHED_ENTRY_LINE_VAT,
+  attachedEntryLineDrafts,
   checkInvoiceLineCapacity,
-  expenseLineDraft,
   insertInvoiceLines,
   requireDraftInvoiceForEntryChanges,
   recalculateInvoiceTotals,
-  timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -99,6 +99,53 @@ const buildAttachEvents = (params: {
   }
   return events;
 };
+
+type ClaimInvoiceExpensesOptions = {
+  workspaceId: SafeId<"workspace">;
+  invoiceId: SafeId<"invoice">;
+  expenseIds: readonly SafeId<"expense">[];
+  currency: string;
+  now: Date;
+};
+
+/**
+ * Marks approved, billable, not-yet-invoiced expenses in the invoice
+ * currency billed on a draft invoice, and returns the ones it claimed; fewer
+ * rows than requested means a concurrent change. Callers record the attach
+ * events and write the lines in the same transaction.
+ */
+export const claimInvoiceExpenses = async (
+  tx: Transaction,
+  {
+    workspaceId,
+    invoiceId,
+    expenseIds,
+    currency,
+    now,
+  }: ClaimInvoiceExpensesOptions,
+) =>
+  // audit: skip - callers record each claimed expense in the same transaction
+  await tx
+    .update(expenses)
+    .set({ invoiceId, status: BILLING_STATUS.BILLED, updatedAt: now })
+    .where(
+      and(
+        eq(expenses.workspaceId, workspaceId),
+        inArray(expenses.id, [...expenseIds]),
+        eq(expenses.status, BILLING_STATUS.APPROVED),
+        eq(expenses.billable, true),
+        isNull(expenses.invoiceId),
+        eq(expenses.currency, currency),
+      ),
+    )
+    .returning({
+      id: expenses.id,
+      dateIncurred: expenses.dateIncurred,
+      amount: expenses.amount,
+      markup: expenses.markup,
+      description: expenses.description,
+      invoiceDescription: expenses.invoiceDescription,
+    });
 
 type AttachmentPreflightOptions = {
   invoiceId: SafeId<"invoice">;
@@ -385,6 +432,7 @@ const addEntries = createSafeHandler(
 
       let attachedTimeEntries: {
         id: SafeId<"timeEntry">;
+        dateWorked: string;
         billedMinutes: number;
         rateAtEntry: CentsAmount;
         narrative: string;
@@ -415,6 +463,7 @@ const addEntries = createSafeHandler(
           )
           .returning({
             id: timeEntries.id,
+            dateWorked: timeEntries.dateWorked,
             billedMinutes: timeEntries.billedMinutes,
             rateAtEntry: timeEntries.rateAtEntry,
             narrative: timeEntries.narrative,
@@ -432,38 +481,16 @@ const addEntries = createSafeHandler(
         }
       }
 
-      let attachedExpenses: {
-        id: SafeId<"expense">;
-        amount: CentsAmount;
-        markup: number;
-        description: string;
-        invoiceDescription: string | null;
-      }[] = [];
+      let attachedExpenses: Awaited<ReturnType<typeof claimInvoiceExpenses>> =
+        [];
       if (expenseIds && expenseIds.length > 0) {
-        attachedExpenses = await tx
-          .update(expenses)
-          .set({
-            invoiceId: params.invoiceId,
-            status: BILLING_STATUS.BILLED,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(expenses.workspaceId, workspaceId),
-              inArray(expenses.id, expenseIds),
-              eq(expenses.status, BILLING_STATUS.APPROVED),
-              eq(expenses.billable, true),
-              isNull(expenses.invoiceId),
-              eq(expenses.currency, invoiceCheck.currency),
-            ),
-          )
-          .returning({
-            id: expenses.id,
-            amount: expenses.amount,
-            markup: expenses.markup,
-            description: expenses.description,
-            invoiceDescription: expenses.invoiceDescription,
-          });
+        attachedExpenses = await claimInvoiceExpenses(tx, {
+          workspaceId,
+          invoiceId: params.invoiceId,
+          expenseIds,
+          currency: invoiceCheck.currency,
+          now,
+        });
 
         if (attachedExpenses.length !== expenseIds.length) {
           return Result.err(
@@ -479,14 +506,11 @@ const addEntries = createSafeHandler(
       await insertInvoiceLines(
         tx,
         { ...scope, organizationId: session.activeOrganizationId },
-        [
-          ...attachedTimeEntries.map((entry) =>
-            timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT),
-          ),
-          ...attachedExpenses.map((expense) =>
-            expenseLineDraft(expense, ATTACHED_ENTRY_LINE_VAT),
-          ),
-        ],
+        attachedEntryLineDrafts({
+          timeEntryRows: attachedTimeEntries,
+          expenseRows: attachedExpenses,
+          vat: ATTACHED_ENTRY_LINE_VAT,
+        }),
         { recordAuditEvent },
       );
       const totals = await recalculateInvoiceTotals(

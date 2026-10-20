@@ -4,11 +4,12 @@ import { eq, inArray } from "drizzle-orm";
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 
 import type { rootDb } from "@/api/db/root";
-import { desktopEditHandoffs } from "@/api/db/schema";
+import { desktopEditHandoffs, workspaces } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   consumeDesktopEditHandoff,
+  readDesktopEditHandoffAccess,
   recordDesktopHandoffFailure,
   DesktopHandoffAccountMismatchError,
 } from "@/api/lib/desktop-edit-handoffs";
@@ -32,12 +33,22 @@ let testDb: TestDatabase;
 let ids: TestIds;
 let db: Pick<typeof rootDb, "update" | "select">;
 const handoffIds: SafeId<"desktopEditHandoff">[] = [];
+/** A matter without a client, reached through membership only. */
+const personalMatterId = createSafeId<"workspace">();
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
   db = asTestRaw<Pick<typeof rootDb, "update" | "select">>(testDb);
+  await testDb.insert(workspaces).values({
+    id: personalMatterId,
+    organizationId: ids.orgA,
+    clientId: null,
+    name: "Personal matter",
+    reference: `REF-${personalMatterId}`,
+    status: "active",
+  });
 });
 
 afterAll(async () => {
@@ -47,6 +58,7 @@ afterAll(async () => {
         .delete(desktopEditHandoffs)
         .where(inArray(desktopEditHandoffs.id, handoffIds));
     }
+    await testDb.delete(workspaces).where(eq(workspaces.id, personalMatterId));
   } finally {
     await releaseRlsFixture();
   }
@@ -70,6 +82,21 @@ const seedHandoff = async (
   handoffIds.push(id);
   return { id, handoffToken };
 };
+
+test("handoff access follows the creator's matter access", async () => {
+  const canWrite = async (
+    createdBy: string,
+    workspaceId: SafeId<"workspace">,
+  ) =>
+    (await readDesktopEditHandoffAccess({ createdBy, workspaceId, db }))
+      ?.canWriteWorkspaceEntities;
+
+  // userAdmin owns orgA and holds no matter membership row.
+  expect(await canWrite(ids.userAdmin, ids.wsA1)).toBe(true);
+  expect(await canWrite(ids.userAdmin, personalMatterId)).toBe(false);
+  expect(await canWrite(ids.userA1, ids.wsA1)).toBe(true);
+  expect(await canWrite(ids.userA1, personalMatterId)).toBe(false);
+});
 
 test("document links report the account selection before redemption", async () => {
   const { id, handoffToken } = await seedHandoff();

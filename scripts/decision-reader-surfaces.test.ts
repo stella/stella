@@ -5,7 +5,7 @@ import ts from "typescript";
 
 import { DECISION_READER_SURFACES } from "../apps/web/src/features/case-law/decision-reader-surfaces";
 
-type ReaderRegistry = Readonly<Record<string, string>>;
+type ReaderRegistry = Readonly<Record<string, readonly string[]>>;
 type ReaderSource = { file: string; text: string };
 type ImportedSymbols = {
   names: Set<string>;
@@ -133,7 +133,7 @@ const includeReaderAliases = (
 const readBindings = (nodes: readonly ts.Node[]) => {
   const byScope = new Map<ts.Node, Map<string, ts.Expression | undefined>>();
   for (const node of nodes) {
-    if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name)) {
+    if (!ts.isVariableDeclaration(node)) {
       continue;
     }
     const scope = functionScope(node);
@@ -142,7 +142,26 @@ const readBindings = (nodes: readonly ts.Node[]) => {
       bindings = new Map();
       byScope.set(scope, bindings);
     }
-    bindings.set(node.name.text, node.initializer);
+    if (ts.isIdentifier(node.name)) {
+      bindings.set(node.name.text, node.initializer);
+      continue;
+    }
+    if (!ts.isObjectBindingPattern(node.name)) {
+      continue;
+    }
+    for (const element of node.name.elements) {
+      const property = element.propertyName ?? element.name;
+      if (
+        element.dotDotDotToken ||
+        element.initializer ||
+        !ts.isIdentifier(element.name) ||
+        !(ts.isIdentifier(property) || ts.isStringLiteral(property)) ||
+        property.text !== "anchors"
+      ) {
+        continue;
+      }
+      bindings.set(element.name.text, node.initializer);
+    }
   }
   return byScope;
 };
@@ -325,8 +344,8 @@ const inspectSource = (
   const imports = readImports(nodes);
   includeReaderAliases(nodes, imports.reader);
   const bindings = readBindings(nodes);
-  const expected = Object.entries(registry).find(
-    ([, registered]) => registered === file,
+  const expected = Object.entries(registry).find(([, registered]) =>
+    registered.includes(file),
   )?.[0];
   const findings: string[] = [];
   let consumerCount = 0;
@@ -376,7 +395,7 @@ const inspectReaderSurfaces = (
       seen.add(readerSource.file);
     }
   }
-  for (const registeredPath of Object.values(registry)) {
+  for (const registeredPath of Object.values(registry).flat()) {
     if (!seen.has(registeredPath)) {
       findings.push(
         `${registeredPath}: registered reader has no DecisionText consumer`,
@@ -387,7 +406,7 @@ const inspectReaderSurfaces = (
 };
 
 const fixturePath = "apps/web/src/features/case-law/reader.tsx";
-const fixtureRegistry = { "full-reader": fixturePath };
+const fixtureRegistry = { "full-reader": [fixturePath] };
 const defaultImports = `import { WebDecisionReader as Reader } from "./web-decision-reader";
 import { useDecisionProvisionAnchors as load } from "./case-viewer/use-decision-provision-anchors";
 import { visibleDecisionBlocks as visible } from "./case-viewer/decision-text.logic";`;
@@ -425,6 +444,35 @@ test("decision reader census accepts aliases with matching decision text inputs"
       fixtureRegistry,
     ),
   ).toEqual([]);
+});
+
+test("decision reader census tracks destructured anchor results without accepting other hook fields", () => {
+  for (const binding of ["{ anchors }", "{ anchors: renamed }"]) {
+    expect(
+      inspectReaderSurfaces(
+        fixture(
+          `const ${binding} = load({ ${loaderInput} }); return <Reader ${readerProps.replace("{anchors}", () => (binding.includes("renamed") ? "{renamed}" : "{anchors}"))} />;`,
+        ),
+        fixtureRegistry,
+      ),
+    ).toEqual([]);
+  }
+  for (const binding of [
+    "{ externalAnchors: anchors }",
+    "{ ...anchors }",
+    "{ anchors = [] }",
+  ]) {
+    expect(
+      inspectReaderSurfaces(
+        fixture(
+          `const ${binding} = load({ ${loaderInput} }); return <Reader ${readerProps} />;`,
+        ),
+        fixtureRegistry,
+      ),
+    ).toEqual([
+      `${fixturePath}: provisionAnchors must receive this reader's useDecisionProvisionAnchors result`,
+    ]);
+  }
 });
 
 test("decision reader census rejects every loader and surface bypass", () => {
@@ -489,7 +537,7 @@ test("decision reader census rejects every loader and surface bypass", () => {
 test("only a registered development route may omit stored-row loading", () => {
   expect(
     inspectReaderSurfaces(fixture('return <Reader surface="development" />;'), {
-      development: fixturePath,
+      development: [fixturePath],
     }),
   ).toContain(`${fixturePath}: development exemption outside routes/dev`);
   const developmentPath = "apps/web/src/routes/dev/reader.tsx";
@@ -499,9 +547,34 @@ test("only a registered development route may omit stored-row loading", () => {
         ...source,
         file: developmentPath,
       })),
-      { development: developmentPath },
+      { development: [developmentPath] },
     ),
   ).toEqual([]);
+});
+
+test("a shared development surface enumerates every consumer in both directions", () => {
+  const paths = [
+    "apps/web/src/routes/dev/first.tsx",
+    "apps/web/src/routes/dev/second.tsx",
+  ];
+  const sources = paths.map((file) => ({
+    file,
+    text: `${defaultImports}\nconst View = () => <Reader surface="development" />;`,
+  }));
+  expect(inspectReaderSurfaces(sources, { development: paths })).toEqual([]);
+  for (const omitted of paths) {
+    expect(
+      inspectReaderSurfaces(
+        sources.filter(({ file }) => file !== omitted),
+        { development: paths },
+      ),
+    ).toEqual([`${omitted}: registered reader has no DecisionText consumer`]);
+    expect(
+      inspectReaderSurfaces(sources, {
+        development: paths.filter((file) => file !== omitted),
+      }),
+    ).toEqual([`${omitted}: unregistered DecisionText consumer`]);
+  }
 });
 
 test("every real decision text reader declares its registered surface and stored-row loading", () => {

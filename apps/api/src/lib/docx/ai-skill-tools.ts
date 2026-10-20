@@ -19,6 +19,7 @@ import { Result } from "better-result";
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import { filterSkillsWithAvailableTools } from "@/api/lib/agent-skills/required-tools";
 import { extractSkillRefSlugs } from "@/api/lib/agent-skills/skill-refs";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
@@ -62,10 +63,15 @@ export const maybeSkillTools = async (
     return Result.err(listed.error);
   }
   // A one-shot generator offers no tool besides the skill reads, so a skill
-  // that requires any tool cannot finish here and is not offered.
-  const skills = filterSkillsWithAvailableTools({
-    offeredToolNames: () => new Set(),
-    skills: listed.value,
+  // that requires any tool cannot finish here and is not offered. The refs in
+  // the instruction are its author's explicit invocation; any other `manual`
+  // skill stays out of the model's reach.
+  const skills = offerSkillsToModel({
+    invokedSkillNames: referencedSlugs,
+    skills: filterSkillsWithAvailableTools({
+      offeredToolNames: () => new Set(),
+      skills: listed.value,
+    }),
   });
   if (!skills.some(({ name }) => referencedSlugs.has(name))) {
     return Result.ok(undefined);

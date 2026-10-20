@@ -144,6 +144,13 @@ export default eslintCompatPlugin({
         };
 
         return {
+          // createOnce state outlives a file: start every file empty, or a
+          // later file reports earlier files' calls.
+          before() {
+            useMutationNames.clear();
+            localTypeNodes.clear();
+            callExpressions.length = 0;
+          },
           ImportDeclaration(node) {
             if (
               !isStringLiteral(node.source) ||

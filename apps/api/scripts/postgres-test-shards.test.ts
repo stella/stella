@@ -2,8 +2,14 @@ import { expect, test } from "bun:test";
 
 import {
   planPostgresTestShards,
+  POSTGRES_SHARD_TEST_BUDGET_SECONDS,
+  POSTGRES_TEST_SHARD_IDS,
+  POSTGRES_UNKNOWN_TEST_SECONDS,
   selectPostgresTestShard,
 } from "./postgres-test-shards";
+
+const budget = POSTGRES_SHARD_TEST_BUDGET_SECONDS;
+const overBudget = `exceeding ${budget}s test budget`;
 
 test("duration shards cover every selected file once and stay within budget", () => {
   const files = ["a", "b", "c", "d", "e"];
@@ -23,15 +29,19 @@ test("duration shards cover every selected file once and stay within budget", ()
 
 test("a single oversized suite and aggregate growth both fail the budget", () => {
   expect(() =>
-    planPostgresTestShards({ files: ["a"], durations: { a: 361 }, count: 3 }),
-  ).toThrow("exceeding 360s test budget");
+    planPostgresTestShards({
+      files: ["a"],
+      durations: { a: budget + 1 },
+      count: POSTGRES_TEST_SHARD_IDS.length,
+    }),
+  ).toThrow(overBudget);
   expect(() =>
     planPostgresTestShards({
       files: ["a", "b", "c"],
-      durations: { a: 200, b: 200, c: 200 },
+      durations: { a: budget * 0.6, b: budget * 0.6, c: budget * 0.6 },
       count: 2,
     }),
-  ).toThrow("exceeding 360s test budget");
+  ).toThrow(overBudget);
 });
 
 test("missing durations conservatively use five seconds or the measured median", () => {
@@ -47,11 +57,14 @@ test("missing durations conservatively use five seconds or the measured median",
   ).toEqual([{ files: ["a", "b"], seconds: 40 }]);
   expect(() =>
     planPostgresTestShards({
-      files: Array.from({ length: 73 }, (_, i) => String(i)),
+      files: Array.from(
+        { length: Math.floor(budget / POSTGRES_UNKNOWN_TEST_SECONDS) + 1 },
+        (_, i) => String(i),
+      ),
       durations: {},
       count: 1,
     }),
-  ).toThrow("exceeding 360s test budget");
+  ).toThrow(overBudget);
 });
 
 test("small selections permit empty shards and reject invalid shard input", () => {

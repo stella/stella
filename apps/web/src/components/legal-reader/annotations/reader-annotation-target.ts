@@ -11,7 +11,6 @@ import {
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { openPublicLawChat } from "@/components/public-law-ask";
-import { formatDecisionCitation } from "@/features/case-law/citation-format";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
 import { ensureLegalDocumentChatThread } from "@/features/chat/legal-document-chat-threads";
 import {
@@ -19,7 +18,6 @@ import {
   useChatDraftStore,
 } from "@/lib/chat-draft-store";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
-import { formatStatuteCitation } from "@/lib/statutes/statute-format";
 
 /**
  * The document a reader is marking, in the terms a citation and a chat
@@ -124,43 +122,6 @@ export const readerSelectionLocator = ({
     }
   }
   return last;
-};
-
-/** The citation a copied quotation carries. */
-export const readerTargetCitation = ({
-  locator,
-  target,
-}: {
-  locator: string | null;
-  target: ReaderAnnotationTarget;
-}): string => {
-  switch (target.type) {
-    case "decision": {
-      return formatDecisionCitation({
-        caseNumber: target.caseNumber,
-        caseNumberType: target.caseNumberType,
-        country: target.country,
-        court: target.court,
-        decisionDate: target.decisionDate,
-        decisionType: target.decisionType,
-        ecli: target.ecli,
-        name: target.name,
-        pincite: locator,
-      });
-    }
-    case "statute": {
-      return formatStatuteCitation({
-        eli: target.eli,
-        provision: locator,
-        title: target.title,
-        versionValidFrom: target.versionValidFrom,
-      });
-    }
-    default: {
-      target satisfies never;
-      return panic(`Unhandled reader target: ${String(target)}`);
-    }
-  }
 };
 
 /**

@@ -24,14 +24,22 @@
 //     within a short wait, so an upgrade that skipped the lane and only
 //     waited briefly for ACCESS EXCLUSIVE could not win, as in production.
 //     Prints CONTENTION_HELD_LINE once both sessions hold their locks, so a
-//     caller can wait for that before it starts the work under test, and
-//     exits non-zero if a write fails. Never run this against a database
+//     caller can wait for that before it starts the work under test, then
+//     one writer-event line per committed transaction and per refused lane
+//     try (scripts/migration-rehearsal-writer-gap.ts reads them), and exits
+//     non-zero if a write fails. Never run this against a database
 //     that matters.
 
 import { panic } from "better-result";
 import { SQL } from "bun";
 
-import { runUnderCorpusSchemaLane } from "../apps/api/src/db/corpus-schema-lane";
+import {
+  CONTENDERS,
+  CONTENTION_HELD_LINE,
+  CONTENTION_HOLD_MS,
+  contendSession,
+} from "./migration-rehearsal-contender";
+import { formatWriterEvent } from "./migration-rehearsal-writer-gap";
 
 const COMMANDS = ["assert-empty", "contend", "digest"] as const;
 type Command = (typeof COMMANDS)[number];
@@ -56,67 +64,11 @@ if (!url) {
 type CountRow = { count: number };
 type DigestRow = { digest: string };
 
-/**
- * How long each contending transaction holds its row locks: longer than a
- * short DDL lock wait, the way the corpus workers' batches are.
- */
-const CONTENTION_HOLD_MS = 5000;
-/**
- * Two holders half a hold out of phase: whenever one is about to commit the
- * other has half a hold left, so a wait shorter than that never finds both
- * gone at once.
- */
-const CONTENDERS = 2;
-/** Printed once every contending session holds its locks. */
-const CONTENTION_HELD_LINE = "contending: locks held";
 /** Tables production's workers write to continuously, with a no-op touch. */
 const CONTENDED_UPDATES = [
   "UPDATE case_law_decisions SET updated_at = updated_at WHERE id = (SELECT id FROM case_law_decisions ORDER BY id LIMIT 1)",
   "UPDATE case_law_citations SET resolution_rule_id = resolution_rule_id WHERE id = (SELECT id FROM case_law_citations ORDER BY id LIMIT 1)",
 ] as const;
-
-type RawTransaction = { execute: (query: string) => Promise<unknown> };
-
-/** One session's `BEGIN`/`COMMIT` pair as the lane helper's database. */
-const rawTransactions = (connection: SQL) => ({
-  transaction: async <TResult>(
-    fn: (tx: RawTransaction) => Promise<TResult>,
-  ): Promise<TResult> => {
-    await connection.unsafe("BEGIN");
-    try {
-      const result = await fn({
-        execute: async (query) => await connection.unsafe(query),
-      });
-      await connection.unsafe("COMMIT");
-      return result;
-    } catch (error: unknown) {
-      await connection.unsafe("ROLLBACK");
-      throw error;
-    }
-  },
-});
-
-/**
- * One held transaction after another on one session, until the process is
- * killed. Recursive rather than a loop with an awaited body: each
- * transaction must commit before the next begins, so the sequencing is
- * structural. `onHeld` fires once, after the first transaction's updates
- * have acquired their locks, never before.
- */
-const contendForever = async (
-  connection: SQL,
-  onHeld: (() => void) | null,
-): Promise<never> => {
-  await runUnderCorpusSchemaLane({
-    database: rawTransactions(connection),
-    work: async () => {
-      await connection.unsafe(CONTENDED_UPDATES.join("; "));
-      onHeld?.();
-      await Bun.sleep(CONTENTION_HOLD_MS);
-    },
-  });
-  return await contendForever(connection, null);
-};
 
 /** Every contender, staggered, announced together once all hold. */
 const contendWithAll = async (databaseUrl: string): Promise<never> => {
@@ -127,14 +79,25 @@ const contendWithAll = async (databaseUrl: string): Promise<never> => {
       console.log(CONTENTION_HELD_LINE);
     }
   };
-  const chains = Array.from({ length: CONTENDERS }, async (_, index) => {
-    await Bun.sleep((CONTENTION_HOLD_MS * index) / CONTENDERS);
+  // Never aborted: the rehearsal ends the contender by killing it.
+  const { signal } = new AbortController();
+  const chains = Array.from({ length: CONTENDERS }, async (_, session) => {
+    await Bun.sleep((CONTENTION_HOLD_MS * session) / CONTENDERS);
     const connection = new SQL({
       url: databaseUrl,
       max: 1,
       connectionTimeout: 30,
     });
-    return await contendForever(connection, onHeld);
+    await contendSession({
+      connection,
+      updates: CONTENDED_UPDATES,
+      holdMs: CONTENTION_HOLD_MS,
+      onHeld,
+      onEvent: (kind, at) => {
+        console.log(formatWriterEvent({ kind, session, at }));
+      },
+      signal,
+    });
   });
   await Promise.all(chains);
   return panic("contenders never return");

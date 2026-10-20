@@ -13,6 +13,7 @@ import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { readRootPoolReport } from "@/api/db/root";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { accountExportsRoute } from "@/api/handlers/account-exports/routes";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
@@ -134,6 +135,7 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
+import { applyDiscoveryMetadataCachePolicy } from "@/api/lib/auth/discovery-metadata-cache";
 import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
@@ -173,7 +175,10 @@ import {
   completeRequest,
   withFinalResponseCompletion,
 } from "@/api/lib/observability/request-lifecycle";
-import { emitEventLoopDelayMetric } from "@/api/lib/observability/request-metrics";
+import {
+  emitEventLoopDelayMetric,
+  emitProcessMemoryLog,
+} from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import {
   closeActionAdmissionRedis,
@@ -210,6 +215,7 @@ import {
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
+import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
@@ -260,17 +266,33 @@ const startMemoryPressureHandler = () => {
   );
 };
 
+const readProcessMemoryReport = () => {
+  const usage = process.memoryUsage();
+  return {
+    rssBytes: usage.rss,
+    heapUsedBytes: usage.heapUsed,
+    arrayBuffersBytes: usage.arrayBuffers,
+    uploadFinalizeInFlightBytes: UPLOAD_FINALIZE_ADMISSION.inUseBytes(),
+  };
+};
+
 // One stall on this loop delays every request the task is serving, so it is
 // reported as soon as the loop is free, and its window's delay as a metric.
 const startEventLoopDelayReporting = () => {
   let reporting: Promise<void> | undefined;
   startEventLoopDelayMonitor({
+    onReportInterval: () => emitProcessMemoryLog(readProcessMemoryReport()),
     onReport: (delay) => {
       if (reporting !== undefined) {
         return;
       }
       reporting = readRootPoolReport()
-        .then((rootPool) => emitEventLoopDelayMetric({ ...delay, rootPool }))
+        .then((rootPool) =>
+          emitEventLoopDelayMetric({
+            ...delay,
+            rootPool,
+          }),
+        )
         .finally(() => {
           reporting = undefined;
         });
@@ -341,6 +363,9 @@ const api = new Elysia()
   .use(multipartFormParser)
   .onRequest(({ set }) => {
     setSecurityHeaders(set);
+  })
+  .onRequest(({ request, set }) => {
+    applyDiscoveryMetadataCachePolicy({ request, set });
   })
   .onRequest(async (context) => {
     const { request, set } = context;
@@ -599,6 +624,7 @@ const api = new Elysia()
       .use(tasksRoute)
       .use(workObligationsRoute)
       .use(myWorkRoute)
+      .use(accountExportsRoute)
       .use(meRoute)
       .use(localDevVersionedRoutes)
       .use(verifyAuthRoute),

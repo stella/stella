@@ -1,7 +1,10 @@
 import { inArray } from "drizzle-orm";
 import * as v from "valibot";
 
-import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
+import {
+  legislationDocuments,
+  publishedCaseLawDecisions,
+} from "@/api/db/schema";
 import type { CorpusResourceCountryResolver } from "@/api/handlers/chat/tools/corpus-scope";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
@@ -25,13 +28,13 @@ export const corpusResourceCountries: CorpusResourceCountryResolver = {
       async (tx) =>
         await tx
           .select({
-            id: caseLawDecisions.id,
-            country: caseLawDecisions.country,
+            id: publishedCaseLawDecisions.id,
+            country: publishedCaseLawDecisions.country,
           })
-          .from(caseLawDecisions)
+          .from(publishedCaseLawDecisions)
           .where(
             inArray(
-              caseLawDecisions.id,
+              publishedCaseLawDecisions.id,
               known.map(brandPersistedCaseLawDecisionId),
             ),
           ),
