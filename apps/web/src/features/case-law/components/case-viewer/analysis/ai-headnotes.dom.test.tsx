@@ -127,13 +127,19 @@ test("holding cites sorted source paragraphs inline with numbered and position l
   fireEvent.click(view.getByRole("button", { name: "Paragraph 9–12" }));
   expect(jumps).toEqual(["p-2"]);
   expect(
-    view.container.querySelector('[data-anchor="p-2"]')?.dataset["highlight"],
+    view.container.querySelector<HTMLElement>('[data-anchor="p-2"]')?.dataset[
+      "highlight"
+    ],
   ).toBe("");
   expect(
-    view.container.querySelector('[data-anchor="p-3"]')?.dataset["highlight"],
+    view.container.querySelector<HTMLElement>('[data-anchor="p-3"]')?.dataset[
+      "highlight"
+    ],
   ).toBe("");
   expect(
-    view.container.querySelector('[data-anchor="p-4"]')?.dataset["highlight"],
+    view.container.querySelector<HTMLElement>('[data-anchor="p-4"]')?.dataset[
+      "highlight"
+    ],
   ).toBeUndefined();
 });
 

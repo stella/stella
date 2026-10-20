@@ -12,7 +12,10 @@ import {
   visibleDecisionBlocks,
 } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  type DocumentAst,
+  parseDocumentAst,
+} from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
@@ -168,6 +171,9 @@ export type DecisionWorkspaceProps =
   | GatedDecisionWorkspaceProps;
 
 /** What the margin's source filter means for the reader's own marks. */
+/** A decision without a parsed body has no blocks to range over. */
+const NO_BLOCKS: DocumentAst["blocks"] = [];
+
 const MARKS_FOR_NOTES_FILTER = {
   ai: "none",
   all: "all",
@@ -572,7 +578,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         container.scrollTop,
       behavior: "instant",
     });
-    const blocks = ast?.blocks ?? [];
+    const blocks = ast?.blocks ?? NO_BLOCKS;
     const range = paragraphRangeIndices(blocks, {
       startAnchorId: anchorId,
       endAnchorId,
@@ -606,7 +612,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     hasAiHeadnotes(completeAnalysis) ? (
       <AiHeadnotes
         analysis={completeAnalysis}
-        blocks={ast?.blocks ?? []}
+        blocks={ast?.blocks ?? NO_BLOCKS}
         onAnchorClick={jumpToAnchor}
       />
     ) : null;
