@@ -855,9 +855,50 @@ type PublisherRuntime<Target extends PublisherTarget> = {
     signal?: AbortSignal,
   ) => Promise<number>;
   defaultMinimumIntervalMs: number;
-  onTelemetry:
-    | ((event: PublisherTelemetry) => void | Promise<void>)
-    | undefined;
+  onTelemetry: ((event: PublisherTelemetry) => Promise<void>) | undefined;
+};
+
+const abortBoundRuntimeBrand = Symbol("abort-bound-publisher-runtime");
+type AbortBoundMember<Member> =
+  NonNullable<Member> extends (...args: infer Args) => Promise<infer Value>
+    ? ((...args: Args) => Promise<Value>) | Extract<Member, undefined>
+    : Member;
+type AbortBoundPublisherRuntime<Target extends PublisherTarget> = {
+  [Key in keyof PublisherRuntime<Target>]: AbortBoundMember<
+    PublisherRuntime<Target>[Key]
+  >;
+} & { readonly [abortBoundRuntimeBrand]: true };
+
+const bindPublisherRuntimeToAbort = <Target extends PublisherTarget>(
+  runtime: PublisherRuntime<Target>,
+  signal: AbortSignal | undefined,
+): AbortBoundPublisherRuntime<Target> => {
+  const onTelemetry = runtime.onTelemetry;
+  const bound = {
+    fetcher: async (...args: Parameters<PublisherRuntime<Target>["fetcher"]>) =>
+      await raceAbort(runtime.fetcher(...args), signal),
+    validateTarget: async (
+      ...args: Parameters<PublisherRuntime<Target>["validateTarget"]>
+    ) => await raceAbort(runtime.validateTarget(...args), signal),
+    robotsFor: async (
+      ...args: Parameters<PublisherRuntime<Target>["robotsFor"]>
+    ) => await raceAbort(runtime.robotsFor(...args), signal),
+    reserve: async (...args: Parameters<PublisherRuntime<Target>["reserve"]>) =>
+      await raceAbort(runtime.reserve(...args), signal),
+    defaultMinimumIntervalMs: runtime.defaultMinimumIntervalMs,
+    onTelemetry: onTelemetry
+      ? async (
+          ...args: Parameters<
+            NonNullable<PublisherRuntime<Target>["onTelemetry"]>
+          >
+        ) => await raceAbort(onTelemetry(...args), signal)
+      : undefined,
+  } satisfies {
+    [Key in keyof PublisherRuntime<Target>]: AbortBoundMember<
+      PublisherRuntime<Target>[Key]
+    >;
+  };
+  return Object.assign(bound, { [abortBoundRuntimeBrand]: true as const });
 };
 
 type WalkState = {
@@ -872,13 +913,13 @@ type WalkState = {
 const enforcePublisherPolicy = async <Target extends PublisherTarget>(
   state: WalkState,
   options: PublisherFetchOptions,
-  runtime: PublisherRuntime<Target>,
+  runtime: AbortBoundPublisherRuntime<Target>,
 ): Promise<Result<number, PublisherPolicyError>> => {
   // The robots load is shared; an aborting caller stops waiting for it
   // without cancelling it for the others.
   const signal = state.requestInit?.signal ?? undefined;
   const loaded = await Result.tryPromise(async () =>
-    raceAbort(runtime.robotsFor(state.url.origin), signal),
+    runtime.robotsFor(state.url.origin),
   );
   if (Result.isError(loaded)) {
     return Result.err(
@@ -938,6 +979,17 @@ const enforcePublisherPolicy = async <Target extends PublisherTarget>(
     });
   });
   if (Result.isError(recorded)) {
+    if (signal?.aborted) {
+      return Result.err(
+        new PublisherRequestAbortedError({
+          message:
+            "Publisher request was aborted while recording its licensed bypass",
+          url: state.url.href,
+          origin: state.url.origin,
+          cause: recorded.error.cause,
+        }),
+      );
+    }
     return Result.err(
       new PublisherBypassUnauditedError({
         message: "Recording the licensed bypass failed",
@@ -963,7 +1015,7 @@ const redirectLimitResult = (state: WalkState) => {
 const walkPublisherRedirects = async <Target extends PublisherTarget>(
   input: string | URL,
   options: PublisherFetchOptions,
-  runtime: PublisherRuntime<Target>,
+  runtime: AbortBoundPublisherRuntime<Target>,
 ): Promise<Result<PublisherFetchResult, PublisherPolicyError>> => {
   const url = new URL(input);
   const state: WalkState = {
@@ -976,10 +1028,7 @@ const walkPublisherRedirects = async <Target extends PublisherTarget>(
   for (let redirects = 0; ; redirects += 1) {
     const signal = state.requestInit?.signal ?? undefined;
     const checked = await Result.tryPromise(async () =>
-      raceAbort(
-        validatePublisherTarget(state.url, runtime.validateTarget),
-        signal,
-      ),
+      validatePublisherTarget(state.url, runtime.validateTarget),
     );
     if (Result.isError(checked)) {
       return Result.err(
@@ -1021,14 +1070,11 @@ const walkPublisherRedirects = async <Target extends PublisherTarget>(
     const headers = new Headers(state.requestInit?.headers);
     headers.set("User-Agent", PUBLISHER_USER_AGENT);
     const fetched = await Result.tryPromise(async () =>
-      raceAbort(
-        runtime.fetcher(validated.value, {
-          ...state.requestInit,
-          headers,
-          redirect: "manual",
-        }),
-        signal,
-      ),
+      runtime.fetcher(validated.value, {
+        ...state.requestInit,
+        headers,
+        redirect: "manual",
+      }),
     );
     if (Result.isError(fetched)) {
       if (!signal?.aborted) {
@@ -1121,13 +1167,20 @@ export const createPolitePublisherFetch = <Target extends PublisherTarget>({
     robotsLoadTimeoutMs,
   });
   const reserve = createOriginScheduler(clock);
+  const runtime: PublisherRuntime<Target> = {
+    fetcher,
+    validateTarget,
+    robotsFor,
+    reserve,
+    defaultMinimumIntervalMs,
+    onTelemetry: onTelemetry
+      ? async (event) => await onTelemetry(event)
+      : undefined,
+  };
   return async (input: string | URL, options: PublisherFetchOptions = {}) =>
-    await walkPublisherRedirects(input, options, {
-      fetcher,
-      validateTarget,
-      robotsFor,
-      reserve,
-      defaultMinimumIntervalMs,
-      onTelemetry,
-    });
+    await walkPublisherRedirects(
+      input,
+      options,
+      bindPublisherRuntimeToAbort(runtime, options.init?.signal ?? undefined),
+    );
 };

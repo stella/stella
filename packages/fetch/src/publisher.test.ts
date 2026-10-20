@@ -781,6 +781,43 @@ describe("publisher scheduler", () => {
     expect(requested).toEqual(["https://publisher.example/robots.txt"]);
   });
 
+  test("aborting a stalled licensed bypass recording returns a typed refusal promptly", async () => {
+    const controller = new AbortController();
+    let markRecordingStarted!: () => void;
+    const recordingStarted = new Promise<void>((resolve) => {
+      markRecordingStarted = resolve;
+    });
+    let resourceFetches = 0;
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      onTelemetry: async () => {
+        markRecordingStarted();
+        await new Promise<never>(() => {});
+      },
+      fetcher: async (input) => {
+        if (input.url.pathname === "/robots.txt") {
+          return new Response("User-agent: *\nDisallow: /");
+        }
+        resourceFetches += 1;
+        return new Response("licensed document");
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const outcomePromise = request("https://publisher.example/one", {
+      init: { signal: controller.signal },
+      policy: licensedPolicy,
+    });
+    await recordingStarted;
+    controller.abort();
+    const outcome = await outcomePromise;
+
+    expect(Result.isError(outcome) && outcome.error._tag).toBe(
+      "publisher_request_aborted",
+    );
+    expect(resourceFetches).toBe(0);
+  }, 1000);
+
   test("licensed sources record their basis and cap unsupported delays", async () => {
     let now = 0;
     const sleeps: number[] = [];
