@@ -28,7 +28,9 @@ import { Result, panic } from "better-result";
 //   type-id order, which follows whichever literal the checker happened to
 //   create first (see lib/web-api-union-order.ts). Intersection members and
 //   object properties keep declaration order, which the compiler preserves.
-// - Anything the printer cannot express structurally falls back to
+// - Platform objects in wire payloads fail with their contract path instead of
+//   being expanded into unstable TypeScript or runtime library declarations.
+// - Anything else the printer cannot express structurally falls back to
 //   `typeToString` and is reported; the identity check then decides.
 // - A route's `response` prints as the client reads it: JSON carries a `Date`
 //   as its ISO string and the client never revives it, so every `Date` reached
@@ -293,7 +295,7 @@ const FUNCTION_TYPE = /[=]>/u;
 const RESPONSE_DATES = { wire: "wire", declared: "declared" } as const;
 type ResponseDates = (typeof RESPONSE_DATES)[keyof typeof RESPONSE_DATES];
 
-// The members Elysia gives every route in its `~Routes` tree.
+// The members Elysia gives every route in its public route registry.
 const ROUTE_MEMBERS = ["body", "params", "query", "headers", "response"];
 
 type PrinterOptions = {
@@ -557,6 +559,7 @@ export const printContract = ({
   };
   // Set while printing a route response in the wire printout.
   let wire = false;
+  let wirePayload = false;
   const withWire = <T>(value: boolean, run: () => T): T => {
     const outer = wire;
     wire = value;
@@ -564,6 +567,15 @@ export const printContract = ({
       return run();
     } finally {
       wire = outer;
+    }
+  };
+  const withinWirePayload = <T>(run: () => T): T => {
+    const outer = wirePayload;
+    wirePayload = true;
+    try {
+      return run();
+    } finally {
+      wirePayload = outer;
     }
   };
   const token = (id: number) => `\uE000${id}\uE000`;
@@ -811,7 +823,9 @@ export const printContract = ({
       }
       const printed = at(key, () => {
         if (wireResponse && key === "response") {
-          return withWire(true, () => print(propertyType));
+          return withinWirePayload(() =>
+            withWire(true, () => print(propertyType)),
+          );
         }
         if (!optional) {
           return print(propertyType);
@@ -1005,6 +1019,19 @@ export const printContract = ({
       }
       const name = globalName(reference.target.symbol);
       if (name !== undefined) {
+        if (wirePayload && name !== "Date") {
+          const declaration = reference.target.symbol.declarations?.at(0);
+          const declarationPath =
+            declaration === undefined
+              ? "an unknown platform declaration"
+              : repoRelativePath(
+                  REPO_ROOT,
+                  declaration.getSourceFile().fileName,
+                );
+          return panic(
+            `generate-web-api-types: platform object ${name} at ${pathStack.join("/")} is declared in ${declarationPath}; route wire payloads must use serializable application types`,
+          );
+        }
         const typeArguments = checker
           .getTypeArguments(reference)
           .slice(0, reference.target.typeParameters?.length ?? 0);
@@ -1015,6 +1042,19 @@ export const printContract = ({
     } else if (isInterfaceOrClass(type.objectFlags)) {
       const name = globalName(type.symbol);
       if (name !== undefined) {
+        if (wirePayload && name !== "Date") {
+          const declaration = type.symbol.declarations?.at(0);
+          const declarationPath =
+            declaration === undefined
+              ? "an unknown platform declaration"
+              : repoRelativePath(
+                  REPO_ROOT,
+                  declaration.getSourceFile().fileName,
+                );
+          return panic(
+            `generate-web-api-types: platform object ${name} at ${pathStack.join("/")} is declared in ${declarationPath}; route wire payloads must use serializable application types`,
+          );
+        }
         return name;
       }
     }

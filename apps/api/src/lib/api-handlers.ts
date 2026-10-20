@@ -27,6 +27,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
+import type { StatusResponse } from "@/api/lib/elysia-contract";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
@@ -799,7 +800,7 @@ export const safePublicHandlerResponseSchemasWithStatusText = <
 // Eden sees distinct error codes instead of a single widened response.
 type SafeStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
   TStatusCode extends HandlerErrorStatusCode
-    ? ElysiaCustomStatusResponse<TStatusCode, SafeErrorBody>
+    ? StatusResponse<TStatusCode, SafeErrorBody>
     : never;
 
 /**
@@ -2186,7 +2187,7 @@ export const isPublicReadBudgetHandler = (handler: unknown): boolean =>
 
 type SafePublicStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
   TStatusCode extends HandlerErrorStatusCode
-    ? ElysiaCustomStatusResponse<
+    ? StatusResponse<
         TStatusCode,
         string | ReturnType<typeof projectPublicErrorBody>
       >
@@ -2247,7 +2248,7 @@ const toBoundedPublicErrorStatus = (
 
 /** What a handler answers with a 200: its result minus statuses and raw bodies. */
 type SuccessPayload<TResult> = TResult extends
-  | ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status>
+  | StatusResponse<infer _Code, infer _Body>
   | Response
   ? never
   : TResult;

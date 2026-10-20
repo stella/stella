@@ -125,6 +125,42 @@ const aliasesOf = (source: string): Map<string, string> =>
     ]),
   );
 
+test("rejects platform objects in route wire payloads with their contract path", () => {
+  const source = `
+type Route = {
+  body: unknown;
+  params: {};
+  query: {};
+  headers: {};
+  response: { 200: { leaked: Headers } };
+};
+export type WebApiContract = { WebRoutes: { files: { get: Route } } };
+`;
+
+  expect(() => printSource(programOf(source))).toThrow(
+    /platform object Headers at WebRoutes\/files\/get\/response\/200\/leaked .*lib\.dom\.d\.ts/u,
+  );
+});
+
+test("repository contracts do not index Elysia private type members", async () => {
+  const privateMember =
+    /["']~(?:Routes|Prefix|Singleton|Definitions|Metadata|Ephemeral|Volatile)["']/u;
+  const findings: string[] = [];
+  const files = new Bun.Glob("{apps,packages,scripts}/**/*.{ts,tsx}");
+  for await (const file of files.scan({
+    cwd: path.resolve(import.meta.dir, "../../.."),
+  })) {
+    const source = await Bun.file(
+      path.resolve(import.meta.dir, "../../..", file),
+    ).text();
+    if (privateMember.test(source)) {
+      findings.push(file);
+    }
+  }
+
+  expect(findings).toEqual([]);
+});
+
 test("preserves an imported generic interface behind a local alias", () => {
   const { program, contractSource, checker } = programOf(`
 import type { StandardTypedV1 } from "@standard-schema/spec";

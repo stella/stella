@@ -1,5 +1,6 @@
 import type { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
 import type { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
+import type { RoutesOf } from "@/api/lib/elysia-contract";
 
 // Derive identifiers from the mounted Elysia registry, without importing any
 // handlers at runtime or traversing their payload/response types.
@@ -10,5 +11,5 @@ type RouteIds<Tree, Path extends string = ""> = {
 }[keyof Tree & string];
 
 export type PublicRouteId =
-  | RouteIds<(typeof publicLegislationRoute)["~Routes"]>
-  | RouteIds<(typeof publicCaseLawRoute)["~Routes"]>;
+  | RouteIds<RoutesOf<typeof publicLegislationRoute>>
+  | RouteIds<RoutesOf<typeof publicCaseLawRoute>>;

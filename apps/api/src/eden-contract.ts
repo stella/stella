@@ -9,6 +9,7 @@ import type {
 import type { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import type { memoriesRoute } from "@/api/handlers/memories/routes";
 import type { PositionDecisionSummary } from "@/api/lib/document-review/position-decisions";
+import type { RoutesOf } from "@/api/lib/elysia-contract";
 import type { LegalListSourceLocator } from "@/api/lib/lists/types";
 import type { GlobalSearchHit } from "@/api/lib/search/types";
 import type {
@@ -34,7 +35,7 @@ import type {
 import type { GradedPosition } from "@/api/lib/workflow/position-runtime";
 import type api from "@/api/server.js";
 
-type ApiRoutes = (typeof api)["~Routes"];
+type ApiRoutes = RoutesOf<typeof api>;
 type ApiV1Routes = ApiRoutes["v1"];
 type ApiEntityRoutes = ApiV1Routes["entities"];
 type ApiWorkspaceEntityRoutes = ApiEntityRoutes[":workspaceId"];
@@ -42,8 +43,8 @@ type ApiEntityResourceRoutes = ApiWorkspaceEntityRoutes["entity"];
 type ApiEntityByIdRoutes = ApiEntityResourceRoutes[":entityId"];
 // Registered only in an open runtime (server.ts), so the inferred app type
 // does not carry them; the browser's local Dev menu still calls them.
-type LocalDevPublicRoutes = (typeof devPublicRoute)["~Routes"];
-type LocalDevV1Routes = (typeof devRoute)["~Routes"];
+type LocalDevPublicRoutes = RoutesOf<typeof devPublicRoute>;
+type LocalDevV1Routes = RoutesOf<typeof devRoute>;
 type ApiWorkspaceRoutes = ApiV1Routes["workspaces"];
 type ApiWorkspaceByIdRoutes = ApiWorkspaceRoutes[":workspaceId"];
 
@@ -95,7 +96,7 @@ export type WebApiContract = {
   WebRoutes: WebRoutes;
   CorrespondenceRoutes: CorrespondenceRoutes;
   MyTimeEntriesRoutes: MyTimeEntriesRoutes;
-  MemoriesRoutes: (typeof memoriesRoute)["~Routes"];
+  MemoriesRoutes: RoutesOf<typeof memoriesRoute>;
   ChatAnonRestoration: ChatAnonRestoration;
   ChatClientTools: ChatClientTools;
   ChatMessage: ChatMessage;
