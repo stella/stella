@@ -60,7 +60,7 @@ test("current content follows organization and matter scope", async () => {
   await inMatter(async (tx) => {
     const rows = await readCurrent(tx);
     expect(rows.map(({ entityId }) => entityId)).toEqual([ids.entityA1]);
-    expect(rows.at(0)?.ciphertext).toEqual(Buffer.from("extracted text a1"));
+    expect(rows.at(0)?.text).toBe("extracted text a1");
     expect(
       await loadCurrentExtractedContents(tx, {
         entityIds: [ids.entityA1],
@@ -78,6 +78,23 @@ test("current content follows organization and matter scope", async () => {
   });
 });
 
+test("the required matter list narrows an otherwise authorized transaction", async () => {
+  await createDryScopedQuery(database)(
+    [ids.wsA1, ids.wsA2],
+    ids.orgA,
+    async (tx) => {
+      expect(
+        await loadCurrentExtractedContents(tx, {
+          entityIds: [ids.entityA1],
+          organizationId: ids.orgA,
+          workspaceIds: [ids.wsA2],
+        }),
+      ).toEqual([]);
+    },
+    ids.userAdmin,
+  );
+});
+
 test.each(["compat search", "cross-matter read"])(
   "%s returns extracted text only from an authorized matter",
   async () => {
@@ -88,7 +105,7 @@ test.each(["compat search", "cross-matter read"])(
         workspaceIds: [ids.wsA1],
       });
       expect(rows.map(({ entityId }) => entityId)).toEqual([ids.entityA1]);
-      expect(rows.at(0)?.ciphertext).toEqual(Buffer.from("extracted text a1"));
+      expect(rows.at(0)?.text).toBe("extracted text a1");
     });
   },
 );
@@ -189,7 +206,9 @@ test.each(["exact", "legacy"] as const)(
             sourceSha256Hex: null,
           })
           .where(eq(extractedContent.entityId, ids.entityA1));
-        expect(await readCurrent(tx)).toHaveLength(1);
+        const legacyRows = await readCurrent(tx);
+        expect(legacyRows).toHaveLength(1);
+        expect(legacyRows.at(0)?.sourceFieldId).toBe(ids.fileFieldA1);
       }
       await tx
         .update(entities)

@@ -22,15 +22,12 @@ describe("OCR text export", () => {
       async (callback: (tx: object) => Promise<unknown>) => {
         scopedDbCall += 1;
         if (scopedDbCall === 1) {
-          return [
-            {
-              ciphertext: Buffer.from("Příliš žluťoučký kůň"),
-              content: { fileName: "smlouva.pdf", type: "file" },
-              entityId,
-              iv: Buffer.alloc(12),
-              ocrRunId: runId,
-            },
-          ];
+          return {
+            content: { fileName: "smlouva.pdf", type: "file" },
+            entityId,
+            ocrRunId: runId,
+            text: "Příliš žluťoučký kůň",
+          };
         }
         return await callback({});
       },
@@ -75,7 +72,7 @@ describe("OCR text export", () => {
 
   test("returns 404 without auditing when no tenant-scoped current projection exists", async () => {
     let audited = false;
-    const scopedDb = asTestRaw<ScopedDb>(async () => []);
+    const scopedDb = asTestRaw<ScopedDb>(async () => null);
 
     const response = await readOcrExport({
       fieldId,

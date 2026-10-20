@@ -23,7 +23,6 @@ import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import { decryptContent } from "@/api/lib/content-encryption";
 import {
   isCurrentDeadlineSource,
   loadCurrentDeadlineSource,
@@ -422,13 +421,7 @@ export const runDocumentDeadlineScout = async ({
             if (!source) {
               return [];
             }
-            const text = capText(
-              await decryptContent(
-                run.organizationId,
-                source.ciphertext,
-                source.iv,
-              ),
-            );
+            const text = capText(source.text);
             if (text.length < DEADLINE_TEXT_MIN_CHARS) {
               return [];
             }

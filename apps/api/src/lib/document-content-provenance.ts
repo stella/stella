@@ -11,6 +11,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
+import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
 
 type ExtractedContentProvenance = {
@@ -178,7 +179,7 @@ const loadCurrentExtractedContentsFromDatabase = async (
     organizationId,
     workspaceIds,
   }: Omit<LoadCurrentExtractedContentsOptions, "workspaceIds"> & {
-    workspaceIds?: SafeId<"workspace">[] | undefined;
+    workspaceIds: SafeId<"workspace">[] | null;
   },
 ) => {
   if (entityIds.length === 0 || workspaceIds?.length === 0) {
@@ -188,7 +189,7 @@ const loadCurrentExtractedContentsFromDatabase = async (
     where: {
       entityId: { in: entityIds },
       organizationId: { eq: organizationId },
-      workspaceId: workspaceIds ? { in: workspaceIds } : undefined,
+      workspaceId: workspaceIds ? { in: [...workspaceIds] } : undefined,
     },
     columns: {
       entityId: true,
@@ -228,26 +229,46 @@ const loadCurrentExtractedContentsFromDatabase = async (
     },
     limit: entityIds.length,
   });
-  return rows.flatMap((row) => {
-    const entity = row.entity;
-    const version = entity?.currentVersion;
-    if (
-      !entity ||
-      !version ||
-      version.deletedAt !== null ||
-      entity.workspace?.status === "deleting"
-    ) {
-      return [];
-    }
-    const current = selectCurrentExtractedContent({
-      extracted: row,
-      allowLegacy: entity.versions.at(0)?.id === version.id,
-      currentVersionCreatedAt: version.createdAt,
-      currentVersionId: version.id,
-      fields: version.fields,
-    });
-    return current ? [{ ...current, name: entity.name }] : [];
-  });
+  const resolved = await Promise.all(
+    rows.map(async (row) => {
+      const entity = row.entity;
+      const version = entity?.currentVersion;
+      if (
+        !entity ||
+        !version ||
+        version.deletedAt !== null ||
+        entity.workspace?.status === "deleting"
+      ) {
+        return null;
+      }
+      const current = selectCurrentExtractedContent({
+        extracted: row,
+        allowLegacy: entity.versions.at(0)?.id === version.id,
+        currentVersionCreatedAt: version.createdAt,
+        currentVersionId: version.id,
+        fields: version.fields,
+      });
+      if (!current) {
+        return null;
+      }
+      const sourceField = resolveCurrentExtractionFileField({
+        currentVersionId: version.id,
+        extracted: current,
+        fields: version.fields,
+      });
+      if (!sourceField) {
+        return null;
+      }
+      const { ciphertext, iv, ...provenance } = current;
+      return {
+        ...provenance,
+        sourceFieldId: sourceField.id,
+        name: entity.name,
+        text: await decryptContent(organizationId, ciphertext, iv),
+      };
+    }),
+  );
+  return resolved.filter((row) => row !== null);
 };
 
 export const loadCurrentExtractedContents = async (
@@ -266,7 +287,7 @@ export const loadCurrentExtractedContentsForSearchIndex = async (
   await loadCurrentExtractedContentsFromDatabase(database, {
     entityIds,
     organizationId,
-    workspaceIds: undefined,
+    workspaceIds: null,
   });
 
 type CurrentExtractionReadDb = Pick<typeof rootDb, "select">;
@@ -337,7 +358,11 @@ export const loadCurrentOcrExport = async ({
   ) {
     return null;
   }
-  return row;
+  const { ciphertext, iv, ...metadata } = row;
+  return {
+    ...metadata,
+    text: await decryptContent(organizationId, ciphertext, iv),
+  };
 };
 
 type DeadlineSourceRun = typeof documentProcessingRuns.$inferSelect;
@@ -385,7 +410,17 @@ export const loadCurrentDeadlineSource = async (
     )
     .where(currentSourceWhere(run))
     .limit(1);
-  return rows.at(0) ?? null;
+  const source = rows.at(0);
+  return source
+    ? {
+        entityName: source.entityName,
+        text: await decryptContent(
+          run.organizationId,
+          source.ciphertext,
+          source.iv,
+        ),
+      }
+    : null;
 };
 
 export const isCurrentDeadlineSource = async (

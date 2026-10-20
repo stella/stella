@@ -38,7 +38,6 @@ import {
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveWorkspaceMemberAccess } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decryptContent } from "@/api/lib/content-encryption";
 import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
@@ -645,7 +644,7 @@ export const loadInputDocuments = async (
       signal.throwIfAborted();
       return {
         label: row.name,
-        text: await decryptContent(organizationId, row.ciphertext, row.iv),
+        text: row.text,
       };
     },
   });

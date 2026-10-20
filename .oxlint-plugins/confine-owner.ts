@@ -565,7 +565,11 @@ const stableValue = (
     : stableValue(context, stableInitializer(variable), seen);
 };
 
-const objectProperty = (node: unknown, name: string): AstNode | null => {
+const objectProperty = (
+  context: ScopeContext,
+  node: unknown,
+  name: string,
+): AstNode | null => {
   if (
     !isAstNode(node) ||
     node.type !== "ObjectExpression" ||
@@ -575,7 +579,18 @@ const objectProperty = (node: unknown, name: string): AstNode | null => {
   }
   let result: AstNode | null = null;
   for (const property of node.properties) {
-    if (!isAstNode(property) || property.type !== "Property") {
+    if (!isAstNode(property)) {
+      return null;
+    }
+    if (property.type === "SpreadElement") {
+      const spreadValue = stableValue(context, property.argument);
+      const inherited = objectProperty(context, spreadValue, name);
+      if (inherited !== null) {
+        result = inherited;
+      }
+      continue;
+    }
+    if (property.type !== "Property") {
       return null;
     }
     const key = property.computed
@@ -597,7 +612,10 @@ const relationSelectsOwnedColumns = ({
   value,
 }: TableReadOptions): boolean => {
   const options = stableValue(context, value);
-  const columns = stableValue(context, objectProperty(options, "columns"));
+  const columns = stableValue(
+    context,
+    objectProperty(context, options, "columns"),
+  );
   if (
     columns?.type !== "ObjectExpression" ||
     !Array.isArray(columns.properties)
@@ -660,7 +678,10 @@ const nestedRelationSelectsOwnedColumns = ({
     return false;
   }
   seen.add(options);
-  const relations = stableValue(context, objectProperty(options, "with"));
+  const relations = stableValue(
+    context,
+    objectProperty(context, options, "with"),
+  );
   if (
     relations?.type !== "ObjectExpression" ||
     !Array.isArray(relations.properties)

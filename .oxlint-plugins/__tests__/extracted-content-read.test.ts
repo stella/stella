@@ -36,9 +36,11 @@ describe.serial("extracted document content ownership", () => {
       "db.query.entities.findFirst({ with: { extractedContent: true } });",
       "db.query.extractedContent.findMany({ columns: { ciphertext: true } });",
       "const selection = { with: { entity: { with: { extractedContent: { columns: { iv: true } } } } } }; db.query.fields.findMany(selection);",
+      "const base = { with: { extractedContent: false } }; db.query.entities.findFirst({ ...base, with: { extractedContent: true } });",
+      "const enabled = { with: { extractedContent: true } }; db.query.entities.findFirst({ with: { extractedContent: false }, ...enabled });",
     ].join("\n");
     expect(await lintSingleRule("confine-owner", source, options)).toEqual([
-      2, 3, 4, 5, 6, 7, 8, 9, 10,
+      2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
     ]);
     expect(
       await lintSingleRule("confine-owner", source, {

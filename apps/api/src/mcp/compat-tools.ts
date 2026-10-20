@@ -3,7 +3,6 @@ import * as v from "valibot";
 
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decryptContent } from "@/api/lib/content-encryption";
 import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -572,11 +571,7 @@ const handleCompatFetchTool: McpToolHandler<
     return errorResult("Document content is unavailable");
   }
 
-  const text = await decryptContent(
-    context.organizationId,
-    row.ciphertext,
-    row.iv,
-  );
+  const text = row.text;
   // Keep the full decrypted text here; windowing happens in the egress
   // pipeline so anonymized fetches anonymize the whole document before slicing
   // (slicing raw text first could split an entity name across the window

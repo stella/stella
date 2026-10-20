@@ -21,7 +21,6 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import { decryptContent } from "@/api/lib/content-encryption";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
@@ -348,11 +347,7 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
             await Promise.all(
               contentRows.map(async (row) => ({
                 label: row.name,
-                text: await decryptContent(
-                  organizationId,
-                  row.ciphertext,
-                  row.iv,
-                ),
+                text: row.text,
               })),
             ),
           catch: (cause) =>

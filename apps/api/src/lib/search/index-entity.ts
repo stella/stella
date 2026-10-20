@@ -11,7 +11,6 @@ import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decryptContent } from "@/api/lib/content-encryption";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
@@ -284,14 +283,9 @@ const buildSearchDocument = async (
     })
   ).at(0);
   if (currentExtractedContent) {
-    const { ciphertext, iv } = currentExtractedContent;
     language = isoToRegconfig(currentExtractedContent.language);
     try {
-      const plaintext = await decryptContent(
-        workspace.organizationId,
-        ciphertext,
-        iv,
-      );
+      const plaintext = currentExtractedContent.text;
       if (plaintext) {
         fieldTexts.push(docxReviewMarkupToSearchText(plaintext));
       }

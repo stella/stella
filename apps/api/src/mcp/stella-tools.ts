@@ -107,7 +107,6 @@ import {
   SEARCH_CASE_LAW_PROJECTION,
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
 } from "@/api/lib/chat/projections";
-import { decryptContent } from "@/api/lib/content-encryption";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import {
   resolveCurrentFileSourceField,
@@ -1880,13 +1879,7 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     });
   }
 
-  const plaintext = currentExtracted
-    ? await decryptContent(
-        context.organizationId,
-        currentExtracted.ciphertext,
-        currentExtracted.iv,
-      )
-    : "";
+  const plaintext = currentExtracted?.text ?? "";
 
   // Prefer the live DOCX-to-Markdown conversion (headings, tables, lists
   // preserved) whenever the current version holds a DOCX file; every other

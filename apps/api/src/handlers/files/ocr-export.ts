@@ -5,7 +5,6 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decryptContent } from "@/api/lib/content-encryption";
 import { loadCurrentOcrExport } from "@/api/lib/document-content-provenance";
 import { createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { getS3 } from "@/api/lib/s3";
@@ -86,7 +85,7 @@ export const readOcrExport = async ({
     return Response.redirect(url, 302);
   }
 
-  const text = await decryptContent(organizationId, row.ciphertext, row.iv);
+  const text = row.text;
   const bytes = new TextEncoder().encode(text);
   const fileName = replaceExtension(row.content.fileName, ".txt");
   await scopedDb(
