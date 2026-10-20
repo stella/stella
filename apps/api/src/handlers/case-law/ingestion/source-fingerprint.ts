@@ -14,10 +14,12 @@ import { panic } from "better-result";
  * the stored fields themselves rather than a list of strings, so what is
  * hashed and what is stored cannot drift apart.
  *
- * A change to what a source feeds this function bumps that source's
- * `SOURCE_FINGERPRINT_VERSIONS` entry, not its parser version. Mark such a
- * change with a `// parser-output-unchanged:` line: fingerprint-only changes
- * must not schedule a re-parse when parser output is unchanged.
+ * Bump a source's `SOURCE_FINGERPRINT_VERSIONS` entry only when its fingerprint
+ * changes over the same stored bytes: the adapter changes which bytes it
+ * passes here from what it already stores, or the hashing itself changes.
+ * Changing which bytes the adapter stores is not fingerprint-only; existing
+ * rows must take the normal changed path when next observed. Bump the parser
+ * version separately only when parser output changes.
  */
 
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.

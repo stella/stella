@@ -83,10 +83,12 @@ export const PARSER_VERSIONS = {
 /**
  * Source fingerprint version for each source.
  *
- * Increment only the affected source when the inputs to `sourceFingerprint`
- * change without changing parser output. This lets ingestion compare stored
- * and incoming fingerprints under the same algorithm without replaying the
- * parser.
+ * Increment only when a source's fingerprint changes over the same stored
+ * bytes: either the adapter changes which already-stored bytes it passes to
+ * `sourceFingerprint`, or the hashing itself changes. Changing which bytes an
+ * adapter stores is not fingerprint-only: those rows take the normal changed
+ * path when next observed, and the parser version changes only when parser
+ * output changes.
  */
 export const SOURCE_FINGERPRINT_VERSIONS = {
   [ADAPTER_KEYS.CZ_REGIONAL]: 0,

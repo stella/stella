@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -27,6 +28,7 @@ import {
   corpusCarriesDocument,
   payloadCarriesDocument,
 } from "@/api/lib/case-law/stored-payload";
+import { errorTag } from "@/api/lib/errors/error-tag";
 import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
 import {
   lockActiveCorpusProjectionSourceTx,
@@ -40,6 +42,7 @@ import {
   OBSERVATION_DETAIL_RANK,
   observationDetailOf,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { logger } from "@/api/lib/observability/logger";
 
 /** What an observation carries, measured against the row it would write. */
 export type ObservationShape = {
@@ -422,15 +425,8 @@ export const resolveExistingDecisionPolicy = async ({
     };
   }
 
-  const comparedSourceHash =
+  const couldSkip =
     existing !== undefined &&
-    existing.sourceHashVersion < sourceFingerprintVersion &&
-    existing.sourceRawS3Key !== null
-      ? await sourceFingerprintFromStoredRaw(existing.sourceRawS3Key)
-      : (existing?.sourceHash ?? null);
-
-  if (
-    existing &&
     existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
     refresh === DECISION_REFRESH.WHEN_SOURCE_CHANGED &&
     // A matching publisher hash cannot settle a row this observation
@@ -449,7 +445,35 @@ export const resolveExistingDecisionPolicy = async ({
     ) &&
     existing.caseNumber === result.caseNumber &&
     existing.caseNumberType ===
-      parsePrimaryReferenceType(result.caseNumberType) &&
+      parsePrimaryReferenceType(result.caseNumberType);
+  if (!couldSkip) {
+    return null;
+  }
+
+  let comparedSourceHash = existing.sourceHash;
+  if (
+    existing.sourceHashVersion < sourceFingerprintVersion &&
+    existing.sourceRawS3Key !== null
+  ) {
+    const storedRawKey = existing.sourceRawS3Key;
+    const fingerprint = await Result.tryPromise({
+      try: async () => await sourceFingerprintFromStoredRaw(storedRawKey),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(fingerprint)) {
+      logger.warn("case_law.ingestion.stored_source_fingerprint_unavailable", {
+        decisionId: existing.id,
+        "error.type": errorTag(fingerprint.error),
+      });
+      // No comparable hash means the unchanged check cannot succeed, so the
+      // incoming observation continues through the normal changed-write path.
+      comparedSourceHash = null;
+    } else {
+      comparedSourceHash = fingerprint.value;
+    }
+  }
+
+  if (
     shouldSkipRefresh({
       existingMetadata: existing.metadata,
       existingSourceRawContentType: existing.sourceRawContentType,

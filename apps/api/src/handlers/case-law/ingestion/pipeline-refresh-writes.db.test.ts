@@ -33,6 +33,7 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
@@ -612,6 +613,117 @@ test("a stale unequal fingerprint follows the changed path", async () => {
   expect(changed).toMatchObject({
     sourceHash: "new-algorithm",
     sourceHashVersion: 1,
+  });
+});
+
+test("an unavailable stale stored source follows the changed path", async () => {
+  const caseNumber = "30 Cdo 307/2024";
+  await ingest(withDocument(caseNumber, "old-algorithm"), canonical);
+  const first = await storedRow(caseNumber);
+  await db.execute(sql`
+    UPDATE case_law_decisions
+       SET source_raw_s3_key = 'missing/raw', source_hash_version = 0
+     WHERE id = ${first.id}::uuid
+  `);
+  order += 1n;
+  const outcome = await processDecision(
+    {
+      input: withDocument(caseNumber, "new-algorithm"),
+      observationOrder: order,
+      sourceId,
+      scopedDb,
+      observedAt: new Date(Date.UTC(2026, 8, 23, 15, 0, Number(order))),
+      corpus: canonical,
+      sourceFingerprintFromStoredRaw: async () =>
+        await Promise.reject(new Error("stored object is missing")),
+    },
+    async () =>
+      await Promise.resolve({
+        metadataUrlSchema: undefined,
+        sourceFingerprintVersion: 1,
+        statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+      }),
+  );
+  expect(outcome.inserted).toBe(true);
+  expect(await storedRow(caseNumber)).toMatchObject({
+    sourceHash: "new-algorithm",
+    sourceHashVersion: 1,
+  });
+});
+
+test("a forced refresh does not read a stale stored source", async () => {
+  const caseNumber = "30 Cdo 308/2024";
+  await ingest(withDocument(caseNumber, "old-algorithm"), canonical);
+  const first = await storedRow(caseNumber);
+  await db.execute(sql`
+    UPDATE case_law_decisions
+       SET source_raw_s3_key = 'stored/raw', source_hash_version = 0
+     WHERE id = ${first.id}::uuid
+  `);
+  let reads = 0;
+  order += 1n;
+  const outcome = await processDecision(
+    {
+      input: withDocument(caseNumber, "new-algorithm"),
+      observationOrder: order,
+      sourceId,
+      scopedDb,
+      observedAt: new Date(Date.UTC(2026, 8, 23, 16, 0, Number(order))),
+      corpus: canonical,
+      refresh: DECISION_REFRESH.ALWAYS,
+      sourceFingerprintFromStoredRaw: async () => {
+        reads += 1;
+        return await Promise.resolve("old-algorithm");
+      },
+    },
+    async () =>
+      await Promise.resolve({
+        metadataUrlSchema: undefined,
+        sourceFingerprintVersion: 1,
+        statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+      }),
+  );
+  expect(outcome.inserted).toBe(true);
+  expect(reads).toBe(0);
+});
+
+test("unchanged fixture bytes recompute a stale fingerprint without rewriting", async () => {
+  const caseNumber = "30 Cdo 309/2024";
+  const sourceRaw = await Bun.file(
+    new URL("parsers/__fixtures__/at-ris-vwgh-text.xml", import.meta.url),
+  ).text();
+  const fingerprint = sourceFingerprint({ sourceRaw });
+  await ingest(withDocument(caseNumber, fingerprint), canonical);
+  const first = await storedRow(caseNumber);
+  await db.execute(sql`
+    UPDATE case_law_decisions
+       SET source_raw_s3_key = 'fixture/raw', source_hash_version = 0
+     WHERE id = ${first.id}::uuid
+  `);
+  order += 1n;
+  const outcome = await processDecision(
+    {
+      input: withDocument(caseNumber, fingerprint),
+      observationOrder: order,
+      sourceId,
+      scopedDb,
+      observedAt: new Date(Date.UTC(2026, 8, 23, 17, 0, Number(order))),
+      corpus: canonical,
+      sourceFingerprintFromStoredRaw: async () =>
+        await Promise.resolve(sourceFingerprint({ sourceRaw })),
+    },
+    async () =>
+      await Promise.resolve({
+        metadataUrlSchema: undefined,
+        sourceFingerprintVersion: 1,
+        statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+      }),
+  );
+  expect(outcome.inserted).toBe(false);
+  expect(await storedRow(caseNumber)).toMatchObject({
+    sourceHash: fingerprint,
+    sourceHashVersion: 1,
+    updatedAt: first.updatedAt,
   });
 });
 
