@@ -3,6 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import { toAgentSkillResponse } from "@/api/handlers/skills/response";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -100,7 +101,7 @@ const getSkill = createSafeRootHandler(
       ),
     );
 
-    return Result.ok({ ...skill, resources });
+    return Result.ok(toAgentSkillResponse(skill, resources));
   },
 );
 

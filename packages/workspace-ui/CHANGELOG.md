@@ -1,5 +1,20 @@
 # @stll/workspace-ui
 
+## 0.12.4
+
+### Patch Changes
+
+- [#5740](https://github.com/stella/stella/pull/5740) [`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A destructive confirm dialog stays open when its confirm settles to `"keep-open"`, and a host-responsive workspace frame may omit its end dock.
+- Updated dependencies [[`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d)]:
+  - @stll/ui@0.47.1
+
+## 0.12.3
+
+### Patch Changes
+
+- Updated dependencies [[`55d62c9`](https://github.com/stella/stella/commit/55d62c989b81bf063cc4cef899aae4a3efe00077)]:
+  - @stll/ui@0.47.0
+
 ## 0.12.2
 
 ### Patch Changes

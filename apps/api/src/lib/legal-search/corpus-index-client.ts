@@ -226,6 +226,8 @@ export type CorpusIndexAggregateInput = {
   indexId: string;
   /** Full corpus index query string the aggregation runs over. */
   query: string;
+  /** Fixed generation scope; missing fields match nothing on legacy indexes. */
+  filter?: string | undefined;
   /** Engine-native aggregation request, keyed by aggregation name. */
   aggs: Record<string, unknown>;
 };
@@ -1494,24 +1496,51 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       catch: toCorpusIndexError,
     }),
 
-  aggregate: async ({ indexId, query, aggs, observer }) =>
+  aggregate: async ({ indexId, query, filter, aggs, observer }) =>
     await Result.tryPromise({
       try: async () => {
         const response = await requestJson({
           observer,
           baseUrl: searchBaseUrl(cluster),
-          path: `/api/v1/${indexId}/search`,
+          path:
+            filter === undefined
+              ? `/api/v1/${indexId}/search`
+              : `/api/v1/_elastic/${indexId}/_search`,
           init: {
             method: "POST",
             headers: { "content-type": "application/json" },
             // Aggregations only: hits are the expensive part of the
             // response and the caller wants counts, not documents.
-            body: JSON.stringify({
-              query,
-              max_hits: 0,
-              aggs,
-              format: SEARCH_RESPONSE_FORMAT,
-            }),
+            body: JSON.stringify(
+              filter === undefined
+                ? {
+                    query,
+                    max_hits: 0,
+                    aggs,
+                    format: SEARCH_RESPONSE_FORMAT,
+                  }
+                : {
+                    size: 0,
+                    track_total_hits: false,
+                    query: {
+                      bool: {
+                        must: [
+                          { query_string: { query, default_operator: "AND" } },
+                        ],
+                        filter: [
+                          {
+                            query_string: {
+                              query: filter,
+                              default_operator: "AND",
+                              lenient: true,
+                            },
+                          },
+                        ],
+                      },
+                    },
+                    aggs,
+                  },
+            ),
           },
           timeoutMs: CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
         });

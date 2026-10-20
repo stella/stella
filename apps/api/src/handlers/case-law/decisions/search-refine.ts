@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
@@ -163,10 +164,8 @@ const refineCaseLawSearch = createSafeRootHandler(
             prompt,
             outputSchema: caseLawRefineOutputSchema,
             maxOutputTokens: 120,
-            abortSignal: AbortSignal.any([
-              request.signal,
-              AbortSignal.timeout(CASE_LAW_REFINE_TIMEOUT_MS),
-            ]),
+            abortSignal: request.signal,
+            deadlineMs: CASE_LAW_REFINE_TIMEOUT_MS,
           }),
         catch: (error: unknown) => {
           analytics.captureError(error);
@@ -193,7 +192,11 @@ const refineCaseLawSearch = createSafeRootHandler(
     }
 
     return Result.err(
-      new HandlerError({ status: 502, message: REFINE_FAILED_MESSAGE }),
+      new HandlerError({
+        code: AI_FAILURE_CODES.output_invalid,
+        status: 502,
+        message: REFINE_FAILED_MESSAGE,
+      }),
     );
   },
 );

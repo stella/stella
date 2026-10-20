@@ -18,6 +18,7 @@ import { panic } from "better-result";
 export type AppFrame =
   | "none"
   | "member"
+  | "admin"
   | "public"
   | "checking"
   | "neutral"
@@ -59,6 +60,9 @@ export const selectAppFrame = ({
   publicKnowledge,
   audience,
 }: SelectAppFrameInput): AppFrame => {
+  if (routeIds.includes("/_protected/admin")) {
+    return hasRouteUser ? "admin" : "checking";
+  }
   const isKnowledge = routeIds.includes(KNOWLEDGE_ROUTE_ID);
   // The root owns the first-load shell while the guard resolves the user;
   // route fallbacks remain content-only when the member frame mounts.
@@ -105,6 +109,7 @@ export const frameVisitor = (
 ): string | null => {
   switch (frame) {
     case "member":
+    case "admin":
       return member === undefined
         ? null
         : `member:${member.userId}:${member.organizationId}`;
