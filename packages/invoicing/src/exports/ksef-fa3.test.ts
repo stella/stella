@@ -257,6 +257,37 @@ describe("KSeF FA(3)", () => {
   });
 });
 
+describe("KSeF FA(3) payment and files", () => {
+  test("marks an invoice paid only when it was paid by its issue date", () => {
+    const paidOn = (paidDate: string) =>
+      fa3({ ...ORDINARY, status: "paid", paidDate });
+    expect(between(paidOn("2026-10-15"), "Zaplacono")).toEqual(["1"]);
+    expect(between(paidOn("2026-10-15"), "DataZaplaty")).toEqual([
+      "2026-10-15",
+    ]);
+    const later = paidOn("2026-10-20");
+    expect(between(later, "Zaplacono")).toEqual([]);
+    expect(between(later, "DataZaplaty")).toEqual([]);
+    expect(schemaErrors(later)).toBe("");
+  });
+
+  test("keeps file names unique when invoice numbers collide", () => {
+    const files = buildKsefFa3Files(
+      [
+        { ...ORDINARY, number: "FV/1" },
+        { ...ORDINARY, number: "FV_1" },
+        { ...ORDINARY, number: "fv_1" },
+      ],
+      GENERATED_AT,
+    ).unwrap();
+    expect(files.map((file) => file.fileName)).toEqual([
+      "FV_1.xml",
+      "FV_1-2.xml",
+      "fv_1-3.xml",
+    ]);
+  });
+});
+
 describe("KSeF FA(3) VAT treatments", () => {
   const line = (
     vatTreatment: InvoiceExportRecord["lines"][number]["vatTreatment"],
@@ -392,6 +423,38 @@ describe("KSeF FA(3) VAT treatments", () => {
     expect(between(french, "KodUE")).toEqual(["FR"]);
     expect(between(french, "NrVatUE")).toEqual(["AB123456789"]);
     expect(schemaErrors(french)).toBe("");
+  });
+
+  test("the VAT registration decides before the address", () => {
+    // A German registration at a Polish address is an EU buyer.
+    const german = fa3(
+      polish({
+        number: "5c/2026",
+        buyer: { ...BUYER, vatId: "DE123456789" },
+        lines: [line("reverse_charge")],
+      }),
+    );
+    expect(between(german, "KodUE")).toEqual(["DE"]);
+    expect(between(german, "NrVatUE")).toEqual(["123456789"]);
+    expect(between(german, "NIP")).toEqual(["1234563218"]);
+    expect(schemaErrors(german)).toBe("");
+    // A PL-prefixed NIP at a German address is a Polish buyer.
+    const polishAbroad = fa3(
+      polish({
+        number: "5d/2026",
+        buyer: {
+          ...BUYER,
+          vatId: "PL 725-001-85-13",
+          addressLine1: "Hauptstraße 1",
+          city: "Berlin",
+          postalCode: "10115",
+          country: "DE",
+        },
+      }),
+    );
+    expect(between(polishAbroad, "NIP")).toEqual(["1234563218", "7250018513"]);
+    expect(between(polishAbroad, "KodUE")).toEqual([]);
+    expect(schemaErrors(polishAbroad)).toBe("");
   });
 
   test("a reverse charge to an EU buyer needs its VAT number", () => {

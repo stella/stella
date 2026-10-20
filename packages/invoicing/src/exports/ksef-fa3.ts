@@ -9,6 +9,7 @@ import type { InvoiceParty } from "../types";
 import {
   clip,
   countryCodeOf,
+  exportFileNamer,
   invoiceDescriptionOf,
   quantityText,
   streetOf,
@@ -229,7 +230,23 @@ const buyerIdentification = (
   const zone = zoneOf(country);
   const identifier = presentText(buyer.vatId) ?? presentText(buyer.taxId);
   const name = text("Nazwa", clip(buyer.name.trim(), 512));
-  if (zone === "domestic") {
+  const vatId = presentText(buyer.vatId)
+    ?.replaceAll(/[^\dA-Za-z+*]/gu, "")
+    .toUpperCase();
+  // The VAT registration identifies the taxpayer, so its own prefix decides
+  // before the address does: a German registration at a Polish address is an
+  // EU buyer, a PL-prefixed NIP at a foreign address a Polish one. Leading
+  // letters that are not a prefix belong to the number (French numbers).
+  const leading = vatId?.slice(0, 2) ?? "";
+  const ownPrefix = EU_VAT_PREFIXES.has(leading) ? leading : undefined;
+  const euVat = (prefix: string, number: string) =>
+    EU_VAT_NUMBER_PATTERN.test(number)
+      ? [text("KodUE", prefix), text("NrVatUE", number), name].join("")
+      : { error: `the buyer's EU VAT number ${vatId ?? ""} is not valid` };
+  if (vatId && ownPrefix !== undefined && ownPrefix !== "PL") {
+    return euVat(ownPrefix, vatId.slice(2));
+  }
+  if (zone === "domestic" || ownPrefix === "PL") {
     if (identifier === null) {
       return [text("BrakID", "1"), name].join("");
     }
@@ -238,22 +255,8 @@ const buyerIdentification = (
       ? { error: `the buyer's NIP ${identifier} is not a valid Polish NIP` }
       : [text("NIP", nip), name].join("");
   }
-  const vatId = presentText(buyer.vatId)
-    ?.replaceAll(/[^\dA-Za-z+*]/gu, "")
-    .toUpperCase();
   if (zone === "eu" && vatId) {
-    // The VAT number's own prefix names the registration country, which
-    // identifies the taxpayer even when it differs from the address (a branch,
-    // a foreign VAT registration). A number without a prefix takes the
-    // address country's (French numbers may begin with two letters that are
-    // not a prefix).
-    const leading = vatId.slice(0, 2);
-    const ownPrefix = EU_VAT_PREFIXES.has(leading) ? leading : undefined;
-    const prefix = ownPrefix ?? vatPrefixOf(country);
-    const number = ownPrefix === undefined ? vatId : vatId.slice(2);
-    return EU_VAT_NUMBER_PATTERN.test(number)
-      ? [text("KodUE", prefix), text("NrVatUE", number), name].join("")
-      : { error: `the buyer's EU VAT number ${vatId} is not valid` };
+    return euVat(vatPrefixOf(country), vatId);
   }
   if (needsEuVatNumber) {
     return {
@@ -319,8 +322,12 @@ const document = (
     : record.taxableSupplyDate;
   const seller = record.seller;
   const swift = seller.bic?.replaceAll(/\s/gu, "").toUpperCase() ?? "";
+  // Zaplacono/DataZaplaty state a payment made by the time the invoice is
+  // issued; a later payment does not change the invoice.
+  const paidByIssue =
+    record.paidDate !== null && record.paidDate <= record.issueDate;
   const payment = el("Platnosc", [
-    record.paidDate
+    paidByIssue
       ? [text("Zaplacono", "1"), text("DataZaplaty", record.paidDate)]
       : "",
     record.dueDate ? el("TerminPlatnosci", text("Termin", record.dueDate)) : "",
@@ -544,6 +551,7 @@ export const buildKsefFa3Files = (
     return invalidInput("There are no issued invoices to export");
   }
   const timestamp = generatedAt.toISOString().replace(/\.\d{3}Z$/u, "Z");
+  const fileName = exportFileNamer("xml");
   const files: { fileName: string; content: string }[] = [];
   for (const record of records) {
     const content = prepare(record, timestamp);
@@ -551,7 +559,7 @@ export const buildKsefFa3Files = (
       return Result.err(content.error);
     }
     files.push({
-      fileName: `${record.number.replace(/[^\w.-]/gu, "_")}.xml`,
+      fileName: fileName(record.number),
       content: content.value,
     });
   }
