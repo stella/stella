@@ -1036,6 +1036,31 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  // The classification check derives its manifest instead of reading a
+  // committed one, and exposes its sensitive-change output by step id.
+  if (
+    step.name === "Check workflow job classifications" &&
+    step["id"] === undefined
+  ) {
+    return { ...step, id: "job-classification" };
+  }
+  if (step.name === "Checkout workflow classification tooling") {
+    const checkout = v.parse(
+      v.looseObject({ "sparse-checkout": v.string() }),
+      step["with"],
+    );
+    return {
+      ...step,
+      with: {
+        ...checkout,
+        "fetch-depth": 0,
+        "sparse-checkout": checkout["sparse-checkout"].replace(
+          ".github/ci-job-classification.json\n",
+          "",
+        ),
+      },
+    };
+  }
   if (
     step.name === "Test oxlint plugins" &&
     fields.run ===

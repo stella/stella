@@ -980,9 +980,7 @@ describe("session freshness", () => {
       enabled: true,
       maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
     });
-    expect(typeof getAuth().options.session.cookieCache.version).toBe(
-      "function",
-    );
+    expect(getAuth().options.session.cookieCache.version).toBeFunction();
     expect(SESSION_COOKIE_CACHE_MAX_AGE_SECONDS).toBe(60);
   });
 });
@@ -992,7 +990,12 @@ describe("OAuth resource provisioning", () => {
     const oauthPlugin = getAuth().options.plugins.find(
       (plugin) => plugin.id === "oauth-provider",
     );
-    if (!oauthPlugin || !("options" in oauthPlugin)) {
+    if (
+      !oauthPlugin ||
+      !("options" in oauthPlugin) ||
+      !oauthPlugin.options ||
+      !("resourceSeedMode" in oauthPlugin.options)
+    ) {
       throw new Error("OAuth provider plugin missing from auth config");
     }
 
@@ -1007,7 +1010,7 @@ describe("OAuth resource provisioning", () => {
     const oauthPlugin = getAuth().options.plugins.find(
       (plugin) => plugin.id === "oauth-provider",
     );
-    if (!oauthPlugin?.rateLimit) {
+    if (!oauthPlugin || !("rateLimit" in oauthPlugin)) {
       throw new Error("OAuth provider plugin declares no rate-limit rules");
     }
 
@@ -1045,10 +1048,24 @@ describe("organization lifecycle hook wiring", () => {
     const orgPlugin = getAuth().options.plugins.find(
       (plugin) => plugin.id === "organization",
     );
-    if (!orgPlugin || !("options" in orgPlugin)) {
+    if (
+      !orgPlugin ||
+      !("options" in orgPlugin) ||
+      !orgPlugin.options ||
+      !("organizationHooks" in orgPlugin.options)
+    ) {
       throw new Error("organization plugin missing from auth config");
     }
     const hooks = orgPlugin.options.organizationHooks;
+    if (
+      typeof hooks !== "object" ||
+      !("afterCreateOrganization" in hooks) ||
+      typeof hooks.afterCreateOrganization !== "function" ||
+      !("afterUpdateOrganization" in hooks) ||
+      typeof hooks.afterUpdateOrganization !== "function"
+    ) {
+      throw new Error("organization lifecycle hooks missing from auth config");
+    }
     expect(hooks.afterCreateOrganization).toBeFunction();
     const afterUpdateOrganization = hooks.afterUpdateOrganization;
     expect(afterUpdateOrganization).toBeFunction();

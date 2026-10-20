@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import type { RateLimitBudgetConfiguration } from "@/api/lib/rate-limit/budget-config-schema";
 
 let budgetReader: (() => RateLimitBudgetConfiguration) | null = null;
@@ -436,3 +438,8 @@ export const {
   API_KEY_RATE_LIMITS,
   OTP_DELIVERY_RATE_LIMITS,
 } = createRateLimitBudgetConfig(readConfiguredBudgets);
+
+export const SYNTHETIC_SESSION_MINT_BUDGETS = {
+  hour: { max: 6, durationMs: 60 * 60 * 1000 },
+  day: { max: 40, durationMs: DAY_IN_MS },
+} as const;

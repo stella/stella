@@ -612,6 +612,7 @@ const extractCandidates = async ({
           });
 
           return await generateTanStackObjectForTask({
+            userId: admission.userId,
             dataClass: "customer",
             task: "short-text",
             serviceTier: "batch",

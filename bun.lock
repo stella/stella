@@ -649,7 +649,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.8.0",
+      "version": "0.8.1",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -846,7 +846,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "5.1.0",
+      "version": "5.1.1",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1026,6 +1026,7 @@
         "@stll/money": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
+        "lzma1": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
@@ -1702,6 +1703,7 @@
     "franc": "6.2.0",
     "jszip": "3.10.2",
     "lucide-react": "1.41.0",
+    "lzma1": "0.4.0",
     "oxc-transform-react": "0.152.0",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
@@ -5065,6 +5067,8 @@
     "luxon": ["luxon@3.7.2", "", {}, "sha512-vtEhXh/gNjI9Yg1u4jX/0YVPMvxzHuGgCm6tC5kZyb08yjGWGnqAjGJvcXbqQR2P3MyMEFnRbpcdFS6PBcLqew=="],
 
     "lz-string": ["lz-string@1.5.0", "", { "bin": { "lz-string": "bin/bin.js" } }, "sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ=="],
+
+    "lzma1": ["lzma1@0.4.0", "", {}, "sha512-6AP1zxycZ2bmfaX1GDex1k4eme5NINXvsViA15oZNCvyzc1F9408YwxC/jW5w8uqs6+h1jZeziB444xykOrK7A=="],
 
     "magic-string": ["magic-string@1.4.3", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.6.0" } }, "sha512-z12OxmaPGE0F4xlpGdjuAUckipLpQlTAuAmyGhNoD7ODpYUzvDfvtxUbjM/jwznyP178oju/KDdyi220wNJ0RQ=="],
 

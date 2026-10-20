@@ -17,11 +17,37 @@ import { DAY_IN_MS } from "@stll/time";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import {
+  SYNTHETIC_SESSION_LIFETIME_MS,
+  SYNTHETIC_SESSION_PREFIX,
+} from "@/api/lib/synthetic-principal/constants";
 
 export const SESSION_ABSOLUTE_AGE_MS = 90 * DAY_IN_MS;
 export const SESSION_IDLE_AGE_MS = 60 * 60 * 1000;
 export const SESSION_PRIOR_TOKEN_GRACE_MS = 60 * 1000;
-const cookieCacheVersion = "session-lifetime-v2";
+const cookieCacheVersion = (session: Pick<Session, "id">) =>
+  session.id.startsWith(SYNTHETIC_SESSION_PREFIX)
+    ? Bun.randomUUIDv7()
+    : "session-lifetime-v2";
+
+type SessionLifetimeDecision = {
+  refreshMode: "fixed";
+  expiresAt: Date;
+};
+
+/** Keeps framework session creation aligned with explicitly minted credentials. */
+export const decidePinnedSessionLifetime = (
+  session: Partial<Pick<Session, "id" | "createdAt">>,
+): SessionLifetimeDecision | undefined =>
+  session.id?.startsWith(SYNTHETIC_SESSION_PREFIX)
+    ? {
+        refreshMode: "fixed",
+        expiresAt: new Date(
+          (session.createdAt ?? new Date()).getTime() +
+            SYNTHETIC_SESSION_LIFETIME_MS,
+        ),
+      }
+    : undefined;
 
 export const SESSION_LIFETIME_FIELDS = {
   originConsentId: { type: "string", required: false, input: false },
@@ -163,6 +189,30 @@ const createSessionDeleter =
       forgetObservations();
     }
   };
+
+const createRevokeSessionByIdEndpoint = (
+  store: SessionLifetimeStore,
+  forgetObservations: () => void,
+) =>
+  createAuthEndpoint(
+    "/revoke-session-by-id",
+    {
+      method: "POST",
+      body: v.strictObject({
+        sessionId: v.pipe(v.string(), v.minLength(1)),
+      }),
+      use: [sensitiveSessionMiddleware],
+      requireHeaders: true,
+    },
+    async (ctx) => {
+      await store.revokeById({
+        sessionId: ctx.body.sessionId,
+        userId: brandPersistedUserId(ctx.context.session.user.id),
+      });
+      forgetObservations();
+      return ctx.json({ status: true });
+    },
+  );
 
 export const createSessionLifetime = ({
   store,
@@ -324,24 +374,9 @@ export const createSessionLifetime = ({
   const plugin = {
     id: "session-lifetime",
     endpoints: {
-      revokeSessionById: createAuthEndpoint(
-        "/revoke-session-by-id",
-        {
-          method: "POST",
-          body: v.strictObject({
-            sessionId: v.pipe(v.string(), v.minLength(1)),
-          }),
-          use: [sensitiveSessionMiddleware],
-          requireHeaders: true,
-        },
-        async (ctx) => {
-          await store.revokeById({
-            sessionId: ctx.body.sessionId,
-            userId: brandPersistedUserId(ctx.context.session.user.id),
-          });
-          forgetObservations();
-          return ctx.json({ status: true });
-        },
+      revokeSessionById: createRevokeSessionByIdEndpoint(
+        store,
+        forgetObservations,
       ),
     },
     hooks: {
@@ -358,5 +393,9 @@ export const createSessionLifetime = ({
     },
   } satisfies BetterAuthPlugin;
 
-  return { plugin, cookieCacheVersion, prepare: decorate };
+  return {
+    plugin,
+    cookieCacheVersion,
+    prepare: decorate,
+  };
 };

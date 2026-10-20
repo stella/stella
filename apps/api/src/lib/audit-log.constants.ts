@@ -11,6 +11,7 @@ export const AUDIT_ACTION = {
   ACCESS: "access",
   CANCEL: "cancel",
   REVIEW: "review",
+  SYNTHETIC_SESSION_MINTED: "synthetic.session_minted",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];

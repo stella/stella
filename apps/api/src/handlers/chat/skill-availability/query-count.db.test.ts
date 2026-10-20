@@ -67,6 +67,13 @@ const countQueries = async (headers: Record<string, string>) =>
     return counter.count;
   });
 
+const requireNextRequestToRecordActivity = async (userId: string) => {
+  await rootDb
+    .update(session)
+    .set({ lastSeenAt: null })
+    .where(eq(session.userId, userId));
+};
+
 describe("skill availability runs a fixed query plan", () => {
   test("the first call and every later one issue the same statements", async () => {
     const { cookieHeader } = await createHumanSession({
@@ -113,6 +120,7 @@ describe("skill availability runs a fixed query plan", () => {
       .filter((pair) => !pair.includes("session_data="))
       .join("; ");
     expect(withoutSnapshot).not.toBe(cookieHeader);
+    await requireNextRequestToRecordActivity(userId);
 
     expect(await countQueries({ cookie: withoutSnapshot })).toBe(
       WITHOUT_SESSION_SNAPSHOT + SESSION_ACTIVITY_WRITE,
@@ -142,6 +150,7 @@ describe("skill availability runs a fixed query plan", () => {
         cookiePrefix: authCookiePolicy().cookiePrefix,
       }) ?? panic("Session fixture missing");
     const headers = { authorization: `Bearer ${credential}` };
+    await requireNextRequestToRecordActivity(userId);
     expect(await countQueries(headers)).toBe(
       WITHOUT_SESSION_SNAPSHOT + SESSION_ACTIVITY_WRITE,
     );

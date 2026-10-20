@@ -128,11 +128,8 @@ import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import { recordWriteContract } from "@/api/lib/write-contract";
 import type { WriteContract } from "@/api/lib/write-contract";
-// Type-only: derive the closed tool-name union from the single MCP registry
-// so `mcp: { type: "tool", name }` typechecks against the real tools. The
-// import is erased at build time and never creates a runtime import cycle
-// (api-handlers must stay importable without pulling in the MCP graph).
-import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
+// Type-only: keep endpoint metadata independent of the expensive MCP schema graph.
+import type { McpToolName } from "@/api/mcp/static-tool-names";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -141,7 +138,7 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
  * `type: "covered"` disposition references one of these; the coverage guard
  * (`apps/api/scripts/mcp-coverage-guard.ts`) cross-checks the runtime registry.
  */
-export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
+export type { McpToolName };
 
 /**
  * Reasons an endpoint is a real end-to-end capability a user or their agent
@@ -570,6 +567,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
       email: string;
     };
     session: {
+      id: string;
       activeOrganizationId: SafeId<"organization">;
     };
     featureAccessSnapshot?: FeatureAccessSnapshot;
@@ -1156,6 +1154,7 @@ const runAdmittedFiniteHandler = async function* <
         }
         const outcome = await admitModelDispatch({
           organizationId: ctx.session.activeOrganizationId,
+          userId: ctx.user.id,
           actionKind,
           organizationStateDb: ctx.scopedDb,
           signal,
