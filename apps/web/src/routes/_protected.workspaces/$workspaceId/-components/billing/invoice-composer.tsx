@@ -38,11 +38,6 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
-import {
-  MEDIUM_DATE,
-  plainDateEpoch,
-  SHORT_DATE,
-} from "@/components/billing/format-plain-date";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -58,6 +53,11 @@ import {
 } from "@/lib/workspaces/queries/invoices";
 import type { InvoicePrefill } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import {
+  MEDIUM_DATE,
+  plainDateEpoch,
+  SHORT_DATE,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-plain-date";
 import { InvoicePdfDownloadButton } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button";
 
 import {
