@@ -682,36 +682,44 @@ const nestedRelationSelectsOwnedColumns = ({
     return false;
   }
   seen.add(options);
-  const relations = stableValue(
-    context,
-    objectProperty(context, options, "with"),
-  );
-  if (
-    relations?.type !== "ObjectExpression" ||
-    !Array.isArray(relations.properties)
-  ) {
-    return false;
-  }
-  return relations.properties.some((property) => {
-    if (!isAstNode(property) || property.type !== "Property") {
+  const relationsSelectOwnedColumns = (withValue: unknown): boolean => {
+    const relations = stableValue(context, withValue);
+    if (
+      relations?.type !== "ObjectExpression" ||
+      !Array.isArray(relations.properties)
+    ) {
       return false;
     }
-    const key = property.computed
-      ? staticStringValue(property.key)
-      : getPropertyName(property.key);
-    const selection = stableValue(context, property.value);
-    if (selection?.type === "Literal" && selection.value === false) {
-      return false;
-    }
-    return key === entry.table
-      ? relationSelectsOwnedColumns({ context, entry, value: selection })
-      : nestedRelationSelectsOwnedColumns({
-          context,
-          entry,
-          value: selection,
-          seen,
-        });
-  });
+    return relations.properties.some((property) => {
+      // A spread inside `with` is followed when it resolves; an unresolved
+      // one could carry the owned relation, so it fails closed.
+      if (isAstNode(property) && property.type === "SpreadElement") {
+        const spread = stableValue(context, property.argument);
+        return spread?.type === "ObjectExpression"
+          ? relationsSelectOwnedColumns(spread)
+          : true;
+      }
+      if (!isAstNode(property) || property.type !== "Property") {
+        return false;
+      }
+      const key = property.computed
+        ? staticStringValue(property.key)
+        : getPropertyName(property.key);
+      const selection = stableValue(context, property.value);
+      if (selection?.type === "Literal" && selection.value === false) {
+        return false;
+      }
+      return key === entry.table
+        ? relationSelectsOwnedColumns({ context, entry, value: selection })
+        : nestedRelationSelectsOwnedColumns({
+            context,
+            entry,
+            value: selection,
+            seen,
+          });
+    });
+  };
+  return relationsSelectOwnedColumns(objectProperty(context, options, "with"));
 };
 
 const patternReadsOwnedColumns = (
