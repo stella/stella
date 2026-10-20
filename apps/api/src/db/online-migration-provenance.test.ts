@@ -7,7 +7,7 @@ import {
   ONLINE_MIGRATION_INDEXES,
   ONLINE_MIGRATION_REPAIRS,
 } from "./online-migrations";
-import { ONLINE_UNIQUE_INDEX_NAMES } from "./online-unique-indexes";
+import { EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES } from "./online-unique-indexes";
 
 test("every online step identifies an existing migration folder", () => {
   const folders = new Set(
@@ -42,7 +42,11 @@ test("every unique online index has exactly one exported dependency name", () =>
   const registered = ONLINE_MIGRATION_INDEXES.filter(({ isUnique }) => isUnique)
     .map(({ name }) => name)
     .toSorted();
-  const exported = Object.values(ONLINE_UNIQUE_INDEX_NAMES).toSorted();
+  // Only executable indexes are created online; validation-only names are
+  // covered by the combined registry test.
+  const exported = Object.values(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
+  ).toSorted();
   expect(registered).toEqual(exported);
   expect(new Set(registered).size).toBe(registered.length);
 });
