@@ -757,12 +757,12 @@
   "candidate:.github/workflows/release-pr.yml/gate": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "d977553ea927832aba86b2e29395d7995095ee86d6b46facf37b9560c6ed1deb"
+    "reviewedDigest": "67ec839456d289a866797e69ea4f7eafb33a31bd4972f92aae447c754e770fdc"
   },
   "candidate:.github/workflows/release-pr.yml/tag-version": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "0000000000000000000000000000000000000000000000000000000000000000"
+    "reviewedDigest": "8eaf31cf8e7e01ccb3216e685f72f92922e1d484e139cb130c6dfce2b1831317"
   },
   "candidate:.github/workflows/release-pr.yml/version": {
     "kind": "ordinary",
