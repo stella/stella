@@ -215,13 +215,16 @@ const pageDecisions = (
 const namedDecisionsFirst = (
   intent: Parameters<typeof namedDecisionsOf>[0],
   decisions: readonly Decision[],
-): readonly Decision[] => {
+): { ordered: readonly Decision[]; exactCount: number } => {
   const exact = namedDecisionsOf(intent, decisions);
   if (exact.length === 0) {
-    return decisions;
+    return { ordered: decisions, exactCount: 0 };
   }
   const exactIds = new Set(exact.map((decision) => decision.id));
-  return [...exact, ...decisions.filter((d) => !exactIds.has(d.id))];
+  return {
+    ordered: [...exact, ...decisions.filter((d) => !exactIds.has(d.id))],
+    exactCount: exact.length,
+  };
 };
 
 type PublicCaseLawIndexProps = {
@@ -417,7 +420,7 @@ export function PublicCaseLawIndex({
     regionRef: paneRef,
     shownPage: rows === "rows" ? pager.currentPage : null,
   });
-  const ordered = namedDecisionsFirst(intent, decisions);
+  const { ordered, exactCount } = namedDecisionsFirst(intent, decisions);
 
   // What the search said about itself, read off the first page: a warning is
   // about the result set, not about the page of it the reader is looking at.
@@ -762,7 +765,7 @@ export function PublicCaseLawIndex({
             // toolbar and the table pushed every result down for one clause.
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
               <CaseLawResultsSummary
-                exactCount={exact.length}
+                exactCount={exactCount}
                 intent={intent}
                 isRefreshing={isRefreshing}
                 page={pager.currentPage}
