@@ -62,14 +62,18 @@ export const MCP_APPS = [
     uri: CITATION_GRAPH_RESOURCE_URI,
     linkedTools: ["read_case_law_citations"],
     type: "presentation",
-    callableTools: ["read_case_law_citations", "open_case_law_decision"],
+    callableTools: [
+      MCP_WEB_HANDOFF_TOOL_NAME,
+      "read_case_law_citations",
+      "open_case_law_decision",
+    ],
   },
   {
     directory: "statute-timeline",
     uri: STATUTE_TIMELINE_RESOURCE_URI,
     linkedTools: ["read_provision_history"],
     type: "presentation",
-    callableTools: ["read_provision_history"],
+    callableTools: [MCP_WEB_HANDOFF_TOOL_NAME, "read_provision_history"],
   },
 ] as const;
 
@@ -80,5 +84,18 @@ export type PresentationApp = Extract<
   (typeof MCP_APPS)[number],
   { type: "presentation" }
 >;
+
+// Every presentation app opens links through the shared handoff refresh, so
+// its host must allow the handoff tool; a manifest without it fails to build.
+type LacksHandoffTool<App> = App extends {
+  callableTools: readonly (infer Tool)[];
+}
+  ? typeof MCP_WEB_HANDOFF_TOOL_NAME extends Tool
+    ? never
+    : App
+  : never;
+true satisfies [LacksHandoffTool<PresentationApp>] extends [never]
+  ? true
+  : false;
 
 export const STATUTE_TIMELINE_APP = MCP_APPS[5];
