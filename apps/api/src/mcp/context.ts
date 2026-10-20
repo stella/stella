@@ -108,6 +108,11 @@ import type {
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
 import type { writeStoredTemplate } from "@/api/lib/templates/write-template";
+import {
+  type OrgWebSearchKeyRow,
+  resolveWebSearchProvidersFromOrgSettingsRow,
+} from "@/api/lib/web-search/load-org-keys";
+import type { WebSearchProvider } from "@/api/lib/web-search/types";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { startWorkflow } from "@/api/lib/workflow-queue";
 import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
@@ -281,6 +286,8 @@ export type McpRequestContext = {
    * which means the org can reach no registry and the tool is dropped.
    */
   enabledRegistrySlugs?: readonly BusinessRegistrySlug[] | undefined;
+  /** Provider is present only when web search is configured and enabled. */
+  webSearchProvider?: WebSearchProvider | null | undefined;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
   /**
@@ -383,6 +390,28 @@ export const loadAccessibleMcpWorkspaces = async ({
   }
   return outcome.value.workspaces;
 };
+
+const resolveEnabledMcpWebSearchProvider = async ({
+  disabledNativeToolSlugs,
+  organizationId,
+  row,
+}: {
+  disabledNativeToolSlugs: readonly string[] | undefined;
+  organizationId: SafeId<"organization">;
+  row: OrgWebSearchKeyRow | null | undefined;
+}): Promise<WebSearchProvider | null> =>
+  disabledNativeToolSlugs?.includes("web-search")
+    ? null
+    : (await resolveWebSearchProvidersFromOrgSettingsRow(organizationId, row))
+        .webSearchProvider;
+
+const credentialPermissionContext = (
+  session: McpSession,
+): Pick<McpRequestContext, "credentialPermissions"> =>
+  session.credential?.type === "machine_api_key" ||
+  session.credential?.type === "personal_api_key"
+    ? { credentialPermissions: session.credential.permissions }
+    : {};
 
 export const resolveMcpSessionContext = async (
   session: McpSession,
@@ -531,14 +560,18 @@ export const resolveMcpSessionContext = async (
             await resolveFeatureAccessSnapshot({ tx, organizationId, userId }),
         );
 
-  // Resolve the org's reachable registries once, so the tools/list projection
-  // can narrow the `lookup_business_registry` enum synchronously. On a read
-  // fault, leave it unresolved (undefined) rather than dropping the tool.
   const [settingsResult, registryDispatch] = await Promise.all([
     requestDatabaseScope.safeDb((tx) =>
       tx.query.organizationSettings.findFirst({
         where: { organizationId: { eq: organizationId } },
-        columns: { practiceJurisdictions: true, nativeToolOverrides: true },
+        columns: {
+          practiceJurisdictions: true,
+          nativeToolOverrides: true,
+          webSearchApiKeyEncrypted: true,
+          webSearchApiKeyIv: true,
+          urlFetchApiKeyEncrypted: true,
+          urlFetchApiKeyIv: true,
+        },
       }),
     ),
     getOrganizationRegistryDispatch({
@@ -546,15 +579,25 @@ export const resolveMcpSessionContext = async (
       scopedDb: requestDatabaseScope.scopedDb,
     }),
   ]);
+  const disabledNativeToolSlugs = Result.isError(settingsResult)
+    ? undefined
+    : getDisabledNativeToolSlugsFromSettingsRow(
+        settingsResult.value ?? undefined,
+      );
   const enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined =
     Result.isError(settingsResult)
       ? undefined
       : availableRegistryHandlersForOrg({
-          disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
-            settingsResult.value ?? undefined,
-          ),
+          disabledNativeToolSlugs,
           dispatch: registryDispatch,
         }).map((handler) => handler.slug);
+  const webSearchProvider = Result.isError(settingsResult)
+    ? null
+    : await resolveEnabledMcpWebSearchProvider({
+        disabledNativeToolSlugs,
+        organizationId,
+        row: settingsResult.value,
+      });
 
   return {
     ...(auditExecution ? { auditExecution } : {}),
@@ -567,15 +610,12 @@ export const resolveMcpSessionContext = async (
     clientIp,
     createOperationDatabaseScope,
     featureAccessSnapshot,
-    ...(session.credential?.type === "machine_api_key" ||
-    session.credential?.type === "personal_api_key"
-      ? { credentialPermissions: session.credential.permissions }
-      : {}),
-    // An agent run has no person at the tool boundary to confirm a call.
+    ...credentialPermissionContext(session),
     ...(session.credential?.type === "agent_run"
       ? { toolConfirmation: TOOL_CONFIRMATION.unavailable }
       : {}),
     enabledRegistrySlugs,
+    webSearchProvider,
     grantedScopes: session.scopes,
     memberRole,
     organizationId,
@@ -590,8 +630,6 @@ export const resolveMcpSessionContext = async (
     }),
     pinServerValidatedWorkspaceId:
       requestDatabaseScope.pinServerValidatedWorkspaceId,
-    // The MCP caller invokes each tool directly, so the request may reach the
-    // third-party services its tools front.
     thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     safeDb: requestDatabaseScope.safeDb,
     scopedDb: requestDatabaseScope.scopedDb,

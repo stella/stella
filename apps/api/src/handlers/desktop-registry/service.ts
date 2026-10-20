@@ -204,7 +204,7 @@ export const searchDesktopRegistry = async (
     if (lookup.hit !== null) {
       results.push(toResult(lookup.hit));
     }
-  } else {
+  } else if (lookup.type === "search") {
     const detailed = await mapWithConcurrency({
       items: lookup.hits.slice(0, SEARCH_LIMIT),
       limit: DETAIL_CONCURRENCY,

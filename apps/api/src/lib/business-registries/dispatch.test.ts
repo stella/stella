@@ -43,6 +43,7 @@ import {
   type RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { WebSearchProvider } from "@/api/lib/web-search/types";
 
 const permit = grantThirdPartyOutboundPermit();
 
@@ -546,6 +547,166 @@ describe("executeRegistryLookup — canonical-id guard", () => {
       throw new TypeError("expected a handler error");
     }
     expect(result.status).toBe(500);
+  });
+});
+
+const webProviderWith = (
+  values: readonly { title: string; snippet?: string; url?: string }[],
+): WebSearchProvider => ({
+  name: "tavily",
+  search: async () => ({
+    results: values.map((value, index) => ({
+      id: `fixture-${index}`,
+      title: value.title,
+      snippet: value.snippet ?? "",
+      url: value.url ?? `https://example.invalid/result-${index}`,
+      source: "fixture",
+    })),
+  }),
+});
+
+const krsWebHandler = (lookup: RegistryHandler["lookup"]): RegistryHandler => ({
+  ...BUSINESS_REGISTRY_DISPATCH.krs,
+  lookup,
+});
+
+const krsHit = (id: string, name: string) => ({
+  registry: "krs" as const,
+  id,
+  name,
+  legalForm: "spółka z ograniczoną odpowiedzialnością",
+  address: null,
+  registryUrl: `https://example.invalid/krs/${id}`,
+});
+
+describe("executeRegistryLookup — verified web candidates", () => {
+  test("returns only an officially verified KRS record with provenance", async () => {
+    let metered = 0;
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async (id) =>
+        id === "0000123456" ? krsHit(id, "Żółć sp. z o.o.") : null,
+      ),
+      query: "Zolc spółka z ograniczoną odpowiedzialnością",
+      webSearch: {
+        provider: webProviderWith([
+          { title: "Noise KRS 0000999999" },
+          { title: "Żółć", snippet: "Numer KRS: 0000123456" },
+        ]),
+        observer: () => {
+          metered += 1;
+        },
+      },
+    });
+
+    expect(result).toEqual({
+      type: "search",
+      registry: "krs",
+      hits: [
+        {
+          ...krsHit("0000123456", "Żółć sp. z o.o."),
+          provenance: {
+            identifierSource: "web-search",
+            recordSource: "official-registry",
+          },
+        },
+      ],
+    });
+    expect(metered).toBe(1);
+  });
+
+  test("reports an unrelated official candidate as a name mismatch", async () => {
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async (id) => krsHit(id, "Inna Firma S.A.")),
+      query: "Szukana Firma sp. z o.o.",
+      webSearch: {
+        provider: webProviderWith([{ title: "KRS 0000123456" }]),
+        observer: () => undefined,
+      },
+    });
+
+    expect(result).toEqual({
+      type: "name-search-not-found",
+      registry: "krs",
+      candidates: [
+        {
+          id: "0000123456",
+          reason: "name-mismatch",
+          officialName: "Inna Firma S.A.",
+        },
+      ],
+    });
+  });
+
+  test("deduplicates candidates and verifies no more than the cap", async () => {
+    const lookedUp: string[] = [];
+    const ids = Array.from({ length: 7 }, (_, index) =>
+      String(index + 1).padStart(10, "0"),
+    );
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async (id) => {
+        lookedUp.push(id);
+        return null;
+      }),
+      query: "Missing Company",
+      webSearch: {
+        provider: webProviderWith([
+          { title: `${ids[0]} ${ids[0]} ${ids[1]}` },
+          { title: ids.slice(2).join(" ") },
+        ]),
+        observer: () => undefined,
+      },
+    });
+
+    expect(lookedUp).toEqual(ids.slice(0, 5));
+    expect(result).toMatchObject({
+      type: "name-search-not-found",
+      candidates: ids.slice(0, 5).map((id) => ({
+        id,
+        reason: "no-official-record",
+      })),
+    });
+  });
+
+  test("returns typed unavailability without a provider", async () => {
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async () => null),
+      query: "Missing Company",
+    });
+    expect(result).toEqual({
+      type: "name-search-unavailable",
+      registry: "krs",
+      reason: "web-search-unavailable",
+    });
+  });
+
+  test("keeps canonical KRS lookup independent of web search", async () => {
+    let webCalls = 0;
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async (id) => krsHit(id, "Direct Company")),
+      query: "0000123456",
+      webSearch: {
+        provider: webProviderWith([]),
+        observer: () => {
+          webCalls += 1;
+        },
+      },
+    });
+    expect(result).toEqual({
+      type: "lookup",
+      registry: "krs",
+      hit: krsHit("0000123456", "Direct Company"),
+    });
+    expect(webCalls).toBe(0);
   });
 });
 

@@ -19,6 +19,7 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import type { WebSearchProvider } from "@/api/lib/web-search/types";
 
 const BUSINESS_REGISTRY_LOOKUP_TOOL_NAME = "business_registry_lookup" as const;
 
@@ -32,7 +33,8 @@ const TOOL_DESCRIPTION_BASE =
   "query must then be a fully-qualified VAT number including the " +
   "2-letter country prefix, e.g. DE143593636. Search by company " +
   "registration number or company name where the selected registry " +
-  "supports name search.";
+  "supports name search, including verified web-assisted search for KRS. " +
+  "Web-assisted matches contain only official records and identify both sources.";
 
 const QUERY_DESCRIPTION_BASE =
   "Company registration number (e.g. Czech IČO, Norwegian orgnr, " +
@@ -40,7 +42,8 @@ const QUERY_DESCRIPTION_BASE =
   "DE143593636) or company name. " +
   "Numeric inputs that match the registry's canonical ID format " +
   "route to a direct lookup; everything else is treated as a " +
-  "name search where the selected registry supports name search.";
+  "name search where supported; KRS names are resolved from web candidates " +
+  "and verified against the official register.";
 
 type CreateBusinessRegistryToolsArgs = {
   organizationId: SafeId<"organization">;
@@ -55,6 +58,7 @@ type CreateBusinessRegistryToolsArgs = {
    * jurisdiction picker the model cannot use).
    */
   enabledHandlers: readonly RegistryHandler[];
+  webSearchProvider?: WebSearchProvider | null | undefined;
 };
 
 /**
@@ -68,6 +72,7 @@ type CreateBusinessRegistryToolsArgs = {
 export const createBusinessRegistryTools = ({
   enabledHandlers,
   organizationId,
+  webSearchProvider = null,
 }: CreateBusinessRegistryToolsArgs) => {
   const enabledJurisdictions = [
     ...new Set(enabledHandlers.map(({ country }) => country)),
@@ -89,7 +94,10 @@ export const createBusinessRegistryTools = ({
     ...RegistryJurisdictionCode[],
   ] = [first, ...rest];
   const canonicalOnlyJurisdictions = enabledHandlers
-    .filter(({ search }) => search === null)
+    .filter(
+      ({ search, webCandidateNameSearch }) =>
+        search === null && webCandidateNameSearch === undefined,
+    )
     .map(({ country }) => country);
   const canonicalOnlyGuidance = canonicalOnlyJurisdictions
     .map(canonicalOnlyQueryGuidanceFor)
@@ -173,6 +181,17 @@ export const createBusinessRegistryTools = ({
         handler,
         query,
         detail,
+        ...(webSearchProvider
+          ? {
+              webSearch: {
+                provider: webSearchProvider,
+                observer: actionRequestObserver(
+                  organizationId,
+                  ACTION_COST_CALL_KIND.webSearchRequest,
+                ).onRequest,
+              },
+            }
+          : {}),
         ...(limit === undefined ? {} : { limit }),
       });
       // executeRegistryLookup returns a HandlerError instance for

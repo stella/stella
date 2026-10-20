@@ -142,7 +142,11 @@ import type { CountryCode } from "@stll/country-codes";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { normalizeRegisteredCompanyName } from "@/api/lib/business-registries/company-name";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { searchWeb } from "@/api/lib/web-search/search";
+import type { WebSearchRequestObserver } from "@/api/lib/web-search/search";
+import type { WebSearchProvider } from "@/api/lib/web-search/types";
 
 export { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
 export type { BusinessRegistrySlug } from "@stll/api-contract";
@@ -197,6 +201,16 @@ export type BusinessRegistryHit = {
    * compiler to flag the missing case.
    */
   details?: BusinessRegistryHitDetails;
+  provenance?: {
+    identifierSource: "web-search";
+    recordSource: "official-registry";
+  };
+};
+
+export type NameSearchCandidateFailure = {
+  id: string;
+  reason: "no-official-record" | "name-mismatch";
+  officialName?: string;
 };
 
 type BusinessRegistryHitDetails =
@@ -240,6 +254,16 @@ export type RegistryLookupResponse =
       type: "search";
       registry: BusinessRegistrySlug;
       hits: BusinessRegistryHit[];
+    }
+  | {
+      type: "name-search-not-found";
+      registry: BusinessRegistrySlug;
+      candidates: NameSearchCandidateFailure[];
+    }
+  | {
+      type: "name-search-unavailable";
+      registry: BusinessRegistrySlug;
+      reason: "web-search-unavailable";
     };
 
 // ---------------------------------------------------------------------------
@@ -267,6 +291,13 @@ type RegistryJurisdictionRole =
       /** What the register covers beyond the primary one, for agents. */
       coverage: string;
     };
+
+type WebCandidateNameSearch = {
+  /** Global matching is added by dispatch; declare only the canonical shape. */
+  canonicalIdPattern: RegExp;
+  normalizeCanonicalId: (input: string) => string;
+  identifyingWords: string;
+};
 
 export type RegistryHandler = {
   /** Changes on credential rotation so cached preview failures cannot survive it. */
@@ -333,6 +364,8 @@ export type RegistryHandler = {
         },
       ) => Promise<BusinessRegistryHit[]>)
     | null;
+  /** Fallback for official APIs that accept identifiers but cannot search names. */
+  webCandidateNameSearch?: WebCandidateNameSearch | undefined;
   /** Deployment-level gate for adapters that require server config. */
   isDeployAvailable: (credential?: string) => boolean;
   /**
@@ -1390,12 +1423,14 @@ const KRS_HANDLER: RegistryHandler = {
     const entity = await lookupByKrsNumber(input, options);
     return entity ? krsEntityToHit(entity) : null;
   },
-  // KRS has no public name-search endpoint. Callers attempting a
-  // name search get the "Registry 'krs' does not support name
-  // search" 400 from `executeRegistryLookup`. Name → KRS resolution
-  // is a separate REGON BIR1 / Biała Lista slice slated for a
-  // follow-up PR.
+  // KRS has no public name-search endpoint; the declared capability below
+  // supplies candidates that this handler verifies through canonical lookup.
   search: null,
+  webCandidateNameSearch: {
+    canonicalIdPattern: /\b\d{10}\b/u,
+    normalizeCanonicalId: normalizeKrsNumber,
+    identifyingWords: "KRS Poland company register",
+  },
   isDeployAvailable: isAlwaysDeployAvailable,
   mapError: mapKrsError,
 };
@@ -1799,6 +1834,7 @@ export const executeRegistryLookup = async ({
   detail,
   observer,
   permit,
+  webSearch,
 }: {
   handler: RegistryHandler;
   observer: RegistryRequestObservation;
@@ -1814,6 +1850,13 @@ export const executeRegistryLookup = async ({
    * silently clamped to the adapter's max.
    */
   limit?: number;
+  webSearch?:
+    | {
+        provider: WebSearchProvider;
+        observer: WebSearchRequestObserver;
+        abortSignal?: AbortSignal | undefined;
+      }
+    | undefined;
 }): Promise<RegistryLookupResponse | HandlerError> => {
   const trimmed = query.trim();
   if (trimmed.length === 0) {
@@ -1830,6 +1873,23 @@ export const executeRegistryLookup = async ({
     if (handler.isCanonicalId(trimmed)) {
       const hit = await handler.lookup(trimmed, { detail, observer, permit });
       return { type: "lookup", registry: handler.slug, hit };
+    }
+    if (!searchFn && handler.webCandidateNameSearch) {
+      if (!webSearch) {
+        return {
+          type: "name-search-unavailable",
+          registry: handler.slug,
+          reason: "web-search-unavailable",
+        };
+      }
+      return await searchRegistryByWebCandidates({
+        handler,
+        capability: handler.webCandidateNameSearch,
+        query: trimmed,
+        observer,
+        permit,
+        webSearch,
+      });
     }
     if (!searchFn) {
       return new HandlerError({
@@ -1854,4 +1914,94 @@ export const executeRegistryLookup = async ({
       cause: error,
     });
   }
+};
+
+export const WEB_CANDIDATE_LIMIT = 5;
+
+type SearchRegistryByWebCandidatesOptions = {
+  handler: RegistryHandler;
+  capability: WebCandidateNameSearch;
+  query: string;
+  observer: RegistryRequestObservation;
+  permit: ThirdPartyOutboundPermit;
+  webSearch: {
+    provider: WebSearchProvider;
+    observer: WebSearchRequestObserver;
+    abortSignal?: AbortSignal | undefined;
+  };
+};
+
+const searchRegistryByWebCandidates = async ({
+  handler,
+  capability,
+  query,
+  observer,
+  permit,
+  webSearch,
+}: SearchRegistryByWebCandidatesOptions): Promise<RegistryLookupResponse> => {
+  const { results } = await searchWeb({
+    provider: webSearch.provider,
+    observer: webSearch.observer,
+    abortSignal: webSearch.abortSignal,
+    query: `${query} ${capability.identifyingWords}`,
+    jurisdiction: "global",
+    freshness: "any",
+    maxResults: 10,
+  });
+  const candidateIds: string[] = [];
+  const seen = new Set<string>();
+  const matcher = new RegExp(
+    capability.canonicalIdPattern.source,
+    `${capability.canonicalIdPattern.flags.replaceAll("g", "")}g`,
+  );
+  for (const result of results) {
+    const candidateText = `${result.title}\n${result.snippet}\n${result.url}`;
+    for (const match of candidateText.matchAll(matcher)) {
+      const rawId = match.at(0);
+      if (!rawId) {
+        continue;
+      }
+      const id = capability.normalizeCanonicalId(rawId);
+      if (!seen.has(id)) {
+        seen.add(id);
+        candidateIds.push(id);
+      }
+      if (candidateIds.length === WEB_CANDIDATE_LIMIT) {
+        break;
+      }
+    }
+    if (candidateIds.length === WEB_CANDIDATE_LIMIT) {
+      break;
+    }
+  }
+
+  const expectedName = normalizeRegisteredCompanyName(query);
+  const hits: BusinessRegistryHit[] = [];
+  const candidates: NameSearchCandidateFailure[] = [];
+  for (const id of candidateIds) {
+    const hit = await handler.lookup(id, { observer, permit });
+    if (!hit) {
+      candidates.push({ id, reason: "no-official-record" });
+      continue;
+    }
+    if (normalizeRegisteredCompanyName(hit.name) !== expectedName) {
+      candidates.push({
+        id,
+        reason: "name-mismatch",
+        officialName: hit.name,
+      });
+      continue;
+    }
+    hits.push({
+      ...hit,
+      provenance: {
+        identifierSource: "web-search",
+        recordSource: "official-registry",
+      },
+    });
+  }
+  if (hits.length > 0) {
+    return { type: "search", registry: handler.slug, hits };
+  }
+  return { type: "name-search-not-found", registry: handler.slug, candidates };
 };

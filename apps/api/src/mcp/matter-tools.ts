@@ -1000,7 +1000,7 @@ const lookupBusinessRegistryArgsSchema = nullAsAbsent(
       v.minLength(1),
       v.maxLength(256),
       v.description(
-        "Canonical identifier (e.g. company number, VAT number) or company name",
+        "Canonical identifier (e.g. company number, VAT number) or company name; KRS name candidates are verified against the official register",
       ),
     ),
     detail: v.optional(
@@ -1037,6 +1037,11 @@ const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
     q: parsed.output.query,
     detail: parsed.output.detail,
     executeLookup: context.testDependencies?.executeRegistryLookup,
+    webSearchProvider: context.webSearchProvider,
+    observeWebSearch: actionRequestObserver(
+      context.organizationId,
+      ACTION_COST_CALL_KIND.webSearchRequest,
+    ).onRequest,
   });
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
@@ -2534,7 +2539,8 @@ export const MATTER_TOOL_DEFINITIONS = [
     description:
       "Look up a company in a public business register. Pass a canonical " +
       "identifier (company/registration number, VAT number) for an exact " +
-      "match, or a company name to search where the register supports it. " +
+      "match, or a company name to search where supported, including KRS. " +
+      "Web-assisted matches contain only verified official records and source provenance. " +
       "Result IDs belong to the external registry, not stella's contact " +
       "directory. Create a contact with save_contact before using " +
       "read_contact.",
