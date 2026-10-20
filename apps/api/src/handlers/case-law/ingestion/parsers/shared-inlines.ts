@@ -41,6 +41,7 @@ import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: the inline-line helpers moved unchanged to their package owner so library parsers can import them.
 import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
+// parser-output-unchanged: the visible-text helpers moved unchanged to visible-html-text.ts so AST validation can reuse them without importing the parser module.
 import {
   EXCLUDED_HTML_SELECTOR,
   isExcludedHtmlTag,
