@@ -211,7 +211,7 @@ const runProductionTick = async (): Promise<void> => {
 
 export const startCaseLawFreshnessMetricLoop = (): (() => Promise<void>) => {
   if (isLocalTestRun()) {
-    return () => Promise.resolve();
+    return async () => Promise.resolve();
   }
   return startNonOverlappingInterval({
     intervalMs: REPORT_INTERVAL_MS,
