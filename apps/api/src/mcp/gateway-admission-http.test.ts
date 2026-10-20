@@ -464,7 +464,7 @@ describe("gateway admission over HTTP", () => {
         testDependencies: {
           consumeInvokeCapabilityRateLimit: async () => {
             limiterCalls += 1;
-            return await Promise.resolve(asTestRaw({ ok: true }));
+            return await Promise.resolve({ ok: true, retryAfterSeconds: 60 });
           },
         },
       }),
@@ -475,6 +475,45 @@ describe("gateway admission over HTTP", () => {
     expect(errorCodeOf(observed.result)).toBe("not_found");
     expect(observed.admissions).toBe(0);
     expect(limiterCalls).toBe(0);
+  });
+
+  test("an executed direct capability call runs inside one admission", async () => {
+    let limiterCalls = 0;
+    const observed = await runStaticTool({
+      args: {
+        capability: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
+        input: buildDocumentVersionUploadReservationInput({
+          entityId: ENTITY_ID,
+          file: {
+            mimeType: "application/octet-stream",
+            name: "agreement.docx",
+            sha256Hex: "a".repeat(64),
+            size: 1,
+          },
+          workspaceId: WORKSPACE_ID,
+        }),
+      },
+      context: createContext({
+        credentialPermissions: {
+          entity: ["update"],
+          workspace: ["read"],
+        },
+        testDependencies: {
+          // The limiter is the first step of the admitted execution branch;
+          // refusing here proves that branch ran without the real handler.
+          consumeInvokeCapabilityRateLimit: async () => {
+            limiterCalls += 1;
+            return await Promise.resolve({ ok: false, retryAfterSeconds: 60 });
+          },
+        },
+      }),
+      mode: "advanced",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
+    });
+
+    expect(errorCodeOf(observed.result)).toBe("rate_limited");
+    expect(limiterCalls).toBe(1);
+    expect(observed.admissions).toBe(1);
   });
 
   test("a permitted direct capability executor call admits once", async () => {
