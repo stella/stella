@@ -494,9 +494,10 @@ fn read_marker(path: &Path) -> io::Result<Option<RunMarker>> {
   fs::File::open(path)?
     .take(MAX_MARKER_BYTES + 1)
     .read_to_end(&mut bytes)?;
-  serde_json::from_slice(&bytes)
-    .map(Some)
-    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+  serde_json::from_slice(&bytes).map(Some).map_err(|error| {
+    crate::logging::log_json_error(&error, "crash marker is invalid");
+    io::Error::new(io::ErrorKind::InvalidData, "invalid crash marker")
+  })
 }
 
 fn read_previous_run(path: &Path) -> io::Result<Option<RunMarker>> {
