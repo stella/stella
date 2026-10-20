@@ -3,6 +3,7 @@ import { SQL } from "bun";
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+import { terminateReserved } from "./sql-close";
 
 type BoundedDatabaseObserverOptions = {
   url: string;
@@ -91,6 +92,7 @@ export const openOnlineRepairConnection = async (
     throw reservation.error;
   }
   const reserved = reservation.value;
+  let session: "open" | "terminated" = "open";
   return {
     execute: async (query, params = []) => {
       await reserved.unsafe(query, [...params]);
@@ -98,8 +100,16 @@ export const openOnlineRepairConnection = async (
     query: async (query, params = []) =>
       await reserved.unsafe<unknown[]>(query, [...params]),
     release: async () => {
-      reserved.release();
+      if (session === "open") {
+        reserved.release();
+      }
       await client.close();
+    },
+    // The table gate closes a session whose stalled statement it could not
+    // cancel; the repair then fails rather than hold the table.
+    terminate: async () => {
+      session = "terminated";
+      await terminateReserved(reserved);
     },
   };
 };

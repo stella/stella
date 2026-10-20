@@ -27,6 +27,7 @@ import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/c
 import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import { parseHuBhgyDecision } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import {
+  parsePlTkPage,
   parsePlTkText,
   readPlTkCasePage,
   readPlTkRuling,
@@ -270,9 +271,11 @@ const readHuBhgy: EvidenceReader = async (fixture) => {
 
 const readPlTk: EvidenceReader = async (fixture) => {
   const html = await textOf(fixture);
-  const page = readPlTkCasePage(html) ?? panic(`${fixture} is not a case page`);
+  const parsedPage = parsePlTkPage(html);
+  const page =
+    readPlTkCasePage(parsedPage) ?? panic(`${fixture} is not a case page`);
   return page.rulingIds.flatMap((rulingId) => {
-    const ruling = readPlTkRuling(html, rulingId);
+    const ruling = readPlTkRuling(parsedPage, rulingId);
     if (ruling?.textHtml === undefined) {
       return [];
     }
@@ -280,6 +283,7 @@ const readPlTk: EvidenceReader = async (fixture) => {
       {
         id: `${fixture}#${rulingId}`,
         ast: parsePlTkText({
+          page: parsedPage,
           caseNumber: path.basename(fixture),
           court: "Trybunał Konstytucyjny",
           decisionDate: undefined,

@@ -3465,7 +3465,7 @@ const loadStreamingToolSources = async ({
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
-}): Promise<Result<StreamingToolSources, HandlerError>> => {
+}): Promise<Result<StreamingToolSources, HandlerError | SafeDbError>> => {
   const externalMcpTools = await Result.tryPromise({
     try: async () => await externalMcpToolsLoader.getExternalMcpTools(),
     catch: (cause) =>
@@ -3485,13 +3485,8 @@ const loadStreamingToolSources = async ({
     userId,
   });
   if (Result.isError(chatToolGrants)) {
-    return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Failed to load stored tool approvals",
-        cause: chatToolGrants.error,
-      }),
-    );
+    // The database error carries its own failure grade.
+    return Result.err(chatToolGrants.error);
   }
   return Result.ok({
     chatToolGrants: chatToolGrants.value,

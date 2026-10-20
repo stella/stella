@@ -106,6 +106,7 @@ test("the hourly workflow calls the derived PR-depth set and publishes its statu
     "ci-checks-rest",
     "code-quality-api",
     "code-quality-web-rest",
+    "generated-sources",
   ]);
 });
 
@@ -139,6 +140,8 @@ const ORCHESTRATION_JOBS = new Set([
   "ci-result",
   "ci-quick-checks",
   "marketing-screenshots-cancel",
+  "code-quality-api-cancel",
+  "code-quality-web-rest-cancel",
 ]);
 
 type SkipViolationsOptions = {

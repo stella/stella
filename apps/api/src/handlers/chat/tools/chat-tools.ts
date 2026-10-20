@@ -113,7 +113,6 @@ import type {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { authorizeDocumentWriteAccess } from "@/api/lib/entities/authorize-document-write";
 import type {
   DocumentWriteAccess,
@@ -122,6 +121,7 @@ import type {
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+  AI_MEMORY_FEATURE_ID,
   FEATURE_REGISTRY,
   type FeatureRegistry,
 } from "@/api/lib/feature-access/registry";
@@ -871,7 +871,16 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
     testDependencies,
-    memoryEnabled = isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+    memoryEnabled = isMcpDescriptorFeatureEnabled({
+      context: {
+        featureAccessSnapshot: props.featureAccessSnapshot,
+        organizationId: props.organizationId,
+        userId: props.userId,
+      },
+      kind: "tools",
+      id: REMEMBER_TOOL_NAME,
+      featureId: AI_MEMORY_FEATURE_ID,
+    }),
     safeDb,
     scopedDb,
     pinServerValidatedWorkspaceId,

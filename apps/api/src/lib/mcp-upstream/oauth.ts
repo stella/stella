@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { getDomain } from "tldts";
 import * as v from "valibot";
 
@@ -20,6 +20,7 @@ import {
   mcpResourceMatchesConnector,
   mcpWellKnownProtectedResourceUrls,
 } from "@/api/lib/mcp-upstream/url-safety";
+import { logger } from "@/api/lib/observability/logger";
 import {
   safeOutboundFetchBytes,
   validateOutboundFetchTarget,
@@ -497,6 +498,149 @@ export const getMcpOAuthRedirectUri = (): string => {
 
 export type McpClientRegistrationMode = "cimd" | "dcr" | "unsupported";
 
+export type AuthorizationResponseRegistrationMode =
+  | "cimd"
+  | "dcr"
+  | "pre_registered"
+  | "unknown";
+
+type KnownAuthorizationResponseRegistrationMode = Exclude<
+  AuthorizationResponseRegistrationMode,
+  "unknown"
+>;
+
+export type AuthorizationResponseBinding =
+  | {
+      type: "issuer";
+      expectedIssuer: string;
+      registrationMode: AuthorizationResponseRegistrationMode;
+      issSupportedAdvertised: true;
+    }
+  | {
+      type: "redirect";
+      bindingId: string;
+      expectedIssuer: string;
+      registrationMode: AuthorizationResponseRegistrationMode;
+      issSupportedAdvertised: false;
+    }
+  | {
+      type: "unbound";
+      expectedIssuer: string;
+      reason:
+        | "no_issuer_support_shared_client"
+        | "no_issuer_support_shared_redirect"
+        | "state_without_binding";
+      registrationMode: AuthorizationResponseRegistrationMode;
+      issSupportedAdvertised: false;
+    };
+
+export const createAuthorizationResponseBinding = ({
+  authorizationServer,
+  registrationMode,
+}: {
+  authorizationServer: UpstreamAuthorizationServerMetadata;
+  registrationMode: KnownAuthorizationResponseRegistrationMode;
+}): AuthorizationResponseBinding => {
+  if (
+    authorizationServer.authorization_response_iss_parameter_supported === true
+  ) {
+    return {
+      type: "issuer",
+      expectedIssuer: authorizationServer.issuer,
+      registrationMode,
+      issSupportedAdvertised: true,
+    };
+  }
+
+  return registrationMode === "cimd"
+    ? {
+        type: "unbound",
+        expectedIssuer: authorizationServer.issuer,
+        reason: "no_issuer_support_shared_client",
+        registrationMode,
+        issSupportedAdvertised: false,
+      }
+    : {
+        type: "unbound",
+        expectedIssuer: authorizationServer.issuer,
+        reason: "no_issuer_support_shared_redirect",
+        registrationMode,
+        issSupportedAdvertised: false,
+      };
+};
+
+export type AuthorizationResponseBindingVerdict =
+  | { type: "accepted"; issPresent: boolean; issMatches: boolean | null }
+  | {
+      type: "would_refuse";
+      reason: "issuer_absent" | "issuer_mismatch" | "binding_unavailable";
+      issPresent: boolean;
+      issMatches: boolean | null;
+    };
+
+export const evaluateAuthorizationResponseBinding = (
+  binding: AuthorizationResponseBinding,
+  response: { issuer: string | undefined },
+): AuthorizationResponseBindingVerdict => {
+  const issPresent = response.issuer !== undefined;
+  const issMatches = issPresent
+    ? response.issuer === binding.expectedIssuer
+    : null;
+  switch (binding.type) {
+    case "issuer": {
+      if (!issPresent) {
+        return {
+          type: "would_refuse",
+          reason: "issuer_absent",
+          issPresent,
+          issMatches,
+        };
+      }
+      return issMatches
+        ? { type: "accepted", issPresent, issMatches }
+        : {
+            type: "would_refuse",
+            reason: "issuer_mismatch",
+            issPresent,
+            issMatches,
+          };
+    }
+    case "redirect":
+      return { type: "accepted", issPresent, issMatches };
+    case "unbound":
+      return {
+        type: "would_refuse",
+        reason: "binding_unavailable",
+        issPresent,
+        issMatches,
+      };
+    default: {
+      binding satisfies never;
+      return panic("Unhandled authorization response binding");
+    }
+  }
+};
+
+export const observeAuthorizationResponseBinding = async <T>({
+  binding,
+  exchange,
+  observe,
+  response,
+}: {
+  binding: AuthorizationResponseBinding;
+  exchange: () => Promise<T>;
+  observe: (verdict: AuthorizationResponseBindingVerdict) => void;
+  response: { issuer: string | undefined };
+}): Promise<T> => {
+  const verdict = evaluateAuthorizationResponseBinding(binding, response);
+  if (Result.isError(Result.try(() => observe(verdict)))) {
+    logger.warn("mcp.oauth.binding_observation_failed");
+  }
+
+  // This phase is observe-only: every verdict continues to the token exchange.
+  return exchange();
+};
+
 // Client ID Metadata Documents are the MCP spec's preferred registration
 // mechanism; Dynamic Client Registration is retained for authorization
 // servers that have not adopted CIMD yet.
@@ -905,6 +1049,7 @@ export const revokeOAuthToken = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "upstream_unavailable",
         message: "MCP token revocation request failed",
         cause: response.error,
       }),

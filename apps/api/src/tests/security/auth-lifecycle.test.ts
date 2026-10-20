@@ -96,8 +96,15 @@ describe("self-host auth bootstrap lifecycle", () => {
     expect(authSource).toContain("assertSelfhostBootstrapSignUp(ctx.body)");
     expect(authSource).toContain("assertSelfhostEmailOtpAllowed(ctx.path)");
     expect(authSource).toContain("isSessionCreatingAuthPath");
-    expect(authSource).toContain("SIGN_IN_EMAIL_PATH");
     expect(authSource).toContain("isTransactionalEmailConfigured()");
+    // The new-device notice owns its email sign-in gate.
+    const newDeviceNoticeSource = readSecurityFixture(
+      "../../lib/auth/new-device-notice.ts",
+    );
+    expect(newDeviceNoticeSource).toContain("SIGN_IN_EMAIL_PATH");
+    expect(newDeviceNoticeSource).toContain(
+      "dependencies.isTransactionalEmailConfigured()",
+    );
     expect(selfhostAuthSource).toContain('"/sign-up/email"');
     expect(selfhostAuthSource).toContain("SELFHOST_BOOTSTRAP_TOKEN");
     expect(selfhostAuthSource).toContain("hasAnyAuthUsers()");
