@@ -439,7 +439,7 @@ export const MODEL_OUTPUT_TOKEN_LIMITS = {
   "openai/gpt-5.6-sol": 128_000,
   "openai/gpt-5.6-terra": 128_000,
   "openai/gpt-5.6-luna": 128_000,
-  "google/gemini-4-argon": 65_536,
+  "google/gemini-4-argon": 943_718,
   "google/gemini-3.8-flash": 65_536,
   "google/gemini-3.7-flash": 65_536,
   "google/gemini-3.6-flash": 65_536,

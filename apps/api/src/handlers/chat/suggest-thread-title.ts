@@ -214,11 +214,10 @@ export const createSuggestThreadTitle = ({
                   Result.tryPromise({
                     try: async () =>
                       await checked.generateTextForTask({
+                        userId: modelAdmission.userId,
                         dataClass: "customer",
-                        abortSignal: AbortSignal.any([
-                          actionSignal,
-                          AbortSignal.timeout(SUGGEST_TITLE_TIMEOUT_MS),
-                        ]),
+                        abortSignal: actionSignal,
+                        deadlineMs: SUGGEST_TITLE_TIMEOUT_MS,
                         analytics: aiAnalytics,
                         caching: resolveCaching({
                           promptCachingEnabled: checked.promptCachingEnabled,

@@ -64,6 +64,10 @@ import {
 } from "@/lib/workspaces/queries/invoices";
 import type { InvoiceStatus } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import {
+  MEDIUM_DATE,
+  plainDateEpoch,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-plain-date";
 import { InvoiceExportMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-export-menu";
 import { InvoicePdfDownloadButton } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
@@ -377,11 +381,18 @@ const InvoiceDetail = ({
       <div className="grid grid-cols-2 gap-4 rounded-lg border p-4 sm:grid-cols-4">
         <InfoCell
           label={t("billing.invoices.invoiceDate")}
-          value={invoice.invoiceDate}
+          value={format.dateTime(
+            plainDateEpoch(invoice.invoiceDate),
+            MEDIUM_DATE,
+          )}
         />
         <InfoCell
           label={t("billing.invoices.dueDate")}
-          value={invoice.dueDate ?? "—"}
+          value={
+            invoice.dueDate === null
+              ? "—"
+              : format.dateTime(plainDateEpoch(invoice.dueDate), MEDIUM_DATE)
+          }
         />
         <InfoCell
           label={t("billing.invoices.totalAmount")}
@@ -452,8 +463,11 @@ const InvoiceDetail = ({
                     <td className="px-4 py-2">
                       {entry.workItem?.name ?? t("common.matter")}
                     </td>
-                    <td className="px-4 py-2 tabular-nums">
-                      {entry.dateWorked}
+                    <td className="px-4 py-2 whitespace-nowrap tabular-nums">
+                      {format.dateTime(
+                        plainDateEpoch(entry.dateWorked),
+                        MEDIUM_DATE,
+                      )}
                     </td>
                     <td className="max-w-xs truncate px-4 py-2">
                       {entry.invoiceNarrative ?? entry.narrative}
@@ -525,8 +539,11 @@ const InvoiceDetail = ({
                 {invoice.expenses.map((expense) => (
                   <tr className="border-b last:border-0" key={expense.id}>
                     <td className="px-4 py-2">{expense.matter?.name ?? "—"}</td>
-                    <td className="px-4 py-2 tabular-nums">
-                      {expense.dateIncurred}
+                    <td className="px-4 py-2 whitespace-nowrap tabular-nums">
+                      {format.dateTime(
+                        plainDateEpoch(expense.dateIncurred),
+                        MEDIUM_DATE,
+                      )}
                     </td>
                     <td className="max-w-xs truncate px-4 py-2">
                       {expense.invoiceDescription ?? expense.description}

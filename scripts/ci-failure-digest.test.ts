@@ -10,7 +10,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  exitCodeDetail,
+  FAILED_CHECK_RECORD,
+  failedCheckRecord,
+} from "./ci-check-pool";
+import {
   annotations,
+  BARE_EXIT_CAUSE,
   buildDigest,
   classify,
   dedupe,
@@ -26,6 +32,7 @@ import {
   MAX_SCAN_WIDTH,
   parseJobs,
   playwrightEntry,
+  POOLED_FAILURE_PREFIX,
   renderTail,
   segmentForStep,
   splitSteps,
@@ -34,6 +41,7 @@ import {
   testFailures,
   type ApiStep,
   type FailureRecord,
+  failedTests,
 } from "./ci-failure-digest";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -119,6 +127,16 @@ test("bun test failures keep their error and repository location", () => {
       line: 12,
     },
   ]);
+});
+
+test("failed Bun tests keep the package scope and file header they ran under", () => {
+  expect(failedTests(BUN_FAILURE)).toEqual([
+    { scope: "@stll/api", file: "src/math.test.ts", name: "math > adds" },
+  ]);
+  // An unhandled error between tests names no test to quarantine.
+  expect(
+    failedTests(["# Unhandled error between tests", "error: boom"]),
+  ).toEqual([]);
 });
 
 test("a test run's tail lists only the failures, after everything else", () => {
@@ -263,7 +281,7 @@ test.each(["stall", "signal"])(
       const kind = classify(step, lines);
       expect(kind).toBe("infra");
       const output = annotations([
-        { job: "runner", step, kind, lines, url: "" },
+        { job: "runner", step, kind, lines, url: "", tests: [] },
       ]);
       expect(output.at(0)).toContain("[infra]");
       expect(output.at(0)).toContain(
@@ -495,6 +513,7 @@ const record = (index: number): FailureRecord => ({
   lines: [
     { message: "100% broken\nsecond", file: "apps/a,b.ts", line: index + 1 },
   ],
+  tests: [],
 });
 
 test("annotations escape workflow command syntax and respect the step cap", () => {
@@ -913,6 +932,88 @@ test("each log segment explains at most one failed step", () => {
   expect(new Set(messages).size).toBe(2);
   expect(messages.join(",")).toContain("boom one");
   expect(messages.join(",")).toContain("boom two");
+});
+
+test("pooled check records become named digest failures in runner-rendered logs", () => {
+  expect(POOLED_FAILURE_PREFIX).toBe(FAILED_CHECK_RECORD);
+  // The runner renders each `::error` annotation as `##[error]<message>`,
+  // dropping its title; the pool's plain record keeps the check name.
+  // A check's own output, inside its log group, is never a record.
+  const log = runStep(4, "bun scripts/ci-check-pool.ts run ci-checks-policy", [
+    "##[group]Bun tests: FAILED in 1.0 s",
+    failedCheckRecord("Spoofed", "printed by the check"),
+    "##[endgroup]",
+    "##[error](fail) parser > rejects -- error: expected value",
+    failedCheckRecord(
+      "Bun tests",
+      "(fail) parser > rejects -- error: expected value",
+    ),
+    "##[error]error: policy failed%",
+    failedCheckRecord("Policy -- guard%2D\nnext", "error: policy failed%"),
+    "2 check(s) failed: Bun tests; Policy -- guard",
+    "##[error]Process completed with exit code 1.",
+  ]).join("\n");
+  const job = {
+    id: 14,
+    name: "ci-checks-policy",
+    conclusion: "failure",
+    html_url: "https://github.com/o/r/actions/runs/1/job/14",
+    steps: [
+      {
+        name: "Run policy checks",
+        number: 4,
+        conclusion: "failure",
+        started_at: "2026-10-12T10:00:04Z",
+        completed_at: "2026-10-12T10:00:05Z",
+      },
+    ],
+  };
+  const records = buildDigest({ jobs: [job], logFor: () => log });
+  expect(records.map(({ step, lines }) => [step, lines[0]?.message])).toEqual([
+    ["Bun tests", "(fail) parser > rejects -- error: expected value"],
+    ["Policy -- guard%2D\nnext", "error: policy failed%"],
+  ]);
+});
+
+test("a pooled check that only exited non-zero is digested from its own output", () => {
+  expect(BARE_EXIT_CAUSE.test(exitCodeDetail(1))).toBe(true);
+  const log = runStep(4, "bun scripts/ci-check-pool.ts run ci-checks-policy", [
+    "##[group]Ratchet guard: FAILED in 243.8 s",
+    "(pass) allowance without an increase fails [2373.06ms]",
+    "ratchet --check: invalid increase allowances:",
+    "  direct-third-party-declarations: actual increase 1, funded 0 (unfunded increase).",
+    "  direct-third-party-declarations: 677 -> 678 (+1)",
+    "      packages/ui/package.json: 30 -> 31",
+    "Increases relative to the measured base tree require exact, justified allowances added in this PR.",
+    "##[endgroup]",
+    `##[error]${exitCodeDetail(1)}`,
+    failedCheckRecord("Ratchet guard", exitCodeDetail(1)),
+    "1 check(s) failed: Ratchet guard",
+    "##[error]Process completed with exit code 1.",
+  ]).join("\n");
+  const job = {
+    id: 15,
+    name: "ci-checks-policy",
+    conclusion: "failure",
+    html_url: "https://github.com/o/r/actions/runs/1/job/15",
+    steps: [
+      {
+        name: "Run policy checks",
+        number: 4,
+        conclusion: "failure",
+        started_at: "2026-10-12T10:00:04Z",
+        completed_at: "2026-10-12T10:00:05Z",
+      },
+    ],
+  };
+  const [ratchet] = buildDigest({ jobs: [job], logFor: () => log });
+  const messages = ratchet?.lines.map(({ message }) => message) ?? [];
+  expect(ratchet?.step).toBe("Ratchet guard");
+  expect(ratchet?.kind).toBe("ratchet");
+  expect(messages).toContain(
+    "direct-third-party-declarations: 677 -> 678 (+1)",
+  );
+  expect(messages).not.toContain(exitCodeDetail(1));
 });
 
 test("the digest command writes JSON, a summary and annotations", () => {

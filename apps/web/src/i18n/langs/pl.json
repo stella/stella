@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Wszystkie twierdzenia wymagające oceny zostały rozpatrzone.</strong> {count, plural, one {Pozostałe # rutynowe ustalenie nie wymaga indywidualnej weryfikacji.} few {Pozostałe # rutynowe ustalenia nie wymagają indywidualnej weryfikacji.} many {Pozostałych # rutynowych ustaleń nie trzeba weryfikować indywidualnie.} other {Pozostałego # rutynowego ustalenia nie trzeba weryfikować indywidualnie.}}",
       "attentionOpen": "<strong>{count, plural, one {# twierdzenie wymaga} few {# twierdzenia wymagają} many {# twierdzeń wymaga} other {# twierdzenia wymaga}} Twojej oceny</strong> — sprzeczności i sporne interpretacje. {routineCount, plural, one {Pozostałe # jest rutynowe i nie wymaga indywidualnego zatwierdzenia.} few {Pozostałe # są rutynowe i nie wymagają indywidualnego zatwierdzenia.} many {Pozostałych # jest rutynowych i nie wymaga indywidualnego zatwierdzenia.} other {Pozostałego # rutynowego ustalenia nie trzeba indywidualnie zatwierdzać.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporne} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} other {}})",
+      "documentView": {
+        "label": "Widok dokumentu",
+        "original": "Oryginał",
+        "reading": "Widok do czytania"
+      },
+      "notLocated": "{count, plural, one {Nie znaleziono # twierdzenia w oryginale} few {Nie znaleziono # twierdzeń w oryginale} many {Nie znaleziono # twierdzeń w oryginale} other {Nie znaleziono # twierdzenia w oryginale}}",
       "selectClaim": "Wybierz twierdzenie, aby przejrzeć powiązane wpisy.",
       "showQueue": "Pokaż kolejkę",
       "stats": {
@@ -1009,6 +1015,9 @@
       "saved": "Zapisano {count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczeń}} do sprawy {matter}"
     },
     "newestDecisions": "Najnowsze orzeczenia",
+    "noResults": {
+      "hint": "Spróbuj innych słów, popraw zapytanie za pomocą AI lub zadaj pytanie na czacie."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Ludzkie"
@@ -1081,6 +1090,10 @@
         "medium": "Średni",
         "short": "Krótki"
       }
+    },
+    "rewritten": {
+      "line": "Brak dokładnych wyników dla <bdi>{original}</bdi>; wyniki dla <bdi>{query}</bdi>",
+      "searchOriginal": "Szukaj moich oryginalnych słów"
     },
     "sameCaseNumber": "{count, plural, one {# orzeczenie ma} few {# orzeczenia mają} many {# orzeczeń ma} other {# orzeczenia ma}} tę sygnaturę. Wybierz sąd.",
     "searchLabel": "Szukaj w orzecznictwie",
@@ -1601,6 +1614,9 @@
         "private": "Twoje umiejętności AI",
         "team": "Umiejętności AI zespołu"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Również sprawdzono ({count, number})"
     },
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",
@@ -2662,10 +2678,12 @@
     "api": {
       "badRequest": "Nie udało się wykonać żądania.",
       "caseLawCountryUnavailable": "Orzecznictwo tego kraju nie jest dostępne. Wybierz inny kraj.",
+      "caseLawIdentityOnly": "Dla tego kraju dostępne są tylko dokładne wyszukiwanie i odczytywanie orzeczeń.",
       "caseLawSearchUnavailable": "Wyszukiwanie orzecznictwa tego kraju nie jest dostępne. Nadal możesz czytać jego publiczne orzeczenia.",
       "conflict": "Żądanie jest sprzeczne z bieżącym stanem.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "legislationCountryUnavailable": "Przepisy tego kraju nie są dostępne. Wybierz inny kraj.",
+      "legislationIdentityOnly": "Dla tego kraju dostępne są tylko dokładne wyszukiwanie i odczytywanie przepisów.",
       "legislationSearchUnavailable": "Wyszukiwanie przepisów tego kraju nie jest dostępne. Nadal możesz czytać jego publiczne przepisy.",
       "notFound": "Nie udało się znaleźć żądanego elementu.",
       "payloadTooLarge": "Żądanie jest zbyt duże.",
@@ -2688,6 +2706,10 @@
       "aiConfigModelInvalid": "Konfiguracja modelu AI jest nieprawidłowa. Sprawdź wybrane modele.",
       "aiConfigProviderInvalid": "Konfiguracja dostawcy AI jest nieprawidłowa. Sprawdź ustawienia dostawcy.",
       "aiConfigProviderValidationFailed": "Dostawca AI odrzucił konfigurację. Sprawdź klucz API i model.",
+      "aiOutputInvalid": "Odpowiedź AI miała nieoczekiwany format. Spróbuj ponownie.",
+      "aiOutputModerated": "Dostawca AI objął odpowiedź moderacją. Przeformułuj żądanie lub wybierz inny model.",
+      "aiProviderTaskUnsupported": "Skonfigurowany dostawca AI nie może wykonać tego zadania. Wybierz dostawcę, który może.",
+      "aiUnknown": "Żądanie AI nie powiodło się. Spróbuj ponownie.",
       "clauseDirectivesInvalid": "Powiązana klauzula zawiera nieprawidłowe dyrektywy. Popraw klauzulę przed wypełnieniem szablonu.",
       "clauseDirectivesInvalidDetails": "Klauzula {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Otwórz edytor klauzul, popraw wskazane akapity i ponownie wypełnij szablon.",
       "clauseDirectivesOverrideInvalidDetails": "Zastąpiona treść klauzuli {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Popraw treść dla tego wypełnienia przed ponowną próbą.",
@@ -4234,6 +4256,10 @@
     "archivedEmpty": "Brak zarchiwizowanych wspomnień.",
     "archivedToast": "Pamięć zarchiwizowana",
     "createdToast": "Zapisano w pamięci",
+    "deleteConfirmation": "Wpisz {confirmation}, aby potwierdzić",
+    "deleteDescription": "Spowoduje to trwałe usunięcie tej pamięci. Tej czynności nie można cofnąć.",
+    "deleteTitle": "Usunąć pamięć?",
+    "deletedToast": "Pamięć usunięta",
     "empty": "Nic jeszcze w pamięci.",
     "kinds": {
       "decision": "Decyzja",
@@ -5162,6 +5188,8 @@
     "outline": "Spis treści",
     "outlineJumpLabel": "Przejdź do przepisu",
     "outlineJumpPlaceholder": "§ 10 lub tytuł",
+    "pendingChanges": "Nadchodzące nowelizacje",
+    "pendingChangesIncomplete": "Dane wydawcy mogą nie obejmować wszystkich nadchodzących nowelizacji.",
     "provisionAskContextPrompt": "\n\nFragmenty stosujące przepis w najbardziej miarodajnych orzeczeniach:\n{passages}\n\nSkorzystaj z narzędzi orzecznictwa, aby przeczytać w całości którekolwiek z tych orzeczeń lub znaleźć kolejne orzeczenia powołujące ten przepis.",
     "provisionAskPlaceholder": "Zapytaj o ten przepis",
     "provisionAskQuestionPrompt": "W sprawie {subject}: {question}",

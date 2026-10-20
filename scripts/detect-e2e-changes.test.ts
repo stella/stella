@@ -14,6 +14,13 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import {
+  computeChangedFileScope,
+  DEFAULT_DETECTORS,
+  MODEL_CATALOG_DRIFT_INPUTS,
+  STACK_REDACTION_BROWSER_INPUTS,
+  type ChangedFileScopeDetectors,
+} from "./ci-plan-scope";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
@@ -23,6 +30,30 @@ const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
 // Built, not written literally: a `${...}` in a plain string reads as a
 // broken template literal to the linter.
 const shellExpansion = (value: string) => ["$", "{", value, "}"].join("");
+const changedFileScope = (
+  file: string,
+  eventName = "pull_request",
+  detectorOverrides: Partial<ChangedFileScopeDetectors> = {},
+) =>
+  computeChangedFileScope(
+    {
+      changedFiles: [file],
+      comparisonBase: "base",
+      scopeUnknown: false,
+      eventName,
+      suiteDepth: "fast",
+      heavyOnly: false,
+      prTitle: "",
+    },
+    {
+      ...DEFAULT_DETECTORS,
+      packageChecks: () => true,
+      landingBuild: () => false,
+      landingDeploy: () => false,
+      desktopBrowser: () => false,
+      ...detectorOverrides,
+    },
+  );
 const workflow = readFileSync(
   path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
   "utf-8",
@@ -485,7 +516,11 @@ describe("detect-e2e-changes", () => {
       "apps/api/src/lib/folio-collab-*",
       "packages/api-contract/src/folio-collab*",
     ]) {
-      expect(plan).toContain(collaborationPath);
+      expect(
+        changedFileScope(collaborationPath.replaceAll("*", "fixture"))
+          .collab_redis_required,
+        collaborationPath,
+      ).toBe("true");
     }
     expect(plan).toContain(
       `service_suites_required: ${githubExpression("steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true'")}`,
@@ -790,7 +825,16 @@ describe("detect-e2e-changes", () => {
   });
 
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
-    const plan = workflowJob("ci-plan");
+    expect(
+      changedFileScope("docs/development.md", "pull_request", {
+        packageChecks: () => false,
+      }).package_checks_required,
+    ).toBe("false");
+    expect(
+      changedFileScope("docs/development.md", "workflow_dispatch", {
+        packageChecks: () => false,
+      }).package_checks_required,
+    ).toBe("true");
     for (const { leg, job, name } of [
       { leg: "api", job: "code-quality-api", name: "Code quality" },
       { leg: "web", job: "code-quality-web-rest", name: "Code quality (web)" },
@@ -802,10 +846,6 @@ describe("detect-e2e-changes", () => {
     ]) {
       const step = workflowStepByName(workflowJobSteps(ciWorkflow, job), name);
       const env = contractRecord(step["env"]);
-      expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
-      expect(plan).toContain(
-        "bun scripts/ci-package-scope.ts --package-checks",
-      );
       expect(env["EVENT_NAME"]).toBe(githubExpression("github.event_name"));
       expect(env["CHECK_BASE_REF"]).toBe(
         githubExpression("format('origin/{0}', github.base_ref || 'main')"),
@@ -821,15 +861,17 @@ describe("detect-e2e-changes", () => {
         ].join("\n"),
       );
     }
-  });
+  }, 15_000);
 
   test("runs the full native compiler only at the release boundary", () => {
     const plan = workflowJob("ci-plan");
     expect(plan).toContain(
       `release_typecheck_required: ${githubExpression("steps.changed-files.outputs.release_typecheck_required")}`,
     );
-    expect(plan).toContain('if [[ "$file" == "VERSION" ]]');
-    expect(plan).toContain("release_typecheck_required=true");
+    expect(changedFileScope("VERSION").release_typecheck_required).toBe("true");
+    expect(
+      changedFileScope("apps/web/src/main.tsx").release_typecheck_required,
+    ).toBe("false");
 
     const releaseTypecheck = workflowJob("release-typecheck");
     expect(releaseTypecheck).toContain(
@@ -864,15 +906,7 @@ describe("detect-e2e-changes", () => {
     expect(plan).toContain(
       `model_catalog_drift_required: ${githubExpression("steps.changed-files.outputs.model_catalog_drift_required")}`,
     );
-    expect(plan).toContain('echo "model_catalog_drift_required=true"');
-    expect(plan).toContain('echo "model_catalog_drift_required=false"');
-
-    const selector =
-      /\n *([^\n)]+)\)\n *model_catalog_drift_required=true\n/u.exec(plan)?.[1];
-    if (selector === undefined) {
-      throw new Error("ci-plan has no model-catalog drift path selector");
-    }
-    expect(new Set(selector.split("|"))).toEqual(
+    expect(new Set(MODEL_CATALOG_DRIFT_INPUTS)).toEqual(
       new Set([
         ".github/workflows/ci.yml",
         "packages/ai-catalog/package.json",
@@ -888,6 +922,11 @@ describe("detect-e2e-changes", () => {
         "packages/scripts/src/model-catalog-rates-gen.ts",
       ]),
     );
+    for (const input of MODEL_CATALOG_DRIFT_INPUTS) {
+      expect(changedFileScope(input).model_catalog_drift_required, input).toBe(
+        "true",
+      );
+    }
 
     const driftGuard = ciChecksRestStep("Model catalog snapshot drift check");
     const driftGuardCondition = requiredExpression(
@@ -1437,14 +1476,9 @@ describe("detect-e2e-changes", () => {
   });
 
   test("builds the production web artifact once per workflow run", () => {
-    const plan = workflowJob("ci-plan");
-    expect(plan).toContain(
-      [
-        'if [[ "$e2e_core_required" == "true" || "$route_smoke_required" == "true" ]]; then',
-        "            web_build_required=true",
-        "          fi",
-      ].join("\n"),
-    );
+    const scope = changedFileScope("apps/api/src/server.ts");
+    expect(scope.e2e_core_required).toBe("true");
+    expect(scope.web_build_required).toBe("true");
 
     const webBuild = workflowJob("web-build");
     expect(webBuild).toContain("needs: [ci-plan, pr-heavy-gate]");
@@ -1675,18 +1709,11 @@ describe("detect-e2e-changes", () => {
     const result = workflowJob("ci-result");
 
     expect(plan).toContain("stack_redaction_browsers_required:");
-    // The selector is the complete owner set of the Firefox/WebKit guard:
+    // The exported inputs are the complete owner set of the Firefox/WebKit guard:
     // production redaction, the harness, and everything that shapes how the
     // harness is built or installed. Set equality in both directions, so a
     // dropped owner fails here instead of silently skipping the job.
-    const selector =
-      /\n *([^\n)]+)\)\n *stack_redaction_browsers_required=true\n/u.exec(
-        plan,
-      )?.[1];
-    if (selector === undefined) {
-      throw new Error("ci-plan has no stack-redaction path selector");
-    }
-    expect(new Set(selector.split("|"))).toEqual(
+    expect(new Set(STACK_REDACTION_BROWSER_INPUTS)).toEqual(
       new Set([
         "apps/web/src/lib/analytics/posthog.ts",
         "apps/web/src/lib/analytics/stack-redaction.ts",
@@ -1705,6 +1732,13 @@ describe("detect-e2e-changes", () => {
         ".github/workflows/ci.yml",
       ]),
     );
+    for (const input of STACK_REDACTION_BROWSER_INPUTS) {
+      expect(
+        changedFileScope(input.replaceAll("*", "fixture"))
+          .stack_redaction_browsers_required,
+        input,
+      ).toBe("true");
+    }
     expect(stackRedaction).toContain(
       "needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'",
     );

@@ -12,6 +12,11 @@
 
 /** Each run actor with the counts one of its runs reports. */
 export const SYSTEM_RUN_ACTOR_COUNTS = {
+  "system:monitoring-session-revoke": [
+    "revokedControls",
+    "deletedSessions",
+    "deletedRoomTokens",
+  ],
   "system:operator-activity": ["reads"],
   "system:sanctions-monitoring-fanout": [
     "freshnessQueued",
@@ -88,6 +93,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "reviewRequired",
     "failed",
   ],
+  "system:eu-soft-law-ingestion": ["sourcesRegistered"],
   "system:corpus-generation-operator": ["registered", "promoted", "demoted"],
 } as const satisfies Record<`system:${string}`, readonly string[]>;
 
