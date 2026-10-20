@@ -5618,6 +5618,7 @@ const config = defineConfig({
         "apps/api/src/handlers/hosted-usage-webhook/routes.ts",
         "apps/api/src/handlers/notifications/routes.ts",
         "apps/api/src/handlers/smoke/routes.ts",
+        "apps/api/src/handlers/synthetic/routes.ts",
         "apps/api/src/handlers/verify/routes.ts",
         "apps/api/src/handlers/well-known/routes.ts",
       ],

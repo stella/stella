@@ -174,6 +174,9 @@ export const RAW_WRITE_CONTRACTS = {
   "apps/api/src/handlers/smoke/routes.ts|POST|/smoke/session": {
     contract: "patch",
   },
+  "apps/api/src/handlers/synthetic/routes.ts|POST|/synthetic/session": {
+    contract: "patch",
+  },
   "apps/api/src/server.ts|MOUNT|": {
     contract: "patch",
   },
