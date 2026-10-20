@@ -20,6 +20,8 @@ import {
   denyStellaAccessPolicies,
 } from "@/api/db/rls";
 
+import { ACCOUNT_CREDENTIAL_SINGLETON_UIDX } from "./online-unique-indexes";
+
 export const user = pgTable(
   "user",
   {
@@ -167,7 +169,7 @@ export const account = pgTable(
       table.providerId,
       table.accountId,
     ),
-    uniqueIndex("account_credential_singleton_uidx")
+    uniqueIndex(ACCOUNT_CREDENTIAL_SINGLETON_UIDX)
       .on(table.providerId)
       .where(sql`${table.providerId} = 'credential'`),
     ...denyStellaAccessPolicies(),

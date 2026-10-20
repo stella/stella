@@ -33,7 +33,8 @@ export const CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX =
 const CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX =
   "correspondence_ws_source_entity_uidx";
 export const CASE_LAW_DECISIONS_SLUG_UIDX = "case_law_decisions_slug_uidx";
-const ACCOUNT_CREDENTIAL_SINGLETON_UIDX = "account_credential_singleton_uidx";
+export const ACCOUNT_CREDENTIAL_SINGLETON_UIDX =
+  "account_credential_singleton_uidx";
 const PROPERTIES_WS_DOCUMENT_TYPE_CLASSIFIER_UNQ =
   "properties_ws_document_type_classifier_unq";
 export const USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX =
@@ -83,7 +84,7 @@ export type OnlineUniqueIndexName =
 export type ExecutableOnlineUniqueIndex = OnlineIndexDeclaration &
   IntroducedMigrationIndex;
 
-export const EXECUTABLE_ONLINE_UNIQUE_INDEXES = [
+const EXECUTABLE_ONLINE_UNIQUE_INDEXES = [
   {
     createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "contacts_org_id_unique" ON public."contacts" USING btree ("organization_id", "id")',

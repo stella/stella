@@ -16,9 +16,9 @@ type UniqueIndex = {
   name: string;
   definitionBody: string;
   introducedBy: string;
-  tableName?: string;
+  tableName: string;
 };
-export type OnlineIndexDependency = {
+type OnlineIndexDependency = {
   file: string;
   line: number;
   name: string;
@@ -95,9 +95,7 @@ export const checkOnlineIndexDependencySource = ({
       const target = onlineIndexColumnTarget(index.definitionBody);
       if (
         target !== undefined &&
-        (table === undefined ||
-          index.tableName === undefined ||
-          index.tableName === table) &&
+        (table === undefined || index.tableName === table) &&
         canonical(target.split(",")) === canonical(columns)
       ) {
         add(
