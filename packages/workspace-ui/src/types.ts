@@ -1,3 +1,4 @@
+import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
 import type { KanbanColumnBand } from "@stll/ui/kanban";
 import type { OptionColor } from "@stll/ui/option-color";
 
@@ -46,13 +47,7 @@ export type FieldContent =
         | {
             status: "failed";
             reason?: "enqueue" | "processing" | "too-large" | undefined;
-            conversionRefusal?:
-              | { kind: "unsupported_field"; fieldType: string }
-              | {
-                  kind: "legacy_format";
-                  replacementExtension: ".xlsx" | ".pptx";
-                }
-              | undefined;
+            conversionRefusal?: ConversionRefusal | undefined;
           }
         | undefined;
     }

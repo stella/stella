@@ -62,6 +62,7 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
+    "@stll/api-contract": "workspace:*",
     "@stll/calculations": "workspace:^",
     "@stll/conditions": "workspace:^",
     "@stll/money": "workspace:^",

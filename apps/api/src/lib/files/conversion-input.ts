@@ -3,6 +3,8 @@ import { load } from "cheerio";
 import { isTag } from "domhandler";
 import * as slimdom from "slimdom";
 
+import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
+
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { CompoundFile } from "@/api/lib/files/compound-file";
 import { DOCUMENT_METADATA_ENTRY_MAX_BYTES } from "@/api/lib/files/document-properties";
@@ -18,14 +20,7 @@ type ConversionInputResult =
 
 export type ConversionInputRefusal =
   | { kind: "external_reference" }
-  | {
-      kind: "unsupported_reference";
-      format: ConvertibleMime;
-      element: string;
-      attribute: string;
-    }
-  | { kind: "unsupported_field"; fieldType: string }
-  | { kind: "legacy_format"; replacementExtension: ".xlsx" | ".pptx" }
+  | ConversionRefusal
   | { kind: "inspection_failed" };
 
 type Detector = (bytes: Uint8Array) => Promise<boolean> | boolean;
@@ -673,7 +668,7 @@ const xhtmlHasExternalReference = (bytes: Uint8Array): boolean => {
       }
     }
     if (
-      isXhtmlElement("style") &&
+      element.localName.toLowerCase() === "style" &&
       cssHasExternalReference(element.textContent ?? "")
     ) {
       return true;
@@ -1014,7 +1009,7 @@ const odfHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
 type RtfDecodeResult = { value: string; end: number } | null;
 
 const rtfGroupEnd = (source: string, start: number): number | null => {
-  let cursor = start + 3;
+  let cursor = start + 1;
   let depth = 1;
   while (cursor < source.length && depth > 0) {
     if (source[cursor] === "\\") {
@@ -1030,6 +1025,54 @@ const rtfGroupEnd = (source: string, start: number): number | null => {
     cursor++;
   }
   return depth === 0 ? cursor : null;
+};
+
+type RtfDestination = { name: string; contentStart: number };
+
+const rtfDestinationAt = (
+  source: string,
+  groupStart: number,
+): RtfDestination | null => {
+  let cursor = groupStart + 1;
+  while (source[cursor] === "\r" || source[cursor] === "\n") {
+    cursor++;
+  }
+  if (source[cursor] !== "\\") {
+    return null;
+  }
+  cursor++;
+  if (source[cursor] === "*") {
+    cursor++;
+    while (source[cursor] === "\r" || source[cursor] === "\n") {
+      cursor++;
+    }
+    if (source[cursor] !== "\\") {
+      return null;
+    }
+    cursor++;
+  }
+  const wordStart = cursor;
+  while (/[a-z]/iu.test(source[cursor] ?? "")) {
+    cursor++;
+  }
+  if (cursor === wordStart) {
+    return null;
+  }
+  const name = source.slice(wordStart, cursor).toLowerCase();
+  if (source[cursor] === "-") {
+    cursor++;
+  }
+  while (/\d/u.test(source[cursor] ?? "")) {
+    cursor++;
+  }
+  if (source[cursor] === " ") {
+    cursor++;
+  } else {
+    while (source[cursor] === "\r" || source[cursor] === "\n") {
+      cursor++;
+    }
+  }
+  return { name, contentStart: cursor };
 };
 
 const rtfUnicodeCodePoint = (signed: number): number =>
@@ -1149,34 +1192,24 @@ const rtfHasExternalReference = (bytes: Uint8Array): boolean => {
   if (lower.includes("\\objlink")) {
     return true;
   }
-  let cursor = 0;
-  while ((cursor = lower.indexOf("{\\field", cursor)) !== -1) {
-    const boundary = lower[cursor + 7];
-    if (
-      (boundary === undefined || !/[a-z]/u.test(boundary)) &&
-      rtfGroupEnd(source, cursor) === null
-    ) {
-      return true;
-    }
-    cursor += 2;
-  }
-  cursor = 0;
-  while ((cursor = lower.indexOf("{\\", cursor)) !== -1) {
-    let marker: string | null = null;
-    if (lower.startsWith("{\\*\\fldinst", cursor)) {
-      marker = "{\\*\\fldinst";
-    } else if (lower.startsWith("{\\fldinst", cursor)) {
-      marker = "{\\fldinst";
-    }
-    if (marker === null) {
-      cursor += 2;
+  for (let cursor = 0; cursor < source.length; cursor++) {
+    if (source[cursor] !== "{") {
       continue;
     }
-    const decoded = decodeRtfInstruction(source, cursor + marker.length);
+    const destination = rtfDestinationAt(source, cursor);
+    if (destination === null) {
+      continue;
+    }
+    if (destination.name === "field" && rtfGroupEnd(source, cursor) === null) {
+      return true;
+    }
+    if (destination.name !== "fldinst") {
+      continue;
+    }
+    const decoded = decodeRtfInstruction(source, destination.contentStart);
     if (decoded === null || fieldInstructionIsRefused(decoded.value)) {
       return true;
     }
-    cursor += marker.length;
   }
   return false;
 };

@@ -704,6 +704,28 @@ describe("document conversion input", () => {
   });
 
   test.each([
+    [
+      "application/xhtml+xml",
+      '<html xmlns="http://www.w3.org/1999/xhtml"><svg xmlns="http://www.w3.org/2000/svg"><style><![CDATA[@import url(https://example.test/a.css);]]></style></svg></html>',
+    ],
+    [
+      "application/xhtml+xml",
+      '<svg xmlns="http://www.w3.org/2000/svg"><style>@import url(https://example.test/a.css);</style></svg>',
+    ],
+    [
+      "text/html",
+      "<svg><style>@import url(https://example.test/a.css);</style></svg>",
+    ],
+  ] satisfies readonly [ConvertibleMime, string][])(
+    "refuses style references in every element namespace",
+    async (mime, source) => {
+      expect(await checkConversionInput(mime, encode(source))).toMatchObject({
+        kind: "refuse",
+      });
+    },
+  );
+
+  test.each([
     '<a href="https://x.test">link</a>',
     '<img src="data:image/png;base64,AA==">',
     '<img src="relative.png">',
@@ -1088,6 +1110,21 @@ describe("document conversion input", () => {
       '{\\field{\\fldinst INCLUDEPICTURE "http://x.invalid/a.png"}}',
     );
     expect(await checkConversionInput("application/rtf", input)).toEqual({
+      kind: "refuse",
+      reason: { kind: "external_reference" },
+      format: "application/rtf",
+    });
+  });
+
+  test.each([
+    '{\\rtf1{\\field{\n\\*\\fldinst INCLUDEPICTURE "https://example.test/a.png"}}}',
+    '{\\rtf1{\\field{\\*\n\\fldinst INCLUDEPICTURE "https://example.test/a.png"}}}',
+    '{\\rtf1{\\field{\r\n\\*\r\n\\fldinst INCLUDEPICTURE "https://example.test/a.png"}}}',
+    '{\\rtf1{\\field{\n\\*\n\\fldinst\nINCLUDEPICTURE "https://example.test/a.png"}}}',
+  ])("refuses line-separated RTF field destinations", async (source) => {
+    expect(
+      await checkConversionInput("application/rtf", encode(source)),
+    ).toEqual({
       kind: "refuse",
       reason: { kind: "external_reference" },
       format: "application/rtf",

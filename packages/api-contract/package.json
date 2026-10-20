@@ -7,6 +7,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./conversion-refusal": "./src/conversion-refusal.ts",
     "./search-history-identity": "./src/search-history-identity.ts",
     "./search-history-title": "./src/search-history-title.ts",
     "./public-crawl-rules": "./src/public-crawl-rules.ts",

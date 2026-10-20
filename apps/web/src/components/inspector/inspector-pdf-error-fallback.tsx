@@ -1,21 +1,9 @@
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
 import { Button } from "@stll/ui/button";
 import { AlertTriangleIcon } from "@stll/ui/icons";
-
-import type { WorkspaceFieldContent } from "@/lib/types";
-
-type ConversionRefusal = NonNullable<
-  Extract<
-    WorkspaceFieldContent,
-    { type: "file" }
-  >["pdfDerivative"] extends infer State
-    ? State extends { status: "failed" }
-      ? State["conversionRefusal"]
-      : never
-    : never
->;
 
 const LEGACY_FORMAT = {
   ".pptx": "PowerPoint",

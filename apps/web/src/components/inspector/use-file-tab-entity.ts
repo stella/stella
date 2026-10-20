@@ -42,7 +42,7 @@ const shouldQueryFileTabEntity = ({
     canUpdateEntity &&
     (desktopEditFileType !== null || isPdfDisplay));
 
-const getFileTabEntityState = ({
+export const getFileTabEntityState = ({
   entityData,
   entityQueryError,
   needsPropertyResolution,
