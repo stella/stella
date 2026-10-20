@@ -1017,7 +1017,13 @@ describe("handleMcpHttpRequest", () => {
         "stella:documents_write",
         "stella:matters_write",
       ]);
-      expect(handleMcpToolCallMock.mock.calls).toMatchObject([
+      // Dispatch receives the request context plus the seam's admission
+      // callback; the static handler gets the context without it.
+      const dispatchContext = {
+        ...context,
+        admitToolInvocation: expect.any(Function),
+      };
+      expect(handleMcpToolCallMock.mock.calls).toEqual([
         [
           {
             args: {
@@ -1030,7 +1036,7 @@ describe("handleMcpHttpRequest", () => {
                   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
               },
             },
-            context,
+            context: dispatchContext,
             mode: "documents",
             toolName: "upload_document_version",
           },
@@ -1038,7 +1044,7 @@ describe("handleMcpHttpRequest", () => {
         [
           {
             args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
-            context,
+            context: dispatchContext,
             mode: "documents",
             toolName: "open_document_version_upload",
           },
