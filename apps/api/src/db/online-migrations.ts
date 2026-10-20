@@ -12,6 +12,7 @@ import {
 
 import {
   REWRITTEN_MIGRATION_INDEXES,
+  type IntroducedMigrationIndex,
   type RequiredMigrationIndex,
 } from "../lib/db/migration-history";
 import { BackfillHeldError } from "./backfill-runtime";
@@ -62,6 +63,10 @@ import type {
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
+import {
+  onlineUniqueIndexDefinition,
+  EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
+} from "./online-unique-indexes";
 import {
   SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   SANCTIONS_MONITORING_CONSTRAINTS,
@@ -127,7 +132,7 @@ const READ_REINDEX_ARTIFACTS_SQL = `
     )
 `;
 
-type OnlineIndex = OnlineIndexDeclaration;
+type OnlineIndex = OnlineIndexDeclaration & IntroducedMigrationIndex;
 
 const PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE =
   publishedCaseLawDecisionIndexPredicateSql();
@@ -138,6 +143,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   ...Object.values(CHAT_CONTENT_V3_SOURCES).map(({ table: tableName }) => ({
     createSql: `CREATE INDEX CONCURRENTLY "${tableName}_content_v3_pending_idx" ON public."${tableName}" (id) WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb`,
     definitionBody: `ON public.${tableName} USING btree (id) WHERE ((content -> 'version'::text) IS DISTINCT FROM '3'::jsonb)`,
+    introducedBy: CHAT_CONTENT_V3_REPAIR.introducedBy,
     isUnique: false,
     name: `${tableName}_content_v3_pending_idx`,
     tableName,
@@ -148,6 +154,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     createSql: `CREATE INDEX CONCURRENTLY "case_law_citations_doctrine_cited_idx" ON public."case_law_citations" USING btree ("cited_decision_id") WHERE "doctrinal_treatment" IN ('distinguishes', 'limits')`,
     definitionBody:
       "ON public.case_law_citations USING btree (cited_decision_id) WHERE ((doctrinal_treatment)::text = ANY ((ARRAY['distinguishes'::character varying, 'limits'::character varying])::text[]))",
+    introducedBy: "20261014174500_case_law_citation_doctrine",
     isUnique: false,
     name: "case_law_citations_doctrine_cited_idx",
     tableName: "case_law_citations",
@@ -156,6 +163,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     createSql: `CREATE INDEX CONCURRENTLY "apikey_personal_owner_keyset_idx" ON public."apikey" (((metadata::jsonb ->> 'organizationId')), reference_id, created_at DESC, id DESC) WHERE metadata IS NOT NULL AND metadata::jsonb ->> 'kind' = 'personal'`,
     definitionBody:
       "ON public.apikey USING btree ((((metadata)::jsonb ->> 'organizationId'::text)), reference_id, created_at DESC, id DESC) WHERE ((metadata IS NOT NULL) AND (((metadata)::jsonb ->> 'kind'::text) = 'personal'::text))",
+    introducedBy: "20261004120300_personal_api_keys",
     isUnique: false,
     name: "apikey_personal_owner_keyset_idx",
     tableName: "apikey",
@@ -165,6 +173,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       'CREATE INDEX CONCURRENTLY "sanctions_contact_matches_org_open_cursor_idx" ON public."sanctions_contact_matches" USING btree ("organization_id", "state", "disposition", "contact_id", "source_id", "source_entry_id")',
     definitionBody:
       "ON public.sanctions_contact_matches USING btree (organization_id, state, disposition, contact_id, source_id, source_entry_id)",
+    introducedBy: "20261003123000_sanctions_monitoring_review_index",
     isUnique: false,
     name: "sanctions_contact_matches_org_open_cursor_idx",
     tableName: "sanctions_contact_matches",
@@ -172,6 +181,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_country_date_published_idx" ON public."case_law_decisions" USING btree ("country", coalesce("decision_date", '-infinity'::date), "id") WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
     definitionBody: `ON public.case_law_decisions USING btree (country, COALESCE(decision_date, '-infinity'::date), id) WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION}`,
+    introducedBy: "20261010212100_case_law_publication_filter",
     isUnique: false,
     name: "case_law_decisions_country_date_published_idx",
     tableName: "case_law_decisions",
@@ -179,6 +189,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_citation_candidate_published_idx" ON public."case_law_decisions" USING btree ("citation_key", "country", "decision_date", "id") WHERE "citation_key" IS NOT NULL AND ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
     definitionBody: `ON public.case_law_decisions USING btree (citation_key, country, decision_date, id) WHERE ((citation_key IS NOT NULL) AND ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION})`,
+    introducedBy: "20261010212100_case_law_publication_filter",
     isUnique: false,
     name: "case_law_decisions_citation_candidate_published_idx",
     tableName: "case_law_decisions",
@@ -186,6 +197,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_source_arrivals_published_idx" ON public."case_law_decisions" USING btree ("source_id", "created_at") WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
     definitionBody: `ON public.case_law_decisions USING btree (source_id, created_at) WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION}`,
+    introducedBy: "20261010212100_case_law_publication_filter",
     isUnique: false,
     name: "case_law_decisions_source_arrivals_published_idx",
     tableName: "case_law_decisions",
@@ -193,6 +205,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_sitemap_shard_published_idx" ON public."case_law_decisions" USING btree ("country", "decision_date", "source_id", "updated_at", "id") WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
     definitionBody: `ON public.case_law_decisions USING btree (country, decision_date, source_id, updated_at, id) WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION}`,
+    introducedBy: "20261010212100_case_law_publication_filter",
     isUnique: false,
     name: "case_law_decisions_sitemap_shard_published_idx",
     tableName: "case_law_decisions",
@@ -200,6 +213,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_search_candidate_published_idx" ON public."case_law_decisions" USING btree ("id", "country", "source_id", "court", "decision_date", "decision_type", "language", "citation_authority", "language_group_key") WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
     definitionBody: `ON public.case_law_decisions USING btree (id, country, source_id, court, decision_date, decision_type, language, citation_authority, language_group_key) WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION}`,
+    introducedBy: "20261010212100_case_law_publication_filter",
     isUnique: false,
     name: "case_law_decisions_search_candidate_published_idx",
     tableName: "case_law_decisions",
@@ -209,40 +223,33 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       'CREATE INDEX CONCURRENTLY "sanctions_screening_events_org_cursor_idx" ON public."sanctions_screening_events" USING btree ("organization_id", "created_at", "id")',
     definitionBody:
       "ON public.sanctions_screening_events USING btree (organization_id, created_at, id)",
+    introducedBy: "20261003123000_sanctions_monitoring_review_index",
     isUnique: false,
     name: "sanctions_screening_events_org_cursor_idx",
     tableName: "sanctions_screening_events",
   },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "contacts_org_id_unique" ON public."contacts" USING btree ("organization_id", "id")',
-    definitionBody: "ON public.contacts USING btree (organization_id, id)",
-    isUnique: true,
-    name: "contacts_org_id_unique",
-    tableName: "contacts",
-  },
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.CONTACTS_ORG_ID_UNIQUE,
+  ),
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "rate_entries_table_role_from_idx" ON public."rate_entries" USING btree ("rate_table_id", "role", "effective_from")',
     definitionBody:
       "ON public.rate_entries USING btree (rate_table_id, role, effective_from)",
+    introducedBy: "20261003123000_billing_role_index",
     isUnique: false,
     name: "rate_entries_table_role_from_idx",
     tableName: "rate_entries",
   },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "session_priorTokenHash_idx" ON public."session" USING btree ("prior_token_hash")',
-    definitionBody: "ON public.session USING btree (prior_token_hash)",
-    isUnique: true,
-    name: "session_priorTokenHash_idx",
-    tableName: "session",
-  },
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.SESSION_PRIOR_TOKEN_HASH_IDX,
+  ),
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "time_entries_org_status_date_id_idx" ON public."time_entries" USING btree ("organization_id", "status", "date_worked", "id")',
     definitionBody:
       "ON public.time_entries USING btree (organization_id, status, date_worked, id)",
+    introducedBy: "20261003122800_time_entry_activity_groups",
     isUnique: false,
     name: "time_entries_org_status_date_id_idx",
     tableName: "time_entries",
@@ -252,41 +259,33 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       'CREATE INDEX CONCURRENTLY "time_entries_approval_queue_idx" ON public."time_entries" USING btree ("organization_id", "approver_user_id", "status", "date_worked", "id") WHERE "status" = \'draft\'',
     definitionBody:
       "ON public.time_entries USING btree (organization_id, approver_user_id, status, date_worked, id) WHERE (status = 'draft'::text)",
+    introducedBy: "20261003122700_time_entry_approval_queue",
     isUnique: false,
     name: "time_entries_approval_queue_idx",
     tableName: "time_entries",
   },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "invoices_id_workspace_unique" ON public."invoices" USING btree ("id", "workspace_id")',
-    definitionBody: "ON public.invoices USING btree (id, workspace_id)",
-    isUnique: true,
-    name: "invoices_id_workspace_unique",
-    tableName: "invoices",
-  },
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.INVOICES_ID_WORKSPACE_UNIQUE,
+  ),
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "invoices_ws_original_idx" ON public."invoices" USING btree ("workspace_id", "original_invoice_id")',
     definitionBody:
       "ON public.invoices USING btree (workspace_id, original_invoice_id)",
+    introducedBy: "20261003122400_invoice_document_types",
     isUnique: false,
     name: "invoices_ws_original_idx",
     tableName: "invoices",
   },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "legal_lists_sample_workspace_uidx" ON public."legal_lists" USING btree ("workspace_id") WHERE "sample_case" IS NOT NULL',
-    definitionBody:
-      "ON public.legal_lists USING btree (workspace_id) WHERE (sample_case IS NOT NULL)",
-    isUnique: true,
-    name: "legal_lists_sample_workspace_uidx",
-    tableName: "legal_lists",
-  },
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.LEGAL_LISTS_SAMPLE_WORKSPACE_UIDX,
+  ),
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "case_law_decisions_provision_scope_cursor_idx" ON public."case_law_decisions" USING btree ("country", "language", "id")',
     definitionBody:
       "ON public.case_law_decisions USING btree (country, language, id)",
+    introducedBy: "20260926170000_case_law_provision_backfill",
     isUnique: false,
     name: "case_law_decisions_provision_scope_cursor_idx",
     tableName: "case_law_decisions",
@@ -296,6 +295,8 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       'CREATE INDEX CONCURRENTLY "case_law_provision_extractions_jurisdiction_due_idx" ON public."case_law_provision_extractions" USING btree ("jurisdiction", "lane", "due_at", "decision_id") WHERE "due_at" IS NOT NULL AND "work_status" <> \'blocked\'',
     definitionBody:
       "ON public.case_law_provision_extractions USING btree (jurisdiction, lane, due_at, decision_id) WHERE ((due_at IS NOT NULL) AND (work_status <> 'blocked'::text))",
+    introducedBy:
+      "20261004120300_provision_extraction_jurisdiction_claim_index",
     isUnique: false,
     name: "case_law_provision_extractions_jurisdiction_due_idx",
     tableName: "case_law_provision_extractions",
@@ -305,6 +306,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       'CREATE INDEX CONCURRENTLY "case_law_provision_extractions_pending_idx" ON public."case_law_provision_extractions" USING btree ("jurisdiction", "pending_since", "decision_id") WHERE "pending_since" IS NOT NULL',
     definitionBody:
       "ON public.case_law_provision_extractions USING btree (jurisdiction, pending_since, decision_id) WHERE (pending_since IS NOT NULL)",
+    introducedBy: "20261010110000_case_law_provision_pending_since",
     isUnique: false,
     name: "case_law_provision_extractions_pending_idx",
     tableName: "case_law_provision_extractions",
@@ -314,6 +316,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       'CREATE INDEX CONCURRENTLY "case_law_provision_extractions_clock_seed_idx" ON public."case_law_provision_extractions" USING btree ("decision_id") WHERE "due_at" IS NOT NULL AND "pending_since" IS NULL',
     definitionBody:
       "ON public.case_law_provision_extractions USING btree (decision_id) WHERE ((due_at IS NOT NULL) AND (pending_since IS NULL))",
+    introducedBy: "20261010110000_case_law_provision_pending_since",
     isUnique: false,
     name: "case_law_provision_extractions_clock_seed_idx",
     tableName: "case_law_provision_extractions",
@@ -325,23 +328,20 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       'CREATE INDEX CONCURRENTLY "case_law_decisions_docket_family_key_idx" ON public."case_law_decisions" USING btree ("docket_family_key") WHERE "docket_family_key" IS NOT NULL',
     definitionBody:
       "ON public.case_law_decisions USING btree (docket_family_key) WHERE (docket_family_key IS NOT NULL)",
+    introducedBy: "20261003123300_case_law_decision_docket_family_key",
     isUnique: false,
     name: "case_law_decisions_docket_family_key_idx",
     tableName: "case_law_decisions",
   },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "account_provider_account_id_uidx" ON public."account" USING btree ("provider_id", "account_id")',
-    definitionBody: "ON public.account USING btree (provider_id, account_id)",
-    isUnique: true,
-    name: "account_provider_account_id_uidx",
-    tableName: "account",
-  },
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX,
+  ),
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "chat_thread_compactions_memory_unmined_org_idx" ON public."chat_thread_compactions" USING btree ("memory_extraction_organization_id", "memory_extraction_consent_at", "memory_extraction_attempted_at" ASC NULLS FIRST, "created_at", "id") WHERE "memory_extraction_organization_id" IS NOT NULL AND "memory_extraction_consent_at" IS NOT NULL AND "memory_extracted_at" IS NULL AND "status" = \'active\'',
     definitionBody:
       "ON public.chat_thread_compactions USING btree (memory_extraction_organization_id, memory_extraction_consent_at, memory_extraction_attempted_at NULLS FIRST, created_at, id) WHERE ((memory_extraction_organization_id IS NOT NULL) AND (memory_extraction_consent_at IS NOT NULL) AND (memory_extracted_at IS NULL) AND ((status)::text = 'active'::text))",
+    introducedBy: "20260808006000_ai_memory_extractor_index",
     isUnique: false,
     name: "chat_thread_compactions_memory_unmined_org_idx",
     tableName: "chat_thread_compactions",
@@ -351,103 +351,54 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       'CREATE INDEX CONCURRENTLY "organization_settings_memory_extraction_queue_idx" ON public."organization_settings" USING btree ("memory_extraction_scheduled_at", "organization_id") WHERE "memory_extraction_enabled" = true AND "memory_extraction_scheduled_at" IS NOT NULL',
     definitionBody:
       "ON public.organization_settings USING btree (memory_extraction_scheduled_at, organization_id) WHERE ((memory_extraction_enabled = true) AND (memory_extraction_scheduled_at IS NOT NULL))",
+    introducedBy: "20260808006000_ai_memory_extractor_index",
     isUnique: false,
     name: "organization_settings_memory_extraction_queue_idx",
     tableName: "organization_settings",
   },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "workspaces_id_org_unq" ON public."workspaces" USING btree ("id", "organization_id")',
-    definitionBody: "ON public.workspaces USING btree (id, organization_id)",
-    isUnique: true,
-    name: "workspaces_id_org_unq",
-    tableName: "workspaces",
-  },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "entity_versions_id_entity_ws_uidx" ON public."entity_versions" USING btree ("id", "entity_id", "workspace_id")',
-    definitionBody:
-      "ON public.entity_versions USING btree (id, entity_id, workspace_id)",
-    isUnique: true,
-    name: "entity_versions_id_entity_ws_uidx",
-    tableName: "entity_versions",
-  },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "entity_versions_entity_number_uidx" ON public."entity_versions" USING btree ("entity_id", "version_number")',
-    definitionBody:
-      "ON public.entity_versions USING btree (entity_id, version_number)",
-    isUnique: true,
-    name: "entity_versions_entity_number_uidx",
-    tableName: "entity_versions",
-  },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "chat_messages_id_thread_uidx" ON public."chat_messages" USING btree ("id", "thread_id")',
-    definitionBody: "ON public.chat_messages USING btree (id, thread_id)",
-    isUnique: true,
-    name: "chat_messages_id_thread_uidx",
-    tableName: "chat_messages",
-  },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "time_entries_one_active_timer_per_user_idx" ON public."time_entries" USING btree ("user_id") WHERE "timer_started_at" IS NOT NULL',
-    definitionBody:
-      "ON public.time_entries USING btree (user_id) WHERE (timer_started_at IS NOT NULL)",
-    isUnique: true,
-    name: "time_entries_one_active_timer_per_user_idx",
-    tableName: "time_entries",
-  },
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.WORKSPACES_ID_ORG_UNQ,
+  ),
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.ENTITY_VERSIONS_ID_ENTITY_WS_UIDX,
+  ),
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.ENTITY_VERSIONS_ENTITY_NUMBER_UIDX,
+  ),
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.CHAT_MESSAGES_ID_THREAD_UIDX,
+  ),
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.TIME_ENTRIES_ONE_ACTIVE_TIMER_PER_USER_IDX,
+  ),
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "time_timers_running_org_id_idx" ON public."time_timers" USING btree ("organization_id", "id") WHERE "state" = \'running\'',
     definitionBody:
       "ON public.time_timers USING btree (organization_id, id) WHERE (state = 'running'::text)",
+    introducedBy: "20261003122600_timer_admin_stop",
     isUnique: false,
     name: "time_timers_running_org_id_idx",
     tableName: "time_timers",
   },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "time_timers_legacy_entry_uidx" ON public."time_timers" USING btree ("legacy_time_entry_id") WHERE "legacy_time_entry_id" IS NOT NULL',
-    definitionBody:
-      "ON public.time_timers USING btree (legacy_time_entry_id) WHERE (legacy_time_entry_id IS NOT NULL)",
-    isUnique: true,
-    name: "time_timers_legacy_entry_uidx",
-    tableName: "time_timers",
-  },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "playbook_definitions_org_starter_id_uidx" ON public."playbook_definitions" USING btree ("organization_id", "starter_id") WHERE "starter_id" IS NOT NULL',
-    definitionBody:
-      "ON public.playbook_definitions USING btree (organization_id, starter_id) WHERE (starter_id IS NOT NULL)",
-    isUnique: true,
-    name: "playbook_definitions_org_starter_id_uidx",
-    tableName: "playbook_definitions",
-  },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "templates_org_pack_template_uidx" ON public."templates" USING btree ("organization_id", (("origin"->>\'packId\')), (("origin"->>\'slug\'))) WHERE "origin_type" = \'bundled-pack\'',
-    definitionBody:
-      "ON public.templates USING btree (organization_id, ((origin ->> 'packId'::text)), ((origin ->> 'slug'::text))) WHERE (origin_type = 'bundled-pack'::text)",
-    isUnique: true,
-    name: "templates_org_pack_template_uidx",
-    tableName: "templates",
-  },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "workspace_views_correspondence_uidx" ON public."workspace_views" USING btree ("workspace_id") WHERE ("layout" ->> \'type\') = \'correspondence\'',
-    definitionBody:
-      "ON public.workspace_views USING btree (workspace_id) WHERE ((layout ->> 'type'::text) = 'correspondence'::text)",
-    isUnique: true,
-    name: "workspace_views_correspondence_uidx",
-    tableName: "workspace_views",
-  },
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.TIME_TIMERS_LEGACY_ENTRY_UIDX,
+  ),
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX,
+  ),
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.TEMPLATES_ORG_PACK_TEMPLATE_UIDX,
+  ),
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.WORKSPACE_VIEWS_CORRESPONDENCE_UIDX,
+  ),
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "report_exports_workspace_requester_created_idx" ON public."report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id")',
     definitionBody:
       "ON public.report_exports USING btree (workspace_id, requested_by, created_at, id)",
+    introducedBy: "20260717160000_report_export_history_index",
     isUnique: false,
     name: "report_exports_workspace_requester_created_idx",
     tableName: "report_exports",
@@ -457,6 +408,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       'CREATE INDEX CONCURRENTLY "folio_collab_rooms_workspace_source_version_idx" ON public."folio_collab_rooms" USING btree ("workspace_id", "source_version_id")',
     definitionBody:
       "ON public.folio_collab_rooms USING btree (workspace_id, source_version_id)",
+    introducedBy: "20260913100100_validate_folio_collab_source_version",
     isUnique: false,
     name: "folio_collab_rooms_workspace_source_version_idx",
     tableName: "folio_collab_rooms",
@@ -466,51 +418,29 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       'CREATE INDEX CONCURRENTLY "legislation_documents_country_slug_idx" ON public."legislation_documents" USING btree ("country", "slug") WHERE "slug" IS NOT NULL',
     definitionBody:
       "ON public.legislation_documents USING btree (country, slug) WHERE (slug IS NOT NULL)",
+    introducedBy: "20260913220000_legislation_document_slugs",
     isUnique: false,
     name: "legislation_documents_country_slug_idx",
     tableName: "legislation_documents",
   },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "chat_turns_org_run_id_uidx" ON public."chat_turns" USING btree ("organization_id", "run_id") WHERE "run_id" IS NOT NULL',
-    definitionBody:
-      "ON public.chat_turns USING btree (organization_id, run_id) WHERE (run_id IS NOT NULL)",
-    isUnique: true,
-    name: "chat_turns_org_run_id_uidx",
-    tableName: "chat_turns",
-  },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "legal_reader_answer_messages_answer_sequence_idx" ON public."legal_reader_answer_messages" USING btree ("answer_id", "sequence")',
-    definitionBody:
-      "ON public.legal_reader_answer_messages USING btree (answer_id, sequence)",
-    isUnique: true,
-    name: "legal_reader_answer_messages_answer_sequence_idx",
-    tableName: "legal_reader_answer_messages",
-  },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "case_law_ingestion_failures_source_record_uidx" ON public."case_law_ingestion_failures" USING btree ("source_id", "record_identity") WHERE "record_identity" IS NOT NULL',
-    definitionBody:
-      "ON public.case_law_ingestion_failures USING btree (source_id, record_identity) WHERE (record_identity IS NOT NULL)",
-    isUnique: true,
-    name: "case_law_ingestion_failures_source_record_uidx",
-    tableName: "case_law_ingestion_failures",
-  },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "correspondence_ws_source_entity_uidx" ON public."correspondence" USING btree ("workspace_id", "source_entity_id")',
-    definitionBody:
-      "ON public.correspondence USING btree (workspace_id, source_entity_id)",
-    isUnique: true,
-    name: "correspondence_ws_source_entity_uidx",
-    tableName: "correspondence",
-  },
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.CHAT_TURNS_ORG_RUN_ID_UIDX,
+  ),
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.LEGAL_READER_ANSWER_MESSAGES_ANSWER_SEQUENCE_IDX,
+  ),
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
+  ),
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX,
+  ),
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "correspondence_attachments_ws_entity_idx" ON public."correspondence_attachments" USING btree ("workspace_id", "entity_id")',
     definitionBody:
       "ON public.correspondence_attachments USING btree (workspace_id, entity_id)",
+    introducedBy: "20261004120100_uploaded_mail_correspondence",
     isUnique: false,
     name: "correspondence_attachments_ws_entity_idx",
     tableName: "correspondence_attachments",
@@ -520,6 +450,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       'CREATE INDEX CONCURRENTLY "sanctions_contact_marks_retry_idx" ON public."sanctions_contact_marks" USING btree ("next_attempt_at", "scheduled_at", "organization_id", "contact_id")',
     definitionBody:
       "ON public.sanctions_contact_marks USING btree (next_attempt_at, scheduled_at, organization_id, contact_id)",
+    introducedBy: "20261005120200_list_verification_force_rls",
     isUnique: false,
     name: "sanctions_contact_marks_retry_idx",
     tableName: "sanctions_contact_marks",
@@ -529,6 +460,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       'CREATE INDEX CONCURRENTLY "sanctions_contact_marks_organization_retry_idx" ON public."sanctions_contact_marks" USING btree ("organization_id", "next_attempt_at", "scheduled_at", "contact_id")',
     definitionBody:
       "ON public.sanctions_contact_marks USING btree (organization_id, next_attempt_at, scheduled_at, contact_id)",
+    introducedBy: "20261005120200_list_verification_force_rls",
     isUnique: false,
     name: "sanctions_contact_marks_organization_retry_idx",
     tableName: "sanctions_contact_marks",
@@ -537,15 +469,26 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
 ];
 
 type OnlineIndexCutover = {
-  final: RequiredMigrationIndex;
+  introducedBy: string;
+  final: IntroducedMigrationIndex;
+  legacy: RequiredMigrationIndex;
   staged: OnlineIndex;
 };
 
 export const ONLINE_MIGRATION_INDEX_CUTOVERS: readonly OnlineIndexCutover[] = [
   {
+    introducedBy: "20260801150000_document_processing_queue_nulls_first",
     final: {
       definitionBody:
         "ON public.case_law_decisions USING btree (updated_at DESC, id DESC)",
+      introducedBy: "20260801150000_document_processing_queue_nulls_first",
+      isUnique: false,
+      name: "case_law_decisions_updated_id_idx",
+      tableName: "case_law_decisions",
+    },
+    legacy: {
+      definitionBody:
+        "ON public.case_law_decisions USING btree (updated_at, id)",
       isUnique: false,
       name: "case_law_decisions_updated_id_idx",
       tableName: "case_law_decisions",
@@ -555,6 +498,7 @@ export const ONLINE_MIGRATION_INDEX_CUTOVERS: readonly OnlineIndexCutover[] = [
         'CREATE INDEX CONCURRENTLY "case_law_decisions_updated_id_idx_replacement" ON public."case_law_decisions" USING btree ("updated_at" DESC, "id" DESC)',
       definitionBody:
         "ON public.case_law_decisions USING btree (updated_at DESC, id DESC)",
+      introducedBy: "20260801150000_document_processing_queue_nulls_first",
       isUnique: false,
       name: "case_law_decisions_updated_id_idx_replacement",
       tableName: "case_law_decisions",
@@ -563,36 +507,44 @@ export const ONLINE_MIGRATION_INDEX_CUTOVERS: readonly OnlineIndexCutover[] = [
 ];
 
 type OnlineIndexReplacement = {
+  introducedBy: string;
   legacyName: string;
   replacementNames: readonly string[];
 };
 
 export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   {
+    introducedBy: "20261010212100_case_law_publication_filter",
     legacyName: "case_law_decisions_country_date_idx",
     replacementNames: ["case_law_decisions_country_date_published_idx"],
   },
   {
+    introducedBy: "20261010212100_case_law_publication_filter",
     legacyName: "case_law_decisions_source_arrivals_idx",
     replacementNames: ["case_law_decisions_source_arrivals_published_idx"],
   },
   {
+    introducedBy: "20261010212100_case_law_publication_filter",
     legacyName: "case_law_decisions_sitemap_shard_idx",
     replacementNames: ["case_law_decisions_sitemap_shard_published_idx"],
   },
   {
+    introducedBy: "20261010212100_case_law_publication_filter",
     legacyName: "case_law_decisions_search_candidate_idx",
     replacementNames: ["case_law_decisions_search_candidate_published_idx"],
   },
   {
+    introducedBy: "20261010212300_reader_answer_message_sequence",
     legacyName: "legal_reader_answer_messages_answer_idx",
     replacementNames: ["legal_reader_answer_messages_answer_sequence_idx"],
   },
   {
+    introducedBy: "20261003124500_public_law_reader_passage_counts",
     legacyName: "case_law_decisions_document_pending_date_idx",
     replacementNames: [DOCUMENT_OUTSTANDING_DATE_INDEX.name],
   },
   {
+    introducedBy: "20260731130000_decision_source_document_id",
     legacyName: "case_law_decisions_source_case_lang_idx",
     replacementNames: [
       "case_law_decisions_source_document_idx",
@@ -604,6 +556,7 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   // replacement is proven ready before this retires the legacy index, so no
   // window exists where neither enforces uniqueness.
   {
+    introducedBy: "20260916140000_account_issuer_nullable",
     legacyName: "account_issuer_account_id_uidx",
     replacementNames: ["account_provider_account_id_uidx"],
   },
@@ -642,11 +595,6 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
-  // Not behind one migration: the OAuth resource set is derived from the MCP
-  // audiences in application code, so it is the code that moves and the rows
-  // that follow. Its completion is the startup census, so the deploy that
-  // widens the audience set is the one that reconciles them, without an
-  // operator step.
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
 ];
 
@@ -684,7 +632,7 @@ type OnlineMigrationMode =
       reserveObserver: () => Promise<OnlineMigrationConnection>;
       timing: MigrationTiming;
     }
-  | { operation: "validate" };
+  | { operation: "validate"; report: OnlineMigrationStartupReport };
 
 type OnlineMigrationOptions = {
   repairs?: readonly OnlineRepair[];
@@ -720,17 +668,78 @@ export const runOnlineMigrations = async (
     options,
   );
 
-export const assertOnlineMigrationsApplied = async (
+type PendingOnlineMigrationStep = {
+  kind: "index" | "cutover" | "replacement_drop" | "repair";
+  name: string;
+  introducedBy: string;
+};
+
+export type OnlineMigrationStartupReport = {
+  newestAppliedMigration: string;
+  pending: PendingOnlineMigrationStep[];
+};
+
+export const reportOnlineMigrations = async (
   pool: OnlineMigrationPool,
   options: OnlineMigrationOptions = {},
-): Promise<void> => {
+): Promise<OnlineMigrationStartupReport> => {
+  const ledgerConnection = await pool.reserve();
+  let newestAppliedMigration: string;
+  try {
+    const row = (
+      await ledgerConnection.query(
+        "SELECT name FROM drizzle.__drizzle_migrations WHERE name IS NOT NULL ORDER BY name DESC LIMIT 1",
+      )
+    ).at(0);
+    if (
+      typeof row !== "object" ||
+      row === null ||
+      !("name" in row) ||
+      typeof row.name !== "string"
+    ) {
+      panic("Online migration startup requires a named applied migration");
+    }
+    newestAppliedMigration = row.name;
+  } finally {
+    await ledgerConnection.release();
+  }
+  const report: OnlineMigrationStartupReport = {
+    newestAppliedMigration,
+    pending: [],
+  };
   const outcome = await processOnlineMigrations(
     pool,
-    { operation: "validate" },
+    { operation: "validate", report },
     options,
   );
   if (outcome.type !== "complete") {
     panic("Online migration validation cannot defer");
+  }
+  return report;
+};
+
+type ReportPendingStepOptions = {
+  report: OnlineMigrationStartupReport;
+  step: PendingOnlineMigrationStep;
+  reason: string;
+};
+
+const reportPendingStep = ({
+  report,
+  step,
+  reason,
+}: ReportPendingStepOptions): void => {
+  if (step.introducedBy !== report.newestAppliedMigration) {
+    panic(
+      `Online ${step.kind} ${step.name} introduced by ${step.introducedBy} is not complete: ${reason}`,
+    );
+  }
+  if (
+    !report.pending.some(
+      ({ kind, name }) => kind === step.kind && name === step.name,
+    )
+  ) {
+    report.pending.push(step);
   }
 };
 
@@ -752,10 +761,9 @@ const processOnlineMigrations = async (
   let lockAcquired = false;
 
   try {
-    await acquireOnlineMigrationLock(connection);
-    lockAcquired = true;
-
     if (mode.operation === "repair") {
+      await acquireOnlineMigrationLock(connection);
+      lockAcquired = true;
       await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
       await connection.execute("SET statement_timeout = '0'");
     }
@@ -779,6 +787,8 @@ const processOnlineMigrations = async (
       if (retirements.type === "deferred") {
         return retirements;
       }
+    } else {
+      await reportOnlineReplacements({ connection, report: mode.report });
     }
     return await processOnlineRepairAt({
       connection,
@@ -837,7 +847,12 @@ const processOnlineIndexAt = async ({
       return outcome;
     }
   } else {
-    await assertIndexReady(connection, index);
+    await reportIndexReadiness({
+      connection,
+      index,
+      report: mode.report,
+      kind: "index",
+    });
   }
   return await processOnlineIndexAt({
     connection,
@@ -878,7 +893,47 @@ const processOnlineIndexCutoverAt = async ({
       return outcome;
     }
   } else {
-    await assertIndexReady(connection, cutover.final);
+    await reportIndexCutoverReadiness({
+      connection,
+      cutover,
+      report: mode.report,
+    });
+    const stagedState = await readIndexState(connection, cutover.staged);
+    const stagedArtifacts = await readReindexArtifacts(
+      connection,
+      cutover.staged,
+    );
+    for (const artifact of stagedArtifacts) {
+      assertIndexDefinition(cutover.staged, artifact);
+      if (artifact.isValid) {
+        panic(
+          `Required migration index ${cutover.staged.name} introduced by ${cutover.introducedBy} has a valid reindex artifact`,
+        );
+      }
+    }
+    if (stagedArtifacts.length > 0) {
+      reportPendingStep({
+        report: mode.report,
+        step: {
+          kind: "cutover",
+          name: cutover.final.name,
+          introducedBy: cutover.introducedBy,
+        },
+        reason: "staged reindex artifacts remain",
+      });
+    }
+    if (stagedState.type === "present") {
+      assertIndexDefinition(cutover.staged, stagedState);
+      reportPendingStep({
+        report: mode.report,
+        step: {
+          kind: "cutover",
+          name: cutover.final.name,
+          introducedBy: cutover.introducedBy,
+        },
+        reason: "staged index remains",
+      });
+    }
   }
   return await processOnlineIndexCutoverAt({
     connection,
@@ -908,7 +963,27 @@ const processOnlineRepairAt = async ({
   }
 
   const completion = await repair.readCompletion(connection);
-  if (mode.operation === "repair" && completion.type !== "complete") {
+  if (mode.operation === "validate") {
+    if (completion.type !== "complete") {
+      reportPendingStep({
+        report: mode.report,
+        step: {
+          kind: "repair",
+          name: repair.name,
+          introducedBy: repair.introducedBy,
+        },
+        reason: completion.reason,
+      });
+    }
+    return await processOnlineRepairAt({
+      connection,
+      mode,
+      repairs,
+      log,
+      offset: offset + 1,
+    });
+  }
+  if (completion.type !== "complete") {
     const step = {
       event: "migrate.online_step_duration",
       kind: "repair",
@@ -973,9 +1048,6 @@ const processOnlineRepairAt = async ({
     }
   } else {
     assertRepairDeployable(repair, completion);
-    if (completion.type === "pending") {
-      log({ event: "online_repair_pending", repair: repair.name, completion });
-    }
   }
   return await processOnlineRepairAt({
     connection,
@@ -1102,6 +1174,51 @@ export const retireOnlineIndex = async ({
       await session.run(dropIndexConcurrently(index, { ifExists: true }));
     },
   });
+};
+
+type ReportOnlineReplacementsOptions = {
+  connection: OnlineMigrationConnection;
+  report: OnlineMigrationStartupReport;
+  offset?: number;
+};
+
+const reportOnlineReplacements = async ({
+  connection,
+  report,
+  offset = 0,
+}: ReportOnlineReplacementsOptions): Promise<void> => {
+  const replacement = ONLINE_INDEX_REPLACEMENTS.at(offset);
+  if (!replacement) {
+    return;
+  }
+  const index = ONLINE_MIGRATION_INDEXES.find(({ name }) =>
+    replacement.replacementNames.includes(name),
+  );
+  if (!index) {
+    panic(
+      `Online replacement ${replacement.legacyName} has no registered index`,
+    );
+  }
+  const legacy = { ...index, name: replacement.legacyName };
+  const state = await readIndexState(connection, legacy);
+  const artifacts = await readReindexArtifacts(connection, legacy);
+  if (artifacts.some(({ isValid }) => isValid)) {
+    panic(
+      `Required migration index ${legacy.name} introduced by ${replacement.introducedBy} has a valid reindex artifact`,
+    );
+  }
+  if (state.type === "present" || artifacts.length > 0) {
+    reportPendingStep({
+      report,
+      step: {
+        kind: "replacement_drop",
+        name: legacy.name,
+        introducedBy: replacement.introducedBy,
+      },
+      reason: "retired index remains",
+    });
+  }
+  await reportOnlineReplacements({ connection, report, offset: offset + 1 });
 };
 
 const assertReplacementIndexAt = async (
@@ -1251,6 +1368,103 @@ const cleanupReindexArtifactAt = async (
     ),
   );
   await cleanupReindexArtifactAt(session, index, artifacts, offset + 1);
+};
+
+type ReportIndexReadinessOptions = {
+  connection: OnlineMigrationConnection;
+  index: RequiredMigrationIndex & { introducedBy: string };
+  report: OnlineMigrationStartupReport;
+  kind: "index" | "cutover";
+};
+
+const reportIndexReadiness = async ({
+  connection,
+  index,
+  report,
+  kind,
+}: ReportIndexReadinessOptions): Promise<void> => {
+  const state = await readIndexState(connection, index);
+  if (state.type === "present") {
+    assertIndexDefinition(index, state);
+  }
+  const artifacts = await readReindexArtifacts(connection, index);
+  for (const artifact of artifacts) {
+    assertIndexDefinition(index, artifact);
+    if (artifact.isValid) {
+      panic(
+        `Required migration index ${index.name} introduced by ${index.introducedBy} has a valid reindex artifact`,
+      );
+    }
+  }
+  if (
+    state.type === "missing" ||
+    !state.isReady ||
+    !state.isValid ||
+    artifacts.length > 0
+  ) {
+    reportPendingStep({
+      report,
+      step: { kind, name: index.name, introducedBy: index.introducedBy },
+      reason:
+        state.type === "missing"
+          ? "index is missing"
+          : "index is not ready or has reindex artifacts",
+    });
+  }
+};
+
+type ReportIndexCutoverReadinessOptions = {
+  connection: OnlineMigrationConnection;
+  cutover: OnlineIndexCutover;
+  report: OnlineMigrationStartupReport;
+};
+
+const reportIndexCutoverReadiness = async ({
+  connection,
+  cutover: { final, introducedBy, legacy },
+  report,
+}: ReportIndexCutoverReadinessOptions): Promise<void> => {
+  const state = await readIndexState(connection, final);
+  const finalHasExpectedDefinition =
+    state.type === "present" && hasExpectedIndexDefinition(final, state);
+  const finalHasLegacyDefinition =
+    state.type === "present" && hasExpectedIndexDefinition(legacy, state);
+  if (
+    state.type === "present" &&
+    !finalHasExpectedDefinition &&
+    !finalHasLegacyDefinition
+  ) {
+    assertIndexDefinition(final, state);
+  }
+
+  const artifacts = await readReindexArtifacts(connection, final);
+  for (const artifact of artifacts) {
+    assertIndexDefinition(final, artifact);
+    if (artifact.isValid) {
+      panic(
+        `Required migration index ${final.name} introduced by ${introducedBy} has a valid reindex artifact`,
+      );
+    }
+  }
+  if (
+    state.type === "missing" ||
+    finalHasLegacyDefinition ||
+    !state.isReady ||
+    !state.isValid ||
+    artifacts.length > 0
+  ) {
+    let reason = "index is not ready or has reindex artifacts";
+    if (state.type === "missing") {
+      reason = "index is missing";
+    } else if (finalHasLegacyDefinition) {
+      reason = "final index still has its legacy definition";
+    }
+    reportPendingStep({
+      report,
+      step: { kind: "cutover", name: final.name, introducedBy },
+      reason,
+    });
+  }
 };
 
 const assertIndexReady = async (

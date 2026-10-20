@@ -7,6 +7,7 @@ import type {
 } from "@stll/api-contract/ai-decision-provider";
 import type { TemplatePackAuthor } from "@stll/template-packs/schema";
 
+import { TEMPLATES_ORG_PACK_TEMPLATE_UIDX } from "@/api/db/online-unique-indexes";
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
@@ -310,7 +311,7 @@ export const templates = p.pgTable(
     // One copy of a pack template per organization: a repeat install is a
     // no-op at the database, not only at the handler.
     p
-      .uniqueIndex("templates_org_pack_template_uidx")
+      .uniqueIndex(TEMPLATES_ORG_PACK_TEMPLATE_UIDX)
       .on(
         table.organizationId,
         sql`(${table.origin}->>'packId')`,

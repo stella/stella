@@ -28,6 +28,7 @@ export const CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS = CONSTRAINT_NAMES.map(
 ) satisfies readonly OnlineConstraintValidation[];
 
 export const CORPUS_PROJECTION_CLEANUP_STALL_REPAIR: OnlineRepair = {
+  introducedBy: "20261003123500_corpus_projection_cleanup_reissue",
   name: REPAIR_NAME,
   readCompletion: async (connection) => {
     for (const constraintName of CONSTRAINT_NAMES) {

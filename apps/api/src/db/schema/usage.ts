@@ -1,3 +1,4 @@
+import { USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX } from "@/api/db/online-unique-indexes";
 import { PROVIDER_EVENT_REPLAY_AUDIT_TEXT_PATH } from "@/api/lib/hosted-usage-provider/replay-audit";
 import type { ProviderEventReplayAudit } from "@/api/lib/hosted-usage-provider/replay-audit";
 import { CONFIGURED_ACCESS_STATUSES } from "@/api/lib/usage/configured-access";
@@ -759,7 +760,7 @@ export const usageEvents = p.pgTable(
       .index("usage_events_org_user_period_idx")
       .on(table.organizationId, table.userId, table.periodStart),
     p
-      .uniqueIndex("usage_events_org_idempotency_key_uidx")
+      .uniqueIndex(USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX)
       .on(table.organizationId, table.idempotencyKey)
       .where(sql`idempotency_key IS NOT NULL`),
     // BYOK rows land with units_consumed = 0: the work is attributed

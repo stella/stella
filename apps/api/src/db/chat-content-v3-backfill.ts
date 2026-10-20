@@ -310,6 +310,7 @@ type RepairOptions = {
 export const createChatContentV3Repair = (
   options: RepairOptions = {},
 ): OnlineRepair => ({
+  introducedBy: "20261015050000_agent_skill_invocation",
   name: "chat-content-v3",
   readCompletion: readChatContentV3Completion,
   repair: async (connection, tables) => {

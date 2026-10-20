@@ -11,6 +11,7 @@ export const LIST_VERIFICATION_CONSTRAINTS = [
 ] as const satisfies readonly OnlineConstraintValidation[];
 
 export const LIST_VERIFICATION_CONSTRAINT_VALIDATION = {
+  introducedBy: "20261005120300_list_verification_access_revoked",
   name: CONSTRAINT_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({

@@ -2,6 +2,10 @@ import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
 import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
 import type { DocumentTranslationSourceLanguageCode } from "@stll/api-contract/document-translation";
 
+import {
+  ENTITY_VERSIONS_ENTITY_NUMBER_UIDX,
+  ENTITY_VERSIONS_ID_ENTITY_WS_UIDX,
+} from "@/api/db/online-unique-indexes";
 import { DESKTOP_EDIT_FILE_TYPES } from "@/api/lib/desktop-edit-file-types";
 import {
   FOLIO_COLLAB_CHECKPOINT_MAX_BYTES,
@@ -444,10 +448,10 @@ export const entityVersions = p.pgTable(
   (table) => [
     ...entityFeatureGateChecks(table),
     p
-      .uniqueIndex("entity_versions_id_entity_ws_uidx")
+      .uniqueIndex(ENTITY_VERSIONS_ID_ENTITY_WS_UIDX)
       .on(table.id, table.entityId, table.workspaceId),
     p
-      .uniqueIndex("entity_versions_entity_number_uidx")
+      .uniqueIndex(ENTITY_VERSIONS_ENTITY_NUMBER_UIDX)
       .on(table.entityId, table.versionNumber),
     p.check(
       "entity_versions_collaboration_contributors_check",

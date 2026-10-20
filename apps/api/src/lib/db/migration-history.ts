@@ -4,7 +4,7 @@ import nodePath from "node:path";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import migrationAliasInventory from "./migration-alias-inventory.json";
+import migrationAliasInventory from "./migration-alias-inventory.json" with { type: "json" };
 
 // Migrations intentionally rewritten after they shipped in a release. A
 // database that applied the earlier version recorded its hash, and the
@@ -21,6 +21,10 @@ export type RequiredMigrationIndex = {
   isUnique: boolean;
   name: string;
   tableName: string;
+};
+
+export type IntroducedMigrationIndex = RequiredMigrationIndex & {
+  introducedBy: string;
 };
 
 type MigrationAliasEntry = {
@@ -41,7 +45,7 @@ export const deriveMigrationAliasHistory = (
       requiredIndexes: RequiredMigrationIndex[];
     }
   > = {};
-  const indexesByName = new Map<string, RequiredMigrationIndex>();
+  const indexesByName = new Map<string, IntroducedMigrationIndex>();
 
   for (const { fileName, priorHash, newHash, repair } of inventory) {
     let history = histories[fileName];
@@ -73,7 +77,7 @@ export const deriveMigrationAliasHistory = (
       if (existing === undefined) {
         history.requiredIndexes.push(index);
       }
-      indexesByName.set(index.name, index);
+      indexesByName.set(index.name, { ...index, introducedBy: fileName });
     }
   }
   return { histories, indexes: [...indexesByName.values()] };
@@ -88,9 +92,8 @@ export const REWRITTEN_MIGRATION_HISTORIES: Readonly<
   Record<string, RewrittenMigrationHistory>
 > = rewrittenMigrationHistories;
 
-export const REWRITTEN_MIGRATION_INDEXES: readonly RequiredMigrationIndex[] = [
-  ...rewrittenMigrationIndexes,
-];
+export const REWRITTEN_MIGRATION_INDEXES: readonly IntroducedMigrationIndex[] =
+  [...rewrittenMigrationIndexes];
 
 export type LocalMigration = { name: string; hash: string };
 export type AppliedMigration = { name: string | null; hash: string };

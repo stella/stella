@@ -21,6 +21,13 @@ const RESOLUTION_OPTIONS = {
   moduleResolution: ts.ModuleResolutionKind.Bundler,
 } satisfies ts.CompilerOptions;
 
+const isLocalModule = (module: string, specifier: string) =>
+  module.startsWith("apps/") ||
+  module.startsWith("packages/") ||
+  module.startsWith("scripts/") ||
+  specifier.startsWith(".") ||
+  specifier.startsWith("@/");
+
 const hasRuntimeBindings = (clause: ts.ImportClause | undefined): boolean => {
   if (clause === undefined) {
     return true;
@@ -535,13 +542,13 @@ export const validateSchemaIntrospection = ({
           report(`database handle import in ${file}: ${specifier}`);
           return;
         }
-        const local =
-          module.startsWith("apps/") ||
-          module.startsWith("packages/") ||
-          module.startsWith("scripts/") ||
-          specifier.startsWith(".") ||
-          specifier.startsWith("@/");
-        if (local) {
+        if (isLocalModule(module, specifier)) {
+          if (
+            module.endsWith(".json") &&
+            existsSync(path.join(repoRoot, module))
+          ) {
+            return;
+          }
           const target = [
             `${module}.ts`,
             `${module}.tsx`,

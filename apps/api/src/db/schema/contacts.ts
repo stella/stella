@@ -2,6 +2,10 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
 
+import {
+  CONTACTS_ORG_ID_UNIQUE,
+  WORKSPACES_ID_ORG_UNQ,
+} from "@/api/db/online-unique-indexes";
 import { workspaceInsertCheck } from "@/api/db/rls";
 import {
   ACCOUNT_AUDIT_EVENT_TYPES,
@@ -112,7 +116,7 @@ export const contacts = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
+    p.unique(CONTACTS_ORG_ID_UNIQUE).on(table.organizationId, table.id),
     p.index("contacts_organization_id_idx").on(table.organizationId),
     p.index("contacts_org_type_idx").on(table.organizationId, table.type),
     p
@@ -344,7 +348,7 @@ export const workspaces = p.pgTable(
     // Composite tenant key for child tables that carry both workspace and
     // organization IDs. This makes a cross-tenant pair impossible even on
     // root/background write paths that bypass RLS.
-    p.unique("workspaces_id_org_unq").on(table.id, table.organizationId),
+    p.unique(WORKSPACES_ID_ORG_UNQ).on(table.id, table.organizationId),
     p
       .index("workspaces_org_client_id_idx")
       .on(table.organizationId, table.clientId)
