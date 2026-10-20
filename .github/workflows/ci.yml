@@ -4277,6 +4277,10 @@ jobs:
     permissions:
       contents: read
       actions: write
+    # Online index builds in the disposable check instance must not wait on storage metrics or busy windows.
+    env:
+      DB_LOAD_GATE_EBS_SIGNAL: disabled
+      DB_LOAD_GATE_BUSY_WINDOWS: "[]"
 
     steps:
       - name: Checkout
@@ -4303,7 +4307,7 @@ jobs:
 
       - name: Check migration coverage
         env:
-          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.merge_group.base_sha || 'HEAD^' }}
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || needs.ci-plan.outputs.target_base_sha || 'HEAD^' }}
         run: bash scripts/check-migrations.sh
 
       - *merge_group_cancel
@@ -4325,6 +4329,10 @@ jobs:
       contents: read
       actions: write
       packages: read
+    # Online index builds in the disposable check instance must not wait on storage metrics or busy windows.
+    env:
+      DB_LOAD_GATE_EBS_SIGNAL: disabled
+      DB_LOAD_GATE_BUSY_WINDOWS: "[]"
 
     services:
       postgres:
