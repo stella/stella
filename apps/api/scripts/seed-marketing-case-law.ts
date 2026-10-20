@@ -13,6 +13,7 @@ import {
   MARKETING_CASE_LAW,
   MARKETING_CASE_LAW_COPY,
 } from "@stll/playwright-tools/marketing-case-law";
+import { MARKETING_LOCALE_ACCOUNTS } from "@stll/playwright-tools/marketing-locales";
 import type { MarketingLocale } from "@stll/playwright-tools/marketing-locales";
 
 import {
@@ -61,6 +62,7 @@ const fixtureSchema = v.object({
 const seedCorpusAnalyses = async (locale: MarketingLocale) => {
   const scenes = MARKETING_CASE_LAW[locale];
   const copy = MARKETING_CASE_LAW_COPY[locale];
+  const { language } = MARKETING_LOCALE_ACCOUNTS[locale];
   const fixtures = await Promise.all(
     FIXTURE_FILES.map(async (name) =>
       v.parse(
@@ -197,7 +199,7 @@ const seedCorpusAnalyses = async (locale: MarketingLocale) => {
         ],
         holding: {
           text: scene.answer,
-          language: copy.analysisLanguage,
+          language,
           anchors: [
             {
               startAnchorId: highlight.anchorId,
@@ -207,7 +209,7 @@ const seedCorpusAnalyses = async (locale: MarketingLocale) => {
         },
         abstract: {
           text: `${scene.answer} ${scene.followUpAnswer}`,
-          language: copy.analysisLanguage,
+          language,
         },
         topics: [],
       });

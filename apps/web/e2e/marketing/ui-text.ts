@@ -2,22 +2,25 @@
 // localized capture looks for the words its locale actually renders.
 import { readFileSync } from "node:fs";
 
+import { MARKETING_LOCALE_ACCOUNTS } from "@stll/playwright-tools/marketing-locales";
 import type { MarketingLocale } from "@stll/playwright-tools/marketing-locales";
 
-const catalogs = new Map<MarketingLocale, unknown>();
+const catalogs = new Map<string, unknown>();
 
+// Markets that share a language share its catalog.
 const catalogFor = (locale: MarketingLocale): unknown => {
-  const cached = catalogs.get(locale);
+  const { language } = MARKETING_LOCALE_ACCOUNTS[locale];
+  const cached = catalogs.get(language);
   if (cached !== undefined) {
     return cached;
   }
   const catalog: unknown = JSON.parse(
     readFileSync(
-      new URL(`../../src/i18n/langs/${locale}.json`, import.meta.url),
+      new URL(`../../src/i18n/langs/${language}.json`, import.meta.url),
       "utf-8",
     ),
   );
-  catalogs.set(locale, catalog);
+  catalogs.set(language, catalog);
   return catalog;
 };
 

@@ -26,6 +26,7 @@ import { printError } from "@stll/errors";
 import {
   MARKETING_LOCALE_ACCOUNTS,
   marketingLocaleForOrganization,
+  PRIMARY_MARKETING_LOCALE,
 } from "@stll/playwright-tools/marketing-locales";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
@@ -54,6 +55,8 @@ import type { SeedColleague } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
 
+const PRIMARY_ACCOUNT = MARKETING_LOCALE_ACCOUNTS[PRIMARY_MARKETING_LOCALE];
+
 // Display names belong to the same fictional world as the rest of the dev
 // seed (Novák & Partners, Česká Energie, Meridian Capital Partners in
 // seed-dev.ts): the marketing captures film these surfaces, so a placeholder
@@ -62,16 +65,16 @@ const db = openMaintenanceDb({ readOnly: false });
 // storage state, and the e2e sign-in all join on.
 const TEST_USER = {
   id: DEFAULT_USER_ID,
-  name: MARKETING_LOCALE_ACCOUNTS.en.userName,
-  email: MARKETING_LOCALE_ACCOUNTS.en.email,
+  name: PRIMARY_ACCOUNT.userName,
+  email: PRIMARY_ACCOUNT.email,
 } as const;
 
 const COLLEAGUES = getSeedColleagues(DEFAULT_TEST_USER_COLLEAGUE_COUNT);
 
 const TEST_ORG = {
   id: DEFAULT_ORG_ID,
-  name: MARKETING_LOCALE_ACCOUNTS.en.organizationName,
-  slug: MARKETING_LOCALE_ACCOUNTS.en.organizationSlug,
+  name: PRIMARY_ACCOUNT.organizationName,
+  slug: PRIMARY_ACCOUNT.organizationSlug,
 } as const;
 
 // Token that Playwright will send as a cookie.
