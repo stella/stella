@@ -3262,7 +3262,7 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
   for (const [name, scope] of [
     ["Web API types determinism guard", "web_api_types_required"],
     ["Route tree drift guard", "route_tree_required"],
-    ["Published export map guard", "published_exports_required"],
+    ["Workspace package export map guard", "published_exports_required"],
   ] as const) {
     const condition = steps.find((step) => step.name === name)?.if ?? "";
     expect(condition, name).toContain(

@@ -2328,32 +2328,32 @@
         "type": "checkout"
       },
       "path": ".github/workflows/publish-npm.yml",
-      "digest": "5fcaac0618c3805cf7d94b4bbb64b02ce87b240c3de47fc05eff86e7c94bf042",
+      "digest": "23d13913998769cce7bb6d7ade2cfe2e17d6a1bc550914ea476c743e9713b180",
       "references": [],
       "jobs": [
         {
           "id": "release-trigger",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "a435b28f44c92350148f8bd55e768045588469a07c40d2ff71a0fd172b9ea8e6"
+          "digest": "526643fad983dd8ebb71cfd3355cfcbba05457b1bf327f895bb235cae7f287c4"
         },
         {
           "id": "pack",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "5d1f754c055aeaac78d7a7498cad5cfcf53d02743002f14fba7dbd74c3de0106"
+          "digest": "886425c77a767cd42fdbf189123106c42db2ab6f99eea25db3f1a9fa72e5497c"
         },
         {
           "id": "release",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "4baca4036c1b460bdc46fb15f72717bf31b1ad4890d836ad57cc0a5734608d39"
+          "digest": "283851a73422e37d7ad1cd02fe2ef3f33915d9594b39da78aba72e4f42562366"
         },
         {
           "id": "verify-npm",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "479f9a44a75417ed93964e7a04e916082e2e23eaa411b39fdfb79343d150f1b3"
+          "digest": "5b4224cc48623441061a7b63ff47bd64a54d9f64e27535abb927e958ca4ec505"
         }
       ],
       "edges": {

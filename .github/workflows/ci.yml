@@ -2295,7 +2295,7 @@ jobs:
       # prepare-publish, pack — then resolves and imports every declared
       # subpath from the built dist, so a missing build entry or an unshipped
       # file fails here rather than after publication.
-      - name: Published export map guard
+      - name: Workspace package export map guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
         run: |
           bun scripts/check-published-exports.ts packages/auth-model
