@@ -1564,6 +1564,26 @@ describe("install-free invocation classification", () => {
     );
   });
 
+  test("an install through a retry helper copy outside scripts/ is an install", () => {
+    for (const helper of [
+      '"$RELEASE_TOOLING/scripts/retry.sh"',
+      "./scripts/retry.sh",
+      "tooling/retry.sh",
+    ]) {
+      expect(
+        classify(`bash ${helper} bun ci --ignore-scripts`).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install"]);
+    }
+    // A helper whose name only ends in retry.sh is a different program.
+    expect(
+      classify("bash scripts/gh-retry.sh bun ci --ignore-scripts").map(
+        ({ classification }) => classification.type,
+      ),
+    ).not.toEqual(["install"]);
+  });
+
   test("bounded installs and planner calls retain dependency coverage", () => {
     for (const prefix of [
       ...["0", "1.5", ".5", "1.", "2s", "3.5m", "4h", "5d"].map(

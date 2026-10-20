@@ -4,6 +4,7 @@ export default {
   id: "transaction-proof-predicates",
   capability: "Checking facts for transaction-bound proofs",
   owner: [
+    "apps/api/src/lib/workspaces/matter-access-proof.ts",
     "apps/api/src/lib/signals/proofs/signal-visible-to.ts",
     "apps/api/src/lib/signals/proofs/may-create-signal-request.ts",
   ],

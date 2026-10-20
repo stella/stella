@@ -7,7 +7,7 @@ import { isUuid } from "@stll/uuid-codec";
 
 import {
   caseLawDecisionIdentifiers,
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
@@ -19,10 +19,11 @@ import {
   type CaseLawPublicReadDb,
 } from "@/api/lib/case-law-public-read-db";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
+  caseLawAppliedProjections,
   caseLawCorpusAppliedRevision,
+  caseLawCorpusServingGeneration,
   caseLawCorpusDocumentCanRecur,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
@@ -35,9 +36,11 @@ import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-fac
 import { courtPartitionsForCourtFilter } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  readCorpusIndexSearchPage,
+  type CorpusCandidateRankingInput,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
-import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import { markCorpusFragment } from "@/api/lib/legal-search/corpus-passage-highlight";
 import {
   caseLawCorpusQuery,
@@ -52,7 +55,7 @@ import {
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
-  partitionCorpusRehydration,
+  partitionReturnedCorpusRecords,
   recordCorpusRehydrationDispositions,
 } from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import {
@@ -69,7 +72,6 @@ import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
 import {
   blendStableCitationAuthority,
-  type ScoredCandidate,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import {
@@ -154,12 +156,16 @@ export const rehydrateCorpusIndexProviderCandidatesStatement = (
   tx: CaseLawPublicReadTransaction,
   { generation, ids }: RehydrateCorpusIndexCandidatesOptions,
 ) => {
+  const requestedIds = sql`(SELECT unnest(ARRAY[${sql.join(
+    ids.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  )}]::uuid[]) AS id) AS requested`;
   const eligibleRows = tx
     .select({
-      id: caseLawDecisions.id,
-      caseNumber: caseLawDecisions.caseNumber,
-      caseNumberType: caseLawDecisions.caseNumberType,
-      ecli: caseLawDecisions.ecli,
+      id: publishedCaseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      caseNumberType: publishedCaseLawDecisions.caseNumberType,
+      ecli: publishedCaseLawDecisions.ecli,
       identifiers: sql<unknown>`coalesce((
         SELECT jsonb_agg(
           jsonb_build_object(
@@ -169,28 +175,32 @@ export const rehydrateCorpusIndexProviderCandidatesStatement = (
           ORDER BY identifier.type, identifier.value
         )
         FROM ${caseLawDecisionIdentifiers} identifier
-        WHERE identifier.decision_id = ${caseLawDecisions.id}
+        WHERE identifier.decision_id = ${publishedCaseLawDecisions.id}
       ), '[]'::jsonb)`.as("identifiers"),
-      court: caseLawDecisions.court,
-      country: caseLawDecisions.country,
-      language: caseLawDecisions.language,
-      decisionDate: caseLawDecisions.decisionDate,
-      decisionType: caseLawDecisions.decisionType,
-      sourceUrl: caseLawDecisions.sourceUrl,
-      citationCount: caseLawDecisions.citationCount,
-      citationAuthority: caseLawDecisions.citationAuthority,
-      createdAt: caseLawDecisions.createdAt,
+      court: publishedCaseLawDecisions.court,
+      country: publishedCaseLawDecisions.country,
+      language: publishedCaseLawDecisions.language,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
+      decisionType: publishedCaseLawDecisions.decisionType,
+      sourceUrl: publishedCaseLawDecisions.sourceUrl,
+      citationCount: publishedCaseLawDecisions.citationCount,
+      citationAuthority: publishedCaseLawDecisions.citationAuthority,
+      createdAt: publishedCaseLawDecisions.createdAt,
       canRecur: caseLawCorpusDocumentCanRecur(generation).as("can_recur"),
       appliedRevision:
         caseLawCorpusAppliedRevision(generation).as("applied_revision"),
+      appliedGeneration:
+        caseLawCorpusServingGeneration(generation).as("applied_generation"),
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
-        inArray(caseLawDecisions.id, ids),
+        inArray(publishedCaseLawDecisions.id, ids),
         redistributableCaseLawSource,
-        publishedCaseLawDecision,
         currentCaseLawCorpusProjection(generation),
       ),
     )
@@ -198,10 +208,9 @@ export const rehydrateCorpusIndexProviderCandidatesStatement = (
     .limit(ids.length)
     .as("eligible_provider");
   return tx
-    .select({ id: caseLawDecisions.id, row: getColumns(eligibleRows) })
-    .from(caseLawDecisions)
-    .leftJoin(eligibleRows, eq(caseLawDecisions.id, eligibleRows.id))
-    .where(inArray(caseLawDecisions.id, ids))
+    .select({ id: sql<string>`requested.id`, row: getColumns(eligibleRows) })
+    .from(requestedIds)
+    .leftJoin(eligibleRows, sql`requested.id = ${eligibleRows.id}`)
     .limit(ids.length);
 };
 
@@ -209,10 +218,9 @@ export const rehydrateCorpusIndexProviderCandidatesQuery = async (
   tx: CaseLawPublicReadTransaction,
   options: RehydrateCorpusIndexCandidatesOptions,
 ) =>
-  partitionCorpusRehydration({
-    ids: options.ids,
-    records: await rehydrateCorpusIndexProviderCandidatesStatement(tx, options),
-  });
+  partitionReturnedCorpusRecords(
+    await rehydrateCorpusIndexProviderCandidatesStatement(tx, options),
+  );
 
 export const rehydrateCorpusIndexProviderCandidates =
   definePublicLawSharedQuery(
@@ -223,11 +231,10 @@ export const rehydrateCorpusIndexProviderCandidates =
     ) => await rehydrateCorpusIndexProviderCandidatesQuery(tx, options),
   );
 
-type RankCorpusIndexProviderCandidatesOptions = {
+type RankCorpusIndexProviderCandidatesOptions = CorpusCandidateRankingInput & {
   caseLawDb?: CaseLawPublicReadDb | undefined;
   hitDispositions?: CorpusHitDispositionCounter | undefined;
   generation: string;
-  candidates: readonly ScoredCandidate[];
   /** Groups earlier pages emitted (`SearchCursor.excludedGroups`). */
   excludedGroups: readonly string[] | undefined;
 };
@@ -237,6 +244,7 @@ export const rankCorpusIndexProviderCandidates = async ({
   hitDispositions = createCorpusHitDispositionCounter(),
   generation,
   candidates,
+  selectAppliedCandidates,
   excludedGroups,
 }: RankCorpusIndexProviderCandidatesOptions) => {
   const ids = candidates.map((candidate) =>
@@ -261,18 +269,20 @@ export const rankCorpusIndexProviderCandidates = async ({
   const authorityById = new Map(
     rows.map((row) => [String(row.id), row.citationAuthority]),
   );
-  const revisionById = new Map<string, CorpusProjectionRevision>();
-  for (const { id, appliedRevision } of rows) {
-    if (appliedRevision !== null) {
-      revisionById.set(String(id), appliedRevision);
-    }
-  }
+  const appliedById = caseLawAppliedProjections(rows);
+  const revisionById = new Map(
+    [...appliedById].map(([id, { revision }]) => [id, revision]),
+  );
 
   // Drop candidates missing from Postgres (index/DB drift) so we never
   // surface a hit we cannot render. Only documents with later physical
   // passages need exclusions when the position window advances.
   const excluded = new Set(excludedGroups);
-  const rendered = candidates.filter(
+  const rendered = (
+    selectAppliedCandidates === undefined
+      ? candidates
+      : selectAppliedCandidates(appliedById)
+  ).filter(
     (candidate) =>
       displayById.has(candidate.id) && revisionById.has(candidate.id),
   );
@@ -466,11 +476,12 @@ const searchResult = async (
     // no unseen candidate could out-blend the page cursor. Saturated
     // authority is bounded by 1, so the bound reads nothing from the corpus.
     unseenScoreUpperBound: stableBlendUpperBound,
-    rankCandidates: async (candidates) =>
+    rankCandidates: async (candidates, { selectAppliedCandidates }) =>
       await rankCorpusIndexProviderCandidates({
         hitDispositions,
         generation,
         candidates,
+        selectAppliedCandidates,
         excludedGroups: parsedCursor?.excludedGroups,
       }),
   });

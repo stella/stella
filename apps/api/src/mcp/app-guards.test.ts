@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { MCP_APPS } from "@stll/mcp-apps/manifest";
+
 import { inspectAppManifest } from "./app-guards";
+import { DEFAULT_MCP_TOOL_DEFINITIONS } from "./static-tool-definitions";
 import type { McpToolDefinition } from "./tool-types";
 
 const readerTool = {
@@ -55,6 +58,16 @@ const inspect = (tool: McpToolDefinition) =>
   });
 
 describe("presentation app tool audiences", () => {
+  test("citation graph's linked and callable tools satisfy the app contract", () => {
+    expect(
+      inspectAppManifest({
+        apps: MCP_APPS,
+        tools: DEFAULT_MCP_TOOL_DEFINITIONS,
+        directories: MCP_APPS.map(({ directory }) => directory),
+      }),
+    ).toEqual([]);
+  });
+
   test("app-only read tools need no resource link", () => {
     expect(inspect(readerTool)).toEqual([]);
   });

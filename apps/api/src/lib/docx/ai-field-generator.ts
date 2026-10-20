@@ -191,7 +191,7 @@ const boundedAiSignal = (
  * fast-role model, disables prompt caching (these calls are not cache-shared),
  * threads analytics middleware, and attaches the optional skill tool loop. Skill
  * refs need the agentic loop (load-skill then draft), so these calls go through
- * `chat()` directly rather than the tool-free `generateTanStack*ForRole` helpers.
+ * `chat()` directly rather than the tool-free `generateTanStack*ForTask` helpers.
  */
 type FieldChatInput = {
   abortSignal: AbortSignal;
@@ -234,7 +234,7 @@ const resolveFieldChat = async ({
   abortController: abortControllerFromSignal(abortSignal),
   caching: resolveCaching({
     promptCachingEnabled: false,
-    role: "fast",
+    task: "short-text",
     scopeKey: organizationId,
   }),
   messages: guardModelMessages({
@@ -243,7 +243,7 @@ const resolveFieldChat = async ({
   }),
   model: await resolveTextModel({
     dataClass: "customer",
-    role: "fast",
+    task: "short-text",
     orgAIConfig,
     managedAIResidency,
     organizationId,
@@ -505,7 +505,7 @@ export const buildAiConditionDecider = ({
           : undefined,
         generation: {
           dataClass: "customer",
-          role: "fast",
+          task: "classify",
           serviceTier: "standard",
           orgAIConfig,
           managedAIResidency,
@@ -518,7 +518,7 @@ export const buildAiConditionDecider = ({
           deadlineMs: AI_CONDITION_TIMEOUT_MS,
           caching: resolveCaching({
             promptCachingEnabled: false,
-            role: "fast",
+            task: "classify",
             scopeKey: organizationId,
           }),
           prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}\n\nKnown details (JSON):\n${JSON.stringify(values)}`,

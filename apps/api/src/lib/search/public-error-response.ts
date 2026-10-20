@@ -2,6 +2,10 @@ import type { Static } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import { LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES } from "@stll/api-contract/legislation-expression";
+import {
+  PUBLIC_LAW_DOMAIN,
+  PUBLIC_LAW_DOMAINS,
+} from "@stll/api-contract/public-country-capability";
 
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -17,6 +21,7 @@ export const PUBLIC_ERROR_TEXT_BYTES = {
   hint: 2048,
   contactUrl: 2048,
   country: 3,
+  domain: Math.max(...PUBLIC_LAW_DOMAINS.map((domain) => domain.length)),
   status: 32,
   reason: 128,
   issuePath: 256,
@@ -58,6 +63,7 @@ export const safePublicHandlerErrorResponseSchema = t.Object(
     type: t.Optional(t.Literal("conflict")),
     versions: t.Optional(publicInconsistentVersionsSchema),
     country: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.country)),
+    domain: t.Optional(t.Enum(PUBLIC_LAW_DOMAIN)),
     status: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.status)),
     reason: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.reason)),
     issues: t.Optional(
@@ -151,6 +157,9 @@ export const projectPublicErrorBody = (
     PUBLIC_ERROR_TEXT_BYTES.country,
   );
   const status = optionalText(value["status"], PUBLIC_ERROR_TEXT_BYTES.status);
+  const domain = PUBLIC_LAW_DOMAINS.find(
+    (candidate) => candidate === value["domain"],
+  );
   const reason = optionalText(value["reason"], PUBLIC_ERROR_TEXT_BYTES.reason);
   return {
     message:
@@ -162,6 +171,7 @@ export const projectPublicErrorBody = (
     ...(hint === undefined ? {} : { hint }),
     ...(contactUrl === undefined ? {} : { contactUrl }),
     ...(country === undefined ? {} : { country }),
+    ...(domain === undefined ? {} : { domain }),
     ...(status === undefined ? {} : { status }),
     ...(reason === undefined ? {} : { reason }),
     ...(typeof value["retryable"] === "boolean"
@@ -187,6 +197,7 @@ export const PUBLIC_ERROR_RESPONSE_MAX_BYTES =
       PUBLIC_ERROR_TEXT_BYTES.hint +
       PUBLIC_ERROR_TEXT_BYTES.contactUrl +
       PUBLIC_ERROR_TEXT_BYTES.country +
+      PUBLIC_ERROR_TEXT_BYTES.domain +
       PUBLIC_ERROR_TEXT_BYTES.status +
       PUBLIC_ERROR_TEXT_BYTES.reason +
       PUBLIC_ERROR_TEXT_BYTES.issueCount *

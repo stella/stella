@@ -306,8 +306,6 @@ test("status precedence uses the decision, scope, and current payload before pub
 
   for (const [id, type] of [
     [outOfScope, "out_of_scope"],
-    [outOfScopeWithheld, "out_of_scope"],
-    [withheld, "withheld"],
     [unavailable, "unavailable"],
     [nullHashEnvelope, "unavailable"],
     [unplaceable, "unplaceable"],
@@ -319,6 +317,16 @@ test("status precedence uses the decision, scope, and current payload before pub
       nextCursor: null,
       status: { type },
     });
+  }
+  for (const id of [outOfScopeWithheld, withheld]) {
+    expect(
+      await withRedistributableSubject(
+        reader,
+        "pages",
+        { kind: "id", id },
+        async (subject) => subject.id,
+      ),
+    ).toBeNull();
   }
 });
 

@@ -4,8 +4,9 @@ import { Result, panic } from "better-result";
 // type-checks against that snapshot instead of re-inferring the whole API
 // graph. The API implementation stays the source of truth: --check asserts,
 // through the compiler's identity relation, that each printed type is
-// identical to the inferred one. `--check` generates twice and fails if the
-// bytes differ; the output is local build input rather than committed state.
+// identical to the inferred one. `--check` compares two independently
+// generated printouts and fails if the bytes differ; the output is local build
+// input rather than committed state.
 // Without --check, a run whose compiler inputs are unchanged since the last
 // printout restores that printout from .cache/web-api-types instead of
 // building the API program (see lib/compiler-input-stamp.ts).
@@ -49,7 +50,10 @@ import { repoRelativePath } from "@stll/portable-path";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { withGenerationLock } from "../../../packages/scripts/src/generation-lock";
-import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
+import {
+  hasPreparedGeneratedSources,
+  preparedGeneratedFile,
+} from "../../../packages/scripts/src/prepared-generated-sources";
 import { withoutTsgoOnlyOptionDiagnostics } from "../../../packages/scripts/src/tsgo-compiler-options";
 import {
   type CompilerInputRecorder,
@@ -1388,6 +1392,31 @@ const readOptional = (file: string): Buffer | undefined => {
   return read.isOk() ? read.value : undefined;
 };
 
+type VerifyDeterminismOptions = {
+  output: string | Uint8Array;
+  prepared: Uint8Array | undefined;
+  regenerate: () => string | Uint8Array;
+};
+
+export const verifyDeterminism = ({
+  output,
+  prepared,
+  regenerate,
+}: VerifyDeterminismOptions): "prepared printout" | "two generations" => {
+  if (prepared !== undefined) {
+    if (!Buffer.from(output).equals(prepared)) {
+      panic("generate-web-api-types: prepared printout differs from this run");
+    }
+    return "prepared printout";
+  }
+  if (!Buffer.from(output).equals(Buffer.from(regenerate()))) {
+    panic(
+      "generate-web-api-types: output is not deterministic across two generations",
+    );
+  }
+  return "two generations";
+};
+
 const cacheStampSchema = v.strictObject({
   outputHash: v.string(),
   inputs: compilerInputStampSchema,
@@ -1489,16 +1518,23 @@ const main = async () => {
     validation: check ? "identity" : "print",
     recorder,
   });
-  // The determinism run starts after the identity check's program is
+  // A fallback determinism run starts after the identity check's program is
   // collected, so it too runs alone.
   if (check) {
     Bun.gc(true);
   }
-  if (check && generate({ validation: "print" }) !== output) {
-    panic(
-      "generate-web-api-types: output is not deterministic across two generations",
-    );
-  }
+  // The generated-sources job's printout for these exact inputs, when it is
+  // still on disk, is the independent second generation.
+  const outcome = check
+    ? `verified deterministic against ${verifyDeterminism({
+        output,
+        prepared: preparedGeneratedFile(
+          REPO_ROOT,
+          repoRelativePath(REPO_ROOT, OUTPUT_PATH),
+        ),
+        regenerate: () => generate({ validation: "print" }),
+      })}`
+    : "wrote";
   writeAtomically(OUTPUT_PATH, output);
   // The copy first: a stamp never names a printout that is not on disk.
   writeAtomically(CACHED_OUTPUT_PATH, output);
@@ -1524,7 +1560,7 @@ const main = async () => {
     );
   }
   console.log(
-    `generate-web-api-types: ${check ? "verified deterministic" : "wrote"} ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
+    `generate-web-api-types: ${outcome} ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
       `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms, ` +
       // maxRSS is in kilobytes on every platform Node and Bun report it for.
       `peak RSS ${Math.round(process.resourceUsage().maxRSS / 1024)} MiB`,

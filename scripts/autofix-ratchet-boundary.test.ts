@@ -54,10 +54,11 @@ exit 1
 `,
       { mode: 0o755 },
     );
-    writeFileSync(
-      path.join(root, "autofix-changed-paths"),
-      "scripts/ratchet-baseline.json\0",
-    );
+    // The fixer steps read the push scope; a run without a settled
+    // commit scopes every changed path.
+    for (const name of ["autofix-changed-paths", "autofix-fix-paths"]) {
+      writeFileSync(path.join(root, name), "scripts/ratchet-baseline.json\0");
+    }
     const result = Bun.spawnSync(["bash", "-c", command], {
       cwd: root,
       env: {
@@ -107,10 +108,14 @@ describe("ratchet autofix output boundary", () => {
         path.join(root, "policy"),
         `${AUTOFIX_PROTECTED_PATHS.join("\n")}\n`,
       );
-      writeFileSync(
-        path.join(root, "autofix-changed-paths"),
-        `${[...protectedPaths, unprotected].join("\0")}\0`,
-      );
+      // The fixer steps read the push scope; a run without a settled
+      // commit scopes every changed path.
+      for (const name of ["autofix-changed-paths", "autofix-fix-paths"]) {
+        writeFileSync(
+          path.join(root, name),
+          `${[...protectedPaths, unprotected].join("\0")}\0`,
+        );
+      }
       writeFileSync(
         path.join(bin, "bun"),
         `#!/bin/bash

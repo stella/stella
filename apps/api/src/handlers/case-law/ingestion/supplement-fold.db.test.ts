@@ -42,7 +42,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ABSORBED_INTO_METADATA_KEY } from "@/api/lib/case-law/decision-absorption";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -408,7 +408,10 @@ test("the fold merges every reasons row into the ruling it explains and keeps th
       .select({ sourceDocumentId: caseLawDecisions.sourceDocumentId })
       .from(caseLawDecisions)
       .where(
-        and(eq(caseLawDecisions.sourceId, sourceId), publishedCaseLawDecision),
+        and(
+          eq(caseLawDecisions.sourceId, sourceId),
+          publishedCaseLawDecisionFor(caseLawDecisions),
+        ),
       )
   )
     .map(({ sourceDocumentId }) => sourceDocumentId ?? "")

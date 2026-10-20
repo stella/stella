@@ -3,10 +3,7 @@ import * as v from "valibot";
 
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
 import launchReadiness from "./launch-readiness.json" with { type: "json" };
-import {
-  ADMITTED_PUBLIC_COUNTRIES,
-  PAGES_PUBLIC_COUNTRIES,
-} from "./public-country-capability";
+import { publicCountriesFor } from "./public-country-capability";
 
 /** Countries the public case-law browser has a complete routing/display model for. */
 export const CASE_LAW_BROWSER_COUNTRIES = [
@@ -73,6 +70,9 @@ export const parseCaseLawLaunchReadiness = (
   return countries;
 };
 
+const ADMITTED_CASE_LAW_COUNTRIES = publicCountriesFor("caseLaw", "search");
+const CASE_LAW_PAGE_COUNTRIES = publicCountriesFor("caseLaw", "pages");
+
 const servingReceipts = parseCaseLawLaunchReadiness(launchReadiness);
 
 /** Every admitted country must have a receipt, and receipts cannot admit independently. */
@@ -80,7 +80,7 @@ const servingReceipts = parseCaseLawLaunchReadiness(launchReadiness);
  * Countries admitted to case-law search, the API search surfaces and MCP.
  * Pages, sitemaps and crawl use `PUBLIC_CASE_LAW_PAGE_COUNTRIES` instead.
  */
-export const PUBLIC_CASE_LAW_COUNTRIES = ADMITTED_PUBLIC_COUNTRIES.map(
+export const PUBLIC_CASE_LAW_COUNTRIES = ADMITTED_CASE_LAW_COUNTRIES.map(
   (country) => {
     const receipt = servingReceipts.find((candidate) => candidate === country);
     if (receipt === undefined) {
@@ -94,7 +94,7 @@ export const PUBLIC_CASE_LAW_COUNTRIES = ADMITTED_PUBLIC_COUNTRIES.map(
 if (
   servingReceipts.some(
     (country) =>
-      !ADMITTED_PUBLIC_COUNTRIES.some((candidate) => candidate === country),
+      !ADMITTED_CASE_LAW_COUNTRIES.some((candidate) => candidate === country),
   )
 ) {
   panic(
@@ -113,7 +113,7 @@ export const isPublicCaseLawCountry = (
  * paths can never be dropped silently.
  */
 const PAGES_PUBLIC_BROWSER_COUNTRIES: readonly CaseLawBrowserCountry[] =
-  PAGES_PUBLIC_COUNTRIES;
+  CASE_LAW_PAGE_COUNTRIES;
 
 /**
  * Countries whose decision pages are served, listed in sitemaps and open to

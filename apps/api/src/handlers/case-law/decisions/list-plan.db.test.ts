@@ -79,10 +79,15 @@ test(
     });
 
     const indexedDecisionScan =
-      /Index Scan Backward using case_law_decisions_country_date_idx on case_law_decisions\n\s+Index Cond: \(\(country\)::text = 'CZE'::text\)/u;
+      /Index Scan Backward using case_law_decisions_country_date_published_idx on case_law_decisions\n\s+Index Cond: \(\(country\)::text = 'CZE'::text\)/u;
     expect(plans.natural).toMatch(indexedDecisionScan);
     expect(plans.forced).toMatch(indexedDecisionScan);
-    expect(plans.natural).toContain("Nested Loop Anti Join");
+    for (const plan of [plans.natural, plans.forced]) {
+      expect(plan).toContain("Nested Loop Left Join");
+      expect(plan).toContain("case_law_decisions_lang_group_idx");
+      expect(plan).toMatch(/Index Cond: .*language_group_key/u);
+      expect(plan).not.toContain("Seq Scan on case_law_decisions");
+    }
     expect(plans.rows.some((row) => row.languageGroupKey === null)).toBe(true);
     const groupKeys = plans.rows.flatMap((row) =>
       row.languageGroupKey === null ? [] : [row.languageGroupKey],

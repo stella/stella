@@ -12,6 +12,7 @@ import { MCP_APP_BUNDLES } from "@stll/mcp-apps/bundles";
 import {
   STATUTE_TIMELINE_APP,
   CASE_LAW_RESULTS_APP,
+  CITATION_GRAPH_APP,
   DECISION_READER_APP,
 } from "@stll/mcp-apps/manifest";
 
@@ -152,6 +153,21 @@ const buildProductIdentity = (mode: McpMode): string => {
 };
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
+  {
+    uri: CITATION_GRAPH_APP.uri,
+    name: "citation-graph",
+    title: "Citation graph",
+    description: "Explore a decision's citations and their treatments.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => MCP_APP_BUNDLES["citation-graph"],
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
   {
     uri: STATUTE_TIMELINE_APP.uri,
     name: "statute-timeline",

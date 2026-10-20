@@ -39,6 +39,7 @@ export const declareVisualSandboxSmoke = () => {
       }
     });
     try {
+      await collector.measureRounds(page);
       const hostResponse = await page.goto(hostUrl);
       expect(hostResponse?.ok()).toBe(true);
       const frameResponse = page.waitForResponse(sandboxUrl);
@@ -110,6 +111,7 @@ export const declareVisualSandboxSmoke = () => {
         minimumObservationMs: 1000,
         timeoutMs: 5000,
       });
+      collector.finishRounds();
       const results = new Map([
         [VISUAL_SANDBOX_PATH, summarizeCapture(await collector.capture())],
       ]);

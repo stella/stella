@@ -15,7 +15,7 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 type GenerateBBoxDataProps = {
   pdfData: Uint8Array;
@@ -23,6 +23,7 @@ type GenerateBBoxDataProps = {
   fieldContent: string;
   justificationText: string;
   abortSignal: AbortSignal;
+  deadlineMs: number;
   justificationId: string;
   organizationId: SafeId<"organization">;
   admission: ModelDispatchAdmission;
@@ -32,7 +33,7 @@ type GenerateBBoxDataProps = {
   managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   /** External model-dispatch boundary; supplied by focused integration tests. */
-  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
+  generateObjectForTask?: typeof generateTanStackObjectForTask | undefined;
 };
 
 export const generateBBoxData = async ({
@@ -41,6 +42,7 @@ export const generateBBoxData = async ({
   fieldContent,
   justificationText,
   abortSignal,
+  deadlineMs,
   justificationId,
   organizationId,
   admission,
@@ -49,19 +51,19 @@ export const generateBBoxData = async ({
   orgAIConfig,
   managedAIResidency,
   promptCachingEnabled,
-  generateObjectForRole = generateTanStackObjectForRole,
+  generateObjectForTask = generateTanStackObjectForTask,
 }: GenerateBBoxDataProps): Promise<
   Result<BBoxItem[], WorkflowIntegrationError>
 > => {
   const caching = resolveCaching({
     promptCachingEnabled,
-    role: "pdf",
+    task: "pdf",
     scopeKey: justificationId,
   });
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "bbox.generate",
-    modelRole: "pdf",
+    modelTask: "pdf",
     organizationId,
     orgAIConfig: orgAIConfig ?? null,
     modelTier: admission.modelTier,
@@ -85,9 +87,9 @@ export const generateBBoxData = async ({
           mimeType: "application/pdf",
         },
       };
-      const result = await generateObjectForRole({
+      const result = await generateObjectForTask({
         dataClass: "customer",
-        role: "pdf",
+        task: "pdf",
         serviceTier: "standard",
         orgAIConfig,
         managedAIResidency,
@@ -115,6 +117,7 @@ export const generateBBoxData = async ({
         ],
         outputSchema: bboxOutputSchema,
         abortSignal,
+        deadlineMs,
       });
 
       return result.boxes;

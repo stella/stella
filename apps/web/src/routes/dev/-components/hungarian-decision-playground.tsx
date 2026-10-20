@@ -24,6 +24,7 @@ export const HungarianDecisionPlayground = () => (
           decisionType: ast.metadata.decisionType,
           ecli: null,
           name: null,
+          paragraph: null,
           pincite: null,
         })}
       </bdi>

@@ -5,7 +5,7 @@ import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
 import { isPublicCaseLawPageCountry } from "@stll/api-contract/case-law-launch-readiness";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -16,7 +16,6 @@ import {
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -74,27 +73,26 @@ export const readPublicDecisionBadges = async ({
         caseLawDb((tx) =>
           tx
             .select({
-              caseNumber: caseLawDecisions.caseNumber,
-              country: caseLawDecisions.country,
-              court: caseLawDecisions.court,
-              courtId: caseLawDecisions.courtId,
-              decisionDate: caseLawDecisions.decisionDate,
-              ecli: caseLawDecisions.ecli,
-              id: caseLawDecisions.id,
-              language: caseLawDecisions.language,
-              languageGroupKey: caseLawDecisions.languageGroupKey,
-              slug: caseLawDecisions.slug,
+              caseNumber: publishedCaseLawDecisions.caseNumber,
+              country: publishedCaseLawDecisions.country,
+              court: publishedCaseLawDecisions.court,
+              courtId: publishedCaseLawDecisions.courtId,
+              decisionDate: publishedCaseLawDecisions.decisionDate,
+              ecli: publishedCaseLawDecisions.ecli,
+              id: publishedCaseLawDecisions.id,
+              language: publishedCaseLawDecisions.language,
+              languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+              slug: publishedCaseLawDecisions.slug,
             })
-            .from(caseLawDecisions)
+            .from(publishedCaseLawDecisions)
             .innerJoin(
               caseLawSources,
-              eq(caseLawSources.id, caseLawDecisions.sourceId),
+              eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
             )
             .where(
               and(
-                inArray(caseLawDecisions.id, uniqueIds),
+                inArray(publishedCaseLawDecisions.id, uniqueIds),
                 redistributableCaseLawSource,
-                publishedCaseLawDecision,
               ),
             )
             .limit(uniqueIds.length),

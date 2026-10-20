@@ -11,6 +11,7 @@ import { readerAnnotationKeys } from "@/components/legal-reader/annotations/read
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
 import { timeTimersOptions } from "@/features/time-timers/queries";
@@ -59,7 +60,7 @@ import {
   organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
 } from "@/queries/organization-settings";
-import { auditLogOptions } from "@/routes/_protected.settings/-queries/audit-logs";
+import { auditLogOptions } from "@/routes/_protected.admin/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
@@ -114,9 +115,13 @@ const DOWNLOAD = "a file download, not cached";
 const OAUTH_REDIRECT = "an OAuth redirect, not cached";
 const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
+const READ_FRESH = "read fresh at each use, never cached";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
+  "account-exports/get.ts": { kind: "no-web-caller", calls: [] },
+  "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
   "search-history/list.ts": {
     kind: "keyed",
     calls: ['api["search-history"].get'],
@@ -215,7 +220,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "audit-logs/list.ts": {
     kind: "keyed",
     calls: ['api["audit-logs"].get'],
-    files: ["routes/_protected.settings/-queries/audit-logs.ts"],
+    files: ["routes/_protected.admin/-queries/audit-logs.ts"],
     keys: () => [
       auditLogOptions({
         viewer: { userId: USER, organizationId: ORG },
@@ -296,6 +301,19 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     },
   },
   "chat/saved-secret.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/tool-grants/list.ts": {
+    kind: "keyed",
+    calls: ['api.chat["tool-grants"].get'],
+    files: ["features/chat/chat-tool-grants.ts"],
+    keys: () => [
+      chatToolGrantsOptions({
+        activeOrganizationId: ORG,
+        threadId: "thread",
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "chat/tool-grants/coverage.ts": { kind: "not-per-user", reason: READ_FRESH },
   "chat/skill-availability/list.ts": {
     kind: "keyed",
     calls: ['api.chat["skill-availability"].get'],

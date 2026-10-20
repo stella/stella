@@ -41,7 +41,7 @@ import { isUuid } from "@stll/uuid-codec";
 
 import {
   caseLawDecisionIdentifiers,
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
@@ -148,10 +148,6 @@ import {
   loadPublicFtsSearchConfigs,
 } from "@/api/lib/case-law/public-case-law-config";
 import {
-  publishedCaseLawDecision,
-  publishedCaseLawDecisionSqlFor,
-} from "@/api/lib/case-law/published-decisions";
-import {
   publisherHeadnoteMetadataSql,
   publisherKeywordsMetadataSql,
 } from "@/api/lib/case-law/publisher-summary";
@@ -167,7 +163,9 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import {
+  caseLawAppliedProjections,
   caseLawCorpusAppliedRevision,
+  caseLawCorpusServingGeneration,
   caseLawCorpusDocumentCanRecur,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
@@ -195,6 +193,7 @@ import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-
 import type {
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
+  CorpusCandidateRankingInput,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -226,7 +225,7 @@ import {
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
-  partitionCorpusRehydration,
+  partitionReturnedCorpusRecords,
   recordCorpusRehydrationDispositions,
 } from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import {
@@ -371,6 +370,7 @@ export const searchDecisionsHandler = async ({
   observer,
 }: SearchDecisionsHandlerArgs) => {
   const countryRead = readPublicLawCountry(body.country, {
+    domain: "caseLaw",
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     surface: "search",
   });
@@ -551,18 +551,22 @@ export const caseLawSearchPlan = ({
       )`
     : sql``;
 
-  const allFilters = sql`
-    ${datedFilter}
-    ${courtFilter}
-    ${courtListFilter}
-    ${countryFilter}
-    ${dateFromFilter}
-    ${dateToFilter}
-    ${typeFilter}
-    ${sourceFilter}
-    ${languageFilter}
-    ${provisionFilter}
-  `;
+  const matchedPredicate = sql.join(
+    [
+      ftsSearch.predicate,
+      datedFilter,
+      courtFilter,
+      courtListFilter,
+      countryFilter,
+      dateFromFilter,
+      dateToFilter,
+      typeFilter,
+      sourceFilter,
+      languageFilter,
+      provisionFilter,
+    ],
+    sql` `,
+  );
 
   // The citing court can belong to any jurisdiction — citation graphs cross
   // borders — so this side of the statement reads the flattened registry
@@ -586,13 +590,12 @@ export const caseLawSearchPlan = ({
       )) AS authority,
       count(*)::int AS cnt
       FROM case_law_citations c
-      JOIN case_law_decisions citing_d
+      JOIN case_law_published_decisions citing_d
         ON citing_d.id = c.citing_decision_id
       JOIN case_law_sources citing_src
         ON citing_src.id = citing_d.source_id
        AND ${sql.raw(redistributableCaseLawSourceSqlFor("citing_src"))}
       WHERE c.cited_decision_id = d.id
-        AND ${sql.raw(publishedCaseLawDecisionSqlFor("citing_d"))}
     ) cb
   `;
 
@@ -611,12 +614,11 @@ export const caseLawSearchPlan = ({
         cb.cnt AS citation_count,
         cb.authority AS citation_authority
       FROM case_law_search_documents sd
-      JOIN case_law_decisions d
+      JOIN case_law_published_decisions d
         ON d.id = sd.decision_id
       ${publicCaseLawDecisionJoin}
       LEFT JOIN ${citationAuthorityLateral} ON true
-      WHERE ${ftsSearch.predicate}
-        ${allFilters}
+      WHERE ${matchedPredicate}
     )
   `;
 
@@ -678,7 +680,7 @@ export const caseLawSearchPlan = ({
       m.citation_authority,
       d.created_at
     FROM matched m
-    JOIN case_law_decisions d
+    JOIN case_law_published_decisions d
       ON d.id = m.decision_id
     JOIN case_law_search_documents sd
       ON sd.decision_id = m.decision_id
@@ -709,7 +711,7 @@ export const caseLawSearchPlan = ({
   // omits its own, so narrowing inside one facet never empties it.
   const facetFrom = sql`
     FROM case_law_search_documents sd
-    JOIN case_law_decisions d
+    JOIN case_law_published_decisions d
       ON d.id = sd.decision_id
     ${publicCaseLawDecisionJoin}
   `;
@@ -1355,53 +1357,59 @@ export const caseLawSearchRowFilters = (
 ): SQL[] => {
   const filters: SQL[] = [
     redistributableCaseLawSource,
-    publishedCaseLawDecision,
     // The generation's projection state rejects a scrubbed or pending row, so
     // a stale physical copy cannot serve outdated or erased snippets.
     currentCaseLawCorpusProjection(generation),
   ];
   if (body.court) {
-    filters.push(eq(caseLawDecisions.court, body.court));
+    filters.push(eq(publishedCaseLawDecisions.court, body.court));
   }
   if (body.courts !== undefined) {
-    filters.push(inArray(caseLawDecisions.court, body.courts));
+    filters.push(inArray(publishedCaseLawDecisions.court, body.courts));
   }
   if (body.category !== undefined) {
     filters.push(
-      sql`${decisionSearchCategorySql(caseLawDecisions.metadata)} = ${body.category}`,
+      sql`${decisionSearchCategorySql(publishedCaseLawDecisions.metadata)} = ${body.category}`,
     );
   }
   if (body.hasLegalSentence !== undefined) {
     filters.push(
-      sql`${decisionHasLegalSentenceSql(caseLawDecisions.metadata)} = ${body.hasLegalSentence}`,
+      sql`${decisionHasLegalSentenceSql(publishedCaseLawDecisions.metadata)} = ${body.hasLegalSentence}`,
     );
   }
   if (body.provision !== undefined) {
     filters.push(
       provisionCitedSql({
-        decisionId: sql`${caseLawDecisions.id}`,
+        decisionId: sql`${publishedCaseLawDecisions.id}`,
         jurisdiction: body.country,
         provision: body.provision,
       }),
     );
   }
-  filters.push(eq(caseLawDecisions.country, body.country));
+  filters.push(eq(publishedCaseLawDecisions.country, body.country));
   if (body.dateFrom) {
-    filters.push(sql`${caseLawDecisions.decisionDate} >= ${body.dateFrom}`);
+    filters.push(
+      sql`${publishedCaseLawDecisions.decisionDate} >= ${body.dateFrom}`,
+    );
   }
   if (body.dateTo) {
-    filters.push(sql`${caseLawDecisions.decisionDate} <= ${body.dateTo}`);
+    filters.push(
+      sql`${publishedCaseLawDecisions.decisionDate} <= ${body.dateTo}`,
+    );
   }
   if (body.decisionType) {
     filters.push(
-      decisionTypeFilterSql(caseLawDecisions.decisionType, body.decisionType),
+      decisionTypeFilterSql(
+        publishedCaseLawDecisions.decisionType,
+        body.decisionType,
+      ),
     );
   }
   if (body.sourceId) {
-    filters.push(eq(caseLawDecisions.sourceId, body.sourceId));
+    filters.push(eq(publishedCaseLawDecisions.sourceId, body.sourceId));
   }
   if (body.language) {
-    filters.push(eq(caseLawDecisions.language, body.language));
+    filters.push(eq(publishedCaseLawDecisions.language, body.language));
   }
   return filters;
 };
@@ -1424,33 +1432,42 @@ export const candidateDecisionRowsStatement = (
   tx: CaseLawPublicReadTransaction,
   { body, generation, ids }: DecisionRowsQueryOptions,
 ) => {
+  const requestedIds = sql`(SELECT unnest(ARRAY[${sql.join(
+    ids.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  )}]::uuid[]) AS id) AS requested`;
   const eligibleRows = tx
     .select({
-      id: caseLawDecisions.id,
-      citationAuthority: caseLawDecisions.citationAuthority,
+      id: publishedCaseLawDecisions.id,
+      citationAuthority: publishedCaseLawDecisions.citationAuthority,
       // The court's rank is a blend signal; the country scopes the pattern
       // match that resolves it, since court names repeat across borders.
-      court: caseLawDecisions.court,
-      country: caseLawDecisions.country,
+      court: publishedCaseLawDecisions.court,
+      country: publishedCaseLawDecisions.country,
       // A directory court is ranked by its id, not by its name.
-      courtId: caseLawDecisions.courtId,
-      languageGroupKey: caseLawDecisions.languageGroupKey,
+      courtId: publishedCaseLawDecisions.courtId,
+      languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
       // The copy a page's snippet and anchor are read from.
       appliedRevision:
         caseLawCorpusAppliedRevision(generation).as("applied_revision"),
+      appliedGeneration:
+        caseLawCorpusServingGeneration(generation).as("applied_generation"),
       canRecur:
         sql<boolean>`CASE WHEN ${caseLawCorpusDocumentCanRecur(generation)}
         THEN true ELSE EXISTS (
-        SELECT 1 FROM ${caseLawDecisions} sibling
-        WHERE sibling.language_group_key = ${caseLawDecisions.languageGroupKey}
-          AND sibling.id <> ${caseLawDecisions.id}
+        SELECT 1 FROM ${publishedCaseLawDecisions} sibling
+        WHERE sibling.language_group_key = ${publishedCaseLawDecisions.languageGroupKey}
+          AND sibling.id <> ${publishedCaseLawDecisions.id}
       ) END`.as("can_recur"),
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
-        inArray(caseLawDecisions.id, ids),
+        inArray(publishedCaseLawDecisions.id, ids),
         ...caseLawSearchRowFilters(body, generation),
       ),
     )
@@ -1458,10 +1475,9 @@ export const candidateDecisionRowsStatement = (
     .limit(ids.length)
     .as("eligible_candidates");
   return tx
-    .select({ id: caseLawDecisions.id, row: getColumns(eligibleRows) })
-    .from(caseLawDecisions)
-    .leftJoin(eligibleRows, eq(caseLawDecisions.id, eligibleRows.id))
-    .where(inArray(caseLawDecisions.id, ids))
+    .select({ id: sql<string>`requested.id`, row: getColumns(eligibleRows) })
+    .from(requestedIds)
+    .leftJoin(eligibleRows, sql`requested.id = ${eligibleRows.id}`)
     .limit(ids.length);
 };
 
@@ -1469,10 +1485,9 @@ export const candidateDecisionRowsQuery = async (
   tx: CaseLawPublicReadTransaction,
   options: DecisionRowsQueryOptions,
 ) =>
-  partitionCorpusRehydration({
-    ids: options.ids,
-    records: await candidateDecisionRowsStatement(tx, options),
-  });
+  partitionReturnedCorpusRecords(
+    await candidateDecisionRowsStatement(tx, options),
+  );
 
 type CandidateDecisionRow = Awaited<
   ReturnType<typeof candidateDecisionRowsQuery>
@@ -1487,6 +1502,10 @@ export const pageDecisionRowsStatement = (
   tx: CaseLawPublicReadTransaction,
   { body, generation, ids }: DecisionRowsQueryOptions,
 ) => {
+  const requestedIds = sql`(SELECT unnest(ARRAY[${sql.join(
+    ids.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  )}]::uuid[]) AS id) AS requested`;
   const columns = publicDecisionRowColumns();
   const eligibleRows = tx
     .select({
@@ -1508,14 +1527,17 @@ export const pageDecisionRowsStatement = (
           ORDER BY identifier.type, identifier.value
         )
         FROM ${caseLawDecisionIdentifiers} identifier
-        WHERE identifier.decision_id = ${caseLawDecisions.id}
+        WHERE identifier.decision_id = ${publishedCaseLawDecisions.id}
       ), '[]'::jsonb)`.as("identifiers"),
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
-        inArray(caseLawDecisions.id, ids),
+        inArray(publishedCaseLawDecisions.id, ids),
         ...caseLawSearchRowFilters(body, generation),
       ),
     )
@@ -1523,10 +1545,9 @@ export const pageDecisionRowsStatement = (
     .limit(ids.length)
     .as("eligible_page");
   return tx
-    .select({ id: caseLawDecisions.id, row: getColumns(eligibleRows) })
-    .from(caseLawDecisions)
-    .leftJoin(eligibleRows, eq(caseLawDecisions.id, eligibleRows.id))
-    .where(inArray(caseLawDecisions.id, ids))
+    .select({ id: sql<string>`requested.id`, row: getColumns(eligibleRows) })
+    .from(requestedIds)
+    .leftJoin(eligibleRows, sql`requested.id = ${eligibleRows.id}`)
     .limit(ids.length);
 };
 
@@ -1534,10 +1555,7 @@ export const pageDecisionRowsQuery = async (
   tx: CaseLawPublicReadTransaction,
   options: DecisionRowsQueryOptions,
 ) =>
-  partitionCorpusRehydration({
-    ids: options.ids,
-    records: await pageDecisionRowsStatement(tx, options),
-  });
+  partitionReturnedCorpusRecords(await pageDecisionRowsStatement(tx, options));
 
 type PageDecisionRow = Awaited<
   ReturnType<typeof pageDecisionRowsQuery>
@@ -1604,9 +1622,8 @@ export const readCaseLawPageDecisionRows = async ({
   return new Map(read.rows.map((row) => [String(row.id), row]));
 };
 
-type RehydrateCaseLawCandidatesOptions = {
+type RehydrateCaseLawCandidatesOptions = CorpusCandidateRankingInput & {
   body: SearchDecisionsBody;
-  candidates: readonly ScoredCandidate[];
   caseLawDb: CaseLawPublicReadDb;
   /**
    * The court rank registry, read once for the request. Every court a
@@ -1714,6 +1731,7 @@ const rankCaseLawCandidates = ({
 export const rehydrateCaseLawCandidates = async ({
   body,
   candidates,
+  selectAppliedCandidates,
   caseLawDb,
   courtWeights,
   generation,
@@ -1748,13 +1766,19 @@ export const rehydrateCaseLawCandidates = async ({
   }
 
   const byId = new Map<string, CandidateDecisionRow>();
-  const revisionById = new Map<string, CorpusProjectionRevision>();
   for (const [id, row] of hydrated) {
     if (row !== null && row.appliedRevision !== null) {
       byId.set(id, row);
-      revisionById.set(id, row.appliedRevision);
     }
   }
+  const appliedById = caseLawAppliedProjections(byId.values());
+  const revisionById = new Map(
+    [...appliedById].map(([id, { revision }]) => [id, revision]),
+  );
+  const appliedCandidates =
+    selectAppliedCandidates === undefined
+      ? candidates
+      : selectAppliedCandidates(appliedById);
   const authorityById = new Map<string, number>();
   // The court a decision comes from is known the day it is published, which
   // is what citation authority cannot say about a judgment nothing cites yet.
@@ -1766,7 +1790,7 @@ export const rehydrateCaseLawCandidates = async ({
     courtTierById.set(id, decisionCourtWeight(courtWeights, row).tier);
   }
 
-  // Candidates missing from Postgres (index/DB drift) are dropped. Every
+  // Candidates absent from eligible published rows are dropped. Every
   // version is blended before the fold, so a version whose citation authority
   // lifts it past a lexically stronger sibling still stands for the judgment;
   // the versions of one decision then fold into their best-blended member. The
@@ -1774,7 +1798,7 @@ export const rehydrateCaseLawCandidates = async ({
   // emitted page, so the representative is the same on every rescan.
   const ranked = rankCaseLawCandidates({
     authorityById,
-    candidates: candidates.filter((candidate) => byId.has(candidate.id)),
+    candidates: appliedCandidates.filter((candidate) => byId.has(candidate.id)),
     courtTierById,
     sort: body.sort ?? DEFAULT_SEARCH_SORT,
   });
@@ -1789,7 +1813,7 @@ export const rehydrateCaseLawCandidates = async ({
   return {
     context: null,
     revisionById,
-    rehydratedCandidateCount: candidates.filter((candidate) =>
+    rehydratedCandidateCount: appliedCandidates.filter((candidate) =>
       byId.has(candidate.id),
     ).length,
     ranked: representatives.filter((hit) => {
@@ -1840,12 +1864,12 @@ export const decisionIdsByIdentityQuery = ({
   tx,
 }: DecisionIdsByIdentityQueryOptions) =>
   tx
-    .select({ id: caseLawDecisions.id })
-    .from(caseLawDecisions)
+    .select({ id: publishedCaseLawDecisions.id })
+    .from(publishedCaseLawDecisions)
     .where(
       and(
         inArray(
-          caseLawDecisions.id,
+          publishedCaseLawDecisions.id,
           decisionIdsNamedBy({
             country,
             familyKey,
@@ -1855,7 +1879,7 @@ export const decisionIdsByIdentityQuery = ({
         ),
         country === undefined
           ? undefined
-          : eq(caseLawDecisions.country, country),
+          : eq(publishedCaseLawDecisions.country, country),
       ),
     )
     .limit(LIMITS.caseLawSearchPageSizeMax);
@@ -2090,6 +2114,7 @@ type ReadCaseLawSearchFacetsOptions = {
   /** The generation's document-id field, already asserted aggregatable. */
   decisionCountField: string;
   indexId: string;
+  aggregationFilter: string | undefined;
   /** Null when the request has no query the facets could be counted under. */
   queryFor: CorpusFacetQuery | null;
   readSourceRegistry: typeof readCaseLawSourceRegistry;
@@ -2122,6 +2147,7 @@ const readCaseLawSearchFacets = async ({
   courtWeights,
   decisionCountField,
   indexId,
+  aggregationFilter,
   queryFor,
   readSourceRegistry,
   recordCacheOutcome,
@@ -2159,7 +2185,7 @@ const readCaseLawSearchFacets = async ({
   }
 
   const aggregates = caseLawFacetAggregateCache.reader({
-    target: { ...serving, indexId },
+    target: { ...serving, indexId, aggregationFilter },
     scope: {
       type: "public_corpus",
       excludedSourceIds: registry.value.excludedSourceIds,
@@ -2168,6 +2194,7 @@ const readCaseLawSearchFacets = async ({
       await getCorpusIndexClient(serving.cluster).aggregate({
         indexId,
         ...input,
+        filter: aggregationFilter,
         observer,
       }),
   });
@@ -2715,11 +2742,15 @@ export const searchCorpusIndexDecisions = async ({
     unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
     // The scan names the groups to leave out: a page addressed by offset
     // walks windows the request's own cursor never named.
-    rankCandidates: async (candidates, { excludedGroups }) =>
+    rankCandidates: async (
+      candidates,
+      { excludedGroups, selectAppliedCandidates },
+    ) =>
       await rehydrateCaseLawCandidates({
         hitDispositions,
         body,
         candidates,
+        selectAppliedCandidates,
         caseLawDb,
         courtWeights,
         generation,
@@ -2739,6 +2770,7 @@ export const searchCorpusIndexDecisions = async ({
         courtWeights,
         decisionCountField,
         indexId,
+        aggregationFilter: route.aggregationFilter,
         queryFor: facetQueries(),
         readSourceRegistry,
         recordCacheOutcome: (outcome) => {
@@ -2990,46 +3022,51 @@ export const listCaseLawProvisionDecisions = async ({
   }
   const keyColumn =
     sort === "newest"
-      ? caseLawDecisions.decisionDate
-      : caseLawDecisions.citationAuthority;
+      ? publishedCaseLawDecisions.decisionDate
+      : publishedCaseLawDecisions.citationAuthority;
   // One transaction is one snapshot (public reads are repeatable read): the
   // ids, the total, the citing sentences and the page rows all describe the
   // same state, so an excerpt cannot be paired with a later revision.
   const { rows, total, sentences, byId } = await caseLawDb(async (tx) => {
     const filters = and(
-      inArray(caseLawDecisions.id, citingDecisionIdsSubquery(tx, scope)),
+      inArray(
+        publishedCaseLawDecisions.id,
+        citingDecisionIdsSubquery(tx, scope),
+      ),
       ...caseLawSearchRowFilters(body, generation),
       // `newest` lists dated decisions only, as the search's order does.
-      ...(sort === "newest" ? [isNotNull(caseLawDecisions.decisionDate)] : []),
+      ...(sort === "newest"
+        ? [isNotNull(publishedCaseLawDecisions.decisionDate)]
+        : []),
     );
     const page = await tx
       .select({
-        id: caseLawDecisions.id,
+        id: publishedCaseLawDecisions.id,
         key: keyColumn,
-        citationAuthority: caseLawDecisions.citationAuthority,
+        citationAuthority: publishedCaseLawDecisions.citationAuthority,
       })
-      .from(caseLawDecisions)
+      .from(publishedCaseLawDecisions)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
+        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
       )
       .where(
         cursor === null
           ? filters
           : and(
               filters,
-              sql`(${keyColumn}, ${caseLawDecisions.id}) < (${cursor.key}, ${cursor.id})`,
+              sql`(${keyColumn}, ${publishedCaseLawDecisions.id}) < (${cursor.key}, ${cursor.id})`,
             ),
       )
-      .orderBy(desc(keyColumn), desc(caseLawDecisions.id))
+      .orderBy(desc(keyColumn), desc(publishedCaseLawDecisions.id))
       .limit(limit + 1);
     // sql-perf-allow: bounded by the provision's own links, read through their work index
     const [counted] = await tx
       .select({ total: sql<number>`count(*)::int` })
-      .from(caseLawDecisions)
+      .from(publishedCaseLawDecisions)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
+        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
       )
       .where(filters);
     const pageIds = page.slice(0, limit).map(({ id }) => id);
