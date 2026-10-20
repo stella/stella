@@ -1138,11 +1138,57 @@ type EvaluateResultOptions = {
   jobConclusion?: "cancelled" | "failure" | "timed_out";
   heavyOnly?: boolean;
   outcomeScript?: string;
+  metadataCodeRun?:
+    | "green"
+    | "red"
+    | "missing"
+    | "other-head"
+    | "running-green"
+    | "running";
 };
 
 const mainHeavyJobNames = mainHeavyJobs({ jobs: ciJobs });
 
 const PULL_REQUEST = { repo: "stella/stella", number: "7" } as const;
+
+type MetadataCodeRun = NonNullable<EvaluateResultOptions["metadataCodeRun"]>;
+
+const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
+  const head = state === "other-head" ? "b".repeat(40) : "a".repeat(40);
+  const runs =
+    state === "missing"
+      ? []
+      : [
+          {
+            id: 200,
+            run_number: 99,
+            head_sha: head,
+            pull_requests: [{ number: Number(PULL_REQUEST.number) }],
+          },
+        ];
+  const conclusion = state === "red" ? "failure" : "success";
+  const jobs = (status: "completed" | "in_progress") => [
+    {
+      jobs: [
+        { id: 1, name: "ci-plan", status: "completed", conclusion: "success" },
+        {
+          id: 2,
+          name: "ci-result",
+          status,
+          conclusion: status === "completed" ? conclusion : null,
+        },
+      ],
+    },
+  ];
+  return {
+    enabled: state === undefined ? "false" : "true",
+    runRequired: state === undefined ? "true" : "false",
+    finalJobs: jobs(state === "running" ? "in_progress" : "completed"),
+    jobs,
+    runs,
+    state: state ?? "",
+  };
+};
 
 // Fake only the GitHub endpoints the extracted evaluator actually calls.
 const fakeGhDirectory = mkdtempSync(nodePath.join(tmpdir(), "ci-result-gh-"));
@@ -1170,6 +1216,18 @@ case "$endpoint" in
   "repos/${PULL_REQUEST.repo}/actions/runs/123/attempts/1/jobs?per_page=100")
     [[ "$FAKE_API_FAILURE" != "jobs" ]] || exit 1
     echo "$FAKE_JOBS"
+    ;;
+  "repos/${PULL_REQUEST.repo}/actions/workflows/ci.yml/runs?event=pull_request&head_sha="*)
+    echo "$FAKE_CODE_RUNS"
+    ;;
+  "repos/${PULL_REQUEST.repo}/actions/runs/200/jobs?per_page=100")
+    state="${nodePath.join(fakeGhDirectory, "metadata-counter")}"
+    if [[ "$FAKE_CODE_STATE" == running-green && ! -e "$state" ]]; then
+      : > "$state"
+      echo "$FAKE_CODE_JOBS_RUNNING"
+    else
+      echo "$FAKE_CODE_JOBS"
+    fi
     ;;
   https://api.github.com/repos/${PULL_REQUEST.repo}/check-runs/*/annotations?per_page=100)
     [[ "$FAKE_API_FAILURE" != "annotations" ]] || exit 1
@@ -1217,6 +1275,7 @@ const resultGateCase = ({
   outcomeScript = resultStep.run,
   newerRun = "same-group",
   queuedCancellation,
+  metadataCodeRun,
 }: EvaluateResultOptions): BashCase => {
   const plan = Object.fromEntries(
     [
@@ -1339,6 +1398,7 @@ const resultGateCase = ({
     pull_requests:
       newerRun === "other-pr" ? [{ number: 8 }] : currentRun.pull_requests,
   };
+  const codeRun = metadataCodeRunFixtures(metadataCodeRun);
   return {
     flags: ["-eu"],
     script: outcomeScript,
@@ -1371,6 +1431,10 @@ const resultGateCase = ({
       FAKE_JOBS: JSON.stringify([{ jobs: missingJob ? [] : jobs }]),
       FAKE_ANNOTATIONS: JSON.stringify(checkAnnotations),
       FAKE_LIVE_DRAFT: liveDraft === undefined ? "" : String(liveDraft),
+      FAKE_CODE_STATE: codeRun.state,
+      FAKE_CODE_RUNS: JSON.stringify([{ workflow_runs: codeRun.runs }]),
+      FAKE_CODE_JOBS: JSON.stringify(codeRun.finalJobs),
+      FAKE_CODE_JOBS_RUNNING: JSON.stringify(codeRun.jobs("in_progress")),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       FOLDED_SUITES: resultStep.env["FOLDED_SUITES"] ?? "",
       NEEDS: JSON.stringify(needs),
@@ -1379,6 +1443,9 @@ const resultGateCase = ({
       PATH: `${fakeGhDirectory}:${process.env["PATH"] ?? ""}`,
       PR_NUMBER: event === EVENT.pullRequest ? PULL_REQUEST.number : "",
       REPO: PULL_REQUEST.repo,
+      HEAD_SHA: "a".repeat(40),
+      METADATA_ONLY: codeRun.enabled,
+      RUN_REQUIRED: codeRun.runRequired,
       PLAN: JSON.stringify({
         ...plan,
         ...plannedOutputs,
@@ -3087,7 +3154,7 @@ test("a manual run supersedes only an older manual run on the same branch", () =
   expect(concurrency.group).toContain("format('run-{0}', github.run_id)");
 });
 
-test("metadata runs cannot replace the required code result and scope-changing labels still run", () => {
+test("metadata runs report the required result while scope-changing labels still run", () => {
   const plan = v.parse(
     v.object({
       outputs: v.record(v.string(), v.string()),
@@ -3100,8 +3167,7 @@ test("metadata runs cannot replace the required code result and scope-changing l
     ciJobs["ci-result"],
   );
   expect(result.if).toBe("always()");
-  expect(result.name).toContain("ci-metadata-result");
-  expect(result.name).toContain("'ci-result'");
+  expect(result.name).toBe("ci-result");
   expect(plan.outputs["metadata_only"]).toBe(
     `\${{ steps.completed-depth.outputs.metadata_only }}`,
   );
@@ -3121,6 +3187,56 @@ test("metadata runs cannot replace the required code result and scope-changing l
   expect(script).toContain('context.payload.label?.name !== "prove-fix"');
   expect(script).toContain('core.setOutput("run_required", "false")');
 });
+
+test("metadata ci-result mirrors only a code run on the same pull request head", () => {
+  const immediateCases = [
+    { state: "green", exitCode: 0, message: "succeeded for head" },
+    { state: "red", exitCode: 1, message: "completed with failure" },
+    { state: "missing", exitCode: 1, message: "no code run exists" },
+    { state: "other-head", exitCode: 1, message: "no code run exists" },
+  ] as const;
+  for (const { state, exitCode, message } of immediateCases) {
+    const outcome = onlyOutcome(
+      evaluateResults([state], () => ({
+        event: EVENT.pullRequest,
+        results: {},
+        metadataCodeRun: state,
+      })),
+    );
+    expect(outcome.exitCode, state).toBe(exitCode);
+    expect(`${outcome.stdout}\n${outcome.stderr}`, state).toContain(message);
+  }
+
+  const runningThenGreen = onlyOutcome(
+    evaluateResults(["running-green"], () => ({
+      event: EVENT.pullRequest,
+      results: {},
+      metadataCodeRun: "running-green",
+      outcomeScript: resultStep.run.replace(
+        "local poll_seconds=30 max_wait_seconds=5400",
+        "local poll_seconds=0 max_wait_seconds=5400",
+      ),
+    })),
+  );
+  expect(runningThenGreen.exitCode).toBe(0);
+  expect(runningThenGreen.stdout).toContain("succeeded for head");
+
+  const timedOut = onlyOutcome(
+    evaluateResults(["running"], () => ({
+      event: EVENT.pullRequest,
+      results: {},
+      metadataCodeRun: "running",
+      outcomeScript: resultStep.run.replace(
+        "local poll_seconds=30 max_wait_seconds=5400",
+        "local poll_seconds=0 max_wait_seconds=0",
+      ),
+    })),
+  );
+  expect(timedOut.exitCode).toBe(1);
+  expect(`${timedOut.stdout}\n${timedOut.stderr}`).toContain(
+    "code run still running after 90 min",
+  );
+}, 20_000);
 
 test("required checks retain PR and merge-group coverage", async () => {
   const workflowSchema = v.object({
