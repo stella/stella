@@ -1,0 +1,6 @@
+{
+  "metric": "schema-introspection-files",
+  "file": "apps/api/src/lib/account-export/schema-census.ts",
+  "delta": 1,
+  "reason": "The schema-only census derives the account export disposition set from actual user foreign keys and the explicitly declared non-FK ownership tables; it performs no database operations."
+}

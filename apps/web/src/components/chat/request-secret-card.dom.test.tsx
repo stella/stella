@@ -93,6 +93,8 @@ const mountCard = ({
             activeOrganizationId: "sample-organization",
             alwaysApprovedTools: new Set(),
             conversationApprovedTools: new Set(),
+            confirmStoredApprovalGrant: async () =>
+              await Promise.resolve(false),
             handleAllowInConversation: () => {},
             handleAlwaysAllow: () => {},
             handleApprove: () => {},

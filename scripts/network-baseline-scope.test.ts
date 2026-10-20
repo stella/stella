@@ -145,6 +145,51 @@ describe("network baseline scope", () => {
     }
   }, 60_000);
 
+  test.each([undefined, "timing-v1", "round-barrier-v1"])(
+    "validates and preserves the recording depth method (%s)",
+    (depthMethod) => {
+      const directory = mkdtempSync(path.join(os.tmpdir(), "network-method-"));
+      const file = path.join(directory, "baseline.json");
+      const recorded = {
+        "/chat": {
+          ...entry(2),
+          ...(depthMethod === undefined ? {} : { depthMethod }),
+        },
+      };
+      try {
+        writeFileSync(file, JSON.stringify(recorded));
+        const validated = validateBaselineFile(file);
+        expect(validated).toEqual(recorded);
+        expect(
+          prepareComparisonBaseline({
+            base: validated,
+            changedPaths: [],
+            baseRouteTree: routeTree,
+            routeTree,
+            declarations: [],
+          }).baseline,
+        ).toEqual(recorded);
+        expect(
+          prepareComparisonBaseline({
+            base: {},
+            changedPaths: [],
+            baseRouteTree: routeTree,
+            routeTree,
+            declarations: [
+              {
+                route: "/chat",
+                reason: "Recorded budget",
+                budget: recorded["/chat"],
+              },
+            ],
+          }).baseline,
+        ).toEqual(recorded);
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
   test("validates schema and rejects oversized files and symlinks", () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), "network-baseline-"));
     const validPath = path.join(directory, "baseline.json");
@@ -401,11 +446,10 @@ describe("network baseline workflows", () => {
       // Every event that compares also loads the published budget; an event
       // filter here would compare against the frozen committed JSON instead.
       expect(job.steps[prepare]?.if ?? "", name).not.toContain("event_name");
+      // The planner's comparison base: the PR base, or the target branch for
+      // a merge group, so a group compares every entry it merges.
       expect(job.steps[prepare]?.with?.["base-sha"]).toContain(
-        "github.event.pull_request.base.sha",
-      );
-      expect(job.steps[prepare]?.with?.["base-sha"]).toContain(
-        "github.event.merge_group.base_sha",
+        "needs.ci-plan.outputs.target_base_sha",
       );
       const checkout = job.steps.find((step) =>
         step.uses?.startsWith("actions/checkout@"),
@@ -451,6 +495,13 @@ describe("reviewed network budgets", () => {
     [{ route: "/chat", reason: " ", budget: entry(1) }],
     [{ route: "chat", reason: "Change", budget: entry(1) }],
     [{ route: "/chat", reason: "Change", budget: { depth: -1, requests: [] } }],
+    [
+      {
+        route: "/chat",
+        reason: "Change",
+        budget: { ...entry(1), depthMethod: 1 },
+      },
+    ],
     [
       {
         route: "/chat",

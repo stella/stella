@@ -5,6 +5,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { panic } from "better-result";
+import { setTimeout as delay } from "node:timers/promises";
 import * as v from "valibot";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
@@ -13,6 +14,8 @@ import { JOURNEY_TAG } from "../playwright.journeys.config";
 
 const TURN_FILLER = "Clause ".repeat(25_000);
 const MAX_TURNS = 16;
+// Allow the five-minute background compactor cadence and its one-minute run budget.
+const COMPACTION_SETTLE_MS = 6 * 60_000;
 const CHAT_THREAD_PATH = /\/chat\/([0-9a-f-]{36})$/u;
 
 const threadSchema = v.object({
@@ -20,6 +23,8 @@ const threadSchema = v.object({
   context: v.object({
     estimatedTokens: v.number(),
     triggerTokens: v.number(),
+    summarizedMessageCount: v.number(),
+    breakdown: v.object({ summaryTokens: v.number() }),
   }),
   messages: v.array(
     v.object({
@@ -79,19 +84,15 @@ const sendTurn = async ({
       new URL(response.url()).pathname.endsWith("/v1/chat"),
   );
   await page.getByRole("button", { name: messages.chat.sendPrompt }).click();
-  expect((await posted).ok()).toBe(true);
+  const response = await posted;
+  expect(response.ok()).toBe(true);
+  expect(await response.finished()).toBeNull();
   await expect(page).toHaveURL(CHAT_THREAD_PATH);
   const threadId = currentThreadId(page);
-  await expect
-    .poll(async () => {
-      const thread = await readThread(request, threadId);
-      return {
-        activeTurnId: thread.activeTurnId,
-        answers: assistantMessages(thread).length,
-      };
-    })
-    .toEqual({ activeTurnId: null, answers: turn });
-  return await readThread(request, threadId);
+  const thread = await readThread(request, threadId);
+  expect(thread.activeTurnId).toBeNull();
+  expect(assistantMessages(thread)).toHaveLength(turn);
+  return thread;
 };
 
 const expectNoTrimmedHistory = async (page: Page, thread: ChatThread) => {
@@ -108,9 +109,10 @@ const expectNoTrimmedHistory = async (page: Page, thread: ChatThread) => {
 };
 
 test(
-  "a chat past the compaction trigger keeps summarizing its history",
+  "compaction replaces history and survives reload; unchanged history without a trimming notice fails",
   { tag: JOURNEY_TAG.localStack },
   async ({ page, request }) => {
+    test.setTimeout(9 * 60_000);
     await page.goto("/chat/new", { waitUntil: "commit" });
     await expect(chatComposer(page)).toBeVisible({ timeout: 60_000 });
 
@@ -125,12 +127,31 @@ test(
       }
       thread = await sendTurn({ page, request, turn });
     }
-    thread = await sendTurn({ page, request, turn: turn + 1 });
+    await sendTurn({ page, request, turn: turn + 1 });
+    // Sends enqueue durable compaction; they do not wait for the scheduler.
+    // Wait once, then inspect the same checkpoint-derived context the page loads.
+    await delay(COMPACTION_SETTLE_MS);
+    thread = await readThread(request, currentThreadId(page));
+    expect(thread.context.summarizedMessageCount).toBeGreaterThan(0);
+    expect(thread.context.breakdown.summaryTokens).toBeGreaterThan(0);
     await expectNoTrimmedHistory(page, thread);
 
+    const reloadedMessages = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        new URL(response.url()).pathname ===
+          `/v1/chat/threads/${currentThreadId(page)}/messages`,
+    );
     await page.reload({ waitUntil: "domcontentloaded" });
+    const reloadedResponse = await reloadedMessages;
+    expect(reloadedResponse.ok()).toBe(true);
+    const reloadedThread = v.parse(threadSchema, await reloadedResponse.json());
+    expect(
+      reloadedThread.context.summarizedMessageCount,
+    ).toBeGreaterThanOrEqual(thread.context.summarizedMessageCount);
+    expect(reloadedThread.context.breakdown.summaryTokens).toBeGreaterThan(0);
     await expect(page.getByRole("log")).toBeVisible({ timeout: 60_000 });
-    await expectNoTrimmedHistory(page, thread);
+    await expectNoTrimmedHistory(page, reloadedThread);
 
     await apiDelete(request, `/chat/threads/${currentThreadId(page)}`);
   },

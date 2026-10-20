@@ -53,7 +53,7 @@ const loadFolioCollabSnapshotHandler = createSafeTokenHandler(
       );
     }
 
-    return Result.ok(snapshot);
+    return Result.ok(snapshot.snapshot);
   },
 );
 

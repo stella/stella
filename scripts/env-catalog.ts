@@ -631,7 +631,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "WebSocket URL for collaborative editing. Unset keeps the single-user editing path.",
   VITE_BETA_FEATURES_ENABLED:
     "Expose Settings → Beta features without enabling any preview by default.",
-  VITE_FEATURE_AI_MEMORY: "Show tenant-scoped AI memory settings.",
   VITE_FEATURE_GOVERNED_WORKFLOW:
     "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
   VITE_FEATURE_INBOX:
@@ -982,7 +981,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_COLLAB_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_BRIDGE_PORT: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_RELEASES_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
-  VITE_FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
@@ -1476,6 +1474,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CHANNEL",
   "CHAT_SAVED_STATE_WRITE",
   "CHAT_TRANSCRIPTS_WRITE",
+  // JSON paths handed from ci-plan to the changed-test repeat in ci-tests.
+  "CHANGED_FILES_JSON",
   // Exact-base CI rehearsal: loopback URL for the separate disposable clean cluster.
   "CLEAN_DATABASE_URL",
   "CODEX_API_KEY",
@@ -1501,6 +1501,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "FLAKE_CHILD_RECORD",
   "FLAKE_GATE_FIXTURE_PRELOADED",
   "FLAKE_GATE_TRIAL",
+  // Quarantine preload: report directory for its JSON lines; registry path override for fixture trees.
+  "FLAKY_TEST_QUARANTINE_REGISTRY",
+  "FLAKY_TEST_QUARANTINE_REPORT_DIR",
   "GH_READ_TOKEN",
   "HEAD_SHA",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
@@ -1646,6 +1649,15 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  // Check pool: the job context its step hands over and an optional
+  // concurrency override; the pool strips the context before running checks.
+  "CI_CHECK_POOL_NEEDS",
+  "CI_CHECK_POOL_STEPS",
+  "CI_CHECK_POOL_INPUTS",
+  "CI_CHECK_POOL_TOKEN",
+  "CI_CHECK_POOL_CONCURRENCY",
+  // Generator families another job of the same CI run checks on this commit.
+  "GENERATED_CHECKS_IN_OTHER_JOBS",
   // Queue proof outcomes and resolved hosted-runner image for static receipts.
   "CHECK_OUTCOMES",
   "ImageOS",
@@ -1654,6 +1666,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODE_QUALITY_PROCESS_GROUP",
   // Lowers the code-check Turbo task count; the pre-push check sets it to 1.
   "CODE_CHECK_CONCURRENCY",
+  // Replaces the detected code-check memory size (tests pin the plan with it).
+  "CODE_CHECK_MEMORY_BYTES",
   // CI installer budget selected from restored package-cache contents.
   "CI_INSTALL_CACHE_RESTORED",
   "CI_POSTGRES_TEST_SELECTION",
@@ -1682,6 +1696,13 @@ export const TOOLING_ENV_KEYS = new Set([
 ]);
 
 export const AMBIENT_ENV_KEYS = new Set([
+  // Network clients conventionally inherit these proxy settings from the host.
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
   "AWS_ACCESS_KEY_ID",
   "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
   "AWS_EXECUTION_ENV",

@@ -20,6 +20,7 @@ export const createPlaygroundChatApproval = (
   activeOrganizationId,
   alwaysApprovedTools: new Set(),
   conversationApprovedTools: new Set(),
+  confirmStoredApprovalGrant: async () => await Promise.resolve(false),
   handleAllowInConversation: noop,
   handleAlwaysAllow: noop,
   handleApprove: noop,

@@ -13,10 +13,18 @@
  * guessing.
  */
 
-import { panic } from "better-result";
+// The check pool evaluates step conditions before dependency installation
+// may have succeeded; keep this module free of package imports.
+class GitHubExpressionError extends Error {
+  override name = "GitHubExpressionError";
+  readonly _tag = "GitHubExpressionError";
+}
+const panic: (message: string) => never = (message) => {
+  throw new GitHubExpressionError(message);
+};
 
 export const UNKNOWN = Symbol("unknown");
-type Value =
+export type Value =
   | string
   | number
   | boolean
@@ -148,7 +156,7 @@ const compare = (operator: string, left: Result, right: Result): Result => {
   return a >= b;
 };
 
-const toValue = (parsed: unknown): Value => {
+export const toValue = (parsed: unknown): Value => {
   if (
     parsed === null ||
     typeof parsed === "string" ||
@@ -279,8 +287,21 @@ const callFunction = (
       return text(first).toLowerCase().startsWith(text(second).toLowerCase());
     case "endswith":
       return text(first).toLowerCase().endsWith(text(second).toLowerCase());
+    case "format":
+      return text(first).replaceAll(
+        /\{\{|\}\}|\{(\d+)\}/gu,
+        (token, index: string | undefined) => {
+          if (index === undefined) {
+            return token.slice(1);
+          }
+          const value = values[Number(index) + 1];
+          return value === undefined
+            ? panic(`format index ${index}`)
+            : text(value);
+        },
+      );
     default:
-      // format, join, hashFiles and friends: no guard depends on their value.
+      // join, hashFiles and friends: no guard depends on their value.
       return UNKNOWN;
   }
 };
@@ -329,7 +350,9 @@ export const evaluate = (source: string, context: Context): Result => {
     if (Object.hasOwn(context.values, path)) {
       return context.values[path] ?? null;
     }
-    return context.fallback?.(path) ?? UNKNOWN;
+    // A fallback's null is a known null (a missing property), not unknown.
+    const value = context.fallback?.(path);
+    return value === undefined ? UNKNOWN : value;
   };
 
   const call = (name: string): Result => {
