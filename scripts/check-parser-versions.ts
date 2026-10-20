@@ -12,6 +12,9 @@ const PARSER_DIRECTORIES = [
   "apps/api/src/handlers/case-law/ingestion/parsers/",
   "apps/api/src/lib/legal-search/parsers/",
 ];
+// Failure vocabulary and sanitization describe unsuccessful ingestion. They
+// cannot change the successful records a parser version identifies.
+const NON_PARSER_INPUT_FILES = new Set(["packages/errors/src/failure.ts"]);
 const OUTPUT_UNCHANGED =
   /^\s*\/\/\s*parser-output-unchanged:\s+(?:\[([a-z\d-]+)\]\s+\S.*|(?!\[)(\S.*))$/u;
 const transpiler = new Bun.Transpiler({ loader: "ts" });
@@ -421,7 +424,9 @@ class StaticTree {
             PARSER_DIRECTORIES.some((directory) => file.startsWith(directory))
           ) {
             for (const dependency of this.closure(file)) {
-              parsers.add(dependency);
+              if (!NON_PARSER_INPUT_FILES.has(dependency)) {
+                parsers.add(dependency);
+              }
             }
           }
         }

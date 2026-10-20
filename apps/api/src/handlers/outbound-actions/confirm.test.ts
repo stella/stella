@@ -83,6 +83,9 @@ const setup = ({
     limit: async () => (action ? [action] : []),
     execute: async (statement: SQL) => {
       const query = dialect.sqlToQuery(statement);
+      if (query.sql.includes("FOR UPDATE")) {
+        return action ? [{ id: actionId }] : [];
+      }
       const assignments = query.sql.split("SET").at(1)?.split("WHERE").at(0);
       expect(assignments).toBeDefined();
       const update = Object.fromEntries(

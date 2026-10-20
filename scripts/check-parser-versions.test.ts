@@ -227,6 +227,35 @@ test("a shared helper change fans out to every importing adapter", () => {
   expect(changed(base, bothVersionsBumped)).toEqual([]);
 });
 
+test("shared error vocabulary is not a parser input", () => {
+  const base = fixture({ adapters: ["A"] });
+  const parser = `${PARSERS}parser-a.ts`;
+  const manifest = "packages/errors/package.json";
+  const entry = "packages/errors/src/index.ts";
+  const failure = "packages/errors/src/failure.ts";
+  base.set(manifest, JSON.stringify({ exports: "./src/index.ts" }));
+  base.set(entry, 'export { FAILURE_REASON_GRADE } from "./failure";');
+  base.set(
+    failure,
+    'export const FAILURE_REASON_GRADE = { existing: "defect" };',
+  );
+  base.set(
+    parser,
+    [
+      'import { FAILURE_REASON_GRADE } from "@stll/errors";',
+      base.get(parser),
+      "export const grade = FAILURE_REASON_GRADE.existing;",
+    ].join("\n"),
+  );
+  const head = new Map(base);
+  head.set(
+    failure,
+    'export const FAILURE_REASON_GRADE = { existing: "defect", added: "defect" };',
+  );
+
+  expect(changed(base, head)).toEqual([]);
+});
+
 test("a newly added marker exempts only its changed file", () => {
   const base = fixture();
   const head = fixture({

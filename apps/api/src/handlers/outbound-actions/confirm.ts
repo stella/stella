@@ -18,6 +18,8 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -121,6 +123,12 @@ export const createConfirmOutboundActionHandler = (
 
       const claimed = yield* Result.await(
         abortableTx(safeDb, async (tx) => {
+          await withAggregateLock({
+            aggregate: "outboundAction",
+            id: { id: actionId, organizationId, userId: user.id },
+            mode: "update",
+            tx,
+          });
           const action = (
             await tx
               .select({
@@ -283,5 +291,10 @@ export const createConfirmOutboundActionHandler = (
 const confirmOutboundAction = createConfirmOutboundActionHandler(
   OUTBOUND_ACTION_EXECUTORS,
 );
+
+declareAggregateMutation(confirmOutboundAction.handler, {
+  type: "aggregate",
+  aggregates: ["outboundAction"],
+});
 
 export default confirmOutboundAction;

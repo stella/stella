@@ -72,6 +72,7 @@ export const AGGREGATE_LOCKS = {
   chatTurn: { rank: 130, kind: "row" },
   chatSecret: { rank: 140, kind: "row" },
   chatToolGrants: { rank: 150, kind: "advisory" },
+  outboundAction: { rank: 160, kind: "row" },
   run: { rank: 200, kind: "row" },
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
@@ -146,6 +147,7 @@ export const AGGREGATE_CHAINS = {
   legislationAmendments: ["legislationAmendmentWork"],
   chatSecret: ["chatThread", "chatTurn", "chatSecret"],
   chatToolGrants: ["chatThread", "chatToolGrants"],
+  outboundAction: ["outboundAction"],
   memberPrefix: [
     "workspace",
     "memberCleanup",
@@ -316,6 +318,11 @@ type AggregateIdentities = {
   };
   contactCapacity: { organizationId: SafeId<"organization"> };
   chatToolGrants: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  outboundAction: {
+    id: SafeId<"outboundAction">;
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   };
@@ -777,6 +784,41 @@ const byIdWithin = (
   scopeColumns: [scopeColumn],
   scopeValues: [scopeValue],
 });
+type ByIdWithinPrincipalOptions = {
+  table: string;
+  id: string;
+  organizationId: string;
+  userId: string;
+};
+const byIdWithinPrincipal = ({
+  table,
+  id,
+  organizationId,
+  userId,
+}: ByIdWithinPrincipalOptions): RowResource => ({
+  table,
+  columns: ["id"],
+  values: [id],
+  scopeColumns: ["organization_id", "user_id"],
+  scopeValues: [organizationId, userId],
+});
+type PrincipalRowOptions = Extract<
+  RowIdentityOptions,
+  { aggregate: "chatThread" | "readerAnswer" | "outboundAction" }
+>;
+const principalRowResource = (options: PrincipalRowOptions): RowResource => {
+  const tables = {
+    chatThread: "chat_threads",
+    readerAnswer: "legal_reader_answers",
+    outboundAction: "outbound_actions",
+  } as const;
+  return byIdWithinPrincipal({
+    table: tables[options.aggregate],
+    id: options.id.id,
+    organizationId: options.id.organizationId,
+    userId: options.id.userId,
+  });
+};
 const memberCleanupRowResource = (
   id: AggregateIdentities["memberCleanup"],
 ): RowResource => {
@@ -939,21 +981,9 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.organizationId,
       );
     case "chatThread":
-      return {
-        table: "chat_threads",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id", "user_id"],
-        scopeValues: [options.id.organizationId, options.id.userId],
-      };
     case "readerAnswer":
-      return {
-        table: "legal_reader_answers",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id", "user_id"],
-        scopeValues: [options.id.organizationId, options.id.userId],
-      };
+    case "outboundAction":
+      return principalRowResource(options);
     case "readerAnswerMessage":
       return byIdWithin(
         "legal_reader_answer_messages",

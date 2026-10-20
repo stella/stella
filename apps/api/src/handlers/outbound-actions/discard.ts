@@ -7,6 +7,8 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 
@@ -31,6 +33,16 @@ const discardOutboundAction = createSafeRootHandler(
     const discarded = yield* Result.await(
       safeDb(async (tx) => {
         const now = new Date();
+        await withAggregateLock({
+          aggregate: "outboundAction",
+          id: {
+            id: actionId,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+          },
+          mode: "update",
+          tx,
+        });
         return await transitionScopedCount({
           tx,
           spec: TRANSITIONS.outboundActions,
@@ -81,5 +93,10 @@ const discardOutboundAction = createSafeRootHandler(
     return Result.ok({ discarded: discarded > 0 });
   },
 );
+
+declareAggregateMutation(discardOutboundAction.handler, {
+  type: "aggregate",
+  aggregates: ["outboundAction"],
+});
 
 export default discardOutboundAction;
