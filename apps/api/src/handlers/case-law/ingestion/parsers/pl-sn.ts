@@ -173,7 +173,7 @@ const bodyFontSizeOf = (lines: readonly PageFurnitureLine[]): number => {
   return bodySize;
 };
 
-const withoutRaisedReferenceMarkers = (
+export const withoutRaisedReferenceMarkers = (
   line: PageFurnitureLine,
   bodySize: number,
 ): PageFurnitureLine => {
@@ -193,10 +193,24 @@ const withoutRaisedReferenceMarkers = (
     return line;
   }
 
-  let text = line.text;
-  for (const span of markerSpans) {
-    text = text.replace(span.text, "");
+  // Each span is located in the line from where the previous one ended, so
+  // a marker removes its own occurrence, never equal digits earlier in the
+  // line (a paragraph's "1." before its footnote mark "1"). A span the line
+  // does not contain in order leaves the line as read.
+  let text = "";
+  let cursor = 0;
+  for (const span of line.spans) {
+    const at = line.text.indexOf(span.text, cursor);
+    if (at === -1) {
+      return line;
+    }
+    text += line.text.slice(cursor, at);
+    if (!markerSpans.has(span)) {
+      text += span.text;
+    }
+    cursor = at + span.text.length;
   }
+  text += line.text.slice(cursor);
   return {
     ...line,
     spans: line.spans.filter((span) => !markerSpans.has(span)),

@@ -5,6 +5,7 @@ import { sha256Hex } from "@stll/sha256/bun";
 import {
   assemblePlSnParagraphs,
   extractPlSnLines,
+  withoutRaisedReferenceMarkers,
   PL_PDF_PAGE_FURNITURE,
   plSnParagraphsToHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
@@ -141,6 +142,33 @@ describe("emitting the paragraphs as markup the Polish parser reads", () => {
     ]);
 
     expect(html).toBe("<p>Pierwszy</p><p>Drugi</p>");
+  });
+});
+
+describe("raised reference markers", () => {
+  const span = (text: string, x: number, y: number, fontSize: number) => ({
+    text,
+    bbox: { x, y, width: text.length * 5 },
+    fontSize,
+    fontName: "Body",
+  });
+
+  test("a marker removes its own digits, not equal digits earlier in the line", () => {
+    const line = {
+      spans: [
+        span("1. Úřad obdržel podnět", 0, 100, 10),
+        span("1", 110, 104, 6),
+        span(" a zahájil řízení.", 115, 100, 10),
+      ],
+      text: "1. Úřad obdržel podnět1 a zahájil řízení.",
+      bbox: { y: 100 },
+    };
+    const cleaned = withoutRaisedReferenceMarkers(line, 10);
+    expect(cleaned.text).toBe("1. Úřad obdržel podnět a zahájil řízení.");
+    expect(cleaned.spans.map(({ text }) => text)).toEqual([
+      "1. Úřad obdržel podnět",
+      " a zahájil řízení.",
+    ]);
   });
 });
 
