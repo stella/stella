@@ -12,10 +12,13 @@ afterEach(() => {
 
 test("every CLI API request carries the shared client identity", async () => {
   let observed: Headers | undefined;
-  globalThis.fetch = mock((_input, init) => {
-    observed = new Headers(init?.headers);
-    return Promise.resolve(new Response());
-  });
+  globalThis.fetch = Object.assign(
+    mock((_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      observed = new Headers(init?.headers);
+      return Promise.resolve(new Response());
+    }),
+    { preconnect: originalFetch.preconnect },
+  );
 
   await apiFetch("https://api.example.test/v1/me", {
     headers: { Authorization: "Bearer test" },
