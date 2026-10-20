@@ -20,7 +20,7 @@ import {
   invokeStaticMcpTool,
 } from "@/api/mcp/static-tool-definitions";
 import type { AccountOperationCheck } from "@/api/mcp/tool-authority";
-import { isMcpEgressPlan } from "@/api/mcp/tool-types";
+import { isMcpEgressPlan, type McpToolResponse } from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
 import type {
