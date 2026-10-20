@@ -781,6 +781,7 @@ export const gradeReferencePositions = async ({
   };
   const generate = async (messages: ModelMessage[]) =>
     await generateObjectForTask({
+      userId: admission.userId,
       dataClass: "customer",
       task: REFERENCE_GRADE_TASK,
       orgAIConfig,
