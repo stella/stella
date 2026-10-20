@@ -666,8 +666,13 @@ const diskRepo = (): Repo => {
   const cache = new Map<string, string | undefined>();
   const paths = checkoutPaths();
   return {
-    exists: (repoPath) =>
-      paths.has(path.posix.normalize(repoPath).replace(/\/+$/u, "")),
+    exists: (repoPath) => {
+      // `normalize` collapses repeated slashes, so one trailing slash at most.
+      const normalized = path.posix.normalize(repoPath);
+      return paths.has(
+        normalized.endsWith("/") ? normalized.slice(0, -1) : normalized,
+      );
+    },
     read: (repoPath) => {
       if (!cache.has(repoPath)) {
         const absolute = path.join(REPO_ROOT, repoPath);
