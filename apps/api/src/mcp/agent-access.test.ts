@@ -88,12 +88,15 @@ const kindOf = (target: AgentAccessTarget) =>
 describe("agent access is resolved in one place", () => {
   test("the module exposes only the resolver's entry points", () => {
     // The classification maps stay private: every caller goes through
-    // `decideAgentCall` or `describeAgentAccess`.
+    // `decideAgentCall` or `describeAgentAccess`, directly or through the
+    // helpers built on them (`finalAgentRefusal`, `describeForAgents`).
     expect(Object.keys(agentAccess).toSorted()).toEqual([
       "AGENT_ACCESS_KIND",
       "AGENT_CALL_SURFACE",
       "decideAgentCall",
       "describeAgentAccess",
+      "describeForAgents",
+      "finalAgentRefusal",
     ]);
   });
 

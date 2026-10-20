@@ -1646,12 +1646,115 @@ const decideCapabilityCall = ({
     confirmed,
   });
 
+type CapabilityGate =
+  | { type: "refused"; result: McpToolResponse }
+  | { type: "passed"; entry: CatalogEntry };
+
+/**
+ * The gates a capability call passes before agent access, in dispatch order.
+ * Dispatch and the pre-admission refusal share them, so an early agent-access
+ * refusal never answers for a call dispatch refuses first.
+ */
+const capabilityGate = async ({
+  id,
+  access,
+  context,
+}: {
+  id: string;
+  access: keyof typeof MCP_CAPABILITY_EXECUTORS;
+  context: McpRequestContext;
+}): Promise<CapabilityGate> => {
+  const refused = (result: McpToolResponse) =>
+    ({ type: "refused", result }) as const;
+  const entry = (await getCatalogById()).get(id);
+
+  // 1. Unknown id -> not_found with a closest-id hint.
+  if (!entry) {
+    return refused(await notFoundWithHint(id, context));
+  }
+
+  // 2. Caller admission precedes deployment availability for discovery parity.
+  if (!capabilityFeatureEnabled(entry, context)) {
+    return refused(await notFoundWithHint(id, context));
+  }
+  if (!contextFeatureEnabled(entry.feature, context)) {
+    return refused(featureDisabledResult(entry.feature));
+  }
+
+  if (entry.access !== access) {
+    return refused(
+      structuredErrorResult({
+        code: "validation_error",
+        message: `Capability "${id}" requires the ${entry.access} executor`,
+        hint: `Call ${MCP_CAPABILITY_EXECUTORS[entry.access]} with the same capability and input.`,
+      }),
+    );
+  }
+
+  // 3. Disposition / fidelity. token/public capabilities self-authorize from a
+  // body/param token and are not reachable through the generic path; a waived
+  // capability's handler needs response plumbing the synthesized context drops.
+  if (entry.handlerKind === "token" || entry.handlerKind === "public") {
+    return refused(
+      notFoundResult(
+        `Capability "${id}" is not invokable through capability executors`,
+        "This operation authorizes itself differently; use its dedicated surface.",
+      ),
+    );
+  }
+  const waiver = (
+    context.testDependencies?.contextFidelityWaivers ?? CONTEXT_FIDELITY_WAIVERS
+  ).get(id);
+  if (waiver !== undefined) {
+    return refused(
+      structuredErrorResult({
+        code: "feature_disabled",
+        message: `Capability "${id}" cannot run through capability executors: ${waiver}`,
+        hint: "Perform this operation in the stella app, which has the required request context.",
+      }),
+    );
+  }
+  // File transport. A file response cannot be serialized, and a REQUIRED file
+  // input cannot be supplied (a plain string passes `format: "binary"`
+  // validation and reaches a handler expecting a `File`), so refuse
+  // pre-execution — before validateOnly too, which would otherwise report
+  // `valid: true` for an un-runnable input. A runtime backstop in
+  // mapHandlerResult still catches any file value that slips past. The refusal
+  // names the alternative transport instead of stopping at "not available".
+  const transportBlock = transportRefusal(id, entry.transport);
+  if (transportBlock !== null) {
+    return refused(transportBlock);
+  }
+
+  // 4. Scopes: the session must hold every scope in the capability catalog. Read
+  // capabilities now resolve to a read scope (see the exporter's access-keyed
+  // resolution), so a `stella:read` grant reaches them directly.
+  const requiredScopes = requiredScopesOf(entry);
+  const missingScope = requiredScopes.find(
+    (scope) => !context.grantedScopes.includes(scope),
+  );
+  if (missingScope !== undefined) {
+    return refused(
+      structuredErrorResult({
+        code: "missing_scope",
+        message: `Insufficient permissions. Capability "${id}" requires scope: ${missingScope}`,
+        hint: oauthScopeRecoveryHint({
+          grantedScopes: context.grantedScopes,
+          missingScope,
+          requiredScopes,
+        }),
+      }),
+    );
+  }
+  return { type: "passed", entry };
+};
+
 /**
  * The final agent-access refusal for the capability an executor call selects,
  * answered before action admission so a call a person must run or approve
  * neither spends the action budget nor gets an admission refusal instead.
- * `null` for calls dispatch reports itself: invalid arguments, unknown or
- * unavailable capabilities, and missing confirmations.
+ * `null` for calls dispatch reports itself: invalid arguments, any refusal of
+ * the earlier gates, and missing confirmations.
  */
 export const invokedCapabilityAgentRefusal = async ({
   args,
@@ -1662,17 +1765,17 @@ export const invokedCapabilityAgentRefusal = async ({
   if (!parsed.success) {
     return null;
   }
-  const entry = (await getCatalogById()).get(parsed.output.capability);
-  if (
-    entry === undefined ||
-    entry.access !== access ||
-    !capabilityFeatureEnabled(entry, context)
-  ) {
+  const gate = await capabilityGate({
+    id: parsed.output.capability,
+    access,
+    context,
+  });
+  if (gate.type === "refused") {
     return null;
   }
   return finalAgentRefusal(
     decideCapabilityCall({
-      id: entry.id,
+      id: gate.entry.id,
       context,
       confirmed: "confirm" in parsed.output && parsed.output.confirm === true,
     }),
@@ -1709,78 +1812,12 @@ const invokeCapabilityHandler = async ({
   } = parsed.output;
   const confirm = "confirm" in parsed.output && parsed.output.confirm === true;
 
-  const entry = (await getCatalogById()).get(id);
-
-  // 1. Unknown id -> not_found with a closest-id hint.
-  if (!entry) {
-    return notFoundWithHint(id, context);
+  // 1-4. Existence, availability, executor, disposition, transport, scopes.
+  const gate = await capabilityGate({ id, access, context });
+  if (gate.type === "refused") {
+    return gate.result;
   }
-
-  // 2. Caller admission precedes deployment availability for discovery parity.
-  if (!capabilityFeatureEnabled(entry, context)) {
-    return notFoundWithHint(id, context);
-  }
-  if (!contextFeatureEnabled(entry.feature, context)) {
-    return featureDisabledResult(entry.feature);
-  }
-
-  if (entry.access !== access) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: `Capability "${id}" requires the ${entry.access} executor`,
-      hint: `Call ${MCP_CAPABILITY_EXECUTORS[entry.access]} with the same capability and input.`,
-    });
-  }
-
-  // 3. Disposition / fidelity. token/public capabilities self-authorize from a
-  // body/param token and are not reachable through the generic path; a waived
-  // capability's handler needs response plumbing the synthesized context drops.
-  if (entry.handlerKind === "token" || entry.handlerKind === "public") {
-    return notFoundResult(
-      `Capability "${id}" is not invokable through capability executors`,
-      "This operation authorizes itself differently; use its dedicated surface.",
-    );
-  }
-  const waiver = (
-    context.testDependencies?.contextFidelityWaivers ?? CONTEXT_FIDELITY_WAIVERS
-  ).get(id);
-  if (waiver !== undefined) {
-    return structuredErrorResult({
-      code: "feature_disabled",
-      message: `Capability "${id}" cannot run through capability executors: ${waiver}`,
-      hint: "Perform this operation in the stella app, which has the required request context.",
-    });
-  }
-  // File transport. A file response cannot be serialized, and a REQUIRED file
-  // input cannot be supplied (a plain string passes `format: "binary"`
-  // validation and reaches a handler expecting a `File`), so refuse
-  // pre-execution — before validateOnly too, which would otherwise report
-  // `valid: true` for an un-runnable input. A runtime backstop in
-  // mapHandlerResult still catches any file value that slips past. The refusal
-  // names the alternative transport instead of stopping at "not available".
-  const transportBlock = transportRefusal(id, entry.transport);
-  if (transportBlock !== null) {
-    return transportBlock;
-  }
-
-  // 4. Scopes: the session must hold every scope in the capability catalog. Read
-  // capabilities now resolve to a read scope (see the exporter's access-keyed
-  // resolution), so a `stella:read` grant reaches them directly.
-  const requiredScopes = requiredScopesOf(entry);
-  const missingScope = requiredScopes.find(
-    (scope) => !context.grantedScopes.includes(scope),
-  );
-  if (missingScope !== undefined) {
-    return structuredErrorResult({
-      code: "missing_scope",
-      message: `Insufficient permissions. Capability "${id}" requires scope: ${missingScope}`,
-      hint: oauthScopeRecoveryHint({
-        grantedScopes: context.grantedScopes,
-        missingScope,
-        requiredScopes,
-      }),
-    });
-  }
+  const { entry } = gate;
 
   // 5. Agent access. A missing confirmation is reported only after the
   // target resolves (`capabilityReferenceRefusal`), so it never answers for a
