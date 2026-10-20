@@ -1,10 +1,10 @@
 import { panic, Result } from "better-result";
 
 import { currencyMinorUnitDigits } from "@stll/money";
-import { validate as validateNip } from "@stll/stdnum/pl/nip";
 
 import { invalidInput, type InvoicingResult } from "../errors";
 import { normalizeIban } from "../iban";
+import { parseNip } from "../nip";
 import type { InvoiceParty } from "../types";
 import {
   clip,
@@ -161,10 +161,8 @@ const polishNipOf = (value: string | undefined): string | null => {
   if (!value?.trim()) {
     return null;
   }
-  const result = validateNip(value);
-  return result.valid && NIP_PATTERN.test(result.compact)
-    ? result.compact
-    : null;
+  const nip = parseNip(value);
+  return nip !== null && NIP_PATTERN.test(nip) ? nip : null;
 };
 
 const presentText = (value: string | undefined): string | null => {

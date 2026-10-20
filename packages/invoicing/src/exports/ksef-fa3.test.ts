@@ -589,7 +589,7 @@ describe("KSeF FA(3) parties", () => {
       ],
     });
     expect(refusal(withoutNip)).toContain("valid Polish NIP");
-    // stdnum accepts ten zeros by checksum; the schema's pattern does not.
+    // Ten zeros pass the checksum; the schema's pattern does not.
     const zeros = polish({
       number: "14/2026",
       seller: { ...SELLER, vatId: "0000000000" },
