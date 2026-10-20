@@ -24,6 +24,7 @@
       "pl-kis": ["court-paragraph-numbers"],
       "pl-uodo": ["court-paragraph-numbers"],
       "pl-uokik": ["court-paragraph-numbers"],
+      "cz-uohs": ["court-paragraph-numbers"],
       "us-courtlistener": ["court-paragraph-numbers"]
     }
   },
@@ -47,6 +48,7 @@
     "pl-kis": ["court-paragraph-numbers"],
     "pl-uodo": ["court-paragraph-numbers"],
     "pl-uokik": ["court-paragraph-numbers"],
+    "cz-uohs": ["court-paragraph-numbers"],
     "us-courtlistener": ["court-paragraph-numbers"]
   }
 }

@@ -124,10 +124,11 @@ const readListingText = async (
   cursor: string | null,
   signal?: AbortSignal,
 ): Promise<Result<string, AdapterFetchError>> => {
-  const outcome = await readPublisherText(
-    LISTING_URL,
-    publisherReadOptions("listing", signal),
-  );
+  // A refused listing is the source refusing the crawl, not one document.
+  const outcome = await readPublisherText(LISTING_URL, {
+    ...publisherReadOptions("listing", signal),
+    refusalScope: "source",
+  });
   if (outcome.type === "present") {
     return Result.ok(outcome.value);
   }
@@ -309,6 +310,8 @@ export const buildCzUohsDecision = async (
       instance: record.instance,
       department: record.odbor,
       collection: collection ?? null,
+      // An authority decision carries no ECLI, and the export states none.
+      ecliAvailability: { status: "not_published" },
       legalForceDate: record.datum_právní_moci ?? null,
       proceedingTypes: record.typ_řízení,
       decisionTypes: record.typ_rozhodnutí,

@@ -111,7 +111,7 @@ test("publication absence debt covers a closed cohort and can only shrink", () =
       .toSorted(),
   );
   const entries = Object.values(TYPED_ABSENCE_DEBT).flat();
-  expect(entries.length).toBeLessThanOrEqual(149);
+  expect(entries.length).toBeLessThanOrEqual(150);
   for (const entry of entries) {
     expect(entry.reason.trim().length).toBeGreaterThan(0);
     expect(DECISION_PUBLICATION_FIELD_KEYS).toContain(entry.field);

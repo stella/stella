@@ -61,7 +61,14 @@ export const TYPED_ABSENCE_DEBT = {
   "pl-kis": unclassified,
   "pl-uodo": unclassified,
   "pl-uokik": unclassified,
-  "cz-uohs": unclassified,
+  "cz-uohs": [
+    {
+      field: "decisionDate",
+      condition: "always",
+      reason:
+        "The export states only the date of legal force, which is not the date the decision was issued.",
+    },
+  ],
   "us-courtlistener": unclassified,
 } as const satisfies Record<
   SourceRegistrationKey,

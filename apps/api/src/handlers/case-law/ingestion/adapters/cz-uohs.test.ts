@@ -3,6 +3,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  CZ_UOHS_SYNTHETIC_LISTING,
+  czUohsSyntheticPdf,
+} from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
+import {
   buildCzUohsDecision,
   czUohsAdapter,
   czUohsCollectionOf,
@@ -13,17 +17,13 @@ import {
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const FIXTURES = new URL("__fixtures__/", import.meta.url);
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-const records = async () =>
-  parseCzUohsListing(
-    await Bun.file(new URL("cz-uohs-decisions.jsonld", FIXTURES)).json(),
-  );
+const records = async () => parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING);
 
 describe("ÚOHS JSON-LD", () => {
   test("maps every stated field and discriminates collections without a default", async () => {
@@ -58,9 +58,7 @@ describe("ÚOHS JSON-LD", () => {
   });
 
   test("an unchanged decision keeps its fingerprint across reads", async () => {
-    const bytes = new Uint8Array(
-      await Bun.file(new URL("cz-uohs-decision.pdf", FIXTURES)).arrayBuffer(),
-    );
+    const bytes = czUohsSyntheticPdf();
     globalThis.fetch = asFetchMock(async () => new Response(bytes));
     const record = (await records())[0]!;
     const first = await buildCzUohsDecision(record);
@@ -89,9 +87,7 @@ describe("ÚOHS JSON-LD", () => {
   });
 
   test("fetches the PDF and retains both raw responses with provenance", async () => {
-    const bytes = new Uint8Array(
-      await Bun.file(new URL("cz-uohs-decision.pdf", FIXTURES)).arrayBuffer(),
-    );
+    const bytes = czUohsSyntheticPdf();
     globalThis.fetch = asFetchMock(
       async () =>
         new Response(bytes, { headers: { "Content-Type": "application/pdf" } }),
@@ -163,9 +159,7 @@ describe("ÚOHS JSON-LD", () => {
       ],
     };
     const invalid = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
-    const valid = new Uint8Array(
-      await Bun.file(new URL("cz-uohs-decision.pdf", FIXTURES)).arrayBuffer(),
-    );
+    const valid = czUohsSyntheticPdf();
     let request = 0;
     globalThis.fetch = asFetchMock(
       async () => new Response(request++ === 0 ? invalid : valid),

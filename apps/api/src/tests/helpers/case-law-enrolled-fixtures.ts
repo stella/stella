@@ -28,6 +28,10 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  CZ_UOHS_SYNTHETIC_LISTING,
+  czUohsSyntheticPdf,
+} from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
 import type { SourceRegistrationKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { AT_ASYLGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
 import { AT_BKS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
@@ -2724,24 +2728,11 @@ export const plUokikRulingFixture = (): EnrolledAdapterFixture => ({
 export const czUohsFixture = (): EnrolledAdapterFixture => ({
   rawFieldValues: {},
   buildDecision: async () => {
-    const document = new Uint8Array(
-      await Bun.file(
-        new URL(
-          "../../handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-decision.pdf",
-          import.meta.url,
-        ),
-      ).arrayBuffer(),
-    );
+    const document = czUohsSyntheticPdf();
     globalThis.fetch = asFetchMock(
       async () => await Promise.resolve(new Response(document)),
     );
-    const payload: unknown = await Bun.file(
-      new URL(
-        "../../handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-decisions.jsonld",
-        import.meta.url,
-      ),
-    ).json();
-    const record = parseCzUohsListing(payload)[0];
+    const record = parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING)[0];
     const decision = await buildCzUohsDecision(
       record ?? panic("the ÚOHS fixture lost its first record"),
     );
