@@ -205,7 +205,7 @@ test("every planned matrix job gates on its matching required output", () => {
     const matrix = job.strategy?.matrix;
     const matrixOutput =
       typeof matrix === "string"
-        ? matrix.match(/outputs\.([a-z0-9_]+)\)/u)?.at(1)
+        ? /outputs\.([a-z0-9_]+)\)/u.exec(matrix)?.at(1)
         : undefined;
     if (matrixOutput === undefined) {
       throw new TypeError(`${name} matrix names no ci-plan output`);
