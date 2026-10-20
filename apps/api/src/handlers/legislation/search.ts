@@ -1213,20 +1213,20 @@ const createIndexRecorder = ({
   };
 };
 
+// The outcome is read from the same promise without re-throwing, so the
+// caller's await still receives the original rejection unchanged.
 const settleIndexRead = async <T>(
   pending: Promise<T>,
   recorder: ReturnType<typeof createIndexRecorder>,
-) =>
-  await pending.then(
-    (value) => {
-      recorder.settle("completed");
-      return value;
-    },
-    (error: unknown) => {
-      recorder.settle("failed");
-      throw error;
-    },
+) => {
+  const outcome = pending.then(
+    (): RequestStageOutcome => "completed",
+    (_error: unknown): RequestStageOutcome => "failed",
   );
+  return await pending.finally(async () => {
+    recorder.settle(await outcome);
+  });
+};
 
 const corpusIndexSearch = async ({
   body,
