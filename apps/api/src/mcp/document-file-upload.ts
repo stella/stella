@@ -108,7 +108,7 @@ const invokeCapability = async ({
   const { getStaticMcpToolDefinition, invokeStaticMcpTool } =
     await import("@/api/mcp/static-tool-definitions");
   const toolName = MCP_CAPABILITY_EXECUTORS.write;
-  const definition = getStaticMcpToolDefinition(toolName);
+  const definition = getStaticMcpToolDefinition(toolName, "documents");
   if (definition === undefined) {
     return {
       status: "error",
@@ -121,6 +121,7 @@ const invokeCapability = async ({
     args,
     context,
     definition,
+    mode: "documents",
   });
   if (
     invocation.status === "authority-refused" ||

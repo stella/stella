@@ -1,5 +1,13 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
+import https from "node:https";
+import { PassThrough } from "node:stream";
+
+import {
+  buildDocumentVersionUploadReservationInput,
+  DOCUMENT_VERSION_UPLOAD_TRANSPORT,
+} from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import type { Transaction } from "@/api/db/root";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
@@ -27,8 +35,44 @@ import { handleMcpToolCall } from "@/api/mcp/tools";
 import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+void mock.module("node:dns/promises", () => ({
+  lookup: async () => [{ address: "93.184.216.34", family: 4 }],
+}));
+
+void mock.module("node:https", () => ({
+  ...https,
+  request: (
+    _options: unknown,
+    onResponse: (
+      response: PassThrough & {
+        headers: Record<string, string>;
+        statusCode: number;
+      },
+    ) => void,
+  ) => {
+    const request = Object.assign(new PassThrough(), {
+      end: () => {
+        const response = Object.assign(new PassThrough(), {
+          headers: { "content-type": "application/octet-stream" },
+          statusCode: 200,
+        });
+        queueMicrotask(() => {
+          onResponse(response);
+          response.end(new Uint8Array([1]));
+        });
+        return request;
+      },
+    });
+    return request;
+  },
+}));
+
 const CONNECTOR_NAME = "mcp__admission_fixture__read";
 const SKILL_NAME = "skill__admission_fixture";
+const ENTITY_ID = "00000000-0000-4000-8000-000000000010";
+const WORKSPACE_ID = toSafeId<"workspace">(
+  "00000000-0000-4000-8000-000000000001",
+);
 const connectorTool = {
   exposedName: CONNECTOR_NAME,
   inputSchema: { type: "object", properties: {} },
@@ -83,6 +127,15 @@ const loadedSkill = {
 } satisfies LoadedChatSkill;
 
 const transaction = asTestRaw<Transaction>({
+  query: {
+    entities: {
+      findFirst: async () => ({
+        kind: "document",
+        name: "Agreement",
+        workspaceId: WORKSPACE_ID,
+      }),
+    },
+  },
   select: (selection: Record<string, unknown>) => {
     const rows =
       "cachedTools" in selection
@@ -117,9 +170,17 @@ const scopedDb: McpRequestContext["scopedDb"] = async (callback) =>
 
 const createContext = (): McpRequestContext =>
   asTestRaw<McpRequestContext>({
-    accessibleWorkspaceIds: [],
-    credentialPermissions: { chat: ["create"], workspace: ["read"] },
-    grantedScopes: ["stella:external_mcps", "stella:skills"],
+    accessibleWorkspaceIds: [WORKSPACE_ID],
+    accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
+    accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
+    accessibleWorkspaces: [{ id: WORKSPACE_ID, status: "active" }],
+    grantedScopes: [
+      "stella:documents_write",
+      "stella:external_mcps",
+      "stella:matters_write",
+      "stella:read",
+      "stella:skills",
+    ],
     memberRole: "owner",
     organizationId: toSafeId<"organization">("org_fixture"),
     recordAuditEvent: async () => undefined,
@@ -225,7 +286,75 @@ const runFamily = async ({
   return { admissions, executions, result };
 };
 
+const runStaticTool = async ({
+  args,
+  mode,
+  toolName,
+}: {
+  args: Record<string, unknown>;
+  mode: "documents" | "advanced";
+  toolName: string;
+}) => {
+  let admissions = 0;
+  await callMcpToolOverHttp({
+    admitAction: async ({ run }) => {
+      admissions += 1;
+      return Result.ok(
+        await run(new AbortController().signal, {
+          reservePeriod: async () => Result.ok(undefined),
+        }),
+      );
+    },
+    args,
+    context: createContext(),
+    mode,
+    toolName,
+  });
+  return admissions;
+};
+
 describe("gateway admission over HTTP", () => {
+  test("a static upload and its nested capability work admit once", async () => {
+    const admissions = await runStaticTool({
+      args: {
+        entity_id: ENTITY_ID,
+        file: {
+          download_url: "https://files.example/agreement.docx",
+          file_id: "file_1",
+          file_name: "agreement.docx",
+          mime_type: "application/octet-stream",
+        },
+      },
+      mode: "documents",
+      toolName: DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName,
+    });
+
+    expect(admissions).toBe(1);
+  });
+
+  test("a direct capability executor call admits once", async () => {
+    const admissions = await runStaticTool({
+      args: {
+        capability: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
+        input: buildDocumentVersionUploadReservationInput({
+          entityId: ENTITY_ID,
+          file: {
+            mimeType: "application/octet-stream",
+            name: "agreement.docx",
+            sha256Hex: "a".repeat(64),
+            size: 1,
+          },
+          workspaceId: WORKSPACE_ID,
+        }),
+        validate_only: true,
+      },
+      mode: "advanced",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
+    });
+
+    expect(admissions).toBe(1);
+  });
+
   test.each(["connector", "skill"] as const)(
     "an authorised %s call admits once",
     async (family) => {
