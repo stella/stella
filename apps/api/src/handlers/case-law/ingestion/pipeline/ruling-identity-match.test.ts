@@ -631,6 +631,59 @@ describe("cross-source ruling identity lookup", () => {
     fakeS3.stop();
   });
 
+  test("a late older observation never replaces newer raw provenance", async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    const sourceId = sourceAt(1);
+    await db.insert(caseLawDecisions).values({
+      id: decisionId,
+      sourceId,
+      sourceDocumentId: "ordered-document",
+      country: "POL",
+      court: observed.court,
+      language: observed.language,
+      caseNumber: "RAW 3/26",
+      docketFamilyKey: docketFamilyKeyOf("RAW 3/26", "POL"),
+    });
+    await db.insert(caseLawDecisionSourceIdentities).values({
+      sourceId,
+      sourceDocumentId: "ordered-document",
+      decisionId,
+    });
+    const scopedDb: ScopedDb = async (callback) =>
+      await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+    const record = async (key: string, observedAt: string) =>
+      await recordSourceIdentityRaw({
+        scopedDb,
+        sourceId,
+        decisionId,
+        sourceDocumentId: "ordered-document",
+        rawArtifact: {
+          sourceRawS3Key: key,
+          sourceRawContentType: "application/json",
+        },
+        sourceUrl: `https://example.invalid/${key}`,
+        observedAt: new Date(observedAt),
+      });
+
+    await record("raw/newer", "2026-10-20T12:00:00Z");
+    await record("raw/older", "2026-10-20T11:00:00Z");
+
+    expect(
+      await db
+        .select({
+          sourceRawS3Key: caseLawDecisionSourceIdentities.sourceRawS3Key,
+          sourceUrl: caseLawDecisionSourceIdentities.sourceUrl,
+        })
+        .from(caseLawDecisionSourceIdentities)
+        .where(eq(caseLawDecisionSourceIdentities.decisionId, decisionId)),
+    ).toEqual([
+      {
+        sourceRawS3Key: "raw/newer",
+        sourceUrl: "https://example.invalid/raw/newer",
+      },
+    ]);
+  });
+
   test("raw provenance is never written to a redacted decision", async () => {
     const decisionId = createSafeId<"caseLawDecision">();
     const sourceId = sourceAt(1);

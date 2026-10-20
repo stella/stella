@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisionSourceIdentities } from "@/api/db/schema";
@@ -113,6 +113,14 @@ export const recordSourceIdentityRaw = async ({
           eq(
             caseLawDecisionSourceIdentities.sourceDocumentId,
             sourceDocumentId,
+          ),
+          // An attempt that finishes late must not replace a newer observation.
+          or(
+            isNull(caseLawDecisionSourceIdentities.sourceObservedAt),
+            lte(
+              caseLawDecisionSourceIdentities.sourceObservedAt,
+              sql`${observedAt.toISOString()}::timestamptz`,
+            ),
           ),
         ),
       );
