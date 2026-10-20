@@ -117,7 +117,7 @@
   "candidate:.github/workflows/ci.yml/ci-plan": {
     "kind": "support",
     "qualifier": "Plans trust, scopes and prerequisites for merge-required checks.",
-    "reviewedDigest": "e72609a9e8d52700a753c36abb8c59d8f47967121b8525e39d0d1fc34b589798"
+    "reviewedDigest": "bed263b3a1775d1119d49435e4e77e0d1cf6fa8ada0f3d72b3f9052246e3e36c"
   },
   "candidate:.github/workflows/ci.yml/generated-sources": {
     "kind": "support",
@@ -312,7 +312,7 @@
   "candidate:.github/workflows/ci.yml/ci-result": {
     "kind": "support",
     "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs.",
-    "reviewedDigest": "92e2db05d7dfe17e4962f530eb17cf349333386c226260661fc16cfa6ef45dd3"
+    "reviewedDigest": "1b722ac1bfca7a36741cc12b863620e7b5620a5049b82c88fbc79ef202828257"
   },
   "candidate:.github/workflows/ci.yml/ci-quick-checks": {
     "kind": "support",
@@ -343,21 +343,6 @@
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
     "reviewedDigest": "82ed271cf41a967c676f3198df021b31ad8bc9f90baeb9d83d89711bda31c158"
-  },
-  "candidate:.github/workflows/db-migrations.yml/scope": {
-    "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "f0cd2c219f6c68a915d8535c973c733b162edccef4c7f67d228ba2bdb76e1235"
-  },
-  "candidate:.github/workflows/db-migrations.yml/check": {
-    "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "752487a28bc738ae2970374fab4a2f71d9b8d22329d09606ad8cce954a507db7"
-  },
-  "candidate:.github/workflows/db-migrations.yml/apply-fresh": {
-    "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "de561f346d9611d7bca2a0b6fdaa8d01e659cf7e4dc07c8d3dfb5d8fb8a45f0b"
   },
   "candidate:.github/workflows/dependency-audit.yml/audit": {
     "kind": "ordinary",
@@ -472,7 +457,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "214db1bd3ca3bce8f87c006db83b8b0c43aa55c19cdeb07828783923d0a25fed"
+    "reviewedDigest": "3dbe01cdb44b5859f44e55e043fd5c8631e934647583f30796073bf530fbb441"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +472,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "baf71fd691ec0d358caefe339c19786b54a6996d345275b16935812c4a835ada"
+    "reviewedDigest": "ed941a2057a8223fdcf3d422fe1b60ea4d0a7b21cc60bdcc45b79a8f8162c274"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -928,5 +913,15 @@
     "kind": "support",
     "qualifier": "Dispatches health evaluation after successful stable production promotion to supply evidence for the next release gate.",
     "reviewedDigest": "76a70d6588524c64dc9199a9e60087b247c95b11020d6bda9a9b78afc486b147"
+  },
+  "candidate:.github/workflows/ci.yml/database-migrations-check": {
+    "kind": "ordinary",
+    "qualifier": "Checks migration safety rules and coverage; no publication or deployment.",
+    "reviewedDigest": "d62302b9370c1f7c1af93f41c8dabc903fcbc4d24380d2e1c73c10dac670dfc8"
+  },
+  "candidate:.github/workflows/ci.yml/database-migrations-apply-fresh": {
+    "kind": "ordinary",
+    "qualifier": "Applies migrations to disposable databases and verifies schema, history and API startup; no publication or deployment.",
+    "reviewedDigest": "a035db92e28a03fb7bfb311f5503f47ec91d31630152692dc51fbd5aabf60fcb"
   }
 }

@@ -320,14 +320,6 @@ const desktopRustRequired = (files: readonly string[]) =>
     ),
   );
 
-const migrationScopeRequired = (files: readonly string[]) =>
-  files.some((file) =>
-    /^(?:docker\/postgres\/|scripts\/configure-test-postgres.*\.sh$|apps\/api\/drizzle\/|apps\/api\/src\/db\/|apps\/api\/src\/lib\/db\/|apps\/api\/drizzle\.config\.ts$|scripts\/[^/]*migrat|scripts\/fixtures\/migration[^/]*\/|scripts\/rehearse-better-auth-constraint-retry\.sh$|\.github\/workflows\/ci\.yml$|scripts\/detect-security-workflow-changes\.(?:sh|test\.ts)$)/u.test(
-      file,
-    ),
-  );
-
-const MIGRATION_DETECTOR_COMMAND = `bash scripts/detect-security-workflow-changes.sh migrations --files "\${changed_files[@]}"`;
 const PR_CORE_DETECTOR_COMMAND = `bash scripts/detect-e2e-changes.sh pr-core "\${changed_files[@]}"`;
 
 const DETECTORS = { inProcess: "in-process", spawned: "spawned" } as const;
@@ -367,7 +359,7 @@ const selectorCase = (
 desktop_rust_checks_required=${detectors === DETECTORS.inProcess ? '"$SERVED_DESKTOP_RUST"' : '$(bash scripts/detect-tauri-rust-changes.sh "$@")'}
 e2e_landing_required="$E2E_LANDING_REQUIRED"
 package_checks_required=true
-${detectors === DETECTORS.inProcess ? selector.replace(MIGRATION_DETECTOR_COMMAND, 'printf %s "$SERVED_MIGRATION_SCOPE"').replace(PR_CORE_DETECTOR_COMMAND, 'printf %s "$SERVED_PR_CORE"') : selector}
+${detectors === DETECTORS.inProcess ? selector.replace(PR_CORE_DETECTOR_COMMAND, 'printf %s "$SERVED_PR_CORE"') : selector}
 printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
     args: files,
     env: {
@@ -385,7 +377,6 @@ printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
       SUITE_DEPTH: suiteDepth,
       SERVED_DESKTOP_RUST: String(desktopRustRequired(files)),
       SERVED_E2E_CORE: String(e2eCoreRequired(files)),
-      SERVED_MIGRATION_SCOPE: String(migrationScopeRequired(files)),
       SERVED_PR_CORE: String(productionE2eRequired(files)),
       ...served,
       SERVED_DESKTOP_BROWSER: outputs.includes("desktop_browser_required")
