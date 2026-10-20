@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 import type {
   OutboundActionPreview,
   OutboundEmailPreview,
@@ -19,29 +17,21 @@ const canonicalRecipient = ({ address, name }: EmailRecipient) => [
  * A fixed-order array of every field the preview card shows, so equal
  * previews serialize identically whatever key order produced them.
  */
-const canonicalPreview = (preview: OutboundActionPreview): unknown[] => {
-  switch (preview.kind) {
-    case "email.send":
-      return [
-        preview.kind,
-        canonicalRecipient(preview.from),
-        preview.to.map(canonicalRecipient),
-        preview.cc.map(canonicalRecipient),
-        preview.bcc.map(canonicalRecipient),
-        preview.subject,
-        preview.bodyText,
-        preview.attachments.map(({ byteLength, fileName, sha256 }) => [
-          fileName,
-          byteLength,
-          sha256,
-        ]),
-        preview.inReplyTo,
-      ];
-    default:
-      preview.kind satisfies never;
-      return panic("Unhandled outbound action kind");
-  }
-};
+const canonicalPreview = (preview: OutboundActionPreview): unknown[] => [
+  preview.kind,
+  canonicalRecipient(preview.from),
+  preview.to.map(canonicalRecipient),
+  preview.cc.map(canonicalRecipient),
+  preview.bcc.map(canonicalRecipient),
+  preview.subject,
+  preview.bodyText,
+  preview.attachments.map(({ byteLength, fileName, sha256 }) => [
+    fileName,
+    byteLength,
+    sha256,
+  ]),
+  preview.inReplyTo,
+];
 
 /**
  * SHA-256 hex over the canonical preview. A confirm carries the hash of the

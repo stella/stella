@@ -3,11 +3,32 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { outboundActions } from "@/api/db/schema";
+import { readStoredOutboundPreview } from "@/api/handlers/outbound-actions/store";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { readStoredOutboundPreview } from "@/api/lib/outbound-actions/store";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
+
+type OutboundActionRow = typeof outboundActions.$inferSelect;
+
+const UNPROJECTED_OUTBOUND_ACTION_COLUMNS = [
+  // Authorization scope is resolved on the server.
+  "organizationId",
+  "userId",
+  // Chat provenance is not part of the confirmation contract.
+  "chatThreadId",
+  // The client receives the decrypted preview, never its storage envelope.
+  "previewEncrypted",
+  "previewIv",
+  // Internal lifecycle timestamps; the card uses expiration and completion.
+  "confirmedAt",
+  "createdAt",
+  "updatedAt",
+] as const satisfies readonly (keyof OutboundActionRow)[];
 
 const config = {
   contract: "patch",
@@ -70,7 +91,7 @@ const readOutboundAction = createSafeRootHandler(
       }),
     );
     const expired = action.status === "pending" && action.expired;
-    return Result.ok({
+    const payload = {
       id: action.id,
       kind: action.kind,
       status: expired ? ("expired" as const) : action.status,
@@ -80,7 +101,24 @@ const readOutboundAction = createSafeRootHandler(
       providerMessageId: action.providerMessageId,
       failureCode: action.failureCode,
       completedAt: action.completedAt,
-    });
+    };
+    type StoredProjection = Omit<typeof payload, "preview">;
+    type ExcusedColumn = (typeof UNPROJECTED_OUTBOUND_ACTION_COLUMNS)[number];
+    true satisfies UnprojectedColumns<
+      OutboundActionRow,
+      StoredProjection,
+      ExcusedColumn
+    > extends never
+      ? true
+      : never;
+    true satisfies UnbackedProjectionKeys<
+      OutboundActionRow,
+      StoredProjection,
+      ExcusedColumn
+    > extends never
+      ? true
+      : never;
+    return Result.ok(payload);
   },
 );
 

@@ -32,6 +32,7 @@ import {
   chatMessageRevisions,
   chatMessages,
   chatThreads,
+  chatToolGrants,
   chatTurns,
   documentTranslationRuns,
   desktopPresence,
@@ -99,6 +100,10 @@ import deleteChatThread from "@/api/handlers/chat/threads/delete";
 import listChatThreads from "@/api/handlers/chat/threads/list";
 import renameChatThread from "@/api/handlers/chat/threads/rename";
 import updateChatThread from "@/api/handlers/chat/threads/update";
+import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
+import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
+import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
+import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
@@ -140,7 +145,9 @@ import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
 import { createConfirmOutboundActionHandler } from "@/api/handlers/outbound-actions/confirm";
 import discardOutboundAction from "@/api/handlers/outbound-actions/discard";
+import { outboundPreviewHash } from "@/api/handlers/outbound-actions/preview";
 import readOutboundAction from "@/api/handlers/outbound-actions/read";
+import { prepareOutboundAction } from "@/api/handlers/outbound-actions/store";
 import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
 import readRateEntries from "@/api/handlers/rates/entries/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
@@ -178,8 +185,6 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { cents } from "@/api/lib/money";
-import { outboundPreviewHash } from "@/api/lib/outbound-actions/preview";
-import { prepareOutboundAction } from "@/api/lib/outbound-actions/store";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
@@ -522,6 +527,17 @@ const chatRevisionAcceptMessageB = toSafeId<"chatMessage">(
 const chatRevisionRevertMessageB = toSafeId<"chatMessage">(
   "22222222-2222-4222-8222-222222222292",
 );
+// Stored tool approvals of user A1 in organization B: one for every
+// conversation, one given in thread B, and one the delete case removes.
+const chatToolGrantAlwaysB = toSafeId<"chatToolGrant">(
+  "22222222-2222-4222-8222-222222222297",
+);
+const chatToolGrantConversationB = toSafeId<"chatToolGrant">(
+  "22222222-2222-4222-8222-222222222298",
+);
+const chatToolGrantDeleteB = toSafeId<"chatToolGrant">(
+  "22222222-2222-4222-8222-222222222299",
+);
 const chatThreadTitleB = "Chat thread B";
 const chatRenameFromA = "Renamed from organization A";
 /** Thread B's stored model, so a foreign "auto" selection is observable. */
@@ -639,6 +655,14 @@ const readChatThreadRow = async (threadId: SafeId<"chatThread">) =>
       .from(chatThreads)
       .where(eq(chatThreads.id, threadId))
   ).at(0) ?? null;
+
+const chatToolGrantExists = async (grantId: SafeId<"chatToolGrant">) =>
+  (
+    await testDb
+      .select({ id: chatToolGrants.id })
+      .from(chatToolGrants)
+      .where(eq(chatToolGrants.id, grantId))
+  ).length > 0;
 
 const countChatMessages = async (threadId: SafeId<"chatThread">) =>
   (
@@ -2126,6 +2150,87 @@ const isolationCases: IsolationCase[] = [
     expectPositive: expectStatus(409),
   },
   {
+    // The same person's approvals in another firm stay with that firm: the
+    // list in organization A neither returns them nor sees thread B's grant.
+    name: "chat tool grant list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listChatToolGrants, workspaceA, {
+        query: { threadId: chatThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listChatToolGrants, sameUserWorkspaceB, {
+        query: { threadId: chatThreadB },
+      }),
+    expectDenied: (result) => {
+      expect(chatToolGrantIds(result)).not.toContain(chatToolGrantAlwaysB);
+      expect(chatToolGrantIds(result)).not.toContain(
+        chatToolGrantConversationB,
+      );
+    },
+    expectPositive: (result) => {
+      expect(chatToolGrantIds(result)).toContain(chatToolGrantAlwaysB);
+      expect(chatToolGrantIds(result)).toContain(chatToolGrantConversationB);
+    },
+  },
+  {
+    name: "chat tool grant coverage",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readChatToolGrantCoverage, workspaceA, {
+        query: { threadId: chatThreadB, toolName: "web_search" },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readChatToolGrantCoverage, sameUserWorkspaceB, {
+        query: { threadId: chatThreadB, toolName: "web_search" },
+      }),
+    expectDenied: (result) => expect(result).toEqual({ covered: false }),
+    expectPositive: (result) => expect(result).toEqual({ covered: true }),
+  },
+  {
+    // A grant names the conversation it was given in; organization A cannot
+    // attach one to thread B.
+    name: "chat tool grant create",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(createChatToolGrant, workspaceA, {
+        body: {
+          scope: "conversation",
+          threadId: chatThreadB,
+          toolName: "add_comment",
+        },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(createChatToolGrant, sameUserWorkspaceB, {
+        body: {
+          scope: "conversation",
+          threadId: chatThreadB,
+          toolName: "add_comment",
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        scope: "conversation",
+        toolName: "add_comment",
+      }),
+  },
+  {
+    name: "chat tool grant delete",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(deleteChatToolGrant, workspaceA, {
+        params: { grantId: chatToolGrantDeleteB },
+      }),
+      exists: await chatToolGrantExists(chatToolGrantDeleteB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(deleteChatToolGrant, sameUserWorkspaceB, {
+        params: { grantId: chatToolGrantDeleteB },
+      }),
+    expectDenied: (result) => {
+      expect(recordField(result, "response")).toEqual({ deleted: false });
+      expect(recordField(result, "exists")).toBe(true);
+    },
+    expectPositive: (result) => expect(result).toEqual({ deleted: true }),
+  },
+  {
     name: "chat thread rename",
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(renameChatThread, workspaceA, {
@@ -3102,6 +3207,30 @@ testState.beforeAll(async () => {
     userMessageId: chatTurnUserMessageB,
     workspaceId: null,
   });
+  await testDb.insert(chatToolGrants).values([
+    {
+      id: chatToolGrantAlwaysB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      scope: "always",
+      toolName: "web_search",
+    },
+    {
+      id: chatToolGrantConversationB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      scope: "conversation",
+      chatThreadId: chatThreadB,
+      toolName: "remember",
+    },
+    {
+      id: chatToolGrantDeleteB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      scope: "always",
+      toolName: "fetch_url",
+    },
+  ]);
 });
 
 afterAll(async () => {
@@ -3404,6 +3533,15 @@ function recordField(result: unknown, field: string): unknown {
     throw new Error("Expected an object result");
   }
   return result[field];
+}
+
+function chatToolGrantIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const grants = recordField(result, "grants");
+  if (!Array.isArray(grants)) {
+    throw new TypeError("Expected a chat tool grant list response");
+  }
+  return grants.map((grant) => recordField(grant, "id"));
 }
 
 function globalChatThreadIds(result: unknown): unknown[] {

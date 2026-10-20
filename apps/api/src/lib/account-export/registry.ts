@@ -87,6 +87,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
   chat_threads: { type: "exported" },
+  chat_tool_grants: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
   chat_turns: { type: "exempt", reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived },
   clauses: {
     type: "exempt",
@@ -283,6 +287,11 @@ export const ACCOUNT_EXPORT_REGISTRY = {
   organization_professional_use_acceptances: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
+  // Confirmation envelopes bind encrypted previews to an actor and approval hash.
+  outbound_actions: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
   pdf_signing_sessions: {
     type: "exempt",

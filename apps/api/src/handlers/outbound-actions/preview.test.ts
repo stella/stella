@@ -6,7 +6,7 @@ import { outboundActionPreviewSchema } from "@stll/api-contract/outbound-action"
 import type { OutboundEmailPreview } from "@stll/api-contract/outbound-action";
 import { assertProperty } from "@stll/property-testing";
 
-import { outboundPreviewHash } from "@/api/lib/outbound-actions/preview";
+import { outboundPreviewHash } from "@/api/handlers/outbound-actions/preview";
 
 const preview: OutboundEmailPreview = {
   kind: "email.send",

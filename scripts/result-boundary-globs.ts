@@ -111,7 +111,6 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/mcp-connectors/**/*.ts",
   "apps/api/src/lib/memory/**/*.ts",
   "apps/api/src/lib/observability/**/*.ts",
-  "apps/api/src/lib/outbound-actions/**/*.ts",
   "apps/api/src/lib/proofs/**/*.ts",
   "apps/api/src/lib/properties/**/*.ts",
   "apps/api/src/lib/review-organization/**/*.ts",
@@ -308,6 +307,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // The test kit reports a hung wait or a refused connection to the test
   // runner, and stands in for the platform's throwing socket API.
   "packages/test-kit/src/network.ts",
+  "packages/test-kit/src/regenerate.ts",
   "packages/test-kit/src/wait.ts",
   "packages/property-testing/src/index.ts",
   // wasm-bindgen reports initialization failures and traps through rejection;

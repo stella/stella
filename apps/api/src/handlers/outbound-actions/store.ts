@@ -6,9 +6,11 @@ import {
   outboundActionPreviewSchema,
   type OutboundActionPreview,
 } from "@stll/api-contract/outbound-action";
+import { classifyFailure } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
 import { outboundActions } from "@/api/db/schema";
+import { outboundPreviewHash } from "@/api/handlers/outbound-actions/preview";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -17,7 +19,6 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { outboundPreviewHash } from "@/api/lib/outbound-actions/preview";
 
 /**
  * Store what the assistant prepared as a pending action. Nothing is sent:
@@ -73,10 +74,13 @@ export const prepareOutboundAction = async ({
   const row = inserted.at(0);
   if (!row) {
     return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Could not prepare the action",
-      }),
+      classifyFailure(
+        new HandlerError({
+          status: 500,
+          message: "Could not prepare the action",
+        }),
+        "outbound_action_storage_failed",
+      ),
     );
   }
   await recordAuditEvent(tx, {
@@ -113,11 +117,14 @@ export const readStoredOutboundPreview = async ({
     try: async () =>
       await decryptContent(organizationId, previewEncrypted, previewIv),
     catch: (cause) =>
-      new HandlerError({
-        status: 500,
-        message: "Could not read the prepared action",
-        cause,
-      }),
+      classifyFailure(
+        new HandlerError({
+          status: 500,
+          message: "Could not read the prepared action",
+          cause,
+        }),
+        "outbound_action_preview_unreadable",
+      ),
   });
   if (Result.isError(decrypted)) {
     return Result.err(decrypted.error);
@@ -128,10 +135,13 @@ export const readStoredOutboundPreview = async ({
   );
   if (!parsed.success || outboundPreviewHash(parsed.output) !== previewHash) {
     return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "The prepared action does not match its preview",
-      }),
+      classifyFailure(
+        new HandlerError({
+          status: 500,
+          message: "The prepared action does not match its preview",
+        }),
+        "outbound_action_preview_unreadable",
+      ),
     );
   }
   return Result.ok(parsed.output);

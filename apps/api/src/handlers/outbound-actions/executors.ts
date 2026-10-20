@@ -9,7 +9,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /** A provider refusal, reported to the user by its stable code. */
-export type OutboundActionFailure = { failureCode: string };
+type OutboundActionFailure = { failureCode: string };
 
 /**
  * Performs one confirmed outbound action as the user. It receives the stored,

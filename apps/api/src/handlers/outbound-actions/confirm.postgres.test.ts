@@ -9,10 +9,10 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { chatThreads, outboundActions } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { outboundPreviewHash } from "@/api/handlers/outbound-actions/preview";
+import { prepareOutboundAction } from "@/api/handlers/outbound-actions/store";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { outboundPreviewHash } from "@/api/lib/outbound-actions/preview";
-import { prepareOutboundAction } from "@/api/lib/outbound-actions/store";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
