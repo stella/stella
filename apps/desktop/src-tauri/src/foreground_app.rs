@@ -170,7 +170,10 @@ pub fn current(app: &AppHandle) -> Option<ForegroundApp> {
   let (sender, receiver) = std::sync::mpsc::sync_channel(1);
   app
     .run_on_main_thread(move || {
-      let _ = sender.send(current_on_main_thread());
+      crate::logging::best_effort(
+        sender.send(current_on_main_thread()),
+        "foreground app lookup had no waiter",
+      );
     })
     .ok()?;
   receiver
