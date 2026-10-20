@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import "@/api/tests/setup-env";
@@ -26,6 +27,7 @@ const GENERATION = "case_law_v5";
 const INDEX_ID = "case_law_v5_cs_sk";
 const NOW = new Date();
 const OLD = new Date(NOW.getTime() - 2 * 60 * 60 * 1000);
+const ONE_HOUR_OLD = new Date(NOW.getTime() - 60 * 60 * 1000);
 const ids = Array.from(
   { length: 8 },
   (_, index) =>
@@ -58,6 +60,7 @@ beforeAll(async () => {
       appliedEpoch: 1n,
       appliedAt: NOW,
       createdAt: OLD,
+      desiredAt: NOW,
     },
     {
       family: "case_law",
@@ -68,6 +71,15 @@ beforeAll(async () => {
       appliedAction: "erase",
       appliedEpoch: 1n,
       appliedAt: NOW,
+    },
+    {
+      family: "case_law",
+      generation: GENERATION,
+      entityId: ids[7]!,
+      desiredAction: "erase",
+      desiredEpoch: 1n,
+      createdAt: ONE_HOUR_OLD,
+      desiredAt: ONE_HOUR_OLD,
     },
   ]);
   await db.insert(corpusIndexProjectionIntents).values([
@@ -82,7 +94,7 @@ beforeAll(async () => {
       status: "reserved",
       leaseToken: ids[4]!,
       leaseExpiresAt: new Date(NOW.getTime() + 60_000),
-      createdAt: OLD,
+      createdAt: NOW,
     },
     {
       id: toSafeId<"corpusIndexProjectionIntent">(ids[5]!),
@@ -134,8 +146,25 @@ test("counts pending projections and reports only enabled scheduled-source fresh
       await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
   );
 
-  expect(report.backlogItems).toBe(2);
-  expect(report.oldestUnpublishedAgeSeconds).toBeGreaterThanOrEqual(7100);
+  expect(report.backlogItems).toBe(3);
+  expect(report.oldestUnpublishedAgeSeconds).toBeGreaterThanOrEqual(3500);
+  expect(report.oldestUnpublishedAgeSeconds).toBeLessThan(7100);
+  expect(report.oldestUnpublishedAgeSource).toBe("desired_at");
+
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({ createdAt: OLD, desiredAt: null })
+    .where(eq(corpusIndexProjectionStates.entityId, ids[7]!));
+  const fallbackReport = await db.transaction(
+    async (tx) =>
+      await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
+  );
+  expect(fallbackReport.oldestUnpublishedAgeSeconds).toBeGreaterThanOrEqual(
+    7100,
+  );
+  expect(fallbackReport.oldestUnpublishedAgeSource).toBe(
+    "state_created_at_fallback",
+  );
   expect(report.sourceAges.map(({ source }) => source).toSorted()).toEqual(
     [ADAPTER_KEYS.CZ_NS, ADAPTER_KEYS.CZ_NSS].toSorted(),
   );

@@ -15,6 +15,7 @@ afterEach(resetMetricLineSinkForTesting);
 const report = {
   backlogItems: 3,
   oldestUnpublishedAgeSeconds: 42,
+  oldestUnpublishedAgeSource: "desired_at",
   sourceAges: [{ source: "cz-ns", ageSeconds: 19 }],
   convergence: "pending",
 } as const;
@@ -91,7 +92,7 @@ test("two loop instances sharing the advisory lock emit once", async () => {
         held = true;
         return true;
       },
-      read: async () => Promise.resolve(report),
+      read: () => Promise.resolve(report),
     });
   };
 

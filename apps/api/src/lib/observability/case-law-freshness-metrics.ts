@@ -38,6 +38,11 @@ const FRESHNESS_METRICS_SINK = failureSink({
 type CaseLawFreshnessReport = {
   backlogItems: number;
   oldestUnpublishedAgeSeconds: number;
+  oldestUnpublishedAgeSource:
+    | "desired_at"
+    | "state_created_at_fallback"
+    | "intent_created_at"
+    | "none";
   sourceAges: readonly { source: string; ageSeconds: number }[];
   convergence: string | null;
 };
@@ -49,15 +54,43 @@ const requiredNumber = (row: unknown, key: string): number => {
   return row[key];
 };
 
+const requiredAgeSource = (
+  row: unknown,
+  key: string,
+): CaseLawFreshnessReport["oldestUnpublishedAgeSource"] => {
+  if (!isRecord(row)) {
+    return panic(`Malformed case-law freshness query result: ${key}`);
+  }
+  const value = row[key];
+  if (
+    value !== "desired_at" &&
+    value !== "state_created_at_fallback" &&
+    value !== "intent_created_at" &&
+    value !== "none"
+  ) {
+    return panic(`Malformed case-law freshness query result: ${key}`);
+  }
+  return value;
+};
+
 export const readCaseLawFreshnessReportTx = async (
   tx: Transaction,
 ): Promise<CaseLawFreshnessReport> => {
   const pendingState = sql`${corpusIndexProjectionStates.desiredEpoch} > coalesce(${corpusIndexProjectionStates.appliedEpoch}, -1)`;
   const [stateRows, intentRows, sourceRows, serving] = await Promise.all([
-    tx.execute(sql`SELECT count(*)::int AS count,
-      coalesce(extract(epoch FROM clock_timestamp() - min(${corpusIndexProjectionStates.createdAt})), 0)::float8 AS age
+    tx.execute(sql`WITH pending AS (
+      SELECT coalesce(${corpusIndexProjectionStates.desiredAt}, ${corpusIndexProjectionStates.createdAt}) AS pending_since,
+        CASE WHEN ${corpusIndexProjectionStates.desiredAt} IS NULL
+          THEN 'state_created_at_fallback'
+          ELSE 'desired_at'
+        END AS age_source
       FROM ${corpusIndexProjectionStates}
-      WHERE ${corpusIndexProjectionStates.family} = 'case_law' AND ${pendingState}`),
+      WHERE ${corpusIndexProjectionStates.family} = 'case_law' AND ${pendingState}
+    )
+    SELECT count(*)::int AS count,
+      coalesce(extract(epoch FROM clock_timestamp() - min(pending_since)), 0)::float8 AS age,
+      coalesce((array_agg(age_source ORDER BY pending_since))[1], 'none') AS age_source
+    FROM pending`),
     tx.execute(sql`SELECT count(*)::int AS count,
       coalesce(extract(epoch FROM clock_timestamp() - min(${corpusIndexProjectionIntents.createdAt})), 0)::float8 AS age
       FROM ${corpusIndexProjectionIntents}
@@ -86,12 +119,23 @@ export const readCaseLawFreshnessReportTx = async (
     requiredNumber(state, "age"),
     requiredNumber(intent, "age"),
   );
+  let oldestUnpublishedAgeSource: CaseLawFreshnessReport["oldestUnpublishedAgeSource"] =
+    "none";
+  if (
+    stateCount > 0 &&
+    requiredNumber(state, "age") >= requiredNumber(intent, "age")
+  ) {
+    oldestUnpublishedAgeSource = requiredAgeSource(state, "age_source");
+  } else if (intentCount > 0) {
+    oldestUnpublishedAgeSource = "intent_created_at";
+  }
   const convergence = Result.isOk(serving)
     ? await readCorpusIndexProjectionConvergenceTx(tx, serving.value)
     : null;
   return {
     backlogItems: stateCount + intentCount,
     oldestUnpublishedAgeSeconds: oldestAge,
+    oldestUnpublishedAgeSource,
     sourceAges: sourceRows,
     convergence,
   };
@@ -156,7 +200,7 @@ const runProductionTick = async (): Promise<void> => {
             result = locked.value;
             return true;
           },
-          read: async () =>
+          read: () =>
             Promise.resolve(
               result ??
                 panic("Case-law freshness report was not read under its lock"),
@@ -169,7 +213,7 @@ const runProductionTick = async (): Promise<void> => {
 
 export const startCaseLawFreshnessMetricLoop = (): (() => Promise<void>) => {
   if (isLocalTestRun()) {
-    return async () => Promise.resolve();
+    return () => Promise.resolve();
   }
   return startNonOverlappingInterval({
     intervalMs: REPORT_INTERVAL_MS,
