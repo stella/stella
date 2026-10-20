@@ -418,6 +418,32 @@ const onRelationKey = (tokens: StatementTokens): string | undefined => {
   return readMigrationRelation(tokens, start)?.relation.key;
 };
 
+const invalidateTouchedCreatedRelations = (
+  tokens: StatementTokens,
+  createdRelations: Set<string>,
+) => {
+  const words = tokens.filter(({ kind }) => kind === "word");
+  const changesRelationIdentity = words.some(
+    ({ value }) =>
+      value === "rename" || value === "drop" || value === "replace",
+  );
+  if (!changesRelationIdentity) {
+    return;
+  }
+  const names = new Set(
+    tokens
+      .filter(({ kind }) => kind !== "punctuation")
+      .map(({ value }) => value),
+  );
+  for (const key of createdRelations) {
+    if (
+      names.values().some((name) => key.endsWith(`,${JSON.stringify(name)}]`))
+    ) {
+      createdRelations.delete(key);
+    }
+  }
+};
+
 const censusSqlSource = (source: string, topLevel: boolean) => {
   const forms: CensusForm[] = [];
   const errors: string[] = [];
@@ -510,6 +536,7 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
               target: relation.relation.key,
             });
           }
+          invalidateTouchedCreatedRelations(sqlTokens, createdRelations);
         }
       } else {
         classify({
@@ -519,6 +546,7 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
           statementIndex,
           target: onRelationKey(sqlTokens),
         });
+        invalidateTouchedCreatedRelations(sqlTokens, createdRelations);
         const created = createdRelationKey(sqlTokens);
         if (
           topLevel &&
@@ -532,10 +560,16 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
     }
     // Only one literal can prove the complete command text. Expressions such
     // as format(), concatenation, and variables can construct arbitrary DDL.
-    const executeTokens = tokens.filter(
-      (token) => token.kind === "word" && token.value === "execute",
-    );
+    const executeTokens =
+      statement.enclosingLine === undefined
+        ? []
+        : tokens.filter(
+            (token) => token.kind === "word" && token.value === "execute",
+          );
     for (const [position, execute] of executeTokens.entries()) {
+      // Executed expressions can rename, drop, or replace any relation. Even a
+      // literal command crosses a parsing boundary, so exemptions fail closed.
+      createdRelations.clear();
       const end = executeTokens[position + 1]?.index ?? statement.text.length;
       const literals = statement.literals.filter(
         (literal) => literal.index > execute.index && literal.index < end,

@@ -264,6 +264,31 @@ ALTER TABLE probe ADD COLUMN title text;`;
     ).toEqual([]);
   });
 
+  test("reusing a created relation name ends its lock exemption", () => {
+    const sql = `CREATE TABLE scratch(id int);
+-- stella-migration-safety: reviewed rename-table-or-column - Move the temporary table out of the way before reusing its name
+ALTER TABLE scratch RENAME TO scratch_old;
+-- stella-migration-safety: reviewed rename-table-or-column - Move the existing table to the newly available relation name
+ALTER TABLE existing RENAME TO scratch;
+ALTER TABLE scratch ADD COLUMN title text;`;
+    expect(
+      checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+    ).toEqual([expect.stringContaining("ACCESS EXCLUSIVE add-column needs")]);
+  });
+
+  test.each(["probe", "probe_old"])(
+    "renaming a created relation ends the exemption for %s",
+    (target) => {
+      const sql = `CREATE TABLE probe(id int);
+-- stella-migration-safety: reviewed rename-table-or-column - Rename the new relation before subsequent migration work
+ALTER TABLE probe RENAME TO probe_old;
+ALTER TABLE ${target} ADD COLUMN title text;`;
+      expect(
+        checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+      ).toEqual([expect.stringContaining("ACCESS EXCLUSIVE add-column needs")]);
+    },
+  );
+
   test("unresolved dynamic SQL fails closed", () => {
     const sql = `DO $$ BEGIN
       EXECUTE format('%s TABLE probe ADD COLUMN title text', 'ALTER');
@@ -281,6 +306,14 @@ ALTER TABLE probe ADD COLUMN title text;`;
     expect(result.forms.map(({ form, lockMode }) => [form, lockMode])).toEqual([
       ["drop-table", "ACCESS EXCLUSIVE"],
     ]);
+  });
+
+  test("a trigger execution clause is not dynamic SQL", () => {
+    const result = censusSql(
+      "CREATE TRIGGER probe AFTER INSERT ON target EXECUTE FUNCTION probe_fn();",
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.forms.map(({ form }) => form)).toEqual(["create-trigger"]);
   });
 
   test("typed allowances name the migration and form and carry a reason", () => {
