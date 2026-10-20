@@ -1,3 +1,4 @@
+import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
@@ -18,7 +19,12 @@ import {
   parseCzUohsDocumentPdf,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
+import {
+  extractPlPdfSeparatedContent,
+  PL_PDF_PARAGRAPH_START,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
+import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const originalFetch = globalThis.fetch;
@@ -179,6 +185,127 @@ describe("ÚOHS JSON-LD", () => {
       );
     },
   );
+
+  test("keeps a raised reference immediately after its claim inside a line", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    page.drawText("first claim", { x: 72, y: 650, size: 12 });
+    page.drawText("1", { x: 123, y: 652, size: 7 });
+    page.drawText("; second claim", { x: 127, y: 650, size: 12 });
+    page.drawText("Body text establishes the ordinary font size.", {
+      x: 72,
+      y: 620,
+      size: 12,
+    });
+    page.drawText("1", { x: 72, y: 120, size: 7 });
+    page.drawText("Source for the first claim.", { x: 72, y: 105, size: 8 });
+    const saved = await savePdfRewrite({ pdf, source: new Uint8Array() });
+    expect(saved.status).toBe("saved");
+    if (saved.status !== "saved") {
+      return;
+    }
+    const extracted = await PDF.load(saved.bytes);
+    expect(
+      extracted
+        .getPages()
+        .at(0)
+        ?.extractText()
+        .lines.at(0)
+        ?.spans.map(({ text }) => text),
+    ).toEqual(["first claim", "1", "; second claim"]);
+    const ast = await parseCzUohsDocumentPdf(saved.bytes, {
+      caseNumber: "synthetic-reference",
+      sourceUrl: "synthetic-reference",
+    });
+    const paragraph = ast.blocks.find((block) =>
+      block.plainText.includes("first claim"),
+    );
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
+    expect(paragraph.inlines.slice(0, 3)).toEqual([
+      { type: "text", text: "first claim" },
+      {
+        type: "link",
+        href: "#footnote-1",
+        children: [
+          { type: "superscript", children: [{ type: "text", text: "1" }] },
+        ],
+      },
+      {
+        type: "text",
+        text: "; second claim Body text establishes the ordinary font size.",
+      },
+    ]);
+  });
+
+  test("keeps an unlabelled page-top continuation in the previous footnote until body resumes", async () => {
+    const pdf = PDF.create();
+    const first = pdf.addPage({ size: "letter" });
+    first.drawText("First body paragraph with a reference", {
+      x: 72,
+      y: 650,
+      size: 12,
+    });
+    first.drawText("1", { x: 274, y: 654, size: 7 });
+    first.drawText("1", { x: 72, y: 120, size: 7 });
+    first.drawText("Note begins on the first page", { x: 72, y: 105, size: 8 });
+    const second = pdf.addPage({ size: "letter" });
+    second.drawText("and continues at the next page top.", {
+      x: 72,
+      y: 720,
+      size: 8,
+    });
+    second.drawText("Body resumes here with ordinary text.", {
+      x: 72,
+      y: 650,
+      size: 12,
+    });
+    second.drawText("Small body text after the body resumes.", {
+      x: 72,
+      y: 620,
+      size: 8,
+    });
+    second.drawText("More ordinary body text establishes the body font size.", {
+      x: 72,
+      y: 590,
+      size: 12,
+    });
+    const saved = await savePdfRewrite({ pdf, source: new Uint8Array() });
+    expect(saved.status).toBe("saved");
+    if (saved.status !== "saved") {
+      return;
+    }
+    const separated = await extractPlPdfSeparatedContent(
+      saved.bytes,
+      PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+    );
+    expect(separated.notes).toMatchObject([
+      { type: "text", footnote: { label: "1", noteId: "footnote-1" } },
+      { type: "text", footnote: { label: "1", noteId: "footnote-1" } },
+    ]);
+    const ast = await parseCzUohsDocumentPdf(saved.bytes, {
+      caseNumber: "synthetic-continuation",
+      sourceUrl: "synthetic-continuation",
+    });
+    const notes = ast.blocks.filter(
+      (block) => block.type === "paragraph" && block.note !== undefined,
+    );
+    expect(notes).toHaveLength(1);
+    expect(notes.at(0)).toMatchObject({
+      note: { type: "footnote", label: "1", noteId: "footnote-1" },
+      plainText:
+        "Note begins on the first page and continues at the next page top.",
+    });
+    const bodyText = ast.blocks
+      .filter((block) => block.type === "paragraph" && block.note === undefined)
+      .map(({ plainText }) => plainText)
+      .join(" ");
+    expect(bodyText).not.toContain("Note begins");
+    expect(bodyText).not.toContain("and continues at the next page top.");
+    expect(bodyText).toContain("Small body text after the body resumes.");
+  });
 
   test("a document without numbered paragraphs gets no paragraph numbers", async () => {
     const ast = await parseCzUohsDocumentPdf(czUohsSyntheticPdf(), {

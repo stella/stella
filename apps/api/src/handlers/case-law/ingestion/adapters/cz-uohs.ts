@@ -244,21 +244,19 @@ export const czUohsDocumentAst = ({
       .join("")
       .trim();
   const inlinesOf = (runs: readonly PlSnRun[]): Inline[] =>
-    runs.flatMap(({ text, footnoteReference }) =>
+    runs.map(({ text, footnoteReference }): Inline =>
       footnoteReference === undefined
-        ? [{ type: "text" as const, text }]
-        : [
-            {
-              type: "link" as const,
-              href: `#footnote-${footnoteReference}`,
-              children: [
-                {
-                  type: "superscript" as const,
-                  children: [{ type: "text" as const, text }],
-                },
-              ],
-            },
-          ],
+        ? { type: "text", text }
+        : {
+            type: "link",
+            href: `#footnote-${footnoteReference}`,
+            children: [
+              {
+                type: "superscript" as const,
+                children: [{ type: "text" as const, text }],
+              },
+            ],
+          },
     );
   const numberedReasoningStart = paragraphs.findIndex((runs) =>
     /^1\.\s+\p{Lu}/u.test(textOf(runs)),
@@ -312,7 +310,7 @@ export const czUohsDocumentAst = ({
 /** The decision's document, or the empty placeholder when no file yielded text. */
 const decisionDocumentAst = (
   canonical: (CzUohsPdf & { url: string }) | undefined,
-  identity: Omit<CzUohsDocumentInput, "paragraphs" | "documentUrl">,
+  identity: Omit<CzUohsDocumentInput, "paragraphs" | "notes" | "documentUrl">,
 ) =>
   canonical === undefined
     ? EMPTY_AST

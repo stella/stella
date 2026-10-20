@@ -198,7 +198,8 @@ describe("reading recorded PDF lines", () => {
       pageFurniture: PL_PDF_PAGE_FURNITURE.SEPARATE,
     });
     const notes = lines.filter(
-      (line) => line.type === "text" && line.footnote !== undefined,
+      (line): line is PlSnTextLine =>
+        line.type === "text" && line.footnote !== undefined,
     );
     const text = notes
       .flatMap(({ runs }) => runs.map((run) => run.text))

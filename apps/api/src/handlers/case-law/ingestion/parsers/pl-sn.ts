@@ -302,6 +302,56 @@ type SeparatedPdfContent = {
   notes: PlSnLine[];
 };
 
+/** Split at references before bold runs can merge across the printed mark. */
+const runsWithReferences = (
+  line: PageFurnitureLine,
+  markers: ReadonlySet<PageFurnitureSpan>,
+): PlSnRun[] => {
+  const runs: PlSnRun[] = [];
+  let cursor = 0;
+  let start = 0;
+  let spans: PageFurnitureSpan[] = [];
+  for (const span of line.spans) {
+    const at = line.text.indexOf(span.text, cursor);
+    if (at === -1) {
+      return panic("PDF span is missing from its extracted line");
+    }
+    cursor = at + span.text.length;
+    if (!markers.has(span)) {
+      spans.push(span);
+      continue;
+    }
+    runs.push(
+      ...runsOfLine({
+        spans,
+        text: line.text
+          .slice(start, at)
+          .replace(/\u00a0/gu, " ")
+          .replace(/ {2,}/gu, " "),
+        x: line.bbox.x,
+      }),
+    );
+    runs.push({
+      text: span.text.trim(),
+      bold: false,
+      footnoteReference: span.text.trim(),
+    });
+    spans = [];
+    start = cursor;
+  }
+  runs.push(
+    ...runsOfLine({
+      spans,
+      text: line.text
+        .slice(start)
+        .replace(/\u00a0/gu, " ")
+        .replace(/ {2,}/gu, " "),
+      x: line.bbox.x,
+    }),
+  );
+  return runs;
+};
+
 /** Keep notes and their references while discarding only margin furniture. */
 const readPagesWithFootnotes = (
   pages: readonly {
@@ -337,12 +387,13 @@ const readPagesWithFootnotes = (
     }
   }
 
-  const bodyLines: (ExtractedLine & { markers?: string[] })[] = [];
+  const bodyLines: (ExtractedLine & { runs?: PlSnRun[] })[] = [];
   const notes: PlSnLine[] = [];
   let currentNote: { label: string; noteId: string } | undefined;
 
   for (const { height, lines } of pages) {
     const bodySize = bodyFontSizeOf(lines);
+    let beforeBody = true;
     for (const original of lines) {
       if (
         original.bbox.y < height * PAGE_MARGIN_RATIO ||
@@ -364,7 +415,8 @@ const readPagesWithFootnotes = (
         noteLabelLines.has(original) ||
         (small &&
           currentNote !== undefined &&
-          original.bbox.y < height * FOOTNOTE_ZONE_RATIO &&
+          (original.bbox.y < height * FOOTNOTE_ZONE_RATIO ||
+            (beforeBody && !/^\d/u.test(text.trim()))) &&
           !/^\d+(?:\s+\d+)*$/u.test(text.trim()))
       ) {
         const label = text.trim();
@@ -387,20 +439,28 @@ const readPagesWithFootnotes = (
 
       if (small) {
         const markers = text.trim().split(/\s+/u);
-        if (
-          markers.length > 0 &&
-          markers.every((marker) => labels.has(marker))
-        ) {
+        if (markers.every((marker) => labels.has(marker))) {
           const previous = bodyLines.findLast(
             ({ text: bodyText }) => bodyText.trim().length > 0,
           );
           if (previous !== undefined) {
-            previous.markers = [...(previous.markers ?? []), ...markers];
+            previous.runs ??= runsOfLine(previous);
+            previous.runs.push(
+              ...markers.map((label) => ({
+                text: label,
+                bold: false,
+                footnoteReference: label,
+              })),
+            );
           }
           continue;
         }
       }
 
+      if (text.trim().length > 0) {
+        beforeBody = false;
+        currentNote = undefined;
+      }
       const markerSpans = original.spans.filter(
         ({ bbox, fontSize, text: spanText }) =>
           labels.has(spanText.trim()) &&
@@ -416,7 +476,7 @@ const readPagesWithFootnotes = (
         text: normalizeSpanText(cleaned.text),
         x: cleaned.bbox.x,
         ...(markerSpans.length > 0
-          ? { markers: markerSpans.map(({ text: marker }) => marker.trim()) }
+          ? { runs: runsWithReferences(original, new Set(markerSpans)) }
           : {}),
       });
     }
@@ -428,19 +488,12 @@ const readPagesWithFootnotes = (
   );
   const body = readPage(bodyLines, paragraphStart, documentBodyMargin).map(
     (line, index): PlSnLine => {
-      const markers = bodyLines.at(index)?.markers;
-      return line.type !== "text" || markers === undefined
+      const runs = bodyLines.at(index)?.runs;
+      return line.type !== "text" || runs === undefined
         ? line
         : {
             ...line,
-            runs: [
-              ...line.runs,
-              ...markers.map((label) => ({
-                text: label,
-                bold: false,
-                footnoteReference: label,
-              })),
-            ],
+            runs,
           };
     },
   );
