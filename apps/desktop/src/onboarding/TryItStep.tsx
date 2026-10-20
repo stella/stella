@@ -229,11 +229,13 @@ function liveKeycaps({
   locale,
 }: LiveKeycapsOptions): Keycap[] {
   const caps: Keycap[] = [
-    ...orderModifiers(keys.modifiers, DESKTOP_PLATFORM).map((modifier) => ({
-      id: modifier,
-      label: modifierLabel({ locale, modifier, platform: DESKTOP_PLATFORM }),
-      state: held.includes(modifier) ? "down" : "idle",
-    })),
+    ...orderModifiers(keys.modifiers, DESKTOP_PLATFORM).map(
+      (modifier): Keycap => ({
+        id: modifier,
+        label: modifierLabel({ locale, modifier, platform: DESKTOP_PLATFORM }),
+        state: held.includes(modifier) ? "down" : "idle",
+      }),
+    ),
     {
       id: "key",
       label: keyLabel(keys.code, layout),
