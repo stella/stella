@@ -79,14 +79,23 @@ export const createOcrSearchablePdfKey = ({
 type CreateUserFileKeyProps = {
   fileId: string;
   mimeType: string;
-  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
 };
 
 export const createUserFileKey = ({
   fileId,
   mimeType,
-  userId,
+  organizationId,
 }: CreateUserFileKeyProps): FileKey =>
   // Chat attachments are scanned before they are written here
   // (`uploadMessageFiles`), so the key addresses scanned bytes.
-  v.parse(fileKeySchema, `${userId}/${fileId}.${getFileExtension(mimeType)}`);
+  v.parse(
+    fileKeySchema,
+    `${organizationId}/${fileId}.${getFileExtension(mimeType)}`,
+  );
+
+/** Returns the persisted key only when it belongs to the given organization. */
+export const storedKeyForOrganization = <StoredKey extends string>(
+  key: StoredKey,
+  organizationId: SafeId<"organization">,
+): StoredKey | null => (key.startsWith(`${organizationId}/`) ? key : null);

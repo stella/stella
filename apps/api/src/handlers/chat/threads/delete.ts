@@ -14,7 +14,6 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const THREAD_FILE_CLEANUP_BATCH_SIZE = 200;
 
@@ -56,7 +55,10 @@ const deleteThread = createSafeRootHandler(
     const thread = yield* Result.await(
       safeDb(async (tx) => {
         const rows = await tx
-          .select({ id: chatThreads.id })
+          .select({
+            id: chatThreads.id,
+            organizationId: chatThreads.organizationId,
+          })
           .from(chatThreads)
           .where(
             and(
@@ -97,7 +99,7 @@ const deleteThread = createSafeRootHandler(
               createUserFileKey({
                 fileId: file.thumbnailFileId,
                 mimeType: THUMBNAIL_MIME_TYPE,
-                userId: brandPersistedUserId(file.userId),
+                organizationId: thread.organizationId,
               }),
             ]
           : [file.s3Key],

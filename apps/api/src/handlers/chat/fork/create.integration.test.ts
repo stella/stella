@@ -134,9 +134,11 @@ type SeededAttachment = {
 };
 
 const seedAttachment = async ({
+  organizationId,
   threadId,
   userId,
 }: {
+  organizationId: SafeId<"organization">;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
 }): Promise<SeededAttachment> => {
@@ -145,12 +147,12 @@ const seedAttachment = async ({
   const s3Key = createUserFileKey({
     fileId,
     mimeType: IMAGE_MIME_TYPE,
-    userId,
+    organizationId,
   });
   const thumbnailKey = createUserFileKey({
     fileId: thumbnailFileId,
     mimeType: THUMBNAIL_MIME_TYPE,
-    userId,
+    organizationId,
   });
   await testDb.insert(userFiles).values({
     fileName: "exhibit.png",
@@ -207,7 +209,11 @@ const seedThread = async ({
   });
 
   const attachment = withAttachment
-    ? await seedAttachment({ threadId, userId: owner })
+    ? await seedAttachment({
+        organizationId: organizationId ?? ids.orgA,
+        threadId,
+        userId: owner,
+      })
     : null;
 
   const messageIds = texts.map(() =>
@@ -512,7 +518,7 @@ test("duplicates attachments so neither thread's deletion touches the other's ob
   const copiedThumbnailKey = createUserFileKey({
     fileId: copiedFile.thumbnailFileId ?? "",
     mimeType: THUMBNAIL_MIME_TYPE,
-    userId: ids.userA1,
+    organizationId: ids.orgA,
   });
   expect(copiedThumbnailKey).not.toBe(attachment.thumbnailKey);
 
@@ -1094,7 +1100,11 @@ test.each([true, false])(
     const attachments = [source.attachment];
     for (let index = 1; index < 130; index += 1) {
       attachments.push(
-        await seedAttachment({ threadId: source.threadId, userId: ids.userA1 }),
+        await seedAttachment({
+          organizationId: ids.orgA,
+          threadId: source.threadId,
+          userId: ids.userA1,
+        }),
       );
     }
     expect(attachments.length).toBeGreaterThan(128);
@@ -1218,7 +1228,7 @@ test.each([true, false])(
         expect(file.thumbnailFileId).not.toBeNull();
         expect(
           fakeS3.objects.has(
-            `${BUCKET}/${createUserFileKey({ fileId: file.thumbnailFileId ?? "", mimeType: THUMBNAIL_MIME_TYPE, userId: ids.userA1 })}`,
+            `${BUCKET}/${createUserFileKey({ fileId: file.thumbnailFileId ?? "", mimeType: THUMBNAIL_MIME_TYPE, organizationId: ids.orgA })}`,
           ),
         ).toBe(true);
       }

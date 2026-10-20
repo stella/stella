@@ -728,36 +728,29 @@ export const uploadUserFile = async ({
     const sha256Hex = hashSha256Hex(file.bytes);
     const id = createSafeId<"userFile">();
 
+    const thread = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await tx.query.chatThreads.findFirst({
+            where: { id: { eq: threadId }, userId: { eq: userId } },
+            columns: { organizationId: true },
+          }),
+      ),
+    );
+    if (!thread) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Chat thread no longer exists",
+        }),
+      );
+    }
+    const organizationId = thread.organizationId;
     const s3Key = createUserFileKey({
       fileId: id,
       mimeType: file.mimeType,
-      userId,
+      organizationId,
     });
-
-    let organizationId: SafeId<"organization"> | undefined;
-    if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
-      const thread = yield* Result.await(
-        safeDb(
-          async (tx) =>
-            await tx.query.chatThreads.findFirst({
-              where: {
-                id: { eq: threadId },
-                userId: { eq: userId },
-              },
-              columns: { organizationId: true },
-            }),
-        ),
-      );
-      if (!thread) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Chat thread no longer exists",
-          }),
-        );
-      }
-      organizationId = thread.organizationId;
-    }
 
     const scanResult = await scanUpload({
       bytes: file.bytes,
@@ -832,7 +825,7 @@ export const uploadUserFile = async ({
         const key = createUserFileKey({
           fileId: generatedThumbnailId,
           mimeType: THUMBNAIL_MIME_TYPE,
-          userId,
+          organizationId,
         });
         preparedThumbnail = {
           bytes: thumbnailResult.value.webp,
@@ -893,7 +886,7 @@ export const uploadUserFile = async ({
       "FEATURE_FILE_USAGE_LIMITS",
     )
       ? await writeOrganizationFile({
-          organizationId: organizationId ?? panic("Missing chat organization"),
+          organizationId,
           objectKey: s3Key,
           sizeBytes: file.bytes.byteLength,
           content: file.bytes,
@@ -971,8 +964,7 @@ export const uploadUserFile = async ({
         "FEATURE_FILE_USAGE_LIMITS",
       )
         ? await writeOrganizationFile({
-            organizationId:
-              organizationId ?? panic("Missing chat organization"),
+            organizationId,
             objectKey: preparedThumbnail.key,
             sizeBytes: preparedThumbnail.bytes.byteLength,
             content: preparedThumbnail.bytes,

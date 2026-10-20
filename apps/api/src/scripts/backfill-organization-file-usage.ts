@@ -33,7 +33,6 @@ import { headObject } from "@/api/lib/s3-presign";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserFileId,
-  brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import {
   isTemporaryOrganizationObjectKey,
@@ -129,7 +128,7 @@ await runScriptWithErrorOutput(async () => {
           objectKey: createUserFileKey({
             fileId: file.thumbnailFileId,
             mimeType: THUMBNAIL_MIME_TYPE,
-            userId: brandPersistedUserId(file.userId),
+            organizationId,
           }),
         });
       }

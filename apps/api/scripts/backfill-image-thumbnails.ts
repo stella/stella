@@ -199,21 +199,12 @@ const backfillChatFilePage = async (
       continue;
     }
     const thumbnailFileId = Bun.randomUUIDv7();
+    const organizationId = brandPersistedOrganizationId(row.organizationId);
     const thumbnailKey = createUserFileKey({
       fileId: thumbnailFileId,
       mimeType: THUMBNAIL_MIME_TYPE,
-      userId: brandPersistedUserId(row.userId),
+      organizationId,
     });
-    let organizationId: SafeId<"organization"> | null = null;
-    if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
-      if (
-        !("organizationId" in row) ||
-        typeof row.organizationId !== "string"
-      ) {
-        return panic("Tracked chat thumbnail query omitted organization id");
-      }
-      organizationId = brandPersistedOrganizationId(row.organizationId);
-    }
     prepared.push({
       rowId: row.id,
       thumbnailFileId,

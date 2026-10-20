@@ -7,6 +7,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { storedKeyForOrganization } from "@/api/lib/file-key";
 
 const getTemplateParamsSchema = t.Object({
   templateId: tSafeId("template"),
@@ -67,13 +68,17 @@ const getTemplate = createSafeRootHandler(
         if (!template) {
           return null;
         }
+        const s3Key = storedKeyForOrganization(template.s3Key, organizationId);
+        if (s3Key === null) {
+          return null;
+        }
 
         const presignedUrl = await auditedPresignDownload({
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
           resourceId: templateId,
-          s3Key: template.s3Key,
+          s3Key,
           expiresInSeconds: PRESIGN_EXPIRES_IN,
           fileName: template.fileName,
           organizationId,

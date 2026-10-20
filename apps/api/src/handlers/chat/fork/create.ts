@@ -254,7 +254,7 @@ type UserFileCopyOutcome =
 
 const stageUserFileCopies = (
   files: SourceUserFileRow[],
-  userId: SafeId<"user">,
+  organizationId: SafeId<"organization">,
 ) =>
   files.map((file) => {
     const newFileId = createSafeId<"userFile">();
@@ -266,7 +266,7 @@ const stageUserFileCopies = (
       copiedS3Key: createUserFileKey({
         fileId: newFileId,
         mimeType: file.mimeType,
-        userId,
+        organizationId,
       }),
       copiedThumbnailFileId,
       thumbnailKey:
@@ -275,7 +275,7 @@ const stageUserFileCopies = (
           : createUserFileKey({
               fileId: copiedThumbnailFileId,
               mimeType: THUMBNAIL_MIME_TYPE,
-              userId,
+              organizationId,
             }),
     };
   });
@@ -306,7 +306,7 @@ const prepareUserFileCopy = async (
 
 const prepareUserFileThumbnail = async (
   copy: ReturnType<typeof stageUserFileCopies>[number],
-  userId: SafeId<"user">,
+  organizationId: SafeId<"organization">,
 ) => {
   const thumbnailSource =
     copy.source.thumbnailFileId === null
@@ -314,7 +314,7 @@ const prepareUserFileThumbnail = async (
       : createUserFileKey({
           fileId: copy.source.thumbnailFileId,
           mimeType: THUMBNAIL_MIME_TYPE,
-          userId,
+          organizationId,
         });
   const thumbnailHead =
     thumbnailSource !== null &&
@@ -329,15 +329,13 @@ const copyUserFiles = async ({
   files,
   fileUsageDb,
   organizationId,
-  userId,
 }: {
   copiedS3Keys: string[];
   files: SourceUserFileRow[];
   fileUsageDb?: Parameters<typeof copyOrganizationFiles>[0]["db"];
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
 }): Promise<Result<UserFileCopyOutcome[], HandlerError<409 | 500 | 503>>> => {
-  const staged = stageUserFileCopies(files, userId);
+  const staged = stageUserFileCopies(files, organizationId);
   const prepared: Awaited<ReturnType<typeof prepareUserFileCopy>>[] = [];
   for (const itemBatch of chunkItems(staged, FORK_COPY_CONCURRENCY)) {
     prepared.push(
@@ -437,7 +435,7 @@ const copyUserFiles = async ({
     inspected.push(
       ...(await Promise.all(
         itemBatch.map(
-          async (copy) => await prepareUserFileThumbnail(copy, userId),
+          async (copy) => await prepareUserFileThumbnail(copy, organizationId),
         ),
       )),
     );
@@ -792,7 +790,6 @@ export const createForkThread = ({
         files: sourceFiles,
         fileUsageDb,
         organizationId: session.activeOrganizationId,
-        userId: user.id,
       });
       if (Result.isError(copiedFiles)) {
         await rollbackCopiedS3Keys(copiedS3Keys, fileUsageDb);

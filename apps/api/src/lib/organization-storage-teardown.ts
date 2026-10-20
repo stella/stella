@@ -575,7 +575,7 @@ const recordChatAttachmentPage = async (
             createUserFileKey({
               fileId: attachment.thumbnailFileId,
               mimeType: THUMBNAIL_MIME_TYPE,
-              userId: attachment.userId,
+              organizationId: scope.organizationId,
             }),
           ],
     ),

@@ -8,6 +8,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { storedKeyForOrganization } from "@/api/lib/file-key";
 
 const readUserFileContent = createSafeRootHandler(
   {
@@ -55,13 +56,20 @@ const readUserFileContent = createSafeRootHandler(
         if (!file) {
           return null;
         }
+        const s3Key = storedKeyForOrganization(
+          file.s3Key,
+          activeOrganizationId,
+        );
+        if (s3Key === null) {
+          return null;
+        }
 
         const presignedUrl = await auditedPresignDownload({
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
           resourceId: fileId,
-          s3Key: file.s3Key,
+          s3Key,
           expiresInSeconds: 900,
           workspaceId: file.workspaceId,
         });

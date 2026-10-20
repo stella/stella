@@ -61,7 +61,7 @@ const readUserFileThumbnail = createSafeRootHandler(
         const thumbnailKey = createUserFileKey({
           fileId: file.thumbnailFileId,
           mimeType: THUMBNAIL_MIME_TYPE,
-          userId: user.id,
+          organizationId: activeOrganizationId,
         });
 
         const presignedUrl = await auditedPresignDownload({

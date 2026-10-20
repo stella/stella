@@ -9,6 +9,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { storedKeyForOrganization } from "@/api/lib/file-key";
 import { STYLE_SET_DOWNLOAD_TTL_SECONDS } from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
@@ -55,13 +56,20 @@ export default createSafeRootHandler(
         if (!styleSet) {
           return null;
         }
+        const s3Key = storedKeyForOrganization(
+          styleSet.s3Key,
+          session.activeOrganizationId,
+        );
+        if (s3Key === null) {
+          return null;
+        }
 
         const presignedUrl = await auditedPresignDownload({
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
           resourceId: styleSet.id,
-          s3Key: styleSet.s3Key,
+          s3Key,
           expiresInSeconds: STYLE_SET_DOWNLOAD_TTL_SECONDS,
           fileName: styleSet.fileName,
           organizationId: session.activeOrganizationId,

@@ -1224,9 +1224,10 @@ export const deleteUserFiles = async ({
       id: userFiles.id,
       s3Key: userFiles.s3Key,
       thumbnailFileId: userFiles.thumbnailFileId,
-      userId: userFiles.userId,
+      organizationId: chatThreads.organizationId,
     })
     .from(userFiles)
+    .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
     .where(eq(userFiles.userId, currentUserId));
 
   if (files.length > 0) {
@@ -1238,7 +1239,9 @@ export const deleteUserFiles = async ({
               createUserFileKey({
                 fileId: file.thumbnailFileId,
                 mimeType: "image/webp",
-                userId: brandPersistedUserId(file.userId),
+                organizationId: brandPersistedOrganizationId(
+                  file.organizationId,
+                ),
               }),
             ]
           : [file.s3Key],

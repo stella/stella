@@ -91,7 +91,7 @@ import { createTextPdf } from "@/api/lib/files/text-pdf";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { cents } from "@/api/lib/money";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import type {
@@ -5071,7 +5071,7 @@ export async function seed(organizationId?: string, userId?: string) {
             id: userFiles.id,
             s3Key: userFiles.s3Key,
             thumbnailFileId: userFiles.thumbnailFileId,
-            userId: userFiles.userId,
+            organizationId: chatThreads.organizationId,
           })
           .from(userFiles)
           .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
@@ -5087,7 +5087,9 @@ export async function seed(organizationId?: string, userId?: string) {
                 createUserFileKey({
                   fileId: file.thumbnailFileId,
                   mimeType: THUMBNAIL_MIME_TYPE,
-                  userId: brandPersistedUserId(file.userId),
+                  organizationId: brandPersistedOrganizationId(
+                    file.organizationId,
+                  ),
                 }),
               ],
         ),

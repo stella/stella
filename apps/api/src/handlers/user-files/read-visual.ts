@@ -16,6 +16,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { storedKeyForOrganization } from "@/api/lib/file-key";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
@@ -87,10 +88,16 @@ export const createReadUserFileVisual = (readObject = readStoredFile) =>
           new HandlerError({ status: 404, message: "User file not found" }),
         );
       }
+      const s3Key = storedKeyForOrganization(file.s3Key, activeOrganizationId);
+      if (s3Key === null) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "User file not found" }),
+        );
+      }
       const read = await Result.tryPromise({
         try: async () =>
           await readObject({
-            key: file.s3Key,
+            key: s3Key,
             mimeType: TEXT_PLAIN_MIME_TYPE,
             maxBytes: STORED_VISUAL_BYTES,
             signal: request.signal,
