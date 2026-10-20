@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import { readdir } from "node:fs/promises";
+import * as v from "valibot";
 
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import {
@@ -15,6 +16,7 @@ const SNAPSHOT = new URL(
   "__snapshots__/cz-us-parser-output.snapshot.json.gz",
   import.meta.url,
 );
+const snapshotSchema = v.record(v.string(), v.string());
 
 const fixtureNames = async (): Promise<string[]> =>
   (await readdir(FIXTURES.pathname))
@@ -38,10 +40,8 @@ const inputFor = (name: string, html: string) => ({
 describe("committed CZ ÚS fixtures", () => {
   test("retain their complete serialized parser output", async () => {
     const names = await fixtureNames();
-    const snapshots = JSON.parse(await gunzipText(SNAPSHOT)) as Record<
-      string,
-      string
-    >;
+    const snapshotJson: unknown = JSON.parse(await gunzipText(SNAPSHOT));
+    const snapshots = v.parse(snapshotSchema, snapshotJson);
 
     expect(Object.keys(snapshots).toSorted()).toEqual(names);
     for (const name of names) {
