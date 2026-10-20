@@ -29,6 +29,16 @@ type RunGatedTestsOptions = {
   selection?: string | undefined;
   exclusiveTestPaths?: ReadonlySet<string> | undefined;
   spawnTestProcess?: RunTestBatchesOptions["spawn"];
+  runnerArguments?: readonly string[] | undefined;
+  runTestFiles?:
+    | ((options: {
+        bunArguments: readonly string[];
+        files: readonly string[];
+        gate: string;
+        gateValue: string;
+        preload?: string | undefined;
+      }) => Promise<number>)
+    | undefined;
   shardTestFiles?:
     | ((testFiles: readonly string[]) => readonly string[])
     | undefined;
@@ -176,6 +186,8 @@ export const runGatedTests = async ({
   selection,
   exclusiveTestPaths = new Set(),
   spawnTestProcess,
+  runnerArguments = Bun.argv.slice(2),
+  runTestFiles,
   validateTestPlan,
   shardTestFiles,
 }: RunGatedTestsOptions): Promise<number> => {
@@ -201,9 +213,7 @@ export const runGatedTests = async ({
     plan.mode === "selected" ? plan.files : discoveredGatedFiles;
   await validateTestPlan?.(apiRoot, discoveredGatedFiles);
 
-  const { bunArguments, patterns } = partitionRunnerArguments(
-    Bun.argv.slice(2),
-  );
+  const { bunArguments, patterns } = partitionRunnerArguments(runnerArguments);
   const selectedPaths = selectTestPaths(
     plannedFiles,
     normalizeAbsoluteTestPatterns(patterns, apiRoot),
@@ -250,6 +260,15 @@ export const runGatedTests = async ({
     }
   }
 
+  if (runTestFiles !== undefined) {
+    return runTestFiles({
+      bunArguments,
+      files: testFiles,
+      gate: runner.gate,
+      gateValue: runner.gateValue,
+      preload,
+    });
+  }
   const batches = isolateSharedTableDdlTests(testFiles, exclusiveTestPaths);
   console.log(
     `Running ${String(testFiles.length)} ${runner.gate} test files in ${String(batches.length)} process batches.`,
