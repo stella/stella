@@ -4,6 +4,7 @@ import tls from "node:tls";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { setProcessEnvironment } from "../tests/environment.ts";
 import {
   NetworkAccessError,
   installNetworkGuard,
@@ -11,6 +12,7 @@ import {
 } from "./network.ts";
 
 let uninstall: (() => void) | undefined;
+let restoreProcessEnvironment: (() => void) | undefined;
 
 // What a fake fetch was asked for, whichever input form it received.
 const requestedUrl = (input: unknown): string => {
@@ -25,6 +27,8 @@ const requestedUrl = (input: unknown): string => {
 afterEach(() => {
   uninstall?.();
   uninstall = undefined;
+  restoreProcessEnvironment?.();
+  restoreProcessEnvironment = undefined;
 });
 
 describe("loopback hosts", () => {
@@ -359,20 +363,35 @@ describe("network guard", () => {
     });
   });
 
-  test("a remote proxy in the environment refuses the install", () => {
-    for (const environment of [
-      { HTTPS_PROXY: "http://proxy.example:3128" },
-      { http_proxy: "http://proxy.example:3128" },
-      { ALL_PROXY: "not a url" },
-    ]) {
-      expect(() => installNetworkGuard({ environment })).toThrow(
-        NetworkAccessError,
-      );
-    }
-    // A loopback proxy keeps every connection on this machine.
-    uninstall = installNetworkGuard({
-      environment: { HTTP_PROXY: "http://127.0.0.1:3128" },
+  test("proxy variables in the given environment are hidden and restored", () => {
+    const environment: Record<string, string | undefined> = {
+      HTTP_PROXY: "http://proxy.example:3128",
+      https_proxy: "http://other-proxy.example:3128",
+    };
+    expect(Object.hasOwn(environment, "ALL_PROXY")).toBe(false);
+
+    uninstall = installNetworkGuard({ environment });
+    expect(environment["HTTP_PROXY"]).toBeUndefined();
+    expect(environment["https_proxy"]).toBeUndefined();
+    expect(Object.hasOwn(environment, "ALL_PROXY")).toBe(false);
+
+    uninstall();
+    uninstall = undefined;
+    expect(environment["HTTP_PROXY"]).toBe("http://proxy.example:3128");
+    expect(environment["https_proxy"]).toBe("http://other-proxy.example:3128");
+    expect(Object.hasOwn(environment, "ALL_PROXY")).toBe(false);
+  });
+
+  test("process proxy variables are hidden with a separate environment", () => {
+    restoreProcessEnvironment = setProcessEnvironment({
+      HTTP_PROXY: "http://proxy.example:3128",
     });
+    uninstall = installNetworkGuard({ environment: {} });
+    expect(process.env["HTTP_PROXY"]).toBeUndefined();
+
+    uninstall();
+    uninstall = undefined;
+    expect(process.env["HTTP_PROXY"]).toBe("http://proxy.example:3128");
   });
 
   test("fetch.preconnect is refused for a remote host before it connects", () => {

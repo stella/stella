@@ -10,7 +10,6 @@
         "@gdp-ts/core": "0.1.0",
         "@oxlint/plugins": "catalog:",
         "@shadcn/lint": "catalog:",
-        "@stll/aho-corasick": "catalog:",
         "@stll/collation": "workspace:*",
         "@stll/oxlint-config": "1.4.0",
         "@stll/portable-path": "workspace:*",
@@ -80,7 +79,6 @@
         "@smithy/fetch-http-handler": "^5.8.0",
         "@stll/agent-engine": "workspace:*",
         "@stll/agent-input": "workspace:*",
-        "@stll/aho-corasick": "catalog:",
         "@stll/ai-catalog": "workspace:*",
         "@stll/analytics-config": "workspace:*",
         "@stll/anonymize": "catalog:",
@@ -106,7 +104,6 @@
         "@stll/fetch": "workspace:*",
         "@stll/folio-agents": "catalog:",
         "@stll/folio-core": "catalog:",
-        "@stll/fuzzy-search": "catalog:",
         "@stll/infosoud": "workspace:*",
         "@stll/invoicing": "workspace:*",
         "@stll/legal-ast": "workspace:*",
@@ -354,7 +351,6 @@
       "name": "@stll/legal-atlas-runner",
       "version": "0.0.0",
       "dependencies": {
-        "@stll/aho-corasick": "catalog:",
         "@stll/api": "workspace:*",
         "@stll/concurrency": "workspace:*",
         "@stll/legal-ast": "workspace:*",
@@ -803,7 +799,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@ag-ui/core": "1.0.2",
         "@stll/ai-catalog": "workspace:^",
@@ -850,7 +846,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "5.0.0",
+      "version": "5.1.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1012,7 +1008,6 @@
         "infosoud": "./dist/cli.js",
       },
       "dependencies": {
-        "@stll/aho-corasick": "catalog:",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "temporal-polyfill": "catalog:",
@@ -1062,7 +1057,9 @@
         "@stll/api-contract": "workspace:*",
         "@stll/concurrency": "workspace:*",
         "@stll/legal-ast": "workspace:*",
+        "@stll/locales": "workspace:*",
         "@stll/text-normalize": "workspace:*",
+        "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
@@ -1130,10 +1127,9 @@
     },
     "packages/mcp-kit": {
       "name": "@stll/mcp-kit",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@stll/agent-input": "workspace:^",
-        "@stll/fuzzy-search": "catalog:",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -1589,6 +1585,7 @@
   ],
   "patchedDependencies": {
     "@tanstack/ai@0.65.1": "patches/@tanstack%2Fai@0.65.1.patch",
+    "oxlint-tailwindcss@1.16.0": "patches/oxlint-tailwindcss@1.16.0.patch",
     "@tanstack/ai-anthropic@0.19.5": "patches/@tanstack%2Fai-anthropic@0.19.5.patch",
     "@tanstack/ai-mcp@0.8.0": "patches/@tanstack%2Fai-mcp@0.8.0.patch",
     "@better-auth/drizzle-adapter@1.7.6": "patches/@better-auth%2Fdrizzle-adapter@1.7.6.patch",

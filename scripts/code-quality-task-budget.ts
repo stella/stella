@@ -278,9 +278,15 @@ type RunBudgetedCheckOptions = {
 
 const PROCESS_GROUP_ENV = "CODE_QUALITY_PROCESS_GROUP";
 const TASK_STALL = "Code-quality task stalled";
+const TASK_OVERRUN = "Code-quality run exceeded twice its budget";
 // Healthy API lint emitted no output for 196.999521 s. Twice that observed gap
 // rounds up to 400 s; advancing owned CPU time also counts as progress.
 export const TASK_STALL_MS = 400_000;
+
+// Advancing CPU time keeps a quiet compiler alive past its warning budget, but
+// a process that spins after its work is done would then never stall. Twice
+// the run's budget is the hard bound: past it the run fails whatever it does.
+export const TASK_DEADLINE_BUDGETS = 2;
 
 type TaskProgressWatchdogOptions = {
   budgetMs: number;
@@ -288,6 +294,8 @@ type TaskProgressWatchdogOptions = {
   now: () => number;
   warn: () => void;
   kill: () => void;
+  // A wall-clock bound that progress cannot extend; diagnostics have none.
+  deadline?: { ms: number; overrun: () => void };
 };
 export const createTaskProgressWatchdog = ({
   budgetMs,
@@ -295,6 +303,7 @@ export const createTaskProgressWatchdog = ({
   now,
   warn,
   kill,
+  deadline,
 }: TaskProgressWatchdogOptions) => {
   const started = now();
   let progressAt = started;
@@ -326,7 +335,13 @@ export const createTaskProgressWatchdog = ({
         return;
       }
       warning();
-      if (!stalled && now() - progressAt >= stallMs) {
+      if (stalled) {
+        return;
+      }
+      if (deadline !== undefined && now() - started >= deadline.ms) {
+        stalled = true;
+        deadline.overrun();
+      } else if (now() - progressAt >= stallMs) {
         stalled = true;
         kill();
       }
@@ -666,6 +681,15 @@ const createTaskMonitor = ({
         `::error title=task-stall::kind=infra class=task-stall ${telemetry()} idle_ms=${watchdog.idleMs()}\n`,
       );
       terminate(TASK_STALL);
+    },
+    deadline: {
+      ms: budgetMs * TASK_DEADLINE_BUDGETS,
+      overrun: () => {
+        reportDiagnostic(
+          `::error title=task-overrun::kind=infra class=task-overrun ${telemetry()} idle_ms=${watchdog.idleMs()}\n`,
+        );
+        terminate(TASK_OVERRUN);
+      },
     },
   });
   let previousCpu: string | undefined;
@@ -1083,7 +1107,10 @@ const finishBudgetedCheck = async ({
     return {
       exitCode: 124,
       output,
-      outcome: termination === TASK_STALL ? "stalled" : "interrupted",
+      outcome:
+        termination === TASK_STALL || termination === TASK_OVERRUN
+          ? "stalled"
+          : "interrupted",
     };
   }
   if (!turbo) {
