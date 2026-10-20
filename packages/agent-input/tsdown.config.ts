@@ -1,13 +1,13 @@
 import { defineConfig } from "tsdown";
 
-import packageManifest from "./package.json" with { type: "json" };
-
-const entry = Object.values(packageManifest.exports).map((target) =>
-  target.replace(/^\.\//u, ""),
-);
-
 export default defineConfig({
-  entry,
+  entry: [
+    "src/index.ts",
+    "src/country.ts",
+    "src/date-value.ts",
+    "src/locale.ts",
+    "src/string-list.ts",
+  ],
   format: ["esm"],
   platform: "neutral",
   dts: true,
