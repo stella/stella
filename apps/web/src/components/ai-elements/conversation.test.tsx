@@ -7,6 +7,7 @@ import { ConversationScrollButton } from "@/components/ai-elements/conversation"
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { StickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import messages from "@/i18n/langs/ar.json";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 const STICK_TO_BOTTOM = {
   contentRef: () => {},
@@ -34,7 +35,13 @@ test("leaves the scroll action out of the follow-up chips", () => {
   const html = renderToStaticMarkup(
     <IntlProvider locale="ar" messages={messages} timeZone="UTC">
       <StickToBottomContext value={STICK_TO_BOTTOM}>
-        <SuggestedFollowupChips onSelect={() => {}} prompts={["لخّص النتيجة"]} />
+        <SuggestedFollowupChips
+          analyticsSurface="chat-thread"
+          messageId="message-1"
+          onSelect={() => {}}
+          prompts={["لخّص النتيجة"]}
+          threadId={toChatThreadId("thread-1")}
+        />
       </StickToBottomContext>
     </IntlProvider>,
   );

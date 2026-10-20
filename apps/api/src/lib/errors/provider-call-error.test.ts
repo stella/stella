@@ -4,6 +4,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  aiErrorStatusBody,
   aiHandlerError,
   classifyAIError,
   providerStatusCode,
@@ -203,4 +204,20 @@ describe("provider call error codes", () => {
     }
     expect(JSON.stringify(error)).not.toContain(sentinel);
   });
+});
+
+test("a status body keeps the managed-provider code the handler preserved", () => {
+  const error = createProviderCallError({
+    model: { provider: "openrouter", keySource: "instance" },
+    status: 503,
+    code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+    evidence: { status: 503, isRetryable: false },
+  });
+
+  const { body } = aiErrorStatusBody(error, {
+    status: 502,
+    message: "Generation failed",
+  });
+
+  expect(body.code).toBe(MANAGED_PROVIDER_UNAVAILABLE_CODE);
 });
