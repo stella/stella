@@ -324,6 +324,32 @@ export const redactCaseLawDecision = async ({
       .from(caseLawDecisionAliases)
       .where(eq(caseLawDecisionAliases.canonicalDecisionId, decisionId));
     const decisionIds = [decisionId, ...aliases.map(({ id }) => id)].toSorted();
+    // Projection fences before decision rows, the order projection writers
+    // take them; and every lock before any row changes, because a failure
+    // returned from this callback commits and must find nothing mutated.
+    const pendingSourceLocks = [];
+    for (const id of decisionIds) {
+      const subject = { family: "case_law", entityId: id } as const;
+      pendingSourceLocks.push(
+        Result.tryPromise({
+          try: async () => await lockSource(tx, subject),
+          catch: (cause) => cause,
+        }).then((sourceLock) => ({ sourceLock, subject })),
+      );
+    }
+    const lockedSubjects = [];
+    for (const locked of await Promise.all(pendingSourceLocks)) {
+      if (Result.isError(locked.sourceLock)) {
+        return locked.sourceLock.error instanceof
+          CorpusIndexProjectionSubjectMissingError
+          ? { type: "missing" }
+          : { type: "lock-failed", cause: locked.sourceLock.error };
+      }
+      lockedSubjects.push({
+        sourceLock: locked.sourceLock.value,
+        subject: locked.subject,
+      });
+    }
     await lockCaseLawDecisionErasureRows({ tx, decisionIds });
     const decisions = await tx
       .select({
@@ -342,35 +368,15 @@ export const redactCaseLawDecision = async ({
       return { type: "missing" };
     }
 
-    // Every projection lock is taken before any row changes: a failure
-    // returned from this callback commits, so it must find nothing mutated.
-    const pendingSourceLocks = [];
-    for (const decision of decisions) {
-      const subject = { family: "case_law", entityId: decision.id } as const;
-      pendingSourceLocks.push(
-        Result.tryPromise({
-          try: async () => await lockSource(tx, subject),
-          catch: (cause) => cause,
-        }).then((sourceLock) => ({ decision, sourceLock, subject })),
-      );
-    }
-    const lockedDecisions = [];
-    for (const locked of await Promise.all(pendingSourceLocks)) {
-      if (Result.isError(locked.sourceLock)) {
-        return locked.sourceLock.error instanceof
-          CorpusIndexProjectionSubjectMissingError
-          ? { type: "missing" }
-          : { type: "lock-failed", cause: locked.sourceLock.error };
-      }
-      lockedDecisions.push({
-        decision: locked.decision,
-        sourceLock: locked.sourceLock.value,
-        subject: locked.subject,
-      });
-    }
-
     const pendingFenceResults = [];
-    for (const { decision, sourceLock, subject } of lockedDecisions) {
+    for (const decision of decisions) {
+      const { sourceLock, subject } =
+        lockedSubjects.find(
+          (locked) => locked.subject.entityId === decision.id,
+        ) ??
+        panic(
+          `Redaction fence read ${decision.id} without its projection lock`,
+        );
       pendingFenceResults.push(
         (async () => {
           // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
