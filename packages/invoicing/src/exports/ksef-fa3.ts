@@ -64,6 +64,10 @@ const EU_COUNTRIES = new Set([
 const vatPrefixOf = (country: string): string =>
   country === "GR" ? "EL" : country;
 
+/** The EU VAT prefixes (TKodyKrajowUE): the member states with EL for Greece,
+ * and XI for Northern Ireland. */
+const EU_VAT_PREFIXES = new Set([...[...EU_COUNTRIES].map(vatPrefixOf), "XI"]);
+
 /**
  * The invoice's sales totals, in the schema's order: each net sum (P_13_x)
  * and, for the taxed rates, the VAT on it (P_14_x).
@@ -238,10 +242,15 @@ const buyerIdentification = (
     ?.replaceAll(/[^\dA-Za-z+*]/gu, "")
     .toUpperCase();
   if (zone === "eu" && vatId) {
-    const prefix = vatPrefixOf(country);
-    const number = vatId.startsWith(prefix)
-      ? vatId.slice(prefix.length)
-      : vatId;
+    // The VAT number's own prefix names the registration country, which
+    // identifies the taxpayer even when it differs from the address (a branch,
+    // a foreign VAT registration). A number without a prefix takes the
+    // address country's (French numbers may begin with two letters that are
+    // not a prefix).
+    const leading = vatId.slice(0, 2);
+    const ownPrefix = EU_VAT_PREFIXES.has(leading) ? leading : undefined;
+    const prefix = ownPrefix ?? vatPrefixOf(country);
+    const number = ownPrefix === undefined ? vatId : vatId.slice(2);
     return EU_VAT_NUMBER_PATTERN.test(number)
       ? [text("KodUE", prefix), text("NrVatUE", number), name].join("")
       : { error: `the buyer's EU VAT number ${vatId} is not valid` };

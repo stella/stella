@@ -357,6 +357,43 @@ describe("KSeF FA(3) VAT treatments", () => {
     expect(schemaErrors(xml)).toBe("");
   });
 
+  test("the VAT number's own EU prefix wins over the address country", () => {
+    const euBuyer = (country: string, vatId: string) =>
+      fa3(
+        polish({
+          number: "5b/2026",
+          buyer: {
+            name: "Buyer",
+            vatId,
+            addressLine1: "Street 1",
+            city: "City",
+            country,
+          },
+          lines: [line("reverse_charge")],
+        }),
+      );
+    // A German registration at a Czech address stays German.
+    const branch = euBuyer("CZ", "DE123456789");
+    expect(between(branch, "KodUE")).toEqual(["DE"]);
+    expect(between(branch, "NrVatUE")).toEqual(["123456789"]);
+    expect(schemaErrors(branch)).toBe("");
+    // Luxembourg and Malta are in TKodyKrajowUE.
+    for (const [country, vatId, number] of [
+      ["LU", "LU15027442", "15027442"],
+      ["MT", "MT12345678", "12345678"],
+    ] as const) {
+      const xml = euBuyer(country, vatId);
+      expect(between(xml, "KodUE")).toEqual([country]);
+      expect(between(xml, "NrVatUE")).toEqual([number]);
+      expect(schemaErrors(xml)).toBe("");
+    }
+    // Leading letters that are not a prefix belong to the number.
+    const french = euBuyer("FR", "AB123456789");
+    expect(between(french, "KodUE")).toEqual(["FR"]);
+    expect(between(french, "NrVatUE")).toEqual(["AB123456789"]);
+    expect(schemaErrors(french)).toBe("");
+  });
+
   test("a reverse charge to an EU buyer needs its VAT number", () => {
     const record = polish({
       number: "6/2026",
@@ -690,6 +727,8 @@ describe.skipIf(XMLLINT === null)("FA(3) schema validation", () => {
 
   test("rejects an invoice missing a mandatory field", () => {
     const xml = fa3(ORDINARY).replace(/<P_15>[^<]*<\/P_15>/u, "");
-    expect(schemaErrors(xml)).toContain("P_15");
+    // xmllint names the element after the gap and lists only some of the
+    // expected ones, so the rejection is the contract, not its wording.
+    expect(schemaErrors(xml)).toContain("fails to validate");
   });
 });
