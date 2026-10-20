@@ -526,10 +526,14 @@ test("an owner-level marker does not exempt another modified parser dependency",
 });
 
 test("an owner-level marker does not exempt another deleted parser dependency", () => {
-  const { base, head } = deletedWorkspaceDependency(
-    "// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\n",
-  );
+  const marker =
+    "// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\n";
+  const { base, head, parser } = deletedWorkspaceDependency(marker);
   head.delete(`${PARSERS}shared-helper.ts`);
+  head.set(
+    parser,
+    `${marker}import { dependency } from "@stll/dependency";\nexport const parseA = () => dependency() + "base";\n`,
+  );
   expect(changed(base, head)).toEqual([
     expect.stringContaining(`${PARSERS}shared-helper.ts`),
   ]);
