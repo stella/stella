@@ -4214,7 +4214,7 @@ describe("file thread binding", () => {
     globalThis.fetch = serve(null, requested);
     const client = new QueryClient();
 
-    const binding = await client.fetchQuery(
+    const binding = await client.query(
       fileChatThreadOptions({
         activeOrganizationId: "org-1",
         key: fileKey,
@@ -4240,7 +4240,7 @@ describe("file thread binding", () => {
     globalThis.fetch = serve("018f0000-0000-7000-8000-0000000000f1", requested);
     const client = new QueryClient();
 
-    const binding = await client.fetchQuery(
+    const binding = await client.query(
       fileChatThreadOptions({
         activeOrganizationId: "org-1",
         key: fileKey,

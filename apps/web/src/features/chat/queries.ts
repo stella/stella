@@ -682,7 +682,7 @@ export const fileChatThreadOptions = ({
         client.setQueryData(grantsOptions.queryKey, { grants: [] });
       } else {
         detached(
-          client.prefetchQuery(grantsOptions),
+          client.query(grantsOptions),
           "chat-queries.prefetch-file-thread-tool-grants",
         );
       }
