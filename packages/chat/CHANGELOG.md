@@ -1,5 +1,12 @@
 # @stll/chat
 
+## 0.2.2
+
+### Patch Changes
+
+- [#6211](https://github.com/stella/stella/pull/6211) [`a2b5091`](https://github.com/stella/stella/commit/a2b5091f41d9786b93415df0321dbf1ab7bacffa) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the unused shared composer shell and action component while retaining
+  composer action-mode resolution for host-owned controls.
+
 ## 0.2.1
 
 ### Patch Changes

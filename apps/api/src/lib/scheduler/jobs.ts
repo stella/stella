@@ -11,6 +11,11 @@ import { envBase } from "@/api/env-base";
 import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+} from "@/api/lib/feature-access/registry";
 import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
@@ -620,7 +625,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Age AI memories through the active -> stale -> archived lifecycle",
-    enabled: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+    enabled: isFeatureDeployed(FEATURE_REGISTRY, AI_MEMORY_FEATURE_ID),
     id: "memory.curator.nightly",
     mode: "recurring",
     schedule: {
@@ -634,7 +639,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Extract suggested AI memories from new chat-thread compactions",
-    enabled: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+    enabled: isFeatureDeployed(FEATURE_REGISTRY, AI_MEMORY_FEATURE_ID),
     id: "memory.extractor.hourly",
     mode: "recurring",
     schedule: {
