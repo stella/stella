@@ -28,6 +28,7 @@ import { normalizeDecisionIdentifierValue } from "@/api/handlers/case-law/ingest
 import {
   assemblePlSnParagraphs,
   extractPlSnLines,
+  PL_PDF_PAGE_FURNITURE,
   PL_PDF_PARAGRAPH_START,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
@@ -176,6 +177,7 @@ const readCzUohsPdf = async (bytes: Uint8Array): Promise<CzUohsPdf> => {
   const lines = await extractPlSnLines(
     bytes,
     PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+    { pageFurniture: PL_PDF_PAGE_FURNITURE.SEPARATE },
   );
   return {
     text: lines
@@ -218,10 +220,19 @@ export const czUohsDocumentAst = ({
   sourceUrl,
   documentUrl,
 }: CzUohsDocumentInput): DocumentAst => {
+  // The unnumbered letterhead and operative part precede the numbered
+  // reasoning; keeping them out of the body-numbering candidate set prevents
+  // their typeset paragraphs from counting as an implausibly long lead-in.
+  const numberedReasoningStart = paragraphs.findIndex((text) =>
+    /^1\.\s+\p{Lu}/u.test(text),
+  );
   const blocks: Block[] = paragraphs.map((text, index) => ({
     id: `b${index + 1}`,
     anchorId: `p-${index + 1}`,
     type: "paragraph",
+    ...(numberedReasoningStart !== -1 && index < numberedReasoningStart
+      ? { role: "holding" as const }
+      : {}),
     inlines: [{ type: "text", text }],
     plainText: text,
   }));

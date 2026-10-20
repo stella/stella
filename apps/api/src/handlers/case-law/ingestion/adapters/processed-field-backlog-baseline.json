@@ -4,8 +4,7 @@
     "not-extracted": {
       "pl-courts": ["court-paragraph-numbers"],
       "pl-nsa": ["court-paragraph-numbers"],
-      "sk-courts": ["court-paragraph-numbers"],
-      "cz-uohs": ["court-paragraph-numbers"]
+      "sk-courts": ["court-paragraph-numbers"]
     },
     "unassessed": {
       "pl-sn": ["court-paragraph-numbers"],
@@ -28,13 +27,7 @@
       "us-courtlistener": ["court-paragraph-numbers"]
     }
   },
-  "newSourceDeclarations": {
-    "cz-uohs": {
-      "owner": "pr-closer-org",
-      "followUp": "prc-uohs-page-furniture: opt-in footnote and header/footer layer in the shared PDF line reader; its acceptance deletes this line",
-      "pairs": ["skipped:not-extracted|court-paragraph-numbers"]
-    }
-  },
+  "newSourceDeclarations": {},
   "unrecorded": {
     "sk-courts": ["court-paragraph-numbers"],
     "pl-courts": ["court-paragraph-numbers"],

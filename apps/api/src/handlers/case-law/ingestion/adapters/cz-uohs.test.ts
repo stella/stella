@@ -101,7 +101,7 @@ describe("ÚOHS JSON-LD", () => {
   });
 
   test.each(["cz-uohs-2026-R0137.pdf", "cz-uohs-2026-S0383.pdf"])(
-    "reads %s as paragraphs and emits no paragraph number it cannot vouch for",
+    "reads %s without page furniture and emits increasing paragraph numbers",
     async (fixture) => {
       const bytes = new Uint8Array(
         await Bun.file(
@@ -113,14 +113,20 @@ describe("ÚOHS JSON-LD", () => {
         sourceUrl: fixture,
       });
       expect(ast.blocks.length).toBeGreaterThan(10);
-      // Footnotes and the running footer interleave the numbered reasoning in
-      // the text layer, so the shared reader rejects the numbering: no number
-      // is emitted until the page-furniture layer separates them.
+      const numbers = ast.blocks.flatMap((block) =>
+        block.type === "paragraph" && block.number !== undefined
+          ? [Number(block.number)]
+          : [],
+      );
+      expect(numbers.slice(0, 3)).toEqual([1, 2, 3]);
       expect(
-        ast.blocks.some(
-          (block) => block.type === "paragraph" && block.number !== undefined,
+        numbers.every(
+          (number, index) => index === 0 || number > numbers[index - 1]!,
         ),
-      ).toBe(false);
+      ).toBe(true);
+      const text = ast.blocks.map(({ plainText }) => plainText).join("\n");
+      expect(text).not.toContain("1/12 třída Kpt. Jaroše");
+      expect(text).not.toContain("Ve správním spise se nachází pod položkou");
     },
   );
 

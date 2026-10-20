@@ -372,9 +372,8 @@ export const PROCESSED_FIELD_INVENTORY = {
     ),
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    "court-paragraph-numbers": skippedField(
-      PROCESSED_FIELD_SKIP_REASONS.NOT_EXTRACTED,
-      "the office numbers its reasoning (1., 2., ...), but the PDF text layer interleaves footnote markers, footnote text and the running footer with the body, so the shared reader rejects the numbering and no number is emitted",
+    "court-paragraph-numbers": providedField(
+      PARAGRAPH_NUMBERS_FROM_TEXT,
       recordedEvidence(
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-R0137.pdf",
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-S0383.pdf",

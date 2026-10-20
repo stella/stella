@@ -269,7 +269,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 1,
+    version: 2,
     scope: {
       type: "all",
       reason: "the source's first parser; there are no stored rows to narrow",

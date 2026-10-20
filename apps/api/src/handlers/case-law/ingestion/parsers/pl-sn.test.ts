@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex } from "@stll/sha256/bun";
+
 import {
   assemblePlSnParagraphs,
+  extractPlSnLines,
+  PL_PDF_PAGE_FURNITURE,
   plSnParagraphsToHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
@@ -20,6 +24,11 @@ const opens = (text: string, bold = false): PlSnTextLine => ({
 });
 
 const BLANK: PlSnLine = { type: "blank" };
+
+const UOKIK_PDF = new URL(
+  "__fixtures__/pl-uokik-dok-9-2011.pdf",
+  import.meta.url,
+);
 
 const plainText = (paragraphs: readonly { text: string }[][]): string[] =>
   paragraphs.map((runs) => runs.map(({ text }) => text).join(""));
@@ -132,5 +141,31 @@ describe("emitting the paragraphs as markup the Polish parser reads", () => {
     ]);
 
     expect(html).toBe("<p>Pierwszy</p><p>Drugi</p>");
+  });
+});
+
+describe("reading recorded PDF lines", () => {
+  test("the default reader keeps its byte-identical UOKiK output", async () => {
+    const bytes = new Uint8Array(await Bun.file(UOKIK_PDF).arrayBuffer());
+    const lines = await extractPlSnLines(bytes);
+    const digest = sha256Hex(JSON.stringify(lines));
+
+    expect(digest).toBe(
+      "63491377b0a8cc8d1f205d0a43b32add539c1e0e6ef4f281ad252f9311d27592",
+    );
+  });
+
+  test("the opt-in reader removes the UOKiK footnote zone", async () => {
+    const bytes = new Uint8Array(await Bun.file(UOKIK_PDF).arrayBuffer());
+    const lines = await extractPlSnLines(bytes, undefined, {
+      pageFurniture: PL_PDF_PAGE_FURNITURE.SEPARATE,
+    });
+    const text = lines
+      .flatMap((line) =>
+        line.type === "blank" ? [] : line.runs.map((run) => run.text),
+      )
+      .join(" ");
+
+    expect(text).not.toContain("B. Turno, Komentarz do art. 105d");
   });
 });

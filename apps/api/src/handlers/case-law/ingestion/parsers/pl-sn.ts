@@ -91,7 +91,10 @@ const escapeHtml = (text: string): string =>
  * all set the same way — a first page carrying a centred heading block has a
  * different spread of positions than a page of running text.
  */
-const bodyMarginOf = (positions: readonly number[]): number => {
+const bodyMarginOf = (
+  positions: readonly number[],
+  preferHangingMargin = false,
+): number => {
   const counts = new Map<number, number>();
   for (const position of positions) {
     const rounded = Math.round(position);
@@ -105,6 +108,18 @@ const bodyMarginOf = (positions: readonly number[]): number => {
       best = count;
     }
   }
+  if (preferHangingMargin) {
+    const continuation = [...counts]
+      .filter(
+        ([position, count]) =>
+          position - margin >= INDENT_THRESHOLD_PT &&
+          position - margin <= INDENT_THRESHOLD_PT * 2 &&
+          count >= best / 2,
+      )
+      .toSorted(([, left], [, right]) => right - left)
+      .at(0);
+    return continuation?.at(0) ?? margin;
+  }
   return margin;
 };
 
@@ -112,6 +127,121 @@ type ExtractedLine = {
   readonly spans: readonly PdfSpan[];
   readonly text: string;
   readonly x: number;
+};
+
+type PageFurnitureSpan = PdfSpan & {
+  readonly bbox: PdfSpan["bbox"] & { readonly y: number };
+};
+
+type PageFurnitureLine = {
+  readonly spans: readonly PageFurnitureSpan[];
+  readonly text: string;
+  readonly bbox: { readonly y: number };
+};
+
+export const PL_PDF_PAGE_FURNITURE = {
+  SEPARATE: "separate",
+} as const;
+
+export type ExtractPlSnLinesOptions = {
+  readonly pageFurniture?:
+    | (typeof PL_PDF_PAGE_FURNITURE)[keyof typeof PL_PDF_PAGE_FURNITURE]
+    | undefined;
+};
+
+const PAGE_MARGIN_RATIO = 0.06;
+const FOOTNOTE_ZONE_RATIO = 0.25;
+const SMALL_TYPE_RATIO = 0.86;
+
+const bodyFontSizeOf = (lines: readonly PageFurnitureLine[]): number => {
+  const counts = new Map<number, number>();
+  for (const { spans } of lines) {
+    for (const { fontSize, text } of spans) {
+      const size = Math.round(fontSize * 10) / 10;
+      counts.set(size, (counts.get(size) ?? 0) + text.trim().length);
+    }
+  }
+  let bodySize = 0;
+  let best = 0;
+  for (const [size, count] of counts) {
+    if (count > best) {
+      bodySize = size;
+      best = count;
+    }
+  }
+  return bodySize;
+};
+
+const withoutRaisedReferenceMarkers = (
+  line: PageFurnitureLine,
+  bodySize: number,
+): PageFurnitureLine => {
+  const bodySpans = line.spans.filter(
+    ({ fontSize }) => fontSize > bodySize * SMALL_TYPE_RATIO,
+  );
+  const bodyY = Math.min(...bodySpans.map(({ bbox }) => bbox.y));
+  const markerSpans = new Set(
+    line.spans.filter(
+      ({ bbox, fontSize, text }) =>
+        /^\d+$/u.test(text.trim()) &&
+        fontSize <= bodySize * SMALL_TYPE_RATIO &&
+        bbox.y > bodyY + bodySize * 0.2,
+    ),
+  );
+  if (markerSpans.size === 0) {
+    return line;
+  }
+
+  let text = line.text;
+  for (const span of markerSpans) {
+    text = text.replace(span.text, "");
+  }
+  return {
+    ...line,
+    spans: line.spans.filter((span) => !markerSpans.has(span)),
+    text,
+  };
+};
+
+/** Remove layout-only matter before paragraph assembly. */
+const separatePageFurniture = (
+  lines: readonly PageFurnitureLine[],
+  pageHeight: number,
+): PageFurnitureLine[] => {
+  const bodySize = bodyFontSizeOf(lines);
+
+  /*
+   * Measured in the two ÚOHS captures: body 9.96pt, notes 8.04pt and
+   * references 6pt; their footer ends at y=47.4 on an 841.92pt page. The
+   * recorded UOKiK PDF uses 12pt body, 10.02pt notes, 6.48/7.98pt references,
+   * and a page counter at y=35.6 on an 842pt page. Thus 86% separates both
+   * note faces from body, 25% bounds their observed bottom-page zone, and 6%
+   * contains both publishers' running furniture without reaching body text.
+   */
+  return lines
+    .filter((line) => {
+      if (
+        line.bbox.y < pageHeight * PAGE_MARGIN_RATIO ||
+        line.bbox.y > pageHeight * (1 - PAGE_MARGIN_RATIO)
+      ) {
+        return false;
+      }
+      const nonBlankSpans = line.spans.filter(
+        ({ text }) => text.trim().length > 0,
+      );
+      const isSmall =
+        nonBlankSpans.length > 0 &&
+        nonBlankSpans.every(
+          ({ fontSize }) => fontSize <= bodySize * SMALL_TYPE_RATIO,
+        );
+      if (isSmall && line.bbox.y < pageHeight * FOOTNOTE_ZONE_RATIO) {
+        return false;
+      }
+      return !(
+        isSmall && /^\d+(?:\s+\d+)*$/u.test(normalizeSpanText(line.text))
+      );
+    })
+    .map((line) => withoutRaisedReferenceMarkers(line, bodySize));
 };
 
 /**
@@ -167,10 +297,11 @@ const opensParagraph = (
 const readPage = (
   lines: readonly ExtractedLine[],
   paragraphStart: PlPdfParagraphStart,
+  documentBodyMargin?: number,
 ): PlSnLine[] => {
-  const margin = bodyMarginOf(
-    lines.filter(({ text }) => text.length > 0).map(({ x }) => x),
-  );
+  const margin =
+    documentBodyMargin ??
+    bodyMarginOf(lines.filter(({ text }) => text.length > 0).map(({ x }) => x));
   return lines.map((line) =>
     line.text.length === 0
       ? { type: "blank" as const }
@@ -264,19 +395,41 @@ export const plSnParagraphsToHtml = (
 export const extractPlSnLines = async (
   pdfBytes: Uint8Array,
   paragraphStart: PlPdfParagraphStart = PL_PDF_PARAGRAPH_START.INDENT,
+  options: ExtractPlSnLinesOptions = {},
 ): Promise<PlSnLine[]> => {
   const pdf = await PDF.load(pdfBytes);
-  return pdf.getPages().flatMap((page) => {
-    const { lines } = page.extractText();
-    return readPage(
-      lines.map((line) => ({
-        spans: line.spans,
-        text: normalizeSpanText(line.text),
-        x: line.bbox.x,
-      })),
-      paragraphStart,
-    );
+  if (options.pageFurniture !== PL_PDF_PAGE_FURNITURE.SEPARATE) {
+    return pdf.getPages().flatMap((page) => {
+      const { lines } = page.extractText();
+      return readPage(
+        lines.map((line) => ({
+          spans: line.spans,
+          text: normalizeSpanText(line.text),
+          x: line.bbox.x,
+        })),
+        paragraphStart,
+      );
+    });
+  }
+
+  const pages = pdf.getPages().map((page) => {
+    const { height, lines } = page.extractText();
+    return separatePageFurniture(lines, height).map((line) => ({
+      spans: line.spans,
+      text: normalizeSpanText(line.text),
+      x: line.bbox.x,
+    }));
   });
+  const documentBodyMargin = bodyMarginOf(
+    pages
+      .flat()
+      .filter(({ text }) => text.length > 0)
+      .map(({ x }) => x),
+    paragraphStart === PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+  );
+  return pages.flatMap((contentLines) =>
+    readPage(contentLines, paragraphStart, documentBodyMargin),
+  );
 };
 
 type ParsePlSnDecisionInput = {
