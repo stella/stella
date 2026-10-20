@@ -11,8 +11,10 @@ import {
 import os from "node:os";
 import path from "node:path";
 
+import { NETWORK_DEPTH_METHOD as WEB_NETWORK_DEPTH_METHOD } from "../apps/web/e2e/helpers/network";
 import { isCanonicalFailureCancellation } from "./ci-cancellation-contract";
 import {
+  NETWORK_DEPTH_METHOD,
   prepareComparisonBaseline,
   validateBaselineFile,
 } from "./network-baseline-scope";
@@ -169,21 +171,30 @@ describe("network baseline scope", () => {
             declarations: [],
           }).baseline,
         ).toEqual(recorded);
-        expect(
-          prepareComparisonBaseline({
-            base: {},
-            changedPaths: [],
-            baseRouteTree: routeTree,
-            routeTree,
-            declarations: [
-              {
-                route: "/chat",
-                reason: "Recorded budget",
-                budget: recorded["/chat"],
-              },
-            ],
-          }).baseline,
-        ).toEqual(recorded);
+        // A declaration carries the current method (stamped when absent); a
+        // stale method is refused, covered by the fail-closed cases below.
+        if (depthMethod !== "timing-v1") {
+          expect(
+            prepareComparisonBaseline({
+              base: {},
+              changedPaths: [],
+              baseRouteTree: routeTree,
+              routeTree,
+              declarations: [
+                {
+                  route: "/chat",
+                  reason: "Recorded budget",
+                  budget: recorded["/chat"],
+                },
+              ],
+            }).baseline,
+          ).toEqual({
+            "/chat": {
+              ...recorded["/chat"],
+              depthMethod: NETWORK_DEPTH_METHOD,
+            },
+          });
+        }
       } finally {
         rmSync(directory, { recursive: true, force: true });
       }
@@ -479,12 +490,18 @@ describe("reviewed network budgets", () => {
     expect(result.notices).toEqual([]);
   });
 
+  test("declarations use the depth method the route smoke measures", () => {
+    expect(NETWORK_DEPTH_METHOD).toBe(WEB_NETWORK_DEPTH_METHOD);
+  });
+
   test("an explicit budget affects only its declared route and reports its reason", () => {
     const result = prepare([
       { route: "/chat", reason: "Additional endpoint", budget: entry(3) },
     ]);
+    // The declared depth is stamped with the current method, so the main
+    // recording keeps it as a floor rather than replacing it with one sample.
     expect(result.baseline).toEqual({
-      "/chat": entry(3),
+      "/chat": { ...entry(3), depthMethod: NETWORK_DEPTH_METHOD },
       "/settings": entry(2),
     });
     expect(result.notices).toEqual(["- `/chat`: `Additional endpoint`"]);
@@ -500,6 +517,13 @@ describe("reviewed network budgets", () => {
         route: "/chat",
         reason: "Change",
         budget: { ...entry(1), depthMethod: 1 },
+      },
+    ],
+    [
+      {
+        route: "/chat",
+        reason: "Change",
+        budget: { ...entry(1), depthMethod: "timing-v1" },
       },
     ],
     [
@@ -963,7 +987,7 @@ esac
       checked(["git", "add", "apps/web/e2e/network-budgets/change.json"]);
       checked(["git", "commit", "-m", "declare budget"]);
       expect(prepare(nextBase)).toEqual({
-        "/chat": entry(9),
+        "/chat": { ...entry(9), depthMethod: NETWORK_DEPTH_METHOD },
         "/settings": entry(2),
       });
       const inheritedBase = checked(["git", "rev-parse", "HEAD"]);
@@ -972,7 +996,11 @@ esac
         "/settings": entry(2),
       });
       // Main must seed declarations even when no request observes them yet.
-      const declared = { "/chat": entry(9), "/settings": entry(2) };
+      // The recording seed keeps the declared depth as a floor (current method).
+      const declared = {
+        "/chat": { ...entry(9), depthMethod: NETWORK_DEPTH_METHOD },
+        "/settings": entry(2),
+      };
       expect(
         prepare(inheritedBase, { NETWORK_BASELINE_PURPOSE: "recording" }),
       ).toEqual(declared);

@@ -561,6 +561,28 @@ describe("mergeNetworkBaseline", () => {
     },
   );
 
+  test("a lower timing sample never tightens a declared depth", () => {
+    // A declaration is stamped with the current method when it is applied.
+    const declared: NetworkBaseline = {
+      "/views": {
+        depth: 9,
+        depthMethod: NETWORK_DEPTH_METHOD,
+        requests: ["GET /v1/views/:id"],
+      },
+    };
+    const recorded = mergeNetworkBaseline(
+      declared,
+      new Map([["/views", metrics(["GET /v1/views/:id"], 6)]]),
+    );
+    expect(recorded["/views"]?.depth).toBe(9);
+    // A later, ordinary sample within the declared budget still passes.
+    const { problems } = diffNetworkBaseline(
+      recorded,
+      new Map([["/views", metrics(["GET /v1/views/:id"], 7)]]),
+    );
+    expect(problems).toEqual([]);
+  });
+
   test("requests accumulate as a union and depth takes the max", () => {
     const existing: NetworkBaseline = {
       "/contacts": {
