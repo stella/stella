@@ -96,17 +96,19 @@ type SessionAdvisoryConnection = {
   unsafe: (query: string, params: unknown[]) => PromiseLike<unknown>;
 };
 
+const CASE_LAW_FRESHNESS_LOCK_KEY = ["caseLawFreshness", "singleton"];
+
 /**
- * The freshness reporter is process-level work, so its fence must survive the
- * read transaction while the EMF records are written. The caller owns the
- * reserved session; releasing it releases this lock.
+ * The freshness reporter is process-level work, so it fences with a session
+ * lock rather than a transaction lock. A reserved session returned to the pool
+ * keeps its session locks, so the lock is released explicitly after every read.
  */
 const tryCaseLawFreshnessSessionLock = async (
   connection: SessionAdvisoryConnection,
 ): Promise<boolean> => {
   const result = await connection.unsafe(
     "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired",
-    ["caseLawFreshness", "singleton"],
+    CASE_LAW_FRESHNESS_LOCK_KEY,
   );
   if (!Array.isArray(result)) {
     return panic("Case-law freshness session lock returned malformed rows");
@@ -116,6 +118,19 @@ const tryCaseLawFreshnessSessionLock = async (
     return panic("Case-law freshness session lock returned malformed row");
   }
   return observation["acquired"];
+};
+
+const releaseCaseLawFreshnessSessionLock = async (
+  connection: SessionAdvisoryConnection,
+): Promise<void> => {
+  const result = await connection.unsafe(
+    "SELECT pg_advisory_unlock(hashtext($1), hashtext($2)) AS released",
+    CASE_LAW_FRESHNESS_LOCK_KEY,
+  );
+  const observation = Array.isArray(result) ? result.find(isRecord) : undefined;
+  if (observation?.["released"] !== true) {
+    panic("Case-law freshness session lock was not held at release");
+  }
 };
 
 export const readUnderCaseLawFreshnessSessionLock = async <T>({
@@ -134,7 +149,11 @@ export const readUnderCaseLawFreshnessSessionLock = async <T>({
   if (!(await tryCaseLawFreshnessSessionLock(connection))) {
     return { status: "skipped" };
   }
-  return { status: "locked", value: await database.transaction(read) };
+  try {
+    return { status: "locked", value: await database.transaction(read) };
+  } finally {
+    await releaseCaseLawFreshnessSessionLock(connection);
+  }
 };
 
 type OrganizationFencedRepairBatchOptions = {
