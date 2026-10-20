@@ -15,7 +15,7 @@ import { panic } from "better-result";
  */
 export type CliSupportBand = {
   readonly minimum: string;
-  readonly maximum: string;
+  readonly latest: string;
 };
 
 const SEMVER_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/u;
@@ -50,9 +50,9 @@ const compareSemver = (a: string, b: string): number => {
  * contract. Called at module scope so a bad edit fails at import time.
  */
 export const declareCliSupportBand = (band: CliSupportBand): CliSupportBand => {
-  if (compareSemver(band.minimum, band.maximum) > 0) {
+  if (compareSemver(band.minimum, band.latest) > 0) {
     return panic(
-      `cli-support-band: minimum ${band.minimum} is newer than maximum ${band.maximum}`,
+      `cli-support-band: minimum ${band.minimum} is newer than latest ${band.latest}`,
     );
   }
   return band;

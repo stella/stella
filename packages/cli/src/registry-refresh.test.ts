@@ -807,8 +807,10 @@ describe("CLI update nudge (spec 051 addendum)", () => {
           ...(over.cliMinimum === undefined
             ? {}
             : { cliMinimum: over.cliMinimum }),
+          ...(over.npmLatest === undefined
+            ? {}
+            : { cliLatest: over.npmLatest }),
         }),
-        fetchLatestVersion: async () => over.npmLatest,
         bakedListings: [listing("list_matters")],
       }),
     };
@@ -822,7 +824,7 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     expect(outcome).toMatchObject({
       status: "refreshed",
       deltaEmpty: true,
-      nudge: "stella 0.1.0 -> 0.2.0 available; npm i -g @stll/cli",
+      nudge: "update available: 0.1.0 -> 0.2.0, run npm i -g @stll/cli@latest",
     });
     // The anti-nag key is persisted for the next refresh.
     const written = await readCacheFile(cachePathFor(ORIGIN, env));
@@ -865,7 +867,7 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     expect(outcome.status).toBe("refreshed");
     if (outcome.status === "refreshed") {
       expect(outcome.nudge).toBe(
-        "stella 0.1.0 is no longer supported (server requires >= 0.2.0); upgrade with: npm i -g @stll/cli",
+        "this CLI is too old for this server: 0.1.0 < 0.2.0; run npm i -g @stll/cli@latest",
       );
     }
   });
@@ -877,7 +879,7 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     });
     expect(outcome.status).toBe("refreshed");
     if (outcome.status === "refreshed") {
-      expect(outcome.nudge).toContain("no longer supported");
+      expect(outcome.nudge).toContain("too old for this server");
     }
   });
 

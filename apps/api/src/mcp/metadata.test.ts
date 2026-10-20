@@ -13,7 +13,7 @@ import {
   STELLA_API_CONTRACT,
   getMcpProtectedResourceMetadataUrl,
   getMcpResourceUrl,
-  STELLA_CLI_MAXIMUM_VERSION,
+  STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
 } from "@/api/mcp/constants";
@@ -49,7 +49,7 @@ describe("MCP protected resource metadata", () => {
       stella_compatibility: {
         api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
         cli_version: {
-          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          maximum: STELLA_CLI_LATEST_VERSION,
           minimum: STELLA_CLI_MINIMUM_VERSION,
         },
       },
@@ -102,7 +102,7 @@ describe("MCP protected resource metadata", () => {
       stella_compatibility: {
         api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
         cli_version: {
-          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          maximum: STELLA_CLI_LATEST_VERSION,
           minimum: STELLA_CLI_MINIMUM_VERSION,
         },
       },
@@ -128,7 +128,7 @@ describe("MCP protected resource metadata", () => {
       stella_compatibility: {
         api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
         cli_version: {
-          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          maximum: STELLA_CLI_LATEST_VERSION,
           minimum: STELLA_CLI_MINIMUM_VERSION,
         },
       },
@@ -158,7 +158,7 @@ describe("MCP protected resource metadata", () => {
       "Authorization, Content-Type, MCP-Protocol-Version",
     );
     expect(headers.get("Access-Control-Expose-Headers")).toBe(
-      "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-organization, x-stella-scopes, x-stella-scope-omitted-tools, x-stella-feature-omitted-tools, x-stella-feature-omitted-capabilities, x-request-id",
+      "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-cli-latest, x-stella-organization, x-stella-scopes, x-stella-scope-omitted-tools, x-stella-feature-omitted-tools, x-stella-feature-omitted-capabilities, x-request-id",
     );
     expect(headers.get("x-stella-api-contract-version")).toBe(
       String(STELLA_MCP_API_CONTRACT_VERSION),
@@ -166,7 +166,7 @@ describe("MCP protected resource metadata", () => {
     expect(headers.get("x-stella-cli-minimum")).toBe(
       STELLA_CLI_MINIMUM_VERSION,
     );
-    expect(headers.get("x-stella-cli-latest")).toBeNull();
+    expect(headers.get("x-stella-cli-latest")).toBe(STELLA_CLI_LATEST_VERSION);
     expect(headers.get("Cache-Control")).toBeNull();
   });
 
@@ -183,7 +183,7 @@ describe("MCP protected resource metadata", () => {
     expect(headers.get("x-stella-cli-minimum")).toBe(
       STELLA_CLI_MINIMUM_VERSION,
     );
-    expect(headers.get("x-stella-cli-latest")).toBeNull();
+    expect(headers.get("x-stella-cli-latest")).toBe(STELLA_CLI_LATEST_VERSION);
   });
 
   test("owns the transport preflight it advertises", () => {
