@@ -17,6 +17,7 @@ import {
   processLauncher,
   resolveEnv,
   runChecks,
+  selectChecks,
   summaryTable,
   type CheckResult,
   type Launched,
@@ -49,6 +50,18 @@ const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
   continueOnError: undefined,
   step: { name },
   ...extra,
+});
+
+test("an exact named subset retains manifest order", () => {
+  const checks = [check("First"), check("Second"), check("Third")];
+  expect(selectChecks(checks, "Third,First").map(({ name }) => name)).toEqual([
+    "First",
+    "Third",
+  ]);
+  expect(selectChecks(checks, undefined)).toEqual(checks);
+  expect(() => selectChecks(checks, "First,Missing")).toThrow(
+    "Unknown check name(s): Missing",
+  );
 });
 
 test("failed checks emit one annotation with their first actionable cause", () => {
