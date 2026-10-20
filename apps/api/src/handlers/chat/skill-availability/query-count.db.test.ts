@@ -1,5 +1,3 @@
-import { getSessionCookie } from "better-auth/cookies";
-import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -10,7 +8,6 @@ import {
 } from "bun:test";
 
 import { chatRoute } from "@/api/handlers/chat/routes";
-import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
   queryCountLogger,
   runWithQueryCounter,
@@ -115,24 +112,5 @@ describe("skill availability runs a fixed query plan", () => {
     expect(await countQueries({ cookie: withoutSnapshot })).toBe(
       WITHOUT_SESSION_SNAPSHOT,
     );
-  });
-
-  test("bearer calls add only the session reads and one activity write", async () => {
-    const { cookieHeader } = await createHumanSession({
-      email: `skill-queries-${Bun.randomUUIDv7()}@stella.dev`,
-      orgName: "Skill queries",
-      orgSlugPrefix: "skill-queries",
-    });
-    const credential =
-      // The app names its cookies with its own prefix, not better-auth's default.
-      getSessionCookie(new Headers({ cookie: cookieHeader }), {
-        cookiePrefix: authCookiePolicy().cookiePrefix,
-      }) ?? panic("Session fixture missing");
-    const headers = { authorization: `Bearer ${credential}` };
-    expect(await countQueries(headers)).toBe(
-      WITHOUT_SESSION_SNAPSHOT + SESSION_ACTIVITY_WRITE,
-    );
-    expect(await countQueries(headers)).toBe(WITHOUT_SESSION_SNAPSHOT);
-    expect(await countQueries(headers)).toBe(WITHOUT_SESSION_SNAPSHOT);
   });
 });

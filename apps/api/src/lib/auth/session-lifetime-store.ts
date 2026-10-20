@@ -35,12 +35,13 @@ type SessionLifetimeDatabase = {
 };
 
 type DatabaseSessionLifetimeOptions = {
+  expiresIn: number;
   updateAge: number;
 };
 
 export const createDatabaseSessionLifetimeStore = (
   db: SessionLifetimeDatabase,
-  { updateAge }: DatabaseSessionLifetimeOptions,
+  { expiresIn, updateAge }: DatabaseSessionLifetimeOptions,
 ): SessionLifetimeStore => {
   type CredentialPredicateOptions = {
     token: string;
@@ -136,8 +137,10 @@ export const createDatabaseSessionLifetimeStore = (
             eq(session.token, token),
             eq(session.refreshMode, "automatic"),
             liveSessionPredicate(now),
-            // Due once per update interval since the last refresh; an expiry
-            // shortened by the absolute lifetime must not make every request due.
+            // Due inside the refresh window, and at most once per update interval:
+            // an expiry shortened by the absolute lifetime stays inside the
+            // window, so the last refresh time keeps it from rotating every request.
+            sql`${session.expiresAt} <= ${new Date(now.getTime() + (expiresIn - updateAge) * 1000)}::timestamptz`,
             sql`${session.updatedAt} <= ${new Date(now.getTime() - updateAge * 1000)}::timestamptz`,
           ),
         )

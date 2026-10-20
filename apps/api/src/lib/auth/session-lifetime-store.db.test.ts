@@ -55,6 +55,7 @@ afterEach(() => {
 beforeAll(async () => {
   testDb = await getTestDb();
   store = createDatabaseSessionLifetimeStore(testDb, {
+    expiresIn: 30 * 24 * 60 * 60,
     updateAge: 24 * 60 * 60,
   });
 }, 120_000);
@@ -482,6 +483,7 @@ const createHttpSession = async (cacheEnabled: boolean) => {
     logger: queryCountLogger,
   });
   const fixtureStore = createDatabaseSessionLifetimeStore(fixtureDb, {
+    expiresIn: 30 * 24 * 60 * 60,
     updateAge: 24 * 60 * 60,
   });
   const lifetime = createSessionLifetime({
