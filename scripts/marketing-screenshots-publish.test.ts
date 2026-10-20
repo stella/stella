@@ -175,12 +175,12 @@ describe("screenshot regeneration trust boundary", () => {
       ],
       [
         "Download regenerated baselines",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
       ],
       ["Stage validated baselines", "run"],
       [
         "Mint App token",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
+        "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510",
       ],
       [
         "Push regenerated baselines",
