@@ -285,6 +285,17 @@ fn open_append(path: &Path) -> io::Result<File> {
   options.open(path)
 }
 
+/// Replaces an error with a fixed message for the caller and keeps the cause
+/// in the local log. Only for causes whose text carries no credentials.
+pub fn with_cause_logged<E: std::fmt::Display>(
+  message: &'static str,
+) -> impl FnOnce(E) -> String {
+  move |cause| {
+    tracing::warn!(cause = %cause, "{message}");
+    message.to_string()
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
