@@ -61,6 +61,67 @@ test("a legacy filename the sanitizer would change refuses the whole message", (
   }
 });
 
+test("rejected SDK input, text provider metadata and non-reproducible arguments survive conversion and reload", () => {
+  const sdk = {
+    version: 1,
+    data: [
+      {
+        type: "text",
+        text: "Answer",
+        state: "done",
+        providerMetadata: { openai: { itemId: "item_1", phase: "final" } },
+      },
+      {
+        type: "tool-search",
+        toolCallId: "call_1",
+        state: "output-error",
+        rawInput: { query: ["not", "a", "string"] },
+        errorText: "Invalid input",
+      },
+    ],
+  };
+  const converted = convertLegacyChatContent(sdk);
+  expect(accountLegacyChatContent(sdk, converted).unaccountedFields).toEqual(
+    [],
+  );
+  const reloaded = normalizePersistedChatMessageContent(converted).parts;
+  expect(reloaded.at(0)).toMatchObject({
+    type: "text",
+    providerMetadata: { openai: { itemId: "item_1", phase: "final" } },
+  });
+  const call = reloaded.find((part) => part.type === "tool-call");
+  if (call?.type !== "tool-call") {
+    panic("Rejected SDK input lost its tool call");
+  }
+  expect(call.input).toBeUndefined();
+  expect(JSON.parse(call.arguments)).toEqual({
+    query: ["not", "a", "string"],
+  });
+
+  const v2 = {
+    version: 2,
+    data: [
+      {
+        type: "tool-call",
+        id: "call_2",
+        name: "search",
+        state: "input-complete",
+        arguments: '{"query":"draft"}',
+        input: { query: "final" },
+      },
+    ],
+  };
+  const convertedV2 = convertLegacyChatContent(v2);
+  expect(accountLegacyChatContent(v2, convertedV2).unaccountedFields).toEqual(
+    [],
+  );
+  const reloadedV2 = normalizePersistedChatMessageContent(convertedV2).parts;
+  expect(reloadedV2.at(0)).toMatchObject({
+    arguments: '{"query":"draft"}',
+    input: { query: "final" },
+  });
+});
+
 test("all nine content-free staging messages convert with complete field accounting", () => {
   expect(stagingFixtures).toHaveLength(9);
   for (const input of stagingFixtures) {

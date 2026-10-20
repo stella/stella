@@ -19,7 +19,11 @@ import type {
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { isPersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
+import {
+  isPersistedJsonObject,
+  isPersistedJsonValue,
+} from "@/api/lib/chat/persisted-message-content";
+import type { PersistedJsonObject } from "@/api/lib/chat/persisted-message-content";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 import {
@@ -61,6 +65,7 @@ type LegacyAiSdkFilePart = {
 };
 
 type LegacyAiSdkTextPart = {
+  providerMetadata?: PersistedJsonObject;
   text: string;
   type: "text";
 };
@@ -71,7 +76,11 @@ type NormalizedLegacyMessageParts = {
 };
 
 const isLegacyAiSdkTextPart = (part: unknown): part is LegacyAiSdkTextPart =>
-  isRecord(part) && part["type"] === "text" && typeof part["text"] === "string";
+  isRecord(part) &&
+  part["type"] === "text" &&
+  typeof part["text"] === "string" &&
+  (part["providerMetadata"] === undefined ||
+    isPersistedJsonObject(part["providerMetadata"]));
 
 const isLegacyAiSdkFilePart = (part: unknown): part is LegacyAiSdkFilePart =>
   isRecord(part) &&
@@ -86,6 +95,9 @@ const legacyAiSdkTextPartToTanStack = (
 ): Extract<ChatTanStackPart, { type: "text" }> => ({
   type: "text",
   content: part.text,
+  ...(part.providerMetadata === undefined
+    ? {}
+    : { providerMetadata: part.providerMetadata }),
 });
 
 const legacyAiSdkFilePartToTanStack = (
@@ -360,11 +372,15 @@ const legacyToolPartToTanStack = (
   }
 
   const input = Reflect.get(part, "input");
+  // An AI SDK call whose input failed validation keeps only `rawInput`; its
+  // JSON text is the call's raw arguments, and the call has no parsed input.
+  const rawInput =
+    input === undefined && "rawInput" in part ? part["rawInput"] : undefined;
   const next: unknown = {
     type: "tool-call" as const,
     id,
     name,
-    arguments: safeStringifyToolArguments(input ?? {}),
+    arguments: safeStringifyToolArguments(rawInput ?? input ?? {}),
     state: legacyToolStateToTanStack(part["state"]),
     ...("input" in part ? { input } : {}),
     ...("output" in part ? { output: Reflect.get(part, "output") } : {}),

@@ -111,7 +111,11 @@ export type ChatAttachmentPart =
 
 type SdkChatPart = MessagePart<ChatClientTools>;
 export type ChatTanStackPart =
-  | Exclude<SdkChatPart, { type: "thinking" | "tool-call" }>
+  | Exclude<SdkChatPart, { type: "text" | "thinking" | "tool-call" }>
+  | (Extract<SdkChatPart, { type: "text" }> & {
+      /** Provider artefacts a writer stored with the text, kept as stored. */
+      providerMetadata?: PersistedJsonObject;
+    })
   | (Extract<SdkChatPart, { type: "tool-call" }> &
       Pick<ToolCallPart, "metadata"> & {
         /** Provider artefacts a writer stored with the call, kept as stored. */

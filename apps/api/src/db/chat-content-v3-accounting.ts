@@ -15,6 +15,7 @@ const emptyCounts = () => ({
     "text-content": 0,
     "thinking-content": 0,
     "thinking-provider-metadata": 0,
+    "text-provider-metadata": 0,
     "file-field": 0,
     "promoted-data": 0,
     "tool-id": 0,
@@ -40,6 +41,7 @@ const emptyCounts = () => ({
     "tool-state": 0,
     "parsed-tool-arguments": 0,
     "streaming-tool-input": 0,
+    "raw-tool-input": 0,
     "paired-tool-result-content": 0,
     "empty-tool-metadata": 0,
   },
@@ -349,6 +351,21 @@ const accountTool = ({
       targetMatches: parsed.isOk() && deepEquals(parsed.value, part["input"]),
     });
   }
+  if (
+    part["rawInput"] !== undefined &&
+    part["input"] === undefined &&
+    next.input.status === "raw"
+  ) {
+    const rawArguments = next.input.rawArguments;
+    const parsed = Result.try((): unknown => JSON.parse(rawArguments));
+    implied({
+      rule: "raw-tool-input",
+      source: [...source, "rawInput"],
+      accepted: part["rawInput"],
+      targetMatches:
+        parsed.isOk() && deepEquals(parsed.value, part["rawInput"]),
+    });
+  }
   mapped({
     rule: "tool-output",
     source: [...source, "output"],
@@ -517,13 +534,11 @@ const accountPart = ({ context, part, sourceIndex }: PartAccountingOptions) => {
       accepted: "done",
       targetMatches: next.type === (thinking ? "thinking" : "text"),
     });
-    if (thinking) {
-      mapped({
-        rule: "thinking-provider-metadata",
-        source: [...source, "providerMetadata"],
-        target: [...target, "providerMetadata"],
-      });
-    }
+    mapped({
+      rule: thinking ? "thinking-provider-metadata" : "text-provider-metadata",
+      source: [...source, "providerMetadata"],
+      target: [...target, "providerMetadata"],
+    });
     return;
   }
   if (version === 1 && type === "file") {

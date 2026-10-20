@@ -53,6 +53,8 @@ export const provePersistedToolCallMetadata = (
 declare const parsedToolInputProof: unique symbol;
 export type ParsedToolInput = {
   readonly [parsedToolInputProof]: true;
+  /** The call's argument text, kept only when it does not parse to `value`. */
+  rawArguments?: string;
   status: "parsed";
   value: PersistedJsonValue;
 };
@@ -174,12 +176,19 @@ export const isPersistedToolProviderMetadata = (
   (value["result"] === undefined || isPersistedJsonObject(value["result"]));
 
 const isParsedToolInput = (input: {
+  rawArguments?: string;
   status: "parsed";
   value: unknown;
 }): input is ParsedToolInput => isPersistedJsonValue(input.value);
 
-export const proveParsedToolInput = (value: unknown): ParsedToolInput => {
-  const input = { status: "parsed" as const, value };
+export const proveParsedToolInput = (
+  value: unknown,
+  rawArguments?: string,
+): ParsedToolInput => {
+  const input =
+    rawArguments === undefined
+      ? { status: "parsed" as const, value }
+      : { rawArguments, status: "parsed" as const, value };
   if (!isParsedToolInput(input)) {
     panic("Cannot mark an invalid tool input as parsed");
   }

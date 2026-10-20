@@ -232,7 +232,7 @@ const v1FieldDispositions = {
     type: "implied",
     text: "mapped",
     state: "implied",
-    providerMetadata: "refuse",
+    providerMetadata: "mapped",
   },
   reasoning: {
     type: "implied",
