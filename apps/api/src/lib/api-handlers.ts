@@ -790,7 +790,7 @@ const SAFE_PUBLIC_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS =
   );
 
 export const safePublicHandlerResponseSchemasWithStatusText = <
-  TSuccessSchema extends TSchema,
+  TSuccessSchema extends AnySchema,
 >(
   successSchema: TSuccessSchema,
 ): SafeHandlerResponseSchemasFor<

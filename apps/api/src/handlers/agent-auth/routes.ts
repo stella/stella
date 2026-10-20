@@ -15,7 +15,7 @@ import agentEventsHandler from "@/api/handlers/agent-auth/events";
 import agentIdentityHandler from "@/api/handlers/agent-auth/identity";
 import manifestHandler from "@/api/handlers/agent-auth/read-manifest";
 import agentTokenHandler from "@/api/handlers/agent-auth/token";
-import { authMacro } from "@/api/lib/auth";
+import { permissionMacro } from "@/api/lib/auth";
 
 const applyManifestHeaders = (set: { headers: HTTPHeaders }) => {
   for (const [key, value] of Object.entries(AGENT_AUTH_MANIFEST_HEADERS)) {
@@ -73,7 +73,7 @@ export const agentAuthRoute = new Elysia()
  * the auth macro.
  */
 export const agentAuthConfirmRoute = new Elysia()
-  .use(authMacro)
+  .use(permissionMacro)
   .guard({ validateAuth: true })
   .post(
     AGENT_AUTH_CONFIRM_PATH,

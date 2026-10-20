@@ -35,7 +35,11 @@ export const desktopRegistryRequestHeaders = t.Object(
     ...desktopRegistryRequestIdentityHeaders,
     "content-type": t.String({
       maxLength: 255,
-      pattern: "^application/json(?:\\s*;.*)?$",
+      // JSON media types are case-insensitive (RFC 6838). TypeBox string
+      // patterns do not carry RegExp flags, so preserve the former /i match
+      // explicitly rather than silently tightening desktop requests.
+      pattern:
+        "^[aA][pP][pP][lL][iI][cC][aA][tT][iI][oO][nN]/[jJ][sS][oO][nN](?:\\s*;.*)?$",
     }),
   },
   { additionalProperties: true },
