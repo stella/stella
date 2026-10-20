@@ -154,13 +154,26 @@ export const countUndeclaredEdenWrites = (
     return 0;
   }
   let count = 0;
-  const visit = (node: ts.Node) => {
+  // `client.items.post(...)` and `client.items["post"](...)` alike.
+  const writeTarget = (callee: ts.Expression): ts.Expression | null => {
+    if (ts.isPropertyAccessExpression(callee)) {
+      return WRITE_METHODS.has(callee.name.text) ? callee.expression : null;
+    }
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      WRITE_METHODS.has(node.expression.name.text)
+      ts.isElementAccessExpression(callee) &&
+      ts.isStringLiteralLike(callee.argumentExpression) &&
+      WRITE_METHODS.has(callee.argumentExpression.text)
     ) {
-      const root = chainRoot(node.expression.expression);
+      return callee.expression;
+    }
+    return null;
+  };
+  const visit = (node: ts.Node) => {
+    const target = ts.isCallExpression(node)
+      ? writeTarget(node.expression)
+      : null;
+    if (target !== null) {
+      const root = chainRoot(target);
       const fn = nearestFunction(node);
       if (
         root !== null &&
