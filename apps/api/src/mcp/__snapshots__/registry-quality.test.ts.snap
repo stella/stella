@@ -34,7 +34,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 9784,
+          "maxLength": 12282,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -6634,7 +6634,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 9784,
+          "maxLength": 12282,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -14016,7 +14016,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 9784,
+          "maxLength": 12282,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -16131,7 +16131,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 9675,
+          "maxLength": 12172,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
