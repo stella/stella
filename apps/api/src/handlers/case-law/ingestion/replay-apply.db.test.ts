@@ -26,6 +26,7 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawCitations,
   caseLawCorpusUploadIntents,
   caseLawDecisions,
@@ -359,6 +360,22 @@ test("a writing replay goes through the pipeline, and replaying again converges"
   expect(citations.map(({ citationText }) => citationText)).toEqual([
     "C-283/81",
   ]);
+
+  // A matching stored hash does not settle a row whose mirror still awaits
+  // repair: only the write pipeline repairs it.
+  await db
+    .update(caseLawDecisions)
+    .set({
+      parserVersion: 1,
+      corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+    })
+    .where(eq(caseLawDecisions.id, id));
+  const pending = await replay();
+  if (pending.type !== "ran") {
+    throw new TypeError("Expected the capable adapter to run");
+  }
+  expect(pending.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(0);
+  expect(pending.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
 
   await sourceLease.release();
 });

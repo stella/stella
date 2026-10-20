@@ -1061,12 +1061,6 @@ const replayWouldChangeRow = async ({
 }): Promise<boolean> => {
   const result = sanitizeResult(input, metadataUrlSchema);
   const payload = caseLawCanonicalPayload(result);
-  if (row.contentHash !== null) {
-    return parsedOutputRequiresWrite(
-      row.contentHash,
-      corpusContentHash(payload),
-    );
-  }
   if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
     return true;
   }
@@ -1090,6 +1084,13 @@ const replayWouldChangeRow = async ({
   });
   if (sourceChanged) {
     return true;
+  }
+  // The stored hash answers what reading the stored payload back would.
+  if (row.contentHash !== null) {
+    return parsedOutputRequiresWrite(
+      row.contentHash,
+      corpusContentHash(payload),
+    );
   }
   return !(await storedPayloadMatches({
     payload,
