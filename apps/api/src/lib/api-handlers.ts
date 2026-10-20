@@ -1152,7 +1152,7 @@ const runAdmittedFiniteHandler = async function* <
                 }),
           );
         }
-        const outcome = await admitModelDispatch({
+        const dispatch = await admitModelDispatch({
           organizationId: ctx.session.activeOrganizationId,
           actionKind,
           organizationStateDb: ctx.scopedDb,
@@ -1166,6 +1166,9 @@ const runAdmittedFiniteHandler = async function* <
             return await Result.gen(() => handler(admitted));
           },
         });
+        const outcome = Result.isError(dispatch)
+          ? Result.err(dispatch.error)
+          : dispatch.value;
         if (Result.isOk(outcome) && outcome.value instanceof Response) {
           // Cancel the producer too: a rejected stream must not keep running after release.
           await outcome.value.body?.cancel();

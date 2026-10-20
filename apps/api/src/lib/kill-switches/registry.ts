@@ -225,7 +225,7 @@ export const ACTION_KIND_KILL_SWITCH = {
 } as const satisfies Record<ActionKind, KillSwitchId>;
 
 /** Operator overrides; a switch the map does not name stays at its default. */
-export type KillSwitchOverrides = ReadonlyMap<KillSwitchId, KillSwitchState>;
+type KillSwitchOverrides = ReadonlyMap<KillSwitchId, KillSwitchState>;
 
 const isKillSwitchId = (id: string): id is KillSwitchId =>
   Object.hasOwn(KILL_SWITCHES, id);

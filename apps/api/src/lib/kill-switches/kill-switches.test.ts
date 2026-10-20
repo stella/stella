@@ -151,16 +151,12 @@ describe("kill switch admission", () => {
         expectSwitchRefusal(admitted.error, killSwitch);
       }
 
-      const dispatch = await Result.tryPromise({
-        try: async () =>
-          await admitModelDispatch({
-            organizationId,
-            actionKind,
-            organizationStateDb: testOrganizationStateDb,
-            signal: new AbortController().signal,
-            run,
-          }),
-        catch: (error: unknown) => error,
+      const dispatch = await admitModelDispatch({
+        organizationId,
+        actionKind,
+        organizationStateDb: testOrganizationStateDb,
+        signal: new AbortController().signal,
+        run,
       });
       expect(Result.isError(dispatch)).toBe(true);
       if (Result.isError(dispatch)) {
