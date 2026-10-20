@@ -44,7 +44,7 @@ import {
 } from "@/api/lib/data-url";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { FileKey } from "@/api/lib/file-key";
+import { createUserFileThumbnailKey, type FileKey } from "@/api/lib/file-key";
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
 import {
   FileScanRejectedError,
@@ -822,11 +822,14 @@ export const uploadUserFile = async ({
         });
       } else {
         const generatedThumbnailId = Bun.randomUUIDv7();
-        const key = createUserFileKey({
-          fileId: generatedThumbnailId,
-          mimeType: THUMBNAIL_MIME_TYPE,
-          organizationId,
-        });
+        const key =
+          createUserFileThumbnailKey({
+            sourceKey: s3Key,
+            thumbnailFileId: generatedThumbnailId,
+            organizationId,
+            uploaderUserId: userId,
+          }) ??
+          panic("The freshly created attachment key must have a valid owner");
         preparedThumbnail = {
           bytes: thumbnailResult.value.webp,
           fileId: generatedThumbnailId,

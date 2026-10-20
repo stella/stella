@@ -58,3 +58,28 @@ describe("stored user file keys", () => {
     ).toBe("user_1/0199f000-0000-7000-8000-000000000001.webp");
   });
 });
+
+describe("user file thumbnail key ownership", () => {
+  test("modules derive persisted thumbnail ids through the owner helper", async () => {
+    const apiRoot = new URL("../..", import.meta.url).pathname;
+    const violations: string[] = [];
+    const thumbnailKeyCall =
+      /createUserFileKey\s*\(\s*\{[\s\S]{0,400}?fileId\s*:\s*[^,\n]*thumbnailFileId/gu;
+
+    for await (const relativePath of new Bun.Glob("**/*.ts").scan({
+      cwd: apiRoot,
+      onlyFiles: true,
+    })) {
+      if (relativePath === "src/lib/file-key.ts") {
+        continue;
+      }
+      const source = await Bun.file(`${apiRoot}/${relativePath}`).text();
+      if (thumbnailKeyCall.test(source)) {
+        violations.push(relativePath);
+      }
+      thumbnailKeyCall.lastIndex = 0;
+    }
+
+    expect(violations).toEqual([]);
+  });
+});

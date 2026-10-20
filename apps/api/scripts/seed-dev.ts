@@ -85,13 +85,16 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
-import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createTextPdf } from "@/api/lib/files/text-pdf";
-import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
+import { deleteS3Keys } from "@/api/lib/files/utils";
 import { cents } from "@/api/lib/money";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
-import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import type {
@@ -5026,6 +5029,31 @@ export const seedPlaybooks = async (
 
 // ─── Main ───────────────────────────────────────────────
 
+type UserFileCleanupRow = {
+  organizationId: string;
+  s3Key: string;
+  thumbnailFileId: string | null;
+  userId: string;
+};
+
+export const userFileCleanupKeys = ({
+  organizationId,
+  s3Key,
+  thumbnailFileId,
+  userId,
+}: UserFileCleanupRow): string[] => {
+  if (thumbnailFileId === null) {
+    return [s3Key];
+  }
+  const thumbnailKey = createUserFileThumbnailKey({
+    sourceKey: s3Key,
+    thumbnailFileId,
+    organizationId: brandPersistedOrganizationId(organizationId),
+    uploaderUserId: brandPersistedUserId(userId),
+  });
+  return thumbnailKey === null ? [s3Key] : [s3Key, thumbnailKey];
+};
+
 export async function seed(organizationId?: string, userId?: string) {
   requireLocalDevOpen("Seeding");
   const ORG_ID = toSafeId<"organization">(organizationId ?? DEFAULT_ORG_ID);
@@ -5072,28 +5100,14 @@ export async function seed(organizationId?: string, userId?: string) {
             s3Key: userFiles.s3Key,
             thumbnailFileId: userFiles.thumbnailFileId,
             organizationId: chatThreads.organizationId,
+            userId: userFiles.userId,
           })
           .from(userFiles)
           .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
           .where(inArray(chatThreads.workspaceId, [...workspaceIds])),
     );
     for (const page of chunkItems(files, SEED_INSERT_CHUNK_SIZE)) {
-      const deleted = await deleteS3Keys(
-        page.flatMap((file) =>
-          file.thumbnailFileId === null
-            ? [file.s3Key]
-            : [
-                file.s3Key,
-                createUserFileKey({
-                  fileId: file.thumbnailFileId,
-                  mimeType: THUMBNAIL_MIME_TYPE,
-                  organizationId: brandPersistedOrganizationId(
-                    file.organizationId,
-                  ),
-                }),
-              ],
-        ),
-      );
+      const deleted = await deleteS3Keys(page.flatMap(userFileCleanupKeys));
       if (deleted.isErr()) {
         panic("Could not delete seeded chat files from storage", deleted.error);
       }

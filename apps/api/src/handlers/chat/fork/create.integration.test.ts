@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -31,6 +31,7 @@ import {
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import {
   type copyOrganizationFile,
@@ -149,11 +150,13 @@ const seedAttachment = async ({
     mimeType: IMAGE_MIME_TYPE,
     organizationId,
   });
-  const thumbnailKey = createUserFileKey({
-    fileId: thumbnailFileId,
-    mimeType: THUMBNAIL_MIME_TYPE,
-    organizationId,
-  });
+  const thumbnailKey =
+    createUserFileThumbnailKey({
+      sourceKey: s3Key,
+      thumbnailFileId,
+      organizationId,
+      uploaderUserId: userId,
+    }) ?? panic("The seeded attachment key must have a valid owner");
   await testDb.insert(userFiles).values({
     fileName: "exhibit.png",
     id: fileId,
@@ -515,11 +518,13 @@ test("duplicates attachments so neither thread's deletion touches the other's ob
   // The thumbnail's key is derived from `thumbnailFileId` at delete time, so
   // reusing that id would silently share one object between the two threads.
   expect(copiedFile.thumbnailFileId).not.toBe(attachment.thumbnailFileId);
-  const copiedThumbnailKey = createUserFileKey({
-    fileId: copiedFile.thumbnailFileId ?? "",
-    mimeType: THUMBNAIL_MIME_TYPE,
-    organizationId: ids.orgA,
-  });
+  const copiedThumbnailKey =
+    createUserFileThumbnailKey({
+      sourceKey: copiedFile.s3Key,
+      thumbnailFileId: copiedFile.thumbnailFileId ?? "",
+      organizationId: ids.orgA,
+      uploaderUserId: ids.userA1,
+    }) ?? panic("The copied attachment key must have a valid owner");
   expect(copiedThumbnailKey).not.toBe(attachment.thumbnailKey);
 
   // Both objects exist independently in storage.
@@ -1228,7 +1233,7 @@ test.each([true, false])(
         expect(file.thumbnailFileId).not.toBeNull();
         expect(
           fakeS3.objects.has(
-            `${BUCKET}/${createUserFileKey({ fileId: file.thumbnailFileId ?? "", mimeType: THUMBNAIL_MIME_TYPE, organizationId: ids.orgA })}`,
+            `${BUCKET}/${createUserFileThumbnailKey({ sourceKey: file.s3Key, thumbnailFileId: file.thumbnailFileId ?? "", organizationId: ids.orgA, uploaderUserId: ids.userA1 }) ?? panic("The copied attachment key must have a valid owner")}`,
           ),
         ).toBe(true);
       }

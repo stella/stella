@@ -42,7 +42,6 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileThumbnailKey, type FileKey } from "@/api/lib/file-key";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
-import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import {
   type CheckedFileCopy,
   OrganizationFileUsageError,
@@ -262,23 +261,25 @@ const stageUserFileCopies = (
     const newFileId = createSafeId<"userFile">();
     const copiedThumbnailFileId =
       file.thumbnailFileId === null ? null : Bun.randomUUIDv7();
+    const copiedS3Key = createUserFileKey({
+      fileId: newFileId,
+      mimeType: file.mimeType,
+      organizationId,
+    });
     return {
       source: file,
       newFileId,
-      copiedS3Key: createUserFileKey({
-        fileId: newFileId,
-        mimeType: file.mimeType,
-        organizationId,
-      }),
+      copiedS3Key,
       copiedThumbnailFileId,
       thumbnailKey:
         copiedThumbnailFileId === null
           ? null
-          : createUserFileKey({
-              fileId: copiedThumbnailFileId,
-              mimeType: THUMBNAIL_MIME_TYPE,
+          : (createUserFileThumbnailKey({
+              sourceKey: copiedS3Key,
+              thumbnailFileId: copiedThumbnailFileId,
               organizationId,
-            }),
+              uploaderUserId: brandPersistedUserId(file.userId),
+            }) ?? panic("The copied attachment key must have a valid owner")),
     };
   });
 
