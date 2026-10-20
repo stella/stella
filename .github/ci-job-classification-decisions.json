@@ -759,6 +759,10 @@
     "qualifier": "Checks; no publication, tag creation, or deployment.",
     "reviewedDigest": "d977553ea927832aba86b2e29395d7995095ee86d6b46facf37b9560c6ed1deb"
   },
+  "candidate:.github/workflows/release-pr.yml/tag-version": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
   "candidate:.github/workflows/release-pr.yml/version": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",

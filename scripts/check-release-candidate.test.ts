@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { assertProperty } from "@stll/property-testing";
+import { drawPropertySamples } from "@stll/property-testing";
 
 import { evaluate } from "./github-expression";
 
@@ -299,90 +299,92 @@ const historyEdits = fc.array(
   { minLength: 1, maxLength: 6 },
 );
 test("only the version commit is accepted across generated main histories", () => {
-  assertProperty(
-    "only the version commit is accepted across generated main histories",
-    fc.property(historyEdits, (edits) => {
-      const { directory, repo, sha, previous } = fixture();
-      try {
+  // Each sample spawns the release scripts, so the histories are drawn once
+  // and run as a batch rather than inside a property predicate.
+  for (const { value: edits, label } of drawPropertySamples(historyEdits, {
+    numRuns: 12,
+  })) {
+    const { directory, repo, sha, previous } = fixture();
+    try {
+      writeFileSync(
+        path.join(repo, "scripts/prepare-release-tag.sh"),
+        readFileSync(
+          new URL("prepare-release-tag.sh", import.meta.url),
+          "utf-8",
+        ),
+      );
+      for (const name of [
+        "verify-release-tree-proof.sh",
+        "check-release-main-health.sh",
+      ]) {
         writeFileSync(
-          path.join(repo, "scripts/prepare-release-tag.sh"),
-          readFileSync(
-            new URL("prepare-release-tag.sh", import.meta.url),
-            "utf-8",
-          ),
+          path.join(repo, "scripts", name),
+          "#!/bin/bash\nexit 0\n",
         );
-        for (const name of [
-          "verify-release-tree-proof.sh",
-          "check-release-main-health.sh",
-        ]) {
-          writeFileSync(
-            path.join(repo, "scripts", name),
-            "#!/bin/bash\nexit 0\n",
-          );
-        }
-        writeFileSync(
-          path.join(repo, "scripts/gh-retry.sh"),
-          `#!/bin/bash
+      }
+      writeFileSync(
+        path.join(repo, "scripts/gh-retry.sh"),
+        `#!/bin/bash
 printf '%s\\n' '[[{"context":"staging/verified","state":"success"},{"context":"main/heavy","state":"success"},{"context":"main/pr-depth","state":"success"}]]'
 `,
-        );
-        const commits = [previous, sha];
-        let version = "1.2.4";
-        let versionCommit = sha;
-        // Always include a later unchanged VERSION commit, even after shrinking.
-        for (const edit of [...edits, { version: undefined, content: 0 }]) {
-          const nextVersion =
-            edit.version === undefined ? version : `1.2.${edit.version}`;
-          writeFileSync(path.join(repo, "VERSION"), `${nextVersion}\n`);
-          writeFileSync(path.join(repo, "content"), String(edit.content));
-          git(repo, "add", ".");
-          git(repo, "commit", "--allow-empty", "-qm", "history edit");
-          const commit = git(repo, "rev-parse", "HEAD");
-          commits.push(commit);
-          if (nextVersion !== version) {
-            versionCommit = commit;
-          }
-          version = nextVersion;
+      );
+      const commits = [previous, sha];
+      let version = "1.2.4";
+      let versionCommit = sha;
+      // Always include a later unchanged VERSION commit, even after shrinking.
+      for (const edit of [...edits, { version: undefined, content: 0 }]) {
+        const nextVersion =
+          edit.version === undefined ? version : `1.2.${edit.version}`;
+        writeFileSync(path.join(repo, "VERSION"), `${nextVersion}\n`);
+        writeFileSync(path.join(repo, "content"), String(edit.content));
+        git(repo, "add", ".");
+        git(repo, "commit", "--allow-empty", "-qm", "history edit");
+        const commit = git(repo, "rev-parse", "HEAD");
+        commits.push(commit);
+        if (nextVersion !== version) {
+          versionCommit = commit;
         }
-        git(repo, "update-ref", "refs/remotes/origin/main", "HEAD");
-        for (const commit of commits) {
-          const candidate = check(repo, commit);
-          const prepared = Bun.spawnSync(
-            [
-              "bash",
-              "scripts/prepare-release-tag.sh",
-              "--repo",
-              "stella/stella",
-              "--sha",
-              commit,
-            ],
-            { cwd: repo },
-          );
-          for (const result of [candidate, prepared]) {
-            expect(
-              result.exitCode,
-              `identity ${commit}: ${result.stderr.toString()}`,
-            ).toBe(commit === versionCommit ? 0 : 1);
-            if (commit === versionCommit) {
-              expect(result.stdout.toString()).toContain(
-                `sha=${versionCommit}\n`,
-              );
-            } else {
-              expect(result.stdout.toString()).toBe("");
-              expect(result.stderr.toString()).toContain(versionCommit);
-            }
-          }
-        }
-        const selected = Bun.spawnSync(
-          ["bash", "scripts/prepare-release-tag.sh", "--repo", "stella/stella"],
+        version = nextVersion;
+      }
+      git(repo, "update-ref", "refs/remotes/origin/main", "HEAD");
+      for (const commit of commits) {
+        const candidate = check(repo, commit);
+        const prepared = Bun.spawnSync(
+          [
+            "bash",
+            "scripts/prepare-release-tag.sh",
+            "--repo",
+            "stella/stella",
+            "--sha",
+            commit,
+          ],
           { cwd: repo },
         );
-        expect(selected.exitCode, selected.stderr.toString()).toBe(0);
-        expect(selected.stdout.toString()).toContain(`sha=${versionCommit}\n`);
-      } finally {
-        rmSync(directory, { recursive: true, force: true });
+        for (const result of [candidate, prepared]) {
+          expect(
+            result.exitCode,
+            `${label} identity ${commit}: ${result.stderr.toString()}`,
+          ).toBe(commit === versionCommit ? 0 : 1);
+          if (commit === versionCommit) {
+            expect(result.stdout.toString()).toContain(
+              `sha=${versionCommit}\n`,
+            );
+          } else {
+            expect(result.stdout.toString()).toBe("");
+            expect(result.stderr.toString()).toContain(versionCommit);
+          }
+        }
       }
-    }),
-    { numRuns: 12 },
-  );
+      const selected = Bun.spawnSync(
+        ["bash", "scripts/prepare-release-tag.sh", "--repo", "stella/stella"],
+        { cwd: repo },
+      );
+      expect(selected.exitCode, `${label} ${selected.stderr.toString()}`).toBe(
+        0,
+      );
+      expect(selected.stdout.toString()).toContain(`sha=${versionCommit}\n`);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }
 }, 60_000);
