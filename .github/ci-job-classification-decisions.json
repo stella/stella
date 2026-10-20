@@ -761,7 +761,8 @@
   },
   "candidate:.github/workflows/release-pr.yml/tag-version": {
     "kind": "priority",
-    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+    "reviewedDigest": "0000000000000000000000000000000000000000000000000000000000000000"
   },
   "candidate:.github/workflows/release-pr.yml/version": {
     "kind": "ordinary",
