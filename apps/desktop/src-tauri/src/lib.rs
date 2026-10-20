@@ -533,7 +533,7 @@ fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
       let resume_handle = handle.clone();
       window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Destroyed) {
-          clipboard_shortcut::resume(&resume_handle);
+          clipboard_shortcut::resume_after_window_closed(&resume_handle);
         }
       });
       // Emit tab activation after a short delay to let the webview load

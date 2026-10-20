@@ -251,6 +251,9 @@ pub struct ClipboardShortcut {
   preference: DevicePreference,
 }
 
+/// Held across OS registration, which the plugin runs on the main thread
+/// and waits for: the main thread must never wait for this lock, or a command
+/// holding it and the main thread wait on each other.
 pub type ClipboardShortcutState = Mutex<ClipboardShortcut>;
 
 impl ClipboardShortcut {
@@ -295,14 +298,24 @@ fn register(app: &AppHandle, shortcut: Shortcut) -> bool {
   }
 }
 
-fn unregister(app: &AppHandle, shortcut: Shortcut) {
-  if let Err(error) = app.global_shortcut().unregister(shortcut) {
-    tracing::warn!(error = %error, "clipboard shortcut could not be released");
+fn unregister(app: &AppHandle, shortcut: Shortcut) -> Result<(), String> {
+  app
+    .global_shortcut()
+    .unregister(shortcut)
+    .map_err(|error| format!("clipboard shortcut could not be released: {error}"))
+}
+
+/// Releases a candidate that was registered but not adopted. The caller
+/// already returns the failure that made it roll back.
+fn discard(app: &AppHandle, candidate: Shortcut) {
+  if let Err(error) = unregister(app, candidate) {
+    tracing::error!(error = %error, "a rejected clipboard shortcut stayed registered");
   }
 }
 
 /// Registers the saved shortcut. A refusal is non-fatal: the shortcut may be
-/// taken, and the clipboard stays reachable from the tray.
+/// taken, and the clipboard stays reachable from the tray. It runs during
+/// setup, before any window can invoke a command that holds the lock.
 pub fn register_at_launch(app: &AppHandle) -> ShortcutRegistration {
   let state = app.state::<ClipboardShortcutState>();
   let Ok(mut shortcut) = state.lock() else {
@@ -317,8 +330,8 @@ pub fn register_at_launch(app: &AppHandle) -> ShortcutRegistration {
 }
 
 /// Re-registers a paused shortcut. Windows call this when recording ends
-/// without a change, and the app calls it when a recording window closes.
-pub fn resume(app: &AppHandle) {
+/// without a change.
+fn resume(app: &AppHandle) {
   let state = app.state::<ClipboardShortcutState>();
   let Ok(mut shortcut) = state.lock() else {
     return;
@@ -326,13 +339,17 @@ pub fn resume(app: &AppHandle) {
   if shortcut.registration != ShortcutRegistration::Paused {
     return;
   }
-  shortcut.registration = if register(app, shortcut.current) {
-    ShortcutRegistration::Active
-  } else {
-    ShortcutRegistration::Unavailable
-  };
+  reregister_if_paused(app, &mut shortcut);
   drop(shortcut);
   let _ = app.emit(CHANGED_EVENT, ());
+}
+
+/// Resumes after a recording window closed. Window events arrive on the main
+/// thread, which must not wait for the shortcut lock (see
+/// [`ClipboardShortcutState`]), so the resume runs on a blocking worker.
+pub fn resume_after_window_closed(app: &AppHandle) {
+  let app = app.clone();
+  tauri::async_runtime::spawn_blocking(move || resume(&app));
 }
 
 fn locked<'a>(
@@ -367,7 +384,7 @@ pub async fn shortcut_pause(
 ) -> Result<ClipboardShortcutSnapshot, String> {
   let mut shortcut = locked(&state)?;
   if shortcut.registration == ShortcutRegistration::Active {
-    unregister(&app, shortcut.current);
+    unregister(&app, shortcut.current)?;
     shortcut.registration = ShortcutRegistration::Paused;
   }
   Ok(shortcut.snapshot())
@@ -401,27 +418,32 @@ pub async fn shortcut_set(
     }
   };
   let previous = shortcut.current;
-  let previous_registration = shortcut.registration;
   if next != previous {
     if !register(&app, next) {
-      restore(&app, &mut shortcut, previous_registration);
+      reregister_if_paused(&app, &mut shortcut);
       return Ok(ShortcutUpdate::Rejected {
         rejection: ShortcutRejection::Taken,
         snapshot: shortcut.snapshot(),
       });
     }
-    if let Err(error) = shortcut.preference.write(&next.into_string()) {
-      unregister(&app, next);
-      restore(&app, &mut shortcut, previous_registration);
-      return Err(error);
+    // The state changes only after the OS released the old combination, so
+    // it never reports a shortcut as replaced while it still fires.
+    if shortcut.registration == ShortcutRegistration::Active {
+      if let Err(error) = unregister(&app, previous) {
+        discard(&app, next);
+        return Err(error);
+      }
+      shortcut.registration = ShortcutRegistration::Paused;
     }
-    if previous_registration == ShortcutRegistration::Active {
-      unregister(&app, previous);
+    if let Err(error) = shortcut.preference.write(&next.into_string()) {
+      discard(&app, next);
+      reregister_if_paused(&app, &mut shortcut);
+      return Err(error);
     }
     shortcut.current = next;
     shortcut.registration = ShortcutRegistration::Active;
   } else {
-    restore(&app, &mut shortcut, previous_registration);
+    reregister_if_paused(&app, &mut shortcut);
   }
   let snapshot = shortcut.snapshot();
   drop(shortcut);
@@ -429,13 +451,9 @@ pub async fn shortcut_set(
   Ok(ShortcutUpdate::Saved { snapshot })
 }
 
-/// Puts the previous shortcut back after a candidate was not applied.
-fn restore(
-  app: &AppHandle,
-  shortcut: &mut ClipboardShortcut,
-  previous: ShortcutRegistration,
-) {
-  if previous == ShortcutRegistration::Paused {
+/// Puts a released shortcut back; an active or unavailable one stays as is.
+fn reregister_if_paused(app: &AppHandle, shortcut: &mut ClipboardShortcut) {
+  if shortcut.registration == ShortcutRegistration::Paused {
     shortcut.registration = if register(app, shortcut.current) {
       ShortcutRegistration::Active
     } else {
