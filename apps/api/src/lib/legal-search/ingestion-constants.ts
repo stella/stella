@@ -81,6 +81,46 @@ export const PARSER_VERSIONS = {
 } as const satisfies Record<AdapterKey, number>;
 
 /**
+ * Source fingerprint version for each source.
+ *
+ * Increment only the affected source when the inputs to `sourceFingerprint`
+ * change without changing parser output. This lets ingestion compare stored
+ * and incoming fingerprints under the same algorithm without replaying the
+ * parser.
+ */
+export const SOURCE_FINGERPRINT_VERSIONS = {
+  [ADAPTER_KEYS.CZ_REGIONAL]: 0,
+  [ADAPTER_KEYS.CZ_NS]: 0,
+  [ADAPTER_KEYS.CZ_NSS]: 0,
+  [ADAPTER_KEYS.CZ_US]: 0,
+  [ADAPTER_KEYS.SK_COURTS]: 0,
+  [ADAPTER_KEYS.SK_US]: 0,
+  [ADAPTER_KEYS.PL_COURTS]: 0,
+  [ADAPTER_KEYS.PL_SN]: 0,
+  [ADAPTER_KEYS.PL_KIO]: 0,
+  [ADAPTER_KEYS.PL_TK]: 0,
+  [ADAPTER_KEYS.PL_NSA]: 0,
+  [ADAPTER_KEYS.PL_NCOURT]: 0,
+  [ADAPTER_KEYS.AT_COURTS]: 0,
+  [ADAPTER_KEYS.AT_VFGH]: 0,
+  [ADAPTER_KEYS.AT_VWGH]: 0,
+  [ADAPTER_KEYS.AT_BVWG]: 0,
+  [ADAPTER_KEYS.AT_LVWG]: 0,
+  [ADAPTER_KEYS.AT_ASYLGH]: 0,
+  [ADAPTER_KEYS.AT_UBAS]: 0,
+  [ADAPTER_KEYS.AT_UVS]: 0,
+  [ADAPTER_KEYS.AT_VERG]: 0,
+  [ADAPTER_KEYS.AT_UMSE]: 0,
+  [ADAPTER_KEYS.AT_BKS]: 0,
+  [ADAPTER_KEYS.AT_FINDOK]: 0,
+  [ADAPTER_KEYS.EU_ECJ]: 0,
+  [ADAPTER_KEYS.HU_BHGY]: 0,
+  [ADAPTER_KEYS.PL_KIS]: 0,
+  [ADAPTER_KEYS.PL_UODO]: 0,
+  [ADAPTER_KEYS.PL_UOKIK]: 0,
+} as const satisfies Record<AdapterKey, number>;
+
+/**
  * Capacity bound for a complete `case_law_sources` read, and nothing more.
  *
  * Deliberately NOT `ADAPTER_KEYS.length`. The registry is deployment state

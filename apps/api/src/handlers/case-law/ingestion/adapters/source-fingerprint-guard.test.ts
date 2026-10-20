@@ -17,6 +17,7 @@ import { sha256Hex as hashContent } from "@stll/sha256/node";
 import { encodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
+import { SOURCE_FINGERPRINT_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   FINGERPRINT_FINDING_REASONS,
@@ -61,7 +62,23 @@ test("every registration's rawHash is the fingerprint of what it stores, or a li
       : [{ key, reason: FINGERPRINT_FINDING_REASONS[finding.type] }],
   );
   if (CENSUS_OUT !== undefined) {
-    writeFileSync(CENSUS_OUT, JSON.stringify(misses));
+    const fingerprints = rows.flatMap(({ key, fingerprint }) => {
+      const source = key.split("::", 1)[0];
+      const version = Object.entries(SOURCE_FINGERPRINT_VERSIONS).find(
+        ([candidate]) => candidate === source,
+      )?.[1];
+      if (version === undefined) {
+        return [];
+      }
+      return [
+        {
+          key,
+          fingerprint,
+          version,
+        },
+      ];
+    });
+    writeFileSync(CENSUS_OUT, JSON.stringify({ fingerprints, misses }));
     return;
   }
   expect(

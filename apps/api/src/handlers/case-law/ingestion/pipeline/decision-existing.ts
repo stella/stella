@@ -248,7 +248,8 @@ const advanceUnchangedObservationWatermark = async ({
   result,
   observedAt,
   observationOrder,
-}: WatermarkOptions) =>
+  sourceFingerprintVersion,
+}: WatermarkOptions & { sourceFingerprintVersion: number }) =>
   await scopedDb(async (tx) => {
     const projectionActive = await lockActiveCorpusProjectionSourceTx(tx, {
       family: "case_law",
@@ -262,6 +263,8 @@ const advanceUnchangedObservationWatermark = async ({
           sourceObservedAt: observedAt,
           sourceObservationOrder: observationOrder,
           sourceObservationHash: result.rawHash,
+          sourceHash: result.rawHash,
+          sourceHashVersion: sourceFingerprintVersion,
           ...unchangedReadOutcomeMetadata(existing, result),
           // Drizzle applies the schema's on-update value unless this column is
           // explicit. A watermark-only replay is not a content modification.
@@ -273,6 +276,7 @@ const advanceUnchangedObservationWatermark = async ({
             storedObservationPrecedes({ order: observationOrder }),
             isNull(caseLawDecisions.redactedAt),
             sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${existing.sourceHash}`,
+            eq(caseLawDecisions.sourceHashVersion, existing.sourceHashVersion),
             // The reference the skip compared, so a concurrent correction of
             // it is not overwritten by a watermark that says nothing changed.
             eq(caseLawDecisions.caseNumber, existing.caseNumber),
@@ -360,6 +364,8 @@ type ResolveExistingDecisionPolicyOptions = {
   observedAt: Date;
   observationOrder: bigint;
   refresh: DecisionRefresh;
+  sourceFingerprintVersion: number;
+  sourceFingerprintFromStoredRaw: (key: string) => Promise<string>;
 };
 
 /**
@@ -381,6 +387,8 @@ export const resolveExistingDecisionPolicy = async ({
   observedAt,
   observationOrder,
   refresh,
+  sourceFingerprintVersion,
+  sourceFingerprintFromStoredRaw,
 }: ResolveExistingDecisionPolicyOptions): Promise<AttemptStep | null> => {
   if (
     preservesExistingDetail &&
@@ -414,6 +422,13 @@ export const resolveExistingDecisionPolicy = async ({
     };
   }
 
+  const comparedSourceHash =
+    existing !== undefined &&
+    existing.sourceHashVersion < sourceFingerprintVersion &&
+    existing.sourceRawS3Key !== null
+      ? await sourceFingerprintFromStoredRaw(existing.sourceRawS3Key)
+      : (existing?.sourceHash ?? null);
+
   if (
     existing &&
     existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
@@ -438,7 +453,7 @@ export const resolveExistingDecisionPolicy = async ({
     shouldSkipRefresh({
       existingMetadata: existing.metadata,
       existingSourceRawContentType: existing.sourceRawContentType,
-      existingSourceHash: existing.sourceHash,
+      existingSourceHash: comparedSourceHash,
       incomingMetadata: result.metadata,
       incomingRawHash: result.rawHash,
       incomingSourceRawContentType: result.sourceRawContentType ?? "text/plain",
@@ -451,6 +466,7 @@ export const resolveExistingDecisionPolicy = async ({
       result,
       observedAt,
       observationOrder,
+      sourceFingerprintVersion,
     });
     if (!watermarkAdvanced) {
       return await watermarkMissOutcome({

@@ -122,6 +122,13 @@ the court. This enables re-parsing without re-downloading.
 
 ### 4. No heuristics where structure exists
 
+Before changing what a source feeds into `sourceFingerprint`, bump that
+source's `SOURCE_FINGERPRINT_VERSIONS` entry and add a
+`// parser-output-unchanged:` line explaining why parsed output is unaffected.
+Never use a parser version bump for a fingerprint-only change: the fingerprint
+version lets ingestion refresh the stored hash from stored raw without parsing,
+rewriting the decision, or reindexing it.
+
 If the source gives you structure (HTML tags, JSON sections,
 RTF markers), use it. Do not write regex-based heuristics to
 split or classify text when the source already provides the

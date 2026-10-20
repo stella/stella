@@ -174,6 +174,8 @@ export type FingerprintCensusRow = {
   /** `<registration>::<driver>`; no line numbers, so it survives edits. */
   readonly key: string;
   readonly finding: FingerprintFinding;
+  /** Fingerprint of the exact raw fields stored by the fixture. */
+  readonly fingerprint: string;
 };
 
 /** Every driver of every registration, with what its decision's hash covers. */
@@ -187,9 +189,17 @@ export const sourceFingerprintCensus = async (): Promise<
     for (const { name, fixture } of drivers) {
       // Sequential: fixtures replace the shared fetch while they build.
       const decision = await fixture().buildDecision();
+      const envelope = emittedEnvelope(decision);
       rows.push({
         key: `${registration}::${name}`,
         finding: fingerprintFinding(decision),
+        fingerprint:
+          envelope === undefined
+            ? decision.rawHash
+            : sourceFingerprint({
+                sourceRaw: envelope,
+                sourceRawObjects: decision.sourceRawObjects,
+              }),
       });
     }
   }

@@ -200,6 +200,7 @@ const IDENTITY_COLUMNS = {
   ecli: true,
   metadata: true,
   sourceHash: true,
+  sourceHashVersion: true,
   sourceObservedAt: true,
   sourceObservationHash: true,
   redactedAt: true,

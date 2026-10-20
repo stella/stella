@@ -13,6 +13,11 @@ import { panic } from "better-result";
  * This module is the only constructor of {@link SourceFingerprint}. It takes
  * the stored fields themselves rather than a list of strings, so what is
  * hashed and what is stored cannot drift apart.
+ *
+ * A change to what a source feeds this function bumps that source's
+ * `SOURCE_FINGERPRINT_VERSIONS` entry, not its parser version. Mark such a
+ * change with a `// parser-output-unchanged:` line: fingerprint-only changes
+ * must not schedule a re-parse when parser output is unchanged.
  */
 
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.

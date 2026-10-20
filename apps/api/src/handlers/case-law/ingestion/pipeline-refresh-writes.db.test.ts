@@ -38,6 +38,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { STATED_ECLI_IDENTITY } from "@/api/lib/legal-search/adapter-manifest";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -128,6 +129,7 @@ type StoredRow = {
   observationOrder: string | null;
   mirrorStatus: string;
   sourceHash: string | null;
+  sourceHashVersion: number;
   contentHash: string | null;
   textKey: string | null;
   holdsInlineText: boolean;
@@ -141,6 +143,7 @@ const storedRow = async (caseNumber: string): Promise<StoredRow> => {
            source_observation_order::text AS observation_order,
            corpus_mirror_status,
            source_hash,
+           source_hash_version,
            content_hash,
            text_s3_key,
            fulltext IS NOT NULL AS holds_inline_text,
@@ -163,6 +166,7 @@ const storedRow = async (caseNumber: string): Promise<StoredRow> => {
     mirrorStatus: String(record["corpus_mirror_status"]),
     sourceHash:
       typeof record["source_hash"] === "string" ? record["source_hash"] : null,
+    sourceHashVersion: Number(record["source_hash_version"]),
     contentHash:
       typeof record["content_hash"] === "string"
         ? record["content_hash"]
@@ -530,6 +534,85 @@ test("a matching source hash restores sections-only content", async () => {
   expect(restored.observationOrder).toBe(String(refreshed));
   expect(restored.contentHash).toBe(first.contentHash);
   expect(restored.textKey).toBe(first.textKey);
+});
+
+test("a stale equal fingerprint advances its version once without rewriting", async () => {
+  const caseNumber = "30 Cdo 305/2024";
+  await ingest(withDocument(caseNumber, "old-algorithm"), canonical);
+  const first = await storedRow(caseNumber);
+  await db.execute(sql`
+    UPDATE case_law_decisions
+       SET source_raw_s3_key = 'stored/raw', source_hash_version = 0
+     WHERE id = ${first.id}::uuid
+  `);
+  let reads = 0;
+  const observe = async () => {
+    order += 1n;
+    return await processDecision(
+      {
+        input: withDocument(caseNumber, "new-algorithm"),
+        observationOrder: order,
+        sourceId,
+        scopedDb,
+        observedAt: new Date(Date.UTC(2026, 8, 23, 13, 0, Number(order))),
+        corpus: canonical,
+        sourceFingerprintFromStoredRaw: async () => {
+          reads += 1;
+          return await Promise.resolve("new-algorithm");
+        },
+      },
+      async () =>
+        await Promise.resolve({
+          metadataUrlSchema: undefined,
+          sourceFingerprintVersion: 1,
+          statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+        }),
+    );
+  };
+  expect((await observe()).inserted).toBe(false);
+  const upgraded = await storedRow(caseNumber);
+  expect(upgraded).toMatchObject({
+    sourceHash: "new-algorithm",
+    sourceHashVersion: 1,
+  });
+  expect((await observe()).inserted).toBe(false);
+  expect(reads).toBe(1);
+});
+
+test("a stale unequal fingerprint follows the changed path", async () => {
+  const caseNumber = "30 Cdo 306/2024";
+  await ingest(withDocument(caseNumber, "old-algorithm"), canonical);
+  const first = await storedRow(caseNumber);
+  await db.execute(sql`
+    UPDATE case_law_decisions
+       SET source_raw_s3_key = 'stored/raw', source_hash_version = 0
+     WHERE id = ${first.id}::uuid
+  `);
+  order += 1n;
+  const outcome = await processDecision(
+    {
+      input: withDocument(caseNumber, "new-algorithm"),
+      observationOrder: order,
+      sourceId,
+      scopedDb,
+      observedAt: new Date(Date.UTC(2026, 8, 23, 14, 0, Number(order))),
+      corpus: canonical,
+      sourceFingerprintFromStoredRaw: async () =>
+        await Promise.resolve("different-document"),
+    },
+    async () =>
+      await Promise.resolve({
+        metadataUrlSchema: undefined,
+        sourceFingerprintVersion: 1,
+        statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+      }),
+  );
+  expect(outcome.inserted).toBe(true);
+  const changed = await storedRow(caseNumber);
+  expect(changed).toMatchObject({
+    sourceHash: "new-algorithm",
+    sourceHashVersion: 1,
+  });
 });
 
 test.each([
