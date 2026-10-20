@@ -29,6 +29,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
@@ -53,7 +54,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { getS3, readS3ObjectBounded } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { headObject } from "@/api/lib/s3-presign";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
@@ -566,9 +567,14 @@ const runFinalize = async function* ({
   }
 
   // 3. Download for scan.
-  const fileBuffer = await readS3ArrayBuffer(tmpKey);
+  const uploadBytes = await readS3ObjectBounded({
+    bucket: envBase.S3_BUCKET,
+    key: tmpKey,
+    maxBytes: claimed.declaredSize,
+    signal: AbortSignal.timeout(FINALIZE_CLAIM_TIMEOUT_MS),
+  });
   if (!head.checksumSHA256) {
-    const uploadedSha256 = hashSha256Hex(new Uint8Array(fileBuffer));
+    const uploadedSha256 = hashSha256Hex(uploadBytes);
     if (uploadedSha256 !== claimed.declaredSha256) {
       return Result.err(
         new UploadFinalizeError({
@@ -582,7 +588,8 @@ const runFinalize = async function* ({
 
   // 4. Scan — same pipeline the legacy upload handler ran inline.
   const scanResult = await scanUpload({
-    bytes: fileBuffer,
+    bytes: uploadBytes,
+    ownership: "transfer",
     declaredMimeType: claimed.declaredMime,
     fileName: claimed.declaredName,
   });
@@ -604,6 +611,7 @@ const runFinalize = async function* ({
     );
   }
   const scanned = scanResult.value;
+  const fileBuffer = scanned.bytes;
   const scanWarnings = scanned.scanWarnings ?? undefined;
 
   // 4b. Reference removal, after the scan judged what the client actually

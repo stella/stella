@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
+import type { ExceptionScope } from "@stll/errors/exception-scope";
 import { assertProperty } from "@stll/property-testing";
 
 import { SandboxError } from "@/api/lib/errors/tagged-errors";
@@ -14,6 +15,67 @@ const locatedError = (line: number, chunk: string) => {
   error.stack = `Error: failure\n    at owner (/app/${chunk}.js:${line}:51)`;
   return error;
 };
+
+test("grouping regression matrix preserves request and execution owners at a shared helper", () => {
+  const evidence = readEvidence(locatedError(20, "before"));
+  const owners = [
+    { type: "request", method: "GET", routeTemplate: "/a/:id" },
+    { type: "request", method: "POST", routeTemplate: "/a/:id" },
+    { type: "request", method: "GET", routeTemplate: "/b/:id" },
+    { type: "request", method: "POST", routeTemplate: "/b/:id" },
+    { type: "handler", handlerId: "first.execute" },
+    { type: "handler", handlerId: "second.execute" },
+    { type: "job", jobId: "first", task: "repair" },
+    { type: "job", jobId: "second", task: "repair" },
+    { type: "job", jobId: "first", task: "index" },
+    { type: "ingestion", adapterKey: "first" },
+    { type: "ingestion", adapterKey: "second" },
+  ] as const satisfies readonly ExceptionScope[];
+  const fingerprints = owners.map((owner) =>
+    exceptionFingerprint(evidence, {
+      fingerprintKey: "shared.reportFailure",
+      scope: { type: "handler", handlerId: "shared.reportFailure" },
+      inheritedScopes: [owner],
+    }),
+  );
+  expect(new Set(fingerprints).size).toBe(owners.length);
+});
+
+test("grouping regression matrix distinguishes Error to TypeError from Error to ReferenceError", () => {
+  const fingerprints = [TypeError, ReferenceError].map((Cause) =>
+    exceptionFingerprint(
+      readEvidence(new Error("wrapper", { cause: new Cause("failure") })),
+      {
+        fingerprintKey: "shared.reportFailure",
+        scope: { type: "handler", handlerId: "shared.reportFailure" },
+      },
+    ),
+  );
+  expect(new Set(fingerprints).size).toBe(2);
+});
+
+test("grouping regression matrix retains SandboxError reasons at every causal position", () => {
+  const fingerprints = new Set<string>();
+  for (let position = 0; position < MAX_EXCEPTION_CAUSE_DEPTH; position += 1) {
+    const atPosition = (["runtime", "timeout"] as const).map((reason) => {
+      let error: Error = new SandboxError({ message: "failure", reason });
+      for (let depth = 0; depth < position; depth += 1) {
+        error = new Error("wrapper", { cause: error });
+      }
+      const evidence = readEvidence(error);
+      expect(evidence.nodes).toHaveLength(position + 1);
+      return exceptionFingerprint(evidence, {
+        fingerprintKey: "sandbox.execute",
+        scope: { type: "handler", handlerId: "sandbox.execute" },
+      });
+    });
+    expect(new Set(atPosition).size).toBe(2);
+    for (const fingerprint of atPosition) {
+      fingerprints.add(fingerprint);
+    }
+  }
+  expect(fingerprints.size).toBe(MAX_EXCEPTION_CAUSE_DEPTH * 2);
+});
 
 test("exception identity survives line insertion and bundle renaming", () => {
   assertProperty(

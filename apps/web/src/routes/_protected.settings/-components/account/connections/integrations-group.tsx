@@ -44,6 +44,13 @@ import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon"
 import { McpAuthorizationReview } from "@/components/mcp-authorization-review";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
+import {
+  canApproveIntegrationAuthorization,
+  integrationStatus,
+  matchesConnectionQuery,
+  type IntegrationAuthorizationStatus,
+  type IntegrationConnection,
+} from "@/lib/account/connections.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -59,14 +66,6 @@ import {
   type McpConnectorsResponse,
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
-
-import {
-  canApproveIntegrationAuthorization,
-  integrationStatus,
-  matchesConnectionQuery,
-  type IntegrationAuthorizationStatus,
-  type IntegrationConnection,
-} from "./connections.logic";
 
 export type IntegrationsData = {
   /** Every integration the organization added. */

@@ -37,14 +37,18 @@ import {
   getOAuthEndpointOrigins,
   validateApprovedOAuthIssuer,
   exchangeAuthorizationCode,
+  observeAuthorizationResponseBinding,
   tokenExpiresAt,
 } from "@/api/lib/mcp-upstream/oauth";
 import type {
   ApprovedMcpIssuerBinding,
+  AuthorizationResponseBinding,
+  AuthorizationResponseBindingVerdict,
   BoundOAuthMetadata,
   TokenResponse,
 } from "@/api/lib/mcp-upstream/oauth";
 import { mcpResourceMatchesConnector } from "@/api/lib/mcp-upstream/url-safety";
+import { logger } from "@/api/lib/observability/logger";
 import { requireRequestExceptionScope } from "@/api/lib/observability/request-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
@@ -93,6 +97,26 @@ const redirect = (input: CallbackRedirectInput) =>
     status: 302,
     headers: { Location: buildCallbackRedirectUrl(env.FRONTEND_URL, input) },
   });
+
+const logAuthorizationResponseBindingObservation = ({
+  binding,
+  connectorId,
+  verdict,
+}: {
+  binding: AuthorizationResponseBinding;
+  connectorId: SafeId<"mcpConnector">;
+  verdict: AuthorizationResponseBindingVerdict;
+}) => {
+  logger.info("mcp.oauth.binding_observed", {
+    connectorId,
+    issuerHost: URL.parse(binding.expectedIssuer)?.hostname ?? null,
+    registrationMode: binding.registrationMode,
+    issSupportedAdvertised: binding.issSupportedAdvertised,
+    issPresent: verdict.issPresent,
+    issMatches: verdict.issMatches,
+    wouldRefuse: verdict.type === "would_refuse",
+  });
+};
 
 type ValidatePendingOAuthMetadataOptions = {
   connectorUrl: string;
@@ -428,18 +452,21 @@ const saveOAuthConnection = async ({
         },
       })
       .returning({ id: mcpUserConnections.id });
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-      resourceId: pending.connectorId,
-      workspaceId: null,
-      metadata: {
-        connectorId: pending.connectorId,
-        connectorSlug,
-        connectionUserId: userId,
-        operation: "mcp_oauth_connect",
-      },
-    });
+    const row = rows.at(0);
+    if (row) {
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.MCP_CONNECTION,
+        resourceId: row.id,
+        workspaceId: null,
+        metadata: {
+          connectorId: pending.connectorId,
+          connectorSlug,
+          connectionUserId: userId,
+          credential: "oauth",
+        },
+      });
+    }
     return rows;
   });
 };
@@ -590,15 +617,34 @@ export const createMcpOAuthCallbackHandler = (
                 })
               : null;
 
-          const token = await exchangeAuthorizationCode({
-            metadata: authorization.metadata,
-            permit,
-            responseIssuer: input.iss,
-            clientId: client.clientId,
-            clientSecret,
-            code,
-            codeVerifier: row.codeVerifier,
-            redirectUri: row.redirectUri,
+          const legacyBinding = {
+            type: "unbound",
+            expectedIssuer: row.authorizationServerUrl,
+            reason: "state_without_binding",
+            registrationMode: "unknown",
+            issSupportedAdvertised: false,
+          } satisfies AuthorizationResponseBinding;
+          const binding = row.authorizationResponseBinding ?? legacyBinding;
+          const token = await observeAuthorizationResponseBinding({
+            binding,
+            response: { issuer: input.iss },
+            observe: (verdict) =>
+              logAuthorizationResponseBindingObservation({
+                binding,
+                connectorId: row.connectorId,
+                verdict,
+              }),
+            exchange: async () =>
+              exchangeAuthorizationCode({
+                metadata: authorization.metadata,
+                permit,
+                responseIssuer: input.iss,
+                clientId: client.clientId,
+                clientSecret,
+                code,
+                codeVerifier: row.codeVerifier,
+                redirectUri: row.redirectUri,
+              }),
           });
 
           if (Result.isError(token)) {

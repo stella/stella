@@ -333,7 +333,7 @@ const organizeSuggestionsHandler = async function* ({
         // wrapping). Capped at 24 000 so a 100-file batch (~20 200) has
         // headroom for the model's slightly variable output sizes.
         maxOutputTokens: Math.min(24_000, 200 + body.files.length * 200),
-        abortSignal: AbortSignal.timeout(60_000),
+        deadlineMs: 60_000,
       }),
     catch: (error: unknown) => error,
   });
@@ -807,7 +807,7 @@ const generateMissingSummaries = async ({
         // bigger budget here. ~120 tokens per summary at 100 files puts
         // us around 12 200 tokens.
         maxOutputTokens: Math.min(24_000, 200 + contexts.length * 300),
-        abortSignal: AbortSignal.timeout(60_000),
+        deadlineMs: 60_000,
       }),
     catch: (error: unknown) => error,
   });

@@ -64,8 +64,8 @@ import {
   type ChatThreadNamesRead,
   recordChatThreadNamesOnTx,
 } from "@/api/lib/chat/thread-names";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { isThreadMemoryEnabled } from "@/api/lib/memory/memory-access";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -269,6 +269,7 @@ const insertMessages = async ({
       workspaceId,
     });
     await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
+    const memoryEnabled = await isThreadMemoryEnabled({ tx, threadId, userId });
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
         id: persistedMessage.id,
@@ -277,8 +278,7 @@ const insertMessages = async ({
         userId,
         role: persistedMessage.role,
         content: chatMessageContentFromMessage(persistedMessage),
-        memoryExtractionEligible:
-          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+        memoryExtractionEligible: memoryEnabled,
       })),
     );
     await tx
@@ -933,7 +933,7 @@ const runPersistMessage = async ({
         .set({
           role: persistencePlan.message.role,
           content: chatMessageContentFromMessage(persistencePlan.message),
-          ...(!isDeploymentFeatureEnabled("FEATURE_AI_MEMORY") && {
+          ...(!(await isThreadMemoryEnabled({ tx, threadId, userId })) && {
             memoryExtractionEligible: false,
           }),
         })
@@ -1086,7 +1086,11 @@ const runPersistMessage = async ({
       threadId,
       userId,
       workspaceId,
-      memoryExtractionEligible: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+      memoryExtractionEligible: await isThreadMemoryEnabled({
+        tx,
+        threadId,
+        userId,
+      }),
     });
     await tx
       .update(chatThreads)

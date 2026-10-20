@@ -57,6 +57,7 @@ import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { organizationListOptions } from "@/lib/organization/queries";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 const CHANGELOG_URL = "https://stll.app/changelog";
@@ -180,6 +181,16 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
             <CogIcon />
             {t("common.settings")}
           </MenuItem>
+          {hasOrganizationManagementAccess(role) && (
+            <MenuItem
+              onClick={() =>
+                detached(navigate({ to: "/admin" }), "sidebar-user-menu.admin")
+              }
+            >
+              <BuildingIcon />
+              {t("admin.title")}
+            </MenuItem>
+          )}
           <MenuSeparator />
           <MenuSub>
             <MenuSubTrigger>
@@ -291,7 +302,7 @@ type OrganizationMenuSectionProps = {
  * Owns the organization list query rather than taking it as a prop so the
  * sidebar reads the active organization and the switchable ones from one cache
  * entry, and therefore one `organization/list` request per route. */
-const OrganizationMenuSection = ({
+export const OrganizationMenuSection = ({
   activeOrganizationId,
   role,
   userId,

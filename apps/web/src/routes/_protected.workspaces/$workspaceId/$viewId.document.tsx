@@ -610,6 +610,10 @@ function RouteComponentInner({
   const canCreateEntity = usePermissions({ entity: ["create"] });
   useSyncJustifications({ workspaceId, entityIds: [entityId] });
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
+  const docxLoadingFallback = useMemo(
+    () => <DocxLoadingShell scaleOffset={scaleOffset} />,
+    [scaleOffset],
+  );
   const justificationId = Route.useSearch({
     select: (s) => s.justification,
   });
@@ -1092,7 +1096,7 @@ function RouteComponentInner({
                       bindings={docxEditorBindings}
                       canUnlock={canUpdateEntity && useDocxBrowserEditor}
                       document={docxDocument}
-                      fallback={<DocxLoadingShell scaleOffset={scaleOffset} />}
+                      fallback={docxLoadingFallback}
                       isEditing={initialEditing}
                       scaleOffset={scaleOffset}
                       slot={DOCX_EDITOR_SLOT.main}

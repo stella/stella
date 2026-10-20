@@ -1,10 +1,50 @@
 import { expect, test } from "bun:test";
 
-import { exceptionScopeIdentity } from "./exception-scope";
+import { createDetached } from "./detached";
+import { exceptionScopeIdentity, type ExceptionScope } from "./exception-scope";
 import {
   getExceptionScopes,
   withExceptionScope,
 } from "./exception-scope-context";
+
+test("detached rejection captures retain nested request and job owners after their scopes return", async () => {
+  const rejection = new Error("detached failure");
+  const settled = Promise.withResolvers<{
+    error: unknown;
+    context: string;
+    scopes: readonly ExceptionScope[];
+  }>();
+  const operation = Promise.withResolvers<undefined>();
+  const detached = createDetached((error, context) => {
+    settled.resolve({ error, context, scopes: getExceptionScopes() });
+  });
+  const request = {
+    type: "request",
+    method: "GET",
+    routeTemplate: "/a/:id",
+  } as const;
+  const job = { type: "job", jobId: "repair", task: "index" } as const;
+  const handler = {
+    type: "handler",
+    handlerId: "shared.reportFailure",
+  } as const;
+  withExceptionScope(request, () =>
+    withExceptionScope(job, () =>
+      withExceptionScope(handler, () => {
+        expect(getExceptionScopes()).toEqual([request, job, handler]);
+        detached(operation.promise, "shared.reportFailure");
+      }),
+    ),
+  );
+  expect(getExceptionScopes()).toEqual([]);
+  operation.reject(rejection);
+  expect(await settled.promise).toEqual({
+    error: rejection,
+    context: "shared.reportFailure",
+    scopes: [request, job, handler],
+  });
+  expect(getExceptionScopes()).toEqual([]);
+});
 
 test("concurrent captures retain additive scopes without leaking between executions", async () => {
   const scope = { type: "handler", handlerId: "shared.reportFailure" } as const;

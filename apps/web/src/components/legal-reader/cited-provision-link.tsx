@@ -124,8 +124,10 @@ type FullProvisionState = keyof typeof FULL_PROVISION;
  */
 export const CitedProvisionExpansion = ({
   citations,
+  placement = "inline",
 }: {
   citations: readonly CitedProvisionTarget[];
+  placement?: "gutter" | "inline";
 }) => {
   const [shown, setShown] = useState<FullProvisionState>(FULL_PROVISION.cited);
   const first = citations.at(0) ?? panic("A provision card without citations");
@@ -161,6 +163,7 @@ export const CitedProvisionExpansion = ({
       citations={citations}
       full={full}
       onToggleFull={onToggleFull}
+      placement={placement}
       showsFull={shown === FULL_PROVISION.full}
       wordings={wordings}
     />

@@ -17,19 +17,21 @@ import type { DocumentDecoration } from "./tenant-action-detail";
 export const TENANT_ACTION_DETAIL =
   "x-stella-tenant-action" satisfies keyof DocumentDecoration;
 
-type TenantActionClassifierOptions = {
+type RequestRouteClassifierOptions = {
   routes: readonly InternalRoute[];
   staticRoutes: Readonly<Record<string, Readonly<Record<string, number>>>>;
   strictPath: boolean | undefined;
   aot: boolean | undefined;
+  classifyRoute: (route: InternalRoute) => boolean;
 };
 
-export const createTenantActionClassifier = ({
+export const createRequestRouteClassifier = ({
   routes,
   staticRoutes,
   strictPath,
   aot,
-}: TenantActionClassifierOptions) => {
+  classifyRoute,
+}: RequestRouteClassifierOptions) => {
   // The registry and static map hold metadata; matching never dispatches handlers.
   const configuration = {
     aot: false,
@@ -37,22 +39,8 @@ export const createTenantActionClassifier = ({
   };
   const registry = new Elysia(configuration);
   const matchRoute = registry.router.dynamic.find.bind(registry.router.dynamic);
-  const routeType = (route: InternalRoute) => {
-    // Elysia exposes hooks as any; narrow its metadata at this boundary.
-    const hooks: unknown = route.hooks;
-    if (typeof hooks !== "object" || hooks === null || !("detail" in hooks)) {
-      return "exempt";
-    }
-    const { detail } = hooks;
-    return typeof detail === "object" &&
-      detail !== null &&
-      TENANT_ACTION_DETAIL in detail &&
-      detail[TENANT_ACTION_DETAIL] === true
-      ? "tenant"
-      : "exempt";
-  };
   const routeMetadata = (route: InternalRoute) => ({
-    type: routeType(route),
+    type: classifyRoute(route) ? ("included" as const) : ("excluded" as const),
     routeTemplate: route.path,
   });
   const staticMetadata = new Map<
@@ -105,12 +93,18 @@ export const createTenantActionClassifier = ({
     const { handle } = match.store;
     if (
       !isRecord(handle) ||
-      (handle["type"] !== "tenant" && handle["type"] !== "exempt") ||
+      (handle["type"] !== "included" && handle["type"] !== "excluded") ||
       typeof handle["routeTemplate"] !== "string"
     ) {
-      return panic("Tenant route registry lost its derived metadata");
+      return panic("Route classifier registry lost its derived metadata");
     }
-    return { type: handle["type"], routeTemplate: handle["routeTemplate"] };
+    return {
+      type:
+        handle["type"] === "included"
+          ? ("included" as const)
+          : ("excluded" as const),
+      routeTemplate: handle["routeTemplate"],
+    };
   };
   return (request: Request) => {
     const path = new URL(request.url).pathname;
@@ -142,6 +136,51 @@ export const createTenantActionClassifier = ({
     return (
       selected ?? ({ type: "unmatched", routeTemplate: "unmatched" } as const)
     );
+  };
+};
+
+type TenantActionClassifierOptions = Omit<
+  RequestRouteClassifierOptions,
+  "classifyRoute"
+>;
+
+export const createTenantActionClassifier = (
+  options: TenantActionClassifierOptions,
+) => {
+  const classify = createRequestRouteClassifier({
+    ...options,
+    classifyRoute: (route) => {
+      // Elysia exposes hooks as any; narrow its metadata at this boundary.
+      const hooks: unknown = route.hooks;
+      if (typeof hooks !== "object" || hooks === null || !("detail" in hooks)) {
+        return false;
+      }
+      const { detail } = hooks;
+      return (
+        typeof detail === "object" &&
+        detail !== null &&
+        TENANT_ACTION_DETAIL in detail &&
+        detail[TENANT_ACTION_DETAIL] === true
+      );
+    },
+  });
+  return (request: Request) => {
+    const route = classify(request);
+    switch (route.type) {
+      case "included":
+        return { type: "tenant" as const, routeTemplate: route.routeTemplate };
+      case "excluded":
+        return { type: "exempt" as const, routeTemplate: route.routeTemplate };
+      case "unmatched":
+        return {
+          type: "unmatched" as const,
+          routeTemplate: route.routeTemplate,
+        };
+      default: {
+        route satisfies never;
+        return panic("Unknown route classification");
+      }
+    }
   };
 };
 

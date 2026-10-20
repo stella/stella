@@ -241,6 +241,7 @@ import {
   providerErrorReason,
 } from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
+import { emitRequestStage } from "@/api/lib/observability/request-metrics";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   ActionAdmissionError,
@@ -485,6 +486,85 @@ export type StreamChatOutcome =
   | { type: "streaming"; response: Response }
   | { type: "refused"; response: ChatTurnFailureResponse };
 
+type ObserveChatOutputStagesOptions = {
+  source: AsyncIterable<StreamChunk>;
+  startedAt: number;
+  getSettlementOutcome: () =>
+    | StreamChatFinishEvent["outcome"]["type"]
+    | undefined;
+  now?: () => number;
+  emitStage?: typeof emitRequestStage;
+};
+
+type SettlementOutcomeKind = StreamChatFinishEvent["outcome"]["type"];
+type RequestStageOutcome = Parameters<typeof emitRequestStage>[0]["outcome"];
+
+const SETTLEMENT_STAGE_OUTCOME = {
+  "awaiting-user": "completed",
+  completed: "completed",
+  cancelled: "cancelled",
+  failed: "failed",
+  interrupted: "cancelled",
+} as const satisfies Record<SettlementOutcomeKind, RequestStageOutcome>;
+
+type OutputGeneratorPosition =
+  | { type: "running" }
+  | { type: "suspended" }
+  | { type: "completed" };
+
+const UNFINISHED_GENERATOR_STAGE_OUTCOME = {
+  running: "failed",
+  suspended: "cancelled",
+} as const satisfies Record<
+  Exclude<OutputGeneratorPosition["type"], "completed">,
+  RequestStageOutcome
+>;
+
+export const observeChatOutputStages = async function* ({
+  source,
+  startedAt,
+  getSettlementOutcome,
+  now = () => performance.now(),
+  emitStage = emitRequestStage,
+}: ObserveChatOutputStagesOptions) {
+  let firstTokenAt: number | undefined;
+  let position: OutputGeneratorPosition = { type: "running" };
+  try {
+    for await (const chunk of source) {
+      if (firstTokenAt === undefined && chunkCarriesAnswer(chunk)) {
+        firstTokenAt = now();
+        emitStage({
+          route: "/v1/chat/:threadId/messages",
+          stage: "provider_first_token",
+          durationMs: firstTokenAt - startedAt,
+          outcome: "completed",
+        });
+      }
+      position = { type: "suspended" };
+      yield chunk;
+      position = { type: "running" };
+    }
+    position = { type: "completed" };
+  } finally {
+    const settlementOutcome = getSettlementOutcome();
+    let outcome: RequestStageOutcome;
+    if (position.type === "completed") {
+      outcome =
+        settlementOutcome === undefined
+          ? "failed"
+          : SETTLEMENT_STAGE_OUTCOME[settlementOutcome];
+    } else {
+      outcome = UNFINISHED_GENERATOR_STAGE_OUTCOME[position.type];
+    }
+    emitStage({
+      route: "/v1/chat/:threadId/messages",
+      stage: "stream_finish",
+      durationMs: now() - startedAt,
+      outcome,
+    });
+  }
+};
+
 export const streamChat = async ({
   visualOrigin,
   devModelId,
@@ -527,6 +607,7 @@ export const streamChat = async ({
   userId,
   workspaceId,
 }: StreamChatProps): Promise<StreamChatOutcome> => {
+  const admittedAt = performance.now();
   const messages = pruneOrphanedToolParts(rawMessages);
   const agentBoundaryError = resolveAgentRunBoundaryError({
     boundary: thirdPartyBoundary,
@@ -993,11 +1074,23 @@ export const streamChat = async ({
     return readPresent(timing.value);
   };
 
+  emitRequestStage({
+    route: "/v1/chat/:threadId/messages",
+    stage: "request_setup",
+    durationMs: performance.now() - admittedAt,
+    outcome: "completed",
+  });
+  const providerWaitStartedAt = performance.now();
+  const observedOutput = observeChatOutputStages({
+    source: output,
+    startedAt: providerWaitStartedAt,
+    getSettlementOutcome: () => settlement.event?.outcome.type,
+  });
   return {
     type: "streaming",
     response: run.produce(
       withChatTurnTiming({
-        source: output,
+        source: observedOutput,
         getPhase: () => timingPhase.status,
         readTiming,
       }),

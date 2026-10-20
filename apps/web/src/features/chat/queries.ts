@@ -42,6 +42,7 @@ import type {
   GroupedChatThreadsKey,
   TemplateChatThreadKey,
 } from "./chat-query-contract";
+import { chatToolGrantsOptions } from "./chat-tool-grants";
 
 const CHAT_THREADS_PAGE_SIZE = 50;
 
@@ -669,6 +670,23 @@ export const fileChatThreadOptions = ({
         workspaceId: key.workspaceId,
       });
 
+      // The tool grants of this thread load with the binding, not after the
+      // overlay mounts: a draft thread has none, and a persisted one starts
+      // its read as soon as its id is known.
+      const grantsOptions = chatToolGrantsOptions({
+        activeOrganizationId,
+        threadId,
+        userId: key.userId,
+      });
+      if (fetched.threadId === null) {
+        client.setQueryData(grantsOptions.queryKey, { grants: [] });
+      } else {
+        detached(
+          client.query(grantsOptions),
+          "chat-queries.prefetch-file-thread-tool-grants",
+        );
+      }
+
       return { threadId, threadExists: fetched.threadId !== null };
     },
   });
@@ -1118,22 +1136,34 @@ export const chatDraftMetaOptions = ({
 
 type ChatThreadTitleOptionsArgs = {
   activeOrganizationId: string;
-  enabled: boolean;
   key: ChatThreadTitleKey;
+  /**
+   * The server's read of this thread (`chatThreadOptions`), undefined until it
+   * resolves. The title is read only once that read reports the row exists: a
+   * thread whose first message is still being sent has no row yet, so its
+   * GET /title answers 404 and the error would stay on screen after the turn
+   * lands. Local message state is never that evidence, which is why this takes
+   * the whole server read rather than a flag.
+   */
+  persistedThread: ChatThreadFetched | undefined;
+  /** False when the caller already holds the title (the grouped list). */
+  needed?: boolean;
 };
 
-// By-id title read for shared chrome (the chat breadcrumb). The grouped-threads
-// list only holds the first loaded pages, so opening an older thread that has
-// scrolled out of that window would otherwise leave the crumb without a title.
-// The breadcrumb reads the grouped cache first and only enables this query on a
-// miss, so a thread already in the list never triggers a redundant fetch.
+// By-id title read for shared chrome (the chat breadcrumb, the floating thread
+// card). The grouped-threads list only holds the first loaded pages, so opening
+// an older thread that has scrolled out of that window would otherwise leave
+// the crumb without a title. The breadcrumb reads the grouped cache first and
+// only needs this query on a miss, so a thread already in the list never
+// triggers a redundant fetch.
 export const chatThreadTitleOptions = ({
   activeOrganizationId,
-  enabled,
   key,
+  persistedThread,
+  needed = true,
 }: ChatThreadTitleOptionsArgs) =>
   queryOptions({
-    enabled,
+    enabled: needed && persistedThread?.threadExists === true,
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
     queryKey: chatKeys.threadTitle(activeOrganizationId, key),

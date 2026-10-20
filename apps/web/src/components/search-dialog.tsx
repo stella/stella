@@ -60,6 +60,7 @@ import {
   SearchCompanyResult,
   useCompanyRegistrySearch,
 } from "@/components/search-company-result";
+import { filterCommandActions } from "@/components/search-dialog-actions.logic";
 import {
   SearchColumnResizeHandle,
   SearchFooterHint,
@@ -924,16 +925,11 @@ export const SearchDialog = ({
   const { resolvedActions, executeAction, uploadRequest, closeUpload } =
     useCommandActions(open);
 
-  const normalizedActionQuery = query.trim().toLowerCase();
-  const filteredActions = resolvedActions.filter(
-    (action) =>
-      mode.type === "browse" &&
-      (normalizedActionQuery.length === 0 ||
-        action.title.toLowerCase().includes(normalizedActionQuery) ||
-        action.keywordLabels.some((keyword) =>
-          keyword.toLowerCase().includes(normalizedActionQuery),
-        )),
-  );
+  const filteredActions = filterCommandActions({
+    actions: resolvedActions,
+    mode: mode.type,
+    query,
+  });
 
   const actionEntries = filteredActions.map(
     (action) =>

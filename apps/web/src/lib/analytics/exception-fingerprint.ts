@@ -33,6 +33,9 @@ export type ApiErrorIdentity = {
 };
 
 const API_ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/u;
+export const isApiErrorCode = (value: string): boolean =>
+  API_ERROR_CODE.test(value);
+
 const HTTP_STATUS_MIN = 100;
 const HTTP_STATUS_MAX = 599;
 
@@ -53,7 +56,7 @@ export const readApiErrorIdentity = ({
   }
   return {
     status,
-    ...(typeof code === "string" && API_ERROR_CODE.test(code) ? { code } : {}),
+    ...(typeof code === "string" && isApiErrorCode(code) ? { code } : {}),
   };
 };
 

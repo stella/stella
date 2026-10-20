@@ -42,6 +42,7 @@ import type {
 } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import type { ModelDefaultCandidate } from "@stll/ai-catalog/model-defaults-ledger";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { createSha256 } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
@@ -343,6 +344,96 @@ export const isAllowedBYOKModelForTask = ({
       role: MODEL_TASK_OVERRIDE_GROUP[task],
     })
   );
+};
+
+type ModelSelectionAvailabilityOptions = {
+  dataClass: AIDataClass;
+  provider: AIProvider;
+  modelId: string;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  task: ModelTask;
+};
+
+export const isModelSelectionAvailableForTask = ({
+  dataClass,
+  provider,
+  modelId,
+  orgAIConfig,
+  task,
+}: ModelSelectionAvailabilityOptions): boolean => {
+  if (!isAllowedBYOKModelForTask({ provider, modelId, task })) {
+    return false;
+  }
+  if (orgAIConfig) {
+    return orgAIConfig.providers.some(
+      (providerConfig) => providerConfig.provider === provider,
+    );
+  }
+  return (
+    hasConfiguredTanStackInstanceProvider() &&
+    (isMockTextAdapterActive() ||
+      isManagedProviderAvailable(provider, dataClass)) &&
+    getActiveProvider() === provider
+  );
+};
+
+type StructuredOutputFallbackModelOptions = {
+  failedModelId: string;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  task: ModelTask;
+  modelTier: ManagedModelTier;
+} & AIRequestPolicy;
+
+/** Select once in catalog order; dispatch still proves admission and policy. */
+export const getStructuredOutputFallbackModelId = ({
+  failedModelId,
+  orgAIConfig,
+  task,
+  modelTier,
+  dataClass,
+}: StructuredOutputFallbackModelOptions): string | null => {
+  // Managed fast-tier resolution pins every selection to the fast primary.
+  if (!orgAIConfig && modelTier === MANAGED_MODEL_TIER.fast) {
+    return null;
+  }
+  const assignedProvider = orgAIConfig
+    ? resolveOrgAIModelForTask(orgAIConfig, task)?.provider
+    : getActiveProvider();
+  for (const provider of TANSTACK_AI_PROVIDERS) {
+    if (provider !== assignedProvider) {
+      continue;
+    }
+    for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+      if (
+        modelId === failedModelId ||
+        !isModelSelectionAvailableForTask({
+          dataClass,
+          provider,
+          modelId,
+          orgAIConfig,
+          task,
+        })
+      ) {
+        continue;
+      }
+      if (!orgAIConfig) {
+        if (
+          !isManagedProviderAvailable(provider, dataClass) ||
+          getModelRate(modelId) === undefined
+        ) {
+          continue;
+        }
+        if (
+          provider === "openrouter" &&
+          Result.isError(assertManagedOpenRouterModel(modelId))
+        ) {
+          continue;
+        }
+      }
+      return `${provider}::${modelId}`;
+    }
+  }
+  return null;
 };
 
 type ModelOverride = {
@@ -1135,6 +1226,7 @@ const byokProviderTaskUnsupportedError = (
   task: ModelTask,
 ): HandlerError<400> =>
   new HandlerError({
+    code: AI_FAILURE_CODES.provider_task_unsupported,
     status: 400,
     message:
       `${provider} is not available for the "${task}" AI task. ` +
@@ -1855,6 +1947,7 @@ export function tanStackModelOptionsForTask(
 
 const byokRoleNotConfiguredError = (task: ModelTask): HandlerError =>
   new HandlerError({
+    code: AI_FAILURE_CODES.role_not_configured,
     status: 403,
     message:
       `AI is not available for the "${task}" task on this deployment. ` +

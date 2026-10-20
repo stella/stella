@@ -126,10 +126,8 @@ const generateAdmittedThreadTitle = async ({
     try: async () =>
       await generateTanStackTextForTask({
         dataClass: "customer",
-        abortSignal: AbortSignal.any([
-          AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
-          admissionSignal,
-        ]),
+        abortSignal: admissionSignal,
+        deadlineMs: TITLE_GENERATION_TIMEOUT_MS,
         finishPolicy: TITLE_FINISH_POLICY,
         maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
         task: "short-text",

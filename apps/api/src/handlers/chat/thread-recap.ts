@@ -124,7 +124,7 @@ export const generateThreadRecapText = async ({
   try {
     const text = await generateTanStackTextForTask({
       dataClass: "customer",
-      abortSignal: AbortSignal.timeout(RECAP_GENERATION_TIMEOUT_MS),
+      deadlineMs: RECAP_GENERATION_TIMEOUT_MS,
       finishPolicy: "allow-incomplete",
       maxOutputTokens: RECAP_MAX_OUTPUT_TOKENS,
       task: "short-text",

@@ -100,7 +100,7 @@ export const loadProtectedContext = async ({
       },
     });
   };
-  if (location.pathname === "/settings/organization/time-policy") {
+  if (location.pathname === "/admin/time-policy") {
     detached(
       (async () => {
         if (
