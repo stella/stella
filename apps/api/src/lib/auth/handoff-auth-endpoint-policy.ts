@@ -46,7 +46,8 @@ export const HANDOFF_AUTH_ENDPOINT_POLICY = {
   "/jwks": "ordinary",
   "/link-social": "refused",
   "/list-accounts": "ordinary",
-  "/list-sessions": "ordinary",
+  // Lists every session with its token; a handoff could reuse an ordinary one.
+  "/list-sessions": "refused",
   "/mcp-handoff/redeem": "ordinary",
   "/mcp-handoff/sessions": "ordinary",
   "/oauth2/authorize": "refused",

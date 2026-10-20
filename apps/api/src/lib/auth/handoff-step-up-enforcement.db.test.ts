@@ -161,6 +161,20 @@ describe("handoff sessions enforce recent authentication at real entry points", 
     ).toHaveLength(1);
 
     const normal = await signInHuman(human.email);
+    // A handoff must never read the token of an ordinary session.
+    await expectStepUp(
+      await getAuth().handler(
+        new Request("http://localhost:3000/api/auth/list-sessions", {
+          headers,
+        }),
+      ),
+    );
+    const listed = await getAuth().handler(
+      new Request("http://localhost:3000/api/auth/list-sessions", {
+        headers: authoritativeHeaders(normal.cookieHeader()),
+      }),
+    );
+    expect(listed.status, await listed.clone().text()).toBe(200);
     const refreshed = await getAuth().api.getSession({
       headers: normal.headers(),
       query: { disableCookieCache: true },
