@@ -147,11 +147,13 @@ if (import.meta.main) {
   } else if (result.isOk()) {
     privilegedJobs = result.value.privilegedJobs;
   }
+  // Fail closed: a check that did not finish cannot prove a change ordinary.
+  const sensitive = result.isErr() || privilegedJobs.length > 0;
   const githubOutput = process.env["GITHUB_OUTPUT"];
   if (githubOutput) {
     appendFileSync(
       githubOutput,
-      `privileged_classification_change=${privilegedJobs.length > 0}\n`,
+      `privileged_classification_change=${sensitive}\n`,
     );
   }
   if (privilegedJobs.length) {

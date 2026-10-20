@@ -2055,6 +2055,40 @@ test("the CLI defaults its root and base when invoked without arguments", () => 
     expect(new TextDecoder().decode(result.stdout)).toBe(
       "Classified 1 workflows\n",
     );
+
+    // A check that fails for any reason reports the change as sensitive.
+    writeFileSync(
+      path.join(root, ".github/ci-job-classification-decisions.json"),
+      JSON.stringify({
+        "candidate:.github/workflows/ci.yml/check": {
+          kind: ORDINARY,
+          qualifier: "Reviewed",
+          reviewedDigest: parsed.value.jobs["check"].digest,
+        },
+        "candidate:.github/workflows/ci.yml/removed": {
+          kind: ORDINARY,
+          qualifier: "Reviewed",
+          reviewedDigest: parsed.value.jobs["check"].digest,
+        },
+      }),
+    );
+    const outputPath = path.join(root, "output");
+    const failed = Bun.spawnSync(
+      [
+        process.execPath,
+        path.join(repositoryRoot, "scripts/check-ci-job-classification.ts"),
+      ],
+      {
+        cwd: root,
+        env: { ...process.env, GITHUB_OUTPUT: outputPath },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(failed.exitCode).toBe(1);
+    expect(readFileSync(outputPath, "utf-8")).toBe(
+      "privileged_classification_change=true\n",
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -2154,8 +2188,9 @@ for (const scenario of [
           );
         const stale = run();
         expect(stale.exitCode).toBe(1);
+        // A failing check reports sensitive regardless of the change.
         expect(readFileSync(output, "utf-8")).toBe(
-          `privileged_classification_change=${scenario.expected}\n`,
+          "privileged_classification_change=true\n",
         );
         writeFileSync(
           decisions,
@@ -2170,7 +2205,7 @@ for (const scenario of [
         const result = run();
         expect(result.exitCode).toBe(0);
         expect(readFileSync(output, "utf-8")).toBe(
-          `privileged_classification_change=${scenario.expected}\nprivileged_classification_change=${scenario.expected}\n`,
+          `privileged_classification_change=true\nprivileged_classification_change=${scenario.expected}\n`,
         );
       } finally {
         rmSync(root, { recursive: true, force: true });
