@@ -5,7 +5,7 @@ import ts from "typescript";
 
 import {
   onlineIndexColumnTarget,
-  ONLINE_UNIQUE_INDEXES,
+  ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
   ONLINE_UNIQUE_INDEX_NAMES,
 } from "../apps/api/src/db/online-unique-indexes";
 
@@ -210,7 +210,9 @@ if (import.meta.main) {
   if (newestMigration === undefined) {
     panic("No migration folders found");
   }
-  const registered = new Set(ONLINE_UNIQUE_INDEXES.map(({ name }) => name));
+  const registered = new Set(
+    ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS.map(({ name }) => name),
+  );
   const exported = new Set(Object.values(ONLINE_UNIQUE_INDEX_NAMES));
   if (
     registered.size !== exported.size ||
@@ -224,7 +226,7 @@ if (import.meta.main) {
     checkOnlineIndexDependencySource({
       file,
       source: readFileSync(path.resolve(ROOT, file), "utf-8"),
-      indexes: ONLINE_UNIQUE_INDEXES,
+      indexes: ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
       newestMigration,
     }),
   );
