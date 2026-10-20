@@ -28,6 +28,7 @@ const report: {
 let afterEntityId: (typeof entities.$inferSelect)["id"] | undefined;
 
 while (true) {
+  // db-await-in-loop: keyset cursor walk over entities, one bounded page per iteration.
   const entityPage = await rootDb
     .select({
       entityId: entities.id,
@@ -62,6 +63,7 @@ while (true) {
       organizationId,
     ]),
   );
+  // db-await-in-loop: loads the fields of the current cursor page only (one query per page).
   const rows = await rootDb
     .select({
       entityId: entities.id,
@@ -112,6 +114,7 @@ console.table(report);
 
 if (write) {
   for (const { entityId } of report) {
+    // db-await-in-loop: operator-run repair; documents are enqueued one at a time on purpose to bound load.
     await processExtraction(entityId);
   }
 }
