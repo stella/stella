@@ -85,7 +85,7 @@ export const executeRowsDatabase = (database: PgliteDatabase): typeof rootDb =>
           return async (
             run: (tx: Transaction) => Promise<unknown>,
             config: unknown,
-          ) =>
+          ): Promise<unknown> =>
             await Reflect.apply(value, target, [
               async (tx: ExecuteOnlyTransaction) =>
                 await run(adaptTransaction(tx)),
@@ -93,7 +93,8 @@ export const executeRowsDatabase = (database: PgliteDatabase): typeof rootDb =>
             ]);
         }
         return typeof value === "function"
-          ? (...args: readonly unknown[]) => Reflect.apply(value, target, args)
+          ? (...args: readonly unknown[]): unknown =>
+              Reflect.apply(value, target, args)
           : value;
       },
     }),
