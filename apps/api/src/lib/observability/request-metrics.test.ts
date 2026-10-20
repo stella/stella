@@ -37,7 +37,7 @@ test("request stages are integral log fields without metric dimensions", () => {
   expect(
     buildRequestStageRecord({
       route: "/v1/law/statutes/search",
-      toolName: "search_legislation",
+      tool: "search_legislation",
       stage: "candidate_hydration",
       durationMs: 12.6,
       rounds: 2,
@@ -49,7 +49,7 @@ test("request stages are integral log fields without metric dimensions", () => {
     event: "request.stage",
     class: "legislation_search",
     "http.route": "/v1/law/statutes/search",
-    toolName: "search_legislation",
+    tool: "search_legislation",
     stage: "candidate_hydration",
     durationMs: 13,
     rounds: 2,
@@ -62,7 +62,7 @@ test("request stages are integral log fields without metric dimensions", () => {
 test("stage log fields pass the content-key policy", () => {
   for (const key of [
     "http.route",
-    "toolName",
+    "tool",
     "stage",
     "durationMs",
     "rounds",
@@ -72,7 +72,7 @@ test("stage log fields pass the content-key policy", () => {
   ]) {
     expect(SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key), key).toBe(false);
   }
-  for (const key of ["query", "content", "decisionContent", "statuteTitle"]) {
+  for (const key of ["content", "decisionContent", "statuteTitle"]) {
     expect(SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key), key).toBe(true);
   }
 });

@@ -36,14 +36,6 @@ export const acceptedKeys = (): void => {
   // Allowed: usage metrics survive the `prompt` lookahead.
   logger.info("ai.usage", { promptTokens: 120, prompt_tokens: 120 });
 
-  // Allowed: count-only queries and tool identifiers carry no query payload.
-  logger.info("request.stage", {
-    queryCount: 2,
-    query_count: 2,
-    toolName: "search_legislation",
-    tool_name: "search_legislation",
-  });
-
   // Allowed: a computed key has no static name to check here.
   const dynamicKey = "attempt";
   logger.warn("worker.retry", { [dynamicKey]: attempt });

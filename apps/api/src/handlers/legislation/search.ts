@@ -177,7 +177,7 @@ type SearchLegislationDependencies = {
   readServingGeneration?: typeof readServingCorpusIndexGenerationTx;
   now?: () => number;
   emitStage?: typeof emitRequestStage;
-  stageToolName?: string;
+  stageTool?: string;
   corpusSearch?: typeof corpusIndexSearch;
   corpusReads?: CorpusLegislationReadDependencies;
   projectHit?: typeof projectLegislationSearchHit;
@@ -185,7 +185,7 @@ type SearchLegislationDependencies = {
 
 type ObserveLegislationStage = <T>(
   stage: Extract<RequestStage, "candidate_hydration" | "work_collapse_ranking">,
-  operation: () => Promise<T>,
+  operation: () => Promise<T> | T,
   counts: (value: T) => { candidateCount?: number; resultCount?: number },
 ) => Promise<T>;
 
@@ -637,7 +637,7 @@ export const rehydrateLegislationCandidates = async ({
 
   return await observeStage(
     "work_collapse_ranking",
-    async () => {
+    () => {
       const byId = new Map<string, LegislationSearchRow>(
         read.rows.map((row) => [String(row.id), row]),
       );
@@ -1216,13 +1216,17 @@ const createIndexRecorder = ({
 const settleIndexRead = async <T>(
   pending: Promise<T>,
   recorder: ReturnType<typeof createIndexRecorder>,
-) => {
-  const outcome = pending.then(
-    (): RequestStageOutcome => "completed",
-    (_error: unknown): RequestStageOutcome => "failed",
+) =>
+  await pending.then(
+    (value) => {
+      recorder.settle("completed");
+      return value;
+    },
+    (error: unknown) => {
+      recorder.settle("failed");
+      throw error;
+    },
   );
-  return await pending.finally(async () => recorder.settle(await outcome));
-};
 
 const corpusIndexSearch = async ({
   body,
@@ -1518,7 +1522,7 @@ const createSearchStageAccumulator = (
     counts,
   ) => {
     const startedAt = now();
-    const pending = operation();
+    const pending = Promise.resolve(operation());
     await pending.then(
       () => undefined,
       (_error: unknown) => failedStages.add(stage),
@@ -1593,9 +1597,9 @@ export const searchLegislationHandler = async (
   ) => {
     emitStage({
       route,
-      ...(dependencies.stageToolName === undefined
+      ...(dependencies.stageTool === undefined
         ? {}
-        : { toolName: dependencies.stageToolName }),
+        : { tool: dependencies.stageTool }),
       stage: timing.stage,
       durationMs,
       ...counts,

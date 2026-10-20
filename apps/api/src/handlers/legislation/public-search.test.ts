@@ -68,7 +68,7 @@ const timingTransaction = drizzle(async () => ({
 type TimedSearchFailure = "none" | "hydration" | "index";
 
 const runTimedSearch = async (
-  stageToolName?: string,
+  stageTool?: string,
   failure: TimedSearchFailure = "none",
 ) => {
   let clock = 0;
@@ -88,8 +88,10 @@ const runTimedSearch = async (
         cluster: "q09",
       }),
     now: () => clock,
-    emitStage: (record) => records.push(record),
-    ...(stageToolName === undefined ? {} : { stageToolName }),
+    emitStage: (record) => {
+      records.push(record);
+    },
+    ...(stageTool === undefined ? {} : { stageTool }),
     corpusReads: {
       readPage: async (options) => {
         clock += 7;
@@ -205,8 +207,8 @@ test.each([
   ["search_legislation", true],
 ] as const)(
   "shared search reports real stage durations for %s entry point",
-  async (toolName, hasToolName) => {
-    const { operation, records } = await runTimedSearch(toolName);
+  async (tool, hasTool) => {
+    const { operation, records } = await runTimedSearch(tool);
     await operation;
     expect(records).toEqual([
       expect.objectContaining({
@@ -238,7 +240,7 @@ test.each([
       }),
     ]);
     for (const record of records) {
-      expect(record.toolName).toBe(hasToolName ? toolName : undefined);
+      expect(record.tool).toBe(hasTool ? tool : undefined);
     }
   },
 );

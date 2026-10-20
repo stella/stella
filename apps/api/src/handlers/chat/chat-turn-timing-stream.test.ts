@@ -85,7 +85,9 @@ test("records a cancelled stream when its consumer returns after one chunk", asy
     startedAt: 0,
     getSettlementOutcome: () => undefined,
     now: () => clock,
-    emitStage: ({ stage, outcome }) => records.push({ stage, outcome }),
+    emitStage: ({ stage, outcome }) => {
+      records.push({ stage, outcome });
+    },
   })[Symbol.asyncIterator]();
 
   expect((await iterator.next()).value).toEqual(starts[0]);
@@ -121,7 +123,9 @@ test("records the first answer-bearing chunk once, at its own time", async () =>
       startedAt: 5,
       getSettlementOutcome: () => "completed",
       now: () => clock,
-      emitStage: ({ stage, durationMs }) => records.push({ stage, durationMs }),
+      emitStage: ({ stage, durationMs }) => {
+        records.push({ stage, durationMs });
+      },
     }),
   );
 
@@ -139,7 +143,9 @@ test("records a successfully settled stream as completed", async () => {
       startedAt: 0,
       getSettlementOutcome: () => "completed",
       now: () => 20,
-      emitStage: ({ stage, outcome }) => records.push({ stage, outcome }),
+      emitStage: ({ stage, outcome }) => {
+        records.push({ stage, outcome });
+      },
     }),
   );
   expect(records).toEqual([{ stage: "stream_finish", outcome: "completed" }]);
@@ -158,7 +164,9 @@ test("records a normally exhausted error settlement as failed", async () => {
       startedAt: 0,
       getSettlementOutcome: () => "failed",
       now: () => 20,
-      emitStage: ({ stage, outcome }) => records.push({ stage, outcome }),
+      emitStage: ({ stage, outcome }) => {
+        records.push({ stage, outcome });
+      },
     }),
   );
   expect(records).toEqual([{ stage: "stream_finish", outcome: "failed" }]);
@@ -176,7 +184,9 @@ test("records a failed stream once and preserves the source error", async () => 
     startedAt: 0,
     getSettlementOutcome: () => undefined,
     now: () => 30,
-    emitStage: ({ stage, outcome }) => records.push({ stage, outcome }),
+    emitStage: ({ stage, outcome }) => {
+      records.push({ stage, outcome });
+    },
   })[Symbol.asyncIterator]();
   await iterator.next();
 

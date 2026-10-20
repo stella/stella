@@ -72,7 +72,7 @@ export const defaultSearchLegislationHandler: typeof searchLegislationHandler =
         await (
           await import("@/api/lib/case-law/public-case-law-config")
         ).loadPublicFtsSearchConfigs(),
-      stageToolName: "search_legislation",
+      stageTool: "search_legislation",
     });
 
 export const defaultResolveStatuteExpression: typeof resolveStatuteExpression =

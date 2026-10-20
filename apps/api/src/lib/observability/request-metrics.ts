@@ -65,7 +65,7 @@ export type RequestStageOutcome =
 
 type RequestStageRecordInput = {
   route: string;
-  toolName?: string;
+  tool?: string;
   stage: RequestStage;
   durationMs: number;
   rounds?: number;
@@ -77,7 +77,7 @@ type RequestStageRecordInput = {
 /** Log-only stage detail: no stage, route, tool, or outcome becomes an EMF dimension. */
 export const buildRequestStageRecord = ({
   route,
-  toolName,
+  tool,
   stage,
   durationMs,
   rounds,
@@ -88,7 +88,7 @@ export const buildRequestStageRecord = ({
   event: "request.stage",
   class: REQUEST_STAGE_FAMILY[stage],
   "http.route": route,
-  ...(toolName === undefined ? {} : { toolName }),
+  ...(tool === undefined ? {} : { tool }),
   stage,
   durationMs: Math.max(0, Math.round(durationMs)),
   ...(rounds === undefined ? {} : { rounds }),
