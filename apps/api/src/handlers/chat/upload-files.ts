@@ -90,6 +90,7 @@ const CHAT_ATTACHMENT_DELETE_TIMEOUT_MS = 10_000;
 type UploadMessageFilesProps = {
   dependencies?: UploadUserFileDependencies;
   message: PersistableChatMessage;
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -120,6 +121,7 @@ type UploadedChatMessage = {
 export const uploadMessageFiles = async ({
   dependencies,
   message,
+  organizationId,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -174,6 +176,7 @@ export const uploadMessageFiles = async ({
     const uploadedFile = await uploadUserFile({
       ...(dependencies === undefined ? {} : { dependencies }),
       file: parsedPart.value,
+      organizationId,
       recordAuditEvent,
       safeDb,
       threadId,
@@ -680,6 +683,7 @@ type UploadUserFileInput = {
     fileName: string;
     mimeType: string;
   };
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -690,6 +694,7 @@ type UploadUserFileInput = {
 export const uploadUserFile = async ({
   dependencies,
   file,
+  organizationId,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -728,24 +733,6 @@ export const uploadUserFile = async ({
     const sha256Hex = hashSha256Hex(file.bytes);
     const id = createSafeId<"userFile">();
 
-    const thread = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await tx.query.chatThreads.findFirst({
-            where: { id: { eq: threadId }, userId: { eq: userId } },
-            columns: { organizationId: true },
-          }),
-      ),
-    );
-    if (!thread) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Chat thread no longer exists",
-        }),
-      );
-    }
-    const organizationId = thread.organizationId;
     const s3Key = createUserFileKey({
       fileId: id,
       mimeType: file.mimeType,
