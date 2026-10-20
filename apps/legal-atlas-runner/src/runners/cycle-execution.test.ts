@@ -25,7 +25,6 @@ const pipelineStop = (
   pagesProcessed: 0,
   nextCursor: "cursor-1",
   haltReason: "Page fetch failed",
-  republishedRulings: { linked: 0, separatePartial: {}, separateAmbiguous: 0 },
   stopKind,
 });
 

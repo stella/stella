@@ -24,7 +24,7 @@ export const REPUBLISHED_RULING_PARTIAL_REASON = {
   TYPE_DIFFERS: "type_differs",
 } as const;
 
-export type RepublishedRulingPartialReason =
+type RepublishedRulingPartialReason =
   (typeof REPUBLISHED_RULING_PARTIAL_REASON)[keyof typeof REPUBLISHED_RULING_PARTIAL_REASON];
 
 export type RepublishedRulingMatch =
@@ -57,8 +57,13 @@ const sameCourt = (
 };
 
 type RepublishedRulingCourtColumns = {
-  court: PgColumn;
-  courtId: PgColumn;
+  court: SQL | PgColumn;
+  courtId: SQL | PgColumn;
+};
+
+type RepublishedRulingObservedCourt = {
+  court: string | SQL | PgColumn | null | undefined;
+  courtId: string | SQL | PgColumn | null | undefined;
 };
 
 const courtNameKeySql = (court: SQL | PgColumn): SQL => sql`
@@ -67,12 +72,16 @@ const courtNameKeySql = (court: SQL | PgColumn): SQL => sql`
 
 /** The database candidate form of the matcher's court-identity rule. */
 export const republishedRulingCourtPredicate = (
-  observed: RulingIdentityInput,
+  observed: RepublishedRulingObservedCourt,
   columns: RepublishedRulingCourtColumns,
 ): SQL => {
   const nameMatches = eq(
     courtNameKeySql(columns.court),
-    courtNameKeySql(sql`${observed.court ?? ""}`),
+    courtNameKeySql(
+      typeof observed.court === "string"
+        ? sql`${observed.court}`
+        : (observed.court ?? sql``),
+    ),
   );
   if (!observed.courtId) {
     return nameMatches;

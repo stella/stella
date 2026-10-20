@@ -1,5 +1,4 @@
 // parser-output-unchanged: Stop dispositions classify cycle failures; parsed decision output is unchanged.
-// parser-output-unchanged: republished-ruling link counts report ingestion outcomes; parsed decision output is unchanged.
 export const INGESTION_STOP_KIND = {
   SOURCE_UNREACHABLE: "source_unreachable",
   PUBLISHER_REFUSAL: "publisher_refusal",
@@ -29,11 +28,6 @@ export type IngestionPipelineResult = {
   nextCursor: string | null;
   /** Non-null if the adapter was halted early due to repeated failures. */
   haltReason: string | null;
-  republishedRulings: {
-    linked: number;
-    separatePartial: Record<string, number>;
-    separateAmbiguous: number;
-  };
   stopKind?: IngestionStopKind;
 };
 
