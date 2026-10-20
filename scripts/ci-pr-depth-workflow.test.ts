@@ -10,8 +10,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { prDepthJobs, prHeavyJobs } from "./ci-pr-jobs";
 import { evaluate } from "./github-expression";
-import { prDepthJobs } from "./main-heavy-plan";
 
 const readWorkflow = (name: string) =>
   v.parse(
@@ -108,6 +108,43 @@ test("the hourly workflow calls the derived PR-depth set and publishes its statu
     "code-quality-web-rest",
     "generated-sources",
   ]);
+  expect(prHeavyJobs(ci)).toEqual([
+    "api-test-durations",
+    "ci-browser",
+    "ci-tests",
+    "e2e-landing",
+    "e2e-production-shard",
+    "e2e-report",
+    "marketing-screenshots",
+    "marketing-screenshots-cancel",
+    "postgres-service-suites",
+    "route-smoke",
+    "service-suites",
+    "web-build",
+  ]);
+});
+
+test("Bun YAML resolves anchors, aliases and merge keys for PR job planning", () => {
+  const parsed: unknown = Bun.YAML.parse(`
+defaults: &defaults
+  needs: pr-heavy-gate
+jobs:
+  ci-result:
+    steps:
+      - name: Evaluate CI outcome
+        env:
+          FAST_REQUIRED: '["ci-checks-policy"]'
+  ci-checks-policy: &check
+    needs: generated-sources
+  code-quality-api: *check
+  inherited:
+    <<: *defaults
+`);
+  expect(prDepthJobs(parsed)).toEqual([
+    "ci-checks-policy",
+    "generated-sources",
+  ]);
+  expect(prHeavyJobs(parsed)).toEqual(["inherited"]);
 });
 
 const ciJobs = v.parse(
@@ -242,24 +279,26 @@ const planStep = (name: string) =>
     }),
     planSteps.find((step) => step.name === name),
   );
-const derivation = planStep("Derive PR-depth jobs");
+const derivation = planStep("Derive PR jobs");
 const planStepIndex = (name: string) =>
   planSteps.findIndex((step) => step.name === name);
 
 type RunDerivationOptions = {
-  script: string;
   runnerTemp: string;
 };
-const runDerivation = ({ script, runnerTemp }: RunDerivationOptions) => {
+const runDerivation = ({ runnerTemp }: RunDerivationOptions) => {
   // An empty workspace, like a scheduled caller before any source checkout.
   const workspace = mkdtempSync(path.join(tmpdir(), "pr-depth-workspace-"));
   const output = path.join(runnerTemp, "output");
   writeFileSync(output, "");
   try {
-    const result = Bun.spawnSync(["ruby", "-e", script], {
-      cwd: workspace,
-      env: { ...process.env, GITHUB_OUTPUT: output, RUNNER_TEMP: runnerTemp },
-    });
+    const result = Bun.spawnSync(
+      [process.execPath, path.join(runnerTemp, "ci-pr-jobs-cli.ts")],
+      {
+        cwd: workspace,
+        env: { ...process.env, GITHUB_OUTPUT: output, RUNNER_TEMP: runnerTemp },
+      },
+    );
     return { result, output: readFileSync(output, "utf-8") };
   } finally {
     rmSync(workspace, { recursive: true, force: true });
@@ -275,23 +314,34 @@ test("the planner derives exactly prDepthJobs before any source checkout", () =>
   expect(String(fetch.with?.["sparse-checkout"])).toContain(
     ".github/workflows/ci.yml",
   );
-  expect(planStep("Preserve this run's CI workflow for planning").run).toBe(
+  expect(String(fetch.with?.["sparse-checkout"])).toContain(
+    "scripts/ci-pr-jobs-cli.ts",
+  );
+  const preserve = planStep("Preserve this run's CI workflow for planning").run;
+  expect(preserve).toContain(
     'cp "$GITHUB_WORKSPACE/.workflow-tooling/.github/workflows/ci.yml" "$RUNNER_TEMP/ci-workflow.yml"',
   );
+  expect(preserve).toContain('"$RUNNER_TEMP/ci-pr-jobs-cli.ts"');
   expect(derivation.if).toBeUndefined();
   for (const earlier of [
     "Fetch GitHub API tooling",
     "Preserve this run's CI workflow for planning",
   ]) {
     expect(planStepIndex(earlier)).toBeLessThan(
-      planStepIndex("Derive PR-depth jobs"),
+      planStepIndex("Derive PR jobs"),
     );
   }
 
-  const script = v.parse(v.string(), derivation.run);
+  expect(derivation.run).toBe('bun "$RUNNER_TEMP/ci-pr-jobs-cli.ts"');
   const runnerTemp = mkdtempSync(path.join(tmpdir(), "pr-depth-runner-"));
   try {
-    const missing = runDerivation({ script, runnerTemp });
+    for (const file of ["ci-pr-jobs.ts", "ci-pr-jobs-cli.ts"]) {
+      writeFileSync(
+        path.join(runnerTemp, file),
+        readFileSync(new URL(file, import.meta.url), "utf-8"),
+      );
+    }
+    const missing = runDerivation({ runnerTemp });
     expect(missing.result.exitCode).not.toBe(0);
     writeFileSync(
       path.join(runnerTemp, "ci-workflow.yml"),
@@ -300,10 +350,10 @@ test("the planner derives exactly prDepthJobs before any source checkout", () =>
         "utf-8",
       ),
     );
-    const derived = runDerivation({ script, runnerTemp });
+    const derived = runDerivation({ runnerTemp });
     expect(derived.result.exitCode, derived.result.stderr.toString()).toBe(0);
     expect(derived.output).toBe(
-      `pr_depth_jobs=${JSON.stringify(prDepthJobs(ci))}\n`,
+      `pr_depth_jobs=${JSON.stringify(prDepthJobs(ci))}\npr_heavy_jobs=${JSON.stringify(prHeavyJobs(ci))}\n`,
     );
   } finally {
     rmSync(runnerTemp, { recursive: true, force: true });

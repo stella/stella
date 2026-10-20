@@ -46,6 +46,7 @@ import {
   OUTPUT_ORDER,
   type ScopeOutput,
 } from "./ci-plan-scope";
+import { prHeavyJobs } from "./ci-pr-jobs";
 import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { GENERATORS } from "./generated-files";
@@ -283,47 +284,8 @@ const jobIf = (job: unknown) =>
 
 const ciJobs = workflowJobs(workflow);
 
-// What the planner's own derivation step publishes as pr_heavy_jobs.
-const derivePrHeavyJobs = () => {
-  const { steps } = v.parse(
-    v.object({
-      steps: v.array(
-        v.looseObject({
-          id: v.optional(v.string()),
-          run: v.optional(v.string()),
-        }),
-      ),
-    }),
-    ciJobs["ci-plan"],
-  );
-  const script = v.parse(
-    v.string(),
-    steps.find(({ id }) => id === "pr-heavy-plan")?.run,
-  );
-  const runnerTemp = mkdtempSync(nodePath.join(tmpdir(), "pr-heavy-plan-"));
-  try {
-    writeFileSync(nodePath.join(runnerTemp, "ci-workflow.yml"), workflow);
-    const output = nodePath.join(runnerTemp, "output");
-    writeFileSync(output, "");
-    const result = Bun.spawnSync(["ruby", "-e", script], {
-      cwd: runnerTemp,
-      env: { ...process.env, GITHUB_OUTPUT: output, RUNNER_TEMP: runnerTemp },
-    });
-    if (result.exitCode !== 0) {
-      panic(`PR heavy-job derivation failed: ${result.stderr.toString()}`);
-    }
-    const published = /^pr_heavy_jobs=(.*)$/u.exec(
-      readFileSync(output, "utf-8").trim(),
-    )?.[1];
-    return v.parse(
-      v.array(v.string()),
-      JSON.parse(published ?? panic("No pr_heavy_jobs output")),
-    );
-  } finally {
-    rmSync(runnerTemp, { recursive: true, force: true });
-  }
-};
-const PR_HEAVY_JOBS = derivePrHeavyJobs();
+// The planner and tests share the dependency-closure owner.
+const PR_HEAVY_JOBS = prHeavyJobs({ jobs: ciJobs });
 const releaseJobs = workflowJobs(
   readFileSync(
     new URL("../.github/workflows/release.yml", import.meta.url),
