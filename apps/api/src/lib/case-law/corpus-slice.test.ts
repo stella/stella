@@ -209,4 +209,12 @@ describe("the corpus slice census", () => {
       .where(eq(caseLawDecisions.id, replacementId));
     await db.insert(caseLawDecisions).values(decision(firstRow));
   });
+
+  test("a manifest whose member count disagrees is not complete", async () => {
+    const census = await corpusSliceCensus(
+      { ...manifest, memberCount: manifest.memberCount + 1 },
+      readDb,
+    );
+    expect(census.verdict).toBe("membership_mismatch");
+  });
 });

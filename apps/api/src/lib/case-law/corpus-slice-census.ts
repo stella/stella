@@ -179,7 +179,10 @@ export const corpusSliceCensus = async (
       .toSorted()
       .join("\n"),
   );
-  if (heldMemberIdsSha256 !== manifest.memberIdsSha256) {
+  if (
+    heldRows.length !== manifest.memberCount ||
+    heldMemberIdsSha256 !== manifest.memberIdsSha256
+  ) {
     return { verdict: "membership_mismatch", cells };
   }
   return { verdict: "complete", cells };
