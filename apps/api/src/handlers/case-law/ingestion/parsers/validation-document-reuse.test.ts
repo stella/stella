@@ -1,6 +1,7 @@
 import { Glob } from "bun";
 import { describe, expect, spyOn, test } from "bun:test";
 import * as cheerio from "cheerio";
+import * as v from "valibot";
 
 import * as astValidation from "@/api/lib/legal-search/parsers/validate-ast";
 
@@ -13,6 +14,9 @@ import { parseSkUsDocumentXhtml } from "./sk-us";
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 const ADAPTER_FIXTURES = new URL("../adapters/__fixtures__/", import.meta.url);
 const decoder = new TextDecoder();
+const saosFixtureSchema = v.object({
+  data: v.object({ textContent: v.string() }),
+});
 
 const gunzip = async (url: URL): Promise<string> =>
   decoder.decode(Bun.gunzipSync(await Bun.file(url).bytes()));
@@ -132,9 +136,10 @@ describe("validation document reuse", () => {
       "pl-courts-detail-common.json.gz",
       "pl-courts-detail-chamber.json.gz",
     ]) {
-      const payload = JSON.parse(
-        await gunzip(new URL(name, ADAPTER_FIXTURES)),
-      ) as { data: { textContent: string } };
+      const payload = v.parse(
+        saosFixtureSchema,
+        JSON.parse(await gunzip(new URL(name, ADAPTER_FIXTURES))),
+      );
       const content = payload.data.textContent;
       if (!/<[a-z][\s\S]*>/iu.test(content)) {
         continue;

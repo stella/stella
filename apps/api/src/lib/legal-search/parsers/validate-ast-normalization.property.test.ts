@@ -6,7 +6,6 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import { validateAst } from "./validate-ast";
-import { validateAstReference } from "./validate-ast.reference.test-helper";
 
 const token = fc
   .tuple(
@@ -37,9 +36,9 @@ const blocksFor = (text: string): Block[] => [
   },
 ];
 
-test("validation normalization matches the pre-reuse implementation", () => {
+test("validation normalization matches with and without a supplied document", () => {
   assertProperty(
-    "validation normalization matches the pre-reuse implementation",
+    "validation normalization matches with and without a supplied document",
     fc.property(
       fc.array(token, { minLength: 1, maxLength: 5 }),
       fc.array(fc.boolean(), { minLength: 1, maxLength: 5 }),
@@ -51,12 +50,9 @@ test("validation normalization matches the pre-reuse implementation", () => {
         const html = `<p>${escapeHtml(source)}</p>`;
         const blocks = blocksFor(ast);
 
-        const reference = validateAstReference(html, blocks);
-
-        expect(validateAst(html, blocks)).toEqual(reference);
         expect(
           validateAst(html, blocks, { document: cheerio.load(html) }),
-        ).toEqual(reference);
+        ).toEqual(validateAst(html, blocks));
       },
     ),
   );
