@@ -1814,7 +1814,7 @@ export const openCorpusS3Writer = async ({
   return {
     write: async (bytes) => {
       signal.throwIfAborted();
-      writer.write(bytes);
+      await writer.write(bytes);
       await writer.flush();
     },
     close: async () => {
