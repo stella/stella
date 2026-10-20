@@ -50,6 +50,40 @@ type RunningLockReservation =
   | { status: "reserve"; expectedRunningValue: string }
   | { status: "skip" };
 
+export type PendingCellOwner = {
+  ownerRunId: string | null;
+  deadlineAt: Date | null;
+  attempt: 0 | 1 | null;
+};
+
+export type PendingCellRecovery =
+  | { type: "leave-owned" }
+  | { type: "retry"; attempt: 1; delayMs: number }
+  | { type: "error"; retry: "manual" };
+
+/**
+ * Decide one pending cell independently of every other cell in its workspace.
+ * A live job for a different run cannot shelter this owner, and a live owner
+ * cannot shelter a cell after its own deadline. Legacy unowned rows are
+ * terminal because there is no durable attempt identity to retry safely.
+ */
+export const pendingCellRecovery = (
+  cell: PendingCellOwner,
+  currentRunId: string | null,
+  now: Date,
+): PendingCellRecovery => {
+  const ownerIsCurrent =
+    cell.ownerRunId !== null && cell.ownerRunId === currentRunId;
+  const beforeDeadline = cell.deadlineAt !== null && cell.deadlineAt > now;
+  if (ownerIsCurrent && beforeDeadline) {
+    return { type: "leave-owned" };
+  }
+  if (cell.ownerRunId !== null && cell.attempt === 0) {
+    return { type: "retry", attempt: 1, delayMs: 1000 };
+  }
+  return { type: "error", retry: "manual" };
+};
+
 /**
  * A candidate workspace (one holding a `running` lock or owning `pending`
  * cells) is orphaned when no in-flight queue job belongs to it: the

@@ -100,6 +100,7 @@ import {
   selectOrphanWorkspaceIds,
   selectRecoverableOrphanWorkspaceIds,
 } from "@/api/lib/workflow/orphan-recovery";
+import { settle } from "@/api/lib/workflow/owned-state";
 import {
   combineLiveWorkflowJobSnapshots,
   workflowQueueClassForServiceTier,
@@ -1737,7 +1738,7 @@ const processOneBatch = async ({
 
   try {
     // Set fields to "pending"
-    await setFieldsStatus({
+    await claimPendingCells({
       workspaceId,
       entityVersionId,
       batch,
@@ -1889,13 +1890,22 @@ const processOneBatch = async ({
       });
       aiResults.push(...verdictOutput.aiResults);
       aiJustifications.push(...verdictOutput.aiJustifications);
-      skippedPropertyIds.push(...verdictOutput.skippedPropertyIds);
-      const erroredVerdictIds = new Set<string>(
-        verdictOutput.erroredPropertyIds,
-      );
       for (const property of verdictProperties) {
-        if (erroredVerdictIds.has(property.id)) {
-          erroredProperties.push(property);
+        const settlement = verdictOutput.settlements.get(property.id);
+        switch (settlement) {
+          case "answered":
+            break;
+          case "notStated":
+            skippedPropertyIds.push(property.id);
+            break;
+          case "failedTransient":
+            erroredProperties.push(property);
+            break;
+          case undefined:
+            return panic(`Verdict property ${property.id} was not settled`);
+          default:
+            settlement satisfies never;
+            return panic(`Unhandled verdict settlement: ${String(settlement)}`);
         }
       }
 
@@ -1941,7 +1951,7 @@ const processOneBatch = async ({
       workspaceId,
     });
     if (!isStillCurrentRequest) {
-      await setFieldsStatus({
+      await settleOwnedCells({
         workspaceId,
         entityVersionId,
         batch,
@@ -1953,7 +1963,7 @@ const processOneBatch = async ({
     }
 
     if (erroredProperties.length > 0) {
-      await setFieldsStatus({
+      await settleOwnedCells({
         workspaceId,
         entityVersionId,
         batch: { ...batch, properties: erroredProperties },
@@ -2446,6 +2456,30 @@ const setFieldsStatus = async ({
 
     await tx.insert(fields).values(fieldValues);
   });
+};
+
+const claimPendingCells = async (
+  args: Extract<SetFieldsStatusArgs, { contentType: "pending" }>,
+): Promise<void> => await setFieldsStatus(args);
+
+const settleOwnedCells = async (
+  args: Extract<SetFieldsStatusArgs, { contentType: "error" | "unsupported" }>,
+): Promise<void> => {
+  // Keep the database transition coupled to the total lifecycle primitive.
+  // Adding a settlement outcome therefore requires an explicit persisted
+  // representation before this writer can compile.
+  const settled = settle(
+    {
+      state: "pending",
+      owner: { runId: args.ownerRunId, batchId: args.batch.id },
+      deadlineAt: new Date(0),
+      attempt: 1,
+      actions: ["restart"],
+    },
+    args.contentType === "unsupported" ? "unsupported" : "failedTransient",
+  );
+  const contentType = settled.state === "unsupported" ? "unsupported" : "error";
+  await setFieldsStatus({ ...args, contentType });
 };
 
 const broadcastWorkflowStatus = (workspaceId: SafeId<"workspace">) => {

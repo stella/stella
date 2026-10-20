@@ -9,14 +9,14 @@ export const CELL_SETTLEMENT_OUTCOMES = [
 
 export type CellSettlementOutcome = (typeof CELL_SETTLEMENT_OUTCOMES)[number];
 
-export type CellOwner = {
+type CellOwner = {
   runId: string;
   batchId: string;
 };
 
 export type OwnedState = "pending" | "errored";
 
-export type OwnedAction<S extends OwnedState> = S extends "pending"
+type OwnedAction<S extends OwnedState> = S extends "pending"
   ? "stop" | "restart"
   : "retry";
 
