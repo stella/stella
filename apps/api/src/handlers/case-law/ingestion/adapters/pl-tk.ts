@@ -1189,27 +1189,26 @@ export type PlTkPageCache = {
   /** Raw responses remain reusable for a case revisited later in the batch. */
   html: Map<string, string>;
   parse: (caseId: string, html: string) => ParsedPlTkPage;
-  rememberParsed: (caseId: string, page: ParsedPlTkPage) => void;
   parsedSize: () => number;
 };
 
 /** A batch keeps raw pages, but owns only the currently assembled case's DOM. */
-export const createPlTkPageCache = (): PlTkPageCache => {
+export const createPlTkPageCache = (
+  parsePage: (html: string) => ParsedPlTkPage = parsePlTkPage,
+): PlTkPageCache => {
   let parsed: { caseId: string; page: ParsedPlTkPage } | undefined;
-  const rememberParsed = (caseId: string, page: ParsedPlTkPage): void => {
-    parsed = { caseId, page };
-  };
   return {
     html: new Map(),
     parse: (caseId, html) => {
       if (parsed?.caseId === caseId) {
         return parsed.page;
       }
-      const page = parsePlTkPage(html);
-      rememberParsed(caseId, page);
+      // Release the previous case's DOM before constructing the next one.
+      parsed = undefined;
+      const page = parsePage(html);
+      parsed = { caseId, page };
       return page;
     },
-    rememberParsed,
     parsedSize: () => (parsed === undefined ? 0 : 1),
   };
 };
@@ -1218,7 +1217,7 @@ export const createPlTkPageCache = (): PlTkPageCache => {
  * Fetch a listed ruling's case page and assemble it. A refused request is
  * the ruling's failure, not its absence, so it comes back as an `Err`.
  */
-const buildPlTkDecision = async ({
+export const buildPlTkDecision = async ({
   cursor,
   pageCache,
   row,
@@ -1308,7 +1307,7 @@ const buildPlTkDecision = async ({
         ),
       );
     }
-    parsedPage = parsePlTkPage(response.body);
+    parsedPage = pageCache.parse(row.caseId ?? row.documentId, response.body);
     if (readPlTkCasePage(parsedPage) === null) {
       // A 200 that is not a case page is the portal's shell for a session
       // it no longer holds: the ruling was not refused, it was not served.
@@ -1319,7 +1318,6 @@ const buildPlTkDecision = async ({
     casePage = response.body;
     if (row.caseId !== undefined) {
       pageCache.html.set(row.caseId, casePage);
-      pageCache.rememberParsed(row.caseId, parsedPage);
     }
   }
   return Result.ok(
