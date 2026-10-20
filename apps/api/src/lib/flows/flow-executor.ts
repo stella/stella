@@ -644,7 +644,7 @@ export const loadInputDocuments = async (
   const drained = await drainFanOut({
     items: available,
     signal: new AbortController().signal,
-    operation: (row, signal) => {
+    operation: async (row, signal) => {
       signal.throwIfAborted();
       return Promise.resolve({
         label: row.name,
