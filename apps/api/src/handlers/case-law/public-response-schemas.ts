@@ -502,6 +502,10 @@ export const coverageResponseSchema = t.Object(
           {
             ...countryCoverage,
             availability: t.Literal("searchable"),
+            admissionBasis: t.Union([
+              t.Literal("recorded-launch-exception"),
+              t.Literal("serving-receipt"),
+            ]),
             searchable: t.Number(),
             decisionYearFrom: numberOrNull,
             decisionYearTo: numberOrNull,

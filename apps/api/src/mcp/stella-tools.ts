@@ -3909,6 +3909,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
           return {
             country: entry.country,
             availability: entry.availability,
+            admissionBasis: entry.admissionBasis,
             decisions: entry.searchable,
             decisionYearFrom: entry.decisionYearFrom,
             decisionYearTo: entry.decisionYearTo,

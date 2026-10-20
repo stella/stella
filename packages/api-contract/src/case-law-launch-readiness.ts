@@ -43,6 +43,25 @@ export type PublicCaseLawCountry = v.InferOutput<
   typeof launchReadinessCountrySchema
 >;
 
+type CaseLawLaunchException = {
+  decidedBy: string;
+  decidedOn: string;
+  reason: string;
+};
+
+type CaseLawLaunchExceptionRecord = Readonly<
+  Partial<Record<CaseLawBrowserCountry, CaseLawLaunchException>>
+>;
+
+/** Recorded exceptions for admitted countries whose serving receipt is pending. */
+export const CASE_LAW_LAUNCH_EXCEPTIONS = {
+  POL: {
+    decidedBy: "project owner",
+    decidedOn: "2026-10-20",
+    reason: "launch for a demo before the serving census receipt exists",
+  },
+} as const satisfies CaseLawLaunchExceptionRecord;
+
 /**
  * The artifact is an inclusion list: every row carries all required facts.
  * Sorted unique rows keep generated updates deterministic.
@@ -75,32 +94,75 @@ const CASE_LAW_PAGE_COUNTRIES = publicCountriesFor("caseLaw", "pages");
 
 const servingReceipts = parseCaseLawLaunchReadiness(launchReadiness);
 
-/** Every admitted country must have a receipt, and receipts cannot admit independently. */
+type ValidateCaseLawLaunchAdmissionOptions = {
+  admitted: readonly CaseLawBrowserCountry[];
+  exceptions: CaseLawLaunchExceptionRecord;
+  receipts: readonly PublicCaseLawCountry[];
+};
+
+/** Validate and brand the countries admitted by either accepted evidence path. */
+export const validateCaseLawLaunchAdmission = ({
+  admitted,
+  exceptions,
+  receipts,
+}: ValidateCaseLawLaunchAdmissionOptions): readonly PublicCaseLawCountry[] => {
+  for (const country of CASE_LAW_BROWSER_COUNTRIES) {
+    const isAdmitted = admitted.some((candidate) => candidate === country);
+    const hasException = exceptions[country] !== undefined;
+    if (hasException && !isAdmitted) {
+      panic("A case-law launch exception cannot name a non-admitted country.");
+    }
+  }
+
+  const countries = admitted.map((country) => {
+    const receipt = receipts.find((candidate) => candidate === country);
+    const exception = exceptions[country];
+    if (receipt !== undefined && exception !== undefined) {
+      return panic(
+        "An admitted public country cannot have both a serving receipt and a launch exception.",
+      );
+    }
+    if (receipt !== undefined) {
+      return receipt;
+    }
+    if (exception === undefined) {
+      return panic(
+        "An admitted public country needs a case-law serving receipt or launch exception.",
+      );
+    }
+    return v.parse(launchReadinessCountrySchema, country);
+  });
+
+  if (
+    receipts.some(
+      (country) => !admitted.some((candidate) => candidate === country),
+    )
+  ) {
+    panic(
+      "A case-law serving receipt cannot admit a pending or withdrawn country.",
+    );
+  }
+  return countries;
+};
+
 /**
  * Countries admitted to case-law search, the API search surfaces and MCP.
  * Pages, sitemaps and crawl use `PUBLIC_CASE_LAW_PAGE_COUNTRIES` instead.
  */
-export const PUBLIC_CASE_LAW_COUNTRIES = ADMITTED_CASE_LAW_COUNTRIES.map(
-  (country) => {
-    const receipt = servingReceipts.find((candidate) => candidate === country);
-    if (receipt === undefined) {
-      return panic(
-        "An admitted public country needs a case-law serving receipt.",
-      );
-    }
-    return receipt;
-  },
-);
-if (
-  servingReceipts.some(
-    (country) =>
-      !ADMITTED_CASE_LAW_COUNTRIES.some((candidate) => candidate === country),
+export const PUBLIC_CASE_LAW_COUNTRIES = validateCaseLawLaunchAdmission({
+  admitted: ADMITTED_CASE_LAW_COUNTRIES,
+  exceptions: CASE_LAW_LAUNCH_EXCEPTIONS,
+  receipts: servingReceipts,
+});
+
+export const caseLawAdmissionBasis = (
+  country: PublicCaseLawCountry,
+): "recorded-launch-exception" | "serving-receipt" =>
+  Object.keys(CASE_LAW_LAUNCH_EXCEPTIONS).some(
+    (candidate) => candidate === country,
   )
-) {
-  panic(
-    "A case-law serving receipt cannot admit a pending or withdrawn country.",
-  );
-}
+    ? "recorded-launch-exception"
+    : "serving-receipt";
 
 export const isPublicCaseLawCountry = (
   country: string,

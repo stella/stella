@@ -42,6 +42,7 @@ export const CASE_LAW_COVERAGE_FIXTURE = {
       ...base,
       country: "CZE",
       availability: "searchable",
+      admissionBasis: "serving-receipt",
       searchable: 100,
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
@@ -74,6 +75,7 @@ export const CASE_LAW_COVERAGE_FIXTURE = {
       stored: { decisions: 0, asOf: null },
       country: "EU",
       availability: "searchable",
+      admissionBasis: "serving-receipt",
       searchable: 0,
       decisionYearFrom: null,
       decisionYearTo: null,
@@ -100,6 +102,7 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
     {
       country: "CZE",
       availability: "searchable",
+      admissionBasis: "serving-receipt",
       decisions: 100,
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
@@ -122,6 +125,7 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
     {
       country: "EU",
       availability: "searchable",
+      admissionBasis: "serving-receipt",
       decisions: 0,
       decisionYearFrom: null,
       decisionYearTo: null,

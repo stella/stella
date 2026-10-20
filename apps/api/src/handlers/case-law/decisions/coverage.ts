@@ -5,7 +5,10 @@ import {
   type CaseLawJurisdiction,
   isCaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  caseLawAdmissionBasis,
+  PUBLIC_CASE_LAW_COUNTRIES,
+} from "@stll/api-contract/case-law-launch-readiness";
 
 import {
   caseLawSources,
@@ -156,6 +159,8 @@ type CaseLawCoverageCountryBase = {
 type CaseLawCoverageCountry =
   | (CaseLawCoverageCountryBase & {
       availability: typeof CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE;
+      /** Which recorded evidence path admits this country. */
+      admissionBasis: "recorded-launch-exception" | "serving-receipt";
       /** What a public search can find: the serving index's country bucket. */
       searchable: number;
       /** Earliest and latest decision year the index holds; null when empty. */
@@ -492,10 +497,10 @@ export const loadCaseLawCoverage = async ({
       storedAsOf = entry.storedAsOf;
     }
 
-    const isAdmitted = PUBLIC_CASE_LAW_COUNTRIES.some(
+    const admittedCountry = PUBLIC_CASE_LAW_COUNTRIES.find(
       (candidate) => candidate === country,
     );
-    if (!isAdmitted) {
+    if (admittedCountry === undefined) {
       countries.push({
         ...base,
         availability: CASE_LAW_COVERAGE_AVAILABILITY.IN_PREPARATION,
@@ -556,6 +561,7 @@ export const loadCaseLawCoverage = async ({
     countries.push({
       ...base,
       availability: CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE,
+      admissionBasis: caseLawAdmissionBasis(admittedCountry),
       searchable,
       decisionYearFrom: from,
       decisionYearTo: to,

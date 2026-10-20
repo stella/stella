@@ -1426,6 +1426,9 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
       v.strictObject({
         country: v.string(),
         availability: v.picklist(["searchable", "in-preparation"]),
+        admissionBasis: v.optional(
+          v.picklist(["recorded-launch-exception", "serving-receipt"]),
+        ),
         decisions: v.number(),
         decisionYearFrom: v.nullable(v.number()),
         decisionYearTo: v.nullable(v.number()),

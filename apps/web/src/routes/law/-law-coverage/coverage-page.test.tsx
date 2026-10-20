@@ -108,6 +108,7 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
 
 const CZECHIA: CaseLawCoverageCountry = {
   availability: "searchable",
+  admissionBasis: "serving-receipt",
   country: "CZE",
   health: "delayed",
   stored: { decisions: 1996, asOf: COUNTED_AT },
