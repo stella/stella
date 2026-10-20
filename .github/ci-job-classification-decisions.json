@@ -142,7 +142,7 @@
   "candidate:.github/workflows/ci.yml/ci-checks-policy": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "949582203daf55993710b1520591ed83400c564e9d496b98fb287a021941c2f4"
+    "reviewedDigest": "63f9146d88bb55b2c27743c2b4b1a69f8bb897cacddb14b3b0ed396e3305bcc8"
   },
   "candidate:.github/workflows/ci.yml/ci-checks-rest": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "39acfad0e32e8ef5ae60dbbc6dcde37c8e0ffec38f412e081d5d54eb49c39d7d"
+    "reviewedDigest": "214db1bd3ca3bce8f87c006db83b8b0c43aa55c19cdeb07828783923d0a25fed"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "008d932e0c7f4cf967faf2d8d14e47e1fbaa2ab0b3f7c114b3a15e32c52c775d"
+    "reviewedDigest": "baf71fd691ec0d358caefe339c19786b54a6996d345275b16935812c4a835ada"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",

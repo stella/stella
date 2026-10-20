@@ -202,7 +202,6 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   },
   generate: { input_hash: "" },
   "heavy-plan": { heavy_jobs: "[]", queue_jobs: "[]", thin_jobs: "[]" },
-  "job-classification": { privileged_classification_change: "false" },
   images: { playwright: "", postgres: "", quickwit: "", redis: "", valkey: "" },
   "legal-atlas-scope": { api_source_required: "false" },
   "marketing-release": { required: "false" },

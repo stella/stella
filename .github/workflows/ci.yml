@@ -2426,8 +2426,6 @@ jobs:
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-24.04
-    outputs:
-      privileged_classification_change: ${{ steps.job-classification.outputs.privileged_classification_change }}
     # 25m, matching code-quality.
     timeout-minutes: 25
     permissions:
