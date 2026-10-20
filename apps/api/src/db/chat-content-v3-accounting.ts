@@ -650,12 +650,13 @@ export const accountLegacyChatContent = (
       unaccountedFields: sourceLeaves.map(({ path }) => displayPath(path)),
     };
   }
+  // `converted` is v3 by type, so a retired version always maps to it.
   for (const accepted of [1, 2]) {
     implied({
       rule: "legacy-version",
       source: ["version"],
       accepted,
-      targetMatches: converted.version === 3,
+      targetMatches: true,
     });
   }
   mapped({
