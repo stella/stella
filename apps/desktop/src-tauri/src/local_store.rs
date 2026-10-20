@@ -119,7 +119,7 @@ impl EncryptedJsonFile {
 
   fn cipher(&self) -> Result<Aes256Gcm, String> {
     Aes256Gcm::new_from_slice(&self.key)
-      .map_err(|_| format!("{} encryption key is invalid", self.label))
+      .map_err(|error| format!("{} encryption key is invalid: {error}", self.label))
   }
 
   pub fn load<T: DeserializeOwned>(&self) -> Result<Option<T>, String> {
@@ -141,8 +141,8 @@ impl EncryptedJsonFile {
         "{label} nonce has an invalid length"
       )));
     }
-    let nonce = Nonce::try_from(nonce.as_slice()).map_err(|_| {
-      EncryptedReadError::Unreadable(format!("{label} nonce has an invalid length"))
+    let nonce = Nonce::try_from(nonce.as_slice()).map_err(|error| {
+      EncryptedReadError::Unreadable(format!("{label} nonce is invalid: {error}"))
     })?;
     let ciphertext = hex::decode(envelope.ciphertext).map_err(|error| {
       EncryptedReadError::Unreadable(format!("{label} ciphertext is invalid: {error}"))
@@ -157,8 +157,10 @@ impl EncryptedJsonFile {
           aad: &self.associated_data,
         },
       )
-      .map_err(|_| {
-        EncryptedReadError::Unreadable(format!("{label} store could not be decrypted"))
+      .map_err(|error| {
+        EncryptedReadError::Unreadable(format!(
+          "{label} store could not be decrypted: {error}"
+        ))
       })?;
     serde_json::from_slice(&plaintext)
       .map(Some)
@@ -185,7 +187,7 @@ impl EncryptedJsonFile {
           aad: &self.associated_data,
         },
       )
-      .map_err(|_| format!("{label} encryption failed"))?;
+      .map_err(|error| format!("{label} encryption failed: {error}"))?;
     let envelope = EncryptedEnvelope {
       ciphertext: hex::encode(ciphertext),
       nonce: hex::encode(nonce),
