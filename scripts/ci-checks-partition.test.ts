@@ -879,7 +879,7 @@ const conditionTokens = (condition: string) =>
 type ScopeOptions = {
   current: Record<string, unknown>;
   base: Record<string, unknown>;
-  job?: string;
+  job?: string | undefined;
   releaseHoldRemoved?: boolean;
 };
 const expectScope = ({

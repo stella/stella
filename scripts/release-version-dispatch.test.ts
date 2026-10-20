@@ -19,18 +19,18 @@ const workflow: unknown = Bun.YAML.parse(
     "utf-8",
   ),
 );
-assert.ok(isRecord(workflow) && isRecord(workflow.jobs));
-const job = workflow.jobs["tag-version"];
-assert.ok(isRecord(job) && Array.isArray(job.steps));
-const step = job.steps.find(
+assert.ok(isRecord(workflow) && isRecord(workflow["jobs"]));
+const job = workflow["jobs"]["tag-version"];
+assert.ok(isRecord(job) && Array.isArray(job["steps"]));
+const step = job["steps"].find(
   (value: unknown) =>
-    isRecord(value) && value.name === "Dispatch the version commit",
+    isRecord(value) && value["name"] === "Dispatch the version commit",
 );
 assert.ok(
-  isRecord(step) && typeof step.run === "string",
+  isRecord(step) && typeof step["run"] === "string",
   "Missing version commit dispatch",
 );
-const dispatch = step.run;
+const dispatch = step["run"];
 const candidate = readFileSync(
   new URL("check-release-candidate.sh", import.meta.url),
   "utf-8",
