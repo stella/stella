@@ -9,15 +9,19 @@ import { DOCX_TIMING_SURFACE } from "./use-docx-editor-viewport";
 import type { DocxEditorSurface } from "./use-docx-editor-viewport";
 
 type UseDocxOpenTimingOptions = {
-  editorRef: RefObject<DocxEditorRef | null>;
+  editorRef: RefObject<TimedDocxEditor | null>;
   fieldId: string;
   surface: DocxEditorSurface;
 };
 
+type TimedDocxEditor = Pick<
+  DocxEditorRef,
+  "ensureEditorView" | "onLayoutChange"
+>;
+
 /**
- * The editor ref that ends a document open at the first painted layout. The
- * live view is created lazily on first interaction, so it would time the
- * user, not the editor.
+ * The editor ref that eagerly creates the live view and ends a document open
+ * at its first painted layout.
  */
 export const useDocxOpenTiming = ({
   editorRef,
@@ -25,7 +29,7 @@ export const useDocxOpenTiming = ({
   surface,
 }: UseDocxOpenTimingOptions) =>
   useCallback(
-    (editor: DocxEditorRef | null) => {
+    (editor: TimedDocxEditor | null) => {
       editorRef.current = editor;
       if (editor === null) {
         return undefined;
@@ -34,6 +38,7 @@ export const useDocxOpenTiming = ({
         stopListening();
         documentOpenTiming.editorReady(fieldId, DOCX_TIMING_SURFACE[surface]);
       });
+      editor.ensureEditorView({ focus: false });
       return () => {
         stopListening();
         editorRef.current = null;
