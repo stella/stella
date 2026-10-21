@@ -608,7 +608,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
   );
   for (const file of [
     "apps/api/src/lib/format.ts",
-    "packages/time/src/format.ts",
+    "packages/agent-input/src/format.ts",
   ]) {
     const selected = new Set(generatorsForFiles([file]).map(({ id }) => id));
     for (const id of requiredIds) {
