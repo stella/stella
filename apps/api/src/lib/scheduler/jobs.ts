@@ -11,6 +11,11 @@ import { envBase } from "@/api/env-base";
 import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+} from "@/api/lib/feature-access/registry";
 import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
@@ -41,6 +46,7 @@ import { PURGE_CHAT_SECRETS_TASK } from "@/api/lib/scheduler/tasks/chat-secret-r
 import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
 import { REAP_OWNERLESS_CHAT_TURNS_TASK } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
+import { CHECK_DATA_INVARIANTS_TASK } from "@/api/lib/scheduler/tasks/data-invariants";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
@@ -417,6 +423,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: BACKFILL_HEARTBEAT_TASK,
   },
   {
+    description: "Check data-correctness invariants over pipeline outputs",
+    id: "observability.checkDataInvariants.hourly",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
+    task: CHECK_DATA_INVARIANTS_TASK,
+  },
+  {
     description:
       "Move withdrawal reasons from the index-job failure column to detail",
     id: "corpusIndex.backfillJobDetail.v1",
@@ -620,7 +633,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Age AI memories through the active -> stale -> archived lifecycle",
-    enabled: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+    enabled: isFeatureDeployed(FEATURE_REGISTRY, AI_MEMORY_FEATURE_ID),
     id: "memory.curator.nightly",
     mode: "recurring",
     schedule: {
@@ -634,7 +647,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Extract suggested AI memories from new chat-thread compactions",
-    enabled: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+    enabled: isFeatureDeployed(FEATURE_REGISTRY, AI_MEMORY_FEATURE_ID),
     id: "memory.extractor.hourly",
     mode: "recurring",
     schedule: {

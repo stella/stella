@@ -2,7 +2,7 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
@@ -413,6 +413,8 @@ export const writeApiTestPartition = (root: string) => {
     const relative = (file: string) =>
       repoRelativePath(path.dirname(source), path.resolve(api, file));
     writeApiTypecheckArtifact(source, {
+      files: [],
+      include: ["src", "drizzle.config.ts", "../../types"].map(relative),
       exclude: [
         "src/handlers/visual-sandbox/browser",
         ...partition.independent,

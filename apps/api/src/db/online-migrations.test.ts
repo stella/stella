@@ -10,6 +10,7 @@ import { readOnlineIndexConfig } from "../env-online-index";
 import { BackfillHeldError } from "./backfill-runtime";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
 import type { MigrationTimingRecord } from "./migration-timing";
+import { declaresOnlineBuild } from "./online-ddl";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import type {
@@ -287,16 +288,19 @@ describe("online migrations", () => {
   });
 
   test("creates a missing index online and verifies completion", async () => {
-    const harness = createHarness({
-      missingIndexes: [REPORT_EXPORT_INDEX],
-    });
+    for (const { name } of ONLINE_MIGRATION_INDEXES.filter(
+      declaresOnlineBuild,
+    )) {
+      const harness = createHarness({ missingIndexes: [name] });
 
-    await runOnlineMigrations(harness.pool);
+      await runOnlineMigrations(harness.pool);
 
-    expect(
-      indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT),
-    ).toBeGreaterThan(-1);
-    expect(harness.released()).toBe(true);
+      expect(
+        indexOfStatement(harness.statements, `INDEX CONCURRENTLY "${name}"`),
+        name,
+      ).toBeGreaterThan(-1);
+      expect(harness.released()).toBe(true);
+    }
   });
 
   /**

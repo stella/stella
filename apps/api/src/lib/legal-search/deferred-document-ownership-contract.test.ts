@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DEFERRED_DOCUMENT_WRITER_CAPABILITIES } from "@/api/lib/legal-search/deferred-document-writer-contract";

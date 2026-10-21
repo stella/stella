@@ -1013,6 +1013,7 @@ const capabilityProbes = [
     timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async ({ config, provider }, signal) => {
       await generateTanStackObjectForTask({
+        userId: null,
         dataClass: "public_corpus",
         abortSignal: signal,
         caching: NO_CACHING,
@@ -1055,6 +1056,7 @@ const capabilityProbes = [
           `union parameters (${edge.budget.basis} budget, compiler=${edge.compiler})`,
       );
       await generateTanStackObjectForTask({
+        userId: null,
         dataClass: "public_corpus",
         abortSignal: signal,
         caching: NO_CACHING,
@@ -1120,6 +1122,7 @@ const capabilityProbes = [
     timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async ({ config, provider }, signal) => {
       const output = await generateTanStackTextForTask({
+        userId: null,
         dataClass: "public_corpus",
         abortSignal: signal,
         caching: CANARY_CACHING,
@@ -1194,6 +1197,7 @@ const runModelTaskProbe = async ({
           },
         };
   const model = await resolveTanStackTextModel({
+    userId: null,
     dataClass: "public_corpus",
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1207,6 +1211,7 @@ const runModelTaskProbe = async ({
   }
 
   const output = await generateTanStackTextForTask({
+    userId: null,
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
@@ -1239,6 +1244,7 @@ const runStructuredOutputModelTaskProbe = async ({
     return panic("Unsupported task must not run a structured output canary");
   }
   await generateTanStackObjectForTask({
+    userId: null,
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
@@ -1269,6 +1275,7 @@ const runWeeklyModelTaskProbe = async ({
   signal,
 }: RunWeeklyModelTaskProbeOptions): Promise<void> => {
   const model = await resolveTanStackTextModel({
+    userId: null,
     dataClass: "public_corpus",
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1282,6 +1289,7 @@ const runWeeklyModelTaskProbe = async ({
   }
 
   const output = await generateTanStackTextForTask({
+    userId: null,
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
@@ -1309,6 +1317,7 @@ const runWeeklyStructuredOutputModelTaskProbe = async ({
   signal,
 }: RunWeeklyModelTaskProbeOptions): Promise<void> => {
   await generateTanStackObjectForTask({
+    userId: null,
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
@@ -1472,6 +1481,7 @@ const runToolProbe = async ({
   tool,
 }: RunToolProbeOptions): Promise<string> => {
   const model = await resolveTextModel({
+    userId: null,
     dataClass: "public_corpus",
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1918,6 +1928,7 @@ const runCatalogModelProbe = async ({
     rotatedModelId: modelId,
   });
   const model = await resolveTanStackTextModel({
+    userId: null,
     dataClass: "public_corpus",
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1931,6 +1942,7 @@ const runCatalogModelProbe = async ({
   }
 
   const output = await generateTanStackTextForTask({
+    userId: null,
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
