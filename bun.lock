@@ -110,6 +110,7 @@
         "@stll/legal-atlas": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/mcp-apps": "workspace:*",
+        "@stll/mcp-kit": "workspace:^",
         "@stll/mojibake": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
@@ -1137,10 +1138,8 @@
         "better-result": "catalog:",
       },
       "devDependencies": {
-        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
-        "fast-check": "catalog:",
         "tsdown": "catalog:",
       },
     },
