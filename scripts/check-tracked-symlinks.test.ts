@@ -239,12 +239,14 @@ test("the CI guard runs after Bun setup under the checkout trust condition", () 
     (step) => step["name"] === "Setup Bun for dependency scope",
   );
   const guard = planJob.steps.find(
-    (step) => step["name"] === "Check tracked symlink archive targets",
+    (step) => step["name"] === "Check tracked repository hygiene",
   );
   if (checkout === undefined || setupBun === undefined || guard === undefined) {
     expect.unreachable("Missing tracked symlink CI ownership steps");
   }
-  expect(guard["run"]).toBe("bun scripts/check-tracked-symlinks.ts");
+  expect(guard["run"]).toBe(
+    "bun scripts/check-tracked-symlinks.ts\nbun scripts/check-tracked-cloud-reports.ts\n",
+  );
   expect(guard["if"]).toBe(checkout["if"]);
   expect(planJob.steps.indexOf(guard)).toBeGreaterThan(
     planJob.steps.indexOf(setupBun),

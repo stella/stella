@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 /**
  * Every consumer of the public country lists names the surface it serves.
@@ -98,6 +98,8 @@ const CONSUMERS = {
   "apps/web/src/routes/law/$country/statutes/index.tsx": "search",
   "apps/web/src/routes/law/-law-home/jurisdictions.ts": "search",
   "apps/web/src/features/case-law/components/top-bar-country.tsx": "search",
+  "apps/web/src/features/chat/hooks/use-global-chat-mention-registration.ts":
+    "search",
   // Tests and query-plan fixtures that mirror a surface's country filter.
   "apps/api/src/tests/query-plans/old-sitemap-refresh-fixture.ts": "sitemap",
   "apps/api/src/tests/query-plans/registry.ts": "search",

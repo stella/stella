@@ -14,6 +14,7 @@ import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type {
   ChatSendRequest,
+  IncomingActiveFile,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
@@ -597,11 +598,13 @@ export const createApprovalHarness = ({
 
   /** A request built by hand rather than by a web client. */
   const sendContext = ({
+    activeFile,
     message,
     resume,
     runId,
     threadId,
   }: {
+    activeFile?: IncomingActiveFile | undefined;
     message: ChatSendRequest["message"];
     /** A continuation names the interrupted run it resumes. */
     resume?: { interruptedRunId: string; items: InterruptResume } | undefined;
@@ -613,6 +616,7 @@ export const createApprovalHarness = ({
         ? {}
         : { parentRunId: resume.interruptedRunId, resume: resume.items };
     const forwardedProps = {
+      activeFile,
       contextMatterIds: [],
       message,
       runId,
@@ -622,6 +626,7 @@ export const createApprovalHarness = ({
     };
     return contextFromBody(
       asTestRaw<SendBody>({
+        activeFile,
         threadId,
         runId: forwardedProps.runId,
         state: {},

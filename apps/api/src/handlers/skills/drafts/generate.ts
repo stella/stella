@@ -150,6 +150,7 @@ const generateSkillDraft = createSafeRootHandler(
     const generation = await Result.tryPromise({
       try: async () =>
         await generateTanStackObjectForTask({
+          userId: user.id,
           dataClass: "customer",
           admission: configuredModelAdmission({ modelAdmission }),
           deadlineMs: GENERATION_TIMEOUT_MS,

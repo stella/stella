@@ -291,6 +291,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inline-style-colors.fixture.tsx", [
     "no-inline-style-colors/no-inline-style-colors",
   ]),
+  fixtureRuleOverride("no-inline-heavy-host-props.fixture.tsx", [
+    "no-inline-heavy-host-props/no-inline-heavy-host-props",
+  ]),
   fixtureRuleOverride("no-ad-hoc-find-shortcut.fixture.ts", [
     "no-ad-hoc-find-shortcut/no-ad-hoc-find-shortcut",
   ]),
@@ -622,6 +625,12 @@ const browserSurfaceFiles = [
 const noZodImport = {
   name: "zod",
   message: "Use 'valibot' instead of 'zod'.",
+};
+
+const noClassicTypeScriptImport = {
+  name: "typescript",
+  message:
+    "TypeScript 7 exposes no compiler API at 'typescript'. Use 'typescript6' for the classic API, or 'typescript/unstable/*' for the TypeScript 7 API.",
 };
 
 const webLocalApiImportGroup = ["@/api/*", "@/api/**/*"];
@@ -1152,7 +1161,10 @@ const config = defineConfig({
     // get/set pairs are essentially absent — so the rule fires on
     // nothing while taking ~10% of lint time.
     "eslint/grouped-accessor-pairs": "off",
-    "no-restricted-imports": ["error", { paths: [noZodImport] }],
+    "no-restricted-imports": [
+      "error",
+      { paths: [noZodImport, noClassicTypeScriptImport] },
+    ],
     "no-bare-error/no-bare-error": "error",
     "no-raw-eden-telemetry/no-raw-eden-telemetry": "error",
     "no-minted-auth-provider-id/no-minted-auth-provider-id": "error",
@@ -1484,6 +1496,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
+    "./.oxlint-plugins/no-inline-heavy-host-props.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
     "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
@@ -1645,6 +1658,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
+    "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
@@ -2402,6 +2416,7 @@ const config = defineConfig({
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
         "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
+        "no-inline-heavy-host-props/no-inline-heavy-host-props": "error",
         "no-physical-properties/no-physical-properties": "error",
         "no-layout-motion-classes/no-layout-motion-classes": [
           "error",
@@ -3454,8 +3469,6 @@ const config = defineConfig({
         "packages/*/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-raw-date-parsing.fixture.ts",
       ],
-      // The package that owns the helpers and the named day length.
-      excludeFiles: ["packages/time/src/**"],
       rules: {
         "no-raw-date-parsing/no-raw-date-parsing": "error",
       },
@@ -3533,7 +3546,11 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, uiPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              uiPragmaticDragAdapterImport,
+            ],
             patterns: [
               ...uiStandaloneImports,
               pragmaticDragAdapterDeepImportBan,
@@ -3551,7 +3568,7 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport],
+            paths: [noZodImport, noClassicTypeScriptImport],
             patterns: [
               ...uiStandaloneImports,
               pragmaticDragAdapterDeepImportBan,
@@ -3675,6 +3692,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -3708,7 +3726,11 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, ...webFolioAllLocalesImports],
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3924,6 +3946,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -3950,6 +3973,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -3984,6 +4008,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -4029,6 +4054,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4072,6 +4098,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4306,9 +4333,6 @@ const config = defineConfig({
               "apps/api/src/server.ts",
               // The one reader of NODE_ENV and the local development opt-in.
               "packages/runtime-mode/src/index.ts",
-              // The test network guard refuses to install while the process
-              // routes fetch through a remote proxy from the environment.
-              "packages/test-kit/src/network.ts",
               // The web server entrypoint reads its listen address from Bun's
               // environment before any app module loads; the web app's env
               // contract is the Vite build, not this process.
@@ -4841,6 +4865,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -4868,6 +4893,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               {
                 name: "@/api/db/root",
                 message:
@@ -4899,6 +4925,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -4917,6 +4944,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -4938,6 +4966,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5321,9 +5350,11 @@ const config = defineConfig({
       files: [
         "**/*.test.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
         "**/*.spec.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+        ".oxlint-plugins/__fixtures__/no-shared-checkout-mutation.fixture.ts",
       ],
       rules: {
         "no-direct-test-state/no-direct-test-state": "error",
+        "no-shared-checkout-mutation/no-shared-checkout-mutation": "error",
       },
     },
     {
@@ -5403,6 +5434,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               {
                 name: "@/api/lib/branded-types",
@@ -5453,7 +5485,13 @@ const config = defineConfig({
       rules: {
         "no-restricted-imports": [
           "error",
-          { paths: [noZodImport, apiValibotJsonSchemaImport] },
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              apiValibotJsonSchemaImport,
+            ],
+          },
         ],
       },
     },
@@ -5522,6 +5560,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5609,6 +5648,7 @@ const config = defineConfig({
         "apps/api/src/handlers/hosted-usage-webhook/routes.ts",
         "apps/api/src/handlers/notifications/routes.ts",
         "apps/api/src/handlers/smoke/routes.ts",
+        "apps/api/src/handlers/synthetic/routes.ts",
         "apps/api/src/handlers/verify/routes.ts",
         "apps/api/src/handlers/well-known/routes.ts",
       ],

@@ -640,10 +640,25 @@ export default defineConfig(({ mode, command }) => {
         "@stll/aho-corasick-wasm",
         "@stll/fuzzy-search-wasm",
         "@stll/regex-set-wasm",
+        // Pre-bundling would inline its `temporal-polyfill/full` import
+        // without running temporalRuntimePlugin, so the browser would load the
+        // polyfill implementation even when native Temporal exists.
+        "@stll/time",
       ],
     },
     resolve: {
       tsconfigPaths: true,
+      alias: [
+        {
+          // tldts' module build exports its public-suffix label table as a
+          // 67 KB string constant from a separate module. Rolldown inlines
+          // imported constants into conditions, so the table was copied into
+          // the chunk once per lookup site. The prebuilt single-module build
+          // keeps the table a local binding that is emitted once.
+          find: /^tldts$/u,
+          replacement: "tldts/dist/index.esm.min.js",
+        },
+      ],
       dedupe: [
         "react",
         "react-dom",
