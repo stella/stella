@@ -89,6 +89,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import {
   applyChatToolPolicy,
   CHAT_TOOL_POLICY_KIND,
+  getChatToolPolicy,
 } from "@/api/handlers/chat/tools/tool-policy";
 import type {
   ChatAnonRestoration,
@@ -3142,7 +3143,9 @@ describe("approved client tool with an output schema", () => {
   // model. Live, stored and reloaded, the call stays owed its real result,
   // never a result its output schema rejects or one the browser reads as run.
   test("is handed to the browser input-only and continues with its result", async () => {
-    expect(browserTools[BROWSER_CONTROL_TOOL_NAME].needsApproval).toBe(true);
+    expect(
+      getChatToolPolicy(browserTools[BROWSER_CONTROL_TOOL_NAME]).needsApproval,
+    ).toBe(true);
     const approved = await runTurn({
       messages: [
         userMessage,
