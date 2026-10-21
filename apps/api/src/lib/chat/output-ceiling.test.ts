@@ -188,6 +188,7 @@ const generate = async (
         maxOutputTokens,
         orgAIConfig: KEY_SOURCES[keySource].orgAIConfig,
         organizationId,
+        userId: null,
         prompt: "Summarize the lease negotiation so far.",
         task: "chat",
         serviceTier: "standard",

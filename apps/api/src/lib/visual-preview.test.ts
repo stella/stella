@@ -140,7 +140,7 @@ describe("visual preview invocation", () => {
     const result = await previewVisual({
       document: "<body>Example</body>",
       functionArn,
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
       invoke: async ({ signal: invocationSignal }) => {
         signal = invocationSignal;
         return new Promise(() => {});

@@ -1,24 +1,14 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { repoRelativePath } from "@stll/portable-path";
 
 import {
   RECEIVER_TYPED_AUTOFIX_RULES,
   lintCommand,
+  mergeScopedFiles,
   runPrecommitLint,
 } from "./precommit-lint";
 
@@ -27,8 +17,10 @@ import {
 setDefaultTimeout(60_000);
 
 const ROOT = path.resolve(import.meta.dir, "..");
-// Inside the repository so oxlint.config.ts applies exactly as in the hook.
-const DIR = path.join("scripts", `__precommit_lint_${process.pid}__`);
+// Inside the repository so oxlint.config.ts applies exactly as in the hook;
+// a directory of its own, since concurrent runs share this checkout.
+const DIRECTORY = mkdtempSync(path.join(ROOT, "scripts", "__precommit_lint_"));
+const DIR = repoRelativePath(ROOT, DIRECTORY);
 
 // One fixture per rule whose autofix assumes a receiver type. Each is valid
 // code the fix would break or change.
@@ -80,18 +72,15 @@ const fixturePath = (name: string) =>
 
 const writeFixture = (name: string, body: string): string => {
   const file = fixturePath(name);
-  writeFileSync(path.join(ROOT, file), `${body}\n`);
+  // oxlint-disable-next-line no-shared-checkout-mutation/no-shared-checkout-mutation -- the name is a rule id with "/" replaced, inside this run's own mkdtemp directory
+  writeFileSync(path.join(DIRECTORY, path.basename(file)), `${body}\n`);
   return file;
 };
 
 const read = (file: string) => readFileSync(path.join(ROOT, file), "utf-8");
 
-beforeAll(() => {
-  mkdirSync(path.join(ROOT, DIR), { recursive: true });
-});
-
 afterAll(() => {
-  rmSync(path.join(ROOT, DIR), { recursive: true, force: true });
+  rmSync(DIRECTORY, { recursive: true, force: true });
 });
 
 describe("pre-commit lint", () => {
@@ -255,6 +244,67 @@ describe("pre-commit lint", () => {
       expect(isRecord(command) ? String(command["run"]) : "").not.toContain(
         "oxlint",
       );
+    }
+  });
+});
+
+describe("merge commit lint scope", () => {
+  const git = (cwd: string, ...args: string[]): string => {
+    const result = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.invalid",
+        ...args,
+      ],
+      {
+        cwd,
+      },
+    );
+    if (result.exitCode !== 0) {
+      throw new Error(`git ${args.join(" ")}: ${result.stderr.toString()}`);
+    }
+    return result.stdout.toString();
+  };
+
+  test("a merge lints only content new to both parents, never main's unchanged files", () => {
+    const repo = mkdtempSync(path.join(tmpdir(), "precommit-merge-"));
+    try {
+      git(repo, "init", "-q", "-b", "main");
+      writeFileSync(path.join(repo, "shared.ts"), "export const a = 1;\n");
+      writeFileSync(path.join(repo, "complex.ts"), "export const debt = 1;\n");
+      git(repo, "add", ".");
+      git(repo, "commit", "-q", "-m", "base");
+      git(repo, "switch", "-q", "-c", "feature");
+      writeFileSync(path.join(repo, "shared.ts"), "export const a = 2;\n");
+      git(repo, "commit", "-q", "-am", "feature");
+      git(repo, "switch", "-q", "main");
+      // Main changes an over-complex file (baselined debt) and the shared file.
+      writeFileSync(
+        path.join(repo, "complex.ts"),
+        "export const debt = 2; // over-complex, baselined\n",
+      );
+      writeFileSync(path.join(repo, "shared.ts"), "export const a = 3;\n");
+      git(repo, "commit", "-q", "-am", "main");
+      git(repo, "switch", "-q", "feature");
+      Bun.spawnSync(["git", "merge", "--no-commit", "main"], { cwd: repo });
+      writeFileSync(path.join(repo, "shared.ts"), "export const a = 23;\n");
+      git(repo, "add", "shared.ts", "complex.ts");
+
+      // complex.ts equals main's blob: not linted. shared.ts is a resolution: linted.
+      expect(mergeScopedFiles(["complex.ts", "shared.ts"], repo)).toEqual([
+        "shared.ts",
+      ]);
+
+      git(repo, "merge", "--abort");
+      expect(mergeScopedFiles(["complex.ts", "shared.ts"], repo)).toEqual([
+        "complex.ts",
+        "shared.ts",
+      ]);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
     }
   });
 });
