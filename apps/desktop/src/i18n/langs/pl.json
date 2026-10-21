@@ -555,7 +555,7 @@
     "permissionsTitleMac": "Skonfiguruj ten Mac",
     "permissionsTitlePc": "Skonfiguruj ten komputer",
     "permissionsBody": "Każde uprawnienie to Twój wybór. Możesz je później zmienić w Ustawieniach.",
-    "neverRequested": "Nigdy niepotrzebne:",
+    "neverRequested": "Aplikacja nigdy nie prosi o:",
     "tryTitle": "Wypróbuj teraz",
     "tryBody": "Skopiuj dowolny tekst, a potem naciśnij {shortcut}.",
     "tryWaiting": "Czekam na skrót",

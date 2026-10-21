@@ -251,8 +251,8 @@ pub fn show_if_pending(app: &AppHandle, background_launch: bool) {
   if background_launch {
     return;
   }
-  let pending = app
-    .state::<OnboardingState>()
+  let state = app.state::<OnboardingState>();
+  let pending = state
     .lock()
     .is_ok_and(|onboarding| onboarding.progress != Progress::Completed);
   if pending {
@@ -340,11 +340,15 @@ async fn apply(app: &AppHandle, from: Step, input: Input) -> Result<(), String> 
   if onboarding.progress == Progress::Completed {
     return Ok(());
   }
+  if input == Input::ShortcutPressed && onboarding.shown != Some(Step::TryIt) {
+    return Ok(());
+  }
   let current = on_screen(onboarding.step(), onboarding.shown, context);
   let next = resolve(current, from, input, context);
   if next != onboarding.step() {
     onboarding.save(Progress::InProgress { resume: next });
   }
+  drop(onboarding);
   Ok(())
 }
 

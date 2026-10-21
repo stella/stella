@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
@@ -46,10 +46,17 @@ const OnboardingApp = () => {
 const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
   const t = useTranslations("onboarding");
   const [flow, setFlow] = useState<FlowState>({ status: "loading" });
+  const operations = useRef(Promise.resolve());
+
+  const enqueue = useCallback(async (operation: () => Promise<void>) => {
+    const queued = operations.current.then(operation);
+    operations.current = queued;
+    await queued;
+  }, []);
 
   useEffect(() => {
     let disposed = false;
-    const refresh = async () => {
+    const refreshUnlessDisposed = async () => {
       const result = await Result.tryPromise(async () =>
         invoke<unknown>("onboarding_get_snapshot"),
       );
@@ -66,7 +73,7 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
     const stopFlow = subscribeDesktopEvent({
       event: ONBOARDING_CHANGED_EVENT,
       handler: () => {
-        void refresh();
+        void enqueue(refreshUnlessDisposed);
       },
       onError: reportOnboardingFailure,
     });
@@ -74,35 +81,42 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
     const stopAccount = subscribeDesktopEvent({
       event: "desktop-account-changed",
       handler: () => {
-        void refresh();
+        void enqueue(refreshUnlessDisposed);
       },
       onError: reportOnboardingFailure,
     });
-    void refresh();
+    void enqueue(refreshUnlessDisposed);
     return () => {
       disposed = true;
       stopFlow();
       stopAccount();
     };
-  }, []);
+  }, [enqueue]);
 
   // `from` lets the native flow ignore a repeated or stale click instead of
   // moving twice.
   const advance = async (from: OnboardingStep, input: OnboardingNavigation) => {
-    const result = await Result.tryPromise(async () =>
-      invoke<unknown>("onboarding_advance", { from, input }),
-    );
-    if (Result.isError(result) || !isOnboardingSnapshot(result.value)) {
-      reportOnboardingFailure();
-      setFlow({ status: "failed" });
-      return;
-    }
-    setFlow({ snapshot: result.value, status: "ready" });
+    await enqueue(async () => {
+      const result = await Result.tryPromise(async () =>
+        invoke<unknown>("onboarding_advance", { from, input }),
+      );
+      if (Result.isError(result) || !isOnboardingSnapshot(result.value)) {
+        reportOnboardingFailure();
+        setFlow({ status: "failed" });
+        return;
+      }
+      setFlow({ snapshot: result.value, status: "ready" });
+    });
   };
 
   const finish = async (openSettings: boolean) => {
     if (openSettings) {
-      await Result.tryPromise(async () => invoke("onboarding_open_settings"));
+      const settingsResult = await Result.tryPromise(async () =>
+        invoke("onboarding_open_settings"),
+      );
+      if (Result.isError(settingsResult)) {
+        reportOnboardingFailure();
+      }
     }
     const result = await Result.tryPromise(async () =>
       invoke("onboarding_complete"),

@@ -63,6 +63,9 @@ export const TryItStep = ({ onBack, onContinue, snapshot }: StepProps) => {
     if (recording || !keys) {
       return undefined;
     }
+    const focusTimer = window.setTimeout(() => {
+      setFocused(document.hasFocus());
+    }, 0);
     let hintTimer: number | undefined;
     const showFeedback = (next: TryFeedback) => {
       window.clearTimeout(hintTimer);
@@ -115,6 +118,9 @@ export const TryItStep = ({ onBack, onContinue, snapshot }: StepProps) => {
     window.addEventListener("focus", onFocus);
     return () => {
       window.clearTimeout(hintTimer);
+      window.clearTimeout(focusTimer);
+      setHeld([]);
+      setFeedback({ type: "idle" });
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
       window.removeEventListener("blur", onBlur);

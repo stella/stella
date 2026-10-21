@@ -555,7 +555,7 @@
     "permissionsTitleMac": "A Mac beállítása",
     "permissionsTitlePc": "A számítógép beállítása",
     "permissionsBody": "Minden engedélyről Ön dönt. Később a Beállításokban módosíthatja őket.",
-    "neverRequested": "Soha nem szükséges:",
+    "neverRequested": "Az alkalmazás soha nem kéri:",
     "tryTitle": "Próbálja ki most",
     "tryBody": "Másoljon ki egy tetszőleges szöveget, majd nyomja le ezt: {shortcut}.",
     "tryWaiting": "Billentyűparancsra vár",
