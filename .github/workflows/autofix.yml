@@ -456,6 +456,27 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
 
     steps:
+      - name: Checkout lockfile tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            packages/scripts/src/generated-files.ts
+            scripts/autofix-protected-paths.ts
+            scripts/baseline-paths.ts
+            scripts/bun-lock-text.ts
+            scripts/generated-conflicts.ts
+            scripts/generated-files.ts
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve lockfile tooling across source checkout
+        run: |
+          cp -R "$GITHUB_WORKSPACE/.workflow-tooling" "$RUNNER_TEMP/workflow-tooling"
+          rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"
+
       - name: Checkout pull request head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -522,7 +543,7 @@ jobs:
           STELLA_LOCAL_AUTOFIX: "true"
           NPM_TOKEN: ""
         run: |
-          bun --no-install --no-env-file scripts/generated-conflicts.ts refresh-lock --repo .
+          bun --no-install --no-env-file "$RUNNER_TEMP/workflow-tooling/scripts/generated-conflicts.ts" refresh-lock --repo "$GITHUB_WORKSPACE"
           cp -- bun.lock "$RUNNER_TEMP/autofix-frozen-bun.lock"
 
       - name: Install dependencies
@@ -770,8 +791,8 @@ jobs:
           # Installation and fixers ran after refresh, so re-check their final
           # output against the exact pins that refresh approved before allowing
           # bun.lock through the generic changed-path boundary.
-          bun --no-install --no-env-file scripts/generated-conflicts.ts \
-            assert-frozen-lock --repo . \
+          bun --no-install --no-env-file "$RUNNER_TEMP/workflow-tooling/scripts/generated-conflicts.ts" \
+            assert-frozen-lock --repo "$GITHUB_WORKSPACE" \
             --frozen "$RUNNER_TEMP/autofix-frozen-bun.lock"
           excludes+=(":(exclude,literal)bun.lock")
           unexpected_tracked="$(git diff --name-only -- . "${excludes[@]}")"

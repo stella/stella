@@ -725,8 +725,54 @@ test("source fixes use only the documented safe-rule allowlist and never save PR
     steps.indexOf(workflowStepByName(steps, "Install dependencies")),
   );
   expect(workflowStepByName(steps, "Refresh merged lockfile")["run"]).toContain(
-    "refresh-lock --repo .",
+    'refresh-lock --repo "$GITHUB_WORKSPACE"',
   );
+});
+
+test("runs lockfile tooling from the workflow revision, not the pull request", () => {
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8")),
+    "regenerate-derived-files",
+  );
+  const checkout = workflowStepByName(steps, "Checkout lockfile tooling");
+  const checkoutInputs = checkout["with"];
+  if (!isRecord(checkoutInputs)) {
+    throw new TypeError("Lockfile tooling checkout inputs must be a mapping");
+  }
+  expect(checkoutInputs).toMatchObject({
+    repository: `\${{ github.repository }}`,
+    ref: `\${{ github.workflow_sha }}`,
+    path: ".workflow-tooling",
+    "persist-credentials": false,
+    "sparse-checkout-cone-mode": false,
+  });
+  const sparseCheckout = String(checkoutInputs["sparse-checkout"]);
+  for (const source of [
+    "packages/scripts/src/generated-files.ts",
+    "scripts/autofix-protected-paths.ts",
+    "scripts/baseline-paths.ts",
+    "scripts/bun-lock-text.ts",
+    "scripts/generated-conflicts.ts",
+    "scripts/generated-files.ts",
+  ]) {
+    expect(sparseCheckout.split("\n")).toContain(source);
+  }
+  expect(
+    workflowStepByName(
+      steps,
+      "Preserve lockfile tooling across source checkout",
+    )["run"],
+  ).toContain('rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"');
+
+  for (const name of ["Refresh merged lockfile", "Restrict autofix changes"]) {
+    const run = String(workflowStepByName(steps, name)["run"]);
+    expect(run).toContain(
+      '"$RUNNER_TEMP/workflow-tooling/scripts/generated-conflicts.ts"',
+    );
+    expect(run).not.toMatch(
+      /(?:^|[;&|]\s*)bun(?:\s+--[\w-]+)*\s+scripts\/generated-conflicts\.ts\b/mu,
+    );
+  }
 });
 
 test("rechecks refresh-approved lockfile pins at the final collection boundary", () => {
@@ -744,7 +790,9 @@ test("rechecks refresh-approved lockfile pins at the final collection boundary",
   if (typeof restriction !== "string") {
     throw new TypeError("Restrict autofix changes must be a shell step");
   }
-  expect(restriction).toContain("assert-frozen-lock --repo .");
+  expect(restriction).toContain(
+    'assert-frozen-lock --repo "$GITHUB_WORKSPACE"',
+  );
   expect(restriction).toContain(
     '--frozen "$RUNNER_TEMP/autofix-frozen-bun.lock"',
   );
