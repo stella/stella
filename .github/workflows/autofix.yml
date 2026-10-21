@@ -614,7 +614,9 @@ jobs:
             fi
             # A type-aware fix is kept only when its project type-checks. A
             # push the fixer leaves unchanged has nothing to keep, so it skips
-            # the full project check; CI's typecheck reports its types.
+            # the full project check; CI's typecheck reports its types. A
+            # rejected fix drops only the lint rewrites: formatting and the
+            # generators still run and push.
             fixed=false
             for path in "${lint_paths[@]}"; do
               if ! cmp -s "$path" "$backup/$path"; then
@@ -627,7 +629,7 @@ jobs:
               bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}" || typecheck_status=$?
               if (( typecheck_status != 0 )); then
                 restore_lint_paths
-                exit "$typecheck_status"
+                echo "::warning title=Autofix lint fixes dropped::The type-aware lint fixes did not type-check (exit $typecheck_status); kept formatting and generated files only."
               fi
             fi
           fi
