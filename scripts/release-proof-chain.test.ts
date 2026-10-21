@@ -9,6 +9,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
+
 const chain = path.join(import.meta.dir, "release-proof-chain.sh");
 const healthGate = path.join(import.meta.dir, "check-release-main-health.sh");
 const repository = "stella/stella";
@@ -18,6 +20,15 @@ const FIXTURE_TIMEOUT = 30_000;
 
 const readWorkflow = (name: string) =>
   readFileSync(path.join(workflows, name), "utf-8");
+
+// A string field of parsed YAML, or undefined when absent or not a string.
+const stringField = (record: unknown, key: string): string | undefined => {
+  if (typeof record !== "object" || record === null) {
+    return undefined;
+  }
+  const value: unknown = Reflect.get(record, key);
+  return typeof value === "string" ? value : undefined;
+};
 
 // The body of a `run: |` step, dedented to its script.
 const runStepBody = (source: string, name: string) => {
@@ -607,29 +618,19 @@ test(
 test(
   "a chained heavy run requires every affected job and carries the unaffected ones",
   () => {
-    const workflow = Bun.YAML.parse(readWorkflow("ci.yml")) as {
-      jobs: Record<
-        string,
-        {
-          steps: {
-            name?: string;
-            env?: Record<string, string>;
-            run?: string;
-          }[];
-        }
-      >;
-    };
-    const step = workflow.jobs["ci-result"]?.steps.find(
-      ({ name }) => name === "Evaluate CI outcome",
+    const workflow: unknown = Bun.YAML.parse(readWorkflow("ci.yml"));
+    const step = workflowStepByName(
+      workflowJobSteps(workflow, "ci-result"),
+      "Evaluate CI outcome",
     );
-    const evaluate = step?.run
+    const evaluate = stringField(step, "run")
       ?.split(/^ {2}full\)\n/mu)
       .at(1)
       ?.split(/^ {2}fast\)\n/mu)
       .at(0);
     expect(evaluate).toBeDefined();
-    const scopes = step?.env?.["JOB_SCOPES"];
-    const folded = step?.env?.["FOLDED_SUITES"];
+    const scopes = stringField(step["env"], "JOB_SCOPES");
+    const folded = stringField(step["env"], "FOLDED_SUITES");
     expect(scopes).toBeDefined();
     expect(folded).toBeDefined();
     const directory = mkdtempSync(path.join(tmpdir(), "release-proof-chain-"));
