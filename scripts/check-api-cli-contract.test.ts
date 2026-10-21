@@ -17,30 +17,11 @@ import {
   CLI_SUPPORTED_API_PROTOCOLS,
 } from "../packages/cli/src/generated/api-contract";
 import { loadChangesetPolicy } from "./changeset-guard";
+import { LIBRARY_PACKAGE_ORDER } from "./publish-packages";
 
-const SHARED_NPM_PACKAGES = [
-  "agent-input",
-  "mcp-kit",
-  "auth-model",
-  "ai-catalog",
-  "anonymize-chat",
-  "business-registries",
-  "chat",
-  "calculations",
-  "country-codes",
-  "conditions",
-  "docx-utils",
-  "money",
-  "ssr-kit",
-  "ssr-testkit",
-  "stable-stringify",
-  "start-runtime",
-  "template-conditions",
-  "text-normalize",
-  "time",
-  "workspace-model",
-  "workspace-ui",
-] as const;
+// Every library publish-npm.yml releases; one list, so a package added to or
+// removed from the release cannot drift out of these assertions.
+const SHARED_NPM_PACKAGES = LIBRARY_PACKAGE_ORDER;
 
 /**
  * The release gate's pathspecs live in scripts/changeset-policy.json, and the
@@ -319,7 +300,7 @@ describe("API and CLI release contract", () => {
         if (typeof target !== "string") {
           throw new TypeError(`${packageName} has a non-string export target`);
         }
-        expect(target).toMatch(/^\.\/src\/.*\.tsx?$/u);
+        expect(target).toMatch(/^\.\/src\/.*\.(?:css|tsx?)$/u);
       }
     }
   });

@@ -346,13 +346,16 @@ test("migration jobs use the CI plan selector and fail open on detector errors",
     "steps.changed-files.outputs.database_migrations_required",
   );
   const selector = plan.steps.find(({ id }) => id === "changed-files")?.run;
-  expect(selector).toContain(
-    `bash scripts/detect-security-workflow-changes.sh migrations --files "\${changed_files[@]}"`,
+  expect(selector).toBe("bun scripts/ci-plan-scope.ts");
+  // The scope module runs the same detector and widens on its failure.
+  const scope = readFileSync(
+    new URL("ci-plan-scope.ts", import.meta.url),
+    "utf-8",
   );
-  expect(selector).toContain("database_migrations_required=true");
-  expect(selector).toContain(
-    "Migration change detector failed; running checks",
-  );
+  expect(scope).toContain('"scripts/detect-security-workflow-changes.sh"');
+  expect(scope).toContain('"migrations"');
+  expect(scope).toContain('failClosedDetector("migration change"');
+  expect(scope).toContain("database_migrations_required: TRUE");
   for (const id of [
     "database-migrations-check",
     "database-migrations-apply-fresh",

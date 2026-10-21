@@ -99,7 +99,7 @@ test("the consolidated quick checks retain the support classification of the job
   ).toBe(SUPPORT);
 });
 
-test("the policy check invokes classification after a successful install", () => {
+test("the quick checks invoke classification after a successful install", () => {
   const workflow: unknown = Bun.YAML.parse(
     readFileSync(
       path.join(repositoryRoot, ".github/workflows/ci.yml"),
@@ -109,7 +109,7 @@ test("the policy check invokes classification after a successful install", () =>
   const policy = v.parse(
     v.object({
       jobs: v.object({
-        "ci-checks-policy": v.object({
+        "ci-quick-checks": v.object({
           steps: v.array(
             v.looseObject({
               name: v.optional(v.string()),
@@ -126,7 +126,7 @@ test("the policy check invokes classification after a successful install", () =>
       }),
     }),
     workflow,
-  ).jobs["ci-checks-policy"].steps;
+  ).jobs["ci-quick-checks"].steps;
   const install = policy.findIndex((step) => step.id === "install");
   const check = policy.findIndex(
     (step) =>
@@ -151,9 +151,7 @@ test("the policy check invokes classification after a successful install", () =>
   for (const index of [checkout, check]) {
     const step = policy.at(index);
     expect(step?.if).toBe(
-      githubExpression(
-        "!cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true')",
-      ),
+      "!cancelled() && steps.install.outcome == 'success' && needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.run_required != 'false' && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')",
     );
     expect(step?.env?.["CI_CHECK_KIND"]).toBe("CONTEXTUAL");
     expect(step?.if).not.toContain("static_receipts");
