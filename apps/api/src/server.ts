@@ -6,6 +6,7 @@ import {
   REQUEST_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { redisConnectionConfig } from "@stll/redis-config";
 
@@ -142,6 +143,11 @@ import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
 } from "@/api/lib/browser-origin-guard";
+import {
+  capabilityRequestGuard,
+  type MountedRoute,
+} from "@/api/lib/capability-request";
+import { loadCapabilityEndpoints } from "@/api/lib/capability-request-endpoints";
 import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-checks";
 import {
   clientAddressConfigurationWarning,
@@ -463,6 +469,7 @@ const api = new Elysia()
         SESSION_ID_HEADER,
         AUTH_SESSION_STARTUP_HEADER,
         TANSTACK_RUN_ID_HEADER,
+        CAPABILITY_REQUEST_HEADER,
       ],
       exposeHeaders: CORS_EXPOSED_HEADERS,
       maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
@@ -470,6 +477,14 @@ const api = new Elysia()
   )
   .onError((context) => answerRequestError(context))
   .onAfterHandle(async (context) => await completeRequest(context))
+  // Global, and ahead of every route, so each route below inherits the hook.
+  // The explicit return type keeps `api` out of its own inferred type.
+  .use(
+    capabilityRequestGuard({
+      mountedRoutes: (): readonly MountedRoute[] => api.routes,
+      loadEndpoints: loadCapabilityEndpoints,
+    }),
+  )
   .use(authUiRoute)
   .use(authMetadataRoute)
   .use(
