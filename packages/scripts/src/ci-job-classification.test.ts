@@ -132,7 +132,7 @@ test("the quick checks invoke classification after a successful install", () => 
   const check = policy.findIndex(
     (step) =>
       step.run ===
-      `trap 'rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"' EXIT\ncd .workflow-tooling\nbun scripts/check-ci-job-classification.ts --check\n`,
+      `trap 'rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"' EXIT\ncd .workflow-tooling\nbun scripts/check-ci-job-classification.ts\n`,
   );
   expect(install).toBeGreaterThanOrEqual(0);
   expect(check).toBeGreaterThan(install);

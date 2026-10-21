@@ -6273,11 +6273,13 @@ jobs:
           CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
         # Remove the tooling checkout so later source checks see only the
         # candidate tree. A digest that only needs a mechanical refresh is
-        # rewritten by the autofix generator; this check stays fail-closed.
+        # rewritten by the autofix generator; this check (the script's
+        # default mode) stays fail-closed. It runs git, so it cannot load the
+        # offline network preload that `--check` commands must use.
         run: |
           trap 'rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"' EXIT
           cd .workflow-tooling
-          bun scripts/check-ci-job-classification.ts --check
+          bun scripts/check-ci-job-classification.ts
 
       - name: "ci-checks-docs: Check changed Markdown consumers"
         if: >-

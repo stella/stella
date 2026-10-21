@@ -11,9 +11,23 @@ export {
 } from "../packages/scripts/src/generated-files";
 
 type GeneratorCheck =
-  | { check: readonly string[]; checkedBy?: string; unchecked?: never }
-  | { check: null; checkedBy: string; unchecked?: never }
-  | { check: null; checkedBy?: never; unchecked: string };
+  | {
+      check: readonly string[];
+      checkedBy?: string;
+      checkedWith?: never;
+      unchecked?: never;
+    }
+  | {
+      check: null;
+      checkedBy: string;
+      /**
+       * The command the `checkedBy` step runs when it is neither `write` nor
+       * its `--check` form.
+       */
+      checkedWith?: readonly string[];
+      unchecked?: never;
+    }
+  | { check: null; checkedBy?: never; checkedWith?: never; unchecked: string };
 
 export type Generator = {
   id: string;
@@ -516,6 +530,9 @@ const GENERATOR_DECLARATIONS = [
     write: ["bun", "scripts/check-ci-job-classification.ts", "--write"],
     check: null,
     checkedBy: "Check workflow job classifications",
+    // The check reads git history, so it cannot load the offline network
+    // preload every `--check` command must use; it runs as the default mode.
+    checkedWith: ["bun", "scripts/check-ci-job-classification.ts"],
     autofix: true,
     after: [],
   },

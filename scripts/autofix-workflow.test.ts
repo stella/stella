@@ -524,7 +524,7 @@ describe("changed-file autofix boundary", () => {
         return argv.join(" ");
       };
       expect(
-        [write, generator.check ?? check].some(
+        [write, generator.check ?? generator.checkedWith ?? check].some(
           (argv) => commands.has(argv.join(" ")) || commands.has(render(argv)),
         ),
         `${generator.id}: ${generator.checkedBy}`,

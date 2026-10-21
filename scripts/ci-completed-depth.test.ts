@@ -1152,6 +1152,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
           "needs.ci-plan.outputs.queue_depth": "thin",
           "needs.ci-plan.result": "success",
           "needs.pr-heavy-gate.result": "skipped",
+          "needs.generated-sources.result": "success",
           "needs.web-build.result": "success",
           "needs.heavy-web-build.result": "skipped",
           "inputs.pr_depth_only": false,
