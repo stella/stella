@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { sleep } from "@stll/concurrency/sleep";
 
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
   createChatRuntime,
   resetChatRequestStateForTests,
@@ -128,7 +129,7 @@ const openPage = ({
   initialMessages,
 }: {
   activeTurnId: typeof TURN_ID | null;
-  initialMessages: UIMessage[];
+  initialMessages: PersistedChatMessage[];
 }): Page => {
   const errors: Error[] = [];
   let reloads = 0;
