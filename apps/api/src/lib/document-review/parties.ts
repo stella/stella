@@ -144,6 +144,7 @@ export const detectReviewParties = async ({
         managedAIResidency,
         organizationId,
         admission,
+        userId: admission.userId,
         analytics: aiAnalytics,
         caching,
         serviceTier,

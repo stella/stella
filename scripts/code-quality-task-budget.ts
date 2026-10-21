@@ -274,6 +274,10 @@ type RunBudgetedCheckOptions = {
   graceMs?: number;
   env?: NodeJS.ProcessEnv;
   summary?: "tasks" | "none";
+  // Runs end at twice their budget. Only callers that exercise other
+  // behaviour with a real process opt out, so wall-clock margins on a busy
+  // machine cannot decide their outcome.
+  deadline?: "twice-budget" | "none";
 };
 
 const PROCESS_GROUP_ENV = "CODE_QUALITY_PROCESS_GROUP";
@@ -659,6 +663,7 @@ type TaskMonitorOptions = {
   pid: number | undefined;
   reportDiagnostic: (message: string) => void;
   terminate: (reason: string) => void;
+  deadline: "twice-budget" | "none";
 };
 const createTaskMonitor = ({
   budgetMs,
@@ -667,6 +672,7 @@ const createTaskMonitor = ({
   pid,
   reportDiagnostic,
   terminate,
+  deadline,
 }: TaskMonitorOptions) => {
   const telemetry = () =>
     `elapsed_ms=${Date.now() - startedAt} budget_ms=${budgetMs} stall_ms=${stallMs} max_progress_gap_ms=${watchdog.maximumGapMs()}`;
@@ -682,15 +688,19 @@ const createTaskMonitor = ({
       );
       terminate(TASK_STALL);
     },
-    deadline: {
-      ms: budgetMs * TASK_DEADLINE_BUDGETS,
-      overrun: () => {
-        reportDiagnostic(
-          `::error title=task-overrun::kind=infra class=task-overrun ${telemetry()} idle_ms=${watchdog.idleMs()}\n`,
-        );
-        terminate(TASK_OVERRUN);
-      },
-    },
+    ...(deadline === "twice-budget"
+      ? {
+          deadline: {
+            ms: budgetMs * TASK_DEADLINE_BUDGETS,
+            overrun: () => {
+              reportDiagnostic(
+                `::error title=task-overrun::kind=infra class=task-overrun ${telemetry()} idle_ms=${watchdog.idleMs()}\n`,
+              );
+              terminate(TASK_OVERRUN);
+            },
+          },
+        }
+      : {}),
   });
   let previousCpu: string | undefined;
   let progressProbeWarning = false;
@@ -793,6 +803,7 @@ export const runBudgetedCheck = async ({
   graceMs = 1000,
   env,
   summary = "tasks",
+  deadline = "twice-budget",
 }: RunBudgetedCheckOptions) => {
   const executable = command.at(0);
   if (
@@ -875,6 +886,7 @@ export const runBudgetedCheck = async ({
     pid: child.pid,
     reportDiagnostic,
     terminate,
+    deadline,
   });
   const tee = (chunk: Buffer, channel: "stdout" | "stderr") => {
     const text = chunk.toString();

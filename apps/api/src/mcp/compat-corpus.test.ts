@@ -262,11 +262,18 @@ beforeEach(() => {
   searchProviderSearchMock.mockReset();
   searchProviderSearchMock.mockResolvedValue({ hits: [], nextCursor: null });
   searchDecisionsHandlerMock.mockReset();
-  searchDecisionsHandlerMock.mockResolvedValue({
-    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-    hits: [decisionHit],
-    nextCursor: null,
-  });
+  // The corpus answers each country's request with that country's decisions.
+  searchDecisionsHandlerMock.mockImplementation(
+    async ({ body }: { body: unknown }) =>
+      await Promise.resolve({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        hits:
+          asTestRaw<{ country: string }>(body).country === decisionHit.country
+            ? [decisionHit]
+            : [],
+        nextCursor: null,
+      }),
+  );
   searchLegislationHandlerMock.mockReset();
   searchLegislationHandlerMock.mockResolvedValue({
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,

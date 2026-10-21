@@ -126,7 +126,7 @@ export const UploadDocumentDialog = ({
             )}
           {selectedMatter && (
             <QuerySuspenseBoundary
-              area="command-palette.upload-document"
+              area="command-palette-upload-document"
               errorFallback={({ reset }) => (
                 <div className="flex items-center justify-between gap-2 text-sm">
                   <span className="text-destructive">

@@ -1,6 +1,10 @@
 import { fireEvent, render } from "@testing-library/react";
 import { expect, test } from "bun:test";
 
+import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
+import { DECISION_SEARCH_MATCHES } from "@stll/api-contract/search";
+
+import { searchView } from "./model";
 import { CaseLawApp } from "./view";
 import type { CaseLawBridge } from "./view";
 
@@ -173,3 +177,35 @@ test("Arabic results render localized empty-state copy in the host direction", (
     "لم يُعثر على حكم مطابق تمامًا. ابحث في الاجتهاد القضائي بدلًا من ذلك.",
   );
 });
+
+for (const { locale, label, direction } of [
+  { locale: "en", label: "Partial match", direction: "ltr" },
+  { locale: "ar", label: "تطابق جزئي", direction: "rtl" },
+] as const) {
+  test.each(DECISION_SEARCH_MATCHES)(
+    `${locale} results disclose %s matching in the host direction`,
+    (match) => {
+      const host = fakeBridge({
+        ...baseSnapshot,
+        context: { locale },
+        input: { country: "CZE", queries: ["náhrada škody"] },
+        result: {
+          status: "ready",
+          view: searchView({
+            ...APP_SEARCH_FIXTURE,
+            results: APP_SEARCH_FIXTURE.results.map((row) => ({
+              ...row,
+              match,
+            })),
+          }),
+        },
+      });
+      const ui = render(<CaseLawApp bridge={host.bridge} />);
+      expect(ui.getByRole("main").getAttribute("dir")).toBe(direction);
+      const labels = ui.queryAllByText(label);
+      expect(labels).toHaveLength(
+        match === "some_terms" ? APP_SEARCH_FIXTURE.results.length : 0,
+      );
+    },
+  );
+}

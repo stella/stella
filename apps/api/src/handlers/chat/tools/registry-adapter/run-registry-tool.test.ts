@@ -347,7 +347,10 @@ describe("runRegistryReadTool", () => {
             versions: [{ id: "version-1" }],
           }),
         },
-        documentProcessingRuns: { findMany: async () => [] },
+        documentProcessingRuns: {
+          findFirst: async () => undefined,
+          findMany: async () => [],
+        },
         entityVersions: { findFirst: async () => ({ id: "version-1" }) },
         extractedContent: { findFirst: async () => null },
         organizationSettings: {
