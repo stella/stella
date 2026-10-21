@@ -249,8 +249,10 @@ describe("pre-commit lint", () => {
 });
 
 describe("merge commit lint scope", () => {
-  const git = (cwd: string, ...args: string[]): string => {
-    const result = Bun.spawnSync(
+  // Every git call names its own identity and reads no global or system
+  // config, so a developer machine behaves like a CI runner that has none.
+  const spawnGit = (cwd: string, args: readonly string[]) =>
+    Bun.spawnSync(
       [
         "git",
         "-c",
@@ -261,8 +263,15 @@ describe("merge commit lint scope", () => {
       ],
       {
         cwd,
+        env: {
+          ...process.env,
+          GIT_CONFIG_GLOBAL: "/dev/null",
+          GIT_CONFIG_NOSYSTEM: "1",
+        },
       },
     );
+  const git = (cwd: string, ...args: string[]): string => {
+    const result = spawnGit(cwd, args);
     if (result.exitCode !== 0) {
       throw new Error(`git ${args.join(" ")}: ${result.stderr.toString()}`);
     }
@@ -289,7 +298,9 @@ describe("merge commit lint scope", () => {
       writeFileSync(path.join(repo, "shared.ts"), "export const a = 3;\n");
       git(repo, "commit", "-q", "-am", "main");
       git(repo, "switch", "-q", "feature");
-      Bun.spawnSync(["git", "merge", "--no-commit", "main"], { cwd: repo });
+      // shared.ts conflicts, so the merge stops (exit 1) with MERGE_HEAD set.
+      expect(spawnGit(repo, ["merge", "--no-commit", "main"]).exitCode).toBe(1);
+      git(repo, "rev-parse", "--verify", "-q", "MERGE_HEAD");
       writeFileSync(path.join(repo, "shared.ts"), "export const a = 23;\n");
       git(repo, "add", "shared.ts", "complex.ts");
 

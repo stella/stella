@@ -109,7 +109,11 @@ export const workerDatabaseName = ({
   worker: number;
 }) => {
   const tail = `_w${worker}_${sha256Hex(`${template}\0${runId}`).slice(0, 12)}`;
-  const head = [...`${template}_test`];
+  // Trim whole graphemes so the byte budget never splits a character.
+  const head = Array.from(
+    new Intl.Segmenter().segment(`${template}_test`),
+    ({ segment }) => segment,
+  );
   while (
     head.length > 0 &&
     Buffer.byteLength(head.join("") + tail) > POSTGRES_IDENTIFIER_BYTES
@@ -309,8 +313,10 @@ export const runPostgresWorkers = async ({
   } finally {
     unregister();
     for (const databaseName of databaseNames.toReversed()) {
+      // Only client sessions: an owner role may not terminate autovacuum
+      // workers, and DROP DATABASE already stops those on its own.
       await admin.query(
-        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1",
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend'",
         [databaseName],
       );
       await admin.query(

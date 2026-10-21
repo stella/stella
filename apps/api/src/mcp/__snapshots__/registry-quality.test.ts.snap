@@ -6459,6 +6459,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to describe, as returned by list_capabilities (e.g. \\"time-entries.create\\")."
         }
       }
@@ -6490,6 +6491,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to invoke. Use an id list_capabilities returned."
         },
         "input": {
@@ -6549,6 +6551,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to invoke. Use an id list_capabilities returned."
         },
         "input": {
@@ -13915,6 +13918,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to invoke."
         },
         "input": {

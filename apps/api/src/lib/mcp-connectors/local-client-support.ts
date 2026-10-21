@@ -1,3 +1,6 @@
+import cliPackage from "@stll/cli/package.json" with { type: "json" };
+import mcpKitPackage from "@stll/mcp-kit/package.json" with { type: "json" };
+
 export const LOCAL_CLIENT_IDENTITY_HEADER = "x-stella-local-client";
 
 export const LOCAL_CLIENT_KINDS = ["cli", "mcp-kit", "desktop"] as const;
@@ -15,21 +18,30 @@ type ClientSupport = {
   readonly update: UpdatePath;
 };
 
-/** The server-owned support policy for every locally installed client kind. */
+// Release builds stamp the release tag over this version; local builds report
+// the committed value from apps/desktop/src-tauri/Cargo.toml, which
+// local-client-support.test.ts binds this to.
+const DESKTOP_WORKSPACE_VERSION = "0.0.1";
+
+/**
+ * The server-owned support policy for every locally installed client kind.
+ * `latest` is the client version in this tree. `minimum` never exceeds it, so
+ * the API always accepts the clients built from the same checkout.
+ */
 export const LOCAL_CLIENT_SUPPORT = {
   cli: {
-    minimum: "5.2.0",
-    latest: "5.2.0",
+    minimum: "5.1.1",
+    latest: cliPackage.version,
     update: { type: "command", command: "npm i -g @stll/cli@latest" },
   },
   "mcp-kit": {
     minimum: "0.2.2",
-    latest: "0.2.2",
+    latest: mcpKitPackage.version,
     update: { type: "command", command: "npm i @stll/mcp-kit@latest" },
   },
   desktop: {
     minimum: "0.0.1",
-    latest: "0.0.1",
+    latest: DESKTOP_WORKSPACE_VERSION,
     update: { type: "desktop_action", action: "check_for_updates" },
   },
 } as const satisfies Record<LocalClientKind, ClientSupport>;

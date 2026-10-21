@@ -19,13 +19,14 @@ import { parseChangelogMarkdown } from "../apps/landing/src/lib/changelog-markdo
 import { parseChangesetEntry } from "./changeset-entry";
 import {
   changesetVersionEnv,
-  fetchPublishedAt,
+  foldSupersededChangelog,
   MaintenanceReleaseError,
   maintenanceChangelog,
   nextPatchVersion,
   parseMaintenanceReleaseOptions,
   parseStableVersion,
   prepareMaintenanceReleaseFiles,
+  readPreviousRelease,
   readPendingChangesets,
   resolveGitHubToken,
   withFileRollback,
@@ -51,15 +52,20 @@ const respondWith = (...responses: readonly Response[]) => {
 const missing = () => new Response(null, { status: 404 });
 const tagRef = () => Response.json({ ref: "refs/tags/v1.2.3" });
 const draftRelease = { draft: true, published_at: null, tag_name: "v1.2.3" };
+const PUBLISHED = {
+  kind: "published",
+  publishedAt: "2026-02-03T04:05:06Z",
+} as const;
+const UNPROMOTED = { kind: "unpromoted" } as const;
 
 const failureMessage = async (tag: string): Promise<string> => {
-  let publishedAt: string | null;
+  let previous: unknown;
   try {
-    publishedAt = await fetchPublishedAt(tag);
+    previous = await readPreviousRelease(tag);
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   }
-  throw new Error(`Expected a failure; read ${String(publishedAt)}`);
+  throw new Error(`Expected a failure; read ${JSON.stringify(previous)}`);
 };
 
 const releaseFixture = (root: string, releaseDates: string) => {
@@ -418,13 +424,14 @@ describe("pending changesets folded into the release", () => {
 
     expect(
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
         versionPackages,
       }),
     ).toEqual({
       changelogPath: "docs/changelog/v1.2.4.md",
       changesets: ["cli.md", "empty.md", "ui.md"],
+      foldedChangelogPath: null,
       previousTag: "v1.2.3",
       version: "1.2.4",
     });
@@ -457,7 +464,7 @@ describe("pending changesets folded into the release", () => {
 
     expect(
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
         versionPackages,
       }).changesets,
@@ -483,7 +490,7 @@ describe("pending changesets folded into the release", () => {
 
     expect(() =>
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
         versionPackages,
         writeFile: (path, contents) => {
@@ -574,12 +581,13 @@ describe("maintenance release preparation", () => {
 
     expect(
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
       }),
     ).toEqual({
       changelogPath: "docs/changelog/v1.2.4.md",
       changesets: [],
+      foldedChangelogPath: null,
       previousTag: "v1.2.3",
       version: "1.2.4",
     });
@@ -629,12 +637,33 @@ describe("maintenance release preparation", () => {
     );
 
     expect(
-      prepareMaintenanceReleaseFiles({ publishedAt: null, rootDir: root }),
+      prepareMaintenanceReleaseFiles({
+        previousRelease: { kind: "unpromoted" },
+        rootDir: root,
+      }),
     ).toMatchObject({ previousTag: "v1.2.3", version: "1.2.4" });
     expect(readReleaseDates(root)).toEqual({
       "v1.2.2": "2026-01-01T00:00:00Z",
       "v1.2.3": null,
     });
+  });
+
+  test("records nothing for a superseded VERSION that was never tagged", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    const dates = { "v1.2.2": "2026-01-01T00:00:00Z" };
+    releaseFixture(root, `${JSON.stringify(dates, null, 2)}\n`);
+
+    expect(
+      prepareMaintenanceReleaseFiles({
+        previousRelease: { kind: "superseded" },
+        rootDir: root,
+      }),
+    ).toMatchObject({ previousTag: "v1.2.3", version: "1.2.4" });
+    expect(readReleaseDates(root)).toEqual(dates);
+    expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
+      "1.2.4\n",
+    );
   });
 
   test("keeps a previous tag already recorded as never promoted", () => {
@@ -643,7 +672,7 @@ describe("maintenance release preparation", () => {
     releaseFixture(root, `${JSON.stringify({ "v1.2.3": null }, null, 2)}\n`);
 
     prepareMaintenanceReleaseFiles({
-      publishedAt: "2026-02-03T04:05:06Z",
+      previousRelease: PUBLISHED,
       rootDir: root,
     });
     expect(readReleaseDates(root)).toEqual({ "v1.2.3": null });
@@ -651,22 +680,22 @@ describe("maintenance release preparation", () => {
 
   test("reads the publication date of a published release", async () => {
     respondWith(Response.json({ published_at: "2026-02-03T04:05:06Z" }));
-    expect(await fetchPublishedAt("v1.2.3")).toBe("2026-02-03T04:05:06Z");
+    expect(await readPreviousRelease("v1.2.3")).toEqual(PUBLISHED);
   });
 
   test("reads a drafted release as never promoted", async () => {
     respondWith(missing(), tagRef(), Response.json([draftRelease]));
-    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+    expect(await readPreviousRelease("v1.2.3")).toEqual(UNPROMOTED);
   });
 
   test("reads a release without a publication date as never promoted", async () => {
     respondWith(Response.json({ published_at: null }));
-    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+    expect(await readPreviousRelease("v1.2.3")).toEqual(UNPROMOTED);
   });
 
   test("reads a release omitting the publication date as never promoted", async () => {
     respondWith(Response.json({ tag_name: "v1.2.3" }));
-    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+    expect(await readPreviousRelease("v1.2.3")).toEqual(UNPROMOTED);
   });
 
   test("pages through the release listing to find the drafted release", async () => {
@@ -681,7 +710,7 @@ describe("maintenance release preparation", () => {
       Response.json(filler),
       Response.json([draftRelease]),
     );
-    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+    expect(await readPreviousRelease("v1.2.3")).toEqual(UNPROMOTED);
   });
 
   test("fails when the previous tag has no release yet", async () => {
@@ -689,9 +718,14 @@ describe("maintenance release preparation", () => {
     expect(await failureMessage("v1.2.3")).toContain("has no GitHub release");
   });
 
-  test("fails when the previous tag does not exist", async () => {
+  test("reads a VERSION that was never tagged as superseded", async () => {
     respondWith(missing(), missing());
-    expect(await failureMessage("v1.2.3")).toContain("does not exist");
+    expect(await readPreviousRelease("v1.2.3")).toEqual({ kind: "superseded" });
+  });
+
+  test("fails on an unreadable tag ref", async () => {
+    respondWith(missing(), new Response(null, { status: 502 }));
+    expect(await failureMessage("v1.2.3")).toContain("HTTP 502");
   });
 
   test("fails on a GitHub error", async () => {
@@ -729,7 +763,7 @@ describe("maintenance release preparation", () => {
 
     expect(() =>
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
       }),
     ).toThrow("already exists");
@@ -758,7 +792,7 @@ describe("maintenance release preparation", () => {
     let failed = false;
     expect(() =>
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
         writeFile: (path, contents) => {
           if (path === releaseDatesPath && !failed) {
@@ -800,7 +834,7 @@ describe("maintenance release preparation", () => {
     let caught: unknown;
     try {
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
         writeFile: (path, contents) => {
           if (path === releaseDatesPath) {
@@ -825,7 +859,7 @@ describe("maintenance release preparation", () => {
     expect(existsSync(nextChangelogPath)).toBe(false);
     expect(
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
       }),
     ).toMatchObject({ version: "1.2.4" });
@@ -857,3 +891,238 @@ describe("maintenance release preparation", () => {
     expect(existsSync(changelogPath)).toBe(false);
   });
 });
+
+describe("a superseded version's notes folded into the release", () => {
+  const MAINTENANCE =
+    "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n";
+  const bullet = (version: string, summary: string) =>
+    `- [@stll/cli](https://github.com/stella/stella/blob/v${version}/packages/cli/CHANGELOG.md): ${summary}`;
+  const withPackages = (body: string, ...entries: readonly string[]) =>
+    `${body}\n## Packages\n\n${entries.map((entry) => `${entry}\n`).join("")}`;
+  const FEATURE =
+    '# Table improvements\n\n## Faster table editing.\n\n<video controls src="https://github.com/user-attachments/assets/example"></video>\n';
+
+  const supersededFixture = (root: string, superseded: string) => {
+    releaseFixture(
+      root,
+      `${JSON.stringify({ "v1.2.2": "2026-01-01T00:00:00Z" }, null, 2)}\n`,
+    );
+    writeFileSync(nodePath.join(root, "docs/changelog/v1.2.3.md"), superseded);
+  };
+
+  const releaseGuard = (root: string, version: string) =>
+    Bun.spawnSync(
+      [
+        "bash",
+        nodePath.join(import.meta.dirname, "check-release-changelog.sh"),
+        "--version",
+        version,
+      ],
+      { cwd: root },
+    );
+
+  const changelogFiles = (root: string) =>
+    readdirSync(nodePath.join(root, "docs/changelog"));
+
+  const changelog = (root: string, tag: string) =>
+    readFileSync(nodePath.join(root, "docs/changelog", `${tag}.md`), "utf-8");
+
+  test("lists the superseded bullets first, on the release tag, once each", () => {
+    expect(
+      foldSupersededChangelog({
+        next: withPackages(
+          MAINTENANCE,
+          bullet("1.2.4", "Newer."),
+          bullet("1.2.4", "Shared."),
+        ),
+        superseded: withPackages(
+          MAINTENANCE,
+          bullet("1.2.3", "Older."),
+          bullet("1.2.3", "Shared."),
+        ),
+        supersededVersion: "1.2.3",
+        version: "1.2.4",
+      }),
+    ).toBe(
+      withPackages(
+        MAINTENANCE,
+        bullet("1.2.4", "Older."),
+        bullet("1.2.4", "Shared."),
+        bullet("1.2.4", "Newer."),
+      ),
+    );
+  });
+
+  test("keeps the heading and media of a superseded note that shows a change", () => {
+    expect(
+      foldSupersededChangelog({
+        next: withPackages(MAINTENANCE, bullet("1.2.4", "Newer.")),
+        superseded: FEATURE,
+        supersededVersion: "1.2.3",
+        version: "1.2.4",
+      }),
+    ).toBe(withPackages(FEATURE, bullet("1.2.4", "Newer.")));
+  });
+
+  test("writes no packages section when neither note has one", () => {
+    expect(
+      foldSupersededChangelog({
+        next: MAINTENANCE,
+        superseded: MAINTENANCE,
+        supersededVersion: "1.2.3",
+        version: "1.2.4",
+      }),
+    ).toBe(MAINTENANCE);
+  });
+
+  test("refuses a packages section it cannot place line by line", () => {
+    expect(() =>
+      foldSupersededChangelog({
+        next: MAINTENANCE,
+        superseded: `${withPackages(MAINTENANCE, bullet("1.2.3", "Older."))}\nA closing paragraph.\n`,
+        supersededVersion: "1.2.3",
+        version: "1.2.4",
+      }),
+    ).toThrow("cannot fold");
+  });
+
+  test("moves the superseded page into the release and removes it", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    supersededFixture(
+      root,
+      withPackages(MAINTENANCE, bullet("1.2.3", "Older.")),
+    );
+
+    expect(
+      prepareMaintenanceReleaseFiles({
+        previousRelease: { kind: "superseded" },
+        rootDir: root,
+      }),
+    ).toEqual({
+      changelogPath: "docs/changelog/v1.2.4.md",
+      changesets: [],
+      foldedChangelogPath: "docs/changelog/v1.2.3.md",
+      previousTag: "v1.2.3",
+      version: "1.2.4",
+    });
+    expect(changelogFiles(root)).toEqual(["v1.2.4.md"]);
+    expect(changelog(root, "v1.2.4")).toBe(
+      withPackages(MAINTENANCE, bullet("1.2.4", "Older.")),
+    );
+    const guard = releaseGuard(root, "1.2.4");
+    expect(guard.stderr.toString()).toBe("");
+    expect(guard.exitCode).toBe(0);
+  });
+
+  test("carries a superseded feature note through the release guard", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    supersededFixture(root, FEATURE);
+
+    prepareMaintenanceReleaseFiles({
+      previousRelease: { kind: "superseded" },
+      rootDir: root,
+    });
+    expect(changelogFiles(root)).toEqual(["v1.2.4.md"]);
+    expect(changelog(root, "v1.2.4")).toBe(FEATURE);
+    const guard = releaseGuard(root, "1.2.4");
+    expect(guard.stderr.toString()).toBe("");
+    expect(guard.exitCode).toBe(0);
+  });
+
+  test("keeps the page of a tagged previous release", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    supersededFixture(root, FEATURE);
+
+    expect(
+      prepareMaintenanceReleaseFiles({
+        previousRelease: PUBLISHED,
+        rootDir: root,
+      }),
+    ).toMatchObject({ foldedChangelogPath: null });
+    expect(changelog(root, "v1.2.3")).toBe(FEATURE);
+    expect(changelog(root, "v1.2.4")).toBe(MAINTENANCE);
+  });
+
+  test("restores the superseded page when preparation fails", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    const superseded = withPackages(MAINTENANCE, bullet("1.2.3", "Older."));
+    supersededFixture(root, superseded);
+    const versionPath = nodePath.join(root, "VERSION");
+
+    expect(() =>
+      prepareMaintenanceReleaseFiles({
+        previousRelease: { kind: "superseded" },
+        rootDir: root,
+        writeFile: (path, contents) => {
+          if (path === versionPath) {
+            throw new Error("simulated write failure");
+          }
+          writeFileSync(path, contents);
+        },
+      }),
+    ).toThrow("simulated write failure");
+
+    expect(changelogFiles(root)).toEqual(["v1.2.3.md"]);
+    expect(changelog(root, "v1.2.3")).toBe(superseded);
+  });
+
+  // The landing changelog lists every note file and requires a date for each
+  // but the newest. Whatever GitHub reports for each previous version, a run
+  // of cuts leaves no undated page behind the newest, and a bullet of a
+  // superseded version stays on exactly one page.
+  test("leaves every page but the newest dated after any run of cuts", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom("published", "superseded", "unpromoted"), {
+          maxLength: 6,
+          minLength: 1,
+        }),
+        (outcomes) => {
+          const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+          roots.push(root);
+          supersededFixture(
+            root,
+            withPackages(MAINTENANCE, bullet("1.2.3", "Original.")),
+          );
+          for (const kind of outcomes) {
+            prepareMaintenanceReleaseFiles({
+              previousRelease: kind === "published" ? PUBLISHED : { kind },
+              rootDir: root,
+            });
+          }
+
+          const dates = readReleaseDates(root);
+          if (!isReleaseDates(dates)) {
+            throw new Error("release dates must be an object");
+          }
+          const listed = changelogFiles(root)
+            .map((file) => file.replace(/\.md$/u, ""))
+            .filter((tag) => dates[tag] !== null)
+            .toSorted(
+              (left, right) =>
+                parseStableVersion(right.slice(1)).patch -
+                parseStableVersion(left.slice(1)).patch,
+            );
+          expect(listed.at(0)).toBe(`v1.2.${String(3 + outcomes.length)}`);
+          expect(
+            listed.slice(1).filter((tag) => typeof dates[tag] !== "string"),
+          ).toEqual([]);
+          const holding = changelogFiles(root).filter((file) =>
+            changelog(root, file.replace(/\.md$/u, "")).includes("Original."),
+          );
+          expect(holding).toHaveLength(1);
+        },
+      ),
+      propertyConfig({ numRuns: 50 }),
+    );
+  });
+});
+
+const isReleaseDates = (
+  value: unknown,
+): value is Partial<Record<string, string | null>> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
