@@ -282,7 +282,7 @@
   "candidate:.github/workflows/ci.yml/desktop-windows-dry-run": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "1a3ce5bb88fa1dff8a706ec8cc3853193447be49a29c87486ae1e2dbe614ba53"
+    "reviewedDigest": "877db89d70f5e79b662226432d49bdc83cef2a39660c4ad14f1d1ca46e0b197f"
   },
   "candidate:.github/workflows/ci.yml/windows-scripts": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "3ae0fa39bd8a258b12300ef371808551c0ad4ef34713bff1b0cc99b12df8052b"
+    "reviewedDigest": "515eab50b5e4080e1ac0ce1f9577f0603fd0efece0eab81954e69507ffe3b1a0"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "33379232871129bd87f9ceea02fa1125008501702f7fd5c5efce17f336e4cf3f"
+    "reviewedDigest": "7ddce88966b0c089c803c434b1b0710fc59279cb5d5d977e08714f64bcb1ca69"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -732,7 +732,7 @@
   "candidate:.github/workflows/release-desktop.yml/build": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "9e3a98ac096fd96eb23af9b6fbc843d2b4fb298440af355045deb712f18ade09"
+    "reviewedDigest": "90b7bcf9eabef8a47bf199ee3b42452069587883105b4fe7116610ceafb91acd"
   },
   "candidate:.github/workflows/release-desktop.yml/verify-production": {
     "kind": "support",
