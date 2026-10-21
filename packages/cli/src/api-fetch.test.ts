@@ -1,8 +1,10 @@
 import { afterEach, expect, mock, test } from "bun:test";
 
-import { LOCAL_CLIENT_IDENTITY_HEADER } from "@stll/api-contract/local-client-identity";
-
-import { apiFetch, CLI_LOCAL_CLIENT_IDENTITY } from "./api-fetch";
+import {
+  apiFetch,
+  CLI_LOCAL_CLIENT_IDENTITY,
+  LOCAL_CLIENT_IDENTITY_HEADER,
+} from "./api-fetch";
 
 const originalFetch = globalThis.fetch;
 

@@ -9,7 +9,7 @@ import * as v from "valibot";
 // Mirror of the server-owned minimum-policy header.
 export const CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
 export const CLI_LATEST_HEADER = "x-stella-cli-latest";
-export const updateCommandFor = (
+const updateCommandFor = (
   entrypoint: string = process.argv[1] ?? "",
 ): string =>
   entrypoint.includes("bunx") || entrypoint.includes(".bun/")
@@ -55,7 +55,7 @@ const compareVersions = (
 export type VersionNudge = {
   line?: string;
   nudgeVersion?: string;
-  unsupported?: boolean;
+  unsupported?: true;
 };
 
 /**

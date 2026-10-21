@@ -12,10 +12,12 @@ import {
   type McpOAuthScope,
   REQUEST_ID_HEADER,
 } from "@stll/api-contract";
-import { LOCAL_CLIENT_IDENTITY_HEADER } from "@stll/api-contract/local-client-identity";
 
 import { env } from "@/api/env";
-import { LOCAL_CLIENT_SUPPORT } from "@/api/lib/local-client-support";
+import {
+  LOCAL_CLIENT_IDENTITY_HEADER,
+  LOCAL_CLIENT_SUPPORT,
+} from "@/api/lib/mcp-connectors/local-client-support";
 import {
   getMcpResourceModeConfig,
   getMcpResourceScopes,

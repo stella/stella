@@ -1,18 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  LOCAL_CLIENT_IDENTITY_HEADER,
-  LOCAL_CLIENT_KINDS,
-  localClientIdentity,
-} from "@stll/api-contract/local-client-identity";
-
-import {
   CLIENT_TOO_OLD_CODE,
   clientTooOldError,
+  LOCAL_CLIENT_IDENTITY_HEADER,
+  LOCAL_CLIENT_KINDS,
   LOCAL_CLIENT_SUPPORT,
 } from "./local-client-support";
 
-const REPOSITORY_ROOT = new URL("../../../../", import.meta.url);
+const localClientIdentity = (kind: string, version: string): string =>
+  `${kind}/${version}`;
+
+const REPOSITORY_ROOT = new URL("../../../../../", import.meta.url);
 const CLIENT_IDENTITY_OWNERS = {
   cli: "packages/cli/src/api-fetch.ts",
   "mcp-kit": "packages/mcp-kit/src/local-client-identity.ts",
@@ -40,14 +39,14 @@ describe("local client support", () => {
     for (const kind of LOCAL_CLIENT_KINDS) {
       const path = CLIENT_IDENTITY_OWNERS[kind];
       const source = await Bun.file(new URL(path, REPOSITORY_ROOT)).text();
+      const marker =
+        kind === "desktop"
+          ? "LOCAL_CLIENT_IDENTITY_HEADER"
+          : ["`", kind, "/${"].join("");
       expect(
         source,
         `${path}:1 must send the ${kind} local client identity`,
-      ).toMatch(
-        kind === "desktop"
-          ? /LOCAL_CLIENT_IDENTITY_HEADER/u
-          : new RegExp(`localClientIdentity\\(\\s*"${kind}"`, "u"),
-      );
+      ).toContain(marker);
     }
   });
 

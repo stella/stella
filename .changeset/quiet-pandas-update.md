@@ -1,5 +1,5 @@
 ---
-"@stll/cli": minor
+"@stll/cli": patch
 "@stll/mcp-kit": patch
 ---
 

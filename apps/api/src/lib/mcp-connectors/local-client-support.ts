@@ -1,8 +1,7 @@
-import {
-  LOCAL_CLIENT_IDENTITY_HEADER,
-  LOCAL_CLIENT_KINDS,
-  type LocalClientKind,
-} from "@stll/api-contract/local-client-identity";
+export const LOCAL_CLIENT_IDENTITY_HEADER = "x-stella-local-client";
+
+export const LOCAL_CLIENT_KINDS = ["cli", "mcp-kit", "desktop"] as const;
+type LocalClientKind = (typeof LOCAL_CLIENT_KINDS)[number];
 
 export const CLIENT_TOO_OLD_CODE = "client_too_old";
 

@@ -1,18 +1,11 @@
-import {
-  LOCAL_CLIENT_IDENTITY_HEADER,
-  localClientIdentity,
-} from "@stll/api-contract/local-client-identity";
-
 import { CLI_VERSION } from "./generated/cli-version.js";
 
-export const CLI_LOCAL_CLIENT_IDENTITY: string = localClientIdentity(
-  "cli",
-  CLI_VERSION,
-);
+export const LOCAL_CLIENT_IDENTITY_HEADER = "x-stella-local-client";
+export const CLI_LOCAL_CLIENT_IDENTITY: string = `cli/${CLI_VERSION}`;
 
 /** Fetch an API resource with the CLI identity while preserving caller headers. */
 export const apiFetch = async (
-  input: string | URL | Request,
+  input: string | URL,
   init?: RequestInit,
 ): Promise<Response> => {
   const headers = new Headers(init?.headers);
