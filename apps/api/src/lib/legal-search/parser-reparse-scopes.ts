@@ -284,7 +284,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.HU_BHGY]: {
-    version: 18,
+    version: 19,
     scope: {
       type: "all",
       reason: "scope declarations start with this contract",
