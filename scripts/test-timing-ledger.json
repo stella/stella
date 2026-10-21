@@ -1,0 +1,1197 @@
+[
+  {
+    "id": "no-real-time-wait::apps/api/scripts/test-db-snapshot-cache.test.ts::build::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/scripts/test-lanes.test.ts::<module>::Bun.sleep",
+    "count": 4,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/scripts/test-lanes.test.ts::runBatch::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/scripts/test-lanes.test.ts::settle::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/scripts/test-process-supervisor.test.ts::<module>::Bun.sleep",
+    "count": 5,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/backfill-runtime-load-reader.db.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts::waitUntilBlocked::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/entity-feature-gate-maintenance.postgres.test.ts::<module>::Bun.sleep",
+    "count": 3,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/entity-feature-gate-maintenance.postgres.test.ts::waitUntilBlocked::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/migration-rehearsal-writer-gap.db.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/migration-rehearsal-writer-gap.db.test.ts::untilCommits::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/migration-runner.db.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/migration-runner.db.test.ts::waitUntilBlocked::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/online-ddl-contention.postgres.test.ts::wait::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/online-index-gate.postgres.test.ts::<module>::Bun.sleep",
+    "count": 3,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/online-index-gate.postgres.test.ts::wait::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/online-index-gate.postgres.test.ts::waitForPhase::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/online-repair-holds.db.test.ts::wait::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/pool-idle-timeout.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/root.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.test.ts::local::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/case-law/ingestion/background-replay.postgres.test.ts::waitForState::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/case-law/ingestion/pipeline-identity.db.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/case-law/ingestion/source-totals.db.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/chat/chat-turn-run-ownership.integration.test.ts::<module>::Bun.sleep",
+    "count": 8,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/chat/chat-turn-run-ownership.integration.test.ts::output::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/chat/send-message-turn-settlement.integration.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/chat/send-message.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.test.ts::waitForCondition::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.test.ts::waitForCondition::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/chat/tools/external-mcp-tools-discovery.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/chat/turns/cancel.integration.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/entities/desktop-edit-session-events.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/expenses/immutability.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/invoices/pdf/typst/session.test.ts::untilExited::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/legal-reader/answers/runtime.db.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/legal-reader/answers/runtime.db.test.ts::delayedDb::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/legal-reader/answers/runtime.db.test.ts::recordAuditEvent::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/legal-reader/answers/runtime.db.test.ts::runModel::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/legal-reader/answers/runtime.db.test.ts::waitUntil::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/legal-reader/answers/stream-deadline.postgres.test.ts::observeBlockedSettlement::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/legislation/work-name-backfill.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/lists/columns/create.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/rates/default-concurrency.postgres.test.ts::observeBlocking::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/search-history/import-clock.integration.test.ts::acquireClockAfter::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/uploads/presigned-upload.integration.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/workspaces/workspace-events-access.db.test.ts::awaitStreamEnd::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/case-law/analysis-failure-sweep.postgres.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/case-law/maintenance-lane.db.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/chat/run-log.db.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/chat/run-log.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/chat/tanstack-chat-runtime.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 5,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/corpus-index/core.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/db-query-counter.test.ts::buildCountingApp::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/db-query-counter.test.ts::loop::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/db/caller-async-context.postgres.test.ts::request::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/db/member-access-hold.postgres.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/db/member-access-hold.postgres.test.ts::expectTransactionToBlockClient::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/db/rls-role-posture.db.test.ts::withElevatedApplicationRole::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/db/tree-parent-guard.postgres.test.ts::observeBlocked::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/document-processing-idle-exit.test.ts::countStarted::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/document-processing-queue.test.ts::<module>::Bun.sleep",
+    "count": 5,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/email/correspondence/account-erasure-lock.postgres.test.ts::waitForWriterGate::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/email/inbound/sender.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/legal-search/browse-facets-cache.test.ts::load::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts::verifyOnceCaughtUp::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts::waitForIngestIdle::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/legal-search/corpus-index-pagination.test.ts::stub::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/legal-search/corpus-index-projection-cleanup-reissue.postgres.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/legal-search/corpus-index-projection-multipart.db.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/legal-search/corpus-index-projection-request-size.test.ts::operation::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/legal-search/corpus-index-projection-request-size.test.ts::runCycle::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/legal-search/corpus-index-projection-revision.postgres.test.ts::<module>::Bun.sleep",
+    "count": 4,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/legal-search/corpus-passage-reader.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/legal-search/corpus-storage-cancellation.test.ts::<module>::Bun.sleep",
+    "count": 3,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/lists/sanctions/monitoring-claims.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts::blockersFor::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/lists/sanctions/monitoring-opt-out.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/machine-api-keys/personal-lifecycle.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/member-removal-locks.postgres.test.ts::waitUntilBlocked::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/member-removal-locks.postgres.test.ts::waitUntilHolding::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/member-role-invariants.postgres.test.ts::waitForMembershipBlock::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/observability/event-loop-delay.test.ts::<module>::Bun.sleep",
+    "count": 4,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/observability/request-context.test.ts::backgroundLoop::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/observability/request-context.test.ts::buildReceiptApp::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/queue-worker-error-log.test.ts::<module>::Bun.sleep",
+    "count": 4,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/rate-limit/action-admission.test.ts::fireNext::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/rate-limit/action-period-budget.valkey.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/rate-limit/auth-storage.test.ts::send::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/rate-limit/mcp-read-fence.valkey.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/rate-limit/public-corpus-admission.test.ts::settled::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/rate-limit/public-corpus-concurrency.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/rate-limit/rate-limit.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/rate-limit/redis-context.cold-start.test.ts::<module>::new Promise(setTimeout)",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/redis-outage.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/redis-outage.test.ts::settle::new Promise(setTimeout)",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/review-organization/membership-fence.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/scheduler/runner.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/scheduler/tasks/case-law-provision-state-backfill.db.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/scheduler/tasks/case-law-provision-state-backfill.db.test.ts::sleep::node:timers/promises#setTimeout",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/scheduler/tasks/case-law-provision-state-backfill.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.db.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/skills/skill-package-discovery.test.ts::safeOutboundFetchBytesMock::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/sse-publish-timeout.test.ts::publishUntilConnected::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/sse.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/sse.test.ts::observeStreamRead::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/sse.test.ts::settlePendingWork::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/tanstack-ai-provider-retry.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/uploads/finalize-admission.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/usage/member-capacity.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/workflow-queue.test.ts::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/workflow/root-run-state-store.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/mcp/server.test.ts::<module>::Bun.sleep",
+    "count": 3,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/scripts/corpus-generation.postgres.test.ts::waitingOn::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/scripts/eu-completion-tick.postgres.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/scripts/eu-ecj-formex-refresh.postgres.test.ts::waitForLease::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/server-shutdown.test.ts::observeWithinDeadline::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/tests/helpers/chat-live-response.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/tests/helpers/event-loop-lag-probe.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 5,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/tests/helpers/transaction-interleaving.postgres.test.ts::run::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/collab/src/server.test.ts::<module>::Bun.sleep",
+    "count": 5,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/collab/src/server.test.ts::<module>::new Promise(setTimeout)",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/collab/src/server.test.ts::runDocker::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/collab/src/server.test.ts::runDocker::new Promise(setTimeout)",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/collab/src/server.test.ts::waitFor::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/desktop/tests/browser/clipboard-keyboard.playwright.spec.ts::waitForTooltip::new Promise(setTimeout)",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/desktop/tests/desktop-events.test.ts::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/extension/e2e/containment.spec.ts::<module>::waitForTimeout",
+    "count": 7,
+    "reason": "Predates the rule: a fixed Playwright wait; wait on a locator, response or event instead."
+  },
+  {
+    "id": "no-real-time-wait::apps/extension/e2e/containment.spec.ts::serve::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/extension/src/lib/download-guard.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/extension/src/lib/download-guard.test.ts::releaseReads::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/extension/src/lib/download-guard.test.ts::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/extension/src/lib/download-scope.test.ts::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/extension/src/lib/tab-containment.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/e2e/marketing/product-screenshots.spec.ts::<module>::waitForTimeout",
+    "count": 1,
+    "reason": "Predates the rule: a fixed Playwright wait; wait on a locator, response or event instead."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/e2e/specs/chat-composer-menu-shortcut.spec.ts::<module>::waitForTimeout",
+    "count": 1,
+    "reason": "Predates the rule: a fixed Playwright wait; wait on a locator, response or event instead."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/e2e/specs/chat-stream-error.spec.ts::<module>::waitForTimeout",
+    "count": 1,
+    "reason": "Predates the rule: a fixed Playwright wait; wait on a locator, response or event instead."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/e2e/specs/guides.spec.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/e2e/specs/heap-growth-canary.spec.ts::<module>::waitForTimeout",
+    "count": 1,
+    "reason": "Predates the rule: a fixed Playwright wait; wait on a locator, response or event instead."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/e2e/specs/heap-growth-canary.spec.ts::measureHeapUsedBytes::waitForTimeout",
+    "count": 1,
+    "reason": "Predates the rule: a fixed Playwright wait; wait on a locator, response or event instead."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/e2e/specs/heap-growth-canary.spec.ts::runNavigationCycle::waitForTimeout",
+    "count": 1,
+    "reason": "Predates the rule: a fixed Playwright wait; wait on a locator, response or event instead."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/e2e/staging/staging-smoke.spec.ts::<module>::waitForTimeout",
+    "count": 1,
+    "reason": "Predates the rule: a fixed Playwright wait; wait on a locator, response or event instead."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/action-admission-outcome.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/auth/last-used-sign-in.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/auth/password-sign-in-option.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/auth/sign-in-query-state.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/breadcrumbs/breadcrumb-query-state.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/chat/recorded-conversations.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/chat/recorded-conversations.dom.test.tsx::flush::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/chat/recorded-conversations.dom.test.tsx::performAction::@stll/concurrency/sleep#sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/chat/recorded-conversations.dom.test.tsx::pull::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/chat/tool-approval-card.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/docx/docx-edit-mode.logic.test.ts::tick::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/inspector/inspector-find.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 3,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/inspector/inspector-tabs-store.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/inspector/maximize-tab.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/legal-reader/legal-reader-ai-chat.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/provider-diagnostic-message.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/provision-version-basis.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/workspaces/table/use-table-state.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/avt/document-verification-status.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/avt/document-verifications.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/case-law/components/case-viewer/analysis/decision-inspector-outline.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis.dom.test.tsx::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/case-law/components/case-viewer/decision-citation-box.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/case-law/components/case-viewer/decision-reader-toggles.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 5,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/case-law/components/case-viewer/decision-reader-toggles.dom.test.tsx::activate::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/case-law/components/case-viewer/decision-reader-toggles.dom.test.tsx::deactivate::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/case-law/components/case-viewer/decision-text.provisions.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/case-law/components/case-viewer/provisions-cited.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 4,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/chat/chat-runtime-emit.test.ts::tick::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/chat/chat-runtime-rejoin.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/chat/chat-runtime-stop.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/chat/chat-runtime-stop.test.ts::tick::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/chat/queries.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx::commitRateWhileStreaming::@stll/concurrency/sleep#sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx::pull::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/knowledge/knowledge-audience.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/knowledge/knowledge-audience.dom.test.tsx::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/knowledge/playbook-editor/playbook-editor.logic.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/knowledge/playbook-editor/playbook-editor.logic.test.ts::cacheAfterSave::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/statutes/components/citing-decision-item.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/statutes/components/provision-citing-decisions.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/statutes/components/statute-page-search.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/time-timers/global-timer.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/hooks/use-latest-callback.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/hooks/use-sign-out.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/hooks/use-time-billing-preview.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/hooks/use-time-billing-preview.dom.test.tsx::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/lib/account/session-change-listener.test.ts::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/lib/account/session-signal.test.ts::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/lib/account/user-scoped-storage.test.ts::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/lib/errors/user-toast.test.ts::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/lib/files/attached-template-upload.test.ts::waitForAttachedTemplatePrompt::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/lib/react-query.test.ts::<module>::@stll/concurrency/sleep#sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/lib/session-cache-guard.test.ts::nextNavigation::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/lib/workspace-sse-connection.logic.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/lib/workspace-sse-connection.logic.test.ts::giveUp::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/-app-frame-transition.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/-protected-app/-components/payment-retry-banner.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.admin/-components/organization/ai-config-navigation.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.dom.test.tsx::drain::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.admin/-hooks/use-settings-mutation.dom.test.tsx::drain::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.chat/-components/chat-history-page.dom.test.tsx::<module>::node:timers/promises#setTimeout",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.chat/-components/chat-thread-page.dom.test.tsx::<module>::node:timers/promises#setTimeout",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.workspaces/$workspaceId/-components/list-source-action.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-refusal.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/auth/-components/social-recovery-panel.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/ssr-response-stream.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/business-registries/src/ares/client.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/cli/src/mcp-client.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/cli/src/mcp-client.test.ts::fetch::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/concurrency/src/index.test.ts::<module>::Bun.sleep",
+    "count": 4,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/concurrency/src/index.test.ts::operation::Bun.sleep",
+    "count": 10,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/concurrency/src/with-timeout.test.ts::<module>::Bun.sleep",
+    "count": 5,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/errors/src/detached.test.ts::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/infosoud/src/client.test.ts::waitForCondition::new Promise(setTimeout)",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/legal-atlas/src/document-stage-observer.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/property-testing/src/assert-property.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/scripts/src/dev-process-groups.test.ts::disposeTree::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/scripts/src/generation-lock.test.ts::waitFor::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/scripts/src/process-memory.test.ts::<module>::Bun.sleep",
+    "count": 3,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/scripts/src/process-shutdown.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/scripts/src/process-spawn.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/scripts/src/process-stderr.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::packages/scripts/src/windows-process-ownership.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::scripts/check-journeys.test.ts::fetch::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::scripts/check-published-versions.test.ts::fetch::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::scripts/flake-gate.test.ts::run::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::scripts/gh-retry-processes.test.ts::waitForFile::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::scripts/parser-output-diff.test.ts::<module>::Bun.sleep",
+    "count": 3,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::scripts/pre-push-affected.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  }
+]
