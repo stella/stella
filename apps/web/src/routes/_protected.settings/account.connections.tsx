@@ -21,6 +21,7 @@ import {
   AppsGroup,
   useConnectedApps,
 } from "@/routes/_protected.settings/-components/account/connections/apps-group";
+import { BrowserExtensionGroup } from "@/routes/_protected.settings/-components/account/connections/browser-extension-group";
 import { ClientSetupGroups } from "@/routes/_protected.settings/-components/account/connections/client-setup-groups";
 import {
   IntegrationsGroup,
@@ -86,6 +87,7 @@ function ConnectionsPage() {
       {!isSearching && <AssistantSetup />}
       {showIntegrations && <IntegrationsGroup integrations={integrations} />}
       {showApps && <AppsGroup apps={apps} />}
+      {!isSearching && <BrowserExtensionGroup />}
       {!isSearching && <ClientSetupGroups apiOrigin={externalApiOrigin()} />}
       {!showIntegrations && !showApps && (
         <div className="text-muted-foreground flex flex-col items-start gap-1 px-1 text-sm">

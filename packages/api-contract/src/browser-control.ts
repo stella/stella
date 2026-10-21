@@ -4,6 +4,19 @@ import * as v from "valibot";
 export const BROWSER_CONTROL_PROTOCOL_VERSION = 4 as const;
 export const BROWSER_CONTROL_TOOL_NAME = "use-browser" as const;
 
+/**
+ * The hosted stella origins the store build bridges: every extension build
+ * but `staging` trusts exactly these unless `WXT_STELLA_ORIGINS` names
+ * others, so the store listing only helps users on one of them.
+ */
+export const PRODUCTION_STELLA_ORIGINS = [
+  "https://app.stll.app",
+  "https://my.stll.app",
+] as const;
+
+export const BROWSER_EXTENSION_STORE_URL =
+  "https://chromewebstore.google.com/detail/hdjfdkknlahegaifklbelmafmpooakmi" as const;
+
 export const BROWSER_CONTROL_CONTENT_TRUST = {
   untrustedWebContent: "untrusted-web-content",
 } as const;
