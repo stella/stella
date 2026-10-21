@@ -43,7 +43,13 @@ const WINDOW_MODULES: Record<string, readonly string[]> = {
       Object.entries(feature.windowModules),
     ),
   ),
-  "src-tauri/capabilities/default.json": ["src/mainview/App.tsx"],
+  "src-tauri/capabilities/default.json": [
+    "src/mainview/App.tsx",
+    "src/mainview/PermissionsSection.tsx",
+    "src/mainview/ShortcutSetting.tsx",
+    "src/shared/ShortcutRecorder.tsx",
+    "src/shared/use-clipboard-shortcut.ts",
+  ],
 };
 
 /**
