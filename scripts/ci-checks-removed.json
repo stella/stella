@@ -106,5 +106,9 @@
   {
     "name": "Published export map guard",
     "reason": "Renamed to Workspace package export map guard; @stll/time is published from stella/tooling now, so its export check left the workspace list with the package"
+  },
+  {
+    "name": "Check workflow job classifications",
+    "reason": "Moved to ci-quick-checks unchanged in substance (same tooling checkout at the workflow revision and the same command), so it fails a pull request before the heavy suites start."
   }
 ]
