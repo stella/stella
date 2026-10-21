@@ -25,10 +25,18 @@ import {
 export const SESSION_ABSOLUTE_AGE_MS = 90 * DAY_IN_MS;
 export const SESSION_IDLE_AGE_MS = 60 * 60 * 1000;
 export const SESSION_PRIOR_TOKEN_GRACE_MS = 60 * 1000;
-const cookieCacheVersion = (session: Pick<Session, "id">) =>
-  session.id.startsWith(SYNTHETIC_SESSION_PREFIX)
-    ? Bun.randomUUIDv7()
-    : "session-lifetime-v2";
+// Synthetic and handoff sessions resolve storage on every read; ordinary snapshots retain their cache.
+const cookieCacheVersion = (
+  session: Pick<Session, "id"> & Readonly<Record<string, unknown>>,
+) => {
+  if (session.id.startsWith(SYNTHETIC_SESSION_PREFIX)) {
+    return Bun.randomUUIDv7();
+  }
+  if (typeof session["originConsentId"] === "string") {
+    return `handoff:${Bun.randomUUIDv7()}`;
+  }
+  return "session-lifetime-v2";
+};
 
 type SessionLifetimeDecision = {
   refreshMode: "fixed";

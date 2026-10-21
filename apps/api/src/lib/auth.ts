@@ -1810,11 +1810,7 @@ export const createAuth = (
       // Member and matter authorization remain live per request.
       cookieCache: {
         enabled: true,
-        // Handoff sessions resolve storage on every read; ordinary snapshots retain their cache.
-        version: (session) =>
-          typeof session["originConsentId"] === "string"
-            ? `handoff:${Bun.randomUUIDv7()}`
-            : sessionLifetime.cookieCacheVersion,
+        version: sessionLifetime.cookieCacheVersion,
         maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
       },
       // Disable Better Auth's session-freshness gate. It defaults to 1 day
