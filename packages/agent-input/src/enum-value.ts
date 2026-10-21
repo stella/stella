@@ -8,6 +8,7 @@
  * it asks and names the closest allowed value instead of guessing which.
  */
 
+import { distance } from "@stll/fuzzy-search";
 import { foldToAscii } from "@stll/text-normalize";
 
 import type { Normalized } from "./normalized";
@@ -21,43 +22,6 @@ const fold = (value: string): string => foldToAscii(value.trim()).toLowerCase();
 
 const quote = (values: readonly string[]): string =>
   values.map((value) => `"${value}"`).join(", ");
-
-/**
- * Levenshtein distance, abandoned once it exceeds `limit`. Only the "did you
- * mean" ranking reads it, so the exact distance beyond the limit is not
- * interesting and the early exit keeps a long value cheap.
- */
-const editDistanceWithin = (
-  left: string,
-  right: string,
-  limit: number,
-): number => {
-  if (Math.abs(left.length - right.length) > limit) {
-    return limit + 1;
-  }
-  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
-  for (let row = 1; row <= left.length; row += 1) {
-    const current = [row];
-    let best = row;
-    for (let column = 1; column <= right.length; column += 1) {
-      const substitution =
-        (previous[column - 1] ?? 0) +
-        (left[row - 1] === right[column - 1] ? 0 : 1);
-      const distance = Math.min(
-        substitution,
-        (previous[column] ?? 0) + 1,
-        (current[column - 1] ?? 0) + 1,
-      );
-      current.push(distance);
-      best = Math.min(best, distance);
-    }
-    if (best > limit) {
-      return limit + 1;
-    }
-    previous = current;
-  }
-  return previous[right.length] ?? limit + 1;
-};
 
 export type EnumValueOptions = {
   /** What the set is called in the ask: "The styles", "The registries". */
@@ -96,9 +60,7 @@ export const normalizeEnumValue = <TValue extends string>(
   }
 
   const closest = allowed.find(
-    (value) =>
-      editDistanceWithin(folded, fold(value), NEAR_MISS_DISTANCE) <=
-      NEAR_MISS_DISTANCE,
+    (value) => distance(folded, fold(value)) <= NEAR_MISS_DISTANCE,
   );
   return askForFix({
     input,

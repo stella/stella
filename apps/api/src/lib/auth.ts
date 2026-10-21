@@ -51,7 +51,12 @@ import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { isUuid } from "@stll/uuid-codec";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
-import { rootDb, rlsDb } from "@/api/db/root";
+import {
+  authorizeOwnerSyntheticSession,
+  bindOwnerSyntheticSessionAuthorityReader,
+  rootDb,
+  rlsDb,
+} from "@/api/db/root";
 import {
   featureEnrolments,
   userProfessionalUseAcceptances,
@@ -161,6 +166,7 @@ import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import { findOtherSessionDevices } from "@/api/lib/auth/session-history";
 import {
   createSessionLifetime,
+  decidePinnedSessionLifetime,
   SESSION_LIFETIME_FIELDS,
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
@@ -281,6 +287,13 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
+import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
+import { isSyntheticSessionPrincipal } from "@/api/lib/synthetic-principal/constants";
+import {
+  checkSyntheticPrincipalAccess,
+  syntheticPrincipalAuthConfig,
+} from "@/api/lib/synthetic-principal/policy";
+import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
 import { includes, isRecord } from "@/api/lib/type-guards";
 import {
   checkMemberAdmission,
@@ -301,6 +314,9 @@ import {
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 
 /** Access token lifetime in seconds (15 minutes). */
+const syntheticSessionAuthorityReader =
+  bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
+
 const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
@@ -1097,6 +1113,7 @@ export const createAuth = (
       capEnabled: env.SESSION_LIFETIME_CAP_ENABLED,
     }),
   });
+  const syntheticAuthHooks = createSyntheticPrincipalAuthHooks();
   const demoConfig = getDemoAccountConfig();
   const reviewConfig = getReviewAccountConfig();
   const resolveSessionAccount = async (userId: SafeId<"user">) =>
@@ -1130,6 +1147,11 @@ export const createAuth = (
   });
   const reviewSessionPolicy = createDemoSessionPolicy({
     config: reviewConfig,
+    resolveUser: resolveSessionAccount,
+    hasMembership: hasSessionMembership,
+  });
+  const syntheticSessionPolicy = createDemoSessionPolicy({
+    config: syntheticPrincipalAuthConfig,
     resolveUser: resolveSessionAccount,
     hasMembership: hasSessionMembership,
   });
@@ -1793,7 +1815,12 @@ export const createAuth = (
     emailVerification: { autoSignInAfterVerification: false },
     databaseHooks: {
       account: {
-        create: { before: reviewDatabaseHooks.accountCreateBefore },
+        create: {
+          before: async (account, ctx) => {
+            syntheticAuthHooks.accountCreateBefore(account);
+            await reviewDatabaseHooks.accountCreateBefore(account, ctx);
+          },
+        },
       },
       member: {
         create: { before: reviewDatabaseHooks.memberCreateBefore },
@@ -1803,9 +1830,17 @@ export const createAuth = (
       },
       session: {
         create: {
-          before: async (session) =>
-            (await demoSessionPolicy(session)) ??
-            (await reviewSessionPolicy(session)),
+          before: async (session) => {
+            const accountPolicy =
+              (await demoSessionPolicy(session)) ??
+              (await reviewSessionPolicy(session)) ??
+              (await syntheticSessionPolicy(session));
+            const data = accountPolicy?.data ?? session;
+            const lifetime = decidePinnedSessionLifetime(data);
+            return accountPolicy || lifetime
+              ? { data: { ...data, ...lifetime } }
+              : undefined;
+          },
         },
       },
       user: {
@@ -1814,6 +1849,7 @@ export const createAuth = (
             // Refuses a creation path that has not decided whether it shows
             // the professional-use statement, before the row is written.
             requireUserCreationOrigin(ctx?.path);
+            syntheticAuthHooks.userCreateBefore(user);
             await reviewDatabaseHooks.userCreateBefore(user, ctx);
             const data = Result.gen(function* () {
               yield* checkNewAccountEmailAllowedForCreation({
@@ -1878,6 +1914,13 @@ export const createAuth = (
       sessionLifetime.plugin,
       createAgentUserPlugin(),
       createReviewAccountUserPlugin(reviewConfig),
+      createReviewAccountPlugin({
+        id: "restricted-monitoring-account",
+        config: syntheticPrincipalAuthConfig,
+        localPasswordEnabled: true,
+        checkAccess: checkSyntheticPrincipalAccess,
+        authorizeSession: authorizeOwnerSyntheticSession,
+      }),
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
@@ -2881,6 +2924,18 @@ const readOrganizationWorkspaces = async (
   return outcome.value.workspaces;
 };
 
+const hasSyntheticSessionAuthority = async (current: {
+  session: { id: string };
+  user: { id: string };
+}) => {
+  const sessionId = current.session.id;
+  const userId = brandPersistedUserId(current.user.id);
+  return (
+    !isSyntheticSessionPrincipal({ sessionId, principalId: userId }) ||
+    (await syntheticSessionAuthorityReader({ sessionId, userId })) !== null
+  );
+};
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -2904,6 +2959,10 @@ const resolveValidateAuth = async ({
   const rawOrgId = session?.activeOrganizationId;
 
   if (!session || !user || !rawOrgId) {
+    return { ok: false as const, statusCode: 401 as const };
+  }
+
+  if (!(await hasSyntheticSessionAuthority({ session, user }))) {
     return { ok: false as const, statusCode: 401 as const };
   }
 
@@ -3074,6 +3133,7 @@ const resolveValidateAuth = async ({
         email: user.email,
       },
       session: {
+        id: session.id,
         activeOrganizationId,
       },
       getActiveWorkspaceIds,

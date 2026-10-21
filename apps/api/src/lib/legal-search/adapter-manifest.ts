@@ -1,3 +1,4 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: Known-gap declarations serve coverage reads only; manifest parser policies and parsed decision output are unchanged.
 import { panic } from "better-result";
 
@@ -698,6 +699,24 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.CZ_UOHS]: {
+    key: ADAPTER_KEYS.CZ_UOHS,
+    knownGaps: UNKNOWN_KNOWN_GAPS,
+    documentStage: "inline",
+    name: "Czech Office for the Protection of Competition Decisions",
+    publisher: "Úřad pro ochranu hospodářské soutěže",
+    publicHomeUrl:
+      "https://uohs.gov.cz/cs/informacni-centrum/sbirky-rozhodnuti.html",
+    ...ADAPTER_JURISDICTIONS.CZE,
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      type: "decision-date",
+      fromInclusive: "1991-01-01",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.EU_ECJ]: {
     key: ADAPTER_KEYS.EU_ECJ,
     knownGaps: UNKNOWN_KNOWN_GAPS,
@@ -802,6 +821,7 @@ export const SOURCE_APP_READER_TEXT = {
   [ADAPTER_KEYS.PL_KIS]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_UODO]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_UOKIK]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.CZ_UOHS]: APP_READER_TEXT.FULL,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: APP_READER_TEXT.FULL,
   ...FIXTURE_SOURCE_APP_READER_TEXT,
 } as const satisfies Record<

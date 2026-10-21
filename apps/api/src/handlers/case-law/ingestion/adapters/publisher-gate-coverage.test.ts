@@ -120,7 +120,7 @@ const expectNoUngatedCall = (entry: string, code: string): void => {
 describe("every publisher request goes through the gate", () => {
   test("the patterns match a module that reaches the network directly", () => {
     const ungated = [
-      "const r = await fetchWithTimeout(url, { timeoutMs: 1 });",
+      "const r = await fetchWithTimeout(url, { timeoutMs: 1 });", // timeout under test
       "await fetch(url);",
       "await globalThis.fetch(url);",
       'import { x } from "@stll/fetch";',
