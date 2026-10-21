@@ -310,7 +310,7 @@ const auditReport = (verified: readonly unknown[]) =>
 
 const MOVED_LATEST = {
   version: "1.2.4",
-  repository: "https://github.com/stella/moved",
+  repository: "git+https://github.com/stella/moved.git/",
 };
 
 const runRepositoryCheck = async ({

@@ -78,10 +78,11 @@ export const normalizeGitHubRepository = (
   }
   try {
     const url = new URL(value.replace(/^git\+/u, ""));
-    const repositoryPath = url.pathname
-      .replace(/\/+$/u, "")
-      .replace(/\.git$/u, "");
-    const segments = repositoryPath.split("/").filter(Boolean);
+    const segments = url.pathname.split("/").filter(Boolean);
+    const repositoryName = segments.at(-1);
+    if (repositoryName?.endsWith(".git") === true) {
+      segments[segments.length - 1] = repositoryName.slice(0, -".git".length);
+    }
     return url.hostname.toLowerCase() === "github.com" && segments.length === 2
       ? `github.com/${segments.join("/")}`.toLowerCase()
       : undefined;
