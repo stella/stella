@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -56,10 +56,17 @@ test("every inventory suppression probe distinguishes passing and failing remova
   );
   const source = "scripts/suppression-waivers.json";
   const rule = "require-search-scope/require-search-scope";
-  const fixtures = [
+  const fixtureNames = [
     { name: "first", id: "SW-0001" },
     { name: "second", id: "SW-0002" },
-  ].map(({ name, id }) => ({
+  ];
+  const fixturePaths = new Map(
+    fixtureNames.map(({ name, id }) => [
+      id,
+      path.join(directory, `${name}.ts`),
+    ]),
+  );
+  const fixtures = fixtureNames.map(({ name, id }) => ({
     id,
     kind: "temporary",
     rule,
@@ -109,7 +116,11 @@ test("every inventory suppression probe distinguishes passing and failing remova
           throw new TypeError("Suppression removal missing");
         }
         expect(changed.after).not.toContain("oxlint-disable");
-        writeFileSync(path.join(root, fixture.file), changed.after);
+        const fixturePath = fixturePaths.get(fixture.id);
+        if (!fixturePath) {
+          throw new TypeError("Suppression fixture path missing");
+        }
+        writeFileSync(fixturePath, changed.after);
         const result = Bun.spawnSync([...declared.probe.command], {
           cwd: root,
           timeout: 30_000,

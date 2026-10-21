@@ -226,6 +226,9 @@ export type CheckResult = {
   maxRssBytes: number | undefined;
 };
 
+/** A failed check's detail when it printed no failed test or error line. */
+export const exitCodeDetail = (exitCode: number) => `exit code ${exitCode}`;
+
 const launchedOutcome = (
   launched: Launched,
   check: PoolCheck,
@@ -238,7 +241,7 @@ const launchedOutcome = (
   }
   return launched.exitCode === 0
     ? { outcome: "success", detail: "passed" }
-    : { outcome: "failure", detail: `exit code ${launched.exitCode}` };
+    : { outcome: "failure", detail: exitCodeDetail(launched.exitCode) };
 };
 
 type RunChecksOptions = {
@@ -416,6 +419,21 @@ const logPath = (directory: string, index: number) =>
 
 // A nested group would end the check's own group in the job log.
 const NESTED_GROUP = /^(::(?:end)?group::|##\[(?:end)?group\])/gmu;
+// An error command printed by a check that passed comes from a fixture or a
+// refusal the check exercises, never from this run's failure; left active it
+// becomes a job annotation that failure digests then report as the cause.
+const ERROR_COMMAND = /^(::error\b)/gmu;
+
+/** A check's log as the job log shows it, so the check cannot drive the job's commands. */
+export const checkLogText = (
+  output: string,
+  outcome: CheckResult["outcome"],
+): string => {
+  const grouped = output.replace(NESTED_GROUP, " $1");
+  return outcome === "failure"
+    ? grouped
+    : grouped.replace(ERROR_COMMAND, " $1");
+};
 const escapeProperty = (value: string) =>
   value
     .replaceAll("%", "%25")
@@ -555,11 +573,39 @@ export const blockingFailures = (results: readonly CheckResult[]) =>
 const isPoolJob = (job: string): job is CheckPoolJob =>
   CHECK_POOL_JOBS.some((known) => known === job);
 
+/** Select an exact, comma-separated subset while retaining manifest order. */
+export const selectChecks = (
+  checks: readonly PoolCheck[],
+  only: string | undefined,
+): PoolCheck[] => {
+  if (only === undefined) {
+    return [...checks];
+  }
+  const requested = only.split(",").map((name) => name.trim());
+  if (requested.some((name) => name === "")) {
+    throw new CheckPoolError("--only requires one or more check names");
+  }
+  const names = new Set(checks.map(({ name }) => name));
+  const unknown = requested.filter((name) => !names.has(name));
+  if (unknown.length > 0) {
+    throw new CheckPoolError(`Unknown check name(s): ${unknown.join(", ")}`);
+  }
+  const selected = new Set(requested);
+  return checks.filter(({ name }) => selected.has(name));
+};
+
 const main = async () => {
-  const [mode, job = ""] = process.argv.slice(2);
-  if (mode !== "run" || !isPoolJob(job)) {
+  const [mode, job = "", option, value, ...extra] = process.argv.slice(2);
+  if (
+    mode !== "run" ||
+    !isPoolJob(job) ||
+    extra.length > 0 ||
+    (option !== undefined && option !== "--only") ||
+    (option === "--only" && value === undefined) ||
+    (option === undefined && value !== undefined)
+  ) {
     throw new CheckPoolError(
-      `Usage: bun scripts/ci-check-pool.ts run ${CHECK_POOL_JOBS.join("|")}`,
+      `Usage: bun scripts/ci-check-pool.ts run ${CHECK_POOL_JOBS.join("|")} [--only <name>[,<name>]]`,
     );
   }
   const root = path.resolve(import.meta.dir, "..");
@@ -584,7 +630,7 @@ const main = async () => {
     steps: json(process.env["CI_CHECK_POOL_STEPS"], "steps context"),
     inputs: json(process.env["CI_CHECK_POOL_INPUTS"], "inputs context"),
   });
-  const planned = planChecks(readCheckPool(job), context);
+  const planned = planChecks(selectChecks(readCheckPool(job), value), context);
   const override = process.env["CI_CHECK_POOL_CONCURRENCY"];
   // One check per CPU but one: four concurrent checks on a four-CPU runner
   // pushed default 5 s Bun test budgets past their limit; three did not.
@@ -625,7 +671,7 @@ const main = async () => {
           ? readFileSync(logPath(directory, index), "utf-8")
           : "";
       if (planned[index]?.status === "selected") {
-        const text = output.replace(NESTED_GROUP, " $1");
+        const text = checkLogText(output, result.outcome);
         writeOut(text === "" || text.endsWith("\n") ? text : `${text}\n`);
       }
       print("::endgroup::");

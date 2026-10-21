@@ -33,7 +33,8 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { writeFileSync } from "node:fs";
+
+import { writeRegeneratedFile } from "@stll/test-kit";
 
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json";
@@ -56,6 +57,7 @@ import {
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
+  czUohsFixture,
   czUsFixture,
   euEcjFixture,
   huBhgyFixture,
@@ -85,6 +87,7 @@ import {
   type RefusalOutcome,
 } from "@/api/tests/helpers/read-fault-drivers";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import { readPublisherText } from "./publisher-read";
 
@@ -97,6 +100,7 @@ const READ_FAULT_COVERAGE = {
   [ADAPTER_KEYS.CZ_NSS]: czNssFixture,
   [ADAPTER_KEYS.CZ_US]: czUsFixture,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
+  [ADAPTER_KEYS.CZ_UOHS]: czUohsFixture,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
   [ADAPTER_KEYS.SK_US]: skUsFixture,
   [ADAPTER_KEYS.PL_COURTS]: plCourtsFixture,
@@ -153,10 +157,12 @@ afterAll(() => {
         .toSorted()
         .map((key) => [key, recorded[key] ?? observedRows.get(key)]),
     );
-    writeFileSync(
-      BASELINE_FILE,
-      `${JSON.stringify({ comment: baseline.comment, rows }, null, 2)}\n`,
-    );
+    writeRegeneratedFile({
+      flag: "READ_FAULT_BASELINE",
+      value: "write",
+      file: BASELINE_FILE,
+      contents: `${JSON.stringify({ comment: baseline.comment, rows }, null, 2)}\n`,
+    });
   }
 });
 
@@ -327,7 +333,7 @@ test("a read through readPublisherText surfaces every fault", async () => {
     const outcome = await readPublisherText(PUBLISHER, {
       adapterKey: ADAPTER_KEYS.CZ_NSS,
       fetchStage: "listing",
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
     return outcome.type === "present"
       ? { fulltext: outcome.value }
@@ -363,7 +369,7 @@ const servedDocumentAndNotice = () => {
 const readInit = {
   adapterKey: ADAPTER_KEYS.CZ_NSS,
   fetchStage: "listing",
-  timeoutMs: 1000,
+  timeoutMs: HAPPY_PATH_TIMEOUT_MS,
 } as const;
 
 const refusalOutcomes = async (

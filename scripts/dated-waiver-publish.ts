@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { type DatedWaiver, waiverKey } from "./dated-waivers";

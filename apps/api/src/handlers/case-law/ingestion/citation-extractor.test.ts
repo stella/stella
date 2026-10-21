@@ -12,6 +12,7 @@ import type {
 import { propertyConfig } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import { czUohsDecisionIdentifiers } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
   normalizeHuBhgyRow,
   readHuBhgySearch,
@@ -34,6 +35,99 @@ import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bou
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 describe("extractCitations", () => {
+  test("an ÚOHS citation normalizes to the adapter's emitted identifier", () => {
+    const [citation] = extractCitations([
+      { index: 0, text: "ÚOHS ÚOHS-R0901/2026/VZ" },
+    ]);
+    const emitted = czUohsDecisionIdentifiers({
+      spisová_značka: "R0901/2026/VZ",
+      číslo_jednací: "90001/2026/163",
+    });
+    expect(
+      normalizeDecisionIdentifierValue(
+        citation!.identifierType,
+        citation!.citationText,
+      ),
+    ).toBe(emitted[0].value);
+  });
+  test.each([
+    ["ÚOHS ÚOHS-S123/2024/VZ", "ÚOHS-S123/2024/VZ"],
+    ["OHS ÚOHS-R456/2025/VZ", "ÚOHS-R456/2025/VZ"],
+    [
+      "Úřad pro ochranu hospodářské soutěže ÚOHS-12345/2024/500",
+      "ÚOHS-12345/2024/500",
+    ],
+    ["rozhodnutí předsedy ÚOHS-54321/2025/500/ABC", "ÚOHS-54321/2025/500/ABC"],
+    [
+      "ÚOHS ÚOHS-S123/2024/VZ-12345/2024/500/JNe",
+      "ÚOHS-S123/2024/VZ-12345/2024/500/JNe",
+    ],
+    [
+      "ÚOHS ÚOHS-R456/2025/VZ-54321/2025/310",
+      "ÚOHS-R456/2025/VZ-54321/2025/310",
+    ],
+    ["ÚOOÚ UOOU-12345/17-12", "UOOU-12345/17-12"],
+    ["Úřad pro ochranu osobních údajů UOOU-123417-12", "UOOU-123417-12"],
+  ])("extracts Czech authority decision shape %s", (text, number) => {
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toContainEqual(
+      expect.objectContaining({
+        citationText: number,
+        identifierType: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
+      }),
+    );
+  });
+
+  test.each(["ÚOHS ÚOHS-S123/2024/VZ-abc", "ÚOHS ÚOHS-S123/2024/VZ-12345"])(
+    "never cuts an unsupported continuation of %s to the proceeding number",
+    (text) => {
+      expect(
+        extractCitations([{ index: 0, text }]).map(
+          ({ citationText }) => citationText,
+        ),
+      ).not.toContain("ÚOHS-S123/2024/VZ");
+    },
+  );
+
+  test("a neighbouring number's prefix is not a Czech authority cue", () => {
+    expect(
+      extractCitations([
+        { index: 0, text: "ÚOOÚ ÚOHS-S1/2024/VZ a ÚOHS-S2/2024/VZ" },
+      ]).map(({ citationText }) => citationText),
+    ).toEqual([]);
+    expect(
+      extractCitations([
+        { index: 0, text: "UOOU-12345/17-12 a UOOU-54321/18-3" },
+      ]).map(({ citationText }) => citationText),
+    ).toEqual([]);
+  });
+
+  test("Polish authority citations carry the type their adapter stores", () => {
+    const [citation] = extractCitations([
+      { index: 0, text: "decyzja Prezesa UOKiK nr DOK-1/2020" },
+    ]);
+    const stored = plUokikDecisionIdentifiers("DOK-1/2020").at(0);
+    expect(citation?.citationText).toBe("DOK-1/2020");
+    expect(citation?.identifierType).toBe(stored?.type);
+    expect(
+      extractCitations([{ index: 0, text: "znak sprawy DKN.5131.6.2024" }]).at(
+        0,
+      )?.identifierType,
+    ).toBe(DECISION_IDENTIFIER_TYPES.CASE_NUMBER);
+  });
+
+  test("rejects Czech authority numbers without their own cue", () => {
+    expect(
+      extractCitations([{ index: 0, text: "ÚOHS-S123/2024/VZ" }]),
+    ).toHaveLength(0);
+    expect(
+      extractCitations([{ index: 0, text: "ÚOOÚ ÚOHS-S123/2024/VZ" }]),
+    ).toHaveLength(0);
+    expect(
+      extractCitations([{ index: 0, text: "ÚOHS UOOU-12345/17-12" }]),
+    ).toHaveLength(0);
+  });
+
   test("deduplicates sp. zn. and č. j. for the same case number", () => {
     const text = "Viz sp. zn. 21 Cdo 1234/2020 a také č. j. 21 Cdo 1234/2020";
     const citations = extractCitations([{ index: 0, text }]);

@@ -89,7 +89,7 @@ describe("inbound acceptance", () => {
   test("generated tokens roundtrip only through exact inbound envelope addresses", () => {
     const tokens = new Set<string>();
     for (let index = 0; index < 100; index += 1) {
-      const token = generateInboundAddressToken();
+      const token = generateInboundAddressToken({ userId: null });
       tokens.add(token);
       expect(token).toMatch(/^[a-f0-9]{64}$/u);
       for (const localPart of [token, token.toUpperCase()]) {
