@@ -197,9 +197,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
-  "packages/test-kit/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
-  "packages/time/src/**/*.ts",
   "packages/uuid-codec/src/**/*.ts",
   "packages/workspace-model/src/**/*.ts",
   "packages/workspace-ui/src/**/*.{ts,tsx}",
@@ -308,11 +306,6 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/cli/src/cli.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
-  // The test kit reports a hung wait or a refused connection to the test
-  // runner, and stands in for the platform's throwing socket API.
-  "packages/test-kit/src/network.ts",
-  "packages/test-kit/src/regenerate.ts",
-  "packages/test-kit/src/wait.ts",
   "packages/property-testing/src/index.ts",
   // wasm-bindgen reports initialization failures and traps through rejection;
   // this adapter converts that runtime contract to a typed Result.
