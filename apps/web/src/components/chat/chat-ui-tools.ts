@@ -16,6 +16,7 @@ import {
   isApprovalGatedBuiltInChatTool,
   isGrantableChatTool,
 } from "@stll/api-contract/chat-tool-grants";
+import { isOwnKey } from "@stll/api-contract/own-key";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
@@ -168,7 +169,7 @@ const TOOL_CALL_STATE_IS_RUNNING = {
 const isChatToolCallState = (
   value: string,
 ): value is ChatToolCallPart["state"] =>
-  Object.hasOwn(TOOL_CALL_STATE_IS_RUNNING, value);
+  isOwnKey(TOOL_CALL_STATE_IS_RUNNING, value);
 const USER_INPUT_TOOL_NAMES = {
   [ASK_USER_TOOL_NAME]: true,
   [REQUEST_SECRET_TOOL_NAME]: true,
@@ -373,7 +374,7 @@ export const isExternalMcpToolName = (
 export const isExternalInputChatToolName = (
   toolName: ApprovalToolName,
 ): toolName is ExternalInputToolName =>
-  toolName in EXTERNAL_INPUT_CHAT_TOOL_NAMES;
+  isOwnKey(EXTERNAL_INPUT_CHAT_TOOL_NAMES, toolName);
 
 export const getExternalMcpConnectorSlugFromToolName = (
   toolName: `mcp__${string}`,
@@ -410,7 +411,7 @@ export const isToolApprovedByGrant = (
 export const isPublicOfficialChatToolName = (
   toolName: string,
 ): toolName is PublicOfficialToolName =>
-  toolName in PUBLIC_OFFICIAL_CHAT_TOOL_NAMES;
+  isOwnKey(PUBLIC_OFFICIAL_CHAT_TOOL_NAMES, toolName);
 
 // The grant policy is shared with the API, which enforces it when storing a
 // grant and when deciding which calls skip the approval prompt.
@@ -510,7 +511,7 @@ const REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES = {
 const isRegistryWriteSummaryEligibleToolName = (
   toolName: string,
 ): toolName is keyof typeof REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES =>
-  Object.hasOwn(REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES, toolName);
+  isOwnKey(REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES, toolName);
 
 export const isRegistryWriteSummaryToolName = (toolName: string): boolean =>
   isRegistryWriteSummaryEligibleToolName(toolName) &&
@@ -523,7 +524,7 @@ export type ChatToolTitleKey =
 const isChatToolName = (
   toolName: string,
 ): toolName is keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS =>
-  toolName in CHAT_TOOL_DISPLAY_TITLE_KEYS;
+  isOwnKey(CHAT_TOOL_DISPLAY_TITLE_KEYS, toolName);
 
 export const isApprovalToolName = (
   toolName: string,
@@ -701,7 +702,10 @@ export const isRunningToolPart = (part: unknown): boolean => {
     return false;
   }
 
-  if (typeof part.name !== "string" || part.name in USER_INPUT_TOOL_NAMES) {
+  if (
+    typeof part.name !== "string" ||
+    isOwnKey(USER_INPUT_TOOL_NAMES, part.name)
+  ) {
     return false;
   }
 
@@ -829,7 +833,7 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
   return (
     "name" in part &&
     typeof part.name === "string" &&
-    part.name in FOLIO_AGENT_DOC_TOOL_NAMES
+    isOwnKey(FOLIO_AGENT_DOC_TOOL_NAMES, part.name)
   );
 };
 

@@ -3,6 +3,8 @@ import type { StreamChunk, UIMessage as StreamUIMessage } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
+import { ownEntry } from "@stll/api-contract/own-key";
+
 type SnapshotChunk = Extract<
   StreamChunk,
   { type: EventType.MESSAGES_SNAPSHOT }
@@ -190,19 +192,13 @@ const REPLACES_MESSAGES = {
   TOOL_CALL_START: false,
 } as const satisfies Record<StreamChunk["type"], boolean>;
 
-const isTabledEventType = (
-  type: string,
-): type is keyof typeof REPLACES_MESSAGES =>
-  Object.hasOwn(REPLACES_MESSAGES, type);
-
 /**
  * Whether an event of `type` replaces the page's messages. The type is read
- * off the wire, so a newer server can send one this table does not name,
- * including a name every object inherits (`toString`): only the table's own
- * entries count, and an unknown type passes through unchanged.
+ * off the wire, so a newer server can send one this table does not name: an
+ * unknown type passes through unchanged.
  */
 const replacesMessages = (type: string): boolean =>
-  isTabledEventType(type) && REPLACES_MESSAGES[type];
+  ownEntry(REPLACES_MESSAGES, type) ?? false;
 
 /**
  * `source` with every snapshot keeping the messages the page posted and the

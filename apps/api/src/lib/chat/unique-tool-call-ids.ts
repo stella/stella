@@ -2,6 +2,8 @@ import { EventType } from "@tanstack/ai";
 import type { ModelMessage, StreamChunk } from "@tanstack/ai";
 import { panic } from "better-result";
 
+import { ownEntry } from "@stll/api-contract/own-key";
+
 import { arrayOrEmpty } from "@/api/lib/array";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -138,7 +140,8 @@ export const withUniqueToolCallIds = async function* (
   const renamed = new Map<string, string>();
   const idOf = (id: string): string => renamed.get(id) ?? id;
   for await (const chunk of chunks) {
-    const carrier = CALL_ID_CARRIER[chunk.type];
+    // A type the installed SDK does not name carries no call id it knows.
+    const carrier = ownEntry(CALL_ID_CARRIER, chunk.type) ?? "none";
     switch (carrier) {
       case "starts": {
         if (chunk.type !== EventType.TOOL_CALL_START) {
