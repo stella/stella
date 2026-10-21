@@ -14,6 +14,7 @@ import {
 import { sleep } from "@stll/concurrency/sleep";
 import { installRenderProbe } from "@stll/render-probe";
 import { formatRenderReport } from "@stll/render-probe/report";
+import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
 import {
   STREAM_CHUNK_COMMIT_BUDGET,
@@ -44,6 +45,10 @@ GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 // React DOM reads its DevTools hook once, when it loads: before any import
 // below reaches it.
 const probe = installRenderProbe();
+// The page renders as it ships: compiled by the React Compiler, as the Vite
+// build compiles it. Without it the page would render far wider than in the
+// app, and a width budget would hold the wrong program.
+Bun.plugin(reactCompilerBunPlugin);
 
 const ORACLE = "chat.render.stream-commits-bounded";
 
@@ -501,8 +506,11 @@ describe(`${ORACLE}: the thread page's commit rate while each kind of chunk stre
   });
 
   for (const kind of KINDS) {
-    const { commitsPerSecond: budget, streams } =
-      STREAM_CHUNK_COMMIT_BUDGET[kind];
+    const {
+      commitsPerSecond: budget,
+      streams,
+      unchangedPropsRendersPerCommit,
+    } = STREAM_CHUNK_COMMIT_BUDGET[kind];
     test(`the thread page commits at a bounded rate while ${kind} streams`, async () => {
       const measured = await commitRateWhileStreaming(kind);
       expect(measured.unexpected).toEqual([]);
@@ -511,6 +519,10 @@ describe(`${ORACLE}: the thread page's commit rate while each kind of chunk stre
       expect(measured.renders.commits).toBeGreaterThan(0);
       const detail = `${ORACLE}: ${String(measured.commits)} commits while ${streams} streamed (${String(measured.kindEvents)} events), budget ${String(budget)}/s\n${formatRenderReport(measured.renders)}`;
       expect(measured.commitsPerSecond, detail).toBeLessThanOrEqual(budget);
+      expect(
+        measured.renders.causes.parent / measured.renders.commits,
+        `${ORACLE}: components rendered with unchanged props while ${streams} streamed, budget ${String(unchangedPropsRendersPerCommit)} a commit\n${formatRenderReport(measured.renders)}`,
+      ).toBeLessThanOrEqual(unchangedPropsRendersPerCommit);
     }, 30_000);
   }
 });
