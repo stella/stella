@@ -245,6 +245,7 @@ impl DesktopCrashMonitor {
       }
     };
     state.tracking = TrackingState::Owned { lock, mode };
+    drop(state);
     Ok(Acquisition::Complete(previous))
   }
 
@@ -264,6 +265,7 @@ impl DesktopCrashMonitor {
         if matches!(state.lifecycle, RunLifecycle::Running) {
           state.tracking = TrackingState::Unavailable;
         }
+        drop(state);
         return Ok(Acquisition::Contended);
       }
       std::thread::sleep(delay.min(remaining));
@@ -632,6 +634,7 @@ mod tests {
         Some(42),
         Some("main"),
       ));
+      drop(state);
     }
     let release = std::thread::spawn(move || {
       std::thread::sleep(Duration::from_millis(20));

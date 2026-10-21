@@ -3,8 +3,6 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { repoRelativePath } from "@stll/portable-path";
-
 import {
   RECEIVER_TYPED_AUTOFIX_RULES,
   lintCommand,
@@ -17,10 +15,11 @@ import {
 setDefaultTimeout(60_000);
 
 const ROOT = path.resolve(import.meta.dir, "..");
-// Inside the repository so oxlint.config.ts applies exactly as in the hook;
-// a directory of its own, since concurrent runs share this checkout.
-const DIRECTORY = mkdtempSync(path.join(ROOT, "scripts", "__precommit_lint_"));
-const DIR = repoRelativePath(ROOT, DIRECTORY);
+// Outside the checkout: repository checks that walk the tree run beside this
+// test, and a fixture directory appearing and vanishing under them races
+// them. The hook still runs from ROOT with oxlint.config.ts; the config
+// control below proves the listed rules reach files here.
+const DIRECTORY = mkdtempSync(path.join(tmpdir(), "precommit-lint-fixtures-"));
 
 // One fixture per rule whose autofix assumes a receiver type. Each is valid
 // code the fix would break or change.
@@ -68,16 +67,15 @@ const RECEIVER_FIXTURES: Record<
 };
 
 const fixturePath = (name: string) =>
-  path.join(DIR, `${name.replaceAll("/", "__")}.ts`);
+  path.join(DIRECTORY, `${name.replaceAll("/", "__")}.ts`);
 
 const writeFixture = (name: string, body: string): string => {
   const file = fixturePath(name);
-  // oxlint-disable-next-line no-shared-checkout-mutation/no-shared-checkout-mutation -- the name is a rule id with "/" replaced, inside this run's own mkdtemp directory
-  writeFileSync(path.join(DIRECTORY, path.basename(file)), `${body}\n`);
+  writeFileSync(file, `${body}\n`);
   return file;
 };
 
-const read = (file: string) => readFileSync(path.join(ROOT, file), "utf-8");
+const read = (file: string) => readFileSync(file, "utf-8");
 
 afterAll(() => {
   rmSync(DIRECTORY, { recursive: true, force: true });
@@ -139,6 +137,28 @@ describe("pre-commit lint", () => {
     expect(files.map(read)).toEqual(before);
   });
 
+  test("the repository config, without the hook's -A flags, rewrites every fixture", () => {
+    // Proves the config reaches the fixture directory; otherwise the
+    // untouched-code test above would pass without exercising the -A flags.
+    const fixtures = Object.entries(RECEIVER_FIXTURES).map(([rule, body]) => ({
+      rule,
+      body,
+      file: writeFixture(`config-${rule}`, body),
+    }));
+    const command = lintCommand(fixtures.map(({ file }) => file));
+    const configOnly = command.filter(
+      (part, index) => part !== "-A" && command[index - 1] !== "-A",
+    );
+    Bun.spawnSync(configOnly, {
+      cwd: ROOT,
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    for (const { rule, body, file } of fixtures) {
+      expect(read(file), rule).not.toBe(`${body}\n`);
+    }
+  });
+
   test("each listed rule, run alone, rewrites its fixture", () => {
     // Guards the list itself: a renamed rule or one that no longer autofixes
     // would make its entry dead weight, and a fixture another rule rewrites
@@ -168,7 +188,7 @@ describe("pre-commit lint", () => {
       RECEIVER_FIXTURES["unicorn/prefer-regexp-test"],
     );
     runPrecommitLint([file], { cwd: ROOT });
-    const loaded: unknown = await import(path.join(ROOT, file));
+    const loaded: unknown = await import(file);
     const matches =
       typeof loaded === "object" && loaded !== null && "matches" in loaded
         ? loaded.matches
@@ -220,7 +240,7 @@ describe("pre-commit lint", () => {
   });
 
   test("a staged deletion is not reported as changed", () => {
-    const missing = path.join(DIR, "deleted.ts");
+    const missing = path.join(DIRECTORY, "deleted.ts");
     expect(runPrecommitLint([missing], { cwd: ROOT }).changed).toEqual([]);
   });
 
@@ -249,8 +269,10 @@ describe("pre-commit lint", () => {
 });
 
 describe("merge commit lint scope", () => {
-  const git = (cwd: string, ...args: string[]): string => {
-    const result = Bun.spawnSync(
+  // Every git call names its own identity and reads no global or system
+  // config, so a developer machine behaves like a CI runner that has none.
+  const spawnGit = (cwd: string, args: readonly string[]) =>
+    Bun.spawnSync(
       [
         "git",
         "-c",
@@ -261,8 +283,15 @@ describe("merge commit lint scope", () => {
       ],
       {
         cwd,
+        env: {
+          ...process.env,
+          GIT_CONFIG_GLOBAL: "/dev/null",
+          GIT_CONFIG_NOSYSTEM: "1",
+        },
       },
     );
+  const git = (cwd: string, ...args: string[]): string => {
+    const result = spawnGit(cwd, args);
     if (result.exitCode !== 0) {
       throw new Error(`git ${args.join(" ")}: ${result.stderr.toString()}`);
     }
@@ -289,7 +318,9 @@ describe("merge commit lint scope", () => {
       writeFileSync(path.join(repo, "shared.ts"), "export const a = 3;\n");
       git(repo, "commit", "-q", "-am", "main");
       git(repo, "switch", "-q", "feature");
-      Bun.spawnSync(["git", "merge", "--no-commit", "main"], { cwd: repo });
+      // shared.ts conflicts, so the merge stops (exit 1) with MERGE_HEAD set.
+      expect(spawnGit(repo, ["merge", "--no-commit", "main"]).exitCode).toBe(1);
+      git(repo, "rev-parse", "--verify", "-q", "MERGE_HEAD");
       writeFileSync(path.join(repo, "shared.ts"), "export const a = 23;\n");
       git(repo, "add", "shared.ts", "complex.ts");
 

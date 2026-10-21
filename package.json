@@ -199,6 +199,7 @@
     "http-cache-semantics": "4.3.0",
     "ioredis": "6.0.0",
     "ip-address": "10.7.2",
+    "launch-editor": "2.14.2",
     "lucide-react": "1.41.0",
     "mailauth/joi": "18.2.9",
     "mailauth/nodemailer": "10.0.13",

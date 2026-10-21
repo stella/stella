@@ -47,6 +47,7 @@ fn register_takeover_dialog(label: &str) -> tokio::sync::oneshot::Receiver<bool>
   if let Some(ref mut map) = *guard {
     map.insert(label.to_string(), tx);
   }
+  drop(guard);
   rx
 }
 
@@ -1852,11 +1853,13 @@ impl SessionManager {
         .parent()
         .unwrap_or(Path::new("."));
 
-      (
+      let watched = (
         dir.to_path_buf(),
         session.file_name.clone(),
         session.id.clone(),
-      )
+      );
+      drop(mgr);
+      watched
     };
 
     let mgr_for_watcher = Arc::clone(manager);
@@ -2299,6 +2302,7 @@ async fn handle_filesystem_event(
       }
       ensure_open_poll_loop(session, &manager, session_id);
     }
+    drop(mgr);
   }
 
   if state_changed {
@@ -2322,8 +2326,11 @@ async fn handle_filesystem_event(
         let sid_for_timer = sid.clone();
         session.checkpoint_timer = Some(tokio::spawn(async move {
           tokio::time::sleep(CHECKPOINT_DEBOUNCE).await;
-          let mut mgr = mgr_for_timer.lock().await;
-          mgr.retry_session(&sid_for_timer).await;
+          mgr_for_timer
+            .lock()
+            .await
+            .retry_session(&sid_for_timer)
+            .await;
         }));
       }
     }
@@ -2414,6 +2421,7 @@ async fn open_poll_loop(manager: Arc<Mutex<SessionManager>>, session_id: String)
     mgr.finish_session(&session_id);
     mgr.persist_sessions().await;
     mgr.retry_session(&session_id).await;
+    drop(mgr);
     return;
   }
 }
@@ -2424,8 +2432,7 @@ pub async fn run_retry_loop(manager: Arc<Mutex<SessionManager>>) {
   let mut interval = tokio::time::interval(RETRY_INTERVAL);
   loop {
     interval.tick().await;
-    let mut mgr = manager.lock().await;
-    mgr.retry_pending_work().await;
+    manager.lock().await.retry_pending_work().await;
   }
 }
 

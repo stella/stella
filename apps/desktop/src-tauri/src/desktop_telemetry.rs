@@ -68,6 +68,8 @@ pub enum DesktopTelemetryOperation {
   ActivityRead,
   ActivitySubscribe,
   ActivityUpdate,
+  ShortcutUpdate,
+  PermissionsUpdate,
 }
 
 impl DesktopTelemetryOperation {
@@ -94,6 +96,8 @@ impl DesktopTelemetryOperation {
       Self::ActivityRead => "activityRead",
       Self::ActivitySubscribe => "activitySubscribe",
       Self::ActivityUpdate => "activityUpdate",
+      Self::ShortcutUpdate => "shortcutUpdate",
+      Self::PermissionsUpdate => "permissionsUpdate",
     }
   }
 }
@@ -562,6 +566,9 @@ impl DesktopTelemetry {
     if !enabled && let Ok(mut reported) = self.reported.lock() {
       reported.clear();
     }
+    // Released only once the crash monitor and the reported set follow the
+    // new preference, so no request observes a half-applied change.
+    drop(gate);
     Ok(enabled)
   }
 
