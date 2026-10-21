@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { censusOnlineDdlSource } from "./online-ddl-lock-census";
+import {
+  censusOnlineDdlSource,
+  TEMPLATE_INTERPOLATION_ALLOWLIST,
+} from "./online-ddl-lock-census";
 
 const ownerSource = readFileSync(
   path.resolve(import.meta.dir, "../apps/api/src/db/online-ddl.ts"),
@@ -10,6 +13,26 @@ const ownerSource = readFileSync(
 );
 
 describe("online DDL lock census", () => {
+  test("the interpolation allowlist remains explicit and counted", () => {
+    expect(
+      TEMPLATE_INTERPOLATION_ALLOWLIST.map(({ shape, reason }) => ({
+        shape,
+        reason,
+      })),
+    ).toEqual([
+      {
+        shape: "quoteIdentifier(...) call",
+        reason:
+          "quoteIdentifier returns one validated, double-quoted PostgreSQL identifier.",
+      },
+      {
+        shape: "conditional with literal-only branches",
+        reason:
+          "Literal branches are enumerated independently and cannot inject uninspected SQL.",
+      },
+    ]);
+  });
+
   test("the online DDL owner classifies each gated SQL variant", () => {
     expect(censusOnlineDdlSource(ownerSource)).toEqual([]);
   });
@@ -40,6 +63,30 @@ describe("online DDL lock census", () => {
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /lockTaking SQL argument .* unresolved SQL variant/iu,
     );
+  });
+
+  test("a template substitution is unresolved even when its value could contain SQL", () => {
+    const source = `${ownerSource}\nconst fixture = lockTaking("probe", \`ALTER TABLE probe ADD COLUMN added text \${suppliedSql}\`);`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /lockTaking SQL argument .* unresolved SQL variant/iu,
+    );
+  });
+
+  test("a raw string interpolation is unresolved", () => {
+    const source = `${ownerSource}\nconst rawSql = "NOT NULL; DROP TABLE probe";\nconst fixture = lockTaking("probe", \`ALTER TABLE probe ADD COLUMN added text \${rawSql}\`);`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /lockTaking SQL argument .* unresolved SQL variant/iu,
+    );
+  });
+
+  test("the quoted-identifier interpolation allowance resolves", () => {
+    const source = `${ownerSource}\nconst fixture = lockTaking("probe", \`ANALYZE public.\${quoteIdentifier(tableName)}\`);`;
+    expect(censusOnlineDdlSource(source)).toEqual([]);
+  });
+
+  test("the literal-branch interpolation allowance resolves every branch", () => {
+    const source = `${ownerSource}\nconst fixture = lockTaking("probe", \`DROP INDEX CONCURRENTLY \${ifExists ? "IF EXISTS " : ""}public.probe_idx\`);`;
+    expect(censusOnlineDdlSource(source)).toEqual([]);
   });
 
   test("a fully literal lock-taking conditional classifies every branch", () => {

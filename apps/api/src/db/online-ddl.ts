@@ -53,11 +53,13 @@ const lockTaking = (tableName: string, text: string): LockTakingStatement => ({
 /** An index declared for the online phase, with its own build statement. */
 export type OnlineIndexDeclaration = RequiredMigrationIndex & {
   /**
-   * The declared build, read only by `createIndexConcurrently`. Without it,
-   * the build renders from `definitionBody`, PostgreSQL's own definition.
+   * The declared build, read only by `createIndexConcurrently`. An index
+   * without one belongs to a schema migration rather than the online phase.
    */
   createSql?: string;
 };
+
+type OnlineBuildDeclaration = OnlineIndexDeclaration & { createSql: string };
 
 type IndexTarget = Pick<RequiredMigrationIndex, "name" | "tableName">;
 
@@ -65,26 +67,18 @@ type IndexTarget = Pick<RequiredMigrationIndex, "name" | "tableName">;
  * Whether the online phase may build the index. One without a declared build
  * belongs to a schema migration, so its absence is a broken deploy.
  */
-export const declaresOnlineBuild = ({
-  createSql,
-}: OnlineIndexDeclaration): boolean => createSql !== undefined;
+export const declaresOnlineBuild = (
+  index: OnlineIndexDeclaration,
+): index is OnlineBuildDeclaration => index.createSql !== undefined;
 
 const createSqlTarget =
   /^CREATE (?:UNIQUE )?INDEX CONCURRENTLY "?([A-Za-z_][A-Za-z0-9_]*)"? ON public\."?([A-Za-z_][A-Za-z0-9_]*)"? /u;
 
 export const createIndexConcurrently = ({
   createSql,
-  definitionBody,
-  isUnique,
   name,
   tableName,
-}: OnlineIndexDeclaration): LockTakingStatement => {
-  if (createSql === undefined) {
-    return lockTaking(
-      tableName,
-      `CREATE ${isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(name)} ${definitionBody}`,
-    );
-  }
+}: OnlineBuildDeclaration): LockTakingStatement => {
   // The gate watches the declared table, so the build must be on it.
   const built = createSqlTarget.exec(createSql);
   if (built?.[1] !== name || built[2] !== tableName) {

@@ -12,8 +12,58 @@ const IDENTIFIER_PLACEHOLDER = '"__online_ddl_identifier__"';
 
 type SqlVariant = { text: string; node: ts.Node };
 type ExpandedSqlVariant = { text: string; resolved: boolean };
+type TemplateInterpolationAllowance = {
+  shape: string;
+  reason: string;
+  expand: (node: ts.Expression) => ExpandedSqlVariant[] | undefined;
+};
 
 const isSql = (text: string): boolean => SQL_START.test(text);
+
+export const TEMPLATE_INTERPOLATION_ALLOWLIST: TemplateInterpolationAllowance[] =
+  [
+    {
+      shape: "quoteIdentifier(...) call",
+      reason:
+        "quoteIdentifier returns one validated, double-quoted PostgreSQL identifier.",
+      expand: (node) =>
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "quoteIdentifier" &&
+        node.arguments.length === 1
+          ? [{ text: IDENTIFIER_PLACEHOLDER, resolved: true }]
+          : undefined,
+    },
+    {
+      shape: "conditional with literal-only branches",
+      reason:
+        "Literal branches are enumerated independently and cannot inject uninspected SQL.",
+      expand: (node) =>
+        ts.isConditionalExpression(node) &&
+        ts.isStringLiteralLike(node.whenTrue) &&
+        ts.isStringLiteralLike(node.whenFalse)
+          ? [
+              { text: node.whenTrue.text, resolved: true },
+              { text: node.whenFalse.text, resolved: true },
+            ]
+          : undefined,
+    },
+  ];
+
+const expandTemplateInterpolation = (
+  node: ts.Expression,
+): ExpandedSqlVariant[] => {
+  const expression = ts.isParenthesizedExpression(node)
+    ? node.expression
+    : node;
+  for (const allowance of TEMPLATE_INTERPOLATION_ALLOWLIST) {
+    const variants = allowance.expand(expression);
+    if (variants) {
+      return variants;
+    }
+  }
+  return [{ text: IDENTIFIER_PLACEHOLDER, resolved: false }];
+};
 
 const expand = (node: ts.Expression): ExpandedSqlVariant[] => {
   if (ts.isParenthesizedExpression(node)) {
@@ -31,13 +81,7 @@ const expand = (node: ts.Expression): ExpandedSqlVariant[] => {
   if (ts.isTemplateExpression(node)) {
     let variants = [{ text: node.head.text, resolved: true }];
     for (const span of node.templateSpans) {
-      // Template substitutions in this owner are identifier/value slots whose
-      // surrounding literal fixes the SQL grammar. Keep representing those
-      // slots opaquely while requiring the command text itself to be literal.
-      const values = expand(span.expression).map((variant) => ({
-        text: variant.text,
-        resolved: true,
-      }));
+      const values = expandTemplateInterpolation(span.expression);
       variants = variants.flatMap((prefix) =>
         values.map(({ text, resolved }) => ({
           text: `${prefix.text}${text}${span.literal.text}`,
