@@ -203,9 +203,6 @@ fn retire_copy(
       if !source.starts_with(edit_root) {
         return Err("document copy is outside the editing directory".into());
       }
-      if editor_state != EditorState::Closed {
-        return Ok(copy.clone());
-      }
       let parent = destination
         .parent()
         .ok_or("invalid document recovery directory")?;
