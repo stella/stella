@@ -14,12 +14,15 @@ describe("landing row icon", () => {
           <CourtBadge abbreviation={abbreviation} weight="outline" />
         </LandingRowIcon>,
       );
+      const slotClasses = /^<span class="([^"]+)"/u
+        .exec(markup)?.[1]
+        ?.split(" ");
       expect(markup).toContain(`>${abbreviation}</span>`);
       // A fixed square (`size-4`) is narrower than the chip; the slot may
       // only set a minimum width.
-      expect(markup).toContain("min-w-4");
-      expect(markup).not.toContain("size-4");
-      expect(markup).not.toMatch(/\bw-4\b/u);
+      expect(slotClasses).toContain("min-w-4");
+      expect(slotClasses).not.toContain("size-4");
+      expect(slotClasses).not.toContain("w-4");
     },
   );
 });
