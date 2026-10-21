@@ -3,10 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { cents } from "@stll/money";
 
 import { INVOICE_ATTACHMENT } from "@/api/db/schema";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 
 import {
   ATTACHED_ENTRY_LINE_VAT,
+  attachedEntryLineDrafts,
   hoursQuantity,
   readInvoiceDocumentLines,
   readInvoiceTotals,
@@ -58,6 +59,50 @@ test("legacy invoice totals and entry line drafts use the same no-charge disposi
       expenses: [],
     }).unwrap(),
   ).toMatchObject({ netAmountMinor: 10_000, grossAmountMinor: 10_000 });
+});
+
+describe("attachedEntryLineDrafts", () => {
+  const entry = (id: string, dateWorked: string) => ({
+    id: toSafeId<"timeEntry">(id),
+    dateWorked,
+    billedMinutes: 60,
+    rateAtEntry: cents(10_000),
+    narrative: id,
+    invoiceNarrative: null,
+    noCharge: false,
+  });
+  const expense = (id: string, dateIncurred: string) => ({
+    id: toSafeId<"expense">(id),
+    dateIncurred,
+    amount: cents(5000),
+    markup: 0,
+    description: id,
+    invoiceDescription: null,
+  });
+
+  test("orders time entries then expenses by date, ties by id, whatever the input order", () => {
+    const drafts = attachedEntryLineDrafts({
+      timeEntryRows: [
+        entry("00000000-0000-7000-8000-000000000003", "2025-02-12"),
+        entry("00000000-0000-7000-8000-000000000002", "2025-02-03"),
+        entry("00000000-0000-7000-8000-000000000004", "2024-12-31"),
+        entry("00000000-0000-7000-8000-000000000001", "2025-02-03"),
+      ],
+      expenseRows: [
+        expense("00000000-0000-7000-8000-00000000000b", "2025-02-10"),
+        expense("00000000-0000-7000-8000-00000000000a", "2025-01-15"),
+      ],
+      vat: ATTACHED_ENTRY_LINE_VAT,
+    });
+    expect(drafts.map(({ description }) => description)).toEqual([
+      "00000000-0000-7000-8000-000000000004",
+      "00000000-0000-7000-8000-000000000001",
+      "00000000-0000-7000-8000-000000000002",
+      "00000000-0000-7000-8000-000000000003",
+      "00000000-0000-7000-8000-00000000000a",
+      "00000000-0000-7000-8000-00000000000b",
+    ]);
+  });
 });
 
 const storedLine = {

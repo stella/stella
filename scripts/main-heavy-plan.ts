@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 
+import { prDepthJobs } from "./ci-pr-jobs";
+
+export { prDepthJobs } from "./ci-pr-jobs";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -72,44 +76,6 @@ export const mainHeavyJobs = (workflow: unknown) => {
     }
   }
   return gated.filter((job) => !thin.includes(job));
-};
-
-export const prDepthJobs = (workflow: unknown) => {
-  const jobs = record(record(workflow)["jobs"]);
-  const result = record(jobs["ci-result"]);
-  const steps = result["steps"];
-  if (!Array.isArray(steps)) {
-    panic("Expected ci-result steps");
-  }
-  const outcome = steps.find(
-    (step: unknown) => record(step)["name"] === "Evaluate CI outcome",
-  );
-  const env = record(outcome)["env"];
-  const required = record(env)["FAST_REQUIRED"];
-  if (typeof required !== "string") {
-    panic("Expected FAST_REQUIRED JSON");
-  }
-  const fastRequired: unknown = JSON.parse(required);
-  if (
-    !Array.isArray(fastRequired) ||
-    !fastRequired.every((job) => typeof job === "string")
-  ) {
-    panic("Expected FAST_REQUIRED job names");
-  }
-  const checks = fastRequired.filter(
-    (job) => job.startsWith("ci-checks-") || job.startsWith("code-quality-"),
-  );
-  // The checks' producers (generated sources) run with them.
-  const producers = checks.flatMap((job) => {
-    const needs: unknown = record(jobs[job])["needs"];
-    if (typeof needs === "string") {
-      return [needs];
-    }
-    return Array.isArray(needs) ? needs : [];
-  });
-  return [...new Set([...checks, ...producers])].filter(
-    (job): job is string => typeof job === "string" && job !== "ci-plan",
-  );
 };
 
 // These jobs cannot certify the queued tree: they either consume a different

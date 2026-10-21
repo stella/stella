@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The API tests use an independent strict XML parser as a test-only oracle for the shared scanner."
+}

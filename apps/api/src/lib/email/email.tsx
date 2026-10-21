@@ -16,6 +16,7 @@ import { subject as reportExportStatusSubject } from "@stll/transactional/emails
 
 import { env } from "@/api/env";
 import type { SupportedLang } from "@/api/lib/locale";
+import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import { isEmailTransportConfigComplete } from "./config";
@@ -80,9 +81,18 @@ const resolveTransport = (): EmailTransport => {
 };
 
 let cachedTransport: EmailTransport | undefined;
+let deliveryTransport: EmailTransport | undefined;
 
 const getTransport = (): EmailTransport => {
-  cachedTransport ??= resolveTransport();
+  cachedTransport ??= {
+    send: async (message) => {
+      if (isSyntheticPrincipal({ email: message.to })) {
+        return;
+      }
+      deliveryTransport ??= resolveTransport();
+      await deliveryTransport.send(message);
+    },
+  };
   return cachedTransport;
 };
 

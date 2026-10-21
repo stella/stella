@@ -15,8 +15,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { getS3 } from "@/api/lib/s3";
+import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const OCR_EXPORT_STORAGE_READ_TIMEOUT_MS = 30 * 1000;
@@ -25,10 +27,13 @@ export const OCR_EXPORT_FORMATS = ["searchable-pdf", "text"] as const;
 type OcrExportFormat = (typeof OCR_EXPORT_FORMATS)[number];
 
 type ReadOcrExportOptions = {
+  userId: SafeId<"user">;
+  source: SignedDownloadSource;
   fieldId: SafeId<"field">;
   format: OcrExportFormat;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
 };
@@ -42,8 +47,11 @@ const replaceExtension = (fileName: string, suffix: string) => {
 export const readOcrExport = async ({
   fieldId,
   format,
+  userId,
+  source,
   organizationId,
   recordAuditEvent,
+  readSessionAuthority,
   scopedDb,
   workspaceId,
 }: ReadOcrExportOptions) => {
@@ -113,10 +121,13 @@ export const readOcrExport = async ({
     const url = await scopedDb(
       async (tx) =>
         await auditedPresignDownload({
+          readSessionAuthority,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: row.entityId,
+          userId,
+          source,
           s3Key,
           expiresInSeconds: OCR_EXPORT_URL_EXPIRY_SECONDS,
           fileName,

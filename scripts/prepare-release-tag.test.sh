@@ -220,16 +220,17 @@ git checkout -q --detach "$main"
 output=$(bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE")
 [[ "$output" == "$(printf 'sha=%s\nvalue=1.2.3\ntag=v1.2.3' "$TEST_CANDIDATE")" ]]
 [[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
-echo 'ok   explicit candidate and newest verified default'
-# A newer commit verified on staging but not heavy-green is passed over.
-export TEST_LATER="$main" TEST_LATER_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
+echo 'ok   explicit candidate and version commit default'
+# Even a fully green later main commit cannot replace the version commit.
+export TEST_LATER="$main" TEST_LATER_STATUSES='[[{"context":"staging/verified","state":"success"},{"context":"main/heavy","state":"success"},{"context":"main/pr-depth","state":"success"}]]'
+expect_failure 'green later main commit' "version commit $TEST_CANDIDATE" "$main"
 [[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
-export TEST_LATER_STATUSES='[[{"context":"main/heavy","state":"success"}]]'
-[[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
-export TEST_LATER_STATUSES='[[{"context":"staging/verified","state":"success"},{"context":"main/heavy","state":"success"}]]'
-[[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
+# Selection never falls back to another green commit when the version commit is red.
+export TEST_STATUSES='[[{"context":"staging/verified","state":"failure"}]]'
+expect_failure 'default version commit is red' 'RELEASE_STATUS_NOT_GREEN' ''
+export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
 unset TEST_LATER TEST_LATER_STATUSES
-echo 'ok   default skips a newer commit missing either status'
+echo 'ok   only the version commit can be selected, regardless of later gates'
 # Execute the real workflow tag block against a local remote; HEAD is newer.
 git init --bare -q "$fixture/remote"
 export TEST_REMOTE="$fixture/remote"
@@ -338,6 +339,8 @@ fi
 echo 'ok   push re-checks the history behind the receipt'
 printf '%s\n' '---' '"@stll/example": patch' '---' 'Pending note' > .changeset/pending.md
 git add .changeset/pending.md
+printf '1.2.4\n' > VERSION
+git add VERSION
 git commit -qm changeset
 TEST_CANDIDATE=$(git rev-parse HEAD)
 git update-ref refs/remotes/origin/main HEAD

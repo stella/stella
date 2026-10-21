@@ -80,12 +80,27 @@ export const browserSuiteInputs = (source: string): readonly string[] => {
   return [...inputs];
 };
 
-type ScopeOptions = { changed: readonly string[]; root?: string };
+type ScopeOptions = {
+  changed: readonly string[];
+  root?: string | undefined;
+};
+// Parsing the workflow dominates; keyed by its text, an edited workflow is
+// parsed again while repeated plans over one revision parse it once.
+const parsedInputs = new Map<string, readonly string[]>();
+const workflowInputs = (source: string) => {
+  const cached = parsedInputs.get(source);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const inputs = browserSuiteInputs(source);
+  parsedInputs.set(source, inputs);
+  return inputs;
+};
 export const ciBrowserScopePredicate = ({
   root = ROOT,
-}: { root?: string } = {}) => {
+}: { root?: string | undefined } = {}) => {
   try {
-    const inputs = browserSuiteInputs(
+    const inputs = workflowInputs(
       readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf-8"),
     );
     return (changed: readonly string[]): boolean =>
