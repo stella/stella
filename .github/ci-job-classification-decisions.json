@@ -937,6 +937,6 @@
   "candidate:.github/workflows/queue-admission.yml/admission": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "9473bd5eb96761e914b6ce43bda66581ac2ea2e1267960b3c1d3efcaa453f274"
+    "reviewedDigest": "d7314118f0938bde6fef2c4bbcdad6f3638726507a776fe89b86537b858188f9"
   }
 }
