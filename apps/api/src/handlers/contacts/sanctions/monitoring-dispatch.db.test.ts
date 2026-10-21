@@ -246,19 +246,11 @@ test("firm monitoring changes require the firm-settings grant over HTTP and a pe
           `${transport}/${role}/${mode}: ${JSON.stringify(response.payload)}`,
         ).toBe(allowed);
         if (!allowed) {
-          if (transport === "http") {
-            expect(response.status).toBe(403);
-          } else {
-            expect(response.payload).toMatchObject({
-              error: { code: "permission_denied" },
-            });
-          }
+          expect(response.status).toBe(403);
           expect(await firmState(organizationId)).toEqual(before);
           continue;
         }
-        expect(response.payload).toMatchObject(
-          transport === "http" ? { mode } : { result: { mode } },
-        );
+        expect(response.payload).toMatchObject({ mode });
         const after = await firmState(organizationId);
         expect(after.settings).toHaveLength(1);
         expect(after.settings.at(0)?.sanctionsMonitoringMode).toBe(mode);
