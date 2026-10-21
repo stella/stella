@@ -788,10 +788,15 @@ const withoutLocalVerification = (step: Step): Step => {
   return original;
 };
 
-// Steps that chose their base from the merge-group event now read the
-// planner's comparison base (the target branch for a merge group). Mapping the
-// merge-base form keeps every other field of those checks compared exactly.
+// Steps that chose their base from the pull request or merge-group event now
+// read the planner's comparison base (the tip the pull request merged onto, or
+// the target branch for a merge group). Mapping the merge-base form keeps every
+// other field of those checks compared exactly.
 const TARGET_BASE_REWRITES = new Map([
+  [
+    `\${{ github.event.pull_request.base.sha }}`,
+    `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+  ],
   [
     `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}`,
     `\${{ needs.ci-plan.outputs.target_base_sha }}`,
