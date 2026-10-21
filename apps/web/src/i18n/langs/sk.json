@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Všetky tvrdenia vyžadujúce úsudok boli vybavené.</strong> {count, plural, one {Zostávajúce # bežné posúdenie nevyžaduje samostatnú kontrolu.} few {Zostávajúce # bežné posúdenia nevyžadujú samostatnú kontrolu.} many {Zostávajúcich # bežných posúdení nevyžaduje samostatnú kontrolu.} other {Zostávajúceho # bežného posúdenia nevyžaduje samostatnú kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrdenie vyžaduje} few {# tvrdenia vyžadujú} many {# tvrdení vyžaduje} other {# tvrdenia vyžaduje}} váš úsudok</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zostávajúce # je bežné a nevyžaduje samostatné schválenie.} few {Zostávajúce # sú bežné a nevyžadujú samostatné schválenie.} many {Zostávajúcich # je bežných a nevyžaduje samostatné schválenie.} other {Zostávajúceho # bežného posúdenia netreba samostatne schvaľovať.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, skontrolované} disputed {, spochybnené} other {}})",
+      "documentView": {
+        "label": "Zobrazenie dokumentu",
+        "original": "Originál",
+        "reading": "Text na čítanie"
+      },
+      "notLocated": "{count, plural, one {# tvrdenie sa v origináli nepodarilo nájsť} few {# tvrdenia sa v origináli nepodarilo nájsť} many {# tvrdenia sa v origináli nepodarilo nájsť} other {# tvrdení sa v origináli nepodarilo nájsť}}",
       "selectClaim": "Vyberte tvrdenie a pozrite si súvisiace záznamy.",
       "showQueue": "Zobraziť poradie",
       "stats": {
@@ -1009,6 +1015,9 @@
       "saved": "Do spisu {matter} {count, plural, one {bolo uložené # rozhodnutie} few {boli uložené # rozhodnutia} other {bolo uložených # rozhodnutí}}"
     },
     "newestDecisions": "Najnovšie rozhodnutia",
+    "noResults": {
+      "hint": "Skúste iné slová, vylepšite dopyt pomocou AI alebo sa opýtajte v chate."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Ľudské"
@@ -1081,6 +1090,10 @@
         "medium": "Stredný",
         "short": "Krátky"
       }
+    },
+    "rewritten": {
+      "line": "Pre <bdi>{original}</bdi> nič presne nezodpovedá; zobrazujeme výsledky pre <bdi>{query}</bdi>",
+      "searchOriginal": "Hľadať moje pôvodné slová"
     },
     "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie}} túto spisovú značku. Vyberte súd.",
     "searchLabel": "Hľadať v judikatúre",
@@ -1601,6 +1614,9 @@
         "private": "Vaše AI zručnosti",
         "team": "Tímové AI zručnosti"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Tiež konzultované ({count, number})"
     },
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",
@@ -4240,6 +4256,10 @@
     "archivedEmpty": "Žiadne archivované pamäte.",
     "archivedToast": "Pamäť bola archivovaná",
     "createdToast": "Uložené do pamäte",
+    "deleteConfirmation": "Na potvrdenie napíšte {confirmation}",
+    "deleteDescription": "Týmto túto pamäť natrvalo odstránite. Túto akciu nemožno vrátiť späť.",
+    "deleteTitle": "Odstrániť pamäť?",
+    "deletedToast": "Pamäť bola odstránená",
     "empty": "Zatiaľ žiadna pamäť.",
     "kinds": {
       "decision": "Rozhodnutie",

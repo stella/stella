@@ -51,7 +51,7 @@
     "@stll/fuzzy-search": "catalog:",
     "@stll/template-conditions": "workspace:^",
     "@stll/text-normalize": "workspace:^",
-    "@stll/time": "workspace:^",
+    "@stll/time": "0.4.1",
     "better-result": "catalog:"
   },
   "devDependencies": {

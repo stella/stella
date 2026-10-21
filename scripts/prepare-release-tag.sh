@@ -58,21 +58,10 @@ all_success() {
 }
 
 if [[ -z "$sha" ]]; then
-  candidates=$(git rev-list --first-parent origin/main)
-  while IFS= read -r candidate; do
-    selected_proof=$(bash "$tree_proof_verifier" --find-proof "$repo" "$candidate")
-    selected_proof="${selected_proof:-$candidate}"
-    states=$(release_states "$selected_proof" "$candidate")
-    if all_success "$states"; then
-      sha="$candidate"
-      proof="$selected_proof"
-      break
-    fi
-  done <<< "$candidates"
-  [[ -n "$sha" ]] || { echo "::error::No commit on main carries $gates_message" >&2; exit 1; }
+  sha=$(bash "$script_dir/check-release-candidate.sh" --version-commit)
 fi
 
-candidate=$(bash "$script_dir/check-release-candidate.sh" "$sha")
+candidate=$(RELEASE_PROOF_REPOSITORY= bash "$script_dir/check-release-candidate.sh" "$sha")
 while IFS='=' read -r key value; do
   case "$key" in sha) sha="$value" ;; esac
 done <<< "$candidate"

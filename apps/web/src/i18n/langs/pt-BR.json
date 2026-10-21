@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Todas as alegações que exigiam julgamento foram decididas.</strong> {count, plural, one {A # determinação de rotina não requer revisão individual.} other {As # determinações de rotina não requerem revisão individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# alegação precisa} other {# alegações precisam}} do seu julgamento</strong> — conflitos e interpretações contestadas. {routineCount, plural, one {A outra # é de rotina e não precisa de aprovação individual.} other {As outras # são de rotina e não precisam de aprovação individual.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contestada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, em disputa} other {}})",
+      "documentView": {
+        "label": "Visualização do documento",
+        "original": "Original",
+        "reading": "Modo de leitura"
+      },
+      "notLocated": "{count, plural, one {# alegação não foi localizada no original} other {# alegações não foram localizadas no original}}",
       "selectClaim": "Selecione uma alegação para inspecionar o registro.",
       "showQueue": "Mostrar fila",
       "stats": {
@@ -1009,6 +1015,9 @@
       "saved": "{count, plural, one {# decisão salva} many {# decisões salvas} other {# decisões salvas}} em {matter}"
     },
     "newestDecisions": "Decisões mais recentes",
+    "noResults": {
+      "hint": "Tente outras palavras, melhore a consulta com IA ou faça a pergunta no chat."
+    },
     "notesFilter": {
       "ai": "IA",
       "human": "Humanas"
@@ -1081,6 +1090,10 @@
         "medium": "Médio",
         "short": "Curto"
       }
+    },
+    "rewritten": {
+      "line": "Nenhuma correspondência exata para <bdi>{original}</bdi>; mostrando resultados para <bdi>{query}</bdi>",
+      "searchOriginal": "Pesquisar minhas palavras originais"
     },
     "sameCaseNumber": "{count, plural, one {# decisão tem} other {# decisões têm}} este número de processo. Escolha o tribunal.",
     "searchLabel": "Pesquisar jurisprudência",
@@ -1601,6 +1614,9 @@
         "private": "Suas habilidades de IA",
         "team": "Habilidades de IA da equipe"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Também consultadas ({count, number})"
     },
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
@@ -4240,6 +4256,10 @@
     "archivedEmpty": "Nenhuma memória arquivada.",
     "archivedToast": "Memória arquivada",
     "createdToast": "Salvo na memória",
+    "deleteConfirmation": "Digite {confirmation} para confirmar",
+    "deleteDescription": "Isso remove esta memória permanentemente. Esta ação não pode ser desfeita.",
+    "deleteTitle": "Excluir memória?",
+    "deletedToast": "Memória excluída",
     "empty": "Ainda não há nada na memória.",
     "kinds": {
       "decision": "Decisão",
