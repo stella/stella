@@ -213,10 +213,12 @@ describe("signing out another device by id", () => {
 
 const apiRoot = path.resolve(import.meta.dir, "../../..");
 // Only these modules read the session table outside Better Auth: the lifetime
-// store (credential checks) and the new-device notice (address and user agent).
+// store (credential checks), the new-device notice (address and user agent)
+// and the monitoring session authority (id and expiry only).
 const SESSION_TABLE_READERS = new Set([
   "src/lib/auth/session-history.ts",
   "src/lib/auth/session-lifetime-store.ts",
+  "src/lib/synthetic-principal/session-authority.ts",
 ]);
 const SESSION_TABLE_READ =
   /\bquery\.session\.find|\.from\(\s*session\s*\)|\bselect\([^)]*\bsession\.token\b/u;

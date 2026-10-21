@@ -1,4 +1,4 @@
-import type { HookEndpointContext } from "better-auth";
+import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { Result } from "better-result";
 import {
   afterAll,
@@ -1157,7 +1157,9 @@ describe("session token responses", () => {
   test("every auth endpoint answer passes the session token redaction", () => {
     const plugins = getAuth().options.plugins;
     const pluginIds = plugins.map((plugin) => plugin.id);
-    const redaction = plugins.find(
+    // Read through the public plugin contract: the census checks what any
+    // endpoint matcher receives, not this plugin's literal type.
+    const redaction: BetterAuthPlugin | undefined = plugins.find(
       (plugin) => plugin.id === "stella-session-token-redaction",
     );
     const after = redaction?.hooks?.after ?? [];

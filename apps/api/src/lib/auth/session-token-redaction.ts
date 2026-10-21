@@ -17,7 +17,9 @@ const isSessionShaped = (value: Record<string, unknown>) =>
   typeof value["userId"] === "string" &&
   "expiresAt" in value;
 
-type Redaction = { value: unknown; changed: boolean };
+type Redaction =
+  | { changed: true; value: Record<string, unknown> | unknown[] }
+  | { changed: false; value: unknown };
 
 /**
  * Removes the token of every session-shaped object except the caller's own.
@@ -28,35 +30,45 @@ export const redactForeignSessionTokens = (
   ownTokens: ReadonlySet<string>,
 ): Redaction => {
   if (Array.isArray(value)) {
-    let changed = false;
-    const items = value.map((item) => {
-      const redacted = redactForeignSessionTokens(item, ownTokens);
-      changed ||= redacted.changed;
-      return redacted.value;
-    });
-    return changed ? { value: items, changed } : { value, changed };
+    const items = value.map((item) =>
+      redactForeignSessionTokens(item, ownTokens),
+    );
+    return items.some((item) => item.changed)
+      ? { changed: true, value: items.map((item) => item.value) }
+      : { changed: false, value };
   }
   if (!isPlainObject(value)) {
-    return { value, changed: false };
+    return { changed: false, value };
   }
-  let changed = false;
-  const entries = Object.entries(value).flatMap(([key, item]) => {
-    if (
+  const sessionShaped = isSessionShaped(value);
+  const entries = Object.entries(value).map(([key, item]) => {
+    const foreignToken =
       key === "token" &&
-      isSessionShaped(value) &&
+      sessionShaped &&
       typeof item === "string" &&
-      !ownTokens.has(item)
-    ) {
-      changed = true;
-      return [];
-    }
-    const redacted = redactForeignSessionTokens(item, ownTokens);
-    changed ||= redacted.changed;
-    return [[key, redacted.value] as const];
+      !ownTokens.has(item);
+    return {
+      key,
+      foreignToken,
+      redacted: foreignToken
+        ? null
+        : redactForeignSessionTokens(item, ownTokens),
+    };
   });
-  return changed
-    ? { value: Object.fromEntries(entries), changed }
-    : { value, changed };
+  const changed = entries.some(
+    ({ foreignToken, redacted }) => foreignToken || redacted?.changed === true,
+  );
+  if (!changed) {
+    return { changed: false, value };
+  }
+  return {
+    changed: true,
+    value: Object.fromEntries(
+      entries.flatMap(({ key, redacted }) =>
+        redacted === null ? [] : [[key, redacted.value] as const],
+      ),
+    ),
+  };
 };
 
 const ownSessionTokens = async (
@@ -105,9 +117,10 @@ export const createSessionTokenRedactionPlugin = () =>
               returned,
               await ownSessionTokens(ctx),
             );
-            return redacted.changed
-              ? await ctx.json(redacted.value)
-              : undefined;
+            if (!redacted.changed) {
+              return undefined;
+            }
+            return await ctx.json(redacted.value);
           }),
         },
       ],
