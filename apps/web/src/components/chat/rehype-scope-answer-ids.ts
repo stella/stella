@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import type { Element, Root, RootContent } from "hast";
 
 /**
@@ -57,12 +58,11 @@ export function rehypeScopeAnswerIds() {
     for (const element of elements) {
       const href = element.properties.href;
       if (typeof href === "string" && href.startsWith("#")) {
-        let fragment = href.slice(1);
-        try {
-          fragment = decodeURIComponent(fragment);
-        } catch {
-          // swallow-ok: malformed fragments cannot name a declared answer id.
-        }
+        const raw = href.slice(1);
+        // A malformed escape cannot name a declared answer id, so it stays raw.
+        const fragment = Result.try(() => decodeURIComponent(raw)).unwrapOr(
+          raw,
+        );
         if (declared.has(fragment)) {
           element.properties.href = `#${encodeURIComponent(scoped(fragment))}`;
         }
