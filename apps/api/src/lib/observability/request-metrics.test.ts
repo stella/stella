@@ -10,6 +10,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { CHAT_TURN_FAILURE_CODES } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { VERIFICATION_RUN_ERROR_CODES } from "@/api/lib/lists/verification/contract";
+import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
 import {
   ANONYMIZATION_REFUSAL_REASONS,
   ANONYMIZATION_REFUSAL_SITES,
@@ -17,6 +18,7 @@ import {
   buildChatTurnSettlementRecord,
   buildMcpRequestMetricRecord,
   buildRequestDurationRecord,
+  buildRequestStageRecord,
   emitActionCostDropMetric,
   emitChatRunLogMetric,
   emitPromptCacheMetric,
@@ -32,6 +34,50 @@ import {
   normalizeMcpMetricMethod,
   observeMcpRequest,
 } from "@/api/mcp/request-metrics";
+
+test("request stages are integral log fields without metric dimensions", () => {
+  expect(
+    buildRequestStageRecord({
+      route: "/v1/law/statutes/search",
+      tool: "search_legislation",
+      stage: "candidate_hydration",
+      durationMs: 12.6,
+      rounds: 2,
+      candidateCount: 18,
+      resultCount: 10,
+      outcome: "completed",
+    }),
+  ).toEqual({
+    event: "request.stage",
+    class: "legislation_search",
+    "http.route": "/v1/law/statutes/search",
+    tool: "search_legislation",
+    stage: "candidate_hydration",
+    durationMs: 13,
+    rounds: 2,
+    candidateCount: 18,
+    resultCount: 10,
+    outcome: "completed",
+  });
+});
+
+test("stage log fields pass the content-key policy", () => {
+  for (const key of [
+    "http.route",
+    "tool",
+    "stage",
+    "durationMs",
+    "rounds",
+    "candidateCount",
+    "resultCount",
+    "outcome",
+  ]) {
+    expect(SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key), key).toBe(false);
+  }
+  for (const key of ["content", "decisionContent", "statuteTitle"]) {
+    expect(SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key), key).toBe(true);
+  }
+});
 
 test("MCP phase records are integral, non-overlapping, and bounded", () => {
   const freeText = "private caller supplied text";

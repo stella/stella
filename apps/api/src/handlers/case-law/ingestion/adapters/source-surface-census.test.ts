@@ -58,6 +58,7 @@ import {
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
+  czUohsFixture,
   czUsFixture,
   euEcjFixture,
   huBhgyFixture,
@@ -130,6 +131,7 @@ const SURFACE_EVIDENCE = {
     { kind: "page-recording", file: "cz-us-page.json.gz" },
   ],
   [ADAPTER_KEYS.CZ_REGIONAL]: [{ kind: "built", fixture: czRegionalFixture }],
+  [ADAPTER_KEYS.CZ_UOHS]: [{ kind: "built", fixture: czUohsFixture }],
   [ADAPTER_KEYS.SK_COURTS]: [
     { kind: "built", fixture: skCourtsFixture },
     { kind: "page-recording", file: "sk-courts-page.json.gz" },

@@ -395,6 +395,7 @@ export const generateWorkflowData = async ({
 
   const typedPhase = await askSystemOne({
     generation: (plannedProperties) => ({
+      userId: admission.userId,
       dataClass: "customer",
       task: "pdf",
       resolveTextModel,
@@ -455,6 +456,7 @@ export const generateWorkflowData = async ({
   const model = await Result.tryPromise({
     try: async () =>
       await (resolveTextModel ?? resolveTanStackTextModel)({
+        userId: admission.userId,
         dataClass: "customer",
         managedAIResidency,
         task: "pdf",
@@ -531,6 +533,7 @@ export const generateWorkflowData = async ({
     return await Result.tryPromise({
       try: async () => {
         const stream = streamTanStackObjectForTask({
+          userId: admission.userId,
           dataClass: "customer",
           task: "pdf",
           resolveTextModel,

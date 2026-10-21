@@ -73,6 +73,7 @@ fn try_reserve_self_host_connect_sender(
     return Err(sender);
   }
   *guard = Some(sender);
+  drop(guard);
   Ok(())
 }
 
@@ -699,8 +700,9 @@ async fn confirm_and_trust_self_host(
     }
   }
 
-  let mut mgr = manager.lock().await;
-  mgr
+  manager
+    .lock()
+    .await
     .trust_self_host_connection(web_origin, api_base_url)
     .await;
   Ok(())
@@ -846,11 +848,11 @@ pub(crate) async fn show_connection_confirmation(
       window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Destroyed) {
           set_self_host_connect_response(false);
-          if let Some(sender) = closed_sender
+          let sender = closed_sender
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take()
-          {
+            .take();
+          if let Some(sender) = sender {
             let _ = sender.send(());
           }
         }
@@ -968,6 +970,7 @@ async fn acknowledge_desktop_edit_handoff_opened(
   .send()
   .await
   .map_err(|e| format!("stella desktop could not acknowledge the edit handoff: {e}"))?;
+  drop(account);
 
   if response.status().is_success() {
     return Ok(());

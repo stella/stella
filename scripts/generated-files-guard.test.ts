@@ -220,13 +220,26 @@ const contexts = (sources: readonly string[]): Context[] => {
     if (contextPath.startsWith("inputs.")) {
       return [false, true];
     }
+    // A needed job either succeeded or did not; every other result compares
+    // the same as a skip.
+    if (/^needs\.[\w-]+\.result$/u.test(contextPath)) {
+      return ["success", "skipped"];
+    }
     return ["true", "false", ""];
   };
-  let expanded: Context[] = [{ values: {} }];
+  // The run itself is live, so status checks such as `!cancelled()` resolve.
+  const status = {
+    always: true,
+    success: true,
+    failure: false,
+    cancelled: false,
+  };
+  let expanded: Context[] = [{ values: {}, status }];
   for (const contextPath of paths) {
     expanded = expanded.flatMap((context) =>
       domain(contextPath).map((value) => ({
         values: { ...context.values, [contextPath]: value },
+        status,
       })),
     );
   }
