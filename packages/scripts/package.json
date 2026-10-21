@@ -33,7 +33,7 @@
     "@stll/time": "0.4.1",
     "better-result": "catalog:",
     "oxfmt": "catalog:",
-    "typescript": "catalog:"
+    "typescript6": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

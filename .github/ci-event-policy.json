@@ -180,7 +180,8 @@
     "manual-checks.yml/install-cache-windows": "main",
     "manual-checks.yml/install-cache-linux": "main",
     "type-cost-measurement.yml/prepare": "main",
-    "type-cost-measurement.yml/measure": "main"
+    "type-cost-measurement.yml/measure": "main",
+    "queue-admission.yml/admission": "dispatch-only"
   },
   "pushMain": {
     "typecheck-base.yml": {

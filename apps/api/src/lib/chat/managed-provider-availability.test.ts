@@ -23,7 +23,7 @@ const fixture = (
     getCredential: async () =>
       Result.ok({ type: "static", apiKey: "fixture-key" }),
     intervalMs: 53,
-    timeoutMs: 11,
+    timeoutMs: 11, // timeout under test
     fetchCatalog,
     now: () => time,
   });

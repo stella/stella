@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
@@ -916,7 +916,22 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
     ["generate:api-types", "web_api_types_required"],
     ["generate:route-tree", "route_tree_required"],
   ] as const) {
-    for (const glob of generationInputs(name)) {
+    // Turbo accepts brace sets; each alternative must be covered on its own.
+    const expandBraces = (glob: string): string[] => {
+      const match = /\{([^{}]+)\}/u.exec(glob);
+      if (match === null) {
+        return [glob];
+      }
+      const [set, alternatives = ""] = match;
+      return alternatives
+        .split(",")
+        .flatMap((alternative) =>
+          expandBraces(
+            `${glob.slice(0, match.index)}${alternative}${glob.slice(match.index + set.length)}`,
+          ),
+        );
+    };
+    for (const glob of generationInputs(name).flatMap(expandBraces)) {
       const rooted = glob.startsWith("$TURBO_ROOT$/")
         ? glob.replace("$TURBO_ROOT$/", "")
         : `apps/web/${glob}`;

@@ -32,6 +32,7 @@ import type {
   TierRule,
 } from "@/api/lib/workflow/playbook-positions";
 import type { GradedPosition } from "@/api/lib/workflow/position-runtime";
+import type { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
 import type api from "@/api/server.js";
 
 type ApiRoutes = (typeof api)["~Routes"];
@@ -102,6 +103,9 @@ export type WebApiContract = {
   ChatPart: ChatPart;
   ChatSourceDocument: ChatSourceDocument;
   ChatUITools: ChatUITools;
+  // Catalog capability ids, from the same generated records as MCP and the
+  // CLI, so a browser write can only declare a capability that exists.
+  CapabilityId: keyof typeof CAPABILITY_DISPATCH;
   // Types the API owns and the browser reads by name, so apps/web imports the
   // one definition instead of re-deriving it from a route's response or body.
   AskManual: AskManual;

@@ -58,5 +58,7 @@ export const startNewThreadCommandHandoff = async ({
     queryClient,
   });
 
-  await chat.startRouteHandoffMessage(message);
+  await chat.startRouteHandoffMessage(message, {
+    timingSurface: "chat-thread",
+  });
 };
