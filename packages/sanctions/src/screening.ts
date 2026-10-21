@@ -11,7 +11,6 @@ import type {
   SanctionsEntry,
 } from "./entry";
 import {
-  cloneNameIndexWithoutCache,
   matchNames,
   nameIndexSteps,
   runSteps,
@@ -122,14 +121,6 @@ function* screeningIndexSteps(
 export const buildScreeningIndex = (
   lists: readonly ParsedList[],
 ): ScreeningIndex => runSteps(screeningIndexSteps(lists));
-
-/** Returns an index sharing immutable storage but with empty screening caches. */
-export const cloneScreeningIndexWithoutCache = (
-  index: ScreeningIndex,
-): ScreeningIndex => ({
-  ...index,
-  names: cloneNameIndexWithoutCache(index.names),
-});
 
 /**
  * The same index as {@link buildScreeningIndex}, built one entry at a time:
