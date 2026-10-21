@@ -62,7 +62,7 @@ test("a route with no app frame still has the extension bridge, across navigatio
     await testing.waitFor(() => view.getByTestId("law"));
     expect(isBrowserExtensionBridgeMounted()).toBe(true);
 
-    await testing.act(async () => {
+    testing.act(() => {
       window.dispatchEvent(
         new window.MessageEvent("message", {
           data: {
@@ -78,16 +78,14 @@ test("a route with no app frame still has the extension bridge, across navigatio
           source: window,
         }),
       );
-      await sleep(20);
     });
     expect(getBrowserClientCapability()).toEqual({
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     });
 
-    await testing.act(async () => {
+    testing.act(() => {
       // The test router has its own route tree, outside the app's typed paths.
       appRouter.history.push("/other");
-      await sleep(20);
     });
     await testing.waitFor(() => view.getByTestId("other"));
     expect(isBrowserExtensionBridgeMounted()).toBe(true);
