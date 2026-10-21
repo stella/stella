@@ -43,6 +43,14 @@ test("every committed baseline and decision ledger is protected", () => {
     isAutofixProtectedPath("scripts/ratchet-allowances/new-budget.json"),
   ).toBe(true);
   expect(isAutofixProtectedPath(".changeset/new-release.md")).toBe(true);
+  expect(isAutofixProtectedPath(".changeset/README.md")).toBe(false);
+  for (const file of [
+    ".changeset/README.md.md",
+    ".changeset/readme.md",
+    ".changeset/nested/README.md",
+  ]) {
+    expect(isAutofixProtectedPath(file), file).toBe(true);
+  }
 });
 
 test("workflow rejects every protected edit despite broad changed-path and generator grants", () => {
@@ -141,6 +149,9 @@ test("workflow rejects every protected edit despite broad changed-path and gener
       );
       write(file, "original\n");
     }
+    write(".changeset/README.md", "generated documentation\n");
+    expect(run(".changeset/README.md").exitCode).toBe(0);
+    rmSync(path.join(root, ".changeset/README.md"));
     write("changed.ts", "allowed\n");
     expect(run("changed.ts").exitCode).toBe(0);
     const added = "scripts/ratchet-allowances/new.json";
