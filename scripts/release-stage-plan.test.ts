@@ -226,7 +226,8 @@ test("release entry plans staging; inherited version identities remain visible t
     // the branch point instead of requiring ancestry.
     git("checkout", "-qb", "moved-main", base);
     writeFileSync(nodePath.join(directory, "MAIN.md"), "moved\n");
-    git("add", ".");
+    // The gh stub stays untracked so checking out another commit keeps it.
+    git("add", "MAIN.md");
     git("commit", "-qm", "main moves");
     const movedMain = git("rev-parse", "HEAD");
     git("checkout", "-q", head);
@@ -277,7 +278,8 @@ test("release entry plans staging; inherited version identities remain visible t
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-});
+  // Each case spawns the planner, its release classifier and git.
+}, 30_000);
 
 test("inherited release proof waits for missing status, fails red, and accepts every exact version commit", () => {
   const directory = mkdtempSync(
