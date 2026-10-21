@@ -3178,6 +3178,18 @@ const createClientAssistantOwner = (responseMessageId: string) => {
   };
 };
 
+/** The approved client calls a resumed message holds. Their input completed
+ *  in the run that asked for approval; the resumed run hands them to the
+ *  client without streaming that input again. */
+const approvedCallIdsOf = (message: ChatMessage | undefined): Set<string> =>
+  new Set(
+    arrayOrEmpty(message?.parts).flatMap((part) =>
+      part.type === "tool-call" && isApprovedClientCallAwaitingResult(part)
+        ? [part.id]
+        : [],
+    ),
+  );
+
 export const processServerChatStream = async function* ({
   abortSignal,
   runSignal = abortSignal,
@@ -3210,15 +3222,7 @@ export const processServerChatStream = async function* ({
   // answer. Continuation history alone cannot make an empty run successful.
   let producedAnswer = false;
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
-  // An approved call's input completed in the run that asked for approval; a
-  // resumed run hands it to the client without streaming that input again.
-  const toolCallsWithCompleteInput = new Set(
-    arrayOrEmpty(initialResponseMessage?.parts).flatMap((part) =>
-      part.type === "tool-call" && isApprovedClientCallAwaitingResult(part)
-        ? [part.id]
-        : [],
-    ),
-  );
+  const toolCallsWithCompleteInput = approvedCallIdsOf(initialResponseMessage);
   let usage: TokenUsage | undefined;
   const recordUsage = (recorded: TokenUsage | undefined) => {
     usage = recorded;
