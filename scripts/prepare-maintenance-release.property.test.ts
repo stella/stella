@@ -1181,7 +1181,7 @@ const job = (
 // Every GitHub read the gate makes, by path; any other read fails the test.
 const fakeGitHub = (responses: Record<string, unknown>) => {
   const paths: string[] = [];
-  const read = (path: string): Promise<unknown> => {
+  const read = async (path: string): Promise<unknown> => {
     paths.push(path);
     if (!(path in responses)) {
       return Promise.reject(new Error(`Unexpected GitHub read: ${path}`));

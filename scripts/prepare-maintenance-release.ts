@@ -904,7 +904,7 @@ const failingJobNames = async (
   if (runId === null) {
     return [`(no workflow run linked: ${String(runUrl)})`];
   }
-  const jobsResult = await Result.tryPromise(() =>
+  const jobsResult = await Result.tryPromise(async () =>
     readGitHubPages(
       `/actions/runs/${runId}/jobs?filter=latest`,
       readJson,
@@ -1040,7 +1040,7 @@ export const readReleaseCutGates = async (
     runUrl: null,
     failingJobs: [],
   });
-  const statusesResult = await Result.tryPromise(() =>
+  const statusesResult = await Result.tryPromise(async () =>
     readGitHubPages(`/commits/${sha}/statuses`, readJson, (payload) => payload),
   );
   if (Result.isError(statusesResult)) {
@@ -1073,7 +1073,7 @@ export const readReleaseCutGates = async (
   };
   return Promise.all(
     RELEASE_CUT_GATES.map(async (spec) => {
-      const gate = await Result.tryPromise(() => readGate(spec));
+      const gate = await Result.tryPromise(async () => readGate(spec));
       return Result.isOk(gate)
         ? gate.value
         : unreadable(spec, gate.error.cause);
