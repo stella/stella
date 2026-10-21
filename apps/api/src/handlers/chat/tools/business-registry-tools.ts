@@ -36,8 +36,7 @@ const TOOL_DESCRIPTION_BASE =
   "query must then be a fully-qualified VAT number including the " +
   "2-letter country prefix, e.g. DE143593636. Search by company " +
   "registration number or company name where the selected registry " +
-  "supports name search, including verified web-assisted search for KRS. " +
-  "Web-assisted matches contain only official records and identify both sources.";
+  "supports name search. KRS name matches are verified against its register.";
 
 const QUERY_DESCRIPTION_BASE =
   "Company registration number (e.g. Czech IČO, Norwegian orgnr, " +
@@ -45,8 +44,7 @@ const QUERY_DESCRIPTION_BASE =
   "DE143593636) or company name. " +
   "Numeric inputs that match the registry's canonical ID format " +
   "route to a direct lookup; everything else is treated as a " +
-  "name search where supported; KRS names are resolved from web candidates " +
-  "and verified against the official register.";
+  "name search where supported, including verified KRS name search.";
 
 /**
  * Holds one call to the turn's source scope (`scopeBusinessRegistryLookup`):

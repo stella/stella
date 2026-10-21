@@ -4,7 +4,7 @@ import type {
   WebSearchProviderResponse,
 } from "@/api/lib/web-search/types";
 
-export const WEB_SEARCH_TIMEOUT_MS = 10_000;
+const WEB_SEARCH_TIMEOUT_MS = 10_000;
 
 export type WebSearchRequestObserver = () => void;
 

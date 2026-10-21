@@ -207,7 +207,7 @@ export type BusinessRegistryHit = {
   };
 };
 
-export type NameSearchCandidateFailure = {
+type NameSearchCandidateFailure = {
   id: string;
   reason: "no-official-record" | "name-mismatch";
   officialName?: string;
@@ -1916,7 +1916,7 @@ export const executeRegistryLookup = async ({
   }
 };
 
-export const WEB_CANDIDATE_LIMIT = 5;
+const WEB_CANDIDATE_LIMIT = 5;
 
 type SearchRegistryByWebCandidatesOptions = {
   handler: RegistryHandler;

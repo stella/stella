@@ -1,7 +1,7 @@
 import { stripDiacritics } from "@stll/text-normalize";
 
 /** Legal-form spellings removed only from the end of a registered name. */
-export const COMPANY_LEGAL_FORM_SUFFIXES = [
+const COMPANY_LEGAL_FORM_SUFFIXES = [
   "spółka z ograniczoną odpowiedzialnością",
   "spolka z ograniczona odpowiedzialnoscia",
   "spółka akcyjna",

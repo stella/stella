@@ -1000,7 +1000,7 @@ const lookupBusinessRegistryArgsSchema = nullAsAbsent(
       v.minLength(1),
       v.maxLength(256),
       v.description(
-        "Canonical identifier (e.g. company number, VAT number) or company name; KRS name candidates are verified against the official register",
+        "Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified)",
       ),
     ),
     detail: v.optional(
@@ -2539,8 +2539,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     description:
       "Look up a company in a public business register. Pass a canonical " +
       "identifier (company/registration number, VAT number) for an exact " +
-      "match, or a company name to search where supported, including KRS. " +
-      "Web-assisted matches contain only verified official records and source provenance. " +
+      "match, or a company name to search where supported; KRS matches are verified. " +
       "Result IDs belong to the external registry, not stella's contact " +
       "directory. Create a contact with save_contact before using " +
       "read_contact.",

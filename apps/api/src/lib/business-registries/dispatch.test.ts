@@ -656,7 +656,7 @@ describe("executeRegistryLookup — verified web candidates", () => {
       query: "Missing Company",
       webSearch: {
         provider: webProviderWith([
-          { title: `${ids[0]} ${ids[0]} ${ids[1]}` },
+          { title: `${String(ids[0])} ${String(ids[0])} ${String(ids[1])}` },
           { title: ids.slice(2).join(" ") },
         ]),
         observer: () => undefined,
