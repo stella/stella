@@ -32,10 +32,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { analyse } from "scslre";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { GRADED_HANDLER_CODE_REASON } from "../apps/api/src/lib/errors/graded-handler-codes";
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
@@ -76,6 +77,7 @@ import {
   unmanagedTransitionTables,
   statusWriteCalls,
 } from "./status-write-shapes";
+import { countUndeclaredEdenWrites } from "./undeclared-eden-writes";
 import {
   countUnsignalledSkips,
   isExcludedSkipSource,
@@ -2271,6 +2273,85 @@ const countFailureLegacyOutputPins: FileCounter = (content, { file }) =>
     (spec) => specProperty(spec, "legacy") !== undefined,
   ).length;
 
+const HANDLER_ERROR_CLASS = "HandlerError";
+const CLASSIFY_FAILURE = "classifyFailure";
+const SERVER_ERROR_STATUSES: ReadonlySet<string> = new Set([
+  "500",
+  "502",
+  "503",
+]);
+const GRADED_HANDLER_CODES: ReadonlySet<string> = new Set(
+  Object.keys(GRADED_HANDLER_CODE_REASON),
+);
+
+const mayAnswerServerError = (expression: ts.Expression): boolean => {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (ts.isNumericLiteral(node) && SERVER_ERROR_STATUSES.has(node.text)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
+};
+
+const unwrapParentheses = (expression: ts.Expression): ts.Expression =>
+  ts.isParenthesizedExpression(expression)
+    ? unwrapParentheses(expression.expression)
+    : expression;
+
+/**
+ * One per `new HandlerError({ status: 5xx, … })` the failure grader can only
+ * call `unclassified`: no graded `code` literal, and not branded by a
+ * `classifyFailure(…)` wrapped around the construction. A status written as
+ * any expression holding a 5xx literal (a ternary, a lookup default) counts;
+ * an opaque status variable is out of reach of a syntax census.
+ */
+const countUnclassifiedHandlerFailures: FileCounter = (content, { file }) => {
+  if (!content.includes(HANDLER_ERROR_CLASS)) {
+    return 0;
+  }
+  const sourceFile = parseSource({ fileName: file, text: content });
+  const classified = new Set<ts.Node>();
+  let count = 0;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === CLASSIFY_FAILURE
+    ) {
+      const branded = node.arguments.at(0);
+      if (branded !== undefined) {
+        classified.add(unwrapParentheses(branded));
+      }
+    }
+    const spec = ts.isNewExpression(node) ? node.arguments?.at(0) : undefined;
+    if (
+      ts.isNewExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === HANDLER_ERROR_CLASS &&
+      spec !== undefined &&
+      ts.isObjectLiteralExpression(spec) &&
+      !classified.has(node)
+    ) {
+      const status = specProperty(spec, "status")?.initializer;
+      const code = specProperty(spec, "code")?.initializer;
+      const graded =
+        code !== undefined &&
+        ts.isStringLiteralLike(code) &&
+        GRADED_HANDLER_CODES.has(code.text);
+      if (status !== undefined && mayAnswerServerError(status) && !graded) {
+        count += 1;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return count;
+};
+
 const FAILURE_SINK_SOURCE_GLOBS = [
   "apps/api/src/**/*.{ts,tsx}",
   "apps/legal-atlas-runner/src/**/*.ts",
@@ -3208,6 +3289,18 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "undeclared-eden-writes",
+    description:
+      "Eden post/put/patch/delete calls in apps/web outside an invokeCapability or useCapabilityMutation callback, so they run without declaring a catalog capability; each file's count can only shrink",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) => isExcludedSource(file),
+    perFile: true,
+    growth: "shrink-only",
+    count: ((content, { file }) =>
+      countUndeclaredEdenWrites(content, file)) satisfies FileCounter,
+  },
+  {
+    scope: "file",
     id: "direct-root-connection-imports",
     description:
       "runtime references to the owner-level database handles (`rootDb`, `rlsDb` from apps/api/src/db/root.ts) anywhere in the API outside tests, one per handle named: named, renamed and namespace imports, re-exports, `import = require` and dynamic imports (scripts/root-connection-shapes.ts). An allowlist gated per file: a new file, a file naming one more handle, or a type-only import turned into a value import fails even when another file dropped one",
@@ -3507,6 +3600,16 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: FAILURE_SINK_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countFailureLegacyOutputPins,
+  },
+  {
+    scope: "file",
+    id: "unclassified-handler-failures",
+    description:
+      "`new HandlerError({ status: 5xx })` constructions with no graded `code` literal and no `classifyFailure(…)` brand: each one grades `unclassified`, which the post-release check alerts on whenever it fires. Name the failure (a graded code, a brand, or a typed error class with a declared reason) instead of adding one; gated per file",
+    include: FAILURE_SINK_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countUnclassifiedHandlerFailures,
+    perFile: true,
   },
   {
     scope: "repo",
@@ -4751,6 +4854,23 @@ const SHARED_WEB_HELPER_FIXTURE_LINES = [
   "// title={formatFullTimestamp(value)} must not count.",
 ];
 const SELF_TEST_SHARED_WEB_HELPERS = `${SHARED_WEB_HELPER_FIXTURE_LINES.join("\n")}\n`;
+const UNDECLARED_EDEN_WRITE_FIXTURE_LINES = [
+  'import { api, memoriesApi as memories } from "@/lib/api";',
+  'import { invokeCapability } from "@/lib/capabilities/capability-request";',
+  'import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";',
+  "await api.items.post(body);",
+  "await memories({ id }).delete();",
+  "const route = api.items({ id });",
+  "await route.patch(body);",
+  'await invokeCapability("items.create", async (request) => await api.items.post(body, request));',
+  'useCapabilityMutation({ capability: "items.update", mutationFn: async (vars, request) => await route.patch(vars, request) });',
+  "await api.items.get();",
+  "map.delete(key);",
+];
+const SELF_TEST_UNDECLARED_EDEN_WRITES = `${UNDECLARED_EDEN_WRITE_FIXTURE_LINES.join("\n")}\n`;
+// The bare post, the aliased delete and the write through `route`; declared
+// writes, reads and unrelated `delete` calls are excluded.
+const EXPECTED_UNDECLARED_EDEN_WRITES = 3;
 const EXPECTED_RAW_USER_AVATAR_PRIMITIVES = 1;
 const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
 const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
@@ -6447,6 +6567,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/web/src/undeclared-eden-writes.ts",
+      SELF_TEST_UNDECLARED_EDEN_WRITES,
+    );
+    writeFixture(
+      root,
       "apps/api/src/shared-helper-shapes.ts",
       SELF_TEST_SHARED_API_HELPERS,
     );
@@ -6861,6 +6986,7 @@ const runSelfTest = (): number => {
           EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO,
       ],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
+      ["undeclared-eden-writes", EXPECTED_UNDECLARED_EDEN_WRITES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
       [
         "ad-hoc-relative-time-formatting",

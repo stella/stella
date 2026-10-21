@@ -81,10 +81,9 @@ test("pull request and merge-group audits are plan-gated in CI", () => {
     "dependency-audit",
     "Audit changed dependency resolutions",
   );
+  // A merge group audits everything it merges, not only its own entry.
   expect(pullRequestAudit.env?.["BASE_SHA"]).toBe(
-    githubExpression(
-      "github.event.pull_request.base.sha || github.event.merge_group.base_sha",
-    ),
+    githubExpression("needs.ci-plan.outputs.target_base_sha"),
   );
   expect(pullRequestAudit.run).toBe(
     'bun scripts/dependency-audit.ts --check-diff "$BASE_SHA"',

@@ -132,7 +132,9 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
   "api-test-durations": { class: "advisory" },
   "ci-browser": { class: "correctness" },
   "code-quality-api": { class: "correctness" },
+  "code-quality-api-cancel": { class: "advisory" },
   "code-quality-web-rest": { class: "correctness" },
+  "code-quality-web-rest-cancel": { class: "advisory" },
   "query-perf": { class: "correctness" },
   "postgres-service-suites": { class: "correctness" },
   "service-suites": { class: "correctness" },
@@ -257,5 +259,11 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       },
     },
   },
-  "ci-result": { class: "correctness" },
+  "ci-result": {
+    class: "correctness",
+    steps: {
+      "Write required-jobs record": { class: "advisory", owner: "ci" },
+      "Upload required-jobs record": { class: "advisory", owner: "ci" },
+    },
+  },
 };

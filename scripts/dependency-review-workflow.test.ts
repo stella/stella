@@ -179,7 +179,14 @@ const selector = ({
         },
         summary,
       },
-      process: { env: { RUNNER_TEMP: "/runner/temp" } },
+      // Every event reads the comparison base ci-plan resolved (a merge
+      // group's target branch), never the previous queue entry from the payload.
+      process: {
+        env: {
+          RUNNER_TEMP: "/runner/temp",
+          TARGET_BASE_SHA: base,
+        },
+      },
       require: (name: string) => {
         if (name === "node:path") {
           return path;
@@ -264,8 +271,15 @@ describe("required dependency review workflow boundary", () => {
     expect(checkout.if).toBe(reviewCondition);
     expect(review.if).toBe(reviewCondition);
     expect(checkout.with?.["persist-credentials"]).toBe(false);
+    // A merge group reviews against the target branch that ci-plan resolved,
+    // not the previous queue entry; no checked-out code runs in this job.
+    expect(JSON.stringify(selectorStep["env"])).toContain(
+      "needs.ci-plan.outputs.target_base_sha",
+    );
+    expect(selectorSource).not.toContain("base_sha");
+    expect(selectorSource).not.toContain("base.sha");
     expect(review.with?.["base-ref"]).toBe(
-      `\${{ github.event.merge_group.base_sha || '' }}`,
+      `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
     );
     expect(review.with?.["head-ref"]).toBe(
       `\${{ github.event.merge_group.head_sha || '' }}`,

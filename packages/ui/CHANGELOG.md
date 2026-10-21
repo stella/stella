@@ -1,5 +1,17 @@
 # @stll/ui
 
+## 0.48.0
+
+### Minor Changes
+
+- [#5823](https://github.com/stella/stella/pull/5823) [`ed25af1`](https://github.com/stella/stella/commit/ed25af1211e6e5f091842ddf553f2795f5c16622) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `textMarkHighlightRule` takes a `variant` and every state, so a line mark (underline, dotted, wavy, strike) can be drawn through the CSS Custom Highlight API as well as a fill.
+
+## 0.47.1
+
+### Patch Changes
+
+- [#5740](https://github.com/stella/stella/pull/5740) [`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A destructive confirm dialog stays open when its confirm settles to `"keep-open"`, and a host-responsive workspace frame may omit its end dock.
+
 ## 0.47.0
 
 ### Minor Changes
