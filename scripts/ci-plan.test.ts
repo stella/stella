@@ -6333,19 +6333,37 @@ test("API planning only loads dependencies after installation and emits install-
   const directory = mkdtempSync(nodePath.join(tmpdir(), "api-plan-output-"));
   const output = nodePath.join(directory, "output");
   try {
-    for (const [event, packages, unknown, selected, shards, expected] of [
-      ["pull_request", "false", "false", "", "", "0"],
-      ["pull_request", "true", "false", "", "", "3"],
-      ["pull_request", "false", "true", "", "", "3"],
-      ["merge_group", "true", "false", "", "", "3"],
-      ["workflow_dispatch", "true", "false", "", "", "3"],
+    for (const [
+      event,
+      packages,
+      unknown,
+      selectedRequired,
+      selected,
+      shards,
+      expected,
+    ] of [
+      ["pull_request", "false", "false", "", "", "", "0"],
+      ["pull_request", "true", "false", "", "", "", "3"],
+      ["pull_request", "false", "true", "", "", "", "3"],
+      ["merge_group", "true", "false", "", "", "", "3"],
+      ["workflow_dispatch", "true", "false", "", "", "", "3"],
       [
         "pull_request",
         "true",
         "false",
+        "true",
         '{"shard":["api-1","rest-web"]}',
         "1",
         "1",
+      ],
+      [
+        "pull_request",
+        "true",
+        "false",
+        "",
+        '{"shard":["api-1","rest-web"]}',
+        "1",
+        "3",
       ],
     ]) {
       writeFileSync(output, "");
@@ -6358,6 +6376,7 @@ test("API planning only loads dependencies after installation and emits install-
             EVENT_NAME: event,
             PACKAGE_CHECKS_REQUIRED: packages,
             API_SCOPE_UNKNOWN: unknown,
+            SELECTED_REQUIRED: selectedRequired,
             SELECTED_MATRIX: selected,
             SELECTED_SHARDS: shards,
             SELECTED_FILES: selected ? "src/a.test.ts\nsrc/b.test.ts" : "",
@@ -6369,10 +6388,16 @@ test("API planning only loads dependencies after installation and emits install-
       expect(result.exitCode, result.stderr.toString()).toBe(0);
       const values = readFileSync(output, "utf-8");
       expect(values).toContain(`api_test_shards=${String(expected)}\n`);
-      if (selected) {
-        expect(values).toContain(`ci_tests_matrix=${selected}\n`);
+      if (selectedRequired) {
+        expect(values).toContain(`ci_tests_required=${selectedRequired}\n`);
+        expect(values).toContain(`ci_tests_matrix=${String(selected)}\n`);
         expect(values).toContain(
           "api_test_files<<API_TEST_FILES_END\nsrc/a.test.ts\nsrc/b.test.ts\nAPI_TEST_FILES_END\n",
+        );
+      } else if (selected) {
+        expect(values).toContain("ci_tests_required=true\n");
+        expect(values).toContain(
+          'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}\n',
         );
       }
     }
