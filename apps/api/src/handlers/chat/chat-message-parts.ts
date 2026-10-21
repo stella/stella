@@ -13,6 +13,7 @@ import {
 import {
   chatToolExecutor,
   isServerChatToolCall,
+  isUnsupportedChatPart,
 } from "@stll/api-contract/chat";
 import {
   GENERATED_VISUAL_MIME_TYPE,
@@ -54,14 +55,101 @@ import {
 } from "@/api/lib/chat/persisted-message-content";
 import type {
   PersistedJsonValue,
+  PersistedToolCallPart,
   PersistedToolInput,
   PersistedToolResultContent,
+  PersistedToolResultPart,
 } from "@/api/lib/chat/persisted-message-content";
-import { isReasoningProvenance } from "@/api/lib/chat/reasoning-provenance";
+import { readableStoredChatPart } from "@/api/lib/chat/stored-chat-part-codec";
 import { LIMITS } from "@/api/lib/limits";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
 
 const IMAGE_MIME_PREFIX = "image/";
+
+// The fields this release knows on each part it rebuilds. A part a newer
+// release stored can carry more; those are kept exactly as stored, so saving a
+// message this release read never loses what the newer release wrote.
+const STORED_TOOL_CALL_FIELDS = {
+  approval: true,
+  id: true,
+  input: true,
+  metadata: true,
+  name: true,
+  output: true,
+  providerMetadata: true,
+  state: true,
+  type: true,
+} as const satisfies Record<keyof PersistedToolCallPart, true>;
+
+const STORED_TOOL_RESULT_FIELDS = {
+  content: true,
+  error: true,
+  outcome: true,
+  state: true,
+  toolCallId: true,
+  type: true,
+} as const satisfies Record<keyof PersistedToolResultPart, true>;
+
+const TOOL_CALL_PART_FIELDS = {
+  approval: true,
+  arguments: true,
+  id: true,
+  input: true,
+  metadata: true,
+  name: true,
+  output: true,
+  providerMetadata: true,
+  state: true,
+  type: true,
+} as const satisfies Record<
+  keyof Extract<ChatPart, { type: "tool-call" }>,
+  true
+>;
+
+const TOOL_RESULT_PART_FIELDS = {
+  content: true,
+  createdAt: true,
+  error: true,
+  id: true,
+  metadata: true,
+  name: true,
+  outcome: true,
+  state: true,
+  toolCallId: true,
+  type: true,
+} as const satisfies Record<
+  keyof Extract<ChatPart, { type: "tool-result" }>,
+  true
+>;
+
+/** Audio and video: the protocol's own fields (its part type is open). */
+const MEDIA_PART_FIELDS = {
+  id: true,
+  metadata: true,
+  source: true,
+  type: true,
+} as const;
+
+const UI_RESOURCE_PART_FIELDS = {
+  meta: true,
+  resource: true,
+  serverId: true,
+  toolCallId: true,
+  toolName: true,
+  type: true,
+} as const satisfies Record<
+  keyof Extract<ChatPart, { type: "ui-resource" }>,
+  true
+>;
+
+/** The fields of `part` this release does not know, as they are. */
+const laterReleaseFields = (
+  part: object,
+  known: Readonly<Record<string, true>>,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(part).filter(([key]) => !Object.hasOwn(known, key)),
+  );
 
 export type ChatAttachmentInput = {
   filename?: string | undefined;
@@ -226,8 +314,12 @@ const normalizePersistedV3ChatMessageContent = (
   ) {
     panic("Stored v3 chat content has invalid metadata");
   }
+  // The stored-content column already carries a part of a type this release
+  // cannot read; carrying it here too keeps every reader of stored content,
+  // however it got the row, from failing on one.
+  const data = content.data.map(readableStoredChatPart);
   const outputByToolCallId = new Map<string, unknown>();
-  for (const part of content.data) {
+  for (const part of data) {
     if (!isRecord(part)) {
       panic("Stored v3 chat content has an invalid part");
     }
@@ -237,7 +329,7 @@ const normalizePersistedV3ChatMessageContent = (
   }
 
   const parts: ChatPart[] = [];
-  for (const part of content.data) {
+  for (const part of data) {
     parts.push(persistedV3PartToChatPart({ outputByToolCallId, part }));
   }
   return { metadata: content.metadata ?? {}, parts };
@@ -258,6 +350,7 @@ const persistedV3PartToChatPart = ({
       panic("Stored v3 tool call has invalid metadata");
     }
     const candidate: unknown = {
+      ...laterReleaseFields(part, STORED_TOOL_CALL_FIELDS),
       ...(part.approval === undefined ? {} : { approval: part.approval }),
       arguments:
         persistedInput.status === "raw"
@@ -287,6 +380,7 @@ const persistedV3PartToChatPart = ({
       part,
     });
     const candidate: unknown = {
+      ...laterReleaseFields(part, STORED_TOOL_RESULT_FIELDS),
       content,
       ...(part.error === undefined ? {} : { error: part.error }),
       ...(part.outcome === undefined ? {} : { outcome: part.outcome }),
@@ -968,8 +1062,10 @@ const CHAT_PART_VALIDATORS = {
       isPersistedJsonObject(part["providerMetadata"])),
   thinking: (part) =>
     typeof part["content"] === "string" &&
+    // Verified on replay, not on load: a provenance this release cannot
+    // verify is kept as stored and never replayed.
     (part["provenance"] === undefined ||
-      isReasoningProvenance(part["provenance"])) &&
+      isPersistedJsonObject(part["provenance"])) &&
     (part["providerMetadata"] === undefined ||
       isPersistedJsonObject(part["providerMetadata"])),
   "tool-call": (part) =>
@@ -1051,7 +1147,13 @@ export const applyChatPartPersistenceBudget = (parts: readonly ChatPart[]) => {
   let richPartCount = 0;
 
   for (const part of parts) {
-    if (!isServerOwnedChatPart(part) || isProviderVisibleChatPart(part)) {
+    // A part a newer release stored passed that release's budget; dropping
+    // it here would lose it the next time this release saves the message.
+    if (
+      !isServerOwnedChatPart(part) ||
+      isProviderVisibleChatPart(part) ||
+      isUnsupportedChatPart(part)
+    ) {
       acceptedParts.push(part);
       continue;
     }
@@ -1122,15 +1224,30 @@ const normalizeMediaSource = (source: ContentPartSource): ContentPartSource => {
   }
 };
 
-const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
+/**
+ * Which fields outside this release's own a rebuilt part keeps. A part the
+ * model just streamed is `canonical`: only the fields this release persists.
+ * A part being saved again (`as-stored`) keeps the fields a newer release
+ * stored with it, so saving never loses them.
+ */
+type PersistedFields = "as-stored" | "canonical";
+
+const normalizeChatPartForPersistence = (
+  part: ChatPart,
+  fields: PersistedFields,
+): ChatPart => {
+  const later = (known: Readonly<Record<string, true>>) =>
+    fields === "as-stored" ? laterReleaseFields(part, known) : {};
   switch (part.type) {
     case "audio":
       return {
+        ...later(MEDIA_PART_FIELDS),
         type: "audio",
         source: normalizeMediaSource(part.source),
       };
     case "video":
       return {
+        ...later(MEDIA_PART_FIELDS),
         type: "video",
         source: normalizeMediaSource(part.source),
       };
@@ -1154,6 +1271,7 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
               text: resource.text,
             };
       return {
+        ...later(UI_RESOURCE_PART_FIELDS),
         type: "ui-resource",
         resource: normalizedResource,
         toolCallId: part.toolCallId,
@@ -1216,7 +1334,10 @@ export const classifyChatPartForPersistence = (
     }
     panic(`Cannot persist malformed chat part type: ${type}`);
   }
-  return { type: "persist", part: normalizeChatPartForPersistence(part) };
+  return {
+    type: "persist",
+    part: normalizeChatPartForPersistence(part, "canonical"),
+  };
 };
 
 const isPersistableChatMessage = (
@@ -1228,7 +1349,7 @@ const normalizeChatPartsForPersistence = (
 ): ChatPart[] => {
   const normalized: ChatPart[] = [];
   for (const part of parts) {
-    normalized.push(normalizeChatPartForPersistence(part));
+    normalized.push(normalizeChatPartForPersistence(part, "as-stored"));
   }
   return applyChatPartPersistenceBudget(normalized).parts;
 };
@@ -1312,6 +1433,7 @@ const chatPartToPersistedV3Part = ({
     }
     const input = persistedToolInputFromChatPart(part);
     return {
+      ...laterReleaseFields(part, TOOL_CALL_PART_FIELDS),
       ...(approval === undefined ? {} : { approval }),
       id: part.id,
       input,
@@ -1341,6 +1463,7 @@ const chatPartToPersistedV3Part = ({
       content = { type: "text", value: part.content };
     }
     return {
+      ...laterReleaseFields(part, TOOL_RESULT_PART_FIELDS),
       ...(content === undefined ? {} : { content }),
       ...(part.error === undefined ? {} : { error: part.error }),
       ...(part.outcome === undefined ? {} : { outcome: part.outcome }),

@@ -1232,6 +1232,7 @@
       "toastTitle": "Pełny widok niedostępny"
     },
     "activity": {
+      "newerVersion": "Ta treść jest wyświetlana w nowszej wersji.",
       "review": "Aktualizacja przeglądu"
     },
     "aiPrompt": "Pole wiadomości AI",
