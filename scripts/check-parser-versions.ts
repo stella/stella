@@ -1,5 +1,29 @@
 import path from "node:path";
 
+/**
+ * Parser versions cover the source modules that can shape persisted parser
+ * output. Traversal stops before the reviewed infrastructure boundaries below:
+ * their imported bindings provide observability, configuration, or connection
+ * setup and are never written into a parser result. Keep this list small; the
+ * guard rejects missing entries and entries under output-shaping roots.
+ */
+export const PARSER_OUTPUT_BOUNDARIES = [
+  {
+    path: "apps/api/src/env-base.ts",
+    reason:
+      "Environment validation provides configuration and never parser output values.",
+  },
+  {
+    path: "apps/api/src/lib/observability/logger.ts",
+    reason: "Structured logging is an output-independent side effect.",
+  },
+  {
+    path: "apps/api/src/lib/version.ts",
+    reason:
+      "The application version configures request identification and telemetry.",
+  },
+] as const satisfies readonly { path: string; reason: string }[];
+
 const REGISTRY_PATH =
   "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry.ts";
 const LEGISLATION_REGISTRY_PATH =
@@ -12,15 +36,27 @@ const PARSER_DIRECTORIES = [
   "apps/api/src/handlers/case-law/ingestion/parsers/",
   "apps/api/src/lib/legal-search/parsers/",
 ];
-// Failure vocabulary and sanitization describe unsuccessful ingestion. They
-// cannot change the successful records a parser version identifies.
-const NON_PARSER_INPUT_FILES = new Set(["packages/errors/src/failure.ts"]);
+const PARSER_VERSION_MODULE =
+  "apps/api/src/lib/legal-search/ingestion-constants.ts";
+const OUTPUT_SHAPING_ROOTS = [
+  ADAPTER_DIRECTORY,
+  LEGISLATION_ADAPTER_DIRECTORY,
+  ...PARSER_DIRECTORIES,
+  CASE_LAW_DIRECTORY,
+  "packages/legal-ast/",
+  "packages/text-normalize/",
+  "packages/sha256/",
+];
 const OUTPUT_UNCHANGED =
   /^\s*\/\/\s*parser-output-unchanged:\s+(?:\[([a-z\d-]+)\]\s+\S.*|(?!\[)(\S.*))$/u;
 const transpiler = new Bun.Transpiler({ loader: "ts" });
 const jsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
 
 type SourceTree = ReadonlyMap<string, string>;
+export type ParserOutputBoundary = {
+  path: string;
+  reason: string;
+};
 type StaticValue =
   | { type: "number"; file: string; name: string; value: number }
   | {
@@ -58,11 +94,16 @@ class StaticTree {
   private readonly versionDeclarations = new Map<string, Set<string>>();
   private readonly codeCache = new Map<string, string>();
   private readonly closureCache = new Map<string, Set<string>>();
+  private readonly outputBoundaries: ReadonlySet<string>;
 
   readonly files: SourceTree;
 
-  constructor(files: SourceTree) {
+  constructor(
+    files: SourceTree,
+    boundaries: readonly ParserOutputBoundary[] = PARSER_OUTPUT_BOUNDARIES,
+  ) {
     this.files = files;
+    this.outputBoundaries = new Set(boundaries.map(({ path: file }) => file));
   }
 
   code(file: string): string {
@@ -177,7 +218,11 @@ class StaticTree {
     const queue = [file];
     while (queue.length > 0) {
       const current = queue.pop();
-      if (current === undefined || files.has(current)) {
+      if (
+        current === undefined ||
+        files.has(current) ||
+        this.outputBoundaries.has(current)
+      ) {
         continue;
       }
       files.add(current);
@@ -424,9 +469,7 @@ class StaticTree {
             PARSER_DIRECTORIES.some((directory) => file.startsWith(directory))
           ) {
             for (const dependency of this.closure(file)) {
-              if (!NON_PARSER_INPUT_FILES.has(dependency)) {
-                parsers.add(dependency);
-              }
+              parsers.add(dependency);
             }
           }
         }
@@ -482,8 +525,10 @@ class StaticTree {
 }
 
 /** Read the registered output owners without importing live adapters. */
-export const sourceOwners = (files: SourceTree): SourceOwnersResult =>
-  new StaticTree(files).owners();
+export const sourceOwners = (
+  files: SourceTree,
+  boundaries: readonly ParserOutputBoundary[] = PARSER_OUTPUT_BOUNDARIES,
+): SourceOwnersResult => new StaticTree(files, boundaries).owners();
 
 // Match the original source rather than transpiled output: local types and
 // unused imports can be erased, but deleting them still needs a version decision.
@@ -592,17 +637,43 @@ const movedParserSources = (
   return moved;
 };
 
-type CheckParserVersionsOptions = { base: SourceTree; head: SourceTree };
+type CheckParserVersionsOptions = {
+  base: SourceTree;
+  head: SourceTree;
+  boundaries?: readonly ParserOutputBoundary[];
+};
+
+const boundaryErrors = (
+  head: SourceTree,
+  boundaries: readonly ParserOutputBoundary[],
+): string[] =>
+  boundaries.flatMap(({ path: file }) => {
+    if (!head.has(file)) {
+      return [`Parser output boundary does not exist in head tree: ${file}`];
+    }
+    if (
+      file === PARSER_VERSION_MODULE ||
+      OUTPUT_SHAPING_ROOTS.some((root) => file.startsWith(root))
+    ) {
+      return [`Parser output boundary lies in an output-shaping root: ${file}`];
+    }
+    return [];
+  });
 
 export const checkParserVersions = ({
   base,
   head,
+  boundaries = PARSER_OUTPUT_BOUNDARIES,
 }: CheckParserVersionsOptions): string[] => {
-  const baseTree = new StaticTree(base);
-  const headTree = new StaticTree(head);
+  const baseTree = new StaticTree(base, boundaries);
+  const headTree = new StaticTree(head, boundaries);
   const before = baseTree.owners();
   const after = headTree.owners();
-  const errors = [...before.errors, ...after.errors];
+  const errors = [
+    ...boundaryErrors(head, boundaries),
+    ...before.errors,
+    ...after.errors,
+  ];
   const movedSources = movedParserSources(baseTree, headTree);
   const deletedReexports = new Set<string>();
   for (const [file, source] of base) {
@@ -630,8 +701,44 @@ export const checkParserVersions = ({
     if (changed.length === 0 || current.version > previous.version) {
       continue;
     }
+    // A marked parser that still imports a workspace package removed from the
+    // repository now gets it from the registry; only that package's deleted
+    // files are covered by the marker.
+    const externalizedRoots = [...current.parsers].flatMap((file) => {
+      const baseLines = new Set((base.get(file) ?? "").split("\n"));
+      const marked = (head.get(file) ?? "").split("\n").some((line) => {
+        if (baseLines.has(line)) {
+          return false;
+        }
+        const marker = OUTPUT_UNCHANGED.exec(line);
+        const owner = marker?.at(1);
+        return marker !== null && (owner === undefined || owner === key);
+      });
+      if (!marked) {
+        return [];
+      }
+      return (file.endsWith("x") ? jsxTranspiler : transpiler)
+        .scanImports(head.get(file) ?? "")
+        .flatMap(({ path: specifier }) => {
+          const name = specifier.startsWith("@stll/")
+            ? specifier.slice("@stll/".length).split("/").at(0)
+            : undefined;
+          const root = `packages/${name ?? ""}/`;
+          return name !== undefined &&
+            baseTree.resolve(file, specifier) !== undefined &&
+            !head.has(`${root}package.json`)
+            ? [root]
+            : [];
+        });
+    });
     const unexempted = changed.filter((file) => {
       if (movedSources.has(file) || deletedReexports.has(file)) {
+        return false;
+      }
+      if (
+        !head.has(file) &&
+        externalizedRoots.some((root) => file.startsWith(root))
+      ) {
         return false;
       }
       const baseLines = new Set((base.get(file) ?? "").split("\n"));

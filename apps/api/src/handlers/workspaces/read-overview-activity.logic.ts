@@ -265,6 +265,7 @@ export type VisibleActivityAction =
 /** Total over `AuditAction`, so a new action must be narrated or excluded. */
 export const VISIBLE_ACTIVITY_ACTION_BY_ACTION = {
   access: null,
+  [AUDIT_ACTION.SYNTHETIC_SESSION_MINTED]: null,
   cancel: AUDIT_ACTION.CANCEL,
   create: AUDIT_ACTION.CREATE,
   delete: AUDIT_ACTION.DELETE,

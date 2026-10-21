@@ -106,6 +106,7 @@ import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-ra
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
+import { syntheticRoute } from "@/api/handlers/synthetic/routes";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
 import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
@@ -162,6 +163,10 @@ import {
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
+import {
+  clientTooOldError,
+  LOCAL_CLIENT_IDENTITY_HEADER,
+} from "@/api/lib/mcp-connectors/local-client-support";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
 import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
@@ -368,6 +373,14 @@ const api = new Elysia()
   .onRequest(({ request, set }) => {
     applyDiscoveryMetadataCachePolicy({ request, set });
   })
+  .onRequest(({ request, set }) => {
+    const error = clientTooOldError(request);
+    if (error) {
+      set.status = 426;
+      return error;
+    }
+    return undefined;
+  })
   .onRequest(async (context) => {
     const { request, set } = context;
 
@@ -442,6 +455,7 @@ const api = new Elysia()
         "Content-Type",
         "Authorization",
         "MCP-Protocol-Version",
+        LOCAL_CLIENT_IDENTITY_HEADER,
         FORMATTING_LOCALE_HEADER,
         SESSION_ID_HEADER,
         AUTH_SESSION_STARTUP_HEADER,
@@ -519,6 +533,7 @@ const api = new Elysia()
   )
   .use(localDevPublicRoutes)
   .use(smokeRoute)
+  .use(syntheticRoute)
   .mount(getAuth().handler)
   .group(STELLA_API_VERSION_PREFIX, (app) =>
     app

@@ -1,11 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -16,6 +10,11 @@ import { partitionRunnerArguments } from "../apps/api/scripts/test-path-filters"
 import webManifest from "../apps/web/package.json" with { type: "json" };
 import { planTestRuns } from "../apps/web/scripts/test-run-plan";
 import { allApiTests, type selectApiTestImpact } from "./api-test-impact";
+import {
+  computeChangedFileScope,
+  DEFAULT_DETECTORS,
+  scopeOutputLines,
+} from "./ci-plan-scope";
 import {
   BUDGET_MS,
   MAX_CHANGED_TEST_FILES,
@@ -851,45 +850,33 @@ test("the CLI emits a JSON error report and report/blocking exit codes on an unr
 }, 30_000);
 
 test("the CI changed-files output round-trips a path list as one compact JSON line", () => {
-  const source = readFileSync(
-    path.join(import.meta.dir, "../.github/workflows/ci.yml"),
-    "utf-8",
+  const files = ["apps/web/src/a b.test.ts", "scripts/x.test.ts"];
+  const scope = computeChangedFileScope(
+    {
+      changedFiles: files,
+      comparisonBase: "base",
+      scopeUnknown: false,
+      eventName: "pull_request",
+      suiteDepth: "fast",
+      heavyOnly: false,
+      prTitle: "",
+    },
+    {
+      ...DEFAULT_DETECTORS,
+      packageChecks: () => true,
+      landingBuild: () => false,
+      landingDeploy: () => false,
+      desktopBrowser: () => false,
+    },
   );
-  const start = source.indexOf(
-    `printf '%s\\0' "\${changed_files[@]}" | jq -Rsc`,
+  const lines = scopeOutputLines(scope).filter((line) =>
+    line.startsWith("changed_files="),
   );
-  expect(start).toBeGreaterThan(-1);
-  // The pipeline alone: the step writes it inside a grouped redirect.
-  const tail = "sed 's/^/changed_files=/'";
-  const end = source.indexOf(tail, start);
-  expect(end).toBeGreaterThan(start);
-  const command = `${source.slice(start, end + tail.length)} >> "$GITHUB_OUTPUT"`;
-  const directory = mkdtempSync(
-    path.join(os.tmpdir(), "changed-files-output-"),
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).not.toContain("\n");
+  expect(JSON.parse(lines[0]?.replace(/^changed_files=/u, "") ?? "")).toEqual(
+    files,
   );
-  try {
-    const output = path.join(directory, "github-output");
-    writeFileSync(output, "");
-    const files = ["apps/web/src/a b.test.ts", "scripts/x.test.ts"];
-    const result = Bun.spawnSync(
-      [
-        "bash",
-        "-c",
-        `set -euo pipefail; changed_files=("$@"); ${command}`,
-        "bash",
-        ...files,
-      ],
-      { env: { ...process.env, GITHUB_OUTPUT: output } },
-    );
-    expect(result.exitCode).toBe(0);
-    const lines = readFileSync(output, "utf-8").split("\n").filter(Boolean);
-    expect(lines).toHaveLength(1);
-    expect(JSON.parse(lines[0]?.replace(/^changed_files=/u, "") ?? "")).toEqual(
-      files,
-    );
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
 });
 
 test("a failed file annotation cannot inject workflow commands through its name", () => {
