@@ -31,7 +31,9 @@ export const ALL_PACKAGE_ORDER = [...LIBRARY_PACKAGE_ORDER, "cli"] as const;
 // with that repository as `github.com/<owner>/<name>`. The journey canary
 // accepts npm's latest for one of these only with npm-verified provenance
 // from exactly this repository; any other repository declaration falls back
-// to the exact version comparison.
+// to the exact version comparison. Only a directory this repository still
+// publishes can appear here: @stll/time and @stll/test-kit left with their
+// directories, so the canary no longer reads them at all.
 export const MOVED_PACKAGE_REPOSITORIES: Partial<
   Record<(typeof ALL_PACKAGE_ORDER)[number], string>
-> = { time: "github.com/stella/tooling" };
+> = {};
