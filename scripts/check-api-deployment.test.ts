@@ -616,12 +616,7 @@ describe("API deployment health receipt", () => {
       Bun.file(
         new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
       ).text(),
-      Bun.file(
-        new URL(
-          "../.github/actions/promote-dispatch/action.yml",
-          import.meta.url,
-        ),
-      ).text(),
+      Bun.file(new URL("workflow-dispatch-watch.sh", import.meta.url)).text(),
     ]);
     const promoteJobStart = releaseWorkflow.indexOf("\n  promote:\n");
     const stagingJobStart = releaseWorkflow.indexOf(
@@ -743,10 +738,14 @@ describe("API deployment health receipt", () => {
       `run_url="https://github.com/\${INFRA_REPO}/actions/runs/\${run_id}"`,
     );
     expect(promoteAction).not.toContain(`Check https://github.com/\${run_url}`);
-    expect(promoteAction).toContain(
-      `-f "inputs[web_image_digest]=\${WEB_IMAGE_DIGEST}"`,
-    );
-    expect(promoteAction).toContain(
+    const promotionInputs = await Bun.file(
+      new URL(
+        "../.github/actions/promote-dispatch/action.yml",
+        import.meta.url,
+      ),
+    ).text();
+    expect(promotionInputs).toContain("web_image_digest:$web_image_digest");
+    expect(promotionInputs).toContain(
       "Frontend promotions require a prebuilt web image digest.",
     );
     expect(promoteJob).not.toContain("steps.app-token.outputs.token");

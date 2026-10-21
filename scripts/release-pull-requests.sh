@@ -9,6 +9,7 @@
 #
 # Usage: release-pull-requests.sh --repo <owner/name> [--number <pull request>]
 # Prints:
+#   release_numbers=<space-separated recognized release pull request numbers>
 #   open_other=<count of release pull requests other than --number>
 #   current_is_release=<true when --number is itself a release pull request>
 set -euo pipefail
@@ -68,3 +69,4 @@ done
 
 echo "open_other=$open_other"
 echo "current_is_release=$current_is_release"
+echo "release_numbers=$releases"

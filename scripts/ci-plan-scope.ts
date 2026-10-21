@@ -40,6 +40,9 @@ export type ChangedFileScopeInput = {
   heavyOnly: boolean;
   prTitle: string;
   versionChangedInHead?: boolean;
+  // Release recognition is independent of paths: even a release-titled
+  // documentation-only PR must run the fail-closed content guard.
+  releaseRecognized?: boolean;
   root?: string | undefined;
 };
 
@@ -478,6 +481,9 @@ const deriveNormalScopeFacts = (
     packageChecks = failClosedDetector("package checks", () =>
       detectors.packageChecks({ changed: scopeFiles, root }),
     );
+  }
+  if (input.releaseRecognized === true) {
+    packageChecks = true;
   }
   const docs = packageChecks
     ? []
@@ -1118,6 +1124,9 @@ if (import.meta.main) {
     heavyOnly,
     prTitle: Bun.env["PR_TITLE"] ?? "",
     versionChangedInHead,
+    releaseRecognized:
+      Bun.env["RELEASE_PR_REQUIRED"] === TRUE ||
+      (Bun.env["RELEASE_VERSION_COMMITS"] ?? "[]") !== "[]",
   });
   const output = `${scopeOutputLines(scope).join("\n")}\n`;
   if (Bun.env["GITHUB_OUTPUT"]) {

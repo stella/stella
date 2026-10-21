@@ -1125,6 +1125,22 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     };
   }
   if (
+    step.name === "Test release policy scripts" &&
+    fields.run?.includes(
+      "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
+    )
+  ) {
+    return {
+      ...step,
+      run: fields.run
+        .replace(
+          "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
+          "bun test scripts/release-version-dispatch.test.ts\n",
+        )
+        .replace("bash scripts/release-pending.test.sh\n", ""),
+    };
+  }
+  if (
     step.name === "Test oxlint plugins" &&
     fields.run ===
       "bun test scripts/oxlint-plugin-test-coverage.test.ts\nbun scripts/run-custom-lint-tests.ts\n"

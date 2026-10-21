@@ -1601,6 +1601,28 @@ export const TOOLING_ENV_KEYS = new Set([
   "RELEASE_PR_HEAD",
   "RELEASE_PROOF_REPOSITORY",
   "RELEASE_TREE_PROOF_VERIFIER",
+  // Release staging plan, prerequisites, preflight, deadline and inherited
+  // proof wait.
+  "EDGE_TOKEN",
+  "EXPECTED_BASE",
+  "RELEASE_BASE_SHA",
+  "RELEASE_HEAD_SHA",
+  "RELEASE_PR_REQUIRED",
+  "RELEASE_STAGE_DEADLINE",
+  "RELEASE_STAGE_NEEDS",
+  "RELEASE_STAGE_PLAN",
+  "RELEASE_STATUS_TIMEOUT_SECONDS",
+  "RELEASE_VERSION_COMMITS",
+  "REQUIRED_DEPLOY_RUNNER_LABEL",
+  // scripts/workflow-dispatch-watch.sh: dispatch one infra workflow and watch
+  // its run to a receipt.
+  "DISPATCH_TOKEN",
+  "INFRA_REPO",
+  "RECEIPT_ARTIFACT",
+  "UNFINISHED_RUN",
+  "WATCH_DEADLINE_EPOCH",
+  "WATCH_MAX_POLLS",
+  "WORKFLOW_FILE",
   "REUSE_RUN",
   "RELEASE_REF",
   "REPO",

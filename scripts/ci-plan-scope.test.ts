@@ -143,6 +143,29 @@ test("documentation and landing detector failures widen their workflow scopes", 
   }
 });
 
+// A recognized release runs the package checks, whose content guard is fail
+// closed, even when every changed file is documentation.
+test("a recognized release keeps the package checks on a documentation-only change", () => {
+  for (const eventName of ["pull_request", "merge_group"]) {
+    const input = {
+      ...detectorInput(eventName),
+      changedFiles: ["docs/guide.md"],
+    };
+    const documentation = computeChangedFileScope(
+      input,
+      detectors({ packageChecks: () => false }),
+    );
+    expect(documentation.package_checks_required).toBe("false");
+    expect(documentation.docs_checks_required).toBe("true");
+    const release = computeChangedFileScope(
+      { ...input, releaseRecognized: true },
+      detectors({ packageChecks: () => false }),
+    );
+    expect(release.package_checks_required).toBe("true");
+    expect(release.docs_checks_required).toBe("false");
+  }
+});
+
 // The path list covers the landing's own tree; the deploy scope adds every
 // workspace it depends on, transitively, and the packages they resolve to.
 test("e2e-landing follows the landing's whole dependency graph", () => {

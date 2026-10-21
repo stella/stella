@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -186,6 +188,91 @@ describe("staging source selection", () => {
       }
     });
   });
+
+  test.each([
+    {
+      name: "release entry",
+      ref: "gh-readonly-queue/main/pr-41-abcd",
+      chain: "tip",
+      authorized: true,
+      accepted: true,
+    },
+    {
+      name: "another entry PR",
+      ref: "gh-readonly-queue/main/pr-42-abcd",
+      chain: "tip",
+      authorized: true,
+      accepted: false,
+    },
+    {
+      name: "non-queue ref",
+      ref: "release-proof",
+      chain: "tip",
+      authorized: true,
+      accepted: false,
+    },
+    {
+      name: "unrelated parent chain",
+      ref: "gh-readonly-queue/main/pr-41-abcd",
+      chain: "other",
+      authorized: true,
+      accepted: false,
+    },
+    {
+      name: "missing release authorization",
+      ref: "gh-readonly-queue/main/pr-41-abcd",
+      chain: "tip",
+      authorized: false,
+      accepted: false,
+    },
+    {
+      name: "stale expected base",
+      ref: "gh-readonly-queue/main/pr-41-abcd",
+      chain: "stale",
+      authorized: true,
+      accepted: false,
+    },
+  ])(
+    "merge-group source boundary: $name",
+    async ({ ref, chain, authorized, accepted }) => {
+      await withRepository(({ seed, checkout, tip, old, other }) => {
+        git(seed, "switch", "-q", "-c", ref, chain === "other" ? other : tip);
+        const candidate = commit(seed, "release queue entry");
+        git(seed, "push", "-q", "origin", ref);
+        const tools = path.join(checkout, "fixture-tools");
+        mkdirSync(tools);
+        const gh = path.join(tools, "gh");
+        writeFileSync(
+          gh,
+          `#!/usr/bin/env bash
+printf '%s\\n' '[{"number":41,"title":"chore: release v1.2.3","isDraft":false,"isCrossRepository":false}]'
+`,
+        );
+        chmodSync(gh, 0o755);
+        const result = run({
+          cwd: checkout,
+          command: ["bash", RESOLVER, "--sha", candidate],
+          env: {
+            EXPECTED_BASE: chain === "stale" ? old : tip,
+            RELEASE_PR_HEAD: String(authorized),
+            GITHUB_REPOSITORY: "stella/stella",
+            PATH: `${tools}:${process.env["PATH"] ?? ""}`,
+          },
+        });
+        if (accepted) {
+          expect(result.exitCode, result.stderr).toBe(0);
+          expect(outputs(result.stdout)).toEqual({
+            sha: candidate,
+            tip: "false",
+            "main-sha": tip,
+          });
+        } else {
+          expectRefused(result);
+          expect(result.stderr).toContain("STAGING_SHA_REFUSED");
+        }
+      });
+    },
+  );
 
   test("selection refreshes main instead of retaining the checkout's tracking tip", async () => {
     await withRepository(({ seed, checkout, tip }) => {

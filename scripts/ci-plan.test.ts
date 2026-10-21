@@ -356,6 +356,8 @@ const CANCELLATION_EXCEPTIONS = new Set([
   "fix-tests-on-base",
   "heavy-web-build",
   "marketing-screenshots",
+  // The reusable release stage cancels only after power cleanup and alerting.
+  "release-stage",
   CANCEL_REUSABLE_JOB,
   ...Object.keys(PR_CODE_QUALITY_CANCEL_JOBS),
   ...MAIN_ONLY_JOBS,
@@ -435,6 +437,7 @@ test("every eligible CI job cancels a failed merge group in its final step with 
     expect(body.permissions?.["actions"] === "write", id).toBe(
       eligible.has(id) ||
         id === CANCEL_REUSABLE_JOB ||
+        id === "release-stage" ||
         Object.hasOwn(PR_CODE_QUALITY_CANCEL_JOBS, id) ||
         MAIN_ONLY_JOBS.has(id),
     );
@@ -594,6 +597,7 @@ const heavyGateContext = (event: string) => ({
 const COMPUTED_SCOPES: ReadonlySet<string> = new Set([
   "ci_browser_required",
   "pr_heavy_gate_required",
+  "release_stage_required",
 ]);
 
 const fastJobScopes = v.parse(

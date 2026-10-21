@@ -1,0 +1,288 @@
+name: Release stage
+on:
+  workflow_call:
+    inputs:
+      needs_json:
+        required: true
+        type: string
+      plan_json:
+        required: true
+        type: string
+      group_sha:
+        required: true
+        type: string
+      base_sha:
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: write
+  statuses: read
+concurrency:
+  # This workflow waits for deploy-staging, whose promotion holds its own lock.
+  # Infra apply serialization belongs to that dispatched promotion's repository.
+  group: release-stage
+  cancel-in-progress: false
+jobs:
+  stage:
+    name: Prove release candidate on staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_BASE: ${{ inputs.base_sha }}
+      GROUP_SHA: ${{ inputs.group_sha }}
+    steps:
+      - name: Reserve the cleanup budget
+        timeout-minutes: 1
+        run: echo "RELEASE_STAGE_DEADLINE=$(($(date +%s) + 6600))" >> "$GITHUB_ENV"
+      - name: Checkout GitHub API tooling
+        timeout-minutes: 1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+      - name: Preserve GitHub API tooling across source checkouts
+        timeout-minutes: 1
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+      - name: Bound staging by the queue check deadline
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          created=$(bash "$GH_RETRY_SCRIPT" api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq '.created_at')
+          # The queue allows 150 minutes for checks, including earlier jobs.
+          # Reserve ten minutes for cleanup at either deadline.
+          queue_deadline=$(($(date -d "$created" +%s) + 8400))
+          if ((queue_deadline < RELEASE_STAGE_DEADLINE)); then
+            echo "RELEASE_STAGE_DEADLINE=$queue_deadline" >> "$GITHUB_ENV"
+          fi
+      - name: Checkout trusted orchestration
+        timeout-minutes: 1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Set up Bun
+        timeout-minutes: 2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - name: Require successful planned prerequisites
+        timeout-minutes: 1
+        env:
+          RELEASE_STAGE_NEEDS: ${{ inputs.needs_json }}
+          RELEASE_STAGE_PLAN: ${{ inputs.plan_json }}
+        run: bun scripts/check-release-stage-prerequisites.ts
+      - name: Read candidate version
+        id: version
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          if [[ ! "$GROUP_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo '::error::invalid_release_candidate_sha'
+            exit 1
+          fi
+          version=$(bash "$GH_RETRY_SCRIPT" api "repos/$GITHUB_REPOSITORY/contents/VERSION?ref=$GROUP_SHA" --jq '.content' | base64 --decode | tr -d '\n')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Wait for the head group
+        id: head
+        timeout-minutes: 61
+        run: bash scripts/release-stage-preflight.sh head
+      - name: Mint runner inventory token
+        timeout-minutes: 1
+        id: runner-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          permission-organization-self-hosted-runners: read
+      - name: Check required runner
+        id: runner
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ steps.runner-token.outputs.token }}
+          REQUIRED_DEPLOY_RUNNER_LABEL: ${{ vars.STAGING_DEPLOY_RUNNER_LABEL }}
+        run: bash scripts/release-stage-preflight.sh runner
+      - name: Read authoritative staging power state
+        id: power-status
+        timeout-minutes: 3
+        uses: ./.github/actions/workflow-dispatch-watch
+        with:
+          unfinished-run: cancel
+          app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          repository: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          workflow: staging-power.yml
+          title: Staging power status
+          inputs: '{"action":"status","hours":"2"}'
+          receipt-artifact: staging-power-state
+          max-polls: "6"
+      - name: Record staging state
+        id: power
+        timeout-minutes: 1
+        env:
+          RECEIPT: ${{ steps.power-status.outputs.receipt }}
+        run: |
+          set -euo pipefail
+          if ! state=$(jq -er '.state | select(. == "on" or . == "off")' "$RECEIPT"); then
+            echo '::error::staging_state_unknown: authoritative power state is transitioning or invalid'
+            exit 1
+          fi
+          case "$state" in
+            off) echo 'started=true' >> "$GITHUB_OUTPUT" ;;
+            on) echo 'started=false' >> "$GITHUB_OUTPUT" ;;
+          esac
+          jq --arg sha "$GROUP_SHA" --arg base "$EXPECTED_BASE" \
+            --arg run "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '. + {candidate_sha:$sha,base_sha:$base,run_url:$run}' "$RECEIPT" > "$RUNNER_TEMP/release-stage-state.json"
+          cat "$RUNNER_TEMP/release-stage-state.json" >> "$GITHUB_STEP_SUMMARY"
+      - name: Start staging
+        id: start
+        if: steps.power.outputs.started == 'true'
+        timeout-minutes: 10
+        uses: ./.github/actions/workflow-dispatch-watch
+        with:
+          unfinished-run: cancel
+          app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          repository: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          workflow: staging-power.yml
+          title: Staging power on (2h)
+          inputs: '{"action":"on","hours":"2"}'
+          max-polls: "48"
+          deadline: ${{ env.RELEASE_STAGE_DEADLINE }}
+      - name: Wait for powered staging readiness
+        id: ready
+        if: steps.power.outputs.started == 'true'
+        timeout-minutes: 10
+        env:
+          EDGE_TOKEN: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
+        run: bash scripts/release-stage-preflight.sh ready
+      - name: Allocate the remaining deployment budget
+        id: budget
+        timeout-minutes: 1
+        run: bash scripts/release-stage-preflight.sh budget
+      - name: Deploy and prove candidate
+        id: deploy
+        timeout-minutes: 110
+        uses: ./.github/actions/workflow-dispatch-watch
+        with:
+          unfinished-run: cancel
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          workflow: deploy-staging.yml
+          title: Staging release proof ${{ inputs.group_sha }}
+          inputs: '{"sha":"${{ inputs.group_sha }}","release_candidate":"true","expected_base":"${{ inputs.base_sha }}"}'
+          max-polls: ${{ steps.budget.outputs.polls }}
+          deadline: ${{ env.RELEASE_STAGE_DEADLINE }}
+      - name: Require staging verification
+        id: verified
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          state=$(bash "$GH_RETRY_SCRIPT" api "repos/$GITHUB_REPOSITORY/commits/$GROUP_SHA/status" --jq '[.statuses[] | select(.context == "staging/verified")] | first | .state // "missing"')
+          if [[ "$state" != success ]]; then
+            echo "::error::staging_verification_failed: staging/verified=$state"
+            exit 1
+          fi
+      - name: Preserve staging start receipt
+        timeout-minutes: 1
+        if: always() && steps.power.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-stage-state
+          path: ${{ runner.temp }}/release-stage-state.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Stop staging started by this stage
+        id: stop
+        if: always() && steps.power.outputs.started == 'true'
+        timeout-minutes: 5
+        uses: ./.github/actions/workflow-dispatch-watch
+        with:
+          unfinished-run: cancel
+          app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          repository: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          workflow: staging-power.yml
+          title: Staging power off
+          inputs: '{"action":"off","hours":"2"}'
+          max-polls: "18"
+      - name: Alert on release stage failure
+        if: failure()
+        timeout-minutes: 2
+        env:
+          WEBHOOK_URL: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_TOKEN }}
+          WEBHOOK_HEADERS: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_HEADERS }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PREFLIGHT_REASON: ${{ steps.head.outputs.reason || steps.runner.outputs.reason }}
+          STEP_OUTCOMES: ${{ toJSON(steps) }}
+        run: |
+          set -euo pipefail
+          reason=${PREFLIGHT_REASON:-$(jq -r 'to_entries | map(select(.value.outcome == "failure") | .key) | join(",")' <<< "$STEP_OUTCOMES")}
+          headers=()
+          if [[ -n "$WEBHOOK_TOKEN" ]]; then headers+=(-H "Authorization: Bearer $WEBHOOK_TOKEN"); fi
+          while IFS= read -r header; do
+            if [[ -n "$header" ]]; then headers+=(-H "$header"); fi
+          done <<< "$WEBHOOK_HEADERS"
+          if [[ -z "$WEBHOOK_URL" || ${#headers[@]} -eq 0 ]]; then
+            echo '::error::release_stage_alert_unconfigured'
+            exit 1
+          fi
+          jq -n --arg text "release stage red: $VERSION $GROUP_SHA $reason ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" '{text:$text}' |
+            bash scripts/retry.sh curl --fail-with-body -sS --max-time 30 -X POST -H 'content-type: application/json' "${headers[@]}" --data-binary @- "$WEBHOOK_URL"
+
+      - name: Cancel merge group after failure in this job
+        if: failure() && github.event_name == 'merge_group'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            let diagnostic;
+            let failureSummary = "failed-step lookup unavailable";
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
