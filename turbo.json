@@ -1568,6 +1568,7 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/docker-compose.yml",
         "$TURBO_ROOT$/docker/postgres/**",
+        "$TURBO_ROOT$/.claude/mcp/package.json",
         "$TURBO_ROOT$/.github/workflows/**",
         "$TURBO_ROOT$/.github/ci-job-classification-decisions.json",
         "$TURBO_ROOT$/.github/ci-job-classification-sources.json",
