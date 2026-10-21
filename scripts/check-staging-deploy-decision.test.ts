@@ -68,6 +68,8 @@ const extractStepScript = (
 
 type DecisionCase = {
   deployWhenUnreachable?: boolean;
+  powerAction?: "" | "on" | "status";
+  runtime?: "" | "off" | "up";
   status: "not_ready" | "ready";
   script?: string;
   statusWriteExitCode?: number;
@@ -91,6 +93,8 @@ let sideSha = "";
 
 const runDecision = async ({
   deployWhenUnreachable = false,
+  powerAction = "",
+  runtime = "",
   status,
   script = scriptPath,
   statusWriteExitCode = 0,
@@ -124,6 +128,8 @@ const runDecision = async ({
       DEPLOY_SHA: TIP_SHA,
       GITHUB_STEP_SUMMARY: summaryPath,
       STATUS: status,
+      POWER_ACTION: powerAction,
+      RUNTIME: runtime,
     },
   });
 
@@ -272,7 +278,7 @@ beforeAll(async () => {
     extractStepScript(
       workflow,
       "Probe staging health",
-      "\n      # Staging that does not answer",
+      "\n      # A staging that does not answer",
     ),
   );
   const recordStart = workflow.indexOf(
@@ -385,6 +391,41 @@ describe("staging deploy decision", () => {
     ).toMatchObject({ deploy: "deploy=true", exitCode: 0 });
   });
 
+  test("deploys over a running staging that does not answer without being asked", async () => {
+    const result = await runDecision({
+      powerAction: "status",
+      runtime: "up",
+      status: "not_ready",
+    });
+    expect(result).toMatchObject({ deploy: "deploy=true", exitCode: 0 });
+    expect(result.calls).toBe("");
+  });
+
+  test("deploys into a staging this run started", async () => {
+    expect(
+      await runDecision({
+        powerAction: "on",
+        runtime: "up",
+        status: "not_ready",
+      }),
+    ).toMatchObject({ deploy: "deploy=true", exitCode: 0 });
+  });
+
+  test.each([
+    ["staging power reports it off", "status", "off"],
+    ["a start that left it off", "on", "off"],
+    ["no power state", "", ""],
+  ] as const)("refuses when %s", async (_label, powerAction, runtime) => {
+    const result = await runDecision({
+      powerAction,
+      runtime,
+      status: "not_ready",
+    });
+    expect(result).toMatchObject({ deploy: "deploy=false", exitCode: 1 });
+    expect(result.summary).toContain("Staging is off");
+    expect(result.calls).toContain('"description":"staging off"');
+  });
+
   test("a failed status write cannot turn an off dispatch green", async () => {
     const result = await runDecision({
       status: "not_ready",
@@ -399,13 +440,22 @@ describe("staging deploy decision", () => {
   test("every successful decision selects deployment", async () => {
     for (const status of ["ready", "not_ready"] as const) {
       for (const deployWhenUnreachable of [false, true]) {
-        const result = await runDecision({ status, deployWhenUnreachable });
-        if (result.exitCode === 0) {
-          expect(result.deploy).toBe("deploy=true");
-          expect(result.calls).toBe("");
-        } else {
-          expect(result.deploy).toBe("deploy=false");
-          expect(result.exitCode).toBe(1);
+        for (const powerAction of ["", "on", "status"] as const) {
+          for (const runtime of ["", "off", "up"] as const) {
+            const result = await runDecision({
+              status,
+              deployWhenUnreachable,
+              powerAction,
+              runtime,
+            });
+            if (result.exitCode === 0) {
+              expect(result.deploy).toBe("deploy=true");
+              expect(result.calls).toBe("");
+            } else {
+              expect(result.deploy).toBe("deploy=false");
+              expect(result.exitCode).toBe(1);
+            }
+          }
         }
       }
     }
@@ -447,6 +497,184 @@ describe("staging deploy decision", () => {
 
     expect(workflow).not.toMatch(/^\s+schedule:/mu);
     expect(workflow).toContain("  workflow_dispatch:\n");
+  });
+
+  test("asks staging power only when staging does not answer, and starts it only when asked", async () => {
+    const workflow = await Bun.file(WORKFLOW_URL).text();
+    const start = workflow.indexOf("  staging-health:\n");
+    const healthJob = workflow.slice(
+      start,
+      workflow.indexOf("\n  build-api:", start),
+    );
+    const notAnswering =
+      "if: steps.probe.outputs.status != 'ready' && inputs.deploy_when_unreachable != true";
+
+    expect(healthJob).toContain("    environment: release-app\n");
+    expect(healthJob.split(notAnswering)).toHaveLength(3);
+    expect(healthJob).toContain(
+      `POWER_ACTION: \${{ (inputs.start_staging || inputs.release_candidate) && 'on' || 'status' }}`,
+    );
+    expect(healthJob).toContain(
+      `CALLER: deploy-staging-\${{ github.run_id }}-\${{ github.run_attempt }}`,
+    );
+    expect(healthJob).toContain(
+      `POWER_ACTION: \${{ steps.power.outputs.action }}`,
+    );
+    expect(healthJob).toContain(`RUNTIME: \${{ steps.power.outputs.runtime }}`);
+    // The decision consumes the power state, so it must come after it.
+    expect(
+      healthJob.indexOf("- name: Read or start staging power"),
+    ).toBeLessThan(
+      healthJob.indexOf("- name: Decide whether staging can deploy"),
+    );
+  });
+});
+
+const POWER_SCRIPT = path.resolve(
+  import.meta.dirname,
+  "staging-power-dispatch.sh",
+);
+
+// Answers the GitHub API calls of staging-power-dispatch.sh from a fixture.
+const FAKE_POWER_GH = `#!/usr/bin/env python3
+import json,os,pathlib,subprocess,sys
+root=pathlib.Path(os.environ['FAKE_ROOT'])
+args=sys.argv[1:]
+endpoint=next((a for a in args if a.startswith('repos/')),'')
+with (root/'calls').open('a') as calls:calls.write(' '.join(args)+'\\n')
+title=os.environ['FAKE_TITLE']
+if endpoint.endswith('/dispatches'):sys.exit(0)
+if '/runs?' in endpoint:payload={'workflow_runs':[
+ {'id':1,'display_title':'Staging power status'},
+ {'id':2,'display_title':title+'0'},
+ {'id':42,'display_title':title}]}
+elif endpoint.endswith('/runs/42'):payload={'status':'completed','conclusion':os.environ['FAKE_CONCLUSION']}
+elif endpoint.endswith('/runs/42/jobs'):
+ steps=[{'name':'Report status','conclusion':'success'}]
+ if os.environ['FAKE_STEP']:steps.append({'name':'Staging runtime is up','conclusion':os.environ['FAKE_STEP']})
+ payload={'jobs':[{'name':'Staging power','steps':steps}]}
+else:raise RuntimeError('unexpected endpoint '+endpoint)
+if '--jq' in args:
+ result=subprocess.run(['jq','-r',args[args.index('--jq')+1]],input=json.dumps(payload),text=True,capture_output=True)
+ sys.stdout.write(result.stdout);sys.stderr.write(result.stderr);sys.exit(result.returncode)
+sys.stdout.write(json.dumps(payload))
+`;
+
+type PowerCase = {
+  action: string;
+  caller?: string;
+  conclusion?: string;
+  step?: string;
+  title: string;
+};
+
+const runPower = async ({
+  action,
+  caller = "deploy-staging-9-1",
+  conclusion = "success",
+  step = "success",
+  title,
+}: PowerCase) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "staging-power-"));
+  try {
+    const fakeGh = path.join(directory, "gh");
+    await Bun.write(fakeGh, FAKE_POWER_GH);
+    await chmod(fakeGh, 0o700);
+    await Bun.write(path.join(directory, "calls"), "");
+    const result = Bun.spawnSync(["bash", POWER_SCRIPT, action], {
+      env: {
+        ...process.env,
+        PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+        FAKE_ROOT: directory,
+        FAKE_TITLE: title,
+        FAKE_CONCLUSION: conclusion,
+        FAKE_STEP: step,
+        GH_TOKEN: "stub",
+        GH_RETRY_SCRIPT: path.resolve(import.meta.dirname, "gh-retry.sh"),
+        INFRA_REPO: "stella/stella-infra",
+        CALLER: caller,
+        HOURS: "2",
+        STAGING_POWER_POLL_SECONDS: "0",
+      },
+    });
+    return {
+      calls: await Bun.file(path.join(directory, "calls")).text(),
+      exitCode: result.exitCode,
+      stderr: result.stderr.toString(),
+      stdout: result.stdout.toString(),
+    };
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+};
+
+describe("staging power state", () => {
+  test.each([
+    ["success", "runtime=up\n"],
+    ["skipped", "runtime=off\n"],
+  ])("reads the runtime step %s as %p", async (step, expected) => {
+    const result = await runPower({
+      action: "status",
+      step,
+      title: "Staging power status for deploy-staging-9-1",
+    });
+    expect(result.stderr).not.toContain("::error::");
+    expect(result).toMatchObject({ exitCode: 0, stdout: expected });
+    expect(result.calls).toContain("actions/runs/42/jobs");
+  });
+
+  test("a start names its lease and never dispatches a second deploy of main", async () => {
+    const result = await runPower({
+      action: "on",
+      title: "Staging power on (2h) for deploy-staging-9-1",
+    });
+    expect(result).toMatchObject({ exitCode: 0, stdout: "runtime=up\n" });
+    const dispatch = result.calls.split("\n")[0] ?? "";
+    expect(dispatch).toContain(
+      "repos/stella/stella-infra/actions/workflows/staging-power.yml/dispatches",
+    );
+    for (const field of [
+      "ref=main",
+      "inputs[action]=on",
+      "inputs[hours]=2",
+      "inputs[deploy_main]=false",
+      "inputs[caller]=deploy-staging-9-1",
+    ]) {
+      expect(dispatch).toContain(`-f ${field}`);
+    }
+  });
+
+  test.each([
+    ["a failed run", { conclusion: "failure" }, "ended failure"],
+    [
+      "a run without the runtime step",
+      { step: "" },
+      "did not report the runtime",
+    ],
+    [
+      "a cancelled runtime step",
+      { step: "cancelled" },
+      "did not report the runtime",
+    ],
+  ] as const)("fails closed on %s", async (_label, fixture, message) => {
+    const result = await runPower({
+      action: "status",
+      title: "Staging power status for deploy-staging-9-1",
+      ...fixture,
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(message);
+  });
+
+  test("refuses a caller id that could change the run title it matches", async () => {
+    const result = await runPower({
+      action: "status",
+      caller: 'x" or true',
+      title: "unused",
+    });
+    expect(result.exitCode).toBe(2);
+    expect(result.calls).toBe("");
   });
 });
 

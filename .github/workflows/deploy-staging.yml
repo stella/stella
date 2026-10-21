@@ -11,10 +11,14 @@ defaults:
 # and a verified main/PR chain. Tags remain the production path.
 #
 # Staging is off unless someone starts it, so this runs only when
-# dispatched. A dispatch while staging is not answering deploys nothing and
-# fails with a staging/verified error: start staging first, then dispatch again. To
-# deploy a fix to a staging that is up but unhealthy, dispatch with
-# deploy_when_unreachable.
+# dispatched. When staging does not answer its health probe, the infrastructure
+# repository's Staging Power workflow says whether it runs. A staging that runs
+# but does not answer (for example an old image that cannot start against the
+# current database) gets the requested commit deployed over it. A staging that
+# is off is started for 2 hours when the dispatch asks for it (start_staging,
+# always for a release candidate); otherwise nothing is deployed and the run
+# fails with a staging/verified error. deploy_when_unreachable deploys without
+# asking.
 
 on:
   workflow_dispatch:
@@ -40,8 +44,13 @@ on:
       waive_reason:
         description: "Required reason including evidence=<path> (single line, maximum 116 characters)"
         type: string
+      start_staging:
+        description: "Start staging (2-hour lease) when it is off; a release candidate always does"
+        required: false
+        default: false
+        type: boolean
       deploy_when_unreachable:
-        description: "Deploy even when staging does not answer its health probe"
+        description: "Deploy without asking whether staging runs when it does not answer its health probe"
         required: false
         default: false
         type: boolean
@@ -174,10 +183,14 @@ jobs:
     needs: resolve
     if: github.ref == 'refs/heads/main' && needs.resolve.outputs.reused != 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # A staging that does not answer waits for one Staging Power run, which
+    # queues for the infrastructure repository's deploy runner.
+    timeout-minutes: 40
     permissions:
       contents: read
       statuses: write
+    # Release App key lives in this environment (main and v* tags only).
+    environment: release-app
     outputs:
       deploy: ${{ steps.decide.outputs.deploy }}
 
@@ -271,8 +284,50 @@ jobs:
           echo "status=${status}" >> "$GITHUB_OUTPUT"
           echo "served_commit=${served_commit}" >> "$GITHUB_OUTPUT"
 
-      # Staging that does not answer is normally off. Deploying into it would
-      # leave the smoke below measuring an environment that is not running.
+      # A staging that does not answer is either off or running an image that
+      # cannot serve (one older than the migrations already applied to its
+      # database never passes its boot checks). Only the infrastructure
+      # repository can tell them apart, so ask its Staging Power workflow, or
+      # start staging through it when the dispatch asks for that.
+      - name: Checkout staging power tooling
+        if: steps.probe.outputs.status != 'ready' && inputs.deploy_when_unreachable != true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .staging-power
+          persist-credentials: false
+          sparse-checkout: scripts/staging-power-dispatch.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Mint staging power token
+        id: power-token
+        if: steps.probe.outputs.status != 'ready' && inputs.deploy_when_unreachable != true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          permission-actions: write
+
+      - name: Read or start staging power
+        id: power
+        if: steps.power-token.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ steps.power-token.outputs.token }}
+          INFRA_REPO: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          CALLER: deploy-staging-${{ github.run_id }}-${{ github.run_attempt }}
+          POWER_ACTION: ${{ (inputs.start_staging || inputs.release_candidate) && 'on' || 'status' }}
+          HOURS: "2"
+        run: |
+          set -euo pipefail
+          echo "action=${POWER_ACTION}" >> "$GITHUB_OUTPUT"
+          bash "$GITHUB_WORKSPACE/.staging-power/scripts/staging-power-dispatch.sh" "$POWER_ACTION" >> "$GITHUB_OUTPUT"
+
+      # Deploying into a staging that is off would leave the smoke below
+      # measuring an environment that is not running.
       - name: Decide whether staging can deploy
         id: decide
         env:
@@ -280,6 +335,8 @@ jobs:
           DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
           DEPLOY_WHEN_UNREACHABLE: ${{ inputs.deploy_when_unreachable }}
           STATUS: ${{ steps.probe.outputs.status }}
+          POWER_ACTION: ${{ steps.power.outputs.action }}
+          RUNTIME: ${{ steps.power.outputs.runtime }}
         run: |
           set -euo pipefail
 
@@ -294,13 +351,26 @@ jobs:
             exit 0
           fi
 
+          case "${POWER_ACTION:-}:${RUNTIME:-}" in
+            on:up)
+              echo "deploy=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::Started staging for 2 hours; deploying into it."
+              exit 0
+              ;;
+            status:up)
+              echo "deploy=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::Staging runs but does not answer its health probe; deploying over the image it runs."
+              exit 0
+              ;;
+          esac
+
           echo "deploy=false" >> "$GITHUB_OUTPUT"
           {
             echo "### Staging is off"
-            echo "Staging is not answering its health probe, so \`${DEPLOY_SHA}\` was not deployed."
-            echo "Start staging, then dispatch this workflow again."
+            echo "Staging is not running, so \`${DEPLOY_SHA}\` was not deployed."
+            echo "Dispatch this workflow again with start_staging, or start staging first."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error::staging off: nothing was deployed. Start staging, then dispatch again."
+          echo "::error::staging off: nothing was deployed. Dispatch again with start_staging, or start staging first."
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           jq -n --arg url "$run_url" \
             '{state: "error", context: "staging/verified", description: "staging off", target_url: $url}' |

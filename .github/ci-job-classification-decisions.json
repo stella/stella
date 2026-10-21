@@ -407,27 +407,27 @@
   "candidate:.github/workflows/deploy-staging.yml/resolve": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "69f9fc243ca519dd7171a21f6ef08d8090388a0df5ab640b8984cb0408a19504"
+    "reviewedDigest": "bc33f9491557a3ea0aec4fb48d89069ab4cfc908179afe8db89e8b4b0112448c"
   },
   "candidate:.github/workflows/deploy-staging.yml/staging-health": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "290da2e9c9706d47792db95d5cde1f97b26ec50082c076fb5684a0c6b33be10b"
+    "reviewedDigest": "83870a184e276ea7c94440e7d38d12ee33ec9a5773658b4a91ea8026ff5526cf"
   },
   "candidate:.github/workflows/deploy-staging.yml/build-api": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "0d4bc3a4dc098b5a23b23abceb0bd2b777e7ba0e1f2fc481593c0e080b525e41"
+    "reviewedDigest": "6f16103e387f8bea8e0a131acc77f76c1413bfc1bc515f86398783563c44e3ad"
   },
   "candidate:.github/workflows/deploy-staging.yml/build-web": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "276e14646d9872c13a7773713ec06dc4c4363a5bdb50ce631ae59899c37c9f78"
+    "reviewedDigest": "76ee143d66856e5e3dc184a09686e3b19fcb228a8a676a63b25fcb8bd0fb0da7"
   },
   "candidate:.github/workflows/deploy-staging.yml/promote-staging": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "8d4b29016ce0c0392e9ac16dae146ef0152700c4ce001c336444d3e9a9d678e4"
+    "reviewedDigest": "5772d9d18d61669d6f5b1e87304c13d30ca3ff8bb3e1479f961692a4502c4393"
   },
   "candidate:.github/workflows/desktop-release-canary.yml/check-latest": {
     "kind": "ordinary",

@@ -62,6 +62,14 @@ result on the deployed SHA and links to the workflow run. A new promotion resets
 that status to `pending`; a failed or incomplete gating smoke records `failure`.
 The API model-turn smoke retains its separate report-only policy.
 
+When staging does not answer its health probe, the run asks the
+infrastructure repository's Staging Power workflow whether staging runs. A
+staging that runs but does not answer (for example an image older than the
+migrations its database already has) gets the commit deployed over it. A
+staging that is off is started for 2 hours when the dispatch sets
+`start_staging` (release candidates always do); otherwise the run deploys
+nothing and records `staging/verified` = `error` ("staging off").
+
 The repository variable `STAGING_STATE` declares environment prerequisites as
 JSON. Missing keys (or an unset variable) mean on: every check gates. The allowed
 keys are `corpus_index` (`on` or `off`) and `rollout` (`on` or
@@ -145,7 +153,9 @@ or change deployed feature flags.
    SHA differs from the commit that set the pending VERSION on main. Ordinary pinned dispatches leave
    `release_candidate` false and skip this check. The release-candidate heavy run dispatches
    `main-pr-depth.yml` for the same SHA. The staging run also refuses a
-   SHA that `main` does not contain. When its smokes pass,
+   SHA that `main` does not contain. A release-candidate staging run starts
+   staging itself (a 2-hour lease) when it is off, and deploys over a staging
+   that runs but does not answer its health probe. When its smokes pass,
    the commit carries `staging/verified` = `success`. `main-heavy.yml`
    records `main/heavy`, while `main-pr-depth.yml` records `main/pr-depth`, on the same commit. If the run is cancelled because
    a newer staging dispatch replaced it while it waited, dispatch it again
