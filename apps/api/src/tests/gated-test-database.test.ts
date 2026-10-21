@@ -7,6 +7,7 @@ import { withTimeout } from "@stll/concurrency/with-timeout";
 import { forceClosePool, terminateReserved } from "@/api/db/sql-close";
 import { PG_DRIVER_ERROR } from "@/api/lib/pg-error";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import { withGatedTestClients } from "./gated-test-database";
 
@@ -55,7 +56,7 @@ describe.skipIf(!runPostgresTests)("forced PostgreSQL scope cleanup", () => {
           expect(
             await withTimeout(async () => await result.query, {
               label: "closed PostgreSQL query rejection",
-              timeoutMs: 2000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             }),
           ).toMatchObject({
             status: "rejected",
@@ -109,12 +110,12 @@ describe.skipIf(!runPostgresTests)("forced PostgreSQL scope cleanup", () => {
           await waitForBlockedPid(observer, { waitingPid, holdingPid });
           await withTimeout(async () => await terminateReserved(reserved), {
             label: "reserved PostgreSQL termination",
-            timeoutMs: 2000,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           });
           expect(
             await withTimeout(async () => await query, {
               label: "terminated reserved query rejection",
-              timeoutMs: 2000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             }),
           ).toMatchObject({
             status: "rejected",

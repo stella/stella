@@ -54,6 +54,7 @@ export const summarizeVersionDiff = async ({
     managedAIResidency,
     organizationId,
     admission,
+    userId: admission.userId,
     // Shared by root-scoped and workspace-scoped callers; no workspace id is
     // threaded through this helper's options.
     tenantWorkspaceIds: [],
