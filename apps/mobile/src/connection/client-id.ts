@@ -3,7 +3,6 @@ import * as v from "valibot";
 
 import {
   MOBILE_CLIENT_NAME,
-  MOBILE_REDIRECT_URI,
   MOBILE_SCOPES,
   mobileClientMetadataUrl,
 } from "@stll/api-contract/mobile-client";
@@ -24,10 +23,12 @@ const registrationResponseSchema = v.object({ client_id: v.string() });
 export const resolveClientId = async ({
   fetch,
   metadata,
+  redirectUri,
   resource,
 }: {
   readonly fetch: Fetch;
   readonly metadata: AuthorizationServerMetadata;
+  readonly redirectUri: string;
   readonly resource: string;
 }): Promise<Result<string, ClientRegistrationError>> => {
   const documentClientId =
@@ -57,7 +58,7 @@ export const resolveClientId = async ({
           application_type: "native",
           client_name: MOBILE_CLIENT_NAME,
           grant_types: ["authorization_code", "refresh_token"],
-          redirect_uris: [MOBILE_REDIRECT_URI],
+          redirect_uris: [redirectUri],
           resources: [resource],
           response_types: ["code"],
           scope: MOBILE_SCOPES.join(" "),
