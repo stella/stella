@@ -545,20 +545,20 @@ describe("code block actions while an answer streams", () => {
     const open = "Example:\n\n```js\nconst total = 1;";
     const view = await mountAnswer(open, { isAnimating: true });
     const renderedBlock = () =>
-      view.root.querySelector('[data-streamdown="code-block"]');
+      view.root.querySelector<HTMLElement>('[data-streamdown="code-block"]');
     const actions = () => [
       ...view.root.querySelectorAll(
         '[data-streamdown="code-block-actions"] button',
       ),
     ];
-    expect(renderedBlock()?.dataset.incomplete).toBe("true");
+    expect(renderedBlock()?.dataset["incomplete"]).toBe("true");
     expect(actions().length).toBeGreaterThan(0);
     expect(actions().every((button) => button.hasAttribute("disabled"))).toBe(
       true,
     );
     // The stream ends with the same text: only the streaming flag changes.
     await view.update(open, { isAnimating: false });
-    expect(renderedBlock()?.dataset.incomplete).toBeUndefined();
+    expect(renderedBlock()?.dataset["incomplete"]).toBeUndefined();
     expect(actions().length).toBeGreaterThan(0);
     expect(actions().some((button) => button.hasAttribute("disabled"))).toBe(
       false,

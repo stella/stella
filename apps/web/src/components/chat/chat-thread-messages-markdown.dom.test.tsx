@@ -2,7 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
@@ -44,7 +44,7 @@ afterAll(async () => {
 });
 
 const thread = (
-  threadMessages: PersistedChatMessage[],
+  threadMessages: ChatUIMessage[],
   isGenerating: boolean,
   queryClient: InstanceType<typeof QueryClient>,
 ) => (
@@ -66,7 +66,9 @@ const thread = (
                 onAskUserSubmit={() => {}}
                 onCreateDocumentResolve={() => {}}
                 onOpenCreatedDocument={() => {}}
-                streamdownComponents={{}}
+                streamdownComponents={{
+                  a: ({ children, ...props }) => <a {...props}>{children}</a>,
+                }}
               />
             </ChatEditorProvider>
           </ChatApprovalContext>
@@ -77,7 +79,7 @@ const thread = (
 );
 
 const renderThread = (
-  threadMessages: PersistedChatMessage[],
+  threadMessages: ChatUIMessage[],
   isGenerating: boolean,
 ) => {
   const queryClient = new QueryClient();
@@ -85,18 +87,18 @@ const renderThread = (
   const view = render(thread(threadMessages, isGenerating, queryClient));
   return {
     view,
-    rerender: (next: PersistedChatMessage[], nextGenerating: boolean) => {
+    rerender: (next: ChatUIMessage[], nextGenerating: boolean) => {
       view.rerender(thread(next, nextGenerating, queryClient));
     },
   };
 };
 
-const answer = (content: string): PersistedChatMessage => ({
+const answer = (content: string): ChatUIMessage => ({
   id: "answer",
   parts: [{ type: "text", content }],
   role: "assistant",
 });
-const question: PersistedChatMessage = {
+const question: ChatUIMessage = {
   id: "question",
   parts: [{ type: "text", content: "<p>Show the snippet.</p>" }],
   role: "user",
@@ -112,8 +114,9 @@ test("code block actions of the streaming answer wait until the turn ends", asyn
   ];
   await waitFor(() => {
     expect(
-      view.container.querySelector('[data-streamdown="code-block"]')?.dataset
-        .incomplete,
+      view.container.querySelector<HTMLElement>(
+        '[data-streamdown="code-block"]',
+      )?.dataset["incomplete"],
     ).toBe("true");
   });
   expect(actions().length).toBeGreaterThan(0);
