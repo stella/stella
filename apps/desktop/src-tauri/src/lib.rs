@@ -362,17 +362,17 @@ pub fn run() {
                 let mut mgr = manager.lock().await;
                 if mgr.finish_session(&id) {
                   mgr.persist_sessions_public().await;
-                  mgr.retry_session(&id).await;
+                  drop(mgr);
+                  crate::session_manager::retry_session(Arc::clone(&manager), &id).await;
                 }
-                drop(mgr);
               }
               tray::MenuAction::RetrySession(id) => {
                 let mut mgr = manager.lock().await;
                 if mgr.retry_session_now(&id) {
                   mgr.persist_sessions_public().await;
-                  mgr.retry_session(&id).await;
+                  drop(mgr);
+                  crate::session_manager::retry_session(Arc::clone(&manager), &id).await;
                 }
-                drop(mgr);
               }
             }
           });

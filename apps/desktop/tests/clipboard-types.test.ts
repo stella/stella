@@ -18,6 +18,7 @@ import {
 } from "../src/clipboard/clipboard-types";
 
 const snapshotWithWelcomeStatus = (welcomeStatus: unknown) => ({
+  revision: 0,
   captureStatus: "active",
   groupLimit: 24,
   groups: [],

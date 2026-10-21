@@ -1,4 +1,3 @@
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::Serialize;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, State, WebviewWindow};
@@ -420,15 +419,17 @@ pub fn clipboard_get_image_preview(
   id: String,
   state: State<'_, ClipboardAppState>,
 ) -> Result<String, String> {
-  let preview = {
+  let (preview, cache) = {
     let manager = state.lock().map_err(|_| lock_error())?;
-    manager.image_preview(&id, &caller)?
-  }
-  .load()?;
-  Ok(format!(
-    "data:image/png;base64,{}",
-    STANDARD.encode(preview)
-  ))
+    (
+      manager.image_preview(&id, &caller)?,
+      std::sync::Arc::clone(&manager.preview_cache),
+    )
+  };
+  let mut cache = cache
+    .lock()
+    .map_err(|_| "clipboard preview cache lock is poisoned".to_string())?;
+  cache.load_preview(&id, preview)
 }
 
 #[tauri::command]

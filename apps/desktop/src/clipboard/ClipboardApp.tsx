@@ -168,10 +168,12 @@ import {
   CLIPBOARD_HISTORY_CHANGED_EVENT,
   CLIPBOARD_RETENTIONS,
   isClipboardCopyError,
+  isClipboardCaptureUpdate,
   isClipboardSnapshot,
 } from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
+  ClipboardCaptureUpdate,
   ClipboardCopyFormat,
   ClipboardCopyErrorKind,
   ClipboardRetention,
@@ -251,6 +253,7 @@ const IMAGE_CLIPBOARD_CAPTURE_SUPPORTED =
   !navigator.userAgent.includes("Linux");
 
 const EMPTY_SNAPSHOT = {
+  revision: 0,
   captureStatus: "active",
   // Native owns the limit; fail closed until the first runtime snapshot.
   groupLimit: 0,
@@ -1603,6 +1606,9 @@ const ClipboardApp = () => {
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const snapshotRequestIdRef = useRef(0);
+  const captureUpdatesRef = useRef<ClipboardCaptureUpdate[]>([]);
+  const snapshotPendingRef = useRef(false);
+  const appliedRevisionRef = useRef(0);
   const [ageReferenceTime, setAgeReferenceTime] = useState(
     () => Temporal.Now.instant().epochMilliseconds,
   );
@@ -1648,6 +1654,8 @@ const ClipboardApp = () => {
     const stopObservingReopens = observeClipboardReopens();
     let disposed = false;
     const readSnapshot = () => {
+      captureUpdatesRef.current = [];
+      snapshotPendingRef.current = true;
       const requestId = snapshotRequestIdRef.current + 1;
       snapshotRequestIdRef.current = requestId;
       void measureClipboardSnapshotRequest(
@@ -1657,7 +1665,9 @@ const ClipboardApp = () => {
           if (disposed || requestId !== snapshotRequestIdRef.current) {
             return undefined;
           }
+          snapshotPendingRef.current = false;
           if (!isClipboardSnapshot(value)) {
+            captureUpdatesRef.current = [];
             reportDesktopError({
               code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
               operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
@@ -1667,6 +1677,29 @@ const ClipboardApp = () => {
             return undefined;
           }
           dispatchClipboard({ type: "snapshotReceived", snapshot: value });
+          appliedRevisionRef.current = Math.max(
+            appliedRevisionRef.current,
+            value.revision,
+          );
+          let refreshRequired = false;
+          const pendingUpdates = captureUpdatesRef.current.toSorted(
+            (left, right) => left.revision - right.revision,
+          );
+          for (const update of pendingUpdates) {
+            if (update.revision <= appliedRevisionRef.current) {
+              continue;
+            }
+            if (update.revision !== appliedRevisionRef.current + 1) {
+              refreshRequired = true;
+              continue;
+            }
+            dispatchClipboard({ type: "captureReceived", update });
+            appliedRevisionRef.current = update.revision;
+          }
+          captureUpdatesRef.current = [];
+          if (refreshRequired) {
+            readSnapshot();
+          }
           setError((current) => (current?.source === "read" ? null : current));
           return undefined;
         })
@@ -1674,6 +1707,8 @@ const ClipboardApp = () => {
           if (disposed || requestId !== snapshotRequestIdRef.current) {
             return;
           }
+          snapshotPendingRef.current = false;
+          captureUpdatesRef.current = [];
           reportDesktopError({
             code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
             detail: describeError(error),
@@ -1684,9 +1719,39 @@ const ClipboardApp = () => {
         });
     };
     readSnapshot();
-    const stopListening = subscribeDesktopEvent({
+    const stopListening = subscribeDesktopEvent<unknown>({
       event: CLIPBOARD_HISTORY_CHANGED_EVENT,
-      handler: readSnapshot,
+      handler: ({ payload }) => {
+        if (payload === null) {
+          readSnapshot();
+          return;
+        }
+        if (!isClipboardCaptureUpdate(payload)) {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError({ message: errorReadHistory, source: "read" });
+          return;
+        }
+        if (payload.revision <= appliedRevisionRef.current) {
+          return;
+        }
+        // Preserve the baseline while its snapshot is in flight. Applying a
+        // delta to the empty shell would make that baseline appear stale.
+        if (snapshotPendingRef.current) {
+          captureUpdatesRef.current.push(payload);
+          return;
+        }
+        if (payload.revision !== appliedRevisionRef.current + 1) {
+          readSnapshot();
+          captureUpdatesRef.current.push(payload);
+          return;
+        }
+        dispatchClipboard({ type: "captureReceived", update: payload });
+        appliedRevisionRef.current = payload.revision;
+      },
       onError: () => {
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
@@ -1901,6 +1966,10 @@ const ClipboardApp = () => {
       void invoke<unknown>(command, args)
         .then((value) => {
           if (isClipboardSnapshot(value)) {
+            appliedRevisionRef.current = Math.max(
+              appliedRevisionRef.current,
+              value.revision,
+            );
             dispatchClipboard({ type: "snapshotReceived", snapshot: value });
             onSuccess?.();
             return undefined;
