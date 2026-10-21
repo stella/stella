@@ -110,5 +110,9 @@
   {
     "name": "Check workflow job classifications",
     "reason": "Moved to ci-quick-checks unchanged in substance (same tooling checkout at the workflow revision and the same command), so it fails a pull request before the heavy suites start."
+  },
+  {
+    "name": "Test merge-group ancestor check",
+    "reason": "The merge queue now requires every entry's own group to pass before it merges (ALLGREEN), so the polling step it tested and the step's script were removed."
   }
 ]
