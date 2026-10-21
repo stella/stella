@@ -106,7 +106,7 @@ const installedBinary = async (
     "package",
     DEVELOPMENT_IDENTIFIER,
   ]);
-  const installed = packageInfo.stdout.match(/lastUpdateTime=(.+)/u)?.[1];
+  const installed = /lastUpdateTime=(.+)/u.exec(packageInfo.stdout)?.[1];
   return packageInfo.exitCode === 0 && installed !== undefined
     ? sha256Hex(`${DEVELOPMENT_IDENTIFIER}@${installed.trim()}`)
     : null;
