@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
@@ -50,6 +51,7 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
       workspaceId,
       session,
       params,
+      user,
       request,
       recordAuditEvent,
     }) {
@@ -182,10 +184,13 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
         safeDb(
           async (tx) =>
             await auditedPresignDownload({
+              readSessionAuthority: ownerSyntheticSessionAuthorityReader,
               tx,
               recordAuditEvent,
               resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
               resourceId: loaded.invoice.id,
+              userId: user.id,
+              source: { kind: "request", sessionId: session.id },
               s3Key: key,
               s3Keyspace: "exports",
               expiresInSeconds: EXPORT_URL_TTL_SECONDS,

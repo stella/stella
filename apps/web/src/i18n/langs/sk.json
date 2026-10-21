@@ -855,7 +855,6 @@
         "unavailable": "AI analýza nie je pre toto rozhodnutie k dispozícii."
       },
       "generate": "Zostaviť právne vety pomocou AI",
-      "holdingAnchor": "Prejsť na odsek",
       "invitation": "S bezplatným účtom vám AI k rozhodnutiu pripraví pracovné poznámky.",
       "topics": "Témy",
       "treatment": "Neskoršia judikatúra"
@@ -1111,6 +1110,8 @@
         "hint": "Zrušte alebo rozšírte filter a hľadajte znova.",
         "message": "Zvoleným filtrom nič nezodpovedá."
       },
+      "partialMatch": "Čiastočná zhoda",
+      "partialMatches": "Čiastočné zhody pre: <bdi>{query}</bdi>",
       "resultsFor": "Výsledky pre: <bdi>{query}</bdi>",
       "searchEveryWord": "Hľadať všetky slová"
     },
@@ -1148,6 +1149,7 @@
       "judges": "Sudcovia",
       "legalArea": "Oblasť práva",
       "legalSentence": "Právna veta",
+      "paragraphReference": "Odsek {number}",
       "popularName": "Populárny názov",
       "portraitCredit": "Zdroj portrétov: {source}",
       "provisionMentions": "{count, number}×",
@@ -1614,6 +1616,9 @@
         "private": "Vaše AI zručnosti",
         "team": "Tímové AI zručnosti"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Tiež konzultované ({count, number})"
     },
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",

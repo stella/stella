@@ -33,7 +33,7 @@ import App from "./App";
 import "./index.css";
 
 const REACT_ROOT_KEY = Symbol.for("legal.stella.desktop.react-root");
-const ClipboardEditor = lazy(
+const ClipboardEditorWindow = lazy(
   async () => import("../clipboard/ClipboardEditor"),
 );
 const ActivityApp = lazy(async () => import("../activity/ActivityApp"));
@@ -142,7 +142,7 @@ const Root = () => {
           <main className="clipboard-editor-window bg-background min-h-dvh" />
         }
       >
-        <ClipboardEditor />
+        <ClipboardEditorWindow />
       </Suspense>
     );
   }

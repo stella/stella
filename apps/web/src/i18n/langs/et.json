@@ -855,7 +855,6 @@
         "unavailable": "Selle lahendi AI-analüüs pole saadaval."
       },
       "generate": "Koosta AI lühikokkuvõtted",
-      "holdingAnchor": "Mine lõigu juurde",
       "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
       "topics": "Teemad",
       "treatment": "Hilisem käsitlus"
@@ -1111,6 +1110,8 @@
         "hint": "Eemaldage filter või laiendage seda ja otsige uuesti.",
         "message": "Miski ei vasta valitud filtritele."
       },
+      "partialMatch": "Osaline vaste",
+      "partialMatches": "Osalised vasted päringule: <bdi>{query}</bdi>",
       "resultsFor": "Tulemused päringule: <bdi>{query}</bdi>",
       "searchEveryWord": "Otsi kõiki sõnu"
     },
@@ -1148,6 +1149,7 @@
       "judges": "Kohtunikud",
       "legalArea": "Õigusvaldkond",
       "legalSentence": "Õiguslause",
+      "paragraphReference": "Lõik {number}",
       "popularName": "Rahvanimi",
       "portraitCredit": "Portreede allikas: {source}",
       "provisionMentions": "{count, number}×",
@@ -1614,6 +1616,9 @@
         "private": "Sinu AI oskused",
         "team": "Tiimi AI oskused"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Samuti vaadatud ({count, number})"
     },
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",
