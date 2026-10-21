@@ -1,5 +1,5 @@
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 const API_TEST_GLOB = "apps/api/src/**/*.test.ts";
 

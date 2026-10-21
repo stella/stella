@@ -26,7 +26,7 @@ test("preserves committed deletion success and captures a stalled delivery", asy
     captureDeliveryError,
     enqueueCleanup,
     requestId,
-    timeoutMs: 5,
+    timeoutMs: 5, // timeout under test
   });
 
   expect(enqueueCleanup).toHaveBeenCalledWith(requestId);

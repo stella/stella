@@ -149,6 +149,7 @@
     "@stll/legal-atlas": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/mcp-apps": "workspace:*",
+    "@stll/mcp-kit": "workspace:^",
     "@stll/mojibake": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
@@ -241,7 +242,6 @@
     "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
     "@playwright/test": "^1.63.0",
     "@standard-schema/spec": "^1.1.0",
-    "@stll/mcp-kit": "workspace:*",
     "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/test-kit": "0.3.0",
@@ -254,7 +254,8 @@
     "drizzle-kit": "catalog:",
     "fast-check": "catalog:",
     "openai": "6.49.0",
-    "pdfjs-dist": "^6.4.299"
+    "pdfjs-dist": "^6.4.299",
+    "saxes": "catalog:"
   },
   "ciGateTestRunners": {
     "test:corpus": {

@@ -1575,6 +1575,7 @@ const FileChatOverlayInner = ({
     approvalPendingMessageId,
   } = useChatSession({
     chat,
+    timingSurface: "document-chat",
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getDocxEditRepresentation,

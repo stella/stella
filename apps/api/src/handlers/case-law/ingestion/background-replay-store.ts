@@ -350,6 +350,7 @@ const chooseSource = async (
             (
               await buildBackgroundReplayProbe(tx, {
                 sourceId: candidate.id,
+                adapterKey: candidate.adapterKey,
                 currentParserVersion: candidate.currentParserVersion,
                 mode: candidate.mode,
               })
@@ -420,6 +421,7 @@ const selectNext = async (
     await work(tx);
   const selection = {
     type: "background",
+    adapterKey: source.adapterKey,
     currentParserVersion: source.currentParserVersion,
     mode: source.mode,
   } as const;
