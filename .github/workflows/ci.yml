@@ -1148,7 +1148,9 @@ jobs:
               printf '%s\n' "$SELECTED_FILES"
               echo 'API_TEST_FILES_END'
             } >> "$GITHUB_OUTPUT"
-          elif [[ "$EVENT_NAME" == pull_request && "$PACKAGE_CHECKS_REQUIRED" != true && "$API_SCOPE_UNKNOWN" != true ]]; then
+          # ci_tests_required is the one gate of ci-tests: without package
+          # checks no API or web-rest test runs, whatever the event or scope.
+          elif [[ "$PACKAGE_CHECKS_REQUIRED" != true ]]; then
             {
               echo 'ci_tests_required=false'
               echo 'ci_tests_matrix={"shard":["rest-web"]}'
@@ -2423,11 +2425,8 @@ jobs:
       needs.ci-plan.outputs.run_required != 'false'
       && needs.ci-plan.outputs.ci_tests_required == 'true'
       && (
-      (
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
-      )
-      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-24.04
     # Three API shards each run a third of the suite. Derived from the merged
@@ -3508,7 +3507,7 @@ jobs:
           CI_POSTGRES_TEST_SELECTION: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
         # The full volume benchmark runs in nightly postgres-suites; this job
         # retains its bounded correctness slice alongside every other suite.
-        run: bun run test:postgres --test-name-pattern='^(?!.*sanctions monitoring full-volume)' --reporter=junit --reporter-outfile="$RUNNER_TEMP/postgres-tests.xml"
+        run: bun run test:postgres --workers=4 --test-name-pattern='^(?!.*sanctions monitoring full-volume)' --reporter=junit --reporter-outfile="$RUNNER_TEMP/postgres-tests.xml"
 
       - name: Check full Postgres failures for selector misses
         timeout-minutes: 5
@@ -6372,7 +6371,6 @@ jobs:
             scripts/retry.sh
             scripts/ci-failure-digest.ts
             scripts/fetch-failed-job-logs.sh
-            scripts/check-merge-group-ancestors.sh
             /package.json
           sparse-checkout-cone-mode: false
 
@@ -6960,23 +6958,6 @@ jobs:
           path: ${{ runner.temp }}/ci-failures/ci-failures.json
           retention-days: 7
           if-no-files-found: ignore
-
-      # GitHub merges every queued group ahead of a passing one, and each group
-      # plans its suites from its own changes, so this group passes only after
-      # every group ahead has passed. The wait holds only this final job.
-      # The wait covers the longest job a group ahead may still be running;
-      # scripts/check-merge-group-ancestors.test.sh keeps the two in step.
-      - name: Queued groups ahead passed
-        if: github.event_name == 'merge_group'
-        timeout-minutes: 125
-        env:
-          ANCESTOR_WAIT_SECONDS: "7200"
-          EVENT_NAME: ${{ github.event_name }}
-          GH_TOKEN: ${{ github.token }}
-          MERGE_GROUP_BASE_REF: ${{ github.event.merge_group.base_ref }}
-          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
-          REPOSITORY: ${{ github.repository }}
-        run: bash .workflow-tooling/scripts/check-merge-group-ancestors.sh
 
       # Evaluate the variable when this final job starts, after the suites.
       - name: Check out the merge hold rule

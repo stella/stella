@@ -9,7 +9,7 @@ import {
   useTranslations,
 } from "use-intl";
 
-import { normalizeStringList } from "@stll/agent-input";
+import { normalizeStringList } from "@stll/agent-input/string-list";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import {
   parseDecisionParagraphFragment,
