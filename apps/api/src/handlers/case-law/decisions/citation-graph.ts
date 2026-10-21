@@ -255,7 +255,7 @@ const relatedDecisionLookup = (
     .as("graph_related_decision");
 const relatedSource = alias(caseLawSources, "graph_related_source");
 
-const decodeCitationCursor = (
+export const decodeCitationCursor = (
   cursor: string | undefined,
   query: Omit<ListDecisionCitationsQuery, "cursor">,
 ): SafeId<"caseLawCitation"> | null | undefined => {
@@ -277,6 +277,24 @@ const decodeCitationCursor = (
 
   return brandPersistedCaseLawCitationId(id);
 };
+
+export const encodeCitationCursor = (id: SafeId<"caseLawCitation">): string =>
+  encodePaginationCursor([id]);
+
+/** The citation page cursor `decodeCitationCursor` accepts: bound to its filter. */
+export const encodeCitationPageCursor = ({
+  id,
+  query,
+}: {
+  id: SafeId<"caseLawCitation">;
+  query: Omit<ListDecisionCitationsQuery, "cursor">;
+}): string =>
+  encodePaginationCursor([
+    id,
+    query.direction,
+    query.doctrine ?? null,
+    query.polarity ?? null,
+  ]);
 
 type ScannedRow = {
   id: SafeId<"caseLawCitation">;
@@ -332,12 +350,7 @@ const createScannedPage = ({
     limit,
     nextCursor:
       rows.length > limit && lastScanned !== undefined
-        ? encodePaginationCursor([
-            lastScanned.id,
-            query.direction,
-            query.doctrine ?? null,
-            query.polarity ?? null,
-          ])
+        ? encodeCitationPageCursor({ id: lastScanned.id, query })
         : null,
   };
 };

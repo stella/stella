@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
@@ -32,6 +33,32 @@ const invoiceRenderError = (cause: unknown) => {
         : "The invoice PDF could not be rendered.",
     hint: "Check the seller payment details and invoice dates before exporting.",
     cause,
+  });
+};
+
+type InvoiceRenderRejection = Extract<
+  Awaited<ReturnType<typeof renderInvoiceWithTypst>>,
+  { status: "rejected" }
+>;
+
+// Renderer infrastructure failures are retryable; any other rejection names
+// invoice data the user must correct.
+const invoiceRenderRejection = ({
+  reason,
+  diagnostics,
+}: InvoiceRenderRejection) => {
+  const infrastructureFailure = ["timeout", "crashed", "memory"].includes(
+    reason,
+  );
+  return new HandlerError({
+    status: infrastructureFailure ? 503 : 409,
+    message: infrastructureFailure
+      ? "The invoice PDF renderer is temporarily unavailable."
+      : diagnostics.join("\n") || `Invoice rendering was rejected: ${reason}`,
+    hint: infrastructureFailure
+      ? "Try exporting the invoice again later."
+      : "Check the seller payment details and invoice dates before exporting.",
+    retryable: infrastructureFailure,
   });
 };
 
@@ -66,6 +93,7 @@ export const createInvoicePdfExport = (
       workspaceId,
       session,
       params,
+      user,
       recordAuditEvent,
     }) {
       const loaded = yield* Result.await(
@@ -167,22 +195,7 @@ export const createInvoicePdfExport = (
         return Result.err(invoiceRenderError(outcome.error));
       }
       if (outcome.value.status === "rejected") {
-        const infrastructureFailure = ["timeout", "crashed", "memory"].includes(
-          outcome.value.reason,
-        );
-        return Result.err(
-          new HandlerError({
-            status: infrastructureFailure ? 503 : 409,
-            message: infrastructureFailure
-              ? "The invoice PDF renderer is temporarily unavailable."
-              : outcome.value.diagnostics.join("\n") ||
-                `Invoice rendering was rejected: ${outcome.value.reason}`,
-            hint: infrastructureFailure
-              ? "Try exporting the invoice again later."
-              : "Check the seller payment details and invoice dates before exporting.",
-            retryable: infrastructureFailure,
-          }),
-        );
+        return Result.err(invoiceRenderRejection(outcome.value));
       }
       const body = outcome.value.pdf;
       const number =
@@ -212,10 +225,13 @@ export const createInvoicePdfExport = (
         safeDb(
           async (tx) =>
             await auditedPresignDownload({
+              readSessionAuthority: ownerSyntheticSessionAuthorityReader,
               tx,
               recordAuditEvent,
               resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
               resourceId: loaded.invoice.id,
+              userId: user.id,
+              source: { kind: "request", sessionId: session.id },
               s3Key: key,
               s3Keyspace: "exports",
               expiresInSeconds: EXPORT_URL_TTL_SECONDS,

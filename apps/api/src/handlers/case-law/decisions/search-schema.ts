@@ -10,6 +10,7 @@ import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types"
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
+  DECISION_SEARCH_MATCHES,
   FACET_COUNT_TYPE,
   SEARCH_PAGE_REACH,
 } from "@stll/api-contract/search";
@@ -124,6 +125,7 @@ const nullableStringSchema = nullableBoundedString(bytes.date);
 const decisionIdentifierSchema = t.Object(
   {
     type: t.Union([
+      t.Literal(DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER),
       t.Literal(DECISION_IDENTIFIER_TYPES.CASE_NUMBER),
       t.Literal(DECISION_IDENTIFIER_TYPES.ECLI),
       t.Literal(DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION),
@@ -280,6 +282,10 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           // window: breadth, not weight. One on the Postgres branch and on an
           // identifier lookup, which score whole decisions.
           matchingPassages: Type.Integer({ minimum: 1 }),
+          // Whether the decision holds every word of the query, or only some
+          // of them: a short first page is topped up with the latter, after
+          // every hit of the former.
+          match: t.UnionEnum([...DECISION_SEARCH_MATCHES]),
           createdAt: boundedString(bytes.date),
         },
         { additionalProperties: false },

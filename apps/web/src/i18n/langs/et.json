@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Kõik inimese otsust nõudvad väited on käsitletud.</strong> {count, plural, one {# tavapärast otsustust ei pea eraldi üle vaatama.} other {# tavapärast otsustust ei pea eraldi üle vaatama.}}",
       "attentionOpen": "<strong>{count, plural, one {# väide vajab} other {# väidet vajavad}} teie otsust</strong>: vastuolud ja vaidlustatud tõlgendused. {routineCount, plural, one {Ülejäänud # väide on tavapärane ega vaja eraldi kinnitamist.} other {Ülejäänud # väidet on tavapärased ega vaja eraldi kinnitamist.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, vaidlustatud} other {}}{reviewStatus, select, reviewed {, kontrollitud} disputed {, vaidlustatud} other {}})",
+      "documentView": {
+        "label": "Dokumendivaade",
+        "original": "Originaal",
+        "reading": "Lugemisvaade"
+      },
+      "notLocated": "{count, plural, one {# väidet ei leitud originaalist} other {# väidet ei leitud originaalist}}",
       "selectClaim": "Valige väide, et selle aluseks olev register üle vaadata.",
       "showQueue": "Näita järjekorda",
       "stats": {
@@ -855,7 +861,6 @@
         "unavailable": "Selle lahendi AI-analüüs pole saadaval."
       },
       "generate": "Koosta AI lühikokkuvõtted",
-      "holdingAnchor": "Mine lõigu juurde",
       "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
       "topics": "Teemad",
       "treatment": "Hilisem käsitlus"
@@ -1015,6 +1020,9 @@
       "saved": "{count, plural, one {# lahend} other {# lahendit}} salvestatud toimikusse {matter}"
     },
     "newestDecisions": "Uusimad lahendid",
+    "noResults": {
+      "hint": "Proovige teisi sõnu, parandage päringut tehisintellektiga või esitage küsimus vestluses."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Inimeste"
@@ -1088,6 +1096,10 @@
         "short": "Lühike"
       }
     },
+    "rewritten": {
+      "line": "Päringule <bdi>{original}</bdi> täpseid vasteid pole; kuvatakse tulemused päringule <bdi>{query}</bdi>",
+      "searchOriginal": "Otsi minu algseid sõnu"
+    },
     "sameCaseNumber": "{count, plural, one {# lahend kannab} other {# lahendit kannavad}} seda kohtuasja numbrit. Valige kohus.",
     "searchLabel": "Otsi kohtupraktikast",
     "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
@@ -1104,6 +1116,8 @@
         "hint": "Eemaldage filter või laiendage seda ja otsige uuesti.",
         "message": "Miski ei vasta valitud filtritele."
       },
+      "partialMatch": "Osaline vaste",
+      "partialMatches": "Osalised vasted päringule: <bdi>{query}</bdi>",
       "resultsFor": "Tulemused päringule: <bdi>{query}</bdi>",
       "searchEveryWord": "Otsi kõiki sõnu"
     },
@@ -1141,6 +1155,7 @@
       "judges": "Kohtunikud",
       "legalArea": "Õigusvaldkond",
       "legalSentence": "Õiguslause",
+      "paragraphReference": "Lõik {number}",
       "popularName": "Rahvanimi",
       "portraitCredit": "Portreede allikas: {source}",
       "provisionMentions": "{count, number}×",
@@ -1607,6 +1622,9 @@
         "private": "Sinu AI oskused",
         "team": "Tiimi AI oskused"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Samuti vaadatud ({count, number})"
     },
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",
@@ -2701,6 +2719,11 @@
       "aiConfigModelInvalid": "AI-mudeli seadistus ei kehti. Kontrollige valitud mudeleid.",
       "aiConfigProviderInvalid": "AI-teenusepakkuja seadistus ei kehti. Kontrollige teenusepakkuja seadeid.",
       "aiConfigProviderValidationFailed": "AI-teenusepakkuja lükkas seadistuse tagasi. Kontrollige API-võtit ja mudelit.",
+      "aiDeadlineExceeded": "AI ei vastanud õigeaegselt. Proovi hetke pärast uuesti.",
+      "aiOutputInvalid": "Tehisintellekti vastus oli ootamatus vormingus. Proovige uuesti.",
+      "aiOutputModerated": "Tehisintellekti teenusepakkuja modereeris väljundit. Sõnastage taotlus ümber või valige teine mudel.",
+      "aiProviderTaskUnsupported": "Seadistatud tehisintellekti teenusepakkuja ei saa seda ülesannet täita. Valige teenusepakkuja, kes saab.",
+      "aiUnknown": "Tehisintellekti taotlus nurjus. Proovige uuesti.",
       "clauseDirectivesInvalid": "Seotud klausel sisaldab vigaseid direktiive. Enne malli täitmist parandage klausel.",
       "clauseDirectivesInvalidDetails": "Klausel {clauseName} väljas {slotName} sisaldab vigaseid direktiive. Avage klausliredaktor, parandage nimetatud lõigud ja täitke mall uuesti.",
       "clauseDirectivesOverrideInvalidDetails": "Klausli {clauseName} asendustekst väljas {slotName} sisaldab vigaseid direktiive. Parandage selle täitmise asendustekst ja proovige uuesti.",
@@ -4247,6 +4270,10 @@
     "archivedEmpty": "Arhiveeritud mälu puudub.",
     "archivedToast": "Mälu arhiveeritud",
     "createdToast": "Mällu salvestatud",
+    "deleteConfirmation": "Kinnitamiseks sisestage {confirmation}",
+    "deleteDescription": "See kustutab selle mälu jäädavalt. Seda toimingut ei saa tagasi võtta.",
+    "deleteTitle": "Kas kustutada mälu?",
+    "deletedToast": "Mälu kustutatud",
     "empty": "Mälus pole veel midagi.",
     "kinds": {
       "decision": "Otsus",
@@ -5175,6 +5202,8 @@
     "outline": "Sisukord",
     "outlineJumpLabel": "Liigu sättele",
     "outlineJumpPlaceholder": "§ 10 või pealkiri",
+    "pendingChanges": "Eelseisvad muudatused",
+    "pendingChangesIncomplete": "Avaldaja andmed ei pruugi sisaldada kõiki eelseisvaid muudatusi.",
     "provisionAskContextPrompt": "\n\nSätet kohaldavad lõigud kõige autoriteetsemates lahendites:\n{passages}\n\nKasuta kohtupraktika tööriistu, et lugeda mõnda neist lahenditest tervikuna või leida teisi sätet viitavaid lahendeid.",
     "provisionAskPlaceholder": "Küsi selle sätte kohta",
     "provisionAskQuestionPrompt": "{subject} kohta: {question}",

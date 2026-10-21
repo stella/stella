@@ -3,7 +3,7 @@
  * any route or CI job.
  *
  *   bun scripts/typst-invoice-spike.ts <out-dir>            all modes, one process each
- *   bun scripts/typst-invoice-spike.ts <out-dir> legacy|wasm|browser
+ *   bun scripts/typst-invoice-spike.ts <out-dir> wasm|browser
  *
  * Each mode runs in a fresh process so cold timings and peak RSS are not
  * shared. PDFs are written to <out-dir> for external validation (veraPDF).
@@ -16,8 +16,7 @@ import { brotliCompressSync, gzipSync } from "node:zlib";
 
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
-import { renderInvoicePdf } from "@/api/handlers/invoices/pdf/render";
-import type { RenderInvoicePdfOptions } from "@/api/handlers/invoices/pdf/render";
+import type { RenderInvoicePdfOptions } from "@/api/handlers/invoices/pdf/render-helpers";
 import { TYPST_FONT_PATHS } from "@/api/handlers/invoices/pdf/typst/compiler";
 import { buildInvoiceTemplateData } from "@/api/handlers/invoices/pdf/typst/data";
 import {
@@ -32,7 +31,7 @@ import {
 } from "@/api/handlers/invoices/pdf/typst/render-typst";
 import { openTypstSession } from "@/api/handlers/invoices/pdf/typst/session";
 
-const MODES = ["legacy", "wasm", "browser"] as const;
+const MODES = ["wasm", "browser"] as const;
 type Mode = (typeof MODES)[number];
 
 const [outDir = "typst-spike-out", requested] = process.argv.slice(2);
@@ -86,33 +85,6 @@ const pdfFacts = async (bytes: Uint8Array) => {
 type Row = Record<string, string | number | boolean>;
 const report = (mode: Mode, rows: Row[]) => {
   console.log(JSON.stringify({ mode, rows, peakRss }));
-};
-
-const legacy = async () => {
-  const rows: Row[] = [];
-  for (const [name, fixture] of Object.entries(FIXTURES)) {
-    const cold = await timed(async () => renderInvoicePdf(fixture));
-    const bytes = cold.value.unwrap(
-      "The legacy renderer renders a spike fixture",
-    );
-    const warm: number[] = [];
-    for (let run = 1; run <= WARM_RUNS; run += 1) {
-      const next = await timed(async () =>
-        renderInvoicePdf(variant(fixture, run)),
-      );
-      next.value.unwrap("The legacy renderer renders a spike fixture");
-      warm.push(next.ms);
-    }
-    await Bun.write(path.join(outDir, `legacy-${name}.pdf`), bytes);
-    rows.push({
-      fixture: name,
-      coldMs: cold.ms,
-      warmMs: median(warm),
-      bytes: bytes.byteLength,
-      ...(await pdfFacts(bytes)),
-    });
-  }
-  report("legacy", rows);
 };
 
 const wasm = async () => {
@@ -296,10 +268,7 @@ const browser = async () => {
   ]);
 };
 
-const runners = { legacy, wasm, browser } satisfies Record<
-  Mode,
-  () => Promise<void>
->;
+const runners = { wasm, browser } satisfies Record<Mode, () => Promise<void>>;
 
 await mkdir(outDir, { recursive: true });
 const mode = MODES.find((candidate) => candidate === requested);

@@ -3,8 +3,9 @@ import { panic } from "better-result";
 import type { InvoiceLanguage, InvoiceStatus } from "@stll/api-contract";
 import {
   buildCzechQrPaymentPayload,
-  buildPayBySquarePayload,
-  paymentQrSchemeFor,
+  buildPolishQrPaymentPayload,
+  normalizeIban,
+  parseNip,
   variableSymbolOf,
 } from "@stll/invoicing";
 import type {
@@ -12,9 +13,12 @@ import type {
   InvoiceDocumentType,
   InvoiceTotals,
   InvoicingResult,
+  PolishQrPaymentResult,
   VatTreatment,
 } from "@stll/invoicing";
-import { formatMoneyCents, toMajorUnits } from "@stll/money";
+import { buildPayBySquarePayload } from "@stll/invoicing/pay-by-square";
+import type { PayBySquareResult } from "@stll/invoicing/pay-by-square";
+import { formatMoneyCents } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
 
 export type RenderInvoicePdfOptions = {
@@ -77,7 +81,11 @@ export const buildInvoicePaymentPayload = ({
   invoice,
   seller,
   totals,
-}: RenderInvoicePdfOptions): InvoicingResult<CzechQrPaymentResult> | null => {
+}: RenderInvoicePdfOptions): InvoicingResult<
+  | (CzechQrPaymentResult & { errorCorrection: "M" })
+  | (PayBySquareResult & { errorCorrection: "M" })
+  | (PolishQrPaymentResult & { errorCorrection: "L" })
+> | null => {
   if (
     invoice.documentType === "credit_note" ||
     totals.grossAmountMinor <= 0 ||
@@ -85,51 +93,48 @@ export const buildInvoicePaymentPayload = ({
   ) {
     return null;
   }
-  const scheme = paymentQrSchemeFor({
-    iban: seller.iban,
-    currency: invoice.currency,
-  });
   const variableSymbol = variableSymbolOf({
     number: invoice.invoiceNumber ?? "",
     reference: invoice.reference,
   });
-  switch (scheme) {
-    case "spayd":
-      return buildCzechQrPaymentPayload({
-        documentType: invoice.documentType,
-        iban: seller.iban,
-        amountMinor: totals.grossAmountMinor,
-        currency: invoice.currency,
-        ...(invoice.dueDate === null ? {} : { dueDate: invoice.dueDate }),
-        ...(variableSymbol === null ? {} : { variableSymbol }),
-        ...(invoice.status === "draft" || invoice.invoiceNumber === null
-          ? {}
-          : { message: invoice.invoiceNumber }),
-      });
-    case "pay_by_square":
-      return buildPayBySquarePayload({
-        amount: toMajorUnits({
-          amountCents: totals.grossAmountMinor,
-          currency: invoice.currency,
-        }),
-        currency: invoice.currency,
-        ...(invoice.dueDate === null ? {} : { dueDate: invoice.dueDate }),
-        ...(variableSymbol === null ? {} : { variableSymbol }),
-        paymentNote:
-          invoice.status === "draft" || invoice.invoiceNumber === null
-            ? ""
-            : invoice.invoiceNumber,
-        iban: seller.iban,
-        ...(seller.bic === null ? {} : { bic: seller.bic }),
-        beneficiaryName: seller.legalName,
-      });
-    case null:
-      return null;
-    default: {
-      scheme satisfies never;
-      return panic("Unknown payment QR scheme");
-    }
+  const payment = {
+    documentType: invoice.documentType,
+    iban: seller.iban,
+    amountMinor: totals.grossAmountMinor,
+    currency: invoice.currency,
+    ...(invoice.dueDate === null ? {} : { dueDate: invoice.dueDate }),
+    ...(variableSymbol === null ? {} : { variableSymbol }),
+    ...(invoice.status === "draft" || invoice.invoiceNumber === null
+      ? {}
+      : { message: invoice.invoiceNumber }),
+  };
+  const country = normalizeIban(seller.iban)?.slice(0, 2);
+  if (country === "SK") {
+    return buildPayBySquarePayload({
+      ...payment,
+      ...(seller.bic === null ? {} : { bic: seller.bic }),
+      beneficiaryName: seller.legalName,
+    }).map((result) => ({ ...result, errorCorrection: "M" as const }));
   }
+  if (country === "PL") {
+    const nip = seller.vatId === null ? null : parseNip(seller.vatId);
+    if (nip === null) {
+      return null;
+    }
+    return buildPolishQrPaymentPayload({
+      documentType: payment.documentType,
+      iban: payment.iban,
+      amountMinor: payment.amountMinor,
+      currency: payment.currency,
+      recipientNip: nip,
+      recipientName: seller.legalName,
+      title: payment.message ?? invoice.reference ?? "Faktura",
+    }).map((result) => ({ ...result, errorCorrection: "L" as const }));
+  }
+  return buildCzechQrPaymentPayload(payment).map((result) => ({
+    ...result,
+    errorCorrection: "M" as const,
+  }));
 };
 
 /**

@@ -69,6 +69,10 @@ import {
   backfillCorpusIndexJobDetail,
 } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
 import {
+  CHECK_DATA_INVARIANTS_TASK,
+  checkDataInvariants,
+} from "@/api/lib/scheduler/tasks/data-invariants";
+import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
   expireDesktopEditSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
@@ -213,6 +217,7 @@ const SCHEDULER_TASKS = {
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
   [BACKFILL_HEARTBEAT_TASK]: emitBackfillHeartbeats,
+  [CHECK_DATA_INVARIANTS_TASK]: checkDataInvariants,
   "scheduler.noop": noopTask,
   "scheduler.dispatchBullMq": createBullMqDispatchTask(),
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,

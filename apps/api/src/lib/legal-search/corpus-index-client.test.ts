@@ -2023,7 +2023,7 @@ test("a search aborts within the remaining shared-request budget", async () => {
     indexId: "case_law_v8_cs_sk",
     query: "text:smlouva",
     maxHits: 1,
-    timeoutMs: 20,
+    timeoutMs: 20, // timeout under test
   });
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {

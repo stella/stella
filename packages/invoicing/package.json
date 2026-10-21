@@ -7,7 +7,8 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./pay-by-square": "./src/pay-by-square.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
@@ -23,7 +24,8 @@
     "@stll/money": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",
-    "bysquare": "4.1.0"
+    "bysquare": "4.1.0",
+    "lzma1": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

@@ -34,6 +34,7 @@ import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-conta
 
 import { getTranslator } from "@/i18n/translator";
 import type { TranslationKey } from "@/i18n/types";
+import { AI_FAILURE_ERROR_KEYS } from "@/lib/errors/ai-failure";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import { ClientOperationError } from "@/lib/errors/client";
 import {
@@ -183,6 +184,7 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
 const CODE_ERROR_KEYS = {
+  ...AI_FAILURE_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
