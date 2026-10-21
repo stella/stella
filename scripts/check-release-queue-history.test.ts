@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { drawPropertySamples } from "@stll/property-testing";
 
 import {
   assertReleaseQueueHistory,
@@ -586,10 +586,10 @@ describe("strict release queue history", () => {
 });
 
 const REPOSITORY_ROOT = nodePath.resolve(import.meta.dirname, "..");
-const histories: string[] = [];
+const historyRoots: string[] = [];
 
 afterEach(() => {
-  for (const root of histories.splice(0)) {
+  for (const root of historyRoots.splice(0)) {
     rmSync(root, { force: true, recursive: true });
   }
 });
@@ -597,11 +597,6 @@ afterEach(() => {
 const git = (cwd: string) => (command: readonly string[]) => {
   const result = Bun.spawnSync([...command], {
     cwd,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_DATE: "2026-10-01T00:00:00Z",
-      GIT_COMMITTER_DATE: "2026-10-01T00:00:00Z",
-    },
     stderr: "pipe",
     stdout: "pipe",
   });
@@ -616,84 +611,128 @@ const git = (cwd: string) => (command: readonly string[]) => {
 // by the next one).
 type Step = { kind: "change" } | { kind: "version"; tagged: boolean };
 
-const buildHistory = (steps: readonly Step[]) => {
-  const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-history-"));
-  histories.push(root);
-  const run = git(root);
-  run(["git", "init", "--quiet", "--initial-branch=main"]);
-  run(["git", "config", "user.email", "release@example.com"]);
-  run(["git", "config", "user.name", "Release"]);
-  run(["git", "config", "commit.gpgsign", "false"]);
-  run(["git", "config", "tag.gpgsign", "false"]);
-  let patch = 0;
-  const tags: string[] = [];
-  // The first release is always tagged, so a previous release exists.
-  for (const [index, step] of [
-    { kind: "version", tagged: true } as const,
-    ...steps,
-  ].entries()) {
-    if (step.kind === "version") {
-      patch += 1;
-      writeFileSync(nodePath.join(root, "VERSION"), `1.0.${String(patch)}\n`);
-    } else {
-      writeFileSync(nodePath.join(root, "change.txt"), `${String(index)}\n`);
-    }
-    run(["git", "add", "--all"]);
-    run(["git", "commit", "--quiet", "-m", `step ${String(index)}`]);
-    if (step.kind === "version" && step.tagged) {
-      run(["git", "tag", `v1.0.${String(patch)}`]);
-      tags.push(`v1.0.${String(patch)}`);
-    }
-  }
-  return { root, run, tags };
+type BuiltHistory = {
+  // The history's tip, the base a release is prepared from.
+  base: string;
+  // The last tag on a commit before the base, read from the steps.
+  expectedTag: string;
 };
+
+const COMMITTER = `Release <release@example.com> ${String(
+  Date.parse("2026-10-01T00:00:00Z") / 1000,
+)} +0000`;
+
+const fastImportData = (text: string) =>
+  `data ${String(Buffer.byteLength(text))}\n${text}\n`;
+
+// Every history becomes its own root branch of one fixture repository, written
+// by a single `git fast-import`. Each history numbers its releases under its
+// own major version, so no tag is shared and none is reachable from another.
+const buildHistories = (histories: readonly (readonly Step[])[]) => {
+  const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-history-"));
+  historyRoots.push(root);
+  const run = git(root);
+  run(["git", "init", "--quiet", "--bare"]);
+  let stream = "";
+  let mark = 0;
+  const expectedTags = histories.map((steps, history) => {
+    const major = String(history + 1);
+    let patch = 0;
+    let lastTag = "";
+    let expectedTag = "";
+    // The first release is always tagged, so a previous release exists.
+    const allSteps: readonly Step[] = [
+      { kind: "version", tagged: true },
+      ...steps,
+    ];
+    for (const [index, step] of allSteps.entries()) {
+      // Before each commit, the last tag so far is the nearest one before it.
+      expectedTag = lastTag;
+      mark += 1;
+      if (step.kind === "version") {
+        patch += 1;
+      }
+      const [file, content] =
+        step.kind === "version"
+          ? ["VERSION", `${major}.0.${String(patch)}\n`]
+          : ["change.txt", `${String(index)}\n`];
+      stream += `commit refs/heads/h${String(history)}\nmark :${String(mark)}\ncommitter ${COMMITTER}\n`;
+      stream += fastImportData(`step ${String(index)}`);
+      stream += `M 644 inline ${file}\n${fastImportData(content)}\n`;
+      if (step.kind === "version" && step.tagged) {
+        lastTag = `v${major}.0.${String(patch)}`;
+        stream += `reset refs/tags/${lastTag}\nfrom :${String(mark)}\n\n`;
+      }
+    }
+    return expectedTag;
+  });
+  const imported = Bun.spawnSync(["git", "fast-import", "--quiet"], {
+    cwd: root,
+    stderr: "pipe",
+    stdin: Buffer.from(stream),
+    stdout: "pipe",
+  });
+  if (!imported.success) {
+    throw new Error(`git fast-import: ${imported.stderr.toString()}`);
+  }
+  const bases = run([
+    "git",
+    "rev-parse",
+    ...histories.map((_, history) => `refs/heads/h${String(history)}`),
+  ]).split("\n");
+  const built: BuiltHistory[] = bases.map((base, history) => ({
+    base,
+    expectedTag: expectedTags[history] ?? "",
+  }));
+  return { built, run };
+};
+
+const historySteps = fc.array(
+  fc.oneof(
+    fc.constant<Step>({ kind: "change" }),
+    fc.boolean().map<Step>((tagged) => ({ kind: "version", tagged })),
+  ),
+  { maxLength: 6, minLength: 1 },
+);
 
 describe("previous release tag", () => {
   test("is the nearest tag before the base, never v + an untagged VERSION", () => {
-    fc.assert(
-      fc.property(
-        fc.array(
-          fc.oneof(
-            fc.constant<Step>({ kind: "change" }),
-            fc.boolean().map<Step>((tagged) => ({ kind: "version", tagged })),
-          ),
-          { maxLength: 6, minLength: 1 },
-        ),
-        (steps) => {
-          const { root, run } = buildHistory(steps);
-          const base = run(["git", "rev-parse", "HEAD"]);
-          // Expected: the last tag on a commit before the base, read from the
-          // history the property built, not from git describe.
-          const parents = run(["git", "rev-list", "--reverse", `${base}^`])
-            .split("\n")
-            .filter(Boolean);
-          const tagged = parents
-            .map((sha) => run(["git", "tag", "--points-at", sha]))
-            .filter(Boolean);
-          expect(previousReleaseTag(base, run)).toBe(tagged.at(-1) ?? "");
-          const version = readFileSync(
-            nodePath.join(root, "VERSION"),
-            "utf-8",
-          ).trim();
-          if (run(["git", "tag", "--list", `v${version}`]) === "") {
-            expect(previousReleaseTag(base, run)).not.toBe(`v${version}`);
-          }
-        },
-      ),
-      propertyConfig({ numRuns: 25 }),
-    );
+    // The histories are drawn once and built as one batch; each sample then
+    // runs the real git describe against its own branch.
+    const samples = drawPropertySamples(historySteps, { numRuns: 25 });
+    const { built, run } = buildHistories(samples.map(({ value }) => value));
+    const tags = new Set(run(["git", "tag", "--list"]).split("\n"));
+    for (const [index, { label }] of samples.entries()) {
+      const history = built[index];
+      if (history === undefined) {
+        throw new Error(`history ${String(index)} was not built`);
+      }
+      const previous = previousReleaseTag(history.base, run);
+      expect(previous, label).toBe(history.expectedTag);
+      const version = run(["git", "show", `${history.base}:VERSION`]);
+      if (!tags.has(`v${version}`)) {
+        expect(previous, label).not.toBe(`v${version}`);
+      }
+    }
   });
 
   test("reads the history of a base whose VERSION was never tagged", () => {
-    const { run } = buildHistory([
-      { kind: "change" },
-      { kind: "version", tagged: false },
-      { kind: "change" },
+    const {
+      built: [history],
+      run,
+    } = buildHistories([
+      [
+        { kind: "change" },
+        { kind: "version", tagged: false },
+        { kind: "change" },
+      ],
     ]);
-    const base = run(["git", "rev-parse", "HEAD"]);
+    if (history === undefined) {
+      throw new Error("history was not built");
+    }
     const ranges: string[] = [];
     const report = assertReleaseQueueHistory({
-      baseSha: base,
+      baseSha: history.base,
       command: (command) => {
         if (command[0] === "git" && command[1] === "rev-list") {
           ranges.push(command.at(-1) ?? "");
@@ -707,7 +746,7 @@ describe("previous release tag", () => {
       ghRetryScript: "/fake/gh-retry.sh",
       strict: true,
     });
-    expect(ranges).toEqual([`v1.0.1..${base}`]);
+    expect(ranges).toEqual([`v1.0.1..${history.base}`]);
     expect(report.validated).toBe(true);
   });
 });
