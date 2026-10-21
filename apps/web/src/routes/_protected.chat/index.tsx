@@ -500,8 +500,10 @@ function ChatIndex() {
       );
       return;
     }
+    // The composer cleared the draft before calling this handler; a declined
+    // send throws the preserved error so `submit` restores it for the retry.
     if (!(await ensureAIAvailable())) {
-      return;
+      throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
     }
     // A model just picked in the (+) menu may still be
     // mid-PATCH: wait for it to settle so the route-handoff
@@ -512,7 +514,7 @@ function ChatIndex() {
     // sending with a model that may not match what the server
     // has persisted.
     if (Result.isError(await modelSelection.awaitPendingSelection())) {
-      return;
+      throw new ChatSubmitPreservedError({ message: "Model selection failed" });
     }
     // Build the request payload and fetch the pure thread data
     // in parallel, then resolve (and register) the Chat<>
