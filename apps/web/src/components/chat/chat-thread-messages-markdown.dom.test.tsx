@@ -19,6 +19,7 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
 const { ChatApprovalContext } =
   await import("@/components/chat/chat-approval-context");
@@ -51,28 +52,30 @@ const thread = (
   <ChatThreadTestRouter>
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatMattersContext
-          value={{ createDocumentMattersView: { type: "empty" } }}
-        >
-          <ChatApprovalContext value={testChatApprovalContextValue}>
-            <ChatEditorProvider>
-              <ChatThreadMessages
-                activitySession={{
-                  reportedUnknownActivityTypes: new Set<string>(),
-                }}
-                approvalPendingMessageId={null}
-                isGenerating={isGenerating}
-                messages={threadMessages}
-                onAskUserSubmit={() => {}}
-                onCreateDocumentResolve={() => {}}
-                onOpenCreatedDocument={() => {}}
-                streamdownComponents={{
-                  a: ({ children, ...props }) => <a {...props}>{children}</a>,
-                }}
-              />
-            </ChatEditorProvider>
-          </ChatApprovalContext>
-        </ChatMattersContext>
+        <FormattingProvider locale="en" timeZone="UTC">
+          <ChatMattersContext
+            value={{ createDocumentMattersView: { type: "empty" } }}
+          >
+            <ChatApprovalContext value={testChatApprovalContextValue}>
+              <ChatEditorProvider>
+                <ChatThreadMessages
+                  activitySession={{
+                    reportedUnknownActivityTypes: new Set<string>(),
+                  }}
+                  approvalPendingMessageId={null}
+                  isGenerating={isGenerating}
+                  messages={threadMessages}
+                  onAskUserSubmit={() => {}}
+                  onCreateDocumentResolve={() => {}}
+                  onOpenCreatedDocument={() => {}}
+                  streamdownComponents={{
+                    a: ({ children, ...props }) => <a {...props}>{children}</a>,
+                  }}
+                />
+              </ChatEditorProvider>
+            </ChatApprovalContext>
+          </ChatMattersContext>
+        </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>
   </ChatThreadTestRouter>
@@ -135,6 +138,56 @@ test("code block actions of the streaming answer wait until the turn ends", asyn
   expect(actions().some((button) => button.hasAttribute("disabled"))).toBe(
     false,
   );
+});
+
+test("only the last text part of an active turn keeps code actions disabled", async () => {
+  const activeAnswer: ChatUIMessage = {
+    id: "answer",
+    parts: [
+      {
+        type: "text",
+        content: "```ts\nconst finished = true;\n```",
+      },
+      {
+        type: "tool-call",
+        id: "tool-call-search",
+        name: "search-chat-history",
+        arguments: JSON.stringify({ query: "deadline" }),
+        state: "complete",
+        input: { query: "deadline" },
+        output: { query: "deadline", results: [] },
+      },
+      {
+        type: "text",
+        content: "```ts\nconst streaming = true;",
+      },
+    ],
+    role: "assistant",
+  };
+  const { view } = renderThread([question, activeAnswer], true);
+  const codeBlocks = () => [
+    ...view.container.querySelectorAll<HTMLElement>(
+      '[data-streamdown="code-block"]',
+    ),
+  ];
+  const actionsForBlock = (index: number) => [
+    ...(codeBlocks()
+      .at(index)
+      ?.querySelectorAll('[data-streamdown="code-block-actions"] button') ??
+      []),
+  ];
+
+  await waitFor(() => {
+    expect(codeBlocks()).toHaveLength(2);
+    expect(actionsForBlock(0).length).toBeGreaterThan(0);
+    expect(actionsForBlock(1).length).toBeGreaterThan(0);
+  });
+  expect(
+    actionsForBlock(0).every((button) => !button.hasAttribute("disabled")),
+  ).toBe(true);
+  expect(
+    actionsForBlock(1).every((button) => button.hasAttribute("disabled")),
+  ).toBe(true);
 });
 
 test("an anonymized thread renders the user's message as text, not HTML source", async () => {

@@ -57,9 +57,14 @@ export function rehypeScopeAnswerIds() {
     for (const element of elements) {
       const href = element.properties.href;
       if (typeof href === "string" && href.startsWith("#")) {
-        const fragment = href.slice(1);
+        let fragment = href.slice(1);
+        try {
+          fragment = decodeURIComponent(fragment);
+        } catch {
+          // swallow-ok: malformed fragments cannot name a declared answer id.
+        }
         if (declared.has(fragment)) {
-          element.properties.href = `#${scoped(fragment)}`;
+          element.properties.href = `#${encodeURIComponent(scoped(fragment))}`;
         }
       }
       for (const property of ID_REFERENCE_PROPERTIES) {
