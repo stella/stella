@@ -127,7 +127,7 @@ describe("custom oxlint guardrails", () => {
       protectedGuardSource.match(/workspacesNavigationOptions\(/gu) ?? [];
     const detachedGuardNavigationReads =
       protectedGuardSource.match(
-        /detached\(\s*prefetchRouteQuery\(\s*context\.queryClient,\s*workspacesNavigationOptions\(/gu,
+        /detached\(\s*prefetchRouteQuery\(\s*queryClient,\s*workspacesNavigationOptions\(/gu,
       ) ?? [];
     expect(guardNavigationReads).toHaveLength(1);
     expect(detachedGuardNavigationReads).toHaveLength(1);

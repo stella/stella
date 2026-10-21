@@ -118,29 +118,11 @@ export const loadProtectedContext = async ({
     );
   }
 
-  detached(
-    prefetchRouteQuery(
-      context.queryClient,
-      aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-      onPrefetchError,
-    ),
-    "protected-layout.prefetch",
-  );
-  // The sidebar reads the workspace list on every signed-in page, and page
-  // content waits on its server-owned feature enrolment (time billing) before
-  // it asks for feature data. Started after chrome mounts, it opened its own
-  // sequential round and pushed every enrolment-gated request one round later.
-  detached(
-    prefetchRouteQuery(
-      context.queryClient,
-      workspacesNavigationOptions({
-        userId,
-        organizationId: activeOrganizationId,
-      }),
-      onPrefetchError,
-    ),
-    "protected-layout.navigation-prefetch",
-  );
+  startSignedInShellRequests({
+    queryClient: context.queryClient,
+    organizationId: activeOrganizationId,
+    userId,
+  });
   // Prefetched here so the bell's first page joins the shell's request wave
   // instead of chaining a new sequential round after hydration.
   if (isInboxPreviewEnabled()) {
@@ -180,3 +162,42 @@ export const prefetchProtectedShell = async ({
   await prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
     getAnalytics().captureError(error);
   });
+
+/**
+ * Starts the shell data every signed-in page reads, in the guard's request
+ * wave. Nothing here is awaited, so route commit never waits on it; chrome
+ * later subscribes to the same keys and reads a warm cache.
+ */
+export const startSignedInShellRequests = ({
+  queryClient,
+  organizationId,
+  userId,
+}: {
+  queryClient: QueryClient;
+  organizationId: string;
+  userId: string;
+}): void => {
+  const onPrefetchError = (error: unknown) => {
+    getAnalytics().captureError(error);
+  };
+  detached(
+    prefetchRouteQuery(
+      queryClient,
+      aiAvailabilityOptions({ organizationId }),
+      onPrefetchError,
+    ),
+    "protected-layout.prefetch",
+  );
+  // The sidebar reads the workspace list on every signed-in page, and page
+  // content waits on its server-owned feature enrolment (time billing) before
+  // it asks for feature data. Started after chrome mounts, it opened its own
+  // sequential round and pushed every enrolment-gated request one round later.
+  detached(
+    prefetchRouteQuery(
+      queryClient,
+      workspacesNavigationOptions({ userId, organizationId }),
+      onPrefetchError,
+    ),
+    "protected-layout.navigation-prefetch",
+  );
+};
