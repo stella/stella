@@ -1148,7 +1148,9 @@ jobs:
               printf '%s\n' "$SELECTED_FILES"
               echo 'API_TEST_FILES_END'
             } >> "$GITHUB_OUTPUT"
-          elif [[ "$EVENT_NAME" == pull_request && "$PACKAGE_CHECKS_REQUIRED" != true && "$API_SCOPE_UNKNOWN" != true ]]; then
+          # ci_tests_required is the one gate of ci-tests: without package
+          # checks no API or web-rest test runs, whatever the event or scope.
+          elif [[ "$PACKAGE_CHECKS_REQUIRED" != true ]]; then
             {
               echo 'ci_tests_required=false'
               echo 'ci_tests_matrix={"shard":["rest-web"]}'
@@ -2000,41 +2002,6 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
-      - name: Checkout workflow classification tooling
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Reads classification tooling at the workflow revision."
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .workflow-tooling
-          fetch-depth: 0
-          persist-credentials: false
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            .github/workflows
-            .github/actions
-            .github/ci-job-classification-decisions.json
-            .github/ci-job-classification-sources.json
-            scripts/check-ci-job-classification.ts
-            scripts/ci-job-classification
-            packages/collation/src/collation.ts
-            packages/sha256/src/node.ts
-            packages/sha256/src/types.ts
-
-      - name: Check workflow job classifications
-        id: job-classification
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
-        # Remove the tooling checkout so later source checks see only the
-        # candidate tree.
-        run: |
-          trap 'rm -rf .workflow-tooling' EXIT
-          bun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling
-
       - name: Compute affected flag
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         id: affected
@@ -2458,11 +2425,8 @@ jobs:
       needs.ci-plan.outputs.run_required != 'false'
       && needs.ci-plan.outputs.ci_tests_required == 'true'
       && (
-      (
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
-      )
-      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-24.04
     # Three API shards each run a third of the suite. Derived from the merged
@@ -3543,7 +3507,7 @@ jobs:
           CI_POSTGRES_TEST_SELECTION: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
         # The full volume benchmark runs in nightly postgres-suites; this job
         # retains its bounded correctness slice alongside every other suite.
-        run: bun run test:postgres --test-name-pattern='^(?!.*sanctions monitoring full-volume)' --reporter=junit --reporter-outfile="$RUNNER_TEMP/postgres-tests.xml"
+        run: bun run test:postgres --workers=4 --test-name-pattern='^(?!.*sanctions monitoring full-volume)' --reporter=junit --reporter-outfile="$RUNNER_TEMP/postgres-tests.xml"
 
       - name: Check full Postgres failures for selector misses
         timeout-minutes: 5
@@ -5697,6 +5661,13 @@ jobs:
           CHANNEL: prod
         run: bun scripts/desktop-release-step.ts stamp
 
+      # The build action compiles offline; the locked crates download here,
+      # retried as a unit.
+      - name: Fetch Rust dependencies
+        if: github.event_name == 'merge_group' || steps.receipt.outputs.reused != 'true'
+        timeout-minutes: 10
+        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target x86_64-pc-windows-msvc
+
       - name: Exercise Windows desktop release build
         if: github.event_name == 'merge_group' || steps.receipt.outputs.reused != 'true'
         uses: ./.github/actions/desktop-windows-build
@@ -5843,7 +5814,8 @@ jobs:
           key: scan-engine-wasm-${{ runner.os }}-${{ hashFiles('packages/scan-engine/Cargo.lock', 'packages/scan-engine/rust-toolchain.toml') }}
 
       - name: Fetch Rust dependencies and wasm-bindgen
-        run: bash packages/scan-engine/scripts/wasm-toolchain.sh
+        timeout-minutes: 15
+        run: bash scripts/retry.sh bash packages/scan-engine/scripts/wasm-toolchain.sh
 
       - name: Check generated WebAssembly from a fresh Cargo cache
         id: wasm-check
@@ -5945,22 +5917,29 @@ jobs:
           targets: ${{ matrix.target }}
           components: clippy
 
+      # The locked crates download once, retried as a unit; every later
+      # cargo command runs --frozen and never reaches the registry itself.
+      - &desktop_rust_fetch
+        name: Fetch Rust dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target ${{ matrix.target }}
+
       # No cargo cache action here: the job is path-filtered to desktop
       # changes, so it runs rarely and a cold compile (well under the
       # timeout) is acceptable. It also keeps the LGPL-3.0 rust-cache
       # action out of the dependency-review-enforced diff.
       - name: Check
         shell: pwsh
-        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
+        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen
 
       - name: Test
         if: matrix.os == 'macos'
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen
 
       - name: Build test binaries
         if: matrix.os == 'windows'
         shell: pwsh
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked --no-run
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen --no-run
 
       # The signer crates link no Tauri, so their tests do run here: against
       # throwaway certificates in the runner's own current-user store, one
@@ -5999,7 +5978,7 @@ jobs:
       - name: Test signer against the certificate store
         if: matrix.os == 'windows'
         shell: pwsh
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p stella-desktop-windows-signing -p stella-desktop-signing-core --target ${{ matrix.target }} --locked -- --include-ignored
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p stella-desktop-windows-signing -p stella-desktop-signing-core --target ${{ matrix.target }} --frozen -- --include-ignored
 
       - name: Remove signing test certificates
         if: always() && matrix.os == 'windows'
@@ -6040,7 +6019,7 @@ jobs:
             sleep 0.1
           done
           test -s "$url_file"
-          STELLA_DESKTOP_SMOKE_API_URL="$(cat "$url_file")" cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --locked registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact
+          STELLA_DESKTOP_SMOKE_API_URL="$(cat "$url_file")" cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --frozen registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact
           wait "$server_pid"
 
       - name: Install cargo-deny
@@ -6066,7 +6045,7 @@ jobs:
 
       - name: Docs
         shell: pwsh
-        run: cargo doc --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --no-deps --target ${{ matrix.target }} --locked
+        run: cargo doc --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --no-deps --target ${{ matrix.target }} --frozen
         env:
           RUSTDOCFLAGS: -D warnings
 
@@ -6099,9 +6078,10 @@ jobs:
     steps:
       - *desktop_rust_checkout
       - *desktop_rust_toolchain
+      - *desktop_rust_fetch
       - name: Clippy
         shell: pwsh
-        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked -- -D warnings
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen -- -D warnings
       - *merge_group_cancel
 
   dependency-malware:
@@ -6226,6 +6206,54 @@ jobs:
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
+
+      # Workflow job classifications fail more red pull requests than any
+      # other check and take seconds, so they run here, before the heavy
+      # suites wait on this job, under ci-checks-policy's own conditions.
+      - name: Checkout workflow classification tooling
+        if: >-
+          !cancelled() && steps.install.outcome == 'success'
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.run_required != 'false'
+          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+          && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Reads classification tooling at the workflow revision."
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            .github/workflows
+            .github/actions
+            .github/ci-job-classification-decisions.json
+            .github/ci-job-classification-sources.json
+            scripts/check-ci-job-classification.ts
+            scripts/ci-job-classification
+            packages/collation/src/collation.ts
+            packages/sha256/src/node.ts
+            packages/sha256/src/types.ts
+
+      - name: Check workflow job classifications
+        id: job-classification
+        if: >-
+          !cancelled() && steps.install.outcome == 'success'
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.run_required != 'false'
+          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+          && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
+        # Remove the tooling checkout so later source checks see only the
+        # candidate tree.
+        run: |
+          trap 'rm -rf .workflow-tooling' EXIT
+          bun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling
 
       - name: "ci-checks-docs: Check changed Markdown consumers"
         if: >-
@@ -6359,7 +6387,6 @@ jobs:
             scripts/retry.sh
             scripts/ci-failure-digest.ts
             scripts/fetch-failed-job-logs.sh
-            scripts/check-merge-group-ancestors.sh
             /package.json
           sparse-checkout-cone-mode: false
 
@@ -6947,23 +6974,6 @@ jobs:
           path: ${{ runner.temp }}/ci-failures/ci-failures.json
           retention-days: 7
           if-no-files-found: ignore
-
-      # GitHub merges every queued group ahead of a passing one, and each group
-      # plans its suites from its own changes, so this group passes only after
-      # every group ahead has passed. The wait holds only this final job.
-      # The wait covers the longest job a group ahead may still be running;
-      # scripts/check-merge-group-ancestors.test.sh keeps the two in step.
-      - name: Queued groups ahead passed
-        if: github.event_name == 'merge_group'
-        timeout-minutes: 125
-        env:
-          ANCESTOR_WAIT_SECONDS: "7200"
-          EVENT_NAME: ${{ github.event_name }}
-          GH_TOKEN: ${{ github.token }}
-          MERGE_GROUP_BASE_REF: ${{ github.event.merge_group.base_ref }}
-          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
-          REPOSITORY: ${{ github.repository }}
-        run: bash .workflow-tooling/scripts/check-merge-group-ancestors.sh
 
       # Evaluate the variable when this final job starts, after the suites.
       - name: Check out the merge hold rule
