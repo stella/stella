@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -64,6 +64,7 @@ test("the corpus slice contains exactly recent or pinned decisions", () => {
         expect(isInCorpusSlice(row, { asOf })).toBe(expected);
       },
     ),
+    propertyConfig({ numRuns: 100 }),
   );
 });
 
@@ -88,6 +89,7 @@ test("the manifest groups every slice member and has an order-independent digest
         expect(parseCorpusSliceManifest(manifest).isOk()).toBe(true);
       },
     ),
+    propertyConfig({ numRuns: 100 }),
   );
 });
 
