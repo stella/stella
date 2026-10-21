@@ -336,6 +336,21 @@ jobs:
           toolchain: 1.99.0
           targets: ${{ matrix.rust_targets }}
 
+      # The locked crates for every target download once, retried as a unit;
+      # the builds below compile with CARGO_NET_OFFLINE and never reach the
+      # registry themselves.
+      - name: Fetch Rust dependencies
+        timeout-minutes: 10
+        env:
+          RUST_TARGETS: ${{ matrix.rust_targets }}
+        run: |
+          targets=()
+          IFS=, read -ra names <<<"$RUST_TARGETS"
+          for name in "${names[@]}"; do
+            targets+=(--target "$name")
+          done
+          bash "$RELEASE_TOOLING/scripts/retry.sh" cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked "${targets[@]}"
+
       # The updater endpoint is baked into the binary per channel so prerelease
       # installations never poll or overwrite the production update feed.
       - name: Stamp desktop release metadata
@@ -385,6 +400,7 @@ jobs:
         if: matrix.os == 'macos'
         working-directory: apps/desktop
         env:
+          CARGO_NET_OFFLINE: "true"
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # Tauri's bundler uses notarytool with API-key auth when

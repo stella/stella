@@ -7,6 +7,7 @@ import {
   configureWindowsSigning,
   desktopArtifacts,
   resignWindowsArtifacts,
+  stampCargoPackageVersion,
   stampDesktopRelease,
 } from "./desktop-release-step";
 
@@ -251,7 +252,11 @@ test("stamps the version into both files and pins the channel endpoint", () => {
   );
   writeFileSync(
     path.join(root, "apps/desktop/src-tauri/Cargo.toml"),
-    'version = "0.1.0"\n',
+    '[package]\nname = "stella-desktop"\nversion = "0.1.0"\n',
+  );
+  writeFileSync(
+    path.join(root, "apps/desktop/src-tauri/Cargo.lock"),
+    '[[package]]\nname = "stella-desktop"\nversion = "0.1.0"\n',
   );
   stampDesktopRelease(root, "2.3.4", "beta");
   expect(
@@ -269,6 +274,75 @@ test("stamps the version into both files and pins the channel endpoint", () => {
   expect(
     readFileSync(path.join(root, "apps/desktop/src-tauri/Cargo.toml"), "utf-8"),
   ).toContain('version = "2.3.4"');
+  expect(
+    readFileSync(path.join(root, "apps/desktop/src-tauri/Cargo.lock"), "utf-8"),
+  ).toBe('[[package]]\nname = "stella-desktop"\nversion = "2.3.4"\n');
+});
+
+const desktopCrate = new URL("../apps/desktop/src-tauri/", import.meta.url);
+
+const changedLines = (before: string, after: string): string[] => {
+  const beforeLines = before.split("\n");
+  const afterLines = after.split("\n");
+  expect(afterLines).toHaveLength(beforeLines.length);
+  return afterLines.filter((line, index) => line !== beforeLines[index]);
+};
+
+test("stamping the committed crate changes only its own version in the manifest and lockfile", () => {
+  const crate = temporary();
+  mkdirSync(crate, { recursive: true });
+  const manifest = readFileSync(new URL("Cargo.toml", desktopCrate), "utf-8");
+  const lock = readFileSync(new URL("Cargo.lock", desktopCrate), "utf-8");
+  writeFileSync(path.join(crate, "Cargo.toml"), manifest);
+  writeFileSync(path.join(crate, "Cargo.lock"), lock);
+
+  stampCargoPackageVersion(crate, "0.0.0-dry.1");
+
+  const stampedLock = readFileSync(path.join(crate, "Cargo.lock"), "utf-8");
+  expect(
+    changedLines(
+      manifest,
+      readFileSync(path.join(crate, "Cargo.toml"), "utf-8"),
+    ),
+  ).toEqual(['version = "0.0.0-dry.1"']);
+  expect(changedLines(lock, stampedLock)).toEqual(['version = "0.0.0-dry.1"']);
+  expect(stampedLock).toContain(
+    '[[package]]\nname = "stella-desktop"\nversion = "0.0.0-dry.1"\n',
+  );
+});
+
+test("stamping keeps CRLF checkouts consistent", () => {
+  const crate = temporary();
+  mkdirSync(crate, { recursive: true });
+  writeFileSync(
+    path.join(crate, "Cargo.toml"),
+    '[package]\r\nname = "app"\r\nversion = "0.1.0"\r\n',
+  );
+  writeFileSync(
+    path.join(crate, "Cargo.lock"),
+    '[[package]]\r\nname = "app"\r\nversion = "0.1.0"\r\n\r\n[[package]]\r\nname = "app-dep"\r\nversion = "0.1.0"\r\n',
+  );
+  stampCargoPackageVersion(crate, "1.2.3");
+  expect(readFileSync(path.join(crate, "Cargo.toml"), "utf-8")).toBe(
+    '[package]\r\nname = "app"\r\nversion = "1.2.3"\r\n',
+  );
+  expect(readFileSync(path.join(crate, "Cargo.lock"), "utf-8")).toBe(
+    '[[package]]\r\nname = "app"\r\nversion = "1.2.3"\r\n\r\n[[package]]\r\nname = "app-dep"\r\nversion = "0.1.0"\r\n',
+  );
+});
+
+test("stamping writes nothing when the lockfile lacks the package entry", () => {
+  const crate = temporary();
+  mkdirSync(crate, { recursive: true });
+  const manifest = '[package]\nname = "app"\nversion = "0.1.0"\n';
+  const lock = '[[package]]\nname = "app"\nversion = "0.0.9"\n';
+  writeFileSync(path.join(crate, "Cargo.toml"), manifest);
+  writeFileSync(path.join(crate, "Cargo.lock"), lock);
+  expect(() => stampCargoPackageVersion(crate, "1.2.3")).toThrow(
+    "Expected exactly one Cargo.lock entry for app 0.1.0, found 0",
+  );
+  expect(readFileSync(path.join(crate, "Cargo.toml"), "utf-8")).toBe(manifest);
+  expect(readFileSync(path.join(crate, "Cargo.lock"), "utf-8")).toBe(lock);
 });
 
 test("resigning skips an absent updater zip", () => {
