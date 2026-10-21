@@ -94,7 +94,7 @@ const twoDeviceSessions = async (auth: ReturnType<typeof createAuth>) => {
       headers: { cookie: signedCookie(first) },
     }),
   );
-  const otherToken = signedCookie(second).match(/session_token=([^.;]+)/u)?.[1];
+  const otherToken = /session_token=([^.;]+)/u.exec(signedCookie(second))?.[1];
   return { listed, otherToken };
 };
 
