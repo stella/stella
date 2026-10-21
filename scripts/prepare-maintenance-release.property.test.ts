@@ -19,13 +19,13 @@ import { parseChangelogMarkdown } from "../apps/landing/src/lib/changelog-markdo
 import { parseChangesetEntry } from "./changeset-entry";
 import {
   changesetVersionEnv,
-  fetchPublishedAt,
   MaintenanceReleaseError,
   maintenanceChangelog,
   nextPatchVersion,
   parseMaintenanceReleaseOptions,
   parseStableVersion,
   prepareMaintenanceReleaseFiles,
+  readPreviousRelease,
   readPendingChangesets,
   resolveGitHubToken,
   withFileRollback,
@@ -51,15 +51,20 @@ const respondWith = (...responses: readonly Response[]) => {
 const missing = () => new Response(null, { status: 404 });
 const tagRef = () => Response.json({ ref: "refs/tags/v1.2.3" });
 const draftRelease = { draft: true, published_at: null, tag_name: "v1.2.3" };
+const PUBLISHED = {
+  kind: "published",
+  publishedAt: "2026-02-03T04:05:06Z",
+} as const;
+const UNPROMOTED = { kind: "unpromoted" } as const;
 
 const failureMessage = async (tag: string): Promise<string> => {
-  let publishedAt: string | null;
+  let previous: unknown;
   try {
-    publishedAt = await fetchPublishedAt(tag);
+    previous = await readPreviousRelease(tag);
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   }
-  throw new Error(`Expected a failure; read ${String(publishedAt)}`);
+  throw new Error(`Expected a failure; read ${JSON.stringify(previous)}`);
 };
 
 const releaseFixture = (root: string, releaseDates: string) => {
@@ -418,7 +423,7 @@ describe("pending changesets folded into the release", () => {
 
     expect(
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
         versionPackages,
       }),
@@ -457,7 +462,7 @@ describe("pending changesets folded into the release", () => {
 
     expect(
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
         versionPackages,
       }).changesets,
@@ -483,7 +488,7 @@ describe("pending changesets folded into the release", () => {
 
     expect(() =>
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
         versionPackages,
         writeFile: (path, contents) => {
@@ -574,7 +579,7 @@ describe("maintenance release preparation", () => {
 
     expect(
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
       }),
     ).toEqual({
@@ -629,12 +634,33 @@ describe("maintenance release preparation", () => {
     );
 
     expect(
-      prepareMaintenanceReleaseFiles({ publishedAt: null, rootDir: root }),
+      prepareMaintenanceReleaseFiles({
+        previousRelease: { kind: "unpromoted" },
+        rootDir: root,
+      }),
     ).toMatchObject({ previousTag: "v1.2.3", version: "1.2.4" });
     expect(readReleaseDates(root)).toEqual({
       "v1.2.2": "2026-01-01T00:00:00Z",
       "v1.2.3": null,
     });
+  });
+
+  test("records nothing for a superseded VERSION that was never tagged", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    const dates = { "v1.2.2": "2026-01-01T00:00:00Z" };
+    releaseFixture(root, `${JSON.stringify(dates, null, 2)}\n`);
+
+    expect(
+      prepareMaintenanceReleaseFiles({
+        previousRelease: { kind: "superseded" },
+        rootDir: root,
+      }),
+    ).toMatchObject({ previousTag: "v1.2.3", version: "1.2.4" });
+    expect(readReleaseDates(root)).toEqual(dates);
+    expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
+      "1.2.4\n",
+    );
   });
 
   test("keeps a previous tag already recorded as never promoted", () => {
@@ -643,7 +669,7 @@ describe("maintenance release preparation", () => {
     releaseFixture(root, `${JSON.stringify({ "v1.2.3": null }, null, 2)}\n`);
 
     prepareMaintenanceReleaseFiles({
-      publishedAt: "2026-02-03T04:05:06Z",
+      previousRelease: PUBLISHED,
       rootDir: root,
     });
     expect(readReleaseDates(root)).toEqual({ "v1.2.3": null });
@@ -651,22 +677,22 @@ describe("maintenance release preparation", () => {
 
   test("reads the publication date of a published release", async () => {
     respondWith(Response.json({ published_at: "2026-02-03T04:05:06Z" }));
-    expect(await fetchPublishedAt("v1.2.3")).toBe("2026-02-03T04:05:06Z");
+    expect(await readPreviousRelease("v1.2.3")).toEqual(PUBLISHED);
   });
 
   test("reads a drafted release as never promoted", async () => {
     respondWith(missing(), tagRef(), Response.json([draftRelease]));
-    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+    expect(await readPreviousRelease("v1.2.3")).toEqual(UNPROMOTED);
   });
 
   test("reads a release without a publication date as never promoted", async () => {
     respondWith(Response.json({ published_at: null }));
-    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+    expect(await readPreviousRelease("v1.2.3")).toEqual(UNPROMOTED);
   });
 
   test("reads a release omitting the publication date as never promoted", async () => {
     respondWith(Response.json({ tag_name: "v1.2.3" }));
-    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+    expect(await readPreviousRelease("v1.2.3")).toEqual(UNPROMOTED);
   });
 
   test("pages through the release listing to find the drafted release", async () => {
@@ -681,7 +707,7 @@ describe("maintenance release preparation", () => {
       Response.json(filler),
       Response.json([draftRelease]),
     );
-    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+    expect(await readPreviousRelease("v1.2.3")).toEqual(UNPROMOTED);
   });
 
   test("fails when the previous tag has no release yet", async () => {
@@ -689,9 +715,14 @@ describe("maintenance release preparation", () => {
     expect(await failureMessage("v1.2.3")).toContain("has no GitHub release");
   });
 
-  test("fails when the previous tag does not exist", async () => {
+  test("reads a VERSION that was never tagged as superseded", async () => {
     respondWith(missing(), missing());
-    expect(await failureMessage("v1.2.3")).toContain("does not exist");
+    expect(await readPreviousRelease("v1.2.3")).toEqual({ kind: "superseded" });
+  });
+
+  test("fails on an unreadable tag ref", async () => {
+    respondWith(missing(), new Response(null, { status: 502 }));
+    expect(await failureMessage("v1.2.3")).toContain("HTTP 502");
   });
 
   test("fails on a GitHub error", async () => {
@@ -729,7 +760,7 @@ describe("maintenance release preparation", () => {
 
     expect(() =>
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
       }),
     ).toThrow("already exists");
@@ -758,7 +789,7 @@ describe("maintenance release preparation", () => {
     let failed = false;
     expect(() =>
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
         writeFile: (path, contents) => {
           if (path === releaseDatesPath && !failed) {
@@ -800,7 +831,7 @@ describe("maintenance release preparation", () => {
     let caught: unknown;
     try {
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
         writeFile: (path, contents) => {
           if (path === releaseDatesPath) {
@@ -825,7 +856,7 @@ describe("maintenance release preparation", () => {
     expect(existsSync(nextChangelogPath)).toBe(false);
     expect(
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
         rootDir: root,
       }),
     ).toMatchObject({ version: "1.2.4" });

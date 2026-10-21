@@ -62,6 +62,22 @@ type StableVersion = {
   value: string;
 };
 
+/**
+ * What GitHub knows about the release VERSION names. A version commit that was
+ * never tagged is superseded by the next one: it is not a release, so it gets
+ * no publication record.
+ */
+export type PreviousRelease =
+  | { kind: "published"; publishedAt: string }
+  | { kind: "unpromoted" }
+  | { kind: "superseded" };
+
+const PREVIOUS_RELEASE_NOTE: Record<PreviousRelease["kind"], string> = {
+  published: "",
+  superseded: ": never tagged, superseded, not recorded",
+  unpromoted: ": never promoted",
+};
+
 type MaintenanceReleaseOptions = {
   recordingReviewReason: string;
 };
@@ -376,20 +392,23 @@ const runChangesetVersion = (rootDir: string) => {
 };
 
 export const prepareMaintenanceReleaseFiles = ({
-  publishedAt,
+  previousRelease,
   rootDir,
   versionPackages = runChangesetVersion,
   writeFile = atomicWriteFile,
 }: {
-  publishedAt: string | null;
+  previousRelease: PreviousRelease;
   rootDir: string;
   /** Consumes the pending changesets; the repository's own version script. */
   versionPackages?: (rootDir: string) => void;
   writeFile?: ReleaseFileWriter;
 }): PreparedMaintenanceRelease => {
-  if (publishedAt !== null && Number.isNaN(Date.parse(publishedAt))) {
+  if (
+    previousRelease.kind === "published" &&
+    Number.isNaN(Date.parse(previousRelease.publishedAt))
+  ) {
     throw new MaintenanceReleaseError(
-      `Previous release has an invalid publication timestamp: ${publishedAt}`,
+      `Previous release has an invalid publication timestamp: ${previousRelease.publishedAt}`,
     );
   }
 
@@ -415,8 +434,12 @@ export const prepareMaintenanceReleaseFiles = ({
 
   const releaseDatesPath = nodePath.join(rootDir, RELEASE_DATES_PATH);
   const releaseDates = readReleaseDates(rootDir);
-  if (releaseDates[previousTag] !== null) {
-    releaseDates[previousTag] = publishedAt;
+  if (
+    previousRelease.kind !== "superseded" &&
+    releaseDates[previousTag] !== null
+  ) {
+    releaseDates[previousTag] =
+      previousRelease.kind === "published" ? previousRelease.publishedAt : null;
   }
   const changesets = readPendingChangesets(rootDir);
   const emptyChangesetPath = nodePath.join(
@@ -571,7 +594,7 @@ const requestGitHub = async (path: string): Promise<Response> => {
   return fetch(`${GITHUB_API_ROOT}${path}`, { headers });
 };
 
-const readPublishedAt = (tag: string, payload: unknown): string | null => {
+const readPublishedAt = (tag: string, payload: unknown): PreviousRelease => {
   if (!isRecord(payload)) {
     throw new MaintenanceReleaseError(
       `GitHub release ${tag} has no valid published_at timestamp`,
@@ -579,7 +602,7 @@ const readPublishedAt = (tag: string, payload: unknown): string | null => {
   }
   const publishedAt = payload["published_at"];
   if (publishedAt === null || publishedAt === undefined) {
-    return null;
+    return { kind: "unpromoted" };
   }
   if (
     typeof publishedAt !== "string" ||
@@ -589,23 +612,22 @@ const readPublishedAt = (tag: string, payload: unknown): string | null => {
       `GitHub release ${tag} has no valid published_at timestamp`,
     );
   }
-  return publishedAt;
+  return { kind: "published", publishedAt };
 };
 
-const assertTagExists = async (tag: string) => {
+const tagExists = async (tag: string): Promise<boolean> => {
   const response = await requestGitHub(
     `/git/ref/tags/${encodeURIComponent(tag)}`,
   );
   if (response.status === 404) {
-    throw new MaintenanceReleaseError(
-      `Previous tag ${tag} does not exist; wait for the release workflow to build it`,
-    );
+    return false;
   }
   if (!response.ok) {
     throw new MaintenanceReleaseError(
       `Could not read tag ${tag} from GitHub (HTTP ${String(response.status)})`,
     );
   }
+  return true;
 };
 
 // The by-tag endpoint hides drafts, so its 404 is ambiguous. The full listing
@@ -614,7 +636,7 @@ const assertTagExists = async (tag: string) => {
 const findUnpromotedRelease = async (
   tag: string,
   page: number,
-): Promise<string | null> => {
+): Promise<PreviousRelease> => {
   if (page > RELEASE_PAGE_LIMIT) {
     throw new MaintenanceReleaseError(
       `Could not find ${tag} in the ${String(RELEASE_PAGE_LIMIT * RELEASE_PAGE_SIZE)} most recent GitHub Releases`,
@@ -639,7 +661,9 @@ const findUnpromotedRelease = async (
     (entry) => isRecord(entry) && entry["tag_name"] === tag,
   );
   if (isRecord(release)) {
-    return release["draft"] === true ? null : readPublishedAt(tag, release);
+    return release["draft"] === true
+      ? { kind: "unpromoted" }
+      : readPublishedAt(tag, release);
   }
   if (entries.length < RELEASE_PAGE_SIZE) {
     throw new MaintenanceReleaseError(
@@ -649,11 +673,14 @@ const findUnpromotedRelease = async (
   return findUnpromotedRelease(tag, page + 1);
 };
 
-// `null` means the tag was built but never promoted: the release is a draft, or
-// it exists without a publication date. A tag whose release was never created
-// is unfinished rather than abandoned, and fails the cut instead: a `null`
-// written for it would never be replaced.
-export const fetchPublishedAt = async (tag: string): Promise<string | null> => {
+// Unpromoted means the tag was built but never promoted: the release is a
+// draft, or it exists without a publication date. A tag whose release was
+// never created is unfinished rather than abandoned, and fails the cut
+// instead: a `null` written for it would never be replaced. No tag at all
+// means the version commit was never tagged; this release supersedes it.
+export const readPreviousRelease = async (
+  tag: string,
+): Promise<PreviousRelease> => {
   const response = await requestGitHub(
     `/releases/tags/${encodeURIComponent(tag)}`,
   );
@@ -665,7 +692,9 @@ export const fetchPublishedAt = async (tag: string): Promise<string | null> => {
       `Could not read ${tag} from GitHub Releases (HTTP ${String(response.status)})`,
     );
   }
-  await assertTagExists(tag);
+  if (!(await tagExists(tag))) {
+    return { kind: "superseded" };
+  }
   return findUnpromotedRelease(tag, 1);
 };
 
@@ -713,12 +742,11 @@ const main = async () => {
   );
   const queueHistoryWarning = releaseQueueHistoryWarning(() => ({
     baseSha: "HEAD",
-    previousTag: `v${current.value}`,
   }));
   if (queueHistoryWarning !== null) {
     process.stdout.write(`${queueHistoryWarning}\n`);
   }
-  const publishedAt = await fetchPublishedAt(`v${current.value}`);
+  const previousRelease = await readPreviousRelease(`v${current.value}`);
   const next = nextPatchVersion(current);
   // Read before the preparation consumes them: the changelog and marketing
   // checks below run after it, and a failure there must restore the version
@@ -728,7 +756,7 @@ const main = async () => {
     operation: () => {
       ensureFreshRecordings(options.recordingReviewReason);
       const release = prepareMaintenanceReleaseFiles({
-        publishedAt,
+        previousRelease,
         rootDir: ROOT_DIR,
       });
       run([
@@ -754,7 +782,7 @@ const main = async () => {
       `maintenance-release: prepared ${prepared.version}`,
       `  VERSION`,
       `  ${prepared.changelogPath}`,
-      `  ${RELEASE_DATES_PATH} (${prepared.previousTag}${publishedAt === null ? ": never promoted" : ""})`,
+      `  ${RELEASE_DATES_PATH} (${prepared.previousTag}${PREVIOUS_RELEASE_NOTE[previousRelease.kind]})`,
       ...(prepared.changesets.length === 0
         ? []
         : [
