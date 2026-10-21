@@ -12,6 +12,8 @@ import {
 } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { installRenderProbe } from "@stll/render-probe";
+import { formatRenderReport } from "@stll/render-probe/report";
 
 import {
   STREAM_CHUNK_COMMIT_BUDGET,
@@ -33,10 +35,15 @@ const sessionArea = () =>
 // of tiny deltas, a few milliseconds apart, through the page's real runtime
 // and messages view; a fake server stands where the network is, and a
 // `Profiler` at the page's root counts its commits while the deltas arrive.
+// The render probe names what each of those commits rendered, so a failure
+// says which components a kind kept re-rendering.
 
 // A DOM for this file only. Everything that touches the DOM is loaded after
 // it exists.
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
+// React DOM reads its DevTools hook once, when it loads: before any import
+// below reaches it.
+const probe = installRenderProbe();
 
 const ORACLE = "chat.render.stream-commits-bounded";
 
@@ -433,6 +440,7 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
     organizationId: ORGANIZATION_ID,
     threadId: THREAD_ID,
   });
+  probe.reset();
   const sent = Result.tryPromise(
     async () =>
       await page.session().sendMessage({
@@ -453,8 +461,13 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
   const commits = commitTimes.filter(
     (at) => at >= firstAt && at <= lastAt,
   ).length;
+  const renders = probe.snapshot();
+  if (process.env["RENDER_PROBE_REPORT"] === "1") {
+    process.stdout.write(`\n${kind}\n${formatRenderReport(renders)}\n`);
+  }
   return {
     commits,
+    renders,
     commitsPerSecond: Math.round((commits * 1000) / (lastAt - firstAt)),
     finished: server.finished(),
     kindEvents: eventsOfKind(events, kind).length,
@@ -494,7 +507,9 @@ describe(`${ORACLE}: the thread page's commit rate while each kind of chunk stre
       const measured = await commitRateWhileStreaming(kind);
       expect(measured.unexpected).toEqual([]);
       expect(measured.finished).toBe(true);
-      const detail = `${ORACLE}: ${String(measured.commits)} commits while ${streams} streamed (${String(measured.kindEvents)} events), budget ${String(budget)}/s`;
+      // The probe saw the page's commits: React loaded after it.
+      expect(measured.renders.commits).toBeGreaterThan(0);
+      const detail = `${ORACLE}: ${String(measured.commits)} commits while ${streams} streamed (${String(measured.kindEvents)} events), budget ${String(budget)}/s\n${formatRenderReport(measured.renders)}`;
       expect(measured.commitsPerSecond, detail).toBeLessThanOrEqual(budget);
     }, 30_000);
   }

@@ -1226,6 +1226,19 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/render-probe": {
+      "name": "@stll/render-probe",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@happy-dom/global-registrator": "21.0.1",
+        "@stll/typescript-config": "workspace:*",
+        "@types/react": "catalog:react19",
+        "@types/react-dom": "catalog:react19",
+        "bun-types": "catalog:",
+        "react": "catalog:react19",
+        "react-dom": "catalog:react19",
+      },
+    },
     "packages/runtime-mode": {
       "name": "@stll/runtime-mode",
       "version": "0.0.0",
@@ -3302,6 +3315,8 @@
     "@stll/regex-set-wasm32-wasi": ["@stll/regex-set-wasm32-wasi@1.0.5", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "cpu": "none" }, "sha512-xcK5XOo9TDji612ExBW4hSvekLGTq++VEUN2p9Yd5sMH4Ch7ivGCFST4Mwvj+A9AeDM996RWz2Sb2+KoFkP14Q=="],
 
     "@stll/regex-set-win32-x64-msvc": ["@stll/regex-set-win32-x64-msvc@1.0.5", "", { "os": "win32", "cpu": "x64" }, "sha512-3NyR0UpI141KRQhFAqOmjzDmC8S4o32RluDqFOYzfd8bkFX+KQ1MRYn6TgN3HqbuTnzQBBiCDF9iaG/h8wzQqQ=="],
+
+    "@stll/render-probe": ["@stll/render-probe@workspace:packages/render-probe"],
 
     "@stll/runtime-mode": ["@stll/runtime-mode@workspace:packages/runtime-mode"],
 
