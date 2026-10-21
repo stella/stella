@@ -268,6 +268,13 @@ export const PARSER_VERSION_SCOPES = {
       reason: "scope declarations start with this contract",
     },
   },
+  [ADAPTER_KEYS.CZ_UOHS]: {
+    version: 2,
+    scope: {
+      type: "all",
+      reason: "the source's first parser; there are no stored rows to narrow",
+    },
+  },
 } as const satisfies ParserVersionScopes<
   Pick<typeof PARSER_VERSIONS, AdapterKey>
 >;

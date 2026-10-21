@@ -17,6 +17,7 @@ type SearchPage = Extract<SearchResults, { results: unknown }>;
 type RowContent =
   | {
       type: "search";
+      match: SearchPage["results"][number]["match"];
       snippet: string | null;
       keywords: SearchPage["results"][number]["keywords"];
       headnote:
@@ -92,6 +93,7 @@ export const searchView = (data: SearchResults) => {
     results: data.results.map((row) =>
       resultRow(row, {
         type: "search",
+        match: row.match,
         // A licence-withheld row carries no excerpt to show.
         snippet: "snippet" in row ? row.snippet : null,
         keywords:

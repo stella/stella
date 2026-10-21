@@ -2,9 +2,9 @@
 # Bootstrap a fresh git worktree.
 #
 # A new `git worktree add` starts with an empty node_modules, so the native
-# TypeScript compiler binary (@typescript/native, a quarantined dependency) is
-# absent and `bun run typecheck` fails immediately with
-# "Module not found @typescript/native/bin/tsc". This installs root and
+# TypeScript compiler binary (typescript, a quarantined dependency) is absent
+# and `bun run typecheck` fails immediately with
+# "Module not found typescript/bin/tsc". This installs root and
 # documentation MCP dependencies, then initializes the submodule that
 # `bun run verify` needs.
 #
@@ -12,7 +12,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-echo "→ bun install (restores @typescript/native so typecheck works here)"
+echo "→ bun install (restores the TypeScript compiler so typecheck works here)"
 bun install
 
 echo "→ bun run setup:mcp (prepares the documentation server before startup)"
