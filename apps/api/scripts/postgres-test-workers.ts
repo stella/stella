@@ -313,8 +313,10 @@ export const runPostgresWorkers = async ({
   } finally {
     unregister();
     for (const databaseName of databaseNames.toReversed()) {
+      // Only client sessions: an owner role may not terminate autovacuum
+      // workers, and DROP DATABASE already stops those on its own.
       await admin.query(
-        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1",
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend'",
         [databaseName],
       );
       await admin.query(

@@ -74,7 +74,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
-import { chatFetchClient } from "./chat-fetch";
+import { chatFetchClient, chatResponseError } from "./chat-fetch";
 import { observeChatProviderDiagnostic } from "./chat-provider-diagnostic";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "./chat-query-contract";
 import type {
@@ -265,6 +265,20 @@ const isRejectedChatContinuation = (error: unknown): boolean =>
  *  completed or superseded): its stored outcome is the answer. */
 const isSettledTurnRefusal = (error: unknown): boolean =>
   hasChatErrorCode(error, CHAT_TURN_NOT_OWNED_ERROR_CODE);
+
+/**
+ * The SDK replays a transport failure as a generic error after its typed
+ * cause reached the page (a refused rejoin ends its stream as a bare
+ * `HTTP error! status: 502`). The typed error already shown stays: losing it
+ * would report an ended session or an admission refusal as a failed send.
+ */
+const keepsShownChatError = (shown: Error | undefined, next: Error): boolean =>
+  (actionAdmissionOutcome(shown) && !actionAdmissionOutcome(next)) ||
+  (chatRefusal(shown) !== null && chatRefusal(next) === null) ||
+  (findChatRequestError(shown) !== undefined &&
+    findChatRequestError(next) === undefined) ||
+  (providerDiagnosticFromThrown(shown) !== undefined &&
+    providerDiagnosticFromThrown(next) === undefined);
 
 const CHAT_RESUME_PROBE_TIMEOUT_MS = 10_000;
 
@@ -594,10 +608,16 @@ export const createChatRuntime = ({
           if (response.status === 404) {
             return { type: "transcript", turnId };
           }
+          const refused = response.status === 401 || response.status === 403;
           return await Promise.reject(
             new ChatReconnectError({
-              ...(response.status === 401 || response.status === 403
-                ? { code: "refused" as const }
+              // The server's refusal stays the cause, so the page tells an
+              // ended session (sign in again) from lost access.
+              ...(refused
+                ? {
+                    code: "refused" as const,
+                    cause: await chatResponseError(response),
+                  }
                 : {}),
               message: `Chat resume probe failed (${response.status}).`,
             }),
@@ -720,6 +740,9 @@ export const createChatRuntime = ({
         normalizeChatStreamError(error),
         providerDiagnostic,
       );
+      if (keepsShownChatError(snapshot.error, normalized)) {
+        return;
+      }
       onError(normalized);
       setSnapshot({ error: normalized });
     },
@@ -733,15 +756,10 @@ export const createChatRuntime = ({
       }
       if (
         error !== undefined &&
-        ((actionAdmissionOutcome(snapshot.error) &&
-          !actionAdmissionOutcome(error)) ||
-          (chatRefusal(snapshot.error) !== null &&
-            chatRefusal(error) === null) ||
-          (findChatRequestError(snapshot.error) !== undefined &&
-            findChatRequestError(error) === undefined) ||
-          (providerDiagnosticFromThrown(snapshot.error) !== undefined &&
-            providerDiagnosticFromThrown(error) === undefined &&
-            providerDiagnostic === undefined))
+        keepsShownChatError(
+          snapshot.error,
+          withProviderDiagnostic(error, providerDiagnostic),
+        )
       ) {
         return;
       }
