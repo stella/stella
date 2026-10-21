@@ -602,7 +602,7 @@
   "candidate:.github/workflows/nightly-test.yml/sanctions-real-editions": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "46a5a448bcf537ba00255ba6b58f8db4e399496b0d41b6d1072fd9579a559e2d"
+    "reviewedDigest": "adf2a9ae78341a48a77f72f188605a9a3ddb67b175a320ef675541f5734b0ea9"
   },
   "candidate:.github/workflows/nightly-test.yml/workspace-replay": {
     "kind": "ordinary",
