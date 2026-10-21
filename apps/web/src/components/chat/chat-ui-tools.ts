@@ -1128,20 +1128,33 @@ const isCanonicalBuiltInToolCall = (
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isCanonicalChatUIMessage = (
-  message: PersistedChatMessage,
-): message is ChatUIMessage =>
-  message.parts.every(
-    (part) =>
-      part.type !== "tool-call" ||
-      isExternalMcpToolName(part.name) ||
-      isOpaquePersistedChatToolCallPart(part) ||
-      isCanonicalBuiltInToolCall(part),
-  );
+const isCanonicalChatUIPart = (part: PersistedChatPart): boolean =>
+  part.type !== "tool-call" ||
+  isExternalMcpToolName(part.name) ||
+  isOpaquePersistedChatToolCallPart(part) ||
+  isCanonicalBuiltInToolCall(part);
 
-/** Messages already checked. A message object never changes, so a streamed
- *  chunk checks only the messages it replaced. */
+/** Whether every part of `message` is canonical, checked afresh. */
+export const isCanonicalChatUIMessage = (
+  message: PersistedChatMessage,
+): message is ChatUIMessage => message.parts.every(isCanonicalChatUIPart);
+
+/** Messages and parts already checked. The client replaces an object rather
+ *  than changing it, so a streamed chunk checks only the parts it replaced,
+ *  and a message rebuilt around the same parts reads none of them. */
 const canonicalChatUIMessages = new WeakSet<PersistedChatMessage>();
+const canonicalChatUIParts = new WeakSet<PersistedChatPart>();
+
+const isKnownCanonicalChatUIPart = (part: PersistedChatPart): boolean => {
+  if (canonicalChatUIParts.has(part)) {
+    return true;
+  }
+  if (!isCanonicalChatUIPart(part)) {
+    return false;
+  }
+  canonicalChatUIParts.add(part);
+  return true;
+};
 
 const isKnownCanonicalChatUIMessage = (
   message: PersistedChatMessage,
@@ -1149,7 +1162,7 @@ const isKnownCanonicalChatUIMessage = (
   if (canonicalChatUIMessages.has(message)) {
     return true;
   }
-  if (!isCanonicalChatUIMessage(message)) {
+  if (!message.parts.every(isKnownCanonicalChatUIPart)) {
     return false;
   }
   canonicalChatUIMessages.add(message);

@@ -5,28 +5,49 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 
-const isBlankText = (part: UIMessage<ChatClientTools>["parts"][number]) =>
+type ClientPart = UIMessage<ChatClientTools>["parts"][number];
+
+const isBlankText = (part: ClientPart): boolean =>
   part.type === "text" && part.content.trim().length === 0;
 
-const toPersistedChatMessage = (
+const withoutDroppedParts = (
   message: UIMessage<ChatClientTools>,
+  isDropped: (part: ClientPart) => boolean,
 ): PersistedChatMessage => {
-  if (message.role !== "assistant" || !message.parts.some(isBlankText)) {
+  if (message.role !== "assistant" || !message.parts.some(isDropped)) {
     return message;
   }
   // RUN_ERROR can leave whitespace parts that server finalization drops.
   return {
     ...message,
-    parts: message.parts.filter((part) => !isBlankText(part)),
+    parts: message.parts.filter((part) => !isDropped(part)),
   };
 };
 
+/** One client message as the page holds it, computed afresh. */
+export const toPersistedChatMessage = (
+  message: UIMessage<ChatClientTools>,
+): PersistedChatMessage => withoutDroppedParts(message, isBlankText);
+
 /**
- * The page's message for every client message object. The client replaces a
- * message object whenever the message changes, so a message it hands back
- * unchanged keeps its page message: memoized rows skip it, and a streamed
- * chunk costs the messages it changed rather than the whole transcript.
+ * The client never changes a message or part object in place: it replaces
+ * the object. Each projection is therefore remembered per object. A message
+ * the client hands back unchanged keeps its page message, so memoized rows
+ * skip it; a message the client rebuilt around the same parts (a tool
+ * result, an approval, a snapshot) costs one lookup per part and reads none.
  */
+const droppedByPart = new WeakMap<ClientPart, boolean>();
+
+const isDroppedPart = (part: ClientPart): boolean => {
+  const known = droppedByPart.get(part);
+  if (known !== undefined) {
+    return known;
+  }
+  const dropped = isBlankText(part);
+  droppedByPart.set(part, dropped);
+  return dropped;
+};
+
 const persistedByClientMessage = new WeakMap<
   UIMessage<ChatClientTools>,
   PersistedChatMessage
@@ -40,7 +61,7 @@ export const toPersistedChatMessages = (
     if (known !== undefined) {
       return known;
     }
-    const persisted = toPersistedChatMessage(message);
+    const persisted = withoutDroppedParts(message, isDroppedPart);
     persistedByClientMessage.set(message, persisted);
     return persisted;
   });
