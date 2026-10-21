@@ -5,6 +5,7 @@ import type {
   FeedbackVia,
 } from "@stll/api-contract/feedback";
 
+import type { CustomerDistinctId } from "@/api/lib/auth/principal-audience";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ReleaseFailureEventProperties } from "@/api/lib/observability/release-failure-contract";
 import { RELEASE_FAILURE_EVENT } from "@/api/lib/observability/release-failure-contract";
@@ -187,6 +188,9 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
         properties: FeedbackReportSubmittedProperties;
       }
     | {
+        // Product usage: only a principal classified as a customer may send
+        // it (`principal-audience.ts`), so monitoring traffic never counts.
+        distinctId: CustomerDistinctId;
         event: typeof SERVER_ANALYTICS_EVENTS.mcpSessionInitialized;
         properties: McpSessionInitializedProperties;
       }
