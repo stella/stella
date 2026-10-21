@@ -16,3 +16,11 @@ path, storage state, and backfill state in `PARSER_REPARSE_FEATURES` in
 `apps/api/src/lib/legal-search/parser-reparse-scopes.ts` first. The
 compiler rejects version mismatches, unknown features, and features that are
 not both stored and backfilled.
+
+The version guard follows value imports from every registered parser to find
+the files that can affect output. `PARSER_OUTPUT_BOUNDARIES` in
+`scripts/check-parser-versions.ts` is the reviewed exception list for logging,
+telemetry, configuration, and connection setup. Traversal neither owns a
+boundary module nor continues through it. Boundary entries must exist and
+cannot be placed in adapter, parser, case-law, legal AST, text-normalization,
+hashing, or parser-version modules.

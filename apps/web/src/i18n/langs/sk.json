@@ -856,7 +856,6 @@
         "unavailable": "AI analýza nie je pre toto rozhodnutie k dispozícii."
       },
       "generate": "Zostaviť právne vety pomocou AI",
-      "holdingAnchor": "Prejsť na odsek",
       "invitation": "S bezplatným účtom vám AI k rozhodnutiu pripraví pracovné poznámky.",
       "topics": "Témy",
       "treatment": "Neskoršia judikatúra"
@@ -1112,6 +1111,8 @@
         "hint": "Zrušte alebo rozšírte filter a hľadajte znova.",
         "message": "Zvoleným filtrom nič nezodpovedá."
       },
+      "partialMatch": "Čiastočná zhoda",
+      "partialMatches": "Čiastočné zhody pre: <bdi>{query}</bdi>",
       "resultsFor": "Výsledky pre: <bdi>{query}</bdi>",
       "searchEveryWord": "Hľadať všetky slová"
     },
@@ -1149,6 +1150,7 @@
       "judges": "Sudcovia",
       "legalArea": "Oblasť práva",
       "legalSentence": "Právna veta",
+      "paragraphReference": "Odsek {number}",
       "popularName": "Populárny názov",
       "portraitCredit": "Zdroj portrétov: {source}",
       "provisionMentions": "{count, number}×",
@@ -2707,6 +2709,7 @@
       "aiConfigModelInvalid": "Konfigurácia modelu AI je neplatná. Skontrolujte vybrané modely.",
       "aiConfigProviderInvalid": "Konfigurácia poskytovateľa AI je neplatná. Skontrolujte nastavenia poskytovateľa.",
       "aiConfigProviderValidationFailed": "Poskytovateľ AI konfiguráciu odmietol. Skontrolujte kľúč API a model.",
+      "aiDeadlineExceeded": "AI neodpovedala včas. Skúste to o chvíľu znova.",
       "aiOutputInvalid": "Odpoveď AI mala neočakávaný formát. Skúste to znova.",
       "aiOutputModerated": "Poskytovateľ AI výstup zablokoval. Preformulujte požiadavku alebo vyberte iný model.",
       "aiProviderTaskUnsupported": "Nastavený poskytovateľ AI túto úlohu nedokáže vykonať. Vyberte poskytovateľa, ktorý ju dokáže vykonať.",

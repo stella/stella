@@ -856,7 +856,6 @@
         "unavailable": "Analiza AI nie jest dostępna dla tego orzeczenia."
       },
       "generate": "Ułóż tezy w AI",
-      "holdingAnchor": "Przejdź do akapitu",
       "invitation": "Z bezpłatnym kontem AI przygotuje robocze notatki do tego orzeczenia.",
       "topics": "Tematy",
       "treatment": "Późniejsze orzecznictwo"
@@ -1112,6 +1111,8 @@
         "hint": "Usuń lub poszerz filtr i wyszukaj ponownie.",
         "message": "Nic nie odpowiada wybranym filtrom."
       },
+      "partialMatch": "Częściowe dopasowanie",
+      "partialMatches": "Częściowe dopasowania dla: <bdi>{query}</bdi>",
       "resultsFor": "Wyniki dla: <bdi>{query}</bdi>",
       "searchEveryWord": "Szukaj wszystkich słów"
     },
@@ -1149,6 +1150,7 @@
       "judges": "Sędziowie",
       "legalArea": "Dziedzina prawa",
       "legalSentence": "Teza orzeczenia",
+      "paragraphReference": "Akapit {number}",
       "popularName": "Nazwa potoczna",
       "portraitCredit": "Źródło portretów: {source}",
       "provisionMentions": "{count, number}×",
@@ -2707,6 +2709,7 @@
       "aiConfigModelInvalid": "Konfiguracja modelu AI jest nieprawidłowa. Sprawdź wybrane modele.",
       "aiConfigProviderInvalid": "Konfiguracja dostawcy AI jest nieprawidłowa. Sprawdź ustawienia dostawcy.",
       "aiConfigProviderValidationFailed": "Dostawca AI odrzucił konfigurację. Sprawdź klucz API i model.",
+      "aiDeadlineExceeded": "AI nie odpowiedziała na czas. Spróbuj ponownie za chwilę.",
       "aiOutputInvalid": "Odpowiedź AI miała nieoczekiwany format. Spróbuj ponownie.",
       "aiOutputModerated": "Dostawca AI objął odpowiedź moderacją. Przeformułuj żądanie lub wybierz inny model.",
       "aiProviderTaskUnsupported": "Skonfigurowany dostawca AI nie może wykonać tego zadania. Wybierz dostawcę, który może.",

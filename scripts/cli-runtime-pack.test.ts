@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -53,6 +54,7 @@ const EXPORTED_PATHS = [
   // Historical base revisions still import the root metadata.
   "scripts/generated-files.ts",
 ];
+const COMPILER_WRAPPER = "packages/scripts/src/tsc-native.ts";
 // The exported tree is parameterized; bind its source scope to the same
 // export inventory so unresolved scans retain named package checks.
 export const CI_MARKDOWN_READER_INPUTS = EXPORTED_PATHS;
@@ -183,6 +185,14 @@ const exportRevision = (root: string, revision: string): Tree => {
     path.join(REPO_ROOT, "node_modules"),
     path.join(root, "node_modules"),
     "dir",
+  );
+  // The compiler wrapper resolves the compiler inside node_modules, which every
+  // export shares with the checkout, so it comes from the checkout too: an
+  // older revision's wrapper can name a compiler path that is no longer
+  // installed.
+  copyFileSync(
+    path.join(REPO_ROOT, COMPILER_WRAPPER),
+    path.join(root, COMPILER_WRAPPER),
   );
   return { root, revision };
 };
