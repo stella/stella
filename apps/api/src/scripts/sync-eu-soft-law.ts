@@ -2,7 +2,7 @@ import { parseArgs } from "node:util";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
-import { EU_SOFT_LAW_SOURCES } from "@/api/handlers/soft-law/adapters/registry";
+import { SOFT_LAW_ADMISSIONS } from "@/api/handlers/soft-law/adapters/registry";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 
@@ -18,12 +18,16 @@ if (import.meta.main) {
       strict: true,
       allowPositionals: false,
     });
-    const source = Object.values(EU_SOFT_LAW_SOURCES).find(
-      ({ adapter }) => adapter.key === values.source,
+    const source = Object.values(SOFT_LAW_ADMISSIONS).find(
+      (entry) =>
+        entry.state === "registered" && entry.adapter.key === values.source,
     );
-    if (!source) {
+    if (!source || source.state !== "registered") {
       throw new SoftLawIngestionError({
-        message: `Use --source ${Object.keys(EU_SOFT_LAW_SOURCES).join(" | ")}; --apply starts one bounded ingestion run`,
+        message: `Use --source ${Object.values(SOFT_LAW_ADMISSIONS)
+          .filter((entry) => entry.state === "registered")
+          .map((entry) => entry.adapter.key)
+          .join(" | ")}; --apply starts one bounded ingestion run`,
       });
     }
     const authority = source.adapter.authority;

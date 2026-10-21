@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}",
       "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong> — conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})",
+      "documentView": {
+        "label": "Document view",
+        "original": "Original",
+        "reading": "Reading view"
+      },
+      "notLocated": "{count, plural, one {# claim was not located in the original} other {# claims were not located in the original}}",
       "selectClaim": "Select a claim to inspect the record.",
       "showQueue": "Show queue",
       "stats": {
@@ -849,7 +855,6 @@
         "unavailable": "AI analysis is not available for this decision."
       },
       "generate": "Generate AI headnotes",
-      "holdingAnchor": "Go to paragraph",
       "invitation": "With a free account, AI drafts working notes on this decision.",
       "topics": "Topics",
       "treatment": "Later treatment"
@@ -1009,6 +1014,9 @@
       "saved": "{count, plural, one {# decision} other {# decisions}} saved into {matter}"
     },
     "newestDecisions": "Newest decisions",
+    "noResults": {
+      "hint": "Try other words, improve the query with AI, or ask the question in chat."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Human"
@@ -1082,6 +1090,10 @@
         "short": "Short"
       }
     },
+    "rewritten": {
+      "line": "No exact matches for <bdi>{original}</bdi>; showing results for <bdi>{query}</bdi>",
+      "searchOriginal": "Search my original words"
+    },
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.",
     "searchLabel": "Search case law",
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012",
@@ -1098,6 +1110,8 @@
         "hint": "Drop or widen a filter and search again.",
         "message": "Nothing matched under the filters you narrowed with."
       },
+      "partialMatch": "Partial match",
+      "partialMatches": "Partial matches for: <bdi>{query}</bdi>",
       "resultsFor": "Results for: <bdi>{query}</bdi>",
       "searchEveryWord": "Search every word"
     },
@@ -1135,6 +1149,7 @@
       "judges": "Judges",
       "legalArea": "Legal area",
       "legalSentence": "Legal sentence",
+      "paragraphReference": "Paragraph {number}",
       "popularName": "Popular name",
       "portraitCredit": "Portrait source: {source}",
       "provisionMentions": "{count, number}×",
@@ -1601,6 +1616,9 @@
         "private": "Your skills",
         "team": "Team skills"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Also consulted ({count, number})"
     },
     "sourcePlaceholder": "Chat about {title}",
     "sourcePlaceholderAction": "Chat about",
@@ -2690,6 +2708,11 @@
       "aiConfigModelInvalid": "The AI model configuration is invalid. Check the selected models.",
       "aiConfigProviderInvalid": "The AI provider configuration is invalid. Check the provider settings.",
       "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.",
+      "aiDeadlineExceeded": "The AI did not answer in time. Try again in a moment.",
+      "aiOutputInvalid": "The AI answer had an unexpected format. Try again.",
+      "aiOutputModerated": "The AI provider moderated the output. Rephrase the request or choose another model.",
+      "aiProviderTaskUnsupported": "The configured AI provider cannot do this task. Choose a provider that can.",
+      "aiUnknown": "The AI request failed. Try again.",
       "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.",
       "clauseDirectivesInvalidDetails": "Clause {clauseName} in slot {slotName} has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.",
       "clauseDirectivesOverrideInvalidDetails": "The override for clause {clauseName} in slot {slotName} has invalid directives. Correct this fill’s override before filling again.",
@@ -4236,6 +4259,10 @@
     "archivedEmpty": "No archived memory.",
     "archivedToast": "Memory archived",
     "createdToast": "Memory saved",
+    "deleteConfirmation": "Type {confirmation} to confirm",
+    "deleteDescription": "This permanently removes this memory. This action cannot be undone.",
+    "deleteTitle": "Delete memory?",
+    "deletedToast": "Memory deleted",
     "empty": "No memory yet.",
     "kinds": {
       "decision": "Decision",
@@ -5164,6 +5191,8 @@
     "outline": "Contents",
     "outlineJumpLabel": "Jump to a provision",
     "outlineJumpPlaceholder": "§ 10 or a heading",
+    "pendingChanges": "Upcoming amendments",
+    "pendingChangesIncomplete": "The publisher data may not include every upcoming amendment.",
     "provisionAskContextPrompt": "\n\nPassages applying it in the most authoritative decisions:\n{passages}\n\nUse the case-law tools to read any of these decisions in full or to find further decisions citing the provision.",
     "provisionAskPlaceholder": "Ask about this provision",
     "provisionAskQuestionPrompt": "About {subject}: {question}",

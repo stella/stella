@@ -158,6 +158,7 @@ import {
 import {
   createScopedDbMock,
   createSelectQueryMock,
+  findNoDocumentProcessingRun,
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
 
@@ -445,6 +446,22 @@ const readOverviewHandlerMock = mock();
 const readWorkspaceContactsHandlerMock = mock();
 const readWorkspaceMembersHandlerMock = mock();
 
+/** The parts of a search_case_law payload the merge tests read. */
+const searchCaseLawPayloadSchema = v.object({
+  results: v.array(
+    v.object({
+      decisionId: v.string(),
+      match: v.string(),
+      snippet: v.nullish(v.string()),
+    }),
+  ),
+  searches: v.array(
+    v.object({
+      warnings: v.array(v.object({ code: v.string(), message: v.string() })),
+    }),
+  ),
+});
+
 const parseToolPayload = (
   result: Awaited<ReturnType<typeof handleMcpToolCall>>,
 ) => {
@@ -699,6 +716,7 @@ const createStatuteAst = () => ({
 const createStatuteReadResult = ({
   allowsDerivedAi = true,
 }: { allowsDerivedAi?: boolean } = {}) => ({
+  pendingChanges: null,
   allowsDerivedAi,
   citationCaseCount: 0,
   country: "CZE",
@@ -862,6 +880,7 @@ type MockMcpTransaction = {
       } | null>;
     };
     documentProcessingRuns: {
+      findFirst: typeof findNoDocumentProcessingRun;
       findMany: (input?: MockProcessingRunQueryInput) => Promise<unknown[]>;
     };
     entityVersions: {
@@ -1030,6 +1049,7 @@ const createScopedDb = (
               findFirst: async () => extractedContentRow,
             },
             documentProcessingRuns: {
+              findFirst: findNoDocumentProcessingRun,
               findMany: async (input) => {
                 const filtered = (processingState.runs ?? []).filter((run) => {
                   if (typeof run !== "object" || run === null) {
@@ -2519,6 +2539,7 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           keywords: null,
           matchingPassages: 4,
+          match: "all_terms",
           languageAlternates: [
             {
               caseNumber: "29 Cdo 123/2024",
@@ -2642,6 +2663,7 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           keywords: null,
           matchingPassages: 4,
+          match: "all_terms",
           snippet: 'Relevant holding on "smlouva"',
           sourceUrl: "https://example.test/decision",
         },
@@ -2711,6 +2733,7 @@ describe("OpenAI-compatible MCP tools", () => {
       },
       keywords: { type: "keywords", items: ["Licensed keyword"], omitted: 0 },
       matchingPassages: 1,
+      match: "all_terms",
       languageAlternates: [],
       slug: "stable-official-slug",
       sourceUrl: "https://example.test/decision",
@@ -2901,6 +2924,7 @@ describe("OpenAI-compatible MCP tools", () => {
           headnote: { type: "absent", reason: "not_published" },
           keywords: null,
           matchingPassages: 1,
+          match: "all_terms",
           slug: "stable-official-slug",
           sourceUrl: "https://example.test/decision",
         },
@@ -2958,6 +2982,7 @@ describe("OpenAI-compatible MCP tools", () => {
           headnote: null,
           keywords: null,
           matchingPassages: 1,
+          match: "all_terms",
           snippet: "Relevant holding",
           sourceUrl: "https://example.test/decision",
         },
@@ -2965,6 +2990,192 @@ describe("OpenAI-compatible MCP tools", () => {
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
     });
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
+  });
+
+  test("search_case_law marks partial matches and warns when any were appended", async () => {
+    const PARTIAL_ID = "f9c1f1a4-0a4f-4d7e-8a53-1d3b2f6a9e10";
+    const baseHit = {
+      caseNumber: "29 Cdo 123/2024",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      citationAuthority: 1,
+      citationCount: 1,
+      country: "CZE",
+      court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      decisionDate: "2024-02-01",
+      decisionId: DECISION_ID,
+      decisionType: "judgment",
+      ecli: null,
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: "29 Cdo 123/2024",
+        },
+      ],
+      headline: "<mark>holding</mark>",
+      textWithheldReason: null,
+      language: "cs",
+      headnote: { type: "absent", reason: "not_published" },
+      keywords: null,
+      matchingPassages: 1,
+      match: "all_terms",
+      slug: "stable-official-slug",
+      sourceUrl: "https://example.test/decision",
+    };
+    searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      facets: null,
+      hits: [
+        baseHit,
+        {
+          ...baseHit,
+          decisionId: PARTIAL_ID,
+          caseNumber: "29 Cdo 124/2024",
+          slug: "other-official-slug",
+          match: "some_terms",
+        },
+      ],
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      queryUsed: "shareholder dispute",
+      warnings: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { country: "CZE", queries: ["shareholder dispute"] },
+      context: createContext(),
+      toolName: "search_case_law",
+    });
+
+    const payload = v.parse(
+      searchCaseLawPayloadSchema,
+      parseToolPayload(result),
+    );
+    expect(
+      payload.results.map(({ decisionId, match }) => ({ decisionId, match })),
+    ).toEqual([
+      { decisionId: DECISION_ID, match: "all_terms" },
+      { decisionId: PARTIAL_ID, match: "some_terms" },
+    ]);
+    expect(payload.searches.at(0)?.warnings.map(({ code }) => code)).toEqual([
+      "partial_matches_appended",
+    ]);
+
+    // Several phrasings: the warning counts the merged response. A partial
+    // hit another phrasing matched in full is returned as all_terms and not
+    // counted, and no phrasing claims the uncounted total or the first
+    // phrasing's facets.
+    const page = (
+      hits: readonly {
+        decisionId: string;
+        match: "all_terms" | "some_terms";
+        headline?: string;
+      }[],
+      queryUsed: string,
+    ) => ({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      facets: null,
+      hits: hits.map((hit, index) => ({
+        ...baseHit,
+        ...hit,
+        caseNumber: `29 Cdo ${String(200 + index)}/2024`,
+        slug: `slug-${hit.decisionId}`,
+      })),
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      queryUsed,
+      warnings: [],
+    });
+    const OTHER_PARTIAL_ID = "018f0000-0000-7000-8000-0000000000c3";
+    searchDecisionsHandlerMock
+      .mockResolvedValueOnce(
+        page(
+          [
+            { decisionId: DECISION_ID, match: "all_terms" },
+            { decisionId: PARTIAL_ID, match: "some_terms" },
+            { decisionId: OTHER_PARTIAL_ID, match: "some_terms" },
+          ],
+          "shareholder dispute",
+        ),
+      )
+      .mockResolvedValueOnce(
+        page([{ decisionId: PARTIAL_ID, match: "all_terms" }], "spor"),
+      );
+    const merged = v.parse(
+      searchCaseLawPayloadSchema,
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: {
+            country: "CZE",
+            queries: ["shareholder dispute", "spor"],
+          },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      ),
+    );
+    expect(
+      merged.results.find(({ decisionId }) => decisionId === PARTIAL_ID)?.match,
+    ).toBe("all_terms");
+    const [firstWarnings, secondWarnings] = merged.searches.map(
+      ({ warnings }) =>
+        warnings.filter(({ code }) => code === "partial_matches_appended"),
+    );
+    expect(firstWarnings).toHaveLength(1);
+    expect(firstWarnings?.at(0)?.message).toContain("1 hit marked");
+    expect(firstWarnings?.at(0)?.message).not.toContain("total and facets");
+    expect(secondWarnings).toEqual([]);
+
+    // Partial at rank 0 in one phrasing and full at rank 2 in the other: the
+    // full occurrence represents it, with its own excerpt and its full-match
+    // rank, so it sorts after the full match at rank 0, not before.
+    searchDecisionsHandlerMock
+      .mockResolvedValueOnce(
+        page(
+          [
+            {
+              decisionId: PARTIAL_ID,
+              match: "some_terms",
+              headline: "<mark>partial</mark> occurrence",
+            },
+          ],
+          "shareholder dispute",
+        ),
+      )
+      .mockResolvedValueOnce(
+        page(
+          [
+            { decisionId: DECISION_ID, match: "all_terms" },
+            { decisionId: OTHER_PARTIAL_ID, match: "all_terms" },
+            {
+              decisionId: PARTIAL_ID,
+              match: "all_terms",
+              headline: "<mark>full</mark> occurrence",
+            },
+          ],
+          "spor",
+        ),
+      );
+    const promoted = v.parse(
+      searchCaseLawPayloadSchema,
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", queries: ["shareholder dispute", "spor"] },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      ),
+    );
+    const representative = promoted.results.find(
+      ({ decisionId }) => decisionId === PARTIAL_ID,
+    );
+    expect(representative?.match).toBe("all_terms");
+    expect(representative?.snippet).toContain("full occurrence");
+    expect(promoted.results.map(({ decisionId }) => decisionId)).toEqual([
+      DECISION_ID,
+      OTHER_PARTIAL_ID,
+      PARTIAL_ID,
+    ]);
   });
 
   test("pending public countries return typed unavailable through real MCP output contracts", async () => {
@@ -3030,6 +3241,7 @@ describe("OpenAI-compatible MCP tools", () => {
     headnote: { type: "absent", reason: "not_published" },
     keywords: null,
     matchingPassages: 1,
+    match: "all_terms",
     slug: `slug-${decisionId}`,
     sourceUrl: "https://example.test/decision",
   });
@@ -3572,6 +3784,7 @@ describe("OpenAI-compatible MCP tools", () => {
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               matchingPassages: 1,
+              match: "all_terms",
               slug: "stable-official-slug",
               sourceUrl: "https://example.test/decision",
             },
@@ -4240,8 +4453,10 @@ describe("OpenAI-compatible MCP tools", () => {
         versionValidFrom: "2014-01-01",
         versionValidTo: null,
         ...EFFECTIVE_LABEL,
+        pendingChanges: null,
         versions: [
           {
+            amendedBy: null,
             documentId: STATUTE_ID,
             resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
             versionValidFrom: "2014-01-01",
@@ -4249,6 +4464,7 @@ describe("OpenAI-compatible MCP tools", () => {
             ...EFFECTIVE_LABEL,
           },
           {
+            amendedBy: null,
             documentId: STATUTE_PRIOR_ID,
             resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
             versionValidFrom: "2012-03-22",
@@ -5953,7 +6169,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(error["issues"]).toEqual([
       {
         path: "country",
-        message: '"XAA" is not a country code, one of CZE.',
+        message: `"XAA" is not a country code, one of ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}.`,
       },
     ]);
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
@@ -8318,7 +8534,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
     expect(withTimeoutMock).toHaveBeenCalledWith(
       expect.any(Function),
-      expect.objectContaining({ timeoutMs: expect.any(Number) }),
+      expect.objectContaining({ timeoutMs: expect.any(Number) }), // timeout: asserted call argument, not a deadline
     );
   });
 
@@ -9805,53 +10021,51 @@ describe("OpenAI-compatible MCP tools", () => {
   };
 
   const createVersionHistoryScopedDb = (rows: VersionHistoryRow[]) =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
-      mock(async (callback: (tx: unknown) => unknown) => {
+    createScopedDbMock({
+      query: {
+        entities: {
+          findFirst: async () => ({
+            createdAt: new Date("2025-12-01T00:00:00.000Z"),
+            kind: "document",
+            name: "Secret Doc for John Smith",
+            updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+            workspaceId: WORKSPACE_ID,
+            extractedContent: null,
+            currentVersion: {
+              createdAt: new Date("2026-01-01T00:00:00.000Z"),
+              id: "ver_current",
+              fields: [],
+            },
+            versions: [{ id: "ver_current" }],
+          }),
+        },
+        documentProcessingRuns: { findMany: async () => [] },
+        entityVersions: {
+          findFirst: async () => ({ id: "ver_current" }),
+        },
+        extractedContent: { findFirst: async () => null },
+        fields: {
+          findMany: async () => [],
+        },
+        organizationSettings: {
+          findFirst: async () => ({ documentProcessingMode: "off" }),
+        },
+        searchDocuments: {
+          findFirst: async () => ({
+            updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+          }),
+        },
+      },
+      select: () => {
         const selectBuilder = {
           from: () => selectBuilder,
           where: () => selectBuilder,
           orderBy: () => selectBuilder,
           limit: () => rows,
         };
-        return await callback({
-          query: {
-            entities: {
-              findFirst: async () => ({
-                createdAt: new Date("2025-12-01T00:00:00.000Z"),
-                kind: "document",
-                name: "Secret Doc for John Smith",
-                updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-                workspaceId: WORKSPACE_ID,
-                extractedContent: null,
-                currentVersion: {
-                  createdAt: new Date("2026-01-01T00:00:00.000Z"),
-                  id: "ver_current",
-                  fields: [],
-                },
-                versions: [{ id: "ver_current" }],
-              }),
-            },
-            documentProcessingRuns: { findMany: async () => [] },
-            entityVersions: {
-              findFirst: async () => ({ id: "ver_current" }),
-            },
-            extractedContent: { findFirst: async () => null },
-            fields: {
-              findMany: async () => [],
-            },
-            organizationSettings: {
-              findFirst: async () => ({ documentProcessingMode: "off" }),
-            },
-            searchDocuments: {
-              findFirst: async () => ({
-                updatedAt: new Date("2026-01-02T00:00:00.000Z"),
-              }),
-            },
-          },
-          select: () => selectBuilder,
-        });
-      }),
-    );
+        return selectBuilder;
+      },
+    }).scopedDb;
 
   test("read_document anonymizes version-history labels and descriptions", async () => {
     anonymizeTextFieldsMock.mockResolvedValue(

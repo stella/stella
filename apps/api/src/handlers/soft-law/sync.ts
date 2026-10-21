@@ -7,11 +7,14 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
-import { EU_SOFT_LAW_SOURCES } from "./adapters/registry";
+import {
+  SOFT_LAW_ADMISSIONS,
+  type RegisteredSoftLawAuthority,
+} from "./adapters/registry";
 import { runSoftLawIngestion } from "./ingestion";
 
 type SyncSoftLawOptions = {
-  authority: keyof typeof EU_SOFT_LAW_SOURCES;
+  authority: RegisteredSoftLawAuthority;
   scopedDb: ScopedDb;
   signal: AbortSignal;
 };
@@ -22,7 +25,7 @@ export const syncEuSoftLaw = async ({
   scopedDb,
   signal,
 }: SyncSoftLawOptions) => {
-  const { adapter, descriptor } = EU_SOFT_LAW_SOURCES[authority];
+  const { adapter, descriptor } = SOFT_LAW_ADMISSIONS[authority];
   const auditSubject = createSafeId<"systemScriptRun">();
   const registration = await Result.tryPromise(
     async () =>
