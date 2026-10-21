@@ -258,27 +258,38 @@ const verifyPackageWithNpm = async ({
       return false;
     }
     const report: unknown = JSON.parse(audit.stdout);
-    if (!isRecord(report)) {
+    if (
+      !isRecord(report) ||
+      !Array.isArray(report["invalid"]) ||
+      !Array.isArray(report["missing"])
+    ) {
       return false;
     }
-    const invalid = Array.isArray(report["invalid"]) ? report["invalid"] : [];
-    const missing = Array.isArray(report["missing"]) ? report["missing"] : [];
-    const verified = Array.isArray(report["verified"])
-      ? report["verified"]
-      : [];
+    // npm's JSON report lists only failures ({ invalid, missing }); it verifies
+    // every attestation the registry advertises, and the caller already
+    // required this version to advertise one. Newer npm versions may also list
+    // the verified packages; when they do, the target must be among them.
     const targetMatches = (entry: unknown) =>
       packageEntryMatches(entry, name, version);
-    return (
-      !invalid.some(targetMatches) &&
-      !missing.some(targetMatches) &&
-      verified.some(
-        (entry) =>
-          targetMatches(entry) &&
-          isRecord(entry) &&
-          Array.isArray(entry["attestations"]) &&
-          entry["attestations"].length > 0,
-      )
-    );
+    const verified = report["verified"];
+    if (
+      report["invalid"].length > 0 ||
+      report["missing"].some(targetMatches) ||
+      (Array.isArray(verified) &&
+        !verified.some(
+          (entry) =>
+            targetMatches(entry) &&
+            isRecord(entry) &&
+            Array.isArray(entry["attestations"]) &&
+            entry["attestations"].length > 0,
+        ))
+    ) {
+      return false;
+    }
+    const installed: unknown = await Bun.file(
+      path.join(directory, "node_modules", name, "package.json"),
+    ).json();
+    return packageEntryMatches(installed, name, version);
   } catch {
     return false;
   } finally {

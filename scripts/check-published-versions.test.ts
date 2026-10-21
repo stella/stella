@@ -270,35 +270,44 @@ const provenanceStatement = ({
   },
 });
 
+// The shape npm 10 prints for `npm audit signatures --json` when every
+// signature and attestation verifies: failures only, no verified list.
+const NPM_AUDIT_VERIFIED = JSON.stringify({ invalid: [], missing: [] });
+
 const runRepositoryCheck = async ({
   latest,
   attestations,
+  installedVersion = "1.2.4",
   npmResults = [
     { exitCode: 0, stdout: "" },
-    {
-      exitCode: 0,
-      stdout: JSON.stringify({
-        invalid: [],
-        missing: [],
-        verified: [
-          {
-            name: "@stll/fixture",
-            version: "1.2.4",
-            attestations: [{ predicateType: "https://slsa.dev/provenance/v1" }],
-          },
-        ],
-      }),
-    },
+    { exitCode: 0, stdout: NPM_AUDIT_VERIFIED },
   ],
 }: {
   latest: Record<string, unknown>;
   attestations?: unknown;
+  installedVersion?: string;
   npmResults?: { exitCode: number; stdout: string }[];
 }) => {
   const npmCalls: Parameters<NpmRunner>[0][] = [];
   const npmRunner: NpmRunner = async (options) => {
     npmCalls.push(options);
-    return npmResults.at(npmCalls.length - 1) ?? { exitCode: 1, stdout: "" };
+    const result = npmResults.at(npmCalls.length - 1) ?? {
+      exitCode: 1,
+      stdout: "",
+    };
+    if (options.args.at(0) === "install" && result.exitCode === 0) {
+      await Bun.write(
+        path.join(
+          options.cwd,
+          "node_modules",
+          "@stll",
+          "fixture",
+          "package.json",
+        ),
+        JSON.stringify({ name: "@stll/fixture", version: installedVersion }),
+      );
+    }
+    return result;
   };
   const server = Bun.serve({
     port: 0,
@@ -452,6 +461,14 @@ describe("published repository provenance", () => {
         ],
       },
     ],
+    [
+      "an invalid dependency signature",
+      {
+        invalid: [{ name: "@stll/fixture-dependency", version: "1.0.0" }],
+        missing: [],
+      },
+    ],
+    ["a report without its failure lists", {}],
   ])("rejects npm reporting %s", async (_, auditReport) => {
     const { result } = await runRepositoryCheck({
       latest: {
@@ -464,6 +481,53 @@ describe("published repository provenance", () => {
         { exitCode: 0, stdout: "" },
         { exitCode: 0, stdout: JSON.stringify(auditReport) },
       ],
+    });
+    expect(result).toEqual({ status: "failed", reason: "unattested_publish" });
+  });
+
+  test("accepts a verified list from newer npm when it names the target", async () => {
+    const { result } = await runRepositoryCheck({
+      latest: {
+        version: "1.2.4",
+        repository: "https://github.com/stella/moved",
+        dist: "fixture",
+      },
+      attestations: attestationDocument(provenanceStatement()),
+      npmResults: [
+        { exitCode: 0, stdout: "" },
+        {
+          exitCode: 0,
+          stdout: JSON.stringify({
+            invalid: [],
+            missing: [],
+            verified: [
+              {
+                name: "@stll/fixture",
+                version: "1.2.4",
+                attestations: [
+                  { predicateType: "https://slsa.dev/provenance/v1" },
+                ],
+              },
+            ],
+          }),
+        },
+      ],
+    });
+    expect(result).toEqual({
+      status: "passed",
+      reason: "published_from_declared_repository",
+    });
+  });
+
+  test("rejects a verified audit when npm installed another version", async () => {
+    const { result } = await runRepositoryCheck({
+      latest: {
+        version: "1.2.4",
+        repository: "https://github.com/stella/moved",
+        dist: "fixture",
+      },
+      attestations: attestationDocument(provenanceStatement()),
+      installedVersion: "1.2.3",
     });
     expect(result).toEqual({ status: "failed", reason: "unattested_publish" });
   });
