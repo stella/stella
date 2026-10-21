@@ -1631,8 +1631,6 @@ jobs:
     timeout-minutes: 105
     permissions:
       contents: read
-      # Release PR state for the release CLI changeset hold.
-      pull-requests: read
       actions: write
     env:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
@@ -1917,8 +1915,6 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
-      # Release PR state for the release CLI changeset hold.
-      pull-requests: read
       actions: write
     env:
       CI_CANCELLATION_KIND: CONTEXTUAL
@@ -2126,8 +2122,6 @@ jobs:
     timeout-minutes: 40
     permissions:
       contents: read
-      # Release PR state for the release CLI changeset hold.
-      pull-requests: read
       actions: write
     env:
       CI_CANCELLATION_KIND: CONTEXTUAL
