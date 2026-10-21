@@ -11,6 +11,7 @@ const { act, cleanup, fireEvent, render } =
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { AnnotationToolbar } = await import("./annotation-toolbar");
+const { cleanSelectionText } = await import("./reader-copy-text.logic");
 
 const SELECTED_TEXT = "Selected passage";
 
@@ -27,6 +28,16 @@ afterEach(async () => {
   await act(async () => cleanup());
 });
 afterAll(async () => await unregisterDomEnvironment());
+
+test("copy text preserves block boundaries while normalizing inline whitespace", () => {
+  const root = document.createElement("div");
+  root.innerHTML =
+    "<p>First   paragraph<span data-reader-chrome>Page 2</span></p><p>Second\tparagraph</p>";
+  const range = document.createRange();
+  range.selectNodeContents(root);
+
+  expect(cleanSelectionText(range)).toBe("First paragraph\nSecond paragraph");
+});
 
 test.each([100, 650])(
   "copy menu uses viewport coordinates outside the toolbar at y=%s",
