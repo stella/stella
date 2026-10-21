@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { repoRelativePath } from "../packages/portable-path/src/index";
 import type { GuardRollout } from "./guard-rollout-policy.ts";

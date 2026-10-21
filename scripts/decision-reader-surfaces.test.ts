@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { DECISION_READER_SURFACES } from "../apps/web/src/features/case-law/decision-reader-surfaces";
 

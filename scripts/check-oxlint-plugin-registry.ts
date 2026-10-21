@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import oxlintConfig from "../oxlint.config.ts";
 import { GENERATORS } from "./generated-files";
@@ -19,6 +19,7 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "aggregate-lock-sites.ts",
   "budget-ledger.ts",
   "database-access.ts",
+  "eden-client.ts",
   "module-id.ts",
   "physical-properties.ts",
   "public-law-decision-surface-modules.ts",

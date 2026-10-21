@@ -855,7 +855,6 @@
         "unavailable": "A análise por IA não está disponível para esta decisão."
       },
       "generate": "Gerar ementas com IA",
-      "holdingAnchor": "Ir para o parágrafo",
       "invitation": "Com uma conta gratuita, a IA prepara notas de trabalho sobre esta decisão.",
       "topics": "Temas",
       "treatment": "Tratamento posterior"
@@ -1111,6 +1110,8 @@
         "hint": "Remova ou amplie um filtro e pesquise novamente.",
         "message": "Nada corresponde aos filtros aplicados."
       },
+      "partialMatch": "Correspondência parcial",
+      "partialMatches": "Correspondências parciais para: <bdi>{query}</bdi>",
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Pesquisar todas as palavras"
     },
@@ -1148,6 +1149,7 @@
       "judges": "Juízes",
       "legalArea": "Área jurídica",
       "legalSentence": "Tese jurídica",
+      "paragraphReference": "Parágrafo {number}",
       "popularName": "Nome popular",
       "portraitCredit": "Fonte dos retratos: {source}",
       "provisionMentions": "{count, number}×",
@@ -1614,6 +1616,9 @@
         "private": "Suas habilidades de IA",
         "team": "Habilidades de IA da equipe"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Também consultadas ({count, number})"
     },
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
@@ -2703,6 +2708,7 @@
       "aiConfigModelInvalid": "A configuração do modelo de IA é inválida. Verifique os modelos selecionados.",
       "aiConfigProviderInvalid": "A configuração do provedor de IA é inválida. Verifique as configurações do provedor.",
       "aiConfigProviderValidationFailed": "O provedor de IA rejeitou a configuração. Verifique a chave de API e o modelo.",
+      "aiDeadlineExceeded": "A IA não respondeu a tempo. Tente novamente em instantes.",
       "aiOutputInvalid": "A resposta da IA tinha um formato inesperado. Tente novamente.",
       "aiOutputModerated": "O provedor de IA moderou a resposta. Reformule a solicitação ou escolha outro modelo.",
       "aiProviderTaskUnsupported": "O provedor de IA configurado não consegue realizar esta tarefa. Escolha um provedor que consiga.",

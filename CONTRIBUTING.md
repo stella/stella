@@ -244,7 +244,6 @@ it:
 - `@stll/start-runtime`
 - `@stll/template-conditions`
 - `@stll/text-normalize`
-- `@stll/time`
 - `@stll/ui`
 - `@stll/workspace-model`
 - `@stll/workspace-ui`
