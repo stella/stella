@@ -125,6 +125,24 @@ describe("workflow YAML validation", () => {
         "workflow.yml",
       ),
     ).toThrow("workflow.yml: Ruby workflow shells are not allowed");
+    for (const shell of [
+      "/usr/bin/ruby {0}",
+      "/usr/bin/env ruby {0}",
+      "env ruby3.3 -w {0}",
+    ]) {
+      expect(() =>
+        validateNoRubyShell(
+          { steps: [{ shell, run: "puts 1" }] },
+          "workflow.yml",
+        ),
+      ).toThrow("workflow.yml: Ruby workflow shells are not allowed");
+    }
+    expect(() =>
+      validateNoRubyShell(
+        { steps: [{ shell: "bash {0}", run: "true" }] },
+        "workflow.yml",
+      ),
+    ).not.toThrow();
 
     const root = mkdtempSync(path.join(tmpdir(), "workflow-ruby-spawn-"));
     try {

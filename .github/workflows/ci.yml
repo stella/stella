@@ -876,6 +876,7 @@ jobs:
         run: |
           git show "$WORKFLOW_SHA:.github/workflows/ci.yml" > "$RUNNER_TEMP/main-heavy-ci.yml"
           git show "$WORKFLOW_SHA:scripts/main-heavy-plan.ts" > packages/scripts/.main-heavy-plan.ts
+          git show "$WORKFLOW_SHA:scripts/ci-pr-jobs.ts" > packages/scripts/ci-pr-jobs.ts
           bun packages/scripts/.main-heavy-plan.ts "$RUNNER_TEMP/main-heavy-ci.yml" >> "$GITHUB_OUTPUT"
 
       - name: Gate API test planners on installed dependencies

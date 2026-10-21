@@ -125,7 +125,13 @@ export const validateNoRubyShell = (value: unknown, file: string): void => {
     return;
   }
   const shell = value["shell"];
-  if (typeof shell === "string" && /^ruby(?:\s|$)/u.test(shell.trim())) {
+  // Any command word naming ruby, so a path or an env launcher cannot hide it.
+  if (
+    typeof shell === "string" &&
+    shell
+      .split(/\s+/u)
+      .some((word) => /^ruby[\d.]*$/u.test(word.split("/").at(-1) ?? ""))
+  ) {
     throw new WorkflowYamlError({
       message: `${file}: Ruby workflow shells are not allowed`,
       file,
