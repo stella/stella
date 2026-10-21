@@ -177,6 +177,9 @@ export type DecisionWorkspaceProps =
 /** A decision without a parsed body has no blocks to range over. */
 const NO_BLOCKS: DocumentAst["blocks"] = [];
 
+const decisionBlocks = (ast: DocumentAst | null): DocumentAst["blocks"] =>
+  ast?.blocks ?? NO_BLOCKS;
+
 const MARKS_FOR_NOTES_FILTER = {
   ai: "none",
   all: "all",
@@ -264,6 +267,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, landingSessionId } = props;
   const t = useTranslations();
   const ast = parseDocumentAst(decision.documentAst);
+  const astBlocks = decisionBlocks(ast);
   // The case's citable name, for the legal copy modes.
   const caseName = decisionCaseName({
     ast,
@@ -583,7 +587,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         container.scrollTop,
       behavior: "instant",
     });
-    const blocks = ast?.blocks ?? NO_BLOCKS;
+    const blocks = astBlocks;
     const range = paragraphRangeIndices(blocks, {
       startAnchorId: anchorId,
       endAnchorId,
@@ -617,7 +621,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     hasAiHeadnotes(completeAnalysis) ? (
       <AiHeadnotes
         analysis={completeAnalysis}
-        blocks={ast?.blocks ?? NO_BLOCKS}
+        blocks={astBlocks}
         onAnchorClick={jumpToAnchor}
       />
     ) : null;

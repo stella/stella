@@ -216,6 +216,23 @@ const pageDecisions = (
   page: { decisions: readonly Decision[] } | undefined,
 ): readonly Decision[] => page?.decisions ?? EMPTY_DECISIONS;
 
+/** Times a search until its own page of results, not a held one, is drawn. */
+const useCaseLawResultsTiming = ({
+  query,
+  page,
+  isPlaceholderData,
+}: {
+  query: string | undefined;
+  page: { decisions: readonly Decision[] } | undefined;
+  isPlaceholderData: boolean;
+}) => {
+  useSearchResultsTiming(
+    "case-law",
+    query ?? "",
+    page !== undefined && !isPlaceholderData,
+  );
+};
+
 type PublicCaseLawIndexProps = {
   /** Whether the router has this page's rows yet. */
   routeState: PublicLawRouteState;
@@ -347,11 +364,11 @@ export function PublicCaseLawIndex({
     // so a step never blanks the table.
     placeholderData: keepPreviousData,
   });
-  useSearchResultsTiming(
-    "case-law",
-    search.q ?? "",
-    pageData !== undefined && !isPlaceholderData,
-  );
+  useCaseLawResultsTiming({
+    query: search.q,
+    page: pageData,
+    isPlaceholderData,
+  });
   // The loader warms these after search; background navigations keep the
   // same order without suspending the page on optional filter choices.
   const { data: browseFacets } = useDecisionBrowseFacets({
