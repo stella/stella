@@ -1,0 +1,99 @@
+name: Mobile Fingerprint Check
+
+defaults:
+  run:
+    shell: bash
+
+# Reports whether a pull request changes the mobile app's native fingerprint
+# (apps/mobile/scripts/fingerprint.ts), i.e. whether merging it means a new
+# TestFlight build must ship before over-the-air updates reach phones again.
+# Advisory: the job summary carries the result and the job never fails over
+# it. Both fingerprints are computed in this one job, so they compare.
+on:
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - "bun.lock"
+      - "package.json"
+      - "patches/**"
+
+permissions: {}
+
+concurrency:
+  group: mobile-fingerprint-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  fingerprint:
+    name: Native fingerprint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      APP_VARIANT: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit, compared with its first parent: the base the
+          # pull request actually merges onto.
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      - name: Install the merge result's mobile dependencies
+        uses: ./.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+
+      - name: Fingerprint the merge result
+        working-directory: apps/mobile
+        run: |
+          mkdir -p "$RUNNER_TEMP/fingerprint"
+          for platform in ios android; do
+            bun scripts/fingerprint.ts "$platform" > "$RUNNER_TEMP/fingerprint/head-$platform"
+          done
+
+      - name: Check out the base
+        run: git checkout --quiet HEAD^1
+
+      # A dependency change must not be fingerprinted against the merge
+      # result's installed packages.
+      - name: Install the base's mobile dependencies
+        uses: ./.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+
+      - name: Fingerprint the base
+        working-directory: apps/mobile
+        run: |
+          for platform in ios android; do
+            if [ -f scripts/fingerprint.ts ]; then
+              bun scripts/fingerprint.ts "$platform" > "$RUNNER_TEMP/fingerprint/base-$platform"
+            else
+              echo "none" > "$RUNNER_TEMP/fingerprint/base-$platform"
+            fi
+          done
+
+      - name: Report
+        run: |
+          {
+            echo "## Mobile native fingerprint"
+            echo
+            for platform in ios android; do
+              head="$(cat "$RUNNER_TEMP/fingerprint/head-$platform")"
+              base="$(cat "$RUNNER_TEMP/fingerprint/base-$platform")"
+              if [ "$head" = "$base" ]; then
+                echo "- **$platform**: unchanged (\`$head\`). Over-the-air updates keep reaching current builds."
+              else
+                echo "- **$platform**: \`$base\` → \`$head\`. After merging, a new TestFlight build must ship before updates reach phones."
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
