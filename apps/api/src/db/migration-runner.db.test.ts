@@ -1128,6 +1128,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const holder = holdLockProbe(openClient());
             const connection = await openClient().reserve();
             const sleeps: number[] = [];
+            let onlineLockTimeout: unknown;
             const stdout = spyOn(process.stdout, "write").mockImplementation(
               () => true,
             );
@@ -1138,7 +1139,13 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 databaseUrl: scratchUrl,
                 ebs: DISABLED_EBS,
                 migrationsFolder: folder,
-                runOnline: async () => ONLINE_COMPLETE,
+                runOnline: async (pool) => {
+                  const onlineConnection = await pool.reserve();
+                  onlineLockTimeout = await onlineConnection.query(
+                    "SELECT current_setting('lock_timeout') AS lock_timeout",
+                  );
+                  return ONLINE_COMPLETE;
+                },
                 lockWaitRetry: {
                   lockTimeoutsMs: [10, 20, 30, 40],
                   pauseBaseMs: 10,
@@ -1156,6 +1163,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               });
               expect(sleeps).toEqual([10]);
               expect(appliedResult(result).insertedNames).toEqual([A, B]);
+              expect(onlineLockTimeout).toEqual([{ lock_timeout: "0" }]);
             } finally {
               stdout.mockRestore();
               await holder.release();

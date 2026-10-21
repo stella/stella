@@ -387,6 +387,23 @@ export const applyPendingRetryingLockWaits = async ({
   });
 };
 
+type ApplySchemaMigrationsOptions = ApplyPendingOptions & {
+  connection: {
+    unsafe: (query: string) => PromiseLike<unknown>;
+  };
+};
+
+export const applySchemaMigrationsRetryingLockWaits = async ({
+  connection,
+  ...options
+}: ApplySchemaMigrationsOptions): Promise<void> => {
+  try {
+    await applyPendingRetryingLockWaits(options);
+  } finally {
+    await connection.unsafe("RESET lock_timeout");
+  }
+};
+
 const ledgerFingerprint = (rows: readonly LedgerRow[]) =>
   rows
     .map(
@@ -542,7 +559,8 @@ export const runMigrations = async ({
     const preflightFingerprint = ledgerFingerprint(preflight.rows);
     // Attempts share this connection, which holds the lane until the finally
     // below, so corpus writers stay drained between them.
-    await applyPendingRetryingLockWaits({
+    await applySchemaMigrationsRetryingLockWaits({
+      connection,
       // Keep original identities and hashes while the runner owns queue bounds.
       apply: async (lockTimeoutMs) => {
         await connection.unsafe(

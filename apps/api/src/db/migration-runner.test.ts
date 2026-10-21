@@ -7,6 +7,7 @@ import { isPgError, PG_ERROR } from "../lib/pg-error";
 import { DEFAULT_LOCK_RETRY_CONFIG } from "./lock-retry-ladder";
 import {
   applyPendingRetryingLockWaits,
+  applySchemaMigrationsRetryingLockWaits,
   decideLedgerAheadPolicy,
   MIGRATION_LOCK_WAIT_FAILURE,
   MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
@@ -284,4 +285,76 @@ describe("a pending set that loses a lock wait", () => {
       expect(run.events).toEqual([]);
     }
   });
+});
+
+test("the schema ladder restores the session lock timeout before the online phase", async () => {
+  const statements: string[] = [];
+  const connection = {
+    unsafe: async (statement: string) => {
+      statements.push(statement);
+      return [];
+    },
+  };
+
+  await applySchemaMigrationsRetryingLockWaits({
+    connection,
+    apply: async (lockTimeoutMs) => {
+      await connection.unsafe(
+        `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
+      );
+    },
+    ledgerUnchanged: async () => true,
+    retry: {
+      ...DEFAULT_LOCK_RETRY_CONFIG,
+      lockTimeoutsMs: [25],
+      random: () => 0.5,
+      now: () => 0,
+      sleep: async () => await Promise.resolve(),
+    },
+  });
+  await connection.unsafe("ONLINE PHASE FIRST STATEMENT");
+
+  expect(statements).toEqual([
+    "SET lock_timeout = '25ms'",
+    "RESET lock_timeout",
+    "ONLINE PHASE FIRST STATEMENT",
+  ]);
+});
+
+test("the schema ladder restores the session lock timeout after a failure", async () => {
+  const statements: string[] = [];
+  const connection = {
+    unsafe: async (statement: string) => {
+      statements.push(statement);
+      return [];
+    },
+  };
+  const failure = new Error("schema migration failed");
+
+  const rejection = await applySchemaMigrationsRetryingLockWaits({
+    connection,
+    apply: async (lockTimeoutMs) => {
+      await connection.unsafe(
+        `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
+      );
+      throw failure;
+    },
+    ledgerUnchanged: async () => true,
+    retry: {
+      ...DEFAULT_LOCK_RETRY_CONFIG,
+      lockTimeoutsMs: [25],
+      random: () => 0.5,
+      now: () => 0,
+      sleep: async () => await Promise.resolve(),
+    },
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(rejection).toBe(failure);
+  expect(statements).toEqual([
+    "SET lock_timeout = '25ms'",
+    "RESET lock_timeout",
+  ]);
 });
