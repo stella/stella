@@ -215,6 +215,14 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
   };
 };
 
+/**
+ * The bridge is mounted once by the signed-in app frame, so every chat send
+ * sees the extension's pairing. A send while it is unmounted drops the browser
+ * tool silently, which the send path reports.
+ */
+export const isBrowserExtensionBridgeMounted = (): boolean =>
+  bridgeRuntime !== null && bridgeRuntime.mountCount > 0;
+
 export const getBrowserClientCapability = ():
   | BrowserClientCapability
   | undefined =>

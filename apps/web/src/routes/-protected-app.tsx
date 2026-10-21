@@ -60,6 +60,7 @@ import {
 import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-template-upload-dialog";
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
+import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
 import { PlaybookPaneLeaveConfirmation } from "@/features/knowledge/playbook-editor/playbook-pane-leave-confirmation";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
@@ -169,6 +170,9 @@ export const ProtectedAppFrame = ({
   user: AuthenticatedUser;
   children: ReactNode;
 }) => {
+  // Every chat send path lives under this frame, including the new-chat page
+  // that sends before it navigates to a thread, so one mount covers them all.
+  useMountEffect(mountBrowserExtensionBridge);
   useMountEffect(() => {
     const activity = createSessionActivity({
       page: document,

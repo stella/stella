@@ -43,7 +43,10 @@ import {
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
 import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
-import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
+import {
+  getBrowserClientCapability,
+  isBrowserExtensionBridgeMounted,
+} from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
 import { keepShownRejoinMessages } from "@/features/chat/chat-rejoin-messages";
 import { createChatSendTiming } from "@/features/chat/chat-send-timing";
@@ -650,6 +653,15 @@ export const createChatRuntime = ({
         return panic("Stella chat connection received model messages");
       }
       providerDiagnostic = undefined;
+      if (!isBrowserExtensionBridgeMounted()) {
+        getAnalytics().captureError(
+          new ChatRequestError({
+            kind: "browser_bridge_unmounted",
+            message:
+              "Chat sent without the browser extension bridge mounted; the browser tool is unavailable for this turn",
+          }),
+        );
+      }
       const prepared = Result.try({
         try: () =>
           buildSendRequestBody({

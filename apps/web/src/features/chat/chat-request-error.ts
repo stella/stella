@@ -5,7 +5,8 @@ export class ChatRequestError extends TaggedError("ChatRequestError")<{
     | "preparation_failed"
     | "connection_failed"
     | "timed_out"
-    | "not_started";
+    | "not_started"
+    | "browser_bridge_unmounted";
   message: string;
   cause?: unknown;
 }> {}
