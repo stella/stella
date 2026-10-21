@@ -59,11 +59,16 @@ describe("principalAudience", () => {
 
 describe("productUsagePrincipal", () => {
   test("keeps a customer's ids", () => {
+    const principal = productUsagePrincipal(
+      { organizationId: "org_1", userId: "user_1" },
+      REVIEW_ACCOUNT,
+    );
+
     expect(
-      productUsagePrincipal(
-        { organizationId: "org_1", userId: "user_1" },
-        REVIEW_ACCOUNT,
-      ),
+      principal && {
+        ...principal,
+        distinctId: principal.distinctId.toString(),
+      },
     ).toEqual({ distinctId: "user_1", organizationId: "org_1" });
   });
 
