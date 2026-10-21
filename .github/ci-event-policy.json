@@ -4,6 +4,7 @@
     "ci.yml/api-test-durations": "main",
     "fetch-public-documents.yml/fetch": "main",
     "visual-preview.yml/preview": "pr-fast",
+    "mobile-fingerprint-check.yml/fingerprint": "pr-fast",
     "railway-smoke.yml/smoke": "main",
     "autofix.yml/regenerate-requested-files": "main",
     "autofix.yml/dependabot-bun-autofix": "pr-fast",
