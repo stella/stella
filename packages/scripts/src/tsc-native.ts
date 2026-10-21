@@ -7,7 +7,7 @@ import { childExitStatus } from "./child-exit-status";
 
 const tsc = path.join(
   import.meta.dir,
-  "../../../node_modules/@typescript/native/bin/tsc",
+  "../../../node_modules/typescript/bin/tsc",
 );
 
 // Flags by which a caller takes over the checker split itself.

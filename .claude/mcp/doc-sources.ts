@@ -327,7 +327,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@types/chrome",
   "@types/hast",
   "@types/node",
-  "@typescript/native",
   "@vscode/markdown-editor",
   "@vscode/observables",
   "astro",
@@ -373,6 +372,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "tailwindcss",
   "tw-animate-css",
   "typescript",
+  "typescript6",
   "unified",
   "uqr",
   "use-debounce",
@@ -404,6 +404,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
           reason: "no-llms-txt",
         }) satisfies NoLlmsTxtExclusion,
     ),
+    {
+      checkedAt: "2026-10-20T00:00:00.000Z",
+      dependency: "lzma1",
+      explanation:
+        "https://xseman.github.io/lzma1/llms.txt and the repository's llms.txt return 404. Use the README and type declarations at https://github.com/xseman/lzma1 directly; PAY by square uses only compress() with explicit lc/lp/pb/dictSize options.",
+      expiresAt: "2026-11-19T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
     {
       checkedAt: "2026-10-17T00:00:00.000Z",
       dependency: "@embedpdf/pdfium",

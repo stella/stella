@@ -44,6 +44,7 @@
     "allow-desktop-report-timing",
     "allow-account-get-state",
     "allow-account-disconnect",
-    "allow-open-stella-account"
+    "allow-open-stella-account",
+    "allow-shortcut-get-snapshot"
   ]
 }

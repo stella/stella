@@ -55,6 +55,9 @@ const WORKED: ReconciliationTurnResult = {
 };
 const IDLE: ReconciliationTurnResult = { turn: RECONCILIATION_TURN.IDLE };
 const LEASED: ReconciliationTurnResult = { turn: RECONCILIATION_TURN.LEASED };
+const ABORTED: ReconciliationTurnResult = {
+  turn: RECONCILIATION_TURN.ABORTED,
+};
 
 type LoopEvent =
   | { type: "turn"; adapterKey: string; atMs: number }
@@ -469,6 +472,16 @@ describe("case law reconciliation loop", () => {
     });
 
     expect(run.summaries).toEqual([]);
+  });
+
+  test("an aborted turn is reported in the summary", async () => {
+    const run = await runLoop({
+      responders: [["cz-regional", () => ABORTED]],
+      turns: 1,
+    });
+
+    expect(run.summaries).toHaveLength(1);
+    expect(run.summaries.at(0)).toMatchObject({ aborted: 1 });
   });
 
   test("a failure is reported with the error that caused it", async () => {
