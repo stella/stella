@@ -91,6 +91,14 @@ const DecisionCitationLabel = ({
           {paragraph}
         </span>
       );
+    case DECISION_CITATION_PRESENTATION.inline:
+      return (
+        <span className="inline-flex items-center gap-1">
+          {badge}
+          <BidiText as="span">{decision.caseNumber}</BidiText>
+          {paragraph}
+        </span>
+      );
     default:
       presentation satisfies never;
       return panic(
