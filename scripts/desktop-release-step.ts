@@ -73,8 +73,8 @@ export const stampCargoPackageVersion = (
     /^\[package\]\r?\nname = "([^"]+)"\r?\nversion = "([^"]+)"/gmu,
     "[package] name and version in Cargo.toml",
   );
-  const [header, name, previous] = packageHeader;
-  if (header === undefined || name === undefined || previous === undefined) {
+  const [, name, previous] = packageHeader;
+  if (name === undefined || previous === undefined) {
     throw new DesktopReleaseStepInvariantError("Unmatched package header");
   }
   const lockEntry = singleMatch(
@@ -87,7 +87,7 @@ export const stampCargoPackageVersion = (
   );
   const stamp = (source: string, match: RegExpMatchArray): string => {
     const [matched] = match;
-    if (match.index === undefined || matched === undefined) {
+    if (match.index === undefined) {
       throw new DesktopReleaseStepInvariantError("Unmatched version line");
     }
     const stamped = matched.replace(
