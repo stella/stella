@@ -616,7 +616,7 @@ mod tests {
 
     let temporary = source.with_extension("tmp");
     local_store::write_private_atomic(&temporary, b"new contents").unwrap();
-    std::fs::rename(&temporary, &source).unwrap();
+    local_store::rename_private(&temporary, &source).unwrap();
     record.editor_state = EditorState::Closed;
     retire_session(&mut record, &root, &boundary).unwrap();
 
@@ -662,6 +662,12 @@ mod tests {
       tokens: RefCell::new(HashSet::from(["1".into()])),
       fault: Fault::None,
     };
+    retire_session(&mut record, &root, &io).unwrap();
+    assert!(
+      matches!(record.copy, CopyRetirement::Pending { .. }),
+      "an attached editor keeps the unassigned edit in place"
+    );
+    record.editor_state = EditorState::Closed;
     retire_session(&mut record, &root, &io).unwrap();
     assert!(record.account_owner.is_none());
     let CopyRetirement::Quarantined { path, .. } = record.copy else {
