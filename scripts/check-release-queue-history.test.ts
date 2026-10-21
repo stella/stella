@@ -23,15 +23,22 @@ const SECOND_SHA = "2222222222222222222222222222222222222222";
 const THIRD_SHA = "3333333333333333333333333333333333333333";
 const FOURTH_SHA = "4444444444444444444444444444444444444444";
 
-const pullRequest = (number: number, sha: string) => ({
+// GitHub reports an unmerged pull request with no merge commit or date.
+type FakePullRequest = {
+  html_url: string;
+  merge_commit_sha: string | null;
+  merged_at: string | null;
+  number: number;
+  title: string;
+};
+
+const pullRequest = (number: number, sha: string): FakePullRequest => ({
   html_url: `https://github.com/stella/stella/pull/${String(number)}`,
   merge_commit_sha: sha,
   merged_at: "2026-10-01T00:00:00Z",
   number,
   title: `Change ${String(number)}`,
 });
-
-type FakePullRequest = ReturnType<typeof pullRequest>;
 
 const QUEUED = ["AddedToMergeQueueEvent", "MergedEvent"] as const;
 const DIRECT = ["MergedEvent"] as const;

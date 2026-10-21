@@ -1184,12 +1184,13 @@ const fakeGitHub = (responses: Record<string, unknown>) => {
   const read = async (path: string): Promise<unknown> => {
     paths.push(path);
     if (!(path in responses)) {
-      return Promise.reject(new Error(`Unexpected GitHub read: ${path}`));
+      throw new Error(`Unexpected GitHub read: ${path}`);
     }
     const response = responses[path];
-    return response instanceof Error
-      ? Promise.reject(response)
-      : Promise.resolve(response);
+    if (response instanceof Error) {
+      throw response;
+    }
+    return response;
   };
   return Object.assign(read, { paths });
 };
@@ -1199,8 +1200,13 @@ const cutRefusal = async (
 ): Promise<string> => {
   const written: string[] = [];
   try {
-    await assertReleaseCutReady(CUT_SHA, false, fakeGitHub(responses), (text) =>
-      written.push(text),
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      fakeGitHub(responses),
+      (text) => {
+        written.push(text);
+      },
     );
   } catch (error) {
     expect(error).toBeInstanceOf(MaintenanceReleaseError);
@@ -1219,9 +1225,9 @@ describe("release cut readiness", () => {
     });
     const written: string[] = [];
 
-    await assertReleaseCutReady(CUT_SHA, false, read, (text) =>
-      written.push(text),
-    );
+    await assertReleaseCutReady(CUT_SHA, false, read, (text) => {
+      written.push(text);
+    });
 
     expect(written).toEqual([
       `maintenance-release: main/heavy and main/pr-depth are green on ${CUT_SHA}\n`,
@@ -1415,7 +1421,9 @@ describe("release cut readiness", () => {
       CUT_SHA,
       true,
       fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }),
-      (text) => written.push(text),
+      (text) => {
+        written.push(text);
+      },
     );
 
     expect(written).toEqual([
