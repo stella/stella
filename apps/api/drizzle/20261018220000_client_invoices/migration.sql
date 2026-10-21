@@ -1,6 +1,6 @@
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '60s';--> statement-breakpoint
-ALTER TABLE invoices ADD COLUMN IF NOT EXISTS client_id uuid CONSTRAINT invoices_client_id_contacts_id_fk REFERENCES contacts(id) ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS client_id uuid;--> statement-breakpoint
 ALTER TABLE invoice_lines ADD COLUMN IF NOT EXISTS recorded_description text,
  ADD COLUMN IF NOT EXISTS recorded_quantity numeric(18,4), ADD COLUMN IF NOT EXISTS recorded_unit varchar(32),
  ADD COLUMN IF NOT EXISTS recorded_unit_price bigint, ADD COLUMN IF NOT EXISTS recorded_net_amount bigint;--> statement-breakpoint
@@ -27,6 +27,7 @@ ALTER TABLE invoices ADD CONSTRAINT invoices_original_organization_fk FOREIGN KE
 -- squawk-ignore ban-drop-not-null
 ALTER TABLE invoices ALTER COLUMN workspace_id DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE invoices ADD CONSTRAINT invoices_scope_check CHECK (workspace_id IS NOT NULL OR client_id IS NOT NULL) NOT VALID;--> statement-breakpoint
+ALTER TABLE invoices ADD CONSTRAINT invoices_client_id_contacts_id_fk FOREIGN KEY (client_id) REFERENCES contacts(id) ON DELETE RESTRICT NOT VALID;--> statement-breakpoint
 ALTER TABLE invoices ADD CONSTRAINT invoices_client_organization_fk FOREIGN KEY (organization_id,client_id) REFERENCES contacts(organization_id,id) NOT VALID;--> statement-breakpoint
 ALTER TABLE invoice_lines ADD CONSTRAINT invoice_lines_recorded_snapshot_check CHECK (
  (recorded_description IS NULL AND recorded_quantity IS NULL AND recorded_unit_price IS NULL AND recorded_net_amount IS NULL)

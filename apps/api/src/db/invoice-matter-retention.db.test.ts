@@ -12,10 +12,11 @@ import { invoiceLines, invoices, workspaces } from "@/api/db/schema";
 import * as schema from "@/api/db/schema";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
-const invoiceTables = Object.values(schema).filter(
-  (value): value is PgTable =>
-    is(value, PgTable) &&
-    /^invoices?$|^invoice_/u.test(getTableConfig(value).name),
+const invoiceTables = Object.values(schema).flatMap((value) =>
+  is(value, PgTable) &&
+  /^invoices?$|^invoice_/u.test(getTableConfig(value).name)
+    ? [value]
+    : [],
 );
 
 // Derive the deletion graph from the shipped schema; copied foreign keys

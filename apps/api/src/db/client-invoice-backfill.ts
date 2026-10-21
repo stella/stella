@@ -52,6 +52,10 @@ export const CLIENT_INVOICE_BACKFILL = {
 
 export const CLIENT_INVOICE_CONSTRAINTS = [
   { tableName: "invoices", constraintName: "invoices_scope_check" },
+  {
+    tableName: "invoices",
+    constraintName: "invoices_client_id_contacts_id_fk",
+  },
   { tableName: "invoices", constraintName: "invoices_client_organization_fk" },
   {
     tableName: "invoices",
