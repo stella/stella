@@ -10,7 +10,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import fc from "fast-check";
 
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -383,6 +383,7 @@ describe("playbook document type references", () => {
           ]);
         },
       ),
+      propertyConfig({ numRuns: 20 }),
     );
   });
 
@@ -514,7 +515,7 @@ describe("playbook document type references", () => {
           }
         },
       ),
-      { numRuns: 8 },
+      propertyConfig({ numRuns: 8 }),
     );
   });
 

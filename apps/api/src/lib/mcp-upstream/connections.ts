@@ -407,6 +407,105 @@ export const loadMcpConnectionById = async ({
   return normalized.at(0) ?? null;
 };
 
+/**
+ * The credential columns a disconnect deletes and returns in one statement,
+ * so revocation uses exactly the credentials of the row that was removed.
+ */
+export const DELETED_MCP_CONNECTION_CREDENTIAL_FIELDS = {
+  responseDisposition: mcpUserConnections.responseDisposition,
+  userConnectionId: mcpUserConnections.id,
+  connectorId: mcpUserConnections.connectorId,
+  accessTokenEncrypted: mcpUserConnections.accessTokenEncrypted,
+  accessTokenIv: mcpUserConnections.accessTokenIv,
+  refreshTokenEncrypted: mcpUserConnections.refreshTokenEncrypted,
+  refreshTokenIv: mcpUserConnections.refreshTokenIv,
+  staticTokenEncrypted: mcpUserConnections.staticTokenEncrypted,
+  staticTokenIv: mcpUserConnections.staticTokenIv,
+  expiresAt: mcpUserConnections.expiresAt,
+  oauthResourceUrl: mcpUserConnections.resourceUrl,
+  oauthAuthorizationServerUrl: mcpUserConnections.authorizationServerUrl,
+} satisfies Record<string, unknown>;
+
+export type DeletedMcpConnectionCredentials = Pick<
+  RawConnectionRow,
+  keyof typeof DELETED_MCP_CONNECTION_CREDENTIAL_FIELDS
+>;
+
+/**
+ * A deleted connection's credentials joined with its connector's current
+ * authorization metadata (organization-level, untouched by a user's own
+ * reconnect), in the form revocation takes; null when it cannot be revoked.
+ */
+export const revocableMcpConnectionFromDeleted = async ({
+  deleted,
+  organizationId,
+  safeDb,
+}: {
+  deleted: DeletedMcpConnectionCredentials;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+}) => {
+  const connectorResult = await safeDb((tx) =>
+    tx
+      .select({
+        slug: mcpConnectors.slug,
+        displayName: mcpConnectors.displayName,
+        description: mcpConnectors.description,
+        url: mcpConnectors.url,
+        authType: mcpConnectors.authType,
+        allowedTools: mcpConnectors.allowedTools,
+        oauthConnectorIssuer: mcpConnectors.oauthIssuer,
+        oauthConnectorConfirmedEndpointOrigins:
+          mcpConnectors.oauthConfirmedEndpointOrigins,
+        oauthReviewApprovedIssuer:
+          mcpConnectorAuthorizationReviews.approvedIssuer,
+        oauthReviewApprovedEndpointOrigins:
+          mcpConnectorAuthorizationReviews.approvedEndpointOrigins,
+        oauthClientId: mcpOAuthClients.clientId,
+        oauthClientSecretEncrypted: mcpOAuthClients.clientSecretEncrypted,
+        oauthClientSecretIv: mcpOAuthClients.clientSecretIv,
+      })
+      .from(mcpConnectors)
+      .leftJoin(
+        mcpConnectorAuthorizationReviews,
+        and(
+          eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+          eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
+        ),
+      )
+      .leftJoin(
+        mcpOAuthClients,
+        and(
+          eq(mcpOAuthClients.connectorId, mcpConnectors.id),
+          eq(mcpOAuthClients.organizationId, organizationId),
+          deleted.oauthAuthorizationServerUrl === null
+            ? isNull(mcpOAuthClients.authorizationServerUrl)
+            : eq(
+                mcpOAuthClients.authorizationServerUrl,
+                deleted.oauthAuthorizationServerUrl,
+              ),
+        ),
+      )
+      .where(eq(mcpConnectors.id, deleted.connectorId))
+      .limit(1),
+  );
+  return connectorResult.map((rows): LoadedMcpConnection | null => {
+    const connector = rows.at(0);
+    if (
+      connector === undefined ||
+      deleted.responseDisposition !== MCP_RESPONSE_DISPOSITION.normal
+    ) {
+      return null;
+    }
+    const normalized = normalizeMcpConnectionRow({
+      ...connector,
+      ...deleted,
+      responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+    });
+    return normalized.type === "loaded" ? normalized.connection : null;
+  });
+};
+
 type NormalizeConnectionRowsOptions = {
   organizationId: SafeId<"organization">;
   rows: RawConnectionRow[];

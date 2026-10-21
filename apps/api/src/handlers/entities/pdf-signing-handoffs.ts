@@ -21,6 +21,7 @@ import {
   openPdfSigningSession,
 } from "@/api/lib/files/pdf-signing/sessions";
 import { sanitizeSigningText } from "@/api/lib/files/pdf-signing/signing-text";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 /**
  * A user-supplied PAdES reason/location ends up inside the signature
@@ -136,6 +137,10 @@ const createPdfSigningHandoff = createSafeHandler(
     user,
     workspaceId,
   }) {
+    requireSessionCredentialIssuer("pdfSigning", {
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+    });
     const preflighted = yield* Result.await(
       preflightPdfSigning({
         entityId,
@@ -150,7 +155,10 @@ const createPdfSigningHandoff = createSafeHandler(
     );
 
     const sessionId = createSafeId<"pdfSigningSession">();
-    const handoffToken = createPdfSigningToken();
+    const handoffToken = createPdfSigningToken({
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+    });
     const expiresAt = computePdfSigningHandoffExpiresAt();
 
     const created = yield* Result.await(

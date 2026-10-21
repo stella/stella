@@ -29,7 +29,10 @@ const createMatterInboundAddress = createSafeHandler(
         }),
       );
     }
-    const token = generateInboundAddressToken();
+    const token = generateInboundAddressToken({
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+    });
     yield* Result.await(
       safeDb(async (tx) => {
         await tx

@@ -221,7 +221,7 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   const guardSteps = expiry.steps.filter(({ name }) =>
     name.startsWith("dated-waiver-expiry: "),
   );
-  expect(guardSteps).toHaveLength(2);
+  expect(guardSteps).toHaveLength(3);
   for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
     const context = {
       values: {
@@ -281,8 +281,12 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   expect(trackedFiles?.run).toBe(
     'git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"',
   );
-  expect(check?.run).toBe(
-    'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"',
+  // Offline, over the tracked tree, scoped to the change when one is listed.
+  expect(check?.run).toMatch(
+    /^bun --preload \.\/scripts\/offline-network-preload\.ts scripts\/dated-waivers\.ts --check --tracked-files "\$RUNNER_TEMP\/dated-waiver-tracked-files" "\$\{scope\[@\]\}"$/mu,
+  );
+  expect(check?.run).toContain(
+    'scope=(--changed-files "$DATED_WAIVER_CHANGED_FILES")',
   );
   for (const step of expiry.steps) {
     expect(step.env?.["GH_TOKEN"]).toBeUndefined();

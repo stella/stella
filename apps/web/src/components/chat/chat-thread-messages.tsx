@@ -14,7 +14,7 @@ import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
-import type { AIErrorKind } from "@stll/api-contract";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { isChatPastedTextPart } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
@@ -111,7 +111,6 @@ import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { RequestSecretCard } from "@/components/chat/request-secret-card";
-import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import {
@@ -130,6 +129,7 @@ import {
   mentionAttrsToHref,
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
+import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import {
   findChatRequestError,
   type ChatRequestError,
@@ -146,6 +146,11 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+import {
+  AI_FAILURE_ERROR_KEYS,
+  aiErrorKindFromMessage,
+} from "@/lib/errors/ai-failure";
+import type { AIFailureTranslationKey } from "@/lib/errors/ai-failure";
 import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
@@ -430,11 +435,14 @@ export const ChatThreadMessages = ({
                           onResend={onResend}
                           threadRef={threadRef}
                         />
-                        <SourceChips
-                          messageId={message.id}
-                          parts={message.parts}
-                          sourceDocuments={message.metadata?.sourceDocuments}
+                        <AssistantAnswerMetadata
+                          message={message}
                           workspaceId={workspaceId}
+                          threadId={threadRef?.threadId}
+                          disabled={
+                            generationActive || !!awaitedAssistantMessageId
+                          }
+                          onAnswerEdited={onAnswerEdited}
                         />
                       </div>
                     </ChatAnswerDecisionProvider>
@@ -1064,30 +1072,8 @@ const ThinkingIndicator = ({
   );
 };
 
-type MappedChatErrorKind = Exclude<AIErrorKind, "unknown">;
-
-// The backend's chat stream returns an AIErrorKind as the error message.
-// Unknown and non-AI errors deliberately fall through to generic copy.
-const CHAT_ERROR_TRANSLATION_KEYS = {
-  provider_billing: "chat.sendErrorProviderBilling",
-  empty_completion: "chat.sendErrorEmptyCompletion",
-  loop_detected: "chat.sendErrorLoopDetected",
-  model_unavailable: "chat.sendErrorModelUnavailable",
-  provider_credentials_rejected: "chat.sendErrorProviderCredentialsRejected",
-  provider_stream_incomplete: "chat.sendErrorStreamIncomplete",
-  // A chat turn keeps a `length` answer and carries no schema or deadline of
-  // its own, so these reach it only through a structured side call; each
-  // reads as its nearest chat outcome.
-  output_incomplete: "chat.sendErrorStreamIncomplete",
-  output_invalid: "chat.sendError",
-  output_moderated: "chat.sendError",
-  deadline_exceeded: "chat.sendErrorProviderUnavailable",
-  provider_unavailable: "chat.sendErrorProviderUnavailable",
-  quota_exhausted: "chat.sendErrorQuotaExhausted",
-} as const satisfies Record<MappedChatErrorKind, TranslationKey>;
-
 type ChatErrorTranslationKey =
-  | (typeof CHAT_ERROR_TRANSLATION_KEYS)[keyof typeof CHAT_ERROR_TRANSLATION_KEYS]
+  | AIFailureTranslationKey
   | "chat.sendErrorAnonymizationBlocked"
   | "chat.sendError"
   | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
@@ -1099,11 +1085,6 @@ const CHAT_REQUEST_ERROR_TRANSLATION_KEYS = {
   not_started: "chat.sendErrorNotStarted",
 } as const satisfies Record<ChatRequestError["kind"], TranslationKey>;
 
-const isMappedChatErrorKind = (
-  message: string,
-): message is keyof typeof CHAT_ERROR_TRANSLATION_KEYS =>
-  message in CHAT_ERROR_TRANSLATION_KEYS;
-
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   const requestError = findChatRequestError(error);
   if (requestError !== undefined) {
@@ -1112,8 +1093,10 @@ const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   if (isThirdPartyBoundaryRefusalError(error)) {
     return "chat.sendErrorAnonymizationBlocked";
   }
-  if (isMappedChatErrorKind(error.message)) {
-    return CHAT_ERROR_TRANSLATION_KEYS[error.message];
+  // An unknown kind keeps the chat's own copy, which points to support.
+  const kind = aiErrorKindFromMessage(error.message);
+  if (kind !== undefined && kind !== "unknown") {
+    return AI_FAILURE_ERROR_KEYS[AI_FAILURE_CODES[kind]];
   }
   return "chat.sendError";
 };

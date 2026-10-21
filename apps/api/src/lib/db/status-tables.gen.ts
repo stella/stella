@@ -3,6 +3,7 @@
 export const STATUS_COLUMNS = {
   accountDeletionEffectChunks: ["status"],
   accountDeletionRequests: ["status"],
+  accountExports: ["status"],
   agentRegistration: ["status"],
   agentSkillProposals: ["status"],
   aiMemories: ["status"],
@@ -103,6 +104,7 @@ export const STATUS_COLUMNS = {
   softLawIngestionAttempts: ["status"],
   softLawSources: ["runState"],
   styleSets: ["scanState"],
+  syntheticSessionControl: ["status"],
   templateDeletionCleanupRequests: ["status"],
   templateFills: ["status"],
   templatePersistenceRequests: ["status"],
@@ -121,6 +123,7 @@ export const STATUS_COLUMNS = {
 export const WRITABLE_STATUS_COLUMNS = {
   accountDeletionEffectChunks: ["status"],
   accountDeletionRequests: ["status"],
+  accountExports: ["status"],
   agentRegistration: ["status"],
   agentSkillProposals: ["status"],
   aiMemories: ["status"],
@@ -220,6 +223,7 @@ export const WRITABLE_STATUS_COLUMNS = {
   softLawIngestionAttempts: ["status"],
   softLawSources: ["runState"],
   styleSets: ["scanState"],
+  syntheticSessionControl: ["status"],
   templateDeletionCleanupRequests: ["status"],
   templateFills: ["status"],
   templatePersistenceRequests: ["status"],

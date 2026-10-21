@@ -39,6 +39,17 @@ const run = async (): Promise<void> => {
     panic("Chat content backfill requires a database connection");
   }
   const connection = await openOnlineRepairConnection(url);
+  // The gate terminates this session when it cannot cancel its own work; the
+  // lock went with the session, and an unlock there would mask why.
+  let sessionStatus: "active" | "terminated" = "active";
+  const sessionIsActive = () => sessionStatus === "active";
+  const { terminate } = connection;
+  if (terminate) {
+    connection.terminate = async () => {
+      sessionStatus = "terminated";
+      await terminate();
+    };
+  }
   try {
     if (!args.includes("--apply")) {
       await connection.execute("BEGIN READ ONLY");
@@ -73,13 +84,21 @@ const run = async (): Promise<void> => {
             reserveObserver: async () => await openOnlineIndexObserver(url),
           }),
         );
-        process.stdout.write(
-          outcome.type === "complete"
-            ? "Chat content v3 backfill complete\n"
-            : `Chat content v3 backfill deferred at ${outcome.step}; rerun after ${String(outcome.retryAfterMs)} ms\n`,
-        );
+        if (outcome.type === "complete") {
+          process.stdout.write("Chat content v3 backfill complete\n");
+        } else {
+          // The constraints stay NOT VALID until a rerun completes, so an
+          // operator job must not read the deferral as success. 75 is the
+          // conventional "temporary failure, retry later" exit code.
+          process.stderr.write(
+            `Chat content v3 backfill deferred at ${outcome.step}; rerun after ${String(outcome.retryAfterMs)} ms\n`,
+          );
+          process.exitCode = 75;
+        }
       } finally {
-        await releaseOnlineMigrationLock(connection);
+        if (sessionIsActive()) {
+          await releaseOnlineMigrationLock(connection);
+        }
       }
     }
   } finally {

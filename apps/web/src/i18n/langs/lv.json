@@ -12,6 +12,31 @@
       "unknownDevice": "Nezināma ierīce"
     }
   },
+  "admin": {
+    "ai": "AI",
+    "backToApp": "Atpakaļ uz lietotni",
+    "billingAndUsage": "Norēķini un lietojums",
+    "billingProfiles": "Norēķinu profili",
+    "deleteDescription": "Neatgriezeniski dzēsiet šo organizāciju un tās datus. Šo darbību nevar atsaukt.",
+    "deleteOrganization": "Dzēst organizāciju",
+    "deleteRefusedSubscription": "Šai organizācijai ir abonements, kas tiek atjaunots. Vispirms atceliet to sadaļā Plāns un lietojums, pēc tam izdzēsiet organizāciju.",
+    "deleteTypeToConfirm": "Lai apstiprinātu, ievadiet {name}.",
+    "firmSetup": "Biroja iestatījumi",
+    "general": "Vispārīgi",
+    "leaveDescription": "Jūs zaudēsiet piekļuvi šīs organizācijas lietām un datiem.",
+    "leaveOrganization": "Pamest organizāciju",
+    "leaveRefusedOnlyOwner": "Jūs esat vienīgais īpašnieks. Pirms aiziešanas padariet par īpašnieku citu dalībnieku.",
+    "modelsAndProviders": "Modeļi un pakalpojumu sniedzēji",
+    "noPlan": "Nav aktīva plāna",
+    "organizationDeleted": "Organizācija ir dzēsta.",
+    "organizationId": "Organizācijas ID",
+    "organizationLeft": "Jūs pametāt organizāciju.",
+    "overviewDescription": "Pārvaldiet organizāciju, cilvēkus un rīkus.",
+    "people": "Cilvēki",
+    "planAndUsage": "Plāns un lietojums",
+    "title": "Organizācijas administrēšana",
+    "toolsDescription": "Iespējojiet vai atspējojiet iebūvētos rīkus visiem šīs organizācijas dalībniekiem."
+  },
   "agentClaim": {
     "access": "Saņemtā piekļuve",
     "accessReadSearch": "Lasīšanas un meklēšanas piekļuve",
@@ -355,6 +380,12 @@
       "attentionComplete": "<strong>Visi apgalvojumi, kuriem vajadzīgs cilvēka lēmums, ir apstrādāti.</strong> {count, plural, zero {# standarta vērtējumiem nav vajadzīga individuāla pārskatīšana.} one {# standarta vērtējumam nav vajadzīga individuāla pārskatīšana.} other {# standarta vērtējumiem nav vajadzīga individuāla pārskatīšana.}}",
       "attentionOpen": "<strong>{count, plural, zero {# apgalvojumiem vajadzīgs} one {# apgalvojumam vajadzīgs} other {# apgalvojumiem vajadzīgs}} jūsu lēmums</strong>: pretrunas un apstrīdētas interpretācijas. {routineCount, plural, zero {Pārējie # apgalvojumi ir standarta, un tiem nav vajadzīgs individuāls apstiprinājums.} one {Pārējais # apgalvojums ir standarta, un tam nav vajadzīgs individuāls apstiprinājums.} other {Pārējie # apgalvojumi ir standarta, un tiem nav vajadzīgs individuāls apstiprinājums.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, apstrīdēts} other {}}{reviewStatus, select, reviewed {, pārskatīts} disputed {, apstrīdēts} other {}})",
+      "documentView": {
+        "label": "Dokumenta skats",
+        "original": "Oriģināls",
+        "reading": "Lasīšanas skats"
+      },
+      "notLocated": "{count, plural, zero {# apgalvojumi oriģinālā netika atrasti} one {# apgalvojums oriģinālā netika atrasts} other {# apgalvojumi oriģinālā netika atrasti}}",
       "selectClaim": "Atlasiet apgalvojumu, lai pārbaudītu tā pamatojumu reģistrā.",
       "showQueue": "Rādīt rindu",
       "stats": {
@@ -824,7 +855,6 @@
         "unavailable": "Šim nolēmumam AI analīze nav pieejama."
       },
       "generate": "Sagatavot AI kopsavilkumus",
-      "holdingAnchor": "Pāriet uz rindkopu",
       "invitation": "Ar bezmaksas kontu AI sagatavo darba piezīmes par šo nolēmumu.",
       "topics": "Tēmas",
       "treatment": "Vēlākā judikatūra"
@@ -984,6 +1014,9 @@
       "saved": "{count, plural, zero {Saglabāti # nolēmumu} one {Saglabāts # nolēmums} other {Saglabāti # nolēmumi}} lietā {matter}"
     },
     "newestDecisions": "Jaunākie nolēmumi",
+    "noResults": {
+      "hint": "Izmēģiniet citus vārdus, uzlabojiet vaicājumu ar AI vai uzdodiet jautājumu tērzēšanā."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Cilvēku"
@@ -1057,6 +1090,10 @@
         "short": "Īss"
       }
     },
+    "rewritten": {
+      "line": "Nav precīzu atbilstību vaicājumam <bdi>{original}</bdi>; rādīti rezultāti vaicājumam <bdi>{query}</bdi>",
+      "searchOriginal": "Meklēt manus sākotnējos vārdus"
+    },
     "sameCaseNumber": "{count, plural, zero {# nolēmumu ir} one {# nolēmumam ir} other {# nolēmumiem ir}} šis lietas numurs. Izvēlieties tiesu.",
     "searchLabel": "Meklēt judikatūrā",
     "searchPlaceholder": "Lietas numurs, ECLI vai vārdi, piem. 22 Cdo 2653/2012",
@@ -1073,6 +1110,8 @@
         "hint": "Noņemiet vai paplašiniet filtru un meklējiet vēlreiz.",
         "message": "Nekas neatbilst izvēlētajiem filtriem."
       },
+      "partialMatch": "Daļēja atbilstība",
+      "partialMatches": "Daļējas atbilstības vaicājumam: <bdi>{query}</bdi>",
       "resultsFor": "Rezultāti vaicājumam: <bdi>{query}</bdi>",
       "searchEveryWord": "Meklēt visus vārdus"
     },
@@ -1110,6 +1149,7 @@
       "judges": "Tiesneši",
       "legalArea": "Tiesību joma",
       "legalSentence": "Tiesību tēze",
+      "paragraphReference": "{number}. rindkopa",
       "popularName": "Populārais nosaukums",
       "portraitCredit": "Portretu avots: {source}",
       "provisionMentions": "{count, number}×",
@@ -1205,15 +1245,32 @@
     },
     "answerEdit": {
       "acceptFailed": "Neizdevās saglabāt izmaiņu. Mēģiniet vēlreiz.",
+      "aiKind": "Pieprasītā rediģēšana",
       "ask": "Pieprasīt izmaiņas",
+      "authorUnknown": "Nezināms autors",
+      "autolinkLabel": "Šis teksts automātiski kļūst par saiti. Pirms saites noņemšanas mainiet tās etiķeti.",
+      "change": "Izmaiņa {revision}",
+      "editedLabel": "Rediģēta atbilde",
       "failed": "Neizdevās sagatavot izmaiņu. Mēģiniet vēlreiz.",
+      "formatKind": "Formatēšana",
+      "heading": "Virsraksts {level}",
+      "history": "Atbildes vēsture",
+      "historyEmpty": "Nav agrāku versiju.",
       "instruction": "Aprakstiet izmaiņu",
       "instructionRequired": "Aprakstiet, kā mainīt atlasīto tekstu.",
       "invalidSelection": "Šo atlasi nevar rediģēt. Atlasiet nepārtrauktu teksta fragmentu.",
+      "invalidUrl": "Ievadiet derīgu HTTP vai HTTPS adresi.",
+      "linkAddress": "Saites adrese",
+      "orderedList": "Numurēts saraksts",
       "proposal": "Ieteiktā izmaiņa",
       "requesting": "Izmaiņu sagatavošana…",
+      "restoreRefreshFailed": "Atbilde ir atjaunota, taču neizdevās to atsvaidzināt. Atsvaidziniet, lai ielādētu atjaunoto atbildi.",
+      "revertKind": "Atjaunotā versija",
       "stale": "Šī atbilde ir mainījusies. Atlasiet tekstu vēlreiz.",
-      "submit": "Pieprasīt izmaiņu"
+      "submit": "Pieprasīt izmaiņu",
+      "textStyle": "Teksta stils",
+      "unorderedList": "Aizzīmju saraksts",
+      "wholeBlockRequired": "Lai mainītu stilu, atlasiet visu rindkopu vai sarakstu."
     },
     "answerQuote": {
       "showInDecision": "Rādīt nolēmumā",
@@ -1559,6 +1616,9 @@
         "private": "Jūsu prasmes",
         "team": "Komandas prasmes"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Arī aplūkoti ({count, number})"
     },
     "sourcePlaceholder": "Tērzēt par {title}",
     "sourcePlaceholderAction": "Tērzēt par",
@@ -2620,10 +2680,12 @@
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
       "caseLawCountryUnavailable": "Šīs valsts judikatūra nav pieejama. Izvēlieties citu valsti.",
+      "caseLawIdentityOnly": "Šajā valstī ir pieejama tikai precīza nolēmumu meklēšana un lasīšana.",
       "caseLawSearchUnavailable": "Šīs valsts judikatūras meklēšana nav pieejama. Tās publiskos tiesu nolēmumus joprojām varat lasīt.",
       "conflict": "Pieprasījums konfliktē ar pašreizējo stāvokli.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "legislationCountryUnavailable": "Šīs valsts tiesību akti nav pieejami. Izvēlieties citu valsti.",
+      "legislationIdentityOnly": "Šajā valstī ir pieejama tikai precīza tiesību aktu meklēšana un lasīšana.",
       "legislationSearchUnavailable": "Šīs valsts tiesību aktu meklēšana nav pieejama. Tās publiskos tiesību aktus joprojām varat lasīt.",
       "notFound": "Pieprasīto vienumu neizdevās atrast.",
       "payloadTooLarge": "Pieprasījums ir pārāk liels.",
@@ -2646,6 +2708,11 @@
       "aiConfigModelInvalid": "AI modeļa konfigurācija nav derīga. Pārbaudiet atlasītos modeļus.",
       "aiConfigProviderInvalid": "AI pakalpojuma sniedzēja konfigurācija nav derīga. Pārbaudiet pakalpojuma sniedzēja iestatījumus.",
       "aiConfigProviderValidationFailed": "AI pakalpojuma sniedzējs noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",
+      "aiDeadlineExceeded": "AI neatbildēja laikā. Mēģiniet vēlreiz pēc brīža.",
+      "aiOutputInvalid": "AI atbilde bija neparedzētā formātā. Mēģiniet vēlreiz.",
+      "aiOutputModerated": "AI pakalpojumu sniedzējs moderēja izvadi. Pārfrāzējiet pieprasījumu vai izvēlieties citu modeli.",
+      "aiProviderTaskUnsupported": "Konfigurētais AI pakalpojumu sniedzējs nevar izpildīt šo uzdevumu. Izvēlieties tādu, kas to spēj.",
+      "aiUnknown": "AI pieprasījums neizdevās. Mēģiniet vēlreiz.",
       "clauseDirectivesInvalid": "Saistītā klauzulā ir nederīgas direktīvas. Pirms veidnes aizpildīšanas izlabojiet klauzulu.",
       "clauseDirectivesInvalidDetails": "Klauzulā {clauseName} laukā {slotName} ir nederīgas direktīvas. Atveriet klauzulu redaktoru, izlabojiet norādītās rindkopas un vēlreiz aizpildiet veidni.",
       "clauseDirectivesOverrideInvalidDetails": "Klauzulas {clauseName} aizstātais teksts laukā {slotName} satur nederīgas direktīvas. Izlabojiet šīs aizpildīšanas aizstāto tekstu un mēģiniet vēlreiz.",
@@ -4192,6 +4259,10 @@
     "archivedEmpty": "Nav arhivētu atmiņu.",
     "archivedToast": "Atmiņa arhivēta",
     "createdToast": "Saglabāts atmiņā",
+    "deleteConfirmation": "Lai apstiprinātu, ievadiet {confirmation}",
+    "deleteDescription": "Šī atmiņa tiks neatgriezeniski dzēsta. Šo darbību nevar atsaukt.",
+    "deleteTitle": "Dzēst atmiņu?",
+    "deletedToast": "Atmiņa dzēsta",
     "empty": "Atmiņā vēl nekā nav.",
     "kinds": {
       "decision": "Lēmums",
@@ -5120,6 +5191,8 @@
     "outline": "Saturs",
     "outlineJumpLabel": "Pāriet uz normu",
     "outlineJumpPlaceholder": "§ 10 vai virsraksts",
+    "pendingChanges": "Gaidāmie grozījumi",
+    "pendingChangesIncomplete": "Izdevēja datos var nebūt iekļauti visi gaidāmie grozījumi.",
     "provisionAskContextPrompt": "\n\nFragmenti, kuros norma piemērota autoritatīvākajos nolēmumos:\n{passages}\n\nIzmanto judikatūras rīkus, lai izlasītu jebkuru no šiem nolēmumiem pilnībā vai atrastu citus nolēmumus, kas atsaucas uz normu.",
     "provisionAskPlaceholder": "Jautājiet par šo normu",
     "provisionAskQuestionPrompt": "Par {subject}: {question}",
@@ -6265,7 +6338,6 @@
         }
       },
       "atAGlance": "Apskats",
-      "edited": "rediģēja",
       "getStarted": "Sāciet, augšupielādējot dokumentus vai izveidojot pirmo mapi.",
       "matterDetails": "Lietas detaļas",
       "membersCount": "{count, plural, zero {# dalībnieku} one {# dalībnieks} other {# dalībnieki}}",
