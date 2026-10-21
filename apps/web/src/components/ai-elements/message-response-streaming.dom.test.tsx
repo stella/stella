@@ -6,6 +6,10 @@ import fc from "fast-check";
 import type { PluggableList } from "unified";
 
 import { assertProperty } from "@stll/property-testing";
+import {
+  markdownLines,
+  readFencedBlockAt,
+} from "@stll/property-testing/commonmark-code-oracle";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -155,8 +159,6 @@ const { IntlProvider } = await import("use-intl");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const { MessageResponseImpl } = await import("./message-response");
 const { rehypeAnonSpans } = await import("@/components/chat/rehype-anon-spans");
-const { readFencedBlockAt, markdownLines } =
-  await import("../../../../api/src/tests/helpers/commonmark-code-oracle");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
