@@ -6,8 +6,23 @@
 // handler (see `scopeRequestAsyncStores` in `server.ts`); nothing else should
 // open either store for a request.
 
-import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import {
+  runWithMeasuredQueryCounter,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
 import { runWithRequestIdScope } from "@/api/lib/observability/request-context";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 export const runWithRequestScope = <TResult>(fn: () => TResult): TResult =>
-  runWithRequestIdScope(() => runWithQueryCounter(() => fn()));
+  runWithRequestIdScope(() =>
+    runWithQueryCounter(() => fn(), {
+      countTransactions: isLocalDevOpen(),
+    }),
+  );
+
+export const runWithMeasuredRequestScope = async <TResult>(
+  fn: () => Promise<TResult>,
+): Promise<TResult> =>
+  await runWithRequestIdScope(() =>
+    runWithMeasuredQueryCounter(async () => await fn()),
+  );

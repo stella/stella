@@ -190,7 +190,10 @@ import {
   emitEventLoopDelayMetric,
   emitProcessMemoryLog,
 } from "@/api/lib/observability/request-metrics";
-import { runWithRequestScope } from "@/api/lib/observability/request-scope";
+import {
+  runWithMeasuredRequestScope,
+  runWithRequestScope,
+} from "@/api/lib/observability/request-scope";
 import {
   closeActionAdmissionRedis,
   startActionAdmissionRedis,
@@ -733,31 +736,33 @@ const scopeRequestAsyncStores = (): void => {
     strictPath: api.config.strictPath,
     aot: api.config.aot,
   });
-  api.wrap(
-    (handleRequest) => async (request: Request) =>
-      runWithRequestScope(async () => {
-        if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-          return handleRequest(request);
-        }
-        return withFinalResponseCompletion(request, async () =>
-          runTenantHttpAction(request, {
-            handleRequest: async (bounded) => {
-              // The private HOC types erase the response type; validate the
-              // framework boundary before applying serialized JSON limits.
-              const response: unknown = await Promise.resolve(
-                handleRequest(bounded),
-              );
-              if (!(response instanceof Response)) {
-                return panic("The HTTP framework returned an invalid response");
-              }
-              return response;
-            },
-            isTenantAction,
-            decorateRefusal: decorateActionSizeRefusal,
-          }),
-        );
-      }),
-  );
+  api.wrap((handleRequest) => async (request: Request) => {
+    const scopedRequest = async () => {
+      if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
+        return handleRequest(request);
+      }
+      return withFinalResponseCompletion(request, async () =>
+        runTenantHttpAction(request, {
+          handleRequest: async (bounded) => {
+            // The private HOC types erase the response type; validate the
+            // framework boundary before applying serialized JSON limits.
+            const response: unknown = await Promise.resolve(
+              handleRequest(bounded),
+            );
+            if (!(response instanceof Response)) {
+              return panic("The HTTP framework returned an invalid response");
+            }
+            return response;
+          },
+          isTenantAction,
+          decorateRefusal: decorateActionSizeRefusal,
+        }),
+      );
+    };
+    return process.env["STELLA_RUN_POSTGRES_TESTS"] === "true"
+      ? runWithMeasuredRequestScope(scopedRequest)
+      : runWithRequestScope(scopedRequest);
+  });
 };
 
 const startS3RefreshLoop = () => {

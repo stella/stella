@@ -88,6 +88,8 @@ import {
 import type { ViewSort } from "@/api/lib/views-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
+export const ENTITY_LIST_TEXT_MAX_LENGTH = 512;
+
 export type QueryEntitiesFieldMode = "full" | "visible";
 
 type CellMetadataFlagProvenanceResult = {
@@ -157,7 +159,7 @@ export type QueryEntityResult = AgendaItemWireFields & {
     id: string;
     propertyId: string;
     entityId: string;
-    content: FieldContent;
+    content: FieldContent & { truncated?: true };
     ocrExportStatus?: OcrExportStatus;
   }[];
   cellMetadata: {
@@ -1058,7 +1060,15 @@ const queryEntitiesGenerator = async function* ({
           entityVersionId: fields.entityVersionId,
           id: fields.id,
           propertyId: fields.propertyId,
-          content: fields.content,
+          content: sql<FieldContent & { truncated?: true }>`CASE
+            WHEN ${fields.content}->>'type' = 'text'
+              AND length(${fields.content}->>'value') > ${ENTITY_LIST_TEXT_MAX_LENGTH}
+            THEN ${fields.content} || jsonb_build_object(
+              'value', left(${fields.content}->>'value', ${ENTITY_LIST_TEXT_MAX_LENGTH}),
+              'truncated', true
+            )
+            ELSE ${fields.content}
+          END`,
           // The run that produced the projection also wrote the searchable
           // PDF before it succeeded, so its terminal state is the derivative's
           // readiness: a retrying or failed run still serves text only.

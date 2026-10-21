@@ -102,7 +102,7 @@ const readKanbanGroup = createSafeHandler(
         find: body.find,
         cursor: cursorResult.value,
         limit: limit + 1,
-        fieldMode: body.fieldMode ?? "full",
+        fieldMode: body.fieldMode ?? "visible",
         fieldIds: arrayOrEmpty(body.fieldIds),
         excludedKinds: arrayOrEmpty(body.excludedKinds),
         extraConditions: [conditionResult.value],

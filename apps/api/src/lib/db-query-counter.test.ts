@@ -2,11 +2,19 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   currentQueryCount,
+  currentRepeatedQueryFingerprints,
+  currentTransactionCount,
   DB_QUERY_COUNT_HEADER,
   queryCountLogger,
+  DB_TRANSACTION_COUNT_HEADER,
   runWithQueryCounter,
+  runWithMeasuredQueryCounter,
+  RepeatedQueryFingerprintError,
+  runCountedTransaction,
 } from "@/api/lib/db-query-counter";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 
@@ -20,6 +28,25 @@ const logQueriesInterleaved = async (queries: number): Promise<void> => {
 };
 
 describe("db query counter logger", () => {
+  test("fails after the measured request settles when one callsite repeats normalized SQL", async () => {
+    const runSameCallsite = () => {
+      for (const query of [
+        "select * from matters where id = $1",
+        " SELECT * FROM matters WHERE id = $2",
+      ]) {
+        queryCountLogger.logQuery(query, []);
+      }
+    };
+
+    expect(
+      await rejectionOf(
+        runWithMeasuredQueryCounter(async () => {
+          runSameCallsite();
+        }),
+      ),
+    ).toBeInstanceOf(RepeatedQueryFingerprintError);
+  });
+
   test("does nothing and reports no count without an active store", () => {
     expect(currentQueryCount()).toBeUndefined();
     // Must not throw when no request/task store is active (background jobs).
@@ -37,6 +64,33 @@ describe("db query counter logger", () => {
     expect(count).toBe(2);
     // Store is torn down once the callback returns.
     expect(currentQueryCount()).toBeUndefined();
+  });
+
+  test("counts transaction round trips separately and fingerprints repeated normalized SQL", async () => {
+    const result = await runWithQueryCounter(
+      async (counter) => {
+        queryCountLogger.logQuery("BEGIN", []);
+        await runCountedTransaction(async () => undefined);
+        for (const query of [
+          "select * from matters where id = $1",
+          " SELECT  *  FROM matters WHERE id = $2 ",
+        ]) {
+          queryCountLogger.logQuery(query, []);
+        }
+        queryCountLogger.logQuery("COMMIT", []);
+        return {
+          count: counter.count,
+          transactions: currentTransactionCount(),
+          repeats: currentRepeatedQueryFingerprints(),
+        };
+      },
+      { detectRepeatedQueries: true, countTransactions: true },
+    );
+
+    expect(result.count).toBe(2);
+    expect(result.transactions).toBe(2);
+    expect(result.repeats).toHaveLength(1);
+    expect(result.repeats[0]).toContain("select * from matters where id = ?");
   });
 
   test("interleaved async contexts count independently", async () => {
@@ -84,8 +138,12 @@ const buildCountingApp = () =>
     )
     .onAfterHandle(({ set }) => {
       const queryCount = currentQueryCount();
+      const transactionCount = currentTransactionCount();
       if (queryCount !== undefined) {
         set.headers[DB_QUERY_COUNT_HEADER] = String(queryCount);
+      }
+      if (transactionCount !== undefined) {
+        set.headers[DB_TRANSACTION_COUNT_HEADER] = String(transactionCount);
       }
     })
     .get("/queries/:count", async ({ params }) => {
@@ -96,6 +154,7 @@ const buildCountingApp = () =>
         await Bun.sleep(QUERY_WAIT_MS);
         queryCountLogger.logQuery("SELECT request", []);
       }
+      await runCountedTransaction(async () => undefined);
       return "ok";
     });
 
@@ -140,5 +199,7 @@ describe("db query counter HTTP header", () => {
 
     expect(three.headers.get(DB_QUERY_COUNT_HEADER)).toBe("3");
     expect(seven.headers.get(DB_QUERY_COUNT_HEADER)).toBe("7");
+    expect(three.headers.get(DB_TRANSACTION_COUNT_HEADER)).toBe("2");
+    expect(seven.headers.get(DB_TRANSACTION_COUNT_HEADER)).toBe("2");
   });
 });

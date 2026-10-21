@@ -167,7 +167,7 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
   queryOptions({
     queryKey: entitiesKeys.sample(key),
     queryFn: async ({ signal }) => {
-      const fieldMode = key.fieldMode ?? "full";
+      const fieldMode = key.fieldMode ?? "visible";
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
         ["query-window"].post(
@@ -200,7 +200,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
   infiniteQueryOptions({
     queryKey: entitiesKeys.window(key),
     queryFn: async ({ signal, pageParam }) => {
-      const fieldMode = key.fieldMode ?? "full";
+      const fieldMode = key.fieldMode ?? "visible";
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
         ["query-window"].post(
@@ -241,33 +241,47 @@ export const filesystemEntitiesOptions = (
   queryOptions({
     queryKey: entitiesKeys.filesystemTree(key),
     queryFn: async ({ signal }) => {
-      const fieldMode = key.fieldMode ?? "full";
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        ["filesystem-tree"].post(
-          {
-            filters: key.filters,
-            sorts: key.sorts,
-            ...(key.search?.trim() && { search: key.search.trim() }),
-            fieldMode,
-            fieldIds:
-              fieldMode === "visible"
-                ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
-                    toSafeId<"property">(fieldId),
-                  )
-                : [],
-          },
-          { fetch: { signal } },
-        );
+      const fieldMode = key.fieldMode ?? "visible";
+      const entities: WorkspaceEntity[] = [];
+      const ancestorLinksById = new Map<
+        string,
+        { entityId: string; parentId: string | null }
+      >();
+      let cursor: string | undefined;
+      do {
+        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- Each bounded tree page requires the preceding page's cursor.
+        const response = await api
+          .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
+          ["filesystem-tree"].post(
+            {
+              ...(cursor !== undefined && { cursor }),
+              filters: key.filters,
+              sorts: key.sorts,
+              ...(key.search?.trim() && { search: key.search.trim() }),
+              fieldMode,
+              fieldIds:
+                fieldMode === "visible"
+                  ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                      toSafeId<"property">(fieldId),
+                    )
+                  : [],
+            },
+            { fetch: { signal } },
+          );
 
-      const data = unwrapEden(response);
+        const data = unwrapEden(response);
 
-      const entities: WorkspaceEntity[] = data.entities.map(toWorkspaceEntity);
+        entities.push(...data.items.map(toWorkspaceEntity));
+        for (const link of data.ancestorLinks) {
+          ancestorLinksById.set(link.entityId, link);
+        }
+        cursor = data.nextCursor ?? undefined;
+      } while (cursor !== undefined);
 
       // Parent links of ancestor folders a filter/search hid. Used only to
       // complete the ancestor chain for cross-matter copy/move dedup; never
       // rendered, so they stay out of selection and bulk actions.
-      const ancestorLinks = data.ancestorLinks;
+      const ancestorLinks = [...ancestorLinksById.values()];
       const isFiltered = key.filters.length > 0 || Boolean(key.search?.trim());
 
       return { entities, ancestorLinks, isFiltered };
@@ -279,7 +293,7 @@ const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
   infiniteQueryOptions({
     queryKey: entitiesKeys.kanbanGroup(key),
     queryFn: async ({ signal, pageParam }) => {
-      const fieldMode = key.fieldMode ?? "full";
+      const fieldMode = key.fieldMode ?? "visible";
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
         ["kanban-group"].post(

@@ -8,7 +8,10 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
-import { queryEntities } from "@/api/lib/entities/query-entities";
+import {
+  ENTITY_LIST_TEXT_MAX_LENGTH,
+  queryEntities,
+} from "@/api/lib/entities/query-entities";
 import {
   decodeEntitiesWindowCursor,
   ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
@@ -54,13 +57,13 @@ const readEntitiesBodySchema = t.Object({
 const config = {
   contract: "patch",
   description:
-    "List a matter's documents, folders, and tasks as table rows, using the " +
-    "same filters, sorts, and search the matter's views use, with cursor " +
-    "pagination. fieldMode and fieldIds choose which column values come " +
-    "back, excludedKinds drops kinds you do not want, and previewableForAi " +
-    "keeps only documents whose content a model can read. Use " +
-    "entities.filesystem-tree.get for the same query shaped as a folder " +
-    "tree, and entities.get to read one row in full.",
+    "List a matter's documents, folders, and tasks as table rows with cursor " +
+    "pagination and view filters, sorts, and search. Returns file metadata " +
+    "by default; use visible fieldMode and fieldIds to select columns. " +
+    `Text previews are capped at ${ENTITY_LIST_TEXT_MAX_LENGTH} characters and marked truncated. ` +
+    "Use entities.get for complete values. excludedKinds drops kinds and " +
+    "previewableForAi keeps documents whose content a model can read. " +
+    "Use entities.filesystem-tree.get for folder pages.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "list_documents" },
@@ -101,7 +104,7 @@ export const createReadEntitiesHandler = (
           ...(body.search !== undefined && { search: body.search }),
           cursor: cursorResult.value,
           limit: limit + 1,
-          fieldMode: body.fieldMode ?? "full",
+          fieldMode: body.fieldMode ?? "visible",
           fieldIds: arrayOrEmpty(body.fieldIds),
           excludedKinds: arrayOrEmpty(body.excludedKinds),
           previewableForAi: body.previewableForAi ?? false,
