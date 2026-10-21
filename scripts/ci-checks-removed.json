@@ -1,5 +1,9 @@
 [
   {
+    "name": "Release CLI changeset hold",
+    "reason": "Release versions are bound to their version commits; later CLI changesets cannot enter an existing release."
+  },
+  {
     "name": "ci-checks-generated: Install Safe Chain",
     "reason": "Safe Chain moved to the dedicated lockfile-change dependency-malware gate (and the nightly)"
   },
