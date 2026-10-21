@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import LandingFooter from "../components/LandingFooter.astro";
+import Prose from "../components/Prose.astro";
 
 const sections = [
   {
@@ -150,7 +151,7 @@ const sections = [
             <section>
               <h2 class="font-display text-xl font-medium tracking-tight">{section.title}</h2>
               <div class="mt-3 space-y-3 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
-                {section.body.map((paragraph) => <p>{paragraph}</p>)}
+                {section.body.map((paragraph) => <Prose>{paragraph}</Prose>)}
               </div>
             </section>
           ))}

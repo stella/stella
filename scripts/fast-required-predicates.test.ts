@@ -68,7 +68,7 @@ describe("fast-required predicates", () => {
     );
     expect(outputs.get("web-build")).toBe("browser_spec_selection_required");
     expect(outputs.get("pr-heavy-gate")).toBeNull();
-    expect(outputs.get("ci-tests")).toBe("package_checks_required");
+    expect(outputs.get("ci-tests")).toBe("ci_tests_required");
   });
 
   test("a fast-required id with no job definition fails", () => {
@@ -93,7 +93,7 @@ describe("fast-required predicates", () => {
     const source = editedCi((jobs) => {
       const target = job(jobs, "ci-tests");
       const condition = v.parse(v.string(), target["if"]);
-      const atom = "needs.ci-plan.outputs.package_checks_required == 'true'";
+      const atom = "needs.ci-plan.outputs.ci_tests_required == 'true'";
       expect(condition).toContain(atom);
       target["if"] = condition.replaceAll(atom, "always()");
     });
