@@ -18,6 +18,7 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { returnPathOf } from "@/lib/redirect";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -124,6 +125,21 @@ export const loadProtectedContext = async ({
       onPrefetchError,
     ),
     "protected-layout.prefetch",
+  );
+  // The sidebar reads the workspace list on every signed-in page, and page
+  // content waits on its server-owned feature enrolment (time billing) before
+  // it asks for feature data. Started after chrome mounts, it opened its own
+  // sequential round and pushed every enrolment-gated request one round later.
+  detached(
+    prefetchRouteQuery(
+      context.queryClient,
+      workspacesNavigationOptions({
+        userId,
+        organizationId: activeOrganizationId,
+      }),
+      onPrefetchError,
+    ),
+    "protected-layout.navigation-prefetch",
   );
   // Prefetched here so the bell's first page joins the shell's request wave
   // instead of chaining a new sequential round after hydration.
