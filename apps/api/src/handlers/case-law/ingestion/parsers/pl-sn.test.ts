@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex } from "@stll/sha256/bun";
+
 import {
   assemblePlSnParagraphs,
+  extractPlSnLines,
+  withoutRaisedReferenceMarkers,
+  PL_PDF_PAGE_FURNITURE,
   plSnParagraphsToHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
@@ -20,6 +25,11 @@ const opens = (text: string, bold = false): PlSnTextLine => ({
 });
 
 const BLANK: PlSnLine = { type: "blank" };
+
+const UOKIK_PDF = new URL(
+  "__fixtures__/pl-uokik-dok-9-2011.pdf",
+  import.meta.url,
+);
 
 const plainText = (paragraphs: readonly { text: string }[][]): string[] =>
   paragraphs.map((runs) => runs.map(({ text }) => text).join(""));
@@ -132,5 +142,72 @@ describe("emitting the paragraphs as markup the Polish parser reads", () => {
     ]);
 
     expect(html).toBe("<p>Pierwszy</p><p>Drugi</p>");
+  });
+});
+
+describe("raised reference markers", () => {
+  const span = (text: string, x: number, y: number, fontSize: number) => ({
+    text,
+    bbox: { x, y, width: text.length * 5 },
+    fontSize,
+    fontName: "Body",
+  });
+
+  test("a marker removes its own digits, not equal digits earlier in the line", () => {
+    const line = {
+      spans: [
+        span("1. Úřad obdržel podnět", 0, 100, 10),
+        span("1", 110, 104, 6),
+        span(" a zahájil řízení.", 115, 100, 10),
+      ],
+      text: "1. Úřad obdržel podnět1 a zahájil řízení.",
+      bbox: { x: 0, y: 100 },
+    };
+    const cleaned = withoutRaisedReferenceMarkers(line, 10);
+    expect(cleaned.text).toBe("1. Úřad obdržel podnět a zahájil řízení.");
+    expect(cleaned.spans.map(({ text }) => text)).toEqual([
+      "1. Úřad obdržel podnět",
+      " a zahájil řízení.",
+    ]);
+  });
+
+  test("a raised digit without a matching footnote stays as text", () => {
+    const line = {
+      spans: [span("m", 0, 100, 10), span("2", 5, 104, 6)],
+      text: "m2",
+      bbox: { x: 0, y: 100 },
+    };
+    expect(withoutRaisedReferenceMarkers(line, 10, new Set()).text).toBe("m2");
+  });
+});
+
+describe("reading recorded PDF lines", () => {
+  test("the default reader keeps its byte-identical UOKiK output", async () => {
+    const bytes = new Uint8Array(await Bun.file(UOKIK_PDF).arrayBuffer());
+    const lines = await extractPlSnLines(bytes);
+    const digest = sha256Hex(JSON.stringify(lines));
+
+    expect(digest).toBe(
+      "63491377b0a8cc8d1f205d0a43b32add539c1e0e6ef4f281ad252f9311d27592",
+    );
+  });
+
+  test("the opt-in reader retains the UOKiK footnote zone as typed lines", async () => {
+    const bytes = new Uint8Array(await Bun.file(UOKIK_PDF).arrayBuffer());
+    const lines = await extractPlSnLines(bytes, undefined, {
+      pageFurniture: PL_PDF_PAGE_FURNITURE.SEPARATE,
+    });
+    const notes = lines.filter(
+      (line): line is PlSnTextLine =>
+        line.type === "text" && line.footnote !== undefined,
+    );
+    const text = notes
+      .flatMap(({ runs }) => runs.map((run) => run.text))
+      .join(" ");
+
+    expect(text).toContain("B. Turno, Komentarz do art. 105d");
+    expect(notes.every(({ footnote }) => footnote?.label.length !== 0)).toBe(
+      true,
+    );
   });
 });

@@ -189,6 +189,7 @@ const extractDeadlines = async ({
   })(
     async ({ admission }) =>
       await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "chat",
         organizationId: run.organizationId,
@@ -206,7 +207,7 @@ const extractDeadlines = async ({
           scopeKey: run.organizationId,
         }),
         serviceTier: "flex",
-        abortSignal: AbortSignal.timeout(DEADLINE_GENERATION_TIMEOUT_MS),
+        deadlineMs: DEADLINE_GENERATION_TIMEOUT_MS,
         outputSchema: deadlineExtractionSchema,
       }),
   );

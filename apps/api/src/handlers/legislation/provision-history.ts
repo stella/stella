@@ -71,7 +71,9 @@ type VersionCursor = {
   id: SafeId<"legislationDocument">;
 };
 
-const decodeVersionCursor = (cursor: string): VersionCursor | null => {
+export const decodeProvisionHistoryCursor = (
+  cursor: string,
+): VersionCursor | null => {
   const parts = decodePaginationCursor(cursor);
 
   if (parts?.length !== 2) {
@@ -89,6 +91,9 @@ const decodeVersionCursor = (cursor: string): VersionCursor | null => {
 
   return { validFrom, id: brandPersistedLegislationDocumentId(id) };
 };
+
+export const encodeProvisionHistoryCursor = (cursor: VersionCursor): string =>
+  encodePaginationCursor([cursor.validFrom, cursor.id]);
 
 const versionColumns = {
   ...versionAstColumns,
@@ -130,7 +135,7 @@ export const readProvisionHistoryHandler = async ({
   let cursor: VersionCursor | null = null;
 
   if (query.cursor !== undefined) {
-    cursor = decodeVersionCursor(query.cursor);
+    cursor = decodeProvisionHistoryCursor(query.cursor);
 
     if (cursor === null) {
       return status(400, { message: "Invalid cursor" });

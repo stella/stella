@@ -781,6 +781,7 @@ export const gradeReferencePositions = async ({
   };
   const generate = async (messages: ModelMessage[]) =>
     await generateObjectForTask({
+      userId: admission.userId,
       dataClass: "customer",
       task: REFERENCE_GRADE_TASK,
       orgAIConfig,
@@ -793,10 +794,8 @@ export const gradeReferencePositions = async ({
       tenantWorkspaceIds: [workspaceId],
       system: SYSTEM_PROMPT,
       messages,
-      abortSignal: AbortSignal.any([
-        abortSignal,
-        AbortSignal.timeout(REFERENCE_GRADE_TIMEOUT_MS),
-      ]),
+      abortSignal,
+      deadlineMs: REFERENCE_GRADE_TIMEOUT_MS,
       outputSchema: referenceGradeSchema,
     });
 

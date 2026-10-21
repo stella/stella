@@ -10,6 +10,7 @@
 use std::time::Duration;
 
 const DESKTOP_HTTP_USER_AGENT: &str = "stella-desktop";
+const LOCAL_CLIENT_IDENTITY_HEADER: &str = "x-stella-local-client";
 
 #[derive(Default)]
 pub struct HttpClientOptions {
@@ -26,6 +27,13 @@ impl DesktopHttpClient {
   pub fn new(options: HttpClientOptions) -> reqwest::Result<Self> {
     let mut builder = reqwest::Client::builder()
       .user_agent(DESKTOP_HTTP_USER_AGENT)
+      .default_headers(reqwest::header::HeaderMap::from_iter([(
+        reqwest::header::HeaderName::from_static(LOCAL_CLIENT_IDENTITY_HEADER),
+        reqwest::header::HeaderValue::from_static(concat!(
+          "desktop/",
+          env!("CARGO_PKG_VERSION")
+        )),
+      )]))
       .redirect(options.redirect)
       // Application retry owners rebuild possession proofs for each attempt.
       .retry(reqwest::retry::never());

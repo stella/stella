@@ -34,6 +34,14 @@ const cases = [
     failure: "prepare",
     extra: "",
   },
+  // Nothing to fix: the fixer leaves the file alone, so its project is not
+  // checked, even with a type error CI's typecheck reports instead.
+  {
+    name: "no fixable finding",
+    failure: "unfixed",
+    extra:
+      'import { missing } from "./absent";\nexport const broken = missing;\n',
+  },
 ] as const;
 
 test.each(cases)(
@@ -41,8 +49,12 @@ test.each(cases)(
   ({ failure, extra }) => {
     const root = mkdtempSync(path.join(tmpdir(), "autofix-type-aware-"));
     const repo = path.resolve(import.meta.dirname, "..");
-    const source =
+    const fixable =
       'export const value = { name: "fixture" };\nexport const name = value["name"];\n';
+    const source =
+      failure === "unfixed"
+        ? fixable.replace('value["name"]', "value.name")
+        : fixable;
     try {
       symlinkSync(
         path.join(repo, "node_modules"),
@@ -118,10 +130,12 @@ test.each(cases)(
         ],
         { cwd: root, stdout: "pipe", stderr: "pipe" },
       );
-      expect(finding.exitCode).toBe(1);
-      expect(finding.stdout.toString() + finding.stderr.toString()).toContain(
-        "dot-notation",
-      );
+      if (failure !== "unfixed") {
+        expect(finding.exitCode).toBe(1);
+        expect(finding.stdout.toString() + finding.stderr.toString()).toContain(
+          "dot-notation",
+        );
+      }
       // Generated-source production is covered by its own integration tests;
       // this fixture verifies that the workflow prepares before the real lint fix.
       writeFileSync(
@@ -178,12 +192,36 @@ exec '${process.execPath}' "$@"
         expect(readFileSync(path.join(root, "changed.ts"), "utf-8")).toBe(
           source.replace('value["name"]', "value.name"),
         );
-      } else {
-        expect(fixed.exitCode).not.toBe(0);
+      } else if (failure === "unfixed") {
+        expect(
+          fixed.exitCode,
+          fixed.stdout.toString() + fixed.stderr.toString(),
+        ).toBe(0);
         expect(readFileSync(path.join(root, "changed.ts"), "utf-8")).toBe(
           source + extra,
         );
-        expect(existsSync(path.join(root, "fixer_ran"))).toBe(false);
+      } else {
+        // Preparation errors stop the step; a fix its project rejects only
+        // drops the lint rewrites, so formatting and generators still run.
+        if (failure === "prepare") {
+          expect(fixed.exitCode).not.toBe(0);
+        } else {
+          expect(
+            fixed.exitCode,
+            fixed.stdout.toString() + fixed.stderr.toString(),
+          ).toBe(0);
+          expect(fixed.stdout.toString()).toContain(
+            "::warning title=Autofix lint fixes dropped::",
+          );
+        }
+        expect(readFileSync(path.join(root, "changed.ts"), "utf-8")).toBe(
+          source + extra,
+        );
+        // Preparation fails before the fixer; every later failure restores the
+        // fixer's rewrites, so the source above stays byte-identical.
+        expect(existsSync(path.join(root, "fixer_ran"))).toBe(
+          failure !== "prepare",
+        );
         if (failure === "coverage") {
           expect(fixed.stdout.toString() + fixed.stderr.toString()).toContain(
             "covered by no candidate project",
@@ -201,9 +239,9 @@ exec '${process.execPath}' "$@"
         }
       }
       expect(existsSync(path.join(root, "compiler_checked"))).toBe(
-        failure !== "prepare",
+        failure !== "prepare" && failure !== "unfixed",
       );
-      if (failure !== "prepare") {
+      if (failure !== "prepare" && failure !== "unfixed") {
         expect(
           readFileSync(path.join(root, "compiler_args"), "utf-8"),
         ).not.toContain("generated.html.txt");
@@ -216,8 +254,12 @@ exec '${process.execPath}' "$@"
         const rewritten = readFileSync(path.join(root, "changed.ts"), "utf-8");
         expect(rewritten).not.toBe(source);
         expect(generated).toBe(rewritten);
-      } else {
+      } else if (failure === "prepare") {
         expect(generated).toBe("fixture");
+      } else {
+        // Unfixed sources and rejected fixes both regenerate from the
+        // byte-identical source.
+        expect(generated).toBe(source + extra);
       }
       expect(readFileSync(path.join(root, "unchanged.ts"), "utf-8")).toBe(
         source,
