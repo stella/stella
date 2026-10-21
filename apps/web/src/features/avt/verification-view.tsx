@@ -31,6 +31,7 @@ import { useInspectorCommandStore } from "@/components/inspector/inspector-comma
 import { ClaimDetailPanel } from "@/features/avt/claim-detail-panel";
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import type { OriginalScrollTarget } from "@/features/avt/original-docx-view";
+import { isPdfClaimBoxDrawn } from "@/features/avt/original-pdf-claim-box";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   MatchStepper,
@@ -196,10 +197,14 @@ export const VerificationView = ({
   // Bring the original to a claim's block or page. Both requests are held
   // while the document is still loading: the block as state the DOCX view
   // applies once Folio has the document, the page in the inspector store the
-  // PDF viewer reads. On a PDF the claim's box then brings itself into view
-  // once its page is drawn.
+  // PDF viewer reads. On a PDF the claim's box brings itself into view once
+  // its page is drawn; when the box is already drawn it alone scrolls, since
+  // a page request would realign the page top over it.
   const scrollOriginalToClaim = (claim: VerificationClaim) => {
     if (claim.anchor.type === "pdf-page") {
+      if (isPdfClaimBoxDrawn(claim.id)) {
+        return;
+      }
       useInspectorCommandStore.getState().requestPdfPageScroll({
         tabId: run.fileFieldId,
         pageNumber: claim.anchor.pageNumber,

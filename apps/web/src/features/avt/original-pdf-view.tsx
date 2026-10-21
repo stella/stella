@@ -26,6 +26,7 @@ import {
 } from "@/components/pdf/peek/peek-pdf-viewer";
 import { UnlocatedClaims } from "@/features/avt/original-claims";
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
+import { PDF_CLAIM_BOX_ATTRIBUTE } from "@/features/avt/original-pdf-claim-box";
 import {
   claimPageNumbers,
   resolvePdfClaimLocations,
@@ -45,7 +46,6 @@ import { fileOptions } from "@/lib/files/queries";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { toPDFSearchViewportBox } from "@/lib/pdf/pdf-search";
 
-const CLAIM_ATTRIBUTE = "data-avt-claim";
 const ROOT_ATTRIBUTE = "data-avt-original-pdf";
 /** The selection visit last brought into view, kept on the pane's element. */
 const SHOWN_ATTRIBUTE = "data-avt-shown-visit";
@@ -165,8 +165,8 @@ export const OriginalPdfView = ({
             return;
           }
           const id = event.target
-            .closest(`[${CLAIM_ATTRIBUTE}]`)
-            ?.getAttribute(CLAIM_ATTRIBUTE);
+            .closest(`[${PDF_CLAIM_BOX_ATTRIBUTE}]`)
+            ?.getAttribute(PDF_CLAIM_BOX_ATTRIBUTE);
           const claim = claims.find((candidate) => candidate.id === id);
           if (claim !== undefined) {
             // A claim picked by its box is already in view.
@@ -331,7 +331,7 @@ const ClaimPageMarks = ({
                   : undefined
               }
               style={viewportBox}
-              {...{ [CLAIM_ATTRIBUTE]: claim.id }}
+              {...{ [PDF_CLAIM_BOX_ATTRIBUTE]: claim.id }}
             />,
           ];
         });

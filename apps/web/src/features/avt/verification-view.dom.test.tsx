@@ -139,6 +139,9 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { avtKeys, verificationRunOptions } = await import("./queries");
 const { fileOptions } = await import("@/lib/files/queries");
+const { useInspectorCommandStore } =
+  await import("@/components/inspector/inspector-command-store");
+const { PDF_CLAIM_BOX_ATTRIBUTE } = await import("./original-pdf-claim-box");
 const { PDF } = await import("@libpdf/core");
 const { VerificationView } = await import("./verification-view");
 const { STATE_META } = await import("./types");
@@ -943,6 +946,51 @@ test("the original PDF mounts its viewer and claim boxes inside the PDF store", 
   } finally {
     consoleError.mockRestore();
     Object.defineProperty(HTMLElement.prototype, "clientWidth", clientWidth);
+  }
+});
+
+test("going to a PDF claim whose box is drawn leaves the scrolling to the box", async () => {
+  const run = seededPdfRun();
+  await mount(run);
+  const requested: number[] = [];
+  const { requestPdfPageScroll } = useInspectorCommandStore.getState();
+  useInspectorCommandStore.setState({
+    requestPdfPageScroll: ({ pageNumber }) => {
+      requested.push(pageNumber);
+    },
+  });
+  const boxes: HTMLElement[] = [];
+  try {
+    // A selected claim, so opening the original goes to it.
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>(
+        'button[aria-pressed="false"]',
+      ) ?? panic("Missing a verdict tile"),
+    );
+
+    // No box drawn yet: the page is requested, and the box follows it.
+    openOriginal();
+    expect(requested).toEqual([1]);
+
+    // Every claim's box is drawn: only the box scrolls, no page request.
+    for (const claim of run.claims) {
+      const box = document.createElement("div");
+      box.setAttribute(PDF_CLAIM_BOX_ATTRIBUTE, claim.id);
+      document.body.append(box);
+      boxes.push(box);
+    }
+    fireEvent.click(
+      screen.getByRole("tab", {
+        name: messages.avt.verification.documentView.reading,
+      }),
+    );
+    openOriginal();
+    expect(requested).toEqual([1]);
+  } finally {
+    for (const box of boxes) {
+      box.remove();
+    }
+    useInspectorCommandStore.setState({ requestPdfPageScroll });
   }
 });
 
