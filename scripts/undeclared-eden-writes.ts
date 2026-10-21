@@ -8,7 +8,7 @@
 // here; the ratchet keeps each file's count from growing. The capability-request
 // lint rule checks the shape of the declared writes and shares its client
 // definition (`.oxlint-plugins/eden-client.ts`).
-import ts from "typescript";
+import ts from "typescript6";
 
 import {
   EDEN_CLIENT_EXPORTS,
