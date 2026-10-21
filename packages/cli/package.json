@@ -26,6 +26,7 @@
     "dist",
     "src",
     "skills",
+    "package.json",
     "README.md"
   ],
   "type": "module",
@@ -35,6 +36,7 @@
     "./local-client-identity": "./src/api-fetch.ts",
     "./capability-catalog-data": "./src/capability-catalog-data.ts",
     "./client-metadata-document": "./src/auth/client-metadata-document.ts",
+    "./package.json": "./package.json",
     "./capabilities/*.json": "./capabilities/*.json"
   },
   "publishConfig": {
