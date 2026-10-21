@@ -270,13 +270,29 @@ const provenanceStatement = ({
   },
 });
 
+const SLSA_PROVENANCE = "https://slsa.dev/provenance/v1";
+const NPM_PUBLISH_ATTESTATION =
+  "https://github.com/npm/attestation/tree/main/specs/publish/v0.1";
+
+const signedBundle = (
+  statement: unknown,
+  predicateType: string = SLSA_PROVENANCE,
+) => ({
+  predicateType,
+  bundle: {
+    dsseEnvelope: {
+      payload: Buffer.from(JSON.stringify(statement)).toString("base64"),
+    },
+  },
+});
+
 // The shape npm 11.20.0 prints for `npm audit signatures --json
-// --include-attestations` when the target's signature and provenance verify.
+// --include-attestations`: each verified package with its verified bundles.
 const verifiedEntry = (
   version: string,
-  predicateTypes: readonly string[] = [
-    "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
-    "https://slsa.dev/provenance/v1",
+  bundles: readonly unknown[] = [
+    signedBundle(provenanceStatement({ version }), NPM_PUBLISH_ATTESTATION),
+    signedBundle(provenanceStatement({ version })),
   ],
 ) => ({
   name: "@stll/fixture",
@@ -285,33 +301,30 @@ const verifiedEntry = (
   registry: "https://registry.npmjs.org/",
   attestations: {
     url: `https://registry.npmjs.org/-/npm/v1/attestations/@stll%2ffixture@${version}`,
-    provenance: { predicateType: "https://slsa.dev/provenance/v1" },
+    provenance: { predicateType: SLSA_PROVENANCE },
   },
-  attestationBundles: predicateTypes.map((predicateType) => ({
-    predicateType,
-    bundle: {},
-  })),
+  attestationBundles: bundles,
 });
-const NPM_AUDIT_VERIFIED = JSON.stringify({
-  invalid: [],
-  missing: [],
-  verified: [verifiedEntry("1.2.4")],
-});
+const auditReport = (verified: readonly unknown[]) =>
+  JSON.stringify({ invalid: [], missing: [], verified });
+
+const MOVED_LATEST = {
+  version: "1.2.4",
+  repository: "https://github.com/stella/moved",
+};
 
 const runRepositoryCheck = async ({
-  latest,
-  attestations,
+  latest = MOVED_LATEST,
   installedVersion = "1.2.4",
   npmResults = [
     { exitCode: 0, stdout: "" },
-    { exitCode: 0, stdout: NPM_AUDIT_VERIFIED },
+    { exitCode: 0, stdout: auditReport([verifiedEntry("1.2.4")]) },
   ],
 }: {
-  latest: Record<string, unknown>;
-  attestations?: unknown;
+  latest?: Record<string, unknown>;
   installedVersion?: string;
   npmResults?: { exitCode: number; stdout: string }[];
-}) => {
+} = {}) => {
   const npmCalls: Parameters<NpmRunner>[0][] = [];
   const npmRunner: NpmRunner = async (options) => {
     npmCalls.push(options);
@@ -333,21 +346,7 @@ const runRepositoryCheck = async ({
     }
     return result;
   };
-  const server = Bun.serve({
-    port: 0,
-    fetch(request) {
-      const url = new URL(request.url);
-      if (url.pathname === "/attestations") {
-        return Response.json(attestations);
-      }
-      return Response.json({
-        ...latest,
-        ...(latest["dist"] === "fixture"
-          ? { dist: { attestations: { url: `${url.origin}/attestations` } } }
-          : {}),
-      });
-    },
-  });
+  const server = Bun.serve({ port: 0, fetch: () => Response.json(latest) });
   try {
     const result = await checkRegistry({
       name: "@stll/fixture",
@@ -365,21 +364,7 @@ const runRepositoryCheck = async ({
   }
 };
 
-const attestationDocument = (
-  statement: unknown,
-  predicateType = "https://slsa.dev/provenance/v1",
-) => ({
-  attestations: [
-    {
-      predicateType,
-      bundle: {
-        dsseEnvelope: {
-          payload: Buffer.from(JSON.stringify(statement)).toString("base64"),
-        },
-      },
-    },
-  ],
-});
+const UNATTESTED = { status: "failed", reason: "unattested_publish" } as const;
 
 describe("published repository provenance", () => {
   test.each([
@@ -425,15 +410,8 @@ describe("published repository provenance", () => {
     },
   );
 
-  test("accepts a moved package only with matching provenance", async () => {
-    const { result, npmCalls } = await runRepositoryCheck({
-      latest: {
-        version: "1.2.4",
-        repository: "https://github.com/stella/moved",
-        dist: "fixture",
-      },
-      attestations: attestationDocument(provenanceStatement()),
-    });
+  test("accepts a moved package only with npm's verified provenance", async () => {
+    const { result, npmCalls } = await runRepositoryCheck();
     expect(result).toEqual({
       status: "passed",
       reason: "published_from_declared_repository",
@@ -468,76 +446,86 @@ describe("published repository provenance", () => {
   test.each([
     [
       "an invalid attestation",
-      {
+      JSON.stringify({
         invalid: [{ name: "@stll/fixture", version: "1.2.4" }],
         missing: [],
         verified: [],
-      },
+      }),
     ],
     [
       "a missing attestation",
-      {
+      JSON.stringify({
         invalid: [],
         missing: [{ name: "@stll/fixture", version: "1.2.4" }],
         verified: [],
-      },
+      }),
     ],
-    [
-      "another package version",
-      { invalid: [], missing: [], verified: [verifiedEntry("9.9.9")] },
-    ],
+    ["another package version", auditReport([verifiedEntry("9.9.9")])],
     [
       "an invalid dependency signature",
-      {
+      JSON.stringify({
         invalid: [{ name: "@stll/fixture-dependency", version: "1.0.0" }],
         missing: [],
         verified: [verifiedEntry("1.2.4")],
-      },
+      }),
     ],
     [
       "failures only, with no verified record (older npm)",
-      { invalid: [], missing: [] },
+      JSON.stringify({ invalid: [], missing: [] }),
     ],
     [
       "a verified signature without a provenance bundle",
-      {
-        invalid: [],
-        missing: [],
-        verified: [
-          verifiedEntry("1.2.4", [
-            "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
-          ]),
-        ],
-      },
+      auditReport([
+        verifiedEntry("1.2.4", [
+          signedBundle(provenanceStatement(), NPM_PUBLISH_ATTESTATION),
+        ]),
+      ]),
     ],
-    ["a report without its lists", {}],
-  ])("rejects npm reporting %s", async (_, auditReport) => {
+    [
+      "verified provenance from another repository",
+      auditReport([
+        verifiedEntry("1.2.4", [
+          signedBundle(
+            provenanceStatement({
+              repository: "https://github.com/stella/other",
+            }),
+          ),
+        ]),
+      ]),
+    ],
+    [
+      "verified provenance for another subject version",
+      auditReport([
+        verifiedEntry("1.2.4", [
+          signedBundle(provenanceStatement({ version: "1.2.3" })),
+        ]),
+      ]),
+    ],
+    [
+      "a verified bundle with a malformed payload",
+      auditReport([
+        verifiedEntry("1.2.4", [
+          {
+            predicateType: SLSA_PROVENANCE,
+            bundle: { dsseEnvelope: { payload: "not JSON" } },
+          },
+        ]),
+      ]),
+    ],
+    ["a report without its lists", JSON.stringify({})],
+  ])("rejects npm reporting %s", async (_, stdout) => {
     const { result } = await runRepositoryCheck({
-      latest: {
-        version: "1.2.4",
-        repository: "https://github.com/stella/moved",
-        dist: "fixture",
-      },
-      attestations: attestationDocument(provenanceStatement()),
       npmResults: [
         { exitCode: 0, stdout: "" },
-        { exitCode: 0, stdout: JSON.stringify(auditReport) },
+        { exitCode: 0, stdout },
       ],
     });
-    expect(result).toEqual({ status: "failed", reason: "unattested_publish" });
+    expect(result).toEqual(UNATTESTED);
   });
 
   test("rejects a verified audit when npm installed another version", async () => {
-    const { result } = await runRepositoryCheck({
-      latest: {
-        version: "1.2.4",
-        repository: "https://github.com/stella/moved",
-        dist: "fixture",
-      },
-      attestations: attestationDocument(provenanceStatement()),
-      installedVersion: "1.2.3",
-    });
-    expect(result).toEqual({ status: "failed", reason: "unattested_publish" });
+    const { result } = await runRepositoryCheck({ installedVersion: "1.2.3" });
+    expect(result).toEqual(UNATTESTED);
   });
 
   test.each([
@@ -557,95 +545,9 @@ describe("published repository provenance", () => {
       ],
     ],
   ])("rejects npm returning %s", async (_, npmResults) => {
-    const { result } = await runRepositoryCheck({
-      latest: {
-        version: "1.2.4",
-        repository: "https://github.com/stella/moved",
-        dist: "fixture",
-      },
-      attestations: attestationDocument(provenanceStatement()),
-      npmResults,
-    });
-    expect(result).toEqual({ status: "failed", reason: "unattested_publish" });
+    const { result } = await runRepositoryCheck({ npmResults });
+    expect(result).toEqual(UNATTESTED);
   });
-
-  test.each([
-    [
-      "no attestations",
-      { version: "1.2.4", repository: "https://github.com/stella/moved" },
-      undefined,
-    ],
-    [
-      "another origin",
-      {
-        version: "1.2.4",
-        repository: "https://github.com/stella/moved",
-        dist: { attestations: { url: "https://example.com/attestations" } },
-      },
-      undefined,
-    ],
-    [
-      "non-provenance predicate",
-      {
-        version: "1.2.4",
-        repository: "https://github.com/stella/moved",
-        dist: "fixture",
-      },
-      attestationDocument(
-        provenanceStatement(),
-        "https://example.com/predicate",
-      ),
-    ],
-    [
-      "another version",
-      {
-        version: "1.2.4",
-        repository: "https://github.com/stella/moved",
-        dist: "fixture",
-      },
-      attestationDocument(provenanceStatement({ version: "1.2.3" })),
-    ],
-    [
-      "another repository",
-      {
-        version: "1.2.4",
-        repository: "https://github.com/stella/moved",
-        dist: "fixture",
-      },
-      attestationDocument(
-        provenanceStatement({ repository: "https://github.com/stella/other" }),
-      ),
-    ],
-    [
-      "malformed payload",
-      {
-        version: "1.2.4",
-        repository: "https://github.com/stella/moved",
-        dist: "fixture",
-      },
-      {
-        attestations: [
-          {
-            predicateType: "https://slsa.dev/provenance/v1",
-            bundle: { dsseEnvelope: { payload: "not JSON" } },
-          },
-        ],
-      },
-    ],
-  ] as const)(
-    "rejects a moved package with %s",
-    async (_, latest, attestations) => {
-      const { result, npmCalls } = await runRepositoryCheck({
-        latest,
-        attestations,
-      });
-      expect(result).toEqual({
-        status: "failed",
-        reason: "unattested_publish",
-      });
-      expect(npmCalls).toHaveLength(0);
-    },
-  );
 });
 
 const POLICY_RESULTS = {

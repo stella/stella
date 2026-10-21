@@ -162,15 +162,6 @@ const repositoryField = (value: unknown): RepositoryField | undefined => {
     : undefined;
 };
 
-type VerifyProvenanceOptions = {
-  attestationUrl: string;
-  expectedRepository: string;
-  expectedSubject: string;
-  registry: string;
-  timeoutMs: number;
-  npmRunner: NpmRunner;
-};
-
 type NpmRunOptions = {
   args: readonly string[];
   cwd: string;
@@ -209,28 +200,64 @@ const packageEntryMatches = (
 const NPM_AUDIT_VERSION = "11.20.0";
 const SLSA_PROVENANCE_V1 = "https://slsa.dev/provenance/v1";
 
-const hasVerifiedProvenance = (entry: unknown): boolean =>
-  isRecord(entry) &&
-  Array.isArray(entry["attestationBundles"]) &&
-  entry["attestationBundles"].some(
-    (bundle) =>
-      isRecord(bundle) && bundle["predicateType"] === SLSA_PROVENANCE_V1,
+type ProvenanceExpectation = { subject: string; repository: string };
+
+// Reads the in-toto statement of one bundle npm reported as verified, so the
+// subject and source repository come from the same signed envelope npm checked.
+const statementMatches = (
+  bundle: unknown,
+  expected: ProvenanceExpectation,
+): boolean => {
+  if (!isRecord(bundle) || bundle["predicateType"] !== SLSA_PROVENANCE_V1) {
+    return false;
+  }
+  const sigstore = bundle["bundle"];
+  const envelope = isRecord(sigstore) ? sigstore["dsseEnvelope"] : undefined;
+  if (!isRecord(envelope) || typeof envelope["payload"] !== "string") {
+    return false;
+  }
+  const statement: unknown = JSON.parse(
+    Buffer.from(envelope["payload"], "base64").toString("utf-8"),
   );
+  if (!isRecord(statement) || !Array.isArray(statement["subject"])) {
+    return false;
+  }
+  const predicate = statement["predicate"];
+  const buildDefinition = isRecord(predicate)
+    ? predicate["buildDefinition"]
+    : undefined;
+  const externalParameters = isRecord(buildDefinition)
+    ? buildDefinition["externalParameters"]
+    : undefined;
+  const workflow = isRecord(externalParameters)
+    ? externalParameters["workflow"]
+    : undefined;
+  return (
+    statement["subject"].some(
+      (subject) => isRecord(subject) && subject["name"] === expected.subject,
+    ) &&
+    isRecord(workflow) &&
+    normalizeGitHubRepository(repositoryField(workflow["repository"])) ===
+      expected.repository
+  );
+};
 
 // npm is the trust anchor here: it verifies the registry signature, Sigstore
 // root and signer identity, and binds the attestation subject digest to the
 // published tarball. A pass needs npm's affirmative record of a verified
-// provenance bundle for this exact version; the decoded metadata checks only
-// decide which repository owns it.
+// provenance bundle for this exact version, and that same bundle must name the
+// declared source repository.
 const verifyPackageWithNpm = async ({
   name,
   version,
+  expected,
   registry,
   timeoutMs,
   npmRunner,
 }: {
   name: string;
   version: string;
+  expected: ProvenanceExpectation;
   registry: string;
   timeoutMs: number;
   npmRunner: NpmRunner;
@@ -294,7 +321,13 @@ const verifyPackageWithNpm = async ({
       report["invalid"].length > 0 ||
       report["missing"].some(targetMatches) ||
       !report["verified"].some(
-        (entry) => targetMatches(entry) && hasVerifiedProvenance(entry),
+        (entry) =>
+          targetMatches(entry) &&
+          isRecord(entry) &&
+          Array.isArray(entry["attestationBundles"]) &&
+          entry["attestationBundles"].some((bundle) =>
+            statementMatches(bundle, expected),
+          ),
       )
     ) {
       return false;
@@ -307,83 +340,6 @@ const verifyPackageWithNpm = async ({
     return false;
   } finally {
     await rm(directory, { recursive: true, force: true });
-  }
-};
-
-const verifyProvenance = async ({
-  attestationUrl,
-  expectedRepository,
-  expectedSubject,
-  registry,
-  timeoutMs,
-  npmRunner,
-}: VerifyProvenanceOptions): Promise<boolean> => {
-  try {
-    const url = new URL(attestationUrl);
-    if (url.origin !== new URL(registry).origin) {
-      return false;
-    }
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (!response.ok) {
-      return false;
-    }
-    const document: unknown = await response.json();
-    const attestations =
-      isRecord(document) && Array.isArray(document["attestations"])
-        ? document["attestations"]
-        : [];
-    const provenance = attestations.find(
-      (attestation) =>
-        isRecord(attestation) &&
-        attestation["predicateType"] === "https://slsa.dev/provenance/v1",
-    );
-    if (!isRecord(provenance) || !isRecord(provenance["bundle"])) {
-      return false;
-    }
-    const envelope = provenance["bundle"]["dsseEnvelope"];
-    if (!isRecord(envelope) || typeof envelope["payload"] !== "string") {
-      return false;
-    }
-    const statement: unknown = JSON.parse(
-      Buffer.from(envelope["payload"], "base64").toString("utf-8"),
-    );
-    const subjects =
-      isRecord(statement) && Array.isArray(statement["subject"])
-        ? statement["subject"]
-        : [];
-    const predicate = isRecord(statement) ? statement["predicate"] : null;
-    const buildDefinition = isRecord(predicate)
-      ? predicate["buildDefinition"]
-      : null;
-    const externalParameters = isRecord(buildDefinition)
-      ? buildDefinition["externalParameters"]
-      : null;
-    const workflow = isRecord(externalParameters)
-      ? externalParameters["workflow"]
-      : null;
-    const attestedRepository = isRecord(workflow)
-      ? normalizeGitHubRepository(repositoryField(workflow["repository"]))
-      : undefined;
-    const metadataMatches =
-      subjects.some(
-        (subject) => isRecord(subject) && subject["name"] === expectedSubject,
-      ) && attestedRepository === expectedRepository;
-    if (!metadataMatches) {
-      return false;
-    }
-    const subject = expectedSubject.slice("pkg:npm/".length);
-    const separator = subject.lastIndexOf("@");
-    return await verifyPackageWithNpm({
-      name: decodeURIComponent(subject.slice(0, separator)),
-      version: subject.slice(separator + 1),
-      registry,
-      timeoutMs,
-      npmRunner,
-    });
-  } catch {
-    return false;
   }
 };
 
@@ -429,25 +385,20 @@ export const checkRegistry = async ({
       repositoryField(payload["repository"]),
     );
     if (npmRepository !== undefined && npmRepository !== repository) {
-      const attestationUrl =
-        isRecord(payload["dist"]) &&
-        isRecord(payload["dist"]["attestations"]) &&
-        typeof payload["dist"]["attestations"]["url"] === "string"
-          ? payload["dist"]["attestations"]["url"]
-          : undefined;
-      const verified =
-        attestationUrl !== undefined &&
-        (await verifyProvenance({
-          attestationUrl,
-          expectedRepository: npmRepository,
-          expectedSubject: `pkg:npm/${name
+      const verified = await verifyPackageWithNpm({
+        name,
+        version: payload["version"],
+        expected: {
+          subject: `pkg:npm/${name
             .split("/")
             .map(encodeURIComponent)
             .join("/")}@${payload["version"]}`,
-          registry,
-          timeoutMs,
-          npmRunner,
-        }));
+          repository: npmRepository,
+        },
+        registry,
+        timeoutMs,
+        npmRunner,
+      });
       return verified
         ? { status: "passed", reason: "published_from_declared_repository" }
         : { status: "failed", reason: "unattested_publish" };
