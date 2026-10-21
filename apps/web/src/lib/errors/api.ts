@@ -55,6 +55,7 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
 
 const MAX_API_RETRY_COUNT = 3;
 const TOO_MANY_REQUESTS_STATUS = 429;
+const SERVER_ERROR_STATUS = 500;
 
 export const shouldRetryAPIRequest = (
   failureCount: number,
@@ -340,14 +341,20 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
   if (isActionAdmissionCode(code)) {
     return translateError(ACTION_ADMISSION_ERROR_KEYS[code]);
   }
+  // Only a rejected request (4xx) is a validation answer. An outage that
+  // carries the code must keep the unavailable/retry message.
   const issue =
-    code === API_VALIDATION_ERROR_CODE
+    code === API_VALIDATION_ERROR_CODE && status < SERVER_ERROR_STATUS
       ? parseApiValidationIssues(details).at(0)
       : undefined;
   if (issue !== undefined) {
     return validationIssueMessage(issue);
   }
-  if (code && isKnownErrorCode(code)) {
+  if (
+    code &&
+    isKnownErrorCode(code) &&
+    !(code === API_VALIDATION_ERROR_CODE && status >= SERVER_ERROR_STATUS)
+  ) {
     return translateError(CODE_ERROR_KEYS[code]);
   }
   if (
