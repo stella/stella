@@ -266,11 +266,12 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       });
       let reader: Promise<number> | undefined;
       let samples = 0;
+      let activeSamples = 0;
       const isDone = () => done;
       try {
         while (!isDone()) {
           const waits = await fixture.observer<
-            { waitMs: number; active: boolean }[]
+            { waitMs: number; active: boolean | null }[]
           >`SELECT extract(epoch FROM clock_timestamp() - l.waitstart)::double precision * 1000 AS "waitMs",
               a.wait_event_type = 'Lock' AS active
             FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
@@ -280,8 +281,10 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
               AND l.waitstart IS NOT NULL`;
           for (const wait of waits) {
             samples++;
-            expect(wait.active).toBe(true);
             expect(wait.waitMs).toBeLessThanOrEqual(500);
+            if (wait.active === true) {
+              activeSamples++;
+            }
             if (reader === undefined) {
               const started = Date.now();
               reader = fixture.owner
@@ -310,6 +313,10 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         retryAfterMs: fixture.gate.config.retryMs,
       });
       expect(samples).toBeGreaterThan(0);
+      // pg_locks and pg_stat_activity are separate observations. At a bounded
+      // request's timeout edge, the former can still expose the old wait row
+      // after the latter has cleared its wait event for the retry pause.
+      expect(activeSamples).toBeGreaterThan(0);
       expect(reader).toBeDefined();
       if (reader !== undefined) {
         expect(await reader).toBeLessThanOrEqual(500);
@@ -1093,9 +1100,9 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
     await withFixture(async (fixture) => {
       await blockBuild(fixture);
       await fixture.owner`BEGIN`;
-      const queued = fixture.owner.unsafe(
-        `LOCK TABLE public.${fixture.table} IN ACCESS EXCLUSIVE MODE`,
-      );
+      const queued = fixture.owner
+        .unsafe(`LOCK TABLE public.${fixture.table} IN ACCESS EXCLUSIVE MODE`)
+        .execute();
       const queuedRequests = async () =>
         await fixture.observer<
           { pid: number }[]

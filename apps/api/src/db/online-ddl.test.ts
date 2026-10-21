@@ -342,6 +342,55 @@ describe("online ACCESS EXCLUSIVE statements", () => {
     expect(statements.at(-1)).toBe('ANALYZE public."probe"');
   });
 
+  test("writer-blocking retry clears its request before the retry pause", async () => {
+    const events: string[] = [];
+    let attempts = 0;
+    const lockFailure = Object.assign(new Error("lock unavailable"), {
+      code: "55P03",
+    });
+    const gate = createUngatedTableGateForTests(
+      {
+        execute: async (text) => {
+          events.push(text);
+          if (text.startsWith("DO ") && attempts++ === 0) {
+            throw lockFailure;
+          }
+        },
+        query: async () => [],
+      },
+      {
+        config: {
+          lockTimeoutsMs: [100, 250],
+          pauseBaseMs: 10,
+          pauseCapMs: 10,
+          budgetMs: 2000,
+        },
+        runtime: {
+          now: () => 0,
+          sleep: async () => {
+            events.push("pause");
+          },
+          random: () => 1,
+        },
+      },
+    );
+
+    await gate.run({
+      target: { tableName: "probe", name: "policy" },
+      kind: "index_repair",
+      work: async (session) => {
+        await session.run(createPolicy(POLICY));
+      },
+    });
+
+    expect(events.at(1)?.startsWith("DO ")).toBe(true);
+    expect([events.at(0), events.at(2), events.at(3)]).toEqual([
+      "SET lock_timeout = '100ms'",
+      "SET lock_timeout = '0'",
+      "pause",
+    ]);
+  });
+
   test("exhausted writer-blocking work leaves subsequent statements for a later run", async () => {
     const lockFailure = Object.assign(new Error("lock unavailable"), {
       code: "55P03",
