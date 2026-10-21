@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { ConditionNode } from "@stll/conditions";
 
@@ -89,6 +89,12 @@ export type PropertyBatch = {
 };
 
 export type ExecutionLevel = PropertyBatch[];
+
+class ComputedColumnPlanError extends TaggedError("ComputedColumnPlanError")<{
+  message: string;
+  code: "ai-column-input-required";
+  propertyIds: string[];
+}> {}
 
 export type ExecutionPlanProperty = {
   id: SafeId<"property">;
@@ -288,7 +294,24 @@ export const buildLevelBatches = (
 export const getPropertyExecutionPlan = ({
   properties,
   dependencies,
-}: ExecutionPlanData): ExecutionLevel[] => {
+}: ExecutionPlanData): Result<ExecutionLevel[], ComputedColumnPlanError> => {
+  const inputlessComputedPropertyIds = properties
+    .filter(
+      ({ id, tool }) =>
+        (tool.type === "ai-model" || tool.type === "playbook-verdict") &&
+        !dependencies.some(({ propertyId }) => propertyId === id),
+    )
+    .map(({ id }) => id);
+  if (inputlessComputedPropertyIds.length > 0) {
+    return Result.err(
+      new ComputedColumnPlanError({
+        code: "ai-column-input-required",
+        message: "Stored computed columns have no input dependencies",
+        propertyIds: inputlessComputedPropertyIds,
+      }),
+    );
+  }
+
   const graph = buildDependencyGraph({ properties, dependencies });
   const propertiesById = new Map(properties.map((p) => [p.id, p]));
 
@@ -314,6 +337,6 @@ export const getPropertyExecutionPlan = ({
     currentLevelIds = nextLevelIds;
   }
 
-  // Remove the first level, which has only properties without inputs
-  return levels.slice(1);
+  // The first level contains user-entered source properties only.
+  return Result.ok(levels.slice(1));
 };

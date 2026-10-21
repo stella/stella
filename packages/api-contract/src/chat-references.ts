@@ -1,4 +1,8 @@
 import { CHAT_CORPUS_HREF_PREFIX } from "./chat-corpus-scope";
+import {
+  CHAT_CONNECTOR_HREF_PREFIX,
+  CHAT_REGISTRY_HREF_PREFIX,
+} from "./chat-source-scope";
 import { CHAT_RESOURCE_HREF_PREFIX } from "./resource-link";
 
 export const CHAT_MENTION_CATEGORIES = ["entity", "workspace"] as const;
@@ -17,6 +21,8 @@ export const CHAT_REFERENCE_CATEGORIES = [
   ...CHAT_MENTION_CATEGORIES,
   "decision",
   "corpus",
+  "registry",
+  "connector",
 ] as const;
 
 export type ChatReferenceCategory = (typeof CHAT_REFERENCE_CATEGORIES)[number];
@@ -32,6 +38,9 @@ export const CHAT_REFERENCE_HREF_PREFIXES = {
   // A public corpus scope chip ("@Case law · Czechia"): no resource row, so
   // its id is the scope itself (`formatChatCorpusId`).
   corpus: CHAT_CORPUS_HREF_PREFIX,
+  // A business registry or MCP connector chip: its id is the source's slug.
+  registry: CHAT_REGISTRY_HREF_PREFIX,
+  connector: CHAT_CONNECTOR_HREF_PREFIX,
 } as const satisfies ChatReferenceHrefPrefixMap;
 
 export const CHAT_MENTION_HREF_PREFIXES = {

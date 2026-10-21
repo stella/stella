@@ -218,6 +218,7 @@ const buildProposalRequest = ({
   return {
     analytics,
     options: {
+      userId: admission.userId,
       dataClass: "customer" as const,
       task: MODEL_TASK,
       orgAIConfig,

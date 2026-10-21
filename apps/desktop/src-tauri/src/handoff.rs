@@ -732,11 +732,11 @@ fn take_parked() -> Resumable {
 
 #[cfg(test)]
 fn take_parked_at(now: std::time::Instant) -> Resumable {
-  match PARKED
+  let parked = PARKED
     .lock()
     .unwrap_or_else(std::sync::PoisonError::into_inner)
-    .take()
-  {
+    .take();
+  match parked {
     None => Resumable::Nothing,
     Some(parked) if now >= parked.expires => Resumable::Expired,
     Some(parked) => Resumable::Ready(parked),

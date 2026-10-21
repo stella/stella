@@ -23,7 +23,7 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
+    const out = patchSheetXml(xml).unwrap();
 
     expect(out).toContain(EXPECTED_FIT_TO_PAGE);
     expect(out).toContain(EXPECTED_FIT_TO_WIDTH);
@@ -38,7 +38,7 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
+    const out = patchSheetXml(xml).unwrap();
     expect(out).toContain(EXPECTED_FIT_TO_PAGE);
     expect(out).toMatch(REGEX_WORKSHEET_WITH_SHEET_PR);
   });
@@ -52,7 +52,7 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
+    const out = patchSheetXml(xml).unwrap();
 
     expect(out).not.toContain('scale="75"');
     expect(out).toContain(EXPECTED_FIT_TO_WIDTH);
@@ -70,7 +70,7 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
+    const out = patchSheetXml(xml).unwrap();
 
     // Verify exactly one fitToPage was inserted
     expect(out.match(/fitToPage="1"/gu)?.length).toBe(1);
@@ -90,12 +90,20 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
+    const out = patchSheetXml(xml).unwrap();
 
     expect(out.match(/fitToPage="1"/gu)?.length).toBe(1);
     expect(out).toContain(
       '<sheetPr codeName="Sheet1"><pageSetUpPr fitToPage="1"/></sheetPr>',
     );
+  });
+
+  it("refuses an incomplete sheet property element", () => {
+    const result = patchSheetXml(
+      "<worksheet><sheetPr><sheetData/></worksheet>",
+    );
+
+    expect(result.isErr()).toBe(true);
   });
 
   it("updates existing pageSetUpPr fitToPage attribute", () => {
@@ -108,7 +116,7 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
+    const out = patchSheetXml(xml).unwrap();
 
     // Should flip fitToPage to 1
     expect(out).toContain(EXPECTED_FIT_TO_PAGE);
@@ -126,8 +134,8 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
-    const out2 = patchSheetXml(out);
+    const out = patchSheetXml(xml).unwrap();
+    const out2 = patchSheetXml(out).unwrap();
 
     expect(out2).toContain(EXPECTED_FIT_TO_PAGE);
     expect(out2).toContain(EXPECTED_FIT_TO_WIDTH);
