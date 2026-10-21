@@ -1928,6 +1928,7 @@ const AssistantMessageParts = ({
               "text-[13px] leading-5 [&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5 [&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5 [&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5 [&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5 [&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5 [&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
           )}
           components={streamdownComponents}
+          isStreaming={isTurnActive}
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
           partIndex={index}
@@ -2336,6 +2337,7 @@ const AssistantThinkingPart = ({
       </summary>
       <AssistantThinkingBody
         components={components}
+        isStreaming={isStreaming}
         restorationPairs={restorationPairs}
         text={text}
       />
@@ -2404,10 +2406,12 @@ const AssistantThinkingHeader = ({
 
 const AssistantThinkingBody = ({
   components,
+  isStreaming,
   restorationPairs,
   text,
 }: {
   components: ChatThreadMessagesProps["streamdownComponents"];
+  isStreaming: boolean;
   restorationPairs: readonly ChatAnonRestoration[];
   text: string;
 }) => (
@@ -2424,6 +2428,7 @@ const AssistantThinkingBody = ({
           "[&_code]:text-2xs",
         )}
         components={components}
+        isStreaming={isStreaming}
         restorationPairs={restorationPairs}
         text={text}
       />
@@ -2434,6 +2439,7 @@ const AssistantThinkingBody = ({
 const AssistantTextPart = ({
   className,
   components,
+  isStreaming,
   restorationPairs,
   partIndex,
   sourceOffsets = false,
@@ -2441,6 +2447,8 @@ const AssistantTextPart = ({
 }: {
   className?: string | undefined;
   components: ChatThreadMessagesProps["streamdownComponents"];
+  /** The model is still writing this turn: the last block may be incomplete. */
+  isStreaming: boolean;
   restorationPairs: readonly ChatAnonRestoration[];
   partIndex?: number;
   sourceOffsets?: boolean;
@@ -2463,6 +2471,7 @@ const AssistantTextPart = ({
       <MessageResponse
         components={components}
         data-text-part-index={partIndex}
+        isAnimating={isStreaming}
         sourceOffsets={sourceOffsets}
         fallbackChildren={assistantMessageFallbackText(text)}
         {...classNamePatch}
@@ -2475,6 +2484,7 @@ const AssistantTextPart = ({
     <MessageResponse
       components={components}
       data-text-part-index={partIndex}
+      isAnimating={isStreaming}
       sourceOffsets={sourceOffsets}
       fallbackChildren={assistantMessageFallbackText(text)}
       rehypePlugins={rehypePlugins}

@@ -38,7 +38,11 @@ export const MessageResponseImpl = memo(
   }: MessageResponseProps) => {
     const effectiveRehypePlugins = useMemo(
       () => [
-        ...(rehypePlugins ?? Object.values(defaultRehypePlugins)),
+        // Streamdown's raw HTML, sanitize and harden chain always runs first:
+        // a caller's `rehypePlugins` only add to it. Replacing it would render
+        // raw HTML as literal text and leave link hardening to the components.
+        ...Object.values(defaultRehypePlugins),
+        ...(rehypePlugins ?? []),
         ...(sourceOffsets ? [rehypeMarkdownSourceOffsets] : []),
         rehypeChatLinks,
       ],
@@ -89,12 +93,14 @@ export const MessageResponseImpl = memo(
       />
     );
   },
-  // Children covers streaming text deltas. Compare the props that
-  // matter for downstream features (rehype plugin, components map,
-  // styling) so the wasm pipeline output isn't masked by an over-
-  // aggressive memo.
+  // Children covers streaming text deltas; `isAnimating` marks the last
+  // block incomplete and holds code-block actions until the stream settles.
+  // Compare the props that matter for downstream features (rehype plugin,
+  // components map, styling) so the wasm pipeline output isn't masked by an
+  // over-aggressive memo.
   (prev, next) =>
     prev.children === next.children &&
+    prev.isAnimating === next.isAnimating &&
     prev.rehypePlugins === next.rehypePlugins &&
     prev.components === next.components &&
     prev.allowedTags === next.allowedTags &&
