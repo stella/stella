@@ -7,6 +7,7 @@ export const AUDIT_ACTION = {
   ACCESS: "access",
   CANCEL: "cancel",
   REVIEW: "review",
+  SYNTHETIC_SESSION_MINTED: "synthetic.session_minted",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
@@ -29,6 +30,8 @@ export const AUDIT_RESOURCE_TYPE = {
   CHAT_MESSAGE: "chat_message",
   CHAT_THREAD: "chat_thread",
   DATA_EXPORT: "data_export",
+  CHAT_TOOL_EXECUTION: "chat_tool_execution",
+  CHAT_TOOL_GRANT: "chat_tool_grant",
   CLAUSE: "clause",
   CLAUSE_CATEGORY: "clause_category",
   CLAUSE_TEMPLATE_LINK: "clause_template_link",
@@ -62,6 +65,7 @@ export const AUDIT_RESOURCE_TYPE = {
   LEGAL_LIST_GENERATION: "legal_list_generation",
   LEGAL_LIST_ITEM: "legal_list_item",
   LEGAL_LIST_VERIFICATION: "legal_list_verification",
+  MCP_CONNECTION: "mcp_connection",
   MCP_GATEWAY_TOOL: "mcp_gateway_tool",
   ORGANIZATION_SETTINGS: "organization_settings",
   PDF_SIGNING_SESSION: "pdf_signing_session",

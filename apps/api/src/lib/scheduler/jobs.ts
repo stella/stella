@@ -11,6 +11,11 @@ import { envBase } from "@/api/env-base";
 import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+} from "@/api/lib/feature-access/registry";
 import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
@@ -27,6 +32,7 @@ import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingu
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { REFRESH_CASE_LAW_BROWSE_FACETS_TASK } from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
 import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
+import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import {
   CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
@@ -42,6 +48,7 @@ import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-threa
 import { REAP_OWNERLESS_CHAT_TURNS_TASK } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
 import { MAINTAIN_DATA_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/data-export-maintenance";
+import { CHECK_DATA_INVARIANTS_TASK } from "@/api/lib/scheduler/tasks/data-invariants";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
@@ -292,6 +299,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
   },
   {
+    description: "Report case-law projection backlog and source freshness",
+    id: "caseLaw.reportFreshness.fiveMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: REPORT_CASE_LAW_FRESHNESS_TASK,
+  },
+  {
     description:
       "Record organizations created without an access state as self-managed-keys while the state is not enforced",
     id: "organizations.recordMissingAccessStates.hourly",
@@ -416,6 +430,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_HEARTBEAT_TASK,
+  },
+  {
+    description: "Check data-correctness invariants over pipeline outputs",
+    id: "observability.checkDataInvariants.hourly",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
+    task: CHECK_DATA_INVARIANTS_TASK,
   },
   {
     description:
@@ -629,7 +650,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Age AI memories through the active -> stale -> archived lifecycle",
-    enabled: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+    enabled: isFeatureDeployed(FEATURE_REGISTRY, AI_MEMORY_FEATURE_ID),
     id: "memory.curator.nightly",
     mode: "recurring",
     schedule: {
@@ -643,7 +664,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Extract suggested AI memories from new chat-thread compactions",
-    enabled: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+    enabled: isFeatureDeployed(FEATURE_REGISTRY, AI_MEMORY_FEATURE_ID),
     id: "memory.extractor.hourly",
     mode: "recurring",
     schedule: {

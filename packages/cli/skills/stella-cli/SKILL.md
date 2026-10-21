@@ -200,6 +200,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
+  - optional: --doctrine (distinguishes|limits), --polarity (negative|neutral|positive|supportive|mixed|unclassified)
 - `stella case-law coverage`
   - optional: --country
 - `stella case-law open`
@@ -212,7 +213,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - `--identifier` — One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case. (string)
 - `stella case-law search`
-  - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--country` — Required corpus country. Admitted: CZE, POL. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)

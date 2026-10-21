@@ -1,11 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -16,6 +10,11 @@ import { partitionRunnerArguments } from "../apps/api/scripts/test-path-filters"
 import webManifest from "../apps/web/package.json" with { type: "json" };
 import { planTestRuns } from "../apps/web/scripts/test-run-plan";
 import { allApiTests, type selectApiTestImpact } from "./api-test-impact";
+import {
+  computeChangedFileScope,
+  DEFAULT_DETECTORS,
+  scopeOutputLines,
+} from "./ci-plan-scope";
 import {
   BUDGET_MS,
   MAX_CHANGED_TEST_FILES,
@@ -524,12 +523,78 @@ test("actual elapsed budget includes probes and stops repeat execution", async (
     run: async ({ timeoutMs }) => {
       timeouts.push(timeoutMs);
       elapsed += Math.min(60, timeoutMs);
-      return { type: "executed", passed: true, status: 0, ranTests: true };
+      return {
+        type: "executed",
+        passed: true,
+        status: 0,
+        ranTests: true,
+        failedTests: [],
+      };
     },
   });
   expect(timeouts).toEqual([100, 40]);
   expect(report.elapsedMs).toBe(100);
   expect(report.results.map(({ runs }) => runs)).toEqual([1, 1]);
+});
+
+test("each test's failing trials are counted for the flaky-test history", async () => {
+  const failing = [["math > adds"], [], ["math > adds", "math > divides"]];
+  let trial = 0;
+  const report = await executeGate({
+    targets: [targetFor("/fixture", "a.test.ts")],
+    skipped: [],
+    run: async () => {
+      const failedTests = failing[trial % failing.length] ?? [];
+      trial += 1;
+      return {
+        type: "executed",
+        passed: failedTests.length === 0,
+        status: failedTests.length === 0 ? 0 : 1,
+        ranTests: true,
+        failedTests,
+      };
+    },
+  });
+  const [result] = report.results;
+  expect(result?.runs).toBe(REPEATS);
+  const expected: Record<string, number> = {};
+  for (let index = 0; index < REPEATS; index += 1) {
+    for (const name of failing[index % failing.length] ?? []) {
+      expected[name] = (expected[name] ?? 0) + 1;
+    }
+  }
+  expect(result?.failedTests).toEqual(expected);
+});
+
+test("a Bun trial reports the names of the tests that failed in it", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "flake-gate-names-"));
+  try {
+    mkdirSync(path.join(root, "packages/unit"), { recursive: true });
+    writeFileSync(
+      path.join(root, "packages/unit/package.json"),
+      JSON.stringify({ name: "unit", scripts: { test: "bun test" } }),
+    );
+    writeFileSync(
+      path.join(root, "packages/unit/unit.test.ts"),
+      'import { describe, expect, test } from "bun:test";\ndescribe("math", () => {\n  test("adds", () => expect(1 + 1).toBe(3));\n  test("subtracts", () => expect(1 - 1).toBe(0));\n});\n',
+    );
+    const target = selectTargets({
+      root,
+      changed: ["packages/unit/unit.test.ts"],
+      hasDb: false,
+    }).targets.at(0);
+    if (!target) {
+      throw new TypeError("Expected selected fixture");
+    }
+    expect(await runOnce({ target, seed: 3, timeoutMs: 10_000 })).toMatchObject(
+      {
+        passed: false,
+        failedTests: ["math > adds"],
+      },
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("reports preserve reduced coverage and failures and only blocking mode fails", () => {
@@ -545,6 +610,7 @@ test("reports preserve reduced coverage and failures and only blocking mode fail
         runs: 3,
         failures: 1,
         failedIterations: [2],
+        failedTests: { adds: 1 },
         durationMs: 10,
         planned: 3,
       },
@@ -583,7 +649,13 @@ test("repeat runs never overlap across files", async () => {
       peak = Math.max(peak, active);
       await Bun.sleep(1);
       active -= 1;
-      return { type: "executed", passed: true, status: 0, ranTests: true };
+      return {
+        type: "executed",
+        passed: true,
+        status: 0,
+        ranTests: true,
+        failedTests: [],
+      };
     },
   });
   expect(report.results.map(({ runs }) => runs)).toEqual([REPEATS, REPEATS]);
@@ -599,6 +671,7 @@ test("five shuffled iterations name the failing iteration", async () => {
       passed: seed !== 3,
       status: seed === 3 ? 1 : 0,
       ranTests: true,
+      failedTests: seed === 3 ? ["fails on the third shuffle"] : [],
     }),
   });
   const result = report.results.at(0);
@@ -777,45 +850,33 @@ test("the CLI emits a JSON error report and report/blocking exit codes on an unr
 }, 30_000);
 
 test("the CI changed-files output round-trips a path list as one compact JSON line", () => {
-  const source = readFileSync(
-    path.join(import.meta.dir, "../.github/workflows/ci.yml"),
-    "utf-8",
+  const files = ["apps/web/src/a b.test.ts", "scripts/x.test.ts"];
+  const scope = computeChangedFileScope(
+    {
+      changedFiles: files,
+      comparisonBase: "base",
+      scopeUnknown: false,
+      eventName: "pull_request",
+      suiteDepth: "fast",
+      heavyOnly: false,
+      prTitle: "",
+    },
+    {
+      ...DEFAULT_DETECTORS,
+      packageChecks: () => true,
+      landingBuild: () => false,
+      landingDeploy: () => false,
+      desktopBrowser: () => false,
+    },
   );
-  const start = source.indexOf(
-    `printf '%s\\0' "\${changed_files[@]}" | jq -Rsc`,
+  const lines = scopeOutputLines(scope).filter((line) =>
+    line.startsWith("changed_files="),
   );
-  expect(start).toBeGreaterThan(-1);
-  // The pipeline alone: the step writes it inside a grouped redirect.
-  const tail = "sed 's/^/changed_files=/'";
-  const end = source.indexOf(tail, start);
-  expect(end).toBeGreaterThan(start);
-  const command = `${source.slice(start, end + tail.length)} >> "$GITHUB_OUTPUT"`;
-  const directory = mkdtempSync(
-    path.join(os.tmpdir(), "changed-files-output-"),
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).not.toContain("\n");
+  expect(JSON.parse(lines[0]?.replace(/^changed_files=/u, "") ?? "")).toEqual(
+    files,
   );
-  try {
-    const output = path.join(directory, "github-output");
-    writeFileSync(output, "");
-    const files = ["apps/web/src/a b.test.ts", "scripts/x.test.ts"];
-    const result = Bun.spawnSync(
-      [
-        "bash",
-        "-c",
-        `set -euo pipefail; changed_files=("$@"); ${command}`,
-        "bash",
-        ...files,
-      ],
-      { env: { ...process.env, GITHUB_OUTPUT: output } },
-    );
-    expect(result.exitCode).toBe(0);
-    const lines = readFileSync(output, "utf-8").split("\n").filter(Boolean);
-    expect(lines).toHaveLength(1);
-    expect(JSON.parse(lines[0]?.replace(/^changed_files=/u, "") ?? "")).toEqual(
-      files,
-    );
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
 });
 
 test("a failed file annotation cannot inject workflow commands through its name", () => {

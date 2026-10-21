@@ -15,6 +15,7 @@ import {
   workObligations,
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
+  syntheticSessionControl,
 } from "@/api/db/schema";
 import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
 import {
@@ -256,6 +257,15 @@ const EU_COMPLETION_CONTROL_LIFECYCLE = defineLifecycle({
   graphs: { state: { edges: { off: ["on"], on: ["off"] }, terminal: [] } },
 });
 
+export const SYNTHETIC_SESSION_CONTROL_TRANSITIONS = defineTransitions(
+  syntheticSessionControl,
+  {
+    enabled: ["revoked"],
+    revoked: [],
+  },
+  { terminal: ["revoked"] },
+);
+
 // The approval copies its dry-run receipt's outcome as foreign-key proof.
 const EU_COMPLETION_APPROVAL_PROOF = defineFixedLifecycle({
   table: euCompletionApprovals,
@@ -395,6 +405,7 @@ export const TRANSITIONS = {
   softLawIngestionAttempts: { unmanaged: UNMANAGED_REASONS.workerRun },
   softLawSources: { unmanaged: UNMANAGED_REASONS.workerRun },
   styleSets: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  syntheticSessionControl: SYNTHETIC_SESSION_CONTROL_TRANSITIONS,
   templateDeletionCleanupRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
   templateFills: { unmanaged: UNMANAGED_REASONS.workerRun },
   templatePersistenceRequests: { unmanaged: UNMANAGED_REASONS.cleanup },

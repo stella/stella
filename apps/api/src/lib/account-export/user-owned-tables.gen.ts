@@ -24,6 +24,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "chat_messages",
   "chat_secrets",
   "chat_threads",
+  "chat_tool_grants",
   "chat_turns",
   "clauses",
   "contact_extraction_uploads",

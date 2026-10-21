@@ -172,6 +172,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   chat_file: null,
   chat_message: null,
   chat_thread: null,
+  chat_tool_execution: null,
+  chat_tool_grant: null,
   clause: null,
   clause_category: null,
   clause_template_link: null,
@@ -191,6 +193,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   legal_list_item: null,
   machine_api_key: null,
   personal_api_key: null,
+  mcp_connection: null,
   mcp_gateway_tool: null,
   organization_settings: null,
   property: null,
@@ -262,6 +265,7 @@ export type VisibleActivityAction =
 /** Total over `AuditAction`, so a new action must be narrated or excluded. */
 export const VISIBLE_ACTIVITY_ACTION_BY_ACTION = {
   access: null,
+  [AUDIT_ACTION.SYNTHETIC_SESSION_MINTED]: null,
   cancel: AUDIT_ACTION.CANCEL,
   create: AUDIT_ACTION.CREATE,
   delete: AUDIT_ACTION.DELETE,
