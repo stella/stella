@@ -296,6 +296,7 @@ const authorize = async (row: Row | null) => {
   return await authorizeFolioCollabRoom({
     createScopedDb,
     db: database,
+    readSessionAuthority: async () => null,
     roomId,
     token: "tok",
   });

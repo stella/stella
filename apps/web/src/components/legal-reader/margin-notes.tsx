@@ -12,6 +12,7 @@ import type { RefObject } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { Button } from "@stll/ui/button";
 import { Building2Icon, PenIcon, Trash2Icon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
@@ -19,6 +20,7 @@ import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { isPendingAnnotationId } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
+import { CitedProvisionExpansion } from "@/components/legal-reader/cited-provision-link";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { AnnotationVisibilityToggle } from "@/features/case-law/components/case-viewer/analysis/annotation-visibility-toggle";
@@ -94,11 +96,19 @@ export type AnswerMarginItem = ReaderAnswerCardProps & {
   startAnchorId: string;
 };
 
+export type ProvisionMarginItem = {
+  kind: "provision";
+  id: string;
+  startAnchorId: string;
+  citations: readonly CitedProvisionTarget[];
+};
+
 export type MarginItem =
   | AnalysisMarginItem
   | CommentMarginItem
   | ComposerMarginItem
-  | AnswerMarginItem;
+  | AnswerMarginItem
+  | ProvisionMarginItem;
 
 type MarginNotesProps =
   | {
@@ -344,7 +354,9 @@ const GutterNotes = ({
           return null;
         }
         const color =
-          item.kind === "comment" || item.kind === "answer"
+          item.kind === "comment" ||
+          item.kind === "answer" ||
+          item.kind === "provision"
             ? "var(--option-sky)"
             : `var(${item.accentVar})`;
         return (
@@ -409,24 +421,39 @@ const MarginNoteBody = ({
   placement,
   presence = "normal",
 }: MarginNoteProps) => {
+  const observeSize = (el: HTMLElement | null) => {
+    if (el === null || measureRef === undefined) {
+      return undefined;
+    }
+    measureRef(el, item.id);
+    const observer = new ResizeObserver(() => measureRef(el, item.id));
+    observer.observe(el);
+    return () => observer.disconnect();
+  };
+
   switch (item.kind) {
+    case "provision": {
+      const position = notePlacementPresentation(placement);
+      return (
+        <div
+          className={position.className}
+          style={position.style}
+          ref={observeSize}
+        >
+          <CitedProvisionExpansion
+            citations={item.citations}
+            placement={placement.type}
+          />
+        </div>
+      );
+    }
     case "answer": {
       const position = notePlacementPresentation(placement);
       return (
         <div
           className={position.className}
           style={position.style}
-          ref={(el) => {
-            if (el === null) {
-              return undefined;
-            }
-            measureRef?.(el, item.id);
-            const observer = new ResizeObserver(() =>
-              measureRef?.(el, item.id),
-            );
-            observer.observe(el);
-            return () => observer.disconnect();
-          }}
+          ref={observeSize}
           onMouseEnter={() => onHover?.(true)}
           onMouseLeave={() => onHover?.(false)}
         >

@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Minden mérlegelést igénylő állítás rendezve van.</strong> {count, plural, one {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.} other {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.}}",
       "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong> — ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, vitatott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
+      "documentView": {
+        "label": "Dokumentumnézet",
+        "original": "Eredeti",
+        "reading": "Olvasási nézet"
+      },
+      "notLocated": "{count, plural, one {# állítás nem található az eredetiben} other {# állítás nem található az eredetiben}}",
       "selectClaim": "Válasszon egy állítást a kapcsolódó nyilvántartás megtekintéséhez.",
       "showQueue": "Várólista megjelenítése",
       "stats": {
@@ -849,7 +855,6 @@
         "unavailable": "Ehhez a határozathoz nem érhető el AI-elemzés."
       },
       "generate": "AI jogi tételek elkészítése",
-      "holdingAnchor": "Ugrás a bekezdésre",
       "invitation": "Ingyenes fiókkal az AI munkajegyzeteket készít ehhez a határozathoz.",
       "topics": "Témák",
       "treatment": "Későbbi megítélés"
@@ -1009,6 +1014,9 @@
       "saved": "{count, plural, one {# határozat} other {# határozat}} elmentve ide: {matter}"
     },
     "newestDecisions": "Legújabb határozatok",
+    "noResults": {
+      "hint": "Próbáljon más szavakat, javítsa a keresést AI-val, vagy tegye fel a kérdést a csevegésben."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Emberi"
@@ -1082,6 +1090,10 @@
         "short": "Rövid"
       }
     },
+    "rewritten": {
+      "line": "Nincs pontos találat erre: <bdi>{original}</bdi>; találatok erre: <bdi>{query}</bdi>",
+      "searchOriginal": "Az eredeti szavaim keresése"
+    },
     "sameCaseNumber": "{count, plural, one {# határozat viseli} other {# határozat viseli}} ezt az ügyszámot. Válasszon bíróságot.",
     "searchLabel": "Keresés a joggyakorlatban",
     "searchPlaceholder": "Ügyszám, ECLI vagy szavak, pl. 22 Cdo 2653/2012",
@@ -1098,6 +1110,8 @@
         "hint": "Töröljön vagy bővítsen egy szűrőt, és keressen újra.",
         "message": "Semmi nem felel meg a beállított szűrőknek."
       },
+      "partialMatch": "Részleges találat",
+      "partialMatches": "Részleges találatok erre: <bdi>{query}</bdi>",
       "resultsFor": "Találatok erre: <bdi>{query}</bdi>",
       "searchEveryWord": "Minden szó keresése"
     },
@@ -1135,6 +1149,7 @@
       "judges": "Bírák",
       "legalArea": "Jogterület",
       "legalSentence": "Elvi bírósági határozat",
+      "paragraphReference": "{number}. bekezdés",
       "popularName": "Népszerű név",
       "portraitCredit": "A portrék forrása: {source}",
       "provisionMentions": "{count, number}×",
@@ -1601,6 +1616,9 @@
         "private": "Saját készségek",
         "team": "A csapat készségei"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Szintén áttekintve ({count, number})"
     },
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
@@ -2690,6 +2708,7 @@
       "aiConfigModelInvalid": "Az AI-modell beállítása érvénytelen. Ellenőrizze a kiválasztott modelleket.",
       "aiConfigProviderInvalid": "Az AI-szolgáltató beállítása érvénytelen. Ellenőrizze a szolgáltató beállításait.",
       "aiConfigProviderValidationFailed": "Az AI-szolgáltató elutasította a beállítást. Ellenőrizze az API-kulcsot és a modellt.",
+      "aiDeadlineExceeded": "Az AI nem válaszolt időben. Próbálja újra egy pillanat múlva.",
       "aiOutputInvalid": "Az AI válasza váratlan formátumú volt. Próbálja újra.",
       "aiOutputModerated": "Az AI-szolgáltató moderálta a kimenetet. Fogalmazza át a kérést, vagy válasszon másik modellt.",
       "aiProviderTaskUnsupported": "A beállított AI-szolgáltató nem képes erre a feladatra. Válasszon olyat, amelyik képes rá.",
@@ -4240,6 +4259,10 @@
     "archivedEmpty": "Nincs archivált emlék.",
     "archivedToast": "Emlék archiválva",
     "createdToast": "Elmentve a memóriába",
+    "deleteConfirmation": "A megerősítéshez írja be: {confirmation}",
+    "deleteDescription": "Ez véglegesen törli ezt az emléket. A művelet nem vonható vissza.",
+    "deleteTitle": "Törli az emléket?",
+    "deletedToast": "Emlék törölve",
     "empty": "Még nincs semmi a memóriában.",
     "kinds": {
       "decision": "Döntés",

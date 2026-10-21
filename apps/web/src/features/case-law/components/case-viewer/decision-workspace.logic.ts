@@ -51,6 +51,7 @@ const NOTE_KIND_OPENS_VISITOR_OFFER = {
   comment: false,
   composer: false,
   example: true,
+  provision: false,
 } as const satisfies Record<MarginItem["kind"], boolean>;
 
 const isMarginNoteKind = (

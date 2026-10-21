@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Všechna tvrzení vyžadující úsudek byla vyřízena.</strong> {count, plural, one {Zbývající # rutinní závěr nevyžaduje samostatnou kontrolu.} few {Zbývající # rutinní závěry nevyžadují samostatnou kontrolu.} other {Zbývajících # rutinních závěrů nevyžaduje samostatnou kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrzení vyžaduje} few {# tvrzení vyžadují} other {# tvrzení vyžaduje}} váš úsudek</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.} few {Zbývající # tvrzení jsou rutinní a nevyžadují samostatné schválení.} other {Zbývajících # tvrzení je rutinních a nevyžaduje samostatné schválení.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} other {}})",
+      "documentView": {
+        "label": "Zobrazení dokumentu",
+        "original": "Originál",
+        "reading": "Text ke čtení"
+      },
+      "notLocated": "{count, plural, one {# tvrzení se v originálu nepodařilo najít} few {# tvrzení se v originálu nepodařilo najít} other {# tvrzení se v originálu nepodařilo najít}}",
       "selectClaim": "Vyberte tvrzení a prohlédněte si související záznamy.",
       "showQueue": "Zobrazit frontu",
       "stats": {
@@ -849,7 +855,6 @@
         "unavailable": "AI analýza není pro toto rozhodnutí k dispozici."
       },
       "generate": "Sestavit právní věty pomocí AI",
-      "holdingAnchor": "Přejít na odstavec",
       "invitation": "S bezplatným účtem vám AI k rozhodnutí připraví pracovní poznámky.",
       "topics": "Témata",
       "treatment": "Pozdější judikatura"
@@ -1009,6 +1014,9 @@
       "saved": "Do spisu {matter} {count, plural, one {bylo uloženo # rozhodnutí} few {byla uložena # rozhodnutí} other {bylo uloženo # rozhodnutí}}"
     },
     "newestDecisions": "Nejnovější rozhodnutí",
+    "noResults": {
+      "hint": "Zkuste jiná slova, vylepšete dotaz pomocí AI, nebo se zeptejte v chatu."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Lidské"
@@ -1082,6 +1090,10 @@
         "short": "Krátký"
       }
     },
+    "rewritten": {
+      "line": "Pro <bdi>{original}</bdi> nic přesně neodpovídá; zobrazujeme výsledky pro <bdi>{query}</bdi>",
+      "searchOriginal": "Hledat moje původní slova"
+    },
     "sameCaseNumber": "{count, plural, one {# rozhodnutí nese} few {# rozhodnutí nesou} other {# rozhodnutí nese}} tuto spisovou značku. Vyberte soud.",
     "searchLabel": "Hledat v judikatuře",
     "searchPlaceholder": "Spisová značka, ECLI nebo slova, např. 22 Cdo 2653/2012",
@@ -1098,6 +1110,8 @@
         "hint": "Zrušte nebo rozšiřte filtr a hledejte znovu.",
         "message": "Zvoleným filtrům nic neodpovídá."
       },
+      "partialMatch": "Částečná shoda",
+      "partialMatches": "Částečné shody pro: <bdi>{query}</bdi>",
       "resultsFor": "Výsledky pro: <bdi>{query}</bdi>",
       "searchEveryWord": "Hledat všechna slova"
     },
@@ -1135,6 +1149,7 @@
       "judges": "Soudci",
       "legalArea": "Oblast práva",
       "legalSentence": "Právní věta",
+      "paragraphReference": "Odstavec {number}",
       "popularName": "Populární název",
       "portraitCredit": "Zdroj portrétů: {source}",
       "provisionMentions": "{count, number}×",
@@ -1601,6 +1616,9 @@
         "private": "Vaše dovednosti",
         "team": "Týmové dovednosti"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Také konzultováno ({count, number})"
     },
     "sourcePlaceholder": "Chatovat o {title}",
     "sourcePlaceholderAction": "Chatovat o",
@@ -2690,6 +2708,7 @@
       "aiConfigModelInvalid": "Konfigurace modelu AI je neplatná. Zkontrolujte vybrané modely.",
       "aiConfigProviderInvalid": "Konfigurace poskytovatele AI je neplatná. Zkontrolujte nastavení poskytovatele.",
       "aiConfigProviderValidationFailed": "Poskytovatel AI konfiguraci odmítl. Zkontrolujte klíč API a model.",
+      "aiDeadlineExceeded": "AI neodpověděla včas. Zkuste to za chvíli znovu.",
       "aiOutputInvalid": "Odpověď AI měla neočekávaný formát. Zkuste to znovu.",
       "aiOutputModerated": "Poskytovatel AI výstup zablokoval. Přeformulujte požadavek nebo zvolte jiný model.",
       "aiProviderTaskUnsupported": "Nastavený poskytovatel AI tuto úlohu nezvládá. Zvolte poskytovatele, který ji zvládá.",
@@ -4240,6 +4259,10 @@
     "archivedEmpty": "Žádné archivované paměti.",
     "archivedToast": "Paměť byla archivována",
     "createdToast": "Uloženo do paměti",
+    "deleteConfirmation": "Pro potvrzení napište {confirmation}",
+    "deleteDescription": "Tímto tuto paměť trvale odstraníte. Tuto akci nelze vrátit zpět.",
+    "deleteTitle": "Smazat paměť?",
+    "deletedToast": "Paměť byla smazána",
     "empty": "Zatím žádná paměť.",
     "kinds": {
       "decision": "Rozhodnutí",

@@ -674,10 +674,9 @@ mod tests {
       replacement.acquire_with_retry(&policy).unwrap(),
       Acquisition::Contended
     ));
-    assert!(matches!(
-      replacement.state.lock().unwrap().tracking,
-      TrackingState::Unavailable
-    ));
+    let state = replacement.state.lock().unwrap();
+    assert!(matches!(state.tracking, TrackingState::Unavailable));
+    drop(state);
     drop(replacement);
     let replacement = waiting_monitor(path.clone(), new_marker(200, 42));
     replacement.clean_exit();

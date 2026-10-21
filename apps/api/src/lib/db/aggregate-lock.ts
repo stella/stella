@@ -72,6 +72,7 @@ export const AGGREGATE_LOCKS = {
   readerAnswerMessage: { rank: 130, kind: "row" },
   chatTurn: { rank: 130, kind: "row" },
   chatSecret: { rank: 140, kind: "row" },
+  chatToolGrants: { rank: 150, kind: "advisory" },
   run: { rank: 200, kind: "row" },
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
@@ -145,6 +146,7 @@ export const AGGREGATE_CHAINS = {
   scoutRun: ["orgFeatureAdmission", "scoutCensus"],
   legislationAmendments: ["legislationAmendmentWork"],
   chatSecret: ["chatThread", "chatTurn", "chatSecret"],
+  chatToolGrants: ["chatThread", "chatToolGrants"],
   memberPrefix: [
     "workspace",
     "memberCleanup",
@@ -320,6 +322,10 @@ type AggregateIdentities = {
     workspaceId: SafeId<"workspace">;
   };
   contactCapacity: { organizationId: SafeId<"organization"> };
+  chatToolGrants: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
   personalCatalog: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
@@ -1272,6 +1278,16 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         first: sql`hashtext('contact_capacity')`,
         second: sql`hashtext(${options.id.organizationId})`,
         order: [options.aggregate, options.id.organizationId],
+      };
+    case "chatToolGrants":
+      return {
+        first: sql`hashtext('chat.tool-grants')`,
+        second: sql`hashtext(${JSON.stringify([options.id.organizationId, options.id.userId])})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.userId,
+        ],
       };
     case "personalCatalog":
       return {

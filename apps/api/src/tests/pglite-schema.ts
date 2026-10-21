@@ -52,6 +52,11 @@ const AGENT_SKILL_ANCHOR_LOCK_MIGRATION_PATH = nodePath.join(
   "20260925230100_agent_skill_anchor_lock",
   "migration.sql",
 );
+const SYNTHETIC_SESSION_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261019070000_monitoring_session",
+  "migration.sql",
+);
 const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260911150000_statute_citation_counts",
@@ -351,6 +356,43 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   });
 };
 
+/** Install the dedicated principal membership trigger omitted by schema push. */
+export const installPgliteSyntheticMembershipTrigger = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    SYNTHETIC_SESSION_MIGRATION_PATH,
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION enforce_synthetic_membership") ||
+      source.startsWith(
+        "REVOKE ALL ON FUNCTION enforce_synthetic_membership",
+      ) ||
+      source.startsWith("CREATE TRIGGER member_synthetic_organization_check")
+    );
+  });
+  if (statements.length !== 3) {
+    panic("Expected the dedicated principal membership function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+export const installPgliteAiMemoryActiveUserGuard = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  await installPgliteMigration({
+    db,
+    migrationPath: nodePath.join(
+      DRIZZLE_DIR,
+      "20261018050200_ai_memory_active_user_guard",
+      "migration.sql",
+    ),
+  });
+};
+
 const TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261004003000_tree_parent_cycle_guard",
@@ -517,7 +559,7 @@ export const installPgliteReaderAnnotationClaimComments = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261016100500_reader_annotation_verification_claims",
+      "20261021080000_reader_annotation_verification_claims",
       "migration.sql",
     ),
   );

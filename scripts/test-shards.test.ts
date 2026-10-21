@@ -100,12 +100,17 @@ test("the ci-tests matrix runs exactly the declared jobs", () => {
       },
     },
   });
-  const declared = planCiApiTests({
+  const plan = planCiApiTests({
     event: "merge_group",
     scopeUnknown: false,
     testJobs: FULL_TEST_JOB_SHARDS,
     select: allApiTests,
-  }).matrix.shard;
+  });
+  expect(plan.type).toBe("run");
+  if (plan.type !== "run") {
+    throw new TypeError("Expected full API test plan to run");
+  }
+  const declared = [...plan.matrix.shard];
   expect(Object.keys(TEST_JOB_SHARDS)).toEqual(declared);
   expect(declared).toEqual(FULL_TEST_JOB_SHARDS);
 });
