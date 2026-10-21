@@ -81,6 +81,7 @@ const PLAN_BOOLEAN_OUTPUTS = [
   "api_image_smoke_required",
   "browser_spec_selection_required",
   "ci_browser_required",
+  "ci_tests_required",
   "corpus_suites_required",
   "dependency_malware_required",
   "desktop_rust_checks_required",
@@ -131,6 +132,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
     api_test_files: "[]",
     api_test_shards: "4",
     ci_tests_matrix: "[]",
+    ci_tests_required: "true",
     test_scope: "",
   },
   "changed-files": {

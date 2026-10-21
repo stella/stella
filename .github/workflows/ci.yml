@@ -1148,7 +1148,9 @@ jobs:
               printf '%s\n' "$SELECTED_FILES"
               echo 'API_TEST_FILES_END'
             } >> "$GITHUB_OUTPUT"
-          elif [[ "$EVENT_NAME" == pull_request && "$PACKAGE_CHECKS_REQUIRED" != true && "$API_SCOPE_UNKNOWN" != true ]]; then
+          # ci_tests_required is the one gate of ci-tests: without package
+          # checks no API or web-rest test runs, whatever the event or scope.
+          elif [[ "$PACKAGE_CHECKS_REQUIRED" != true ]]; then
             {
               echo 'ci_tests_required=false'
               echo 'ci_tests_matrix={"shard":["rest-web"]}'
@@ -2423,11 +2425,8 @@ jobs:
       needs.ci-plan.outputs.run_required != 'false'
       && needs.ci-plan.outputs.ci_tests_required == 'true'
       && (
-      (
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
-      )
-      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-24.04
     # Three API shards each run a third of the suite. Derived from the merged
