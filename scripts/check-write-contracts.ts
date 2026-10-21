@@ -3,7 +3,7 @@ import { panic } from "better-result";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { SAFE_HANDLER_FACTORIES } from "../apps/api/src/lib/safe-handler-factories";

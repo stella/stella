@@ -1965,7 +1965,8 @@ mod tests {
         lifetime > 0 && lifetime <= max_lifetime
       );
       if lifetime <= 0 || lifetime > max_lifetime {
-        assert!(matches!(&*state.lock().await, AccountStore::Memory(None)));
+        let store = state.lock().await;
+        assert!(matches!(&*store, AccountStore::Memory(None)));
       }
     }
     assert!(!is_live_expiry("not-a-date"));
@@ -2155,10 +2156,9 @@ mod tests {
       keychain_clear_failed()
     );
     // The record is still in the store, but nothing reads its key again.
-    assert!(matches!(
-      &*state.lock().await,
-      AccountStore::ReadOnly(Some(_))
-    ));
+    let store = state.lock().await;
+    assert!(matches!(&*store, AccountStore::ReadOnly(Some(_))));
+    drop(store);
     assert!(current(&state).await.unwrap().is_none());
     assert!(request_account(&state).await.unwrap().is_none());
     assert!(foreground_account(&state).await.unwrap().is_none());

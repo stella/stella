@@ -1,6 +1,9 @@
 import { createFormatter } from "use-intl/core";
 
-import type { CaseLawBrowserCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  CASE_LAW_REGION_BY_COUNTRY,
+  type CaseLawBrowserCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 import { US_ABBREVIATED_COURTS } from "@stll/api-contract/us-court-abbreviations";
 import type { UsAbbreviatedCourtId } from "@stll/api-contract/us-court-abbreviations";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -257,14 +260,29 @@ const QUOTATION_MARKS = {
   SVK: ["„", "“"],
 } as const satisfies Record<CaseLawBrowserCountry, readonly [string, string]>;
 
-export const formatDecisionQuotation = (
+const COUNTRY_BY_REGION = Object.fromEntries(
+  Object.entries(CASE_LAW_REGION_BY_COUNTRY).map(([country, region]) => [
+    region,
+    country,
+  ]),
+);
+const DEFAULT_QUOTATION_MARKS = QUOTATION_MARKS.EU;
+
+const quotationCountry = (country: string): CaseLawBrowserCountry | null => {
+  const normalized = fromCaseLawCountryParam(country);
+  const corpusCountry = COUNTRY_BY_REGION[normalized] ?? normalized;
+  return isCaseLawBrowserCountry(corpusCountry) ? corpusCountry : null;
+};
+
+export const formatJurisdictionQuotation = (
   text: string,
   country: string,
 ): string => {
-  const normalizedCountry = fromCaseLawCountryParam(country);
-  const marks = isCaseLawBrowserCountry(normalizedCountry)
-    ? QUOTATION_MARKS[normalizedCountry]
-    : ["“", "”"];
+  const normalizedCountry = quotationCountry(country);
+  const marks =
+    normalizedCountry === null
+      ? DEFAULT_QUOTATION_MARKS
+      : QUOTATION_MARKS[normalizedCountry];
   return `${marks[0]}${text}${marks[1]}`;
 };
 

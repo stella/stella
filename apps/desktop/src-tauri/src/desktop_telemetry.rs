@@ -353,6 +353,9 @@ pub enum DesktopTelemetrySpan {
   ClipboardHistoryReady,
   /// Window focus after a reopen until the next painted frame.
   ClipboardReopenPaint,
+  /// Edit request until the editor window read its clip: a created window
+  /// (first open) or a reused one (reopen).
+  ClipboardEditorOpen,
 }
 
 impl DesktopTelemetrySpan {
@@ -371,6 +374,7 @@ impl DesktopTelemetrySpan {
       Self::ClipboardFirstPaint => "clipboardFirstPaint",
       Self::ClipboardHistoryReady => "clipboardHistoryReady",
       Self::ClipboardReopenPaint => "clipboardReopenPaint",
+      Self::ClipboardEditorOpen => "clipboardEditorOpen",
     }
   }
 }

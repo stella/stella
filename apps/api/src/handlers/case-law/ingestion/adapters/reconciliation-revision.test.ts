@@ -68,6 +68,10 @@ const IDENTITY_REVISION_PAYLOADS = {
     { "@unid": "00000000000000000000000000000001" },
     { "@unid": "00000000000000000000000000000002" },
   ],
+  [ADAPTER_KEYS.CZ_UOHS]: [
+    { iri: "https://uohs.gov.cz/synthetic/1" },
+    { iri: "https://uohs.gov.cz/synthetic/2" },
+  ],
 } as const satisfies Record<AdapterKey, readonly unknown[]>;
 
 describe("every registered adapter keeps publisher identity in its revision signal", () => {

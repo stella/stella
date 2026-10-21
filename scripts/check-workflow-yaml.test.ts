@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -9,6 +11,8 @@ import {
   validateActionMetadata,
   actionlintWorkflowSource,
   validateLocalActionReferences,
+  validateNoRubyProcessSpawns,
+  validateNoRubyShell,
   validateWorkflowSize,
   WORKFLOW_SIZE_LIMIT_BYTES,
 } from "./check-workflow-yaml";
@@ -112,6 +116,49 @@ describe("workflow YAML validation", () => {
     ).toThrow(
       `ci.yml: ${WORKFLOW_SIZE_LIMIT_BYTES + 1} bytes exceeds the ${WORKFLOW_SIZE_LIMIT_BYTES}-byte workflow size limit`,
     );
+  });
+
+  test("Ruby workflow shells and script process spawns are rejected", async () => {
+    expect(() =>
+      validateNoRubyShell(
+        { jobs: { check: { steps: [{ shell: "ruby {0}", run: "puts 1" }] } } },
+        "workflow.yml",
+      ),
+    ).toThrow("workflow.yml: Ruby workflow shells are not allowed");
+    for (const shell of [
+      "/usr/bin/ruby {0}",
+      "/usr/bin/env ruby {0}",
+      "env ruby3.3 -w {0}",
+    ]) {
+      expect(() =>
+        validateNoRubyShell(
+          { steps: [{ shell, run: "puts 1" }] },
+          "workflow.yml",
+        ),
+      ).toThrow("workflow.yml: Ruby workflow shells are not allowed");
+    }
+    expect(() =>
+      validateNoRubyShell(
+        { steps: [{ shell: "bash {0}", run: "true" }] },
+        "workflow.yml",
+      ),
+    ).not.toThrow();
+
+    const root = mkdtempSync(path.join(tmpdir(), "workflow-ruby-spawn-"));
+    try {
+      mkdirSync(path.join(root, "scripts"));
+      const runtime = "ruby";
+      writeFileSync(
+        path.join(root, "scripts/check.ts"),
+        `Bun.spawnSync(["${runtime}", "-e", "puts 1"]);\n`,
+      );
+      const rejection = await rejectionOf(validateNoRubyProcessSpawns(root));
+      expect(rejection instanceof Error ? rejection.message : "").toContain(
+        "spawning Ruby from scripts is not allowed",
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("malformed workflow YAML reports its file", async () => {

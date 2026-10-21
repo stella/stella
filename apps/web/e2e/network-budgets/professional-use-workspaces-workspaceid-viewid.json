@@ -1,6 +1,6 @@
 {
   "route": "/workspaces/$workspaceId/$viewId",
-  "reason": "Load professional-use acceptance before protected route data is requested.",
+  "reason": "Load professional-use acceptance before protected route data is requested. The view's time-entry summaries resolve after the matter overview, so the measured waterfall varies between 6 and 9 levels with render timing; the budget keeps the observed peak.",
   "budget": {
     "depth": 9,
     "requests": [

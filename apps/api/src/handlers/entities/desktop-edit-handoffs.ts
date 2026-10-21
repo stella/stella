@@ -35,6 +35,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 import type { DesktopEditHandoffStatusResponse } from "./desktop-edit-handoffs.logic";
 import { resolveDesktopEditHandoffStatus } from "./desktop-edit-handoffs.logic";
@@ -133,9 +134,10 @@ export const createDesktopEditHandoff = createSafeHandler(
     workspaceId,
     recordAuditEvent,
   }) {
+    requireSessionCredentialIssuer("desktopHandoff", { userId: user.id });
     const apiBaseUrl = DESKTOP_EDIT_API_BASE_URL;
     const handoffId = createSafeId<"desktopEditHandoff">();
-    const handoffToken = createDesktopEditHandoffToken();
+    const handoffToken = createDesktopEditHandoffToken({ userId: user.id });
     const tokenHash = hashDesktopEditHandoffToken(handoffToken);
     const expiresAt = computeDesktopEditHandoffExpiresAt();
 
@@ -327,6 +329,7 @@ export const redeemDesktopEditHandoffHandler = async (
       organizationId: access.organizationId,
       recordAuditEvent,
       safeDb,
+      source: { kind: "background", reason: "desktop edit session fixture" },
       userId: brandPersistedUserId(handoff.createdBy),
       workspaceId: handoff.workspaceId,
     });
