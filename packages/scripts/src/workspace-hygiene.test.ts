@@ -477,7 +477,10 @@ describe("workspace hygiene", () => {
       },
       webPackageJson: {
         dependencies: {},
-        devDependencies: { typescript: "catalog:" },
+        devDependencies: {
+          typescript6: "catalog:",
+          typescript: "catalog:",
+        },
         name: "@stll/web",
         scripts: { typecheck: "tsc --noEmit" },
       },
@@ -497,7 +500,12 @@ describe("workspace hygiene", () => {
         },
         {
           message:
-            "TypeScript 6 is compatibility-only and may only be declared by packages/scripts for the compiler API",
+            "typescript is the root-owned TypeScript 7 compiler; only apps/landing pins its own TypeScript 6 for Astro's checker",
+          path: "apps/web/package.json",
+        },
+        {
+          message:
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by packages/scripts (and the root)",
           path: "apps/web/package.json",
         },
       ]),
@@ -532,12 +540,14 @@ const createWorkspaceRoot = ({
         ? rootPackageJson["catalog"]
         : {}),
       oxlint: repositoryPackage.catalog.oxlint,
-      typescript: "6.0.3",
+      typescript: "7.0.2",
+      typescript6: "npm:typescript@6.0.3",
     },
+    catalogs: { ts6: { typescript: "6.0.3" } },
     devDependencies: {
       "@stll/oxlint-config":
         repositoryPackage.devDependencies["@stll/oxlint-config"],
-      "@typescript/native": "npm:typescript@7.0.2",
+      typescript6: "catalog:",
       "oxlint-tsgolint": "7.0.2003",
       typescript: "catalog:",
       ...rootDevDependencies,
@@ -558,7 +568,10 @@ const createWorkspaceRoot = ({
   writeFileSync(
     path.join(rootDir, "apps/landing/package.json"),
     JSON.stringify({
-      devDependencies: { "@astrojs/check": "^0.9.9" },
+      devDependencies: {
+        "@astrojs/check": "^0.9.9",
+        typescript: "catalog:ts6",
+      },
       name: "@stll/landing",
       scripts: {
         typecheck:
@@ -569,7 +582,7 @@ const createWorkspaceRoot = ({
   writeFileSync(
     path.join(rootDir, "packages/scripts/package.json"),
     JSON.stringify({
-      devDependencies: { typescript: "catalog:" },
+      dependencies: { typescript6: "catalog:" },
       name: "@stll/scripts",
       scripts: {
         typecheck: "bun check --no-pretty --all --project=tsconfig.json",

@@ -122,6 +122,7 @@ const polishTimeEntryNarrative = createSafeHandler(
       Result.tryPromise({
         try: async () =>
           await generateTanStackTextForTask({
+            userId: user.id,
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
             abortSignal: request.signal,

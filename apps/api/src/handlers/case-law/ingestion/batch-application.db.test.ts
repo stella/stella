@@ -1176,7 +1176,7 @@ describe("the batch bounds", () => {
           measured(new Uint8Array()) + 2 * bytes.length,
         );
       }),
-      propertyConfig(),
+      propertyConfig({ numRuns: 100 }),
     );
 
     const payload = Buffer.alloc(8 * 1024 * 1024, 255);
