@@ -1,6 +1,7 @@
 /* oxlint-disable require-contract-domains/require-contract-domains -- Generator sizes bound the test workload; they are not an API limit. */
 import { EventType } from "@tanstack/ai";
 import { Result } from "better-result";
+import type { UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -152,7 +153,7 @@ const serve = (events: readonly StreamEvent[]) => {
 
 type Turn = {
   errors: Error[];
-  sent: Result<undefined, unknown>;
+  sent: Result<void, UnhandledException>;
   snapshot: ReturnType<ChatRuntime["getSnapshot"]>;
 };
 
