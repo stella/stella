@@ -718,7 +718,9 @@ const tokenDispatchesOfFollowed = (
         ].filter((token) => token !== undefined);
         if (
           tokens.length > 0 &&
-          tokens.every((token) => APP_TOKEN.test(String(token)))
+          tokens.every(
+            (token) => typeof token === "string" && APP_TOKEN.test(token),
+          )
         ) {
           continue;
         }

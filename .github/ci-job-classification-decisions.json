@@ -2,12 +2,12 @@
   "candidate:.github/workflows/autofix-generated-conflicts.yml/dispatch": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "76864c51aec07e19e9e55e93b4fe1f7960a57427a34c23638328966992094f78"
+    "reviewedDigest": "c761a04865fa388de3b43608089164a0b6e104aabfca2564a0894bbb86fe1ca0"
   },
   "candidate:.github/workflows/generated-conflicts-publish.yml/publish": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "6ff158acb04277bfaf53e358e68bb215e9a55bfcb74be136da6319369213783d"
+    "reviewedDigest": "125c8dc674430067c8f71351a8091f2ccdaa2ec2e1f6c2b7531037c33e6b8be6"
   },
   "candidate:.github/workflows/generated-conflicts-resolve.yml/resolve": {
     "kind": "ordinary",
@@ -517,12 +517,12 @@
   "candidate:.github/workflows/marketing-screenshots-publish.yml/publish": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "64b14fe3f5b054c5c67ca51aa65793c819994bdc3fd6407fb63a6d7e03f91c4a"
+    "reviewedDigest": "9fde72b58370d3444c64577e216d5b5e12030152e9b1764866bad51902905945"
   },
   "candidate:.github/workflows/marketing-screenshots-update.yml/update": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "a13712621eb4d469b88a8d350f756ce567891c25344e7e297e92f4e1be26ecee"
+    "reviewedDigest": "b6a9667d02cc18aca3f2df0c238b128689d51b6320593e4497334ae206d7172a"
   },
   "candidate:.github/workflows/marketing-screenshots.yml/check": {
     "kind": "support",
