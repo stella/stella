@@ -47,6 +47,7 @@ import {
 } from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
+  AI_MEMORY_FEATURE_ID,
   GENERATED_VIEWS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import {
@@ -190,6 +191,31 @@ const buildRunScenarios = (): RunToolsProps[] => {
                         editApplyMode,
                         memberRole,
                         memoryEnabled,
+                        featureAccessSnapshot: createFeatureAccessSnapshot({
+                          organizationId,
+                          userId,
+                          decisions: new Map([
+                            [
+                              AI_MEMORY_FEATURE_ID,
+                              decideFeatureAccess({
+                                registry: FEATURE_REGISTRY,
+                                featureId: AI_MEMORY_FEATURE_ID,
+                                organizationId,
+                                userId,
+                                membership: true,
+                                user: {
+                                  email: "member@example.test",
+                                  emailVerified: true,
+                                },
+                                grants: {
+                                  [AI_MEMORY_FEATURE_ID]: [
+                                    { type: "organization", organizationId },
+                                  ],
+                                },
+                              }),
+                            ],
+                          ]),
+                        }),
                         organizationId,
                         orgAIConfig: null,
                         managedAIResidency: "eu" as const,

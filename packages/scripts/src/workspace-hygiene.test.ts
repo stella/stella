@@ -21,6 +21,159 @@ afterEach(() => {
 });
 
 describe("workspace hygiene", () => {
+  test("rejects exact npm text-search dependencies and accepts similar names", () => {
+    const deniedNames = [
+      "fuse.js",
+      "flexsearch",
+      "minisearch",
+      "lunr",
+      "fast-levenshtein",
+      "fastest-levenshtein",
+      "leven",
+      "js-levenshtein",
+      "string-similarity",
+      "ahocorasick",
+      "natural",
+      "match-sorter",
+      "cmdk",
+      "fuzzysort",
+      "@leeoniya/ufuzzy",
+      "fuzzball",
+      "rapidfuzz",
+      "fuzzywuzzy",
+    ];
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          ...Object.fromEntries(
+            deniedNames
+              .filter((name) => name !== "@leeoniya/ufuzzy")
+              .map((name) => [name, "1.0.0"]),
+          ),
+          "search-alias": "npm:@leeoniya/ufuzzy@1.0.0",
+        },
+      },
+      webPackageJson: {
+        dependencies: {
+          "fuse-js": "1.0.0",
+          "@leeoniya/ufuzzy-extra": "1.0.0",
+        },
+        devDependencies: { "flexsearch-lite": "1.0.0" },
+        name: "@stll/web",
+        optionalDependencies: { "cmdk-components": "1.0.0" },
+        peerDependencies: { "lunr-pro": "1.0.0" },
+      },
+    });
+    mkdirSync(path.join(rootDir, ".claude/mcp"), { recursive: true });
+    writeFileSync(
+      path.join(rootDir, ".claude/mcp/package.json"),
+      JSON.stringify({
+        dependencies: { fuzzywuzzy: "1.0.0" },
+        name: "stella-docs-mcp",
+      }),
+    );
+
+    expect(
+      validateWorkspaceRoot(rootDir, LOCAL).filter((issue) =>
+        issue.message.includes(" is blocked; use @stll/text-search"),
+      ),
+    ).toEqual(
+      [
+        ...deniedNames.filter((name) => name !== "@leeoniya/ufuzzy"),
+        "@leeoniya/ufuzzy",
+      ]
+        .map((name) => ({
+          message: `${name} is blocked; use @stll/text-search for search functionality`,
+          path: "package.json",
+        }))
+        .concat({
+          message:
+            "fuzzywuzzy is blocked; use @stll/text-search for search functionality",
+          path: ".claude/mcp/package.json",
+        }),
+    );
+  });
+
+  test("rejects exact Cargo text-search dependencies across manifest tables", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {},
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+    const manifestPath = path.join(rootDir, "apps/web/Cargo.toml");
+    writeFileSync(
+      manifestPath,
+      [
+        "[package]",
+        'name = "fixture"',
+        'version = "0.1.0"',
+        "",
+        "[workspace.dependencies]",
+        'rapidfuzz = "0.1"',
+        'strsim = "0.11"',
+        "",
+        "[dependencies]",
+        'fuzzy = { package = "fuzzy-matcher", version = "0.3" }',
+        "",
+        "[dev-dependencies]",
+        'levenshtein = "1.0"',
+        "",
+        "[build-dependencies]",
+        'edit-distance = "2.0"',
+        "",
+        "[target.'cfg(target_os = \"linux\")'.dependencies]",
+        'triple_accel = "0.4"',
+      ].join("\n"),
+    );
+
+    expect(
+      validateWorkspaceRoot(rootDir, LOCAL).filter((issue) =>
+        issue.message.includes(" is blocked; use @stll/text-search"),
+      ),
+    ).toEqual(
+      [
+        "fuzzy-matcher",
+        "levenshtein",
+        "edit-distance",
+        "rapidfuzz",
+        "strsim",
+        "triple_accel",
+      ].map((name) => ({
+        message: `${name} is blocked; use @stll/text-search for search functionality`,
+        path: "apps/web/Cargo.toml",
+      })),
+    );
+  });
+
+  test("accepts similar Cargo crate names and package rename targets", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {},
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+    writeFileSync(
+      path.join(rootDir, "packages/scripts/Cargo.toml"),
+      [
+        "[workspace.dependencies]",
+        'strsim-extra = "0.11"',
+        'similarity = { package = "levenshtein-rs", version = "1.0" }',
+        "",
+        "[target.'cfg(target_os = \"linux\")'.dev-dependencies]",
+        'triple-accelerator = "0.4"',
+      ].join("\n"),
+    );
+
+    expect(
+      validateWorkspaceRoot(rootDir, LOCAL).filter((issue) =>
+        issue.message.includes(" is blocked; use @stll/text-search"),
+      ),
+    ).toEqual([]);
+  });
+
   test("rejects mirrored turbo install pins", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
@@ -477,7 +630,10 @@ describe("workspace hygiene", () => {
       },
       webPackageJson: {
         dependencies: {},
-        devDependencies: { typescript: "catalog:" },
+        devDependencies: {
+          typescript6: "catalog:",
+          typescript: "catalog:",
+        },
         name: "@stll/web",
         scripts: { typecheck: "tsc --noEmit" },
       },
@@ -497,7 +653,12 @@ describe("workspace hygiene", () => {
         },
         {
           message:
-            "TypeScript 6 is compatibility-only and may only be declared by packages/scripts for the compiler API",
+            "typescript is the root-owned TypeScript 7 compiler; only apps/landing pins its own TypeScript 6 for Astro's checker",
+          path: "apps/web/package.json",
+        },
+        {
+          message:
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by packages/scripts (and the root)",
           path: "apps/web/package.json",
         },
       ]),
@@ -532,12 +693,14 @@ const createWorkspaceRoot = ({
         ? rootPackageJson["catalog"]
         : {}),
       oxlint: repositoryPackage.catalog.oxlint,
-      typescript: "6.0.3",
+      typescript: "7.0.2",
+      typescript6: "npm:typescript@6.0.3",
     },
+    catalogs: { ts6: { typescript: "6.0.3" } },
     devDependencies: {
       "@stll/oxlint-config":
         repositoryPackage.devDependencies["@stll/oxlint-config"],
-      "@typescript/native": "npm:typescript@7.0.2",
+      typescript6: "catalog:",
       "oxlint-tsgolint": "7.0.2003",
       typescript: "catalog:",
       ...rootDevDependencies,
@@ -558,7 +721,10 @@ const createWorkspaceRoot = ({
   writeFileSync(
     path.join(rootDir, "apps/landing/package.json"),
     JSON.stringify({
-      devDependencies: { "@astrojs/check": "^0.9.9" },
+      devDependencies: {
+        "@astrojs/check": "^0.9.9",
+        typescript: "catalog:ts6",
+      },
       name: "@stll/landing",
       scripts: {
         typecheck:
@@ -569,7 +735,7 @@ const createWorkspaceRoot = ({
   writeFileSync(
     path.join(rootDir, "packages/scripts/package.json"),
     JSON.stringify({
-      devDependencies: { typescript: "catalog:" },
+      dependencies: { typescript6: "catalog:" },
       name: "@stll/scripts",
       scripts: {
         typecheck: "bun check --no-pretty --all --project=tsconfig.json",
