@@ -5,7 +5,7 @@ set -euo pipefail
 : "${VERSION:?Release version required}"
 : "${RUNNER_TEMP:?Runner temporary directory required}"
 
-bun ci --filter @stll/extension --ignore-scripts
+bash scripts/retry.sh bun ci --filter @stll/extension --ignore-scripts
 bun --filter @stll/extension zip
 # Check the packaged manifest, rather than only the build directory.
 unzip -p "apps/extension/.output/stella-extension-chrome-${VERSION}.zip" manifest.json > "$RUNNER_TEMP/extension-manifest.json"

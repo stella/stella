@@ -52,7 +52,9 @@ type MergedPullRequest = PullRequest & {
 
 type QueueHistoryOptions = {
   baseSha: string;
-  previousTag: string;
+  // Omitted: the nearest release tag reachable from the base's parent. VERSION
+  // never names it, because a version commit can be superseded untagged.
+  previousTag?: string;
   // Strict mode answers only whether the merge queue validated every commit;
   // a green main heavy run on the base does not count, because the release
   // gate validates that status itself when it falls back to it.
@@ -75,6 +77,25 @@ export class ReleaseQueueHistoryError extends Error {
     this.name = "ReleaseQueueHistoryError";
   }
 }
+
+/**
+ * The previous release is the nearest release tag the base's parent reaches,
+ * the rule check-release-receipt-coverage.sh applies at the tag gate. It is
+ * never `v` + VERSION: a later version commit supersedes an untagged VERSION.
+ */
+export const previousReleaseTag = (
+  baseSha: string,
+  command: CommandRunner,
+): string =>
+  command([
+    "git",
+    "describe",
+    "--tags",
+    "--abbrev=0",
+    "--match",
+    "v*",
+    `${baseSha}^`,
+  ]).trim();
 
 const commandRunner =
   (cwd: string): CommandRunner =>
@@ -338,7 +359,7 @@ export const assertReleaseQueueHistory = ({
     "rev-list",
     "--reverse",
     "--first-parent",
-    `${previousTag}..${resolvedBaseSha}`,
+    `${previousTag ?? previousReleaseTag(resolvedBaseSha, command)}..${resolvedBaseSha}`,
   ])
     .split("\n")
     .filter(Boolean);
@@ -455,7 +476,7 @@ export const formatReleaseQueueHistoryNotice = (
   ].join("\n");
 
 const USAGE =
-  "Usage: check-release-queue-history.ts --from <tag> --base <sha> [--require] [--repo-dir <path>]";
+  "Usage: check-release-queue-history.ts --base <sha> [--from <tag>] [--require] [--repo-dir <path>]";
 const VALUE_OPTIONS = new Set(["--from", "--base", "--repo-dir"]);
 
 export const parseOptions = (args: readonly string[]): QueueHistoryOptions => {
@@ -482,10 +503,15 @@ export const parseOptions = (args: readonly string[]): QueueHistoryOptions => {
   const previousTag = values.get("--from");
   const baseSha = values.get("--base");
   const repoDir = values.get("--repo-dir");
-  if (!previousTag || !baseSha) {
+  if (!baseSha) {
     throw new ReleaseQueueHistoryError(USAGE);
   }
-  return { baseSha, previousTag, strict, ...(repoDir ? { repoDir } : {}) };
+  return {
+    baseSha,
+    strict,
+    ...(previousTag ? { previousTag } : {}),
+    ...(repoDir ? { repoDir } : {}),
+  };
 };
 
 /**
