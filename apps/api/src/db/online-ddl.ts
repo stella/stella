@@ -23,7 +23,6 @@ import {
   runLockRetryLadder,
 } from "./lock-retry-ladder";
 import type { LockRetryConfig, LockRetryRuntime } from "./lock-retry-ladder";
-import { setDedicatedLockTimeout } from "./long-running-connection";
 import { readConstraintValidated } from "./online-constraint-completion";
 import { readDdlFunctionDeclaration } from "./online-ddl-functions";
 import type { OnlineDdlFunctionName } from "./online-ddl-functions";
@@ -68,6 +67,21 @@ type LockTakingOptions = {
   text: string;
   lockQueue: LockTakingStatement["lockQueue"];
 };
+
+const setDedicatedLockTimeout = async (
+  connection: Pick<OnlineMigrationConnection, "execute">,
+  lockTimeoutMs: number,
+): Promise<void> => {
+  if (!Number.isSafeInteger(lockTimeoutMs) || lockTimeoutMs < 0) {
+    return panic("lockTimeoutMs must be a safe non-negative integer");
+  }
+  await connection.execute(
+    lockTimeoutMs === 0
+      ? "SET lock_timeout = '0'"
+      : `SET lock_timeout = '${lockTimeoutMs}ms'`,
+  );
+};
+
 const lockTaking = ({
   tableName,
   text,
