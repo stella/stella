@@ -2,10 +2,17 @@ import { expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule";
 
+// The rule resolves `@/lib/api` against the importing file, so each case is
+// linted at a web source path, where the alias names the Eden client.
+const lintWebSource = async (source: string) =>
+  await lintSingleRule("capability-request", source, {
+    sourcePath: "apps/web/src/capability-request-case.ts",
+    cwd: "scratch",
+  });
+
 test("requires declared writes to forward the request and name a literal capability", async () => {
   expect(
-    await lintSingleRule(
-      "capability-request",
+    await lintWebSource(
       `
 import { api as client } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
@@ -24,8 +31,7 @@ useCapabilityMutation({ capability: name, mutationFn: async (vars, request) => a
 
 test("reads the request from the options position, not the body", async () => {
   expect(
-    await lintSingleRule(
-      "capability-request",
+    await lintWebSource(
       `import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 await invokeCapability("x.delete", async (request) => await api.x({ id }).delete(request));
@@ -38,8 +44,7 @@ await invokeCapability("x.delete", async (request) => await api.x({ id }).delete
 
 test("rejects a forwarded request whose headers are replaced after the spread", async () => {
   expect(
-    await lintSingleRule(
-      "capability-request",
+    await lintWebSource(
       `import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: {} }));
@@ -54,8 +59,7 @@ await invokeCapability("x.update", async (request) => await api.x.post(body, { h
 
 test("accepts forwarded requests and writes outside capability callbacks", async () => {
   expect(
-    await lintSingleRule(
-      "capability-request",
+    await lintWebSource(
       `import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
