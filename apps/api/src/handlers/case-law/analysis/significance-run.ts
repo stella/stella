@@ -164,6 +164,7 @@ export const refreshSignificance = async ({
       },
     );
     const result = await generateTanStackObjectForTask({
+      userId: admission.userId,
       dataClass: "public_corpus",
       task: "classify",
       serviceTier: "standard",

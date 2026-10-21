@@ -46,6 +46,11 @@ export type SearchExcerpt = (typeof SEARCH_EXCERPTS)[number];
 
 export const DEFAULT_SEARCH_EXCERPT = SEARCH_EXCERPTS[0];
 
+/** Whether a decision satisfies every required term or a relaxed partial query. */
+export const DECISION_SEARCH_MATCHES = ["all_terms", "some_terms"] as const;
+
+export type DecisionSearchMatch = (typeof DECISION_SEARCH_MATCHES)[number];
+
 /** Match semantics shared by HTTP, MCP and persisted chat projections. */
 export const LEGISLATION_SEARCH_MATCH_TYPES = ["strict", "relaxed"] as const;
 
@@ -79,14 +84,6 @@ export type SearchTotal =
     }
   | { readonly type: typeof SEARCH_TOTAL_TYPE.NOT_COUNTED };
 
-/** Counts a case-law result page reports without mixing match semantics. */
-export type CaseLawSearchResultCounts = {
-  /** The whole exact-match result set, which facets describe. */
-  readonly total: SearchTotal;
-  /** Results appended to this page after matching any query word. */
-  readonly relaxedHitCount: number;
-};
-
 export const SEARCH_TOTAL_NOT_COUNTED = {
   type: SEARCH_TOTAL_TYPE.NOT_COUNTED,
 } as const satisfies SearchTotal;
@@ -114,15 +111,16 @@ export const countedSearchTotal = (
  * - `function_words_optional`: the query carried words that are grammar
  *   rather than subject matter, and did not require them. The response's
  *   `queryUsed` is what it did require.
+ * - `partial_matches_appended`: some hits match only part of the required
+ *   terms; each hit carries its own match classification.
  * - `no_hits`: nothing matched the words the query required.
  * - `no_hits_filtered`: nothing matched under the filters the request
  *   narrowed with, which is a different answer from `no_hits` because the
  *   caller can drop a filter.
- * - `relaxed_match`: at least one result matched only some query words.
  */
 export const CASE_LAW_SEARCH_WARNING_CODES = [
   "function_words_optional",
-  "relaxed_match",
+  "partial_matches_appended",
   "no_hits",
   "no_hits_filtered",
 ] as const;

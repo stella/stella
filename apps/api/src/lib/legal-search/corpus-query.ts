@@ -1073,6 +1073,7 @@ export type CaseLawCorpusQueryOptions = {
   keywordFields?: readonly string[] | undefined;
   functionWords?: ReadonlySet<string> | null | undefined;
   legalAlternatives?: CorpusTermExpander | null | undefined;
+  /** "any" ranks partial matches by coverage; absent keeps the strict query. */
   match?: "all" | "any" | undefined;
 };
 
@@ -1103,7 +1104,6 @@ export const caseLawCorpusQuery = ({
     return null;
   }
   const freeText = corpusFreeTextClause(text, {
-    match,
     jurisdiction,
     queryVariant,
     expand,
@@ -1113,6 +1113,7 @@ export const caseLawCorpusQuery = ({
     functionWords,
     legalAlternatives,
     legacyStemming,
+    match,
   });
   if (freeText === null) {
     return null;

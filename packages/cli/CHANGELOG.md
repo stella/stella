@@ -1,5 +1,25 @@
 # @stll/cli
 
+## 5.2.0
+
+### Minor Changes
+
+- [#5805](https://github.com/stella/stella/pull/5805) [`6ff1ef3`](https://github.com/stella/stella/commit/6ff1ef348f1fcd639ccfe85df8f6d31859a71474) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law search automatically tries partial matching when a question has no full matches, ranks partial hits by term coverage, and exposes match classifications and warnings in API, MCP, CLI and web results.
+
+### Patch Changes
+
+- [#6343](https://github.com/stella/stella/pull/6343) [`fd168ab`](https://github.com/stella/stella/commit/fd168abcc2dcb8de45b0764687149049163c42fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep published clients independent from private workspace packages while preserving supported-version requests.
+
+- [#6393](https://github.com/stella/stella/pull/6393) [`7ac81e4`](https://github.com/stella/stella/commit/7ac81e466061fa75b412e51f1a9faf7b7616c19c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export `package.json` so consumers can read the installed package version.
+
+- [#6343](https://github.com/stella/stella/pull/6343) [`fd168ab`](https://github.com/stella/stella/commit/fd168abcc2dcb8de45b0764687149049163c42fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require supported local client versions, identify CLI and MCP kit requests, cache CLI update metadata, and turn incompatibilities into actionable update errors. Keep CLI version tests on the server metadata contract and scope the local-client CORS header to MCP transport requests.
+
+## 5.1.1
+
+### Patch Changes
+
+- [#6304](https://github.com/stella/stella/pull/6304) [`8554dd6`](https://github.com/stella/stella/commit/8554dd6fbe7ffbb9eb24f46859e4ba294e62df6b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add Poland to case-law search.
+
 ## 5.1.0
 
 ### Minor Changes

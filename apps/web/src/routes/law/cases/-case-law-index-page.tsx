@@ -10,15 +10,21 @@ import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import { namedDecisionsOf } from "@stll/api-contract/decision-query-intent";
+import {
+  type DecisionQueryIntent,
+  namedDecisionsOf,
+} from "@stll/api-contract/decision-query-intent";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   SEARCH_TOTAL_NOT_COUNTED,
+  SEARCH_TOTAL_TYPE,
   type SearchSort,
+  type SearchTotal,
 } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { RefreshCwIcon, SearchXIcon } from "@stll/ui/icons";
+import { cn } from "@stll/ui/utils";
 
 import { PublicLawPager } from "@/components/public-law-table/public-law-pager";
 import { publicLawNumberedPagerModel } from "@/components/public-law-table/public-law-pagination.logic";
@@ -72,7 +78,6 @@ import {
   CaseLawNoResults,
   RewrittenSearchLine,
 } from "@/features/case-law/components/case-law-no-results";
-import { CaseLawResultsSummary } from "@/features/case-law/components/case-law-results-summary";
 import {
   CaseLawSearch,
   useCaseLawAskScope,
@@ -116,6 +121,10 @@ import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-dec
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
+import {
+  searchTiming,
+  useSearchResultsTiming,
+} from "@/lib/analytics/search-timing";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
@@ -207,24 +216,21 @@ const pageDecisions = (
   page: { decisions: readonly Decision[] } | undefined,
 ): readonly Decision[] => page?.decisions ?? EMPTY_DECISIONS;
 
-/**
- * The named decision first, when the entry named one; the decisions of one
- * file, or the same docket at several courts, stay several rows the reader
- * chooses between.
- */
-const namedDecisionsFirst = (
-  intent: Parameters<typeof namedDecisionsOf>[0],
-  decisions: readonly Decision[],
-): { ordered: readonly Decision[]; exactCount: number } => {
-  const exact = namedDecisionsOf(intent, decisions);
-  if (exact.length === 0) {
-    return { ordered: decisions, exactCount: 0 };
-  }
-  const exactIds = new Set(exact.map((decision) => decision.id));
-  return {
-    ordered: [...exact, ...decisions.filter((d) => !exactIds.has(d.id))],
-    exactCount: exact.length,
-  };
+/** Times a search until its own page of results, not a held one, is drawn. */
+const useCaseLawResultsTiming = ({
+  query,
+  page,
+  isPlaceholderData,
+}: {
+  query: string | undefined;
+  page: { decisions: readonly Decision[] } | undefined;
+  isPlaceholderData: boolean;
+}) => {
+  useSearchResultsTiming(
+    "case-law",
+    query ?? "",
+    page !== undefined && !isPlaceholderData,
+  );
 };
 
 type PublicCaseLawIndexProps = {
@@ -308,6 +314,7 @@ export function PublicCaseLawIndex({
   // this value is the field's own write coming back, not somebody else's.
   const [requestedQuery, setRequestedQuery] = useState(search.q ?? "");
   const writeQuery = useDebouncedCallback((value: string) => {
+    searchTiming.requested("case-law", value);
     detached(
       navigate({
         replace: true,
@@ -356,6 +363,11 @@ export function PublicCaseLawIndex({
     // The rows on screen stay while another page or another search arrives,
     // so a step never blanks the table.
     placeholderData: keepPreviousData,
+  });
+  useCaseLawResultsTiming({
+    query: search.q,
+    page: pageData,
+    isPlaceholderData,
   });
   // The loader warms these after search; background navigations keep the
   // same order without suspending the page on optional filter choices.
@@ -420,7 +432,15 @@ export function PublicCaseLawIndex({
     regionRef: paneRef,
     shownPage: rows === "rows" ? pager.currentPage : null,
   });
-  const { ordered, exactCount } = namedDecisionsFirst(intent, decisions);
+  // The named decision first, when the entry named one; the decisions of one
+  // file, or the same docket at several courts, stay several rows the reader
+  // chooses between.
+  const exact = namedDecisionsOf(intent, decisions);
+  const exactIds = new Set(exact.map((decision) => decision.id));
+  const ordered =
+    exact.length === 0
+      ? decisions
+      : [...exact, ...decisions.filter((d) => !exactIds.has(d.id))];
 
   // What the search said about itself, read off the first page: a warning is
   // about the result set, not about the page of it the reader is looking at.
@@ -764,12 +784,11 @@ export function PublicCaseLawIndex({
             // line of its own: it qualifies the count, and a row between the
             // toolbar and the table pushed every result down for one clause.
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
-              <CaseLawResultsSummary
-                exactCount={exactCount}
+              <ListHeading
+                exactCount={exact.length}
                 intent={intent}
                 isRefreshing={isRefreshing}
                 page={pager.currentPage}
-                relaxedHitCount={pageData?.relaxedHitCount ?? 0}
                 total={searchTotal}
               />
               {rewriteState.rewrittenFrom === undefined ||
@@ -997,4 +1016,92 @@ function SearchUnavailable({ onRetry }: SearchUnavailableProps) {
       </Button>
     </div>
   );
+}
+
+type ListHeadingProps = {
+  exactCount: number;
+  intent: DecisionQueryIntent;
+  /** The count still answers the previous search; say so without hiding it. */
+  isRefreshing: boolean;
+  page: number;
+  total: SearchTotal;
+};
+
+/**
+ * What the list under the box is: newest first while a filter alone narrows
+ * it, a choice between courts when a docket names several decisions, a count
+ * for a search that could be counted.
+ *
+ * While a new search is in flight the line fades rather than blanking: a
+ * number that disappears and comes back reads as a page reload, which is
+ * exactly what is not happening.
+ */
+function ListHeading({ isRefreshing, ...heading }: ListHeadingProps) {
+  return (
+    <div
+      aria-busy={isRefreshing}
+      className={cn(
+        "transition-opacity duration-200",
+        isRefreshing && "opacity-56",
+      )}
+    >
+      <ListHeadingText {...heading} />
+    </div>
+  );
+}
+
+function ListHeadingText({
+  exactCount,
+  intent,
+  page,
+  total,
+}: Omit<ListHeadingProps, "isRefreshing">) {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  if (intent.type === "empty") {
+    return (
+      <h2 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        {page > 1
+          ? t("common.page", { page: format.number(page) })
+          : t("caseLaw.newestDecisions")}
+      </h2>
+    );
+  }
+  if (intent.type === "identifier" && exactCount > 1) {
+    return (
+      <p className="text-xs">
+        {t("caseLaw.sameCaseNumber", { count: exactCount })}
+      </p>
+    );
+  }
+  switch (total.type) {
+    case SEARCH_TOTAL_TYPE.EXACT:
+      return (
+        <p className="text-xs tabular-nums">
+          {t("caseLaw.pagination.pageWithResultCount", {
+            count: total.count,
+            page: format.number(page),
+          })}
+        </p>
+      );
+    case SEARCH_TOTAL_TYPE.ESTIMATE:
+      return (
+        <p className="text-xs tabular-nums">
+          {t("caseLaw.pagination.pageWithEstimatedResultCount", {
+            count: total.count,
+            page: format.number(page),
+          })}
+        </p>
+      );
+    case SEARCH_TOTAL_TYPE.NOT_COUNTED:
+      return (
+        <p className="text-xs tabular-nums">
+          {t("common.page", { page: format.number(page) })}
+        </p>
+      );
+    default:
+      total satisfies never;
+      return panic("Unhandled search total");
+  }
 }
