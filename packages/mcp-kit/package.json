@@ -21,12 +21,14 @@
   "files": [
     "dist",
     "src",
+    "package.json",
     "README.md"
   ],
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
