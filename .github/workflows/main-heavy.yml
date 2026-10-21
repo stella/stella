@@ -23,6 +23,11 @@ on:
         description: Full lowercase commit SHA on main or a same-repository release PR head
         required: true
         type: string
+      proof_chain:
+        description: "Run only the jobs affected since a fully proven main ancestor (falls back to full when unsafe)"
+        required: false
+        type: boolean
+        default: true
 
 concurrency:
   # Release pushes and pinned gates are independent of schedules and ordinary pushes.
@@ -53,6 +58,7 @@ jobs:
       task_cache_producer: ${{ steps.ancestor.outputs.task_cache_producer }}
       proof: ${{ steps.reuse.outputs.proof }}
       main-base: ${{ steps.ancestor.outputs.main-base }}
+      chain-base: ${{ steps.chain.outputs.chain-base }}
       run: ${{ steps.reuse.outputs.run || steps.selection.outputs.run }}
     steps:
       - name: Check release candidate
@@ -201,6 +207,7 @@ jobs:
           echo "::add-mask::$auth"
           git -C "$RUNNER_TEMP/main-heavy-validation" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
           git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/release-proof-chain.sh > "$RUNNER_TEMP/release-proof-chain.sh"
           git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
 
       - name: Verify main ancestry
@@ -217,6 +224,30 @@ jobs:
             echo "sha=$SHA"
             echo "task_cache_producer=validated-main"
           } >> "$GITHUB_OUTPUT"
+
+      # A pinned gate on a release candidate may chain its proof: plan against
+      # the nearest fully proven main ancestor and run only the affected jobs.
+      # Scheduled and push runs stay full; they produce the anchors. The
+      # selector is main's own copy and prints nothing whenever a full run is
+      # safer (forced paths, no anchor, unreadable evidence); the release gate
+      # verifies the chain again before it accepts the status.
+      - name: Select proof chain anchor
+        if: steps.selection.outputs.run == 'true' && github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.proof_chain != false
+        id: chain
+        working-directory: ${{ runner.temp }}/main-heavy-validation
+        env:
+          SHA: ${{ inputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+        run: |
+          anchor=$(bash "$RUNNER_TEMP/release-proof-chain.sh" --select "$GITHUB_REPOSITORY" "$SHA") || anchor=''
+          if [[ -n "$anchor" && ! "$anchor" =~ ^[0-9a-f]{40}$ ]]; then
+            anchor=''
+          fi
+          echo "chain-base=$anchor" >> "$GITHUB_OUTPUT"
+          if [[ -n "$anchor" ]]; then
+            echo "Proof chained from fully proven main ancestor $anchor; jobs the diff does not affect are carried over." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   suites:
     if: needs.validate.result == 'success' && needs.validate.outputs.run == 'true'
@@ -235,6 +266,7 @@ jobs:
       depth: full
       heavy_only: true
       sha: ${{ needs.validate.outputs.sha }}
+      chain_base: ${{ needs.validate.outputs.chain-base }}
       task_cache_producer: ${{ needs.validate.outputs.task_cache_producer }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -311,10 +343,15 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           DESCRIPTION: ${{ steps.classification.outputs.description }}
           PROOF_MAIN_BASE: ${{ needs.validate.outputs.main-base }}
+          PROOF_CHAIN_BASE: ${{ needs.validate.outputs.chain-base }}
         run: |
           state=failure
           if jq -e 'all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
             state=success
+          fi
+          # The release gate reads the anchor from here and verifies the chain.
+          if [[ -n "${PROOF_CHAIN_BASE:-}" ]]; then
+            DESCRIPTION="${DESCRIPTION:-Main heavy suites: $state}; chain=$PROOF_CHAIN_BASE"
           fi
           if [[ -n "$PROOF_MAIN_BASE" ]]; then
             DESCRIPTION="${DESCRIPTION:-Main heavy suites: $state}; main=$PROOF_MAIN_BASE"
