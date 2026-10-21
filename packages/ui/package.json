@@ -91,6 +91,7 @@
     "./positioner-sizing": "./src/lib/positioner-sizing.ts",
     "./preview-card": "./src/components/preview-card.tsx",
     "./preview-pane": "./src/components/preview-pane.tsx",
+    "./prose": "./src/components/prose.tsx",
     "./review-author-avatar": "./src/review/review-author-avatar.tsx",
     "./review-comment-card": "./src/review/review-comment-card.tsx",
     "./review-decision-actions": "./src/review/review-decision-actions.tsx",
