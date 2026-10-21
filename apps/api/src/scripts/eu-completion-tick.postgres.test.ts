@@ -58,6 +58,7 @@ import {
 import { runEuCompletionTickFixture } from "@/api/tests/helpers/eu-completion-tick";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -1066,7 +1067,7 @@ if (!databaseUrl || !enabled) {
                 {
                   adapterKey: ADAPTER_KEYS.EU_ECJ,
                   fetchStage: "listing",
-                  timeoutMs: 1000,
+                  timeoutMs: HAPPY_PATH_TIMEOUT_MS,
                 },
               );
               const report = await runEuCompletionTickFixture(

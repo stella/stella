@@ -85,6 +85,35 @@ describe("prepareTemplateFromDocument", () => {
     expect(unapplied).toEqual([]);
   });
 
+  test("keeps the original document when a part cannot be read completely", async () => {
+    const file = await makeDocx(["Granted by Acme Ltd."]);
+    const zip = await JSZip.loadAsync(file.bytes);
+    const documentXml = await zip.file("word/document.xml")?.async("text");
+    if (documentXml === undefined) {
+      throw new Error("Fixture has no main document part");
+    }
+    writeZipEntry(
+      zip,
+      "word/document.xml",
+      documentXml.replace("<w:sectPr/>", "<w:p><w:r><w:t>Acme<w:sectPr/>"),
+    );
+    const incomplete = testDocxFile(
+      await zip.generateAsync({ type: "uint8array" }),
+    );
+    const suggestions = [
+      { literalText: "Acme Ltd.", fieldPath: "company.name" },
+    ];
+
+    const result = await prepareTemplateFromDocument({
+      file: incomplete,
+      suggest: async () => suggestions,
+    });
+
+    expect(result.file).toBe(incomplete);
+    expect(result.fields).toEqual([]);
+    expect(result.unapplied).toEqual(suggestions);
+  });
+
   test("propagates a suggest() rejection instead of swallowing it", async () => {
     // prepareTemplateFromDocument stays a thin pass-through: the decision to
     // degrade a model-call failure to an empty list (or surface it) belongs
