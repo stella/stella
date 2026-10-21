@@ -4,7 +4,6 @@ import {
   StreamProcessor,
   uiMessagesToWire,
 } from "@tanstack/ai";
-import { Panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -20,7 +19,9 @@ import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   chatToolExecutor,
   isServerChatToolCall,
+  isUnsupportedChatPart,
   createChatPastedTextPart,
+  UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
@@ -56,6 +57,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
+import { encodeStoredChatContent } from "@/api/lib/chat/stored-chat-part-codec";
 import { LIMITS } from "@/api/lib/limits";
 
 import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
@@ -385,7 +387,7 @@ describe("persisted chat message parts", () => {
     );
   });
 
-  test("rejects malformed v3 parsed input at the database boundary", () => {
+  test("carries a stored call whose parsed input this release cannot decode, and writes it back as stored", () => {
     const persisted = toPersistedChatMessageContentV3({
       data: [
         {
@@ -403,11 +405,23 @@ describe("persisted chat message parts", () => {
     if (call === undefined) {
       return;
     }
-    Reflect.set(call, "input", { status: "parsed", value: new Date() });
+    // An input state a newer release introduced.
+    Reflect.set(call, "input", { status: "parsed-later", value: {} });
 
-    expect(() => normalizePersistedChatMessageContent(persisted)).toThrow(
-      "Cannot mark an invalid tool input as parsed",
-    );
+    // Loading never fails on a stored part: one this release cannot decode is
+    // carried whole, never shown to the model, and saved back unchanged.
+    const parts = normalizePersistedChatMessageContent(persisted).parts;
+    expect(parts).toEqual([
+      {
+        activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+        content: { part: call },
+        type: "activity",
+      },
+    ]);
+    expect(parts.some(isProviderVisibleChatPart)).toBe(false);
+    expect(
+      encodeStoredChatContent(toPersistedChatMessageContentV3({ data: parts })),
+    ).toEqual(persisted);
   });
 
   test("rejects non-JSON canonical tool output", () => {
@@ -672,7 +686,7 @@ describe("persisted chat message parts", () => {
     }
   });
 
-  test("malformed stored tool metadata is rejected as corrupted state", () => {
+  test("a stored call whose ownership this release cannot read is carried, never guessed", () => {
     const call = {
       type: "tool-call",
       name: "list_templates",
@@ -701,19 +715,15 @@ describe("persisted chat message parts", () => {
       { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "unknown" },
     ]) {
       const content = { ...canonical, data: [{ ...untagged, metadata }] };
-      const result = Result.try({
-        try: () => normalizePersistedChatMessageContent(content),
-        catch: (error) => error,
-      });
-      expect(Result.isError(result)).toBe(true);
-      if (Result.isError(result)) {
-        expect(result.error).toBeInstanceOf(Panic);
-        if (result.error instanceof Panic) {
-          expect(result.error.message).toContain(
-            "Stored tool call has invalid",
-          );
-        }
-      }
+      // Never decoded as a call, so its ownership is never guessed: the call
+      // is carried whole and written back as stored.
+      const parts = normalizePersistedChatMessageContent(content).parts;
+      expect(parts.map(isUnsupportedChatPart)).toEqual([true]);
+      expect(
+        encodeStoredChatContent(
+          toPersistedChatMessageContentV3({ data: parts }),
+        ),
+      ).toEqual(content);
     }
   });
 

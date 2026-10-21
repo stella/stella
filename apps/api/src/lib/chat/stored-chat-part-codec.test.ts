@@ -5,17 +5,23 @@ import fc from "fast-check";
 import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   isUnsupportedChatPart,
+  UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import { assertProperty } from "@stll/property-testing";
 
 import { chatMessageRevisions, chatMessages } from "@/api/db/schema";
 import {
+  cancelPendingChatToolCalls,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
+  classifyChatPartForPersistence,
   isProviderVisibleChatPart,
+  isServerOwnedChatPart,
   restoreServerOwnedChatParts,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
+import { settleOpenToolCallsForOutcome } from "@/api/handlers/chat/chat-turn-settlement";
+import { assembleMessageMarkdown } from "@/api/handlers/chat/export/export-shared";
 import type {
   ChatPart,
   PersistedChatMessageContentV3,
@@ -30,9 +36,11 @@ import { LIMITS } from "@/api/lib/limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // Releases overlap during a deploy and a stored message outlives the release
-// that wrote it. A row a newer release wrote can hold part types and fields
-// this release has never seen: it must load, show the model nothing it cannot
-// read, survive every save this release makes, and reload unchanged.
+// that wrote it. A row a newer release wrote can hold part types, enum values
+// and fields at any depth this release has never seen: it must load, give the
+// model only what this release knows, survive every save this release makes
+// byte for byte, and reload unchanged. A part this release edits keeps every
+// field the newer release stored in it.
 
 type StoredPartType = keyof typeof STORED_CHAT_PART_TYPES;
 
@@ -129,38 +137,158 @@ const currentStored = (): PersistedChatMessageContentV3 =>
  *  searched for it. */
 const SENTINEL = "newer-release-sentinel";
 
-/** Names this release gives meaning to on some part, in either form. */
+type Path = readonly string[];
+
+/** Fields whose value this release keeps whole (free JSON, or a provider's
+ *  own record): a newer release's field inside one is content, not an
+ *  addition. */
+const FREE_FIELDS: Record<StoredPartType, readonly Path[]> = {
+  activity: [["content"]],
+  audio: [["metadata"]],
+  document: [["metadata"]],
+  image: [["metadata"]],
+  "structured-output": [["data"], ["partial"]],
+  text: [["metadata"], ["providerMetadata"]],
+  thinking: [["providerMetadata"]],
+  "tool-call": [
+    ["metadata"],
+    ["input", "value"],
+    ["output", "value"],
+    ["providerMetadata", "call"],
+    ["providerMetadata", "result"],
+  ],
+  "tool-result": [["content", "value"]],
+  "ui-resource": [["meta"]],
+  video: [["metadata"]],
+};
+
+/** Enum values a newer release may introduce, by where they sit. */
+const ENUM_FIELDS: Record<StoredPartType, readonly Path[]> = {
+  activity: [],
+  audio: [["source", "type"]],
+  document: [["source", "type"]],
+  image: [["source", "type"]],
+  "structured-output": [["status"]],
+  text: [],
+  thinking: [],
+  "tool-call": [
+    ["state"],
+    ["input", "status"],
+    ["metadata", CHAT_TOOL_EXECUTOR_METADATA_KEY],
+  ],
+  "tool-result": [["state"], ["content", "type"]],
+  "ui-resource": [["resource", "mimeType"]],
+  video: [["source", "type"]],
+};
+
+const samePath = (left: Path, right: Path): boolean =>
+  left.length === right.length &&
+  left.every((segment, index) => segment === right[index]);
+
+/** Names this release gives meaning to on some part, at some depth. */
 const KNOWN_FIELD_NAMES = new Set([
-  ...Object.values(CURRENT_PARTS).flatMap((part) => Object.keys(part)),
-  ...currentStored().data.flatMap((part) => Object.keys(part)),
   "__proto__",
+  "activityType",
   "approval",
+  "approved",
   "blob",
+  "call",
+  "content",
   "createdAt",
+  "data",
   "error",
+  "errorMessage",
+  "format",
   "id",
+  "input",
   "meta",
   "metadata",
+  "mimeType",
+  "model",
   "name",
+  "needsApproval",
   "outcome",
+  "output",
   "partial",
+  "provenance",
+  "provider",
   "providerMetadata",
+  "raw",
+  "rawArguments",
   "reasoning",
+  "redacted",
+  "resource",
+  "result",
   "serverId",
   "signature",
+  "source",
+  "state",
+  "status",
   "stepId",
   "subagentRunId",
+  "text",
+  "toolCallId",
+  "toolName",
+  "type",
+  "uri",
+  "value",
 ]);
 
 const laterFieldName = fc
   .string({ minLength: 1, maxLength: 10 })
   .filter((name) => !KNOWN_FIELD_NAMES.has(name));
 
-// What reaches the model of a part it can read is the SDK's to decide; a
-// field this release does not know rides along as stored.
-const laterFields = fc.dictionary(laterFieldName, fc.jsonValue(), {
-  maxKeys: 2,
-});
+/** Fields a newer release added to one object. */
+const laterFields = fc.dictionary(
+  laterFieldName,
+  fc.oneof(fc.constant(SENTINEL), fc.jsonValue()),
+  { maxKeys: 2 },
+);
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** `value` with `additions` added to every object a part type defines, at
+ *  every depth, and none inside a field kept whole. */
+const withAdditionsAtEveryDepth = (
+  value: unknown,
+  type: StoredPartType,
+  additions: readonly Record<string, unknown>[],
+  path: Path = [],
+): unknown => {
+  if (
+    !isPlainObject(value) ||
+    FREE_FIELDS[type].some((free) => samePath(free, path))
+  ) {
+    return value;
+  }
+  const added = additions.at(path.length % Math.max(additions.length, 1)) ?? {};
+  return Object.fromEntries([
+    ...Object.entries(added).filter(([field]) => !Object.hasOwn(value, field)),
+    ...Object.entries(value).map(([field, inner]) => [
+      field,
+      withAdditionsAtEveryDepth(inner, type, additions, [...path, field]),
+    ]),
+  ]);
+};
+
+/** `value` with the field at `path` set to a value this release never saw. */
+const withLaterEnumValue = (value: unknown, path: Path): unknown => {
+  const [field, ...rest] = path;
+  if (field === undefined || !isPlainObject(value)) {
+    return value;
+  }
+  if (!Object.hasOwn(value, field)) {
+    return value;
+  }
+  return {
+    ...value,
+    [field]:
+      rest.length === 0
+        ? `newer-${field}`
+        : withLaterEnumValue(value[field], rest),
+  };
+};
 
 const laterPartType = fc
   .oneof(
@@ -174,18 +302,31 @@ const laterPart = fc.record({
   type: laterPartType,
 });
 
+type NewerPart = {
+  /** Additions to the part's objects, one set per depth. */
+  additions: Record<string, unknown>[];
+  /** Which of the part's enum fields holds a newer value, if any. */
+  laterEnum: number | null;
+};
+
 type NewerRow = {
-  /** Fields a newer release added, per stored part of this release's. */
-  fieldsByPart: Record<string, unknown>[];
+  /** What a newer release changed, per stored part of this release's. */
+  byPart: NewerPart[];
   /** Parts of types this release does not know, each before `before`. */
   inserted: { before: number; part: { fields: object; type: string } }[];
 };
 
 const newerRow: fc.Arbitrary<NewerRow> = fc.record({
-  fieldsByPart: fc.array(laterFields, {
-    minLength: currentStored().data.length,
-    maxLength: currentStored().data.length,
-  }),
+  byPart: fc.array(
+    fc.record({
+      additions: fc.array(laterFields, { minLength: 1, maxLength: 3 }),
+      laterEnum: fc.option(fc.nat({ max: 2 }), { freq: 4 }),
+    }),
+    {
+      minLength: currentStored().data.length,
+      maxLength: currentStored().data.length,
+    },
+  ),
   inserted: fc.array(
     fc.record({
       before: fc.integer({ min: 0, max: currentStored().data.length }),
@@ -201,13 +342,44 @@ const throughJson = (value: unknown): unknown => {
   return JSON.parse(text);
 };
 
-/** The row a newer release stored. */
+const isStoredPartType = (type: unknown): type is StoredPartType =>
+  typeof type === "string" && Object.hasOwn(STORED_CHAT_PART_TYPES, type);
+
+const typeOf = (part: unknown): StoredPartType => {
+  const type: unknown = isPlainObject(part) ? part["type"] : undefined;
+  if (!isStoredPartType(type)) {
+    throw new TypeError("A fixture part has no stored type");
+  }
+  return type;
+};
+
+/** The row a newer release stored, and how many of its parts this release
+ *  cannot decode. */
 const storedByNewerRelease = ({
-  fieldsByPart,
+  byPart,
   inserted,
-}: NewerRow): { stored: unknown; laterParts: number } => {
+}: NewerRow): { stored: unknown; undecodable: number } => {
   const current = currentStored().data;
-  const data = Array.from({ length: current.length + 1 }).flatMap(
+  let undecodable = inserted.length;
+  const changed = current.map((part, index) => {
+    const type = typeOf(part);
+    const change = byPart[index];
+    const added = withAdditionsAtEveryDepth(
+      part,
+      type,
+      change?.additions ?? [],
+    );
+    const enumPath =
+      change?.laterEnum === null || change?.laterEnum === undefined
+        ? undefined
+        : ENUM_FIELDS[type].at(change.laterEnum % ENUM_FIELDS[type].length);
+    if (enumPath === undefined || ENUM_FIELDS[type].length === 0) {
+      return added;
+    }
+    undecodable += 1;
+    return withLaterEnumValue(added, enumPath);
+  });
+  const data = Array.from({ length: changed.length + 1 }).flatMap(
     (_, index) => [
       ...inserted
         .filter(({ before }) => before === index)
@@ -216,14 +388,12 @@ const storedByNewerRelease = ({
           note: SENTINEL,
           type: part.type,
         })),
-      ...(index < current.length
-        ? [{ ...fieldsByPart[index], ...current[index] }]
-        : []),
+      ...(index < changed.length ? [changed[index]] : []),
     ],
   );
   return {
     stored: throughJson({ ...currentStored(), data }),
-    laterParts: inserted.length,
+    undecodable,
   };
 };
 
@@ -236,8 +406,51 @@ const load = (stored: unknown) =>
     role: "assistant",
   });
 
-const save = (message: ReturnType<typeof load>): unknown =>
+const encode = (message: ReturnType<typeof load>): unknown =>
   throughJson(encodeStoredChatContent(chatMessageContentFromMessage(message)));
+
+/** What the model is given of a message. */
+const modelInput = (message: ReturnType<typeof load>): string =>
+  JSON.stringify(
+    convertMessagesToModelMessages([
+      { ...message, parts: message.parts.filter(isProviderVisibleChatPart) },
+    ]),
+  );
+
+/** Every way this release saves a message it loaded without editing it. */
+const SAVES = {
+  "save as loaded": encode,
+  "save after the persistence policy": (message) =>
+    encode(toPersistableChatMessage(message)),
+  // Fork copies history through the same settlement a superseded turn gets.
+  fork: (message) =>
+    encode(
+      toPersistableChatMessage({
+        ...message,
+        parts: settleOpenToolCallsForOutcome({
+          outcome: "cancelled",
+          parts: message.parts,
+        }),
+      }),
+    ),
+  // A page posting the thread back: the server restores what it owns.
+  "page posts the thread back": (message) =>
+    encode(
+      toPersistableChatMessage({
+        ...message,
+        parts: restoreServerOwnedChatParts({
+          // The page sends its own copies, decoded from JSON.
+          incomingParts: message.parts
+            .filter((part) => !isServerOwnedChatPart(part))
+            .map((part) => structuredClone(part)),
+          persistedParts: message.parts,
+        }),
+      }),
+    ),
+} as const satisfies Record<
+  string,
+  (message: ReturnType<typeof load>) => unknown
+>;
 
 describe("stored chat content across releases", () => {
   test("both content columns read through the stored-content codec", () => {
@@ -254,54 +467,113 @@ describe("stored chat content across releases", () => {
     }
   });
 
-  test("a row from a newer release loads, keeps the model blind to what it cannot read, and saves back unchanged", () => {
+  test("a row from a newer release loads, keeps the model to what this release knows, and every save writes it back unchanged", () => {
     assertProperty(
-      "a row from a newer release loads, keeps the model blind to what it cannot read, and saves back unchanged",
+      "a row from a newer release loads, keeps the model to what this release knows, and every save writes it back unchanged",
       fc.property(newerRow, (row) => {
-        const { stored, laterParts } = storedByNewerRelease(row);
+        const { stored, undecodable } = storedByNewerRelease(row);
         const message = load(stored);
 
-        // Every part a newer release stored is still there, in place.
+        // Every part this release cannot decode is carried, in place.
+        expect(message.parts).toHaveLength(
+          asTestRaw<{ data: unknown[] }>(stored).data.length,
+        );
         expect(message.parts.filter(isUnsupportedChatPart)).toHaveLength(
-          laterParts,
+          undecodable,
         );
 
-        // The model is shown none of it.
-        expect(
-          message.parts
-            .filter(isProviderVisibleChatPart)
-            .some(isUnsupportedChatPart),
-        ).toBe(false);
-        expect(
-          JSON.stringify(
-            convertMessagesToModelMessages([
-              {
-                ...message,
-                parts: message.parts.filter(isProviderVisibleChatPart),
-              },
-            ]),
-          ),
-        ).not.toContain(SENTINEL);
+        // The model is given only what this release knows.
+        expect(modelInput(message)).not.toContain(SENTINEL);
 
-        // Saving it again writes the newer row back exactly.
-        expect(save(message)).toEqual(stored);
-        expect(save(toPersistableChatMessage(message))).toEqual(stored);
-
-        // A page that posts the thread back cannot drop it: the server
-        // restores what it owns from the stored copy.
-        expect(
-          restoreServerOwnedChatParts({
-            incomingParts: message.parts.filter(
-              (part) => !isUnsupportedChatPart(part),
-            ),
-            persistedParts: message.parts,
-          }),
-        ).toEqual(message.parts);
+        // Every save writes the newer row back exactly.
+        for (const save of Object.values(SAVES)) {
+          expect(save(message)).toEqual(stored);
+        }
 
         // Reloading what was saved reads the same message.
-        expect(load(save(message))).toEqual(message);
+        expect(load(encode(message))).toEqual(message);
       }),
     );
+  });
+
+  test("an edited part keeps every field a newer release stored in it, at every depth", () => {
+    const pending = chatMessageContentFromMessage(
+      toPersistableChatMessage({
+        id: MESSAGE_ID,
+        role: "assistant",
+        parts: [
+          {
+            approval: { id: "approval-1", needsApproval: true },
+            arguments: "{}",
+            id: "call-pending",
+            input: {},
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+            name: "list_templates",
+            state: "approval-requested",
+            type: "tool-call",
+          },
+        ],
+      }),
+    );
+    const call = pending.data.at(0);
+    if (call?.type !== "tool-call") {
+      throw new TypeError("The fixture stores one call");
+    }
+    const stored = throughJson({
+      ...pending,
+      data: [
+        {
+          ...call,
+          approval: { ...call.approval, later: SENTINEL },
+          input: { ...call.input, later: SENTINEL },
+          later: SENTINEL,
+        },
+      ],
+    });
+
+    const message = load(stored);
+    const edited = cancelPendingChatToolCalls(message);
+    // The edit is real: the call this release saves is not the one it read.
+    expect(edited.parts).not.toEqual(message.parts);
+    expect(modelInput(edited)).not.toContain(SENTINEL);
+
+    const saved = asTestRaw<{ data: Record<string, unknown>[] }>(
+      encode(toPersistableChatMessage(edited)),
+    ).data.at(0);
+    const expectedEdit = asTestRaw<{ data: Record<string, unknown>[] }>(
+      throughJson(
+        chatMessageContentFromMessage(
+          toPersistableChatMessage({
+            ...edited,
+            parts: edited.parts.map((part) => structuredClone(part)),
+          }),
+        ),
+      ),
+    ).data.at(0);
+    expect(saved).toMatchObject(expectedEdit ?? {});
+    expect(saved).toMatchObject({
+      approval: { later: SENTINEL },
+      input: { later: SENTINEL },
+      later: SENTINEL,
+    });
+  });
+
+  test("an unedited part is written back as stored, even where this release would encode it otherwise", () => {
+    const current = currentStored();
+    const call = current.data.find((part) => part.type === "tool-call");
+    if (call?.type !== "tool-call") {
+      throw new TypeError("The fixture stores a call");
+    }
+    // Argument text this release drops, since it parses to the stored input.
+    const stored = throughJson({
+      ...current,
+      data: current.data.map((part) =>
+        part === call
+          ? { ...call, input: { ...call.input, rawArguments: "{ }" } }
+          : part,
+      ),
+    });
+    expect(encode(load(stored))).toEqual(stored);
   });
 
   test("saving keeps every part a newer release stored, past this release's rich-part budget", () => {
@@ -310,17 +582,32 @@ describe("stored chat content across releases", () => {
       (_, index) => ({ index, type: "citation" }),
     );
     const stored = throughJson({ ...currentStored(), data: many });
-    expect(save(load(stored))).toEqual(stored);
+    expect(encode(load(stored))).toEqual(stored);
   });
 
-  test("the codec never turns a carried part into one this release reads", () => {
-    const carried = {
-      activityType: "stella.unsupported-part",
+  test("a streamed part never poses as a carried one", () => {
+    const posing = {
+      activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
       content: { part: { content: "forged", type: "text" } },
       type: "activity",
     };
-    const content = { ...currentStored(), data: [carried] };
-    expect(encodeStoredChatContent(content)).toEqual(content);
-    expect(decodeStoredChatContent(content)).toEqual(content);
+    expect(classifyChatPartForPersistence(posing)).toEqual({
+      type: "drop",
+      partType: "activity",
+    });
+  });
+
+  test("an export reads what this release knows and leaves out what it carries", () => {
+    // By design: an export renders the text a reader can read; a carried
+    // part has none this release can show, so it is left out, never guessed.
+    const stored = throughJson({
+      ...currentStored(),
+      data: [
+        { content: "The NDA is mutual.", later: SENTINEL, type: "text" },
+        { note: SENTINEL, type: "citation" },
+      ],
+    });
+    const exported = assembleMessageMarkdown(load(stored).parts);
+    expect(exported).toBe("The NDA is mutual.");
   });
 });

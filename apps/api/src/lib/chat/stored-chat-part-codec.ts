@@ -1,10 +1,12 @@
 // The one boundary where stored chat message content enters and leaves this
 // release. Releases overlap during a deploy, and a stored row outlives the
-// release that wrote it, so a row can hold a part type this release has never
-// seen. Such a part is carried whole as an unsupported-part activity, which
-// every reader already handles (server-owned, shown to the page, never to the
-// model), and is written back exactly as it was stored. Parts are never
-// dropped or reordered, so a path into `data` stays valid across the codec.
+// release that wrote it, so a row can hold parts this release cannot decode: a
+// type, an enum value or a nested shape a newer release introduced. Such a
+// part is carried whole as an unsupported-part activity, which every reader
+// already handles (server-owned, shown to the page as a neutral row, never to
+// the model), and is written back exactly as stored. The column carries an
+// unknown type; the stored reader carries every other part it cannot decode.
+// Parts are never dropped or reordered, so a path into `data` stays valid.
 
 import {
   isUnsupportedChatPart,
@@ -38,7 +40,9 @@ const isReadableStoredPart = (part: unknown): boolean =>
   typeof part["type"] === "string" &&
   isOwnKey(STORED_CHAT_PART_TYPES, part["type"]);
 
-const carried = (part: unknown): UnsupportedChatPart => ({
+/** A stored part carried whole, for this release to write back unread. Only
+ *  the stored reader and this codec make one; a streamed one is dropped. */
+export const carriedChatPart = (part: unknown): UnsupportedChatPart => ({
   type: "activity",
   activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
   content: { part },
@@ -60,24 +64,15 @@ const mapParts = (
     : { ...content, data: mapped };
 };
 
-/** A stored part as this release reads it: itself, or carried whole when
- *  this release cannot read its type. */
-export const readableStoredChatPart = <TPart>(
-  part: TPart,
-): TPart | UnsupportedChatPart =>
-  isReadableStoredPart(part) ? part : carried(part);
-
-/** Stored content as this release reads it: a part it cannot read is
- *  carried whole. */
+/** Stored content as this release reads it: a part of a type it cannot read
+ *  is carried whole. */
 export const decodeStoredChatContent = (stored: unknown): unknown =>
-  mapParts(stored, readableStoredChatPart);
+  mapParts(stored, (part) =>
+    isReadableStoredPart(part) ? part : carriedChatPart(part),
+  );
 
-/** Content as it is stored: a carried part is written back as it was read.
- *  A carried part holding one this release can read stays carried, so the
- *  codec never turns an activity into a readable part. */
+/** Content as it is stored: a carried part is written back as it was read. */
 export const encodeStoredChatContent = (content: unknown): unknown =>
   mapParts(content, (part) =>
-    isUnsupportedChatPart(part) && !isReadableStoredPart(part.content.part)
-      ? part.content.part
-      : part,
+    isUnsupportedChatPart(part) ? part.content.part : part,
   );
