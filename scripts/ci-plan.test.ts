@@ -2223,6 +2223,7 @@ test("desktop Rust lint is required on PRs and every merge-group depth", () => {
         v.looseObject({
           run: v.optional(v.string()),
           if: v.optional(v.string()),
+          env: v.optional(v.record(v.string(), v.unknown())),
         }),
       ),
     }),
@@ -2234,8 +2235,53 @@ test("desktop Rust lint is required on PRs and every merge-group depth", () => {
   ]);
   const clippy = job.steps.find(({ run }) => run?.includes("cargo clippy"));
   expect(clippy?.run).toContain("--workspace --all-targets");
-  expect(clippy?.run).toContain("--locked -- -D warnings");
+  expect(clippy?.run).toEndWith(" -- -D warnings");
+  expect(clippy?.run && lockedOfflineCargo(clippy.run, clippy.env)).toBe(true);
   expect(clippy?.if).toBeUndefined();
+});
+
+// Cargo's own flags (before ` -- `) must pin the lockfile and keep cargo off
+// the network: `--frozen`, or `--locked` with `--offline` or
+// CARGO_NET_OFFLINE=true (inline or in the step env).
+const lockedOfflineCargo = (
+  run: string,
+  env: Readonly<Record<string, unknown>> = {},
+): boolean => {
+  const [cargoPart = ""] = run.split(" -- ");
+  const flags = new Set(cargoPart.split(/\s+/u));
+  const stepOffline = env["CARGO_NET_OFFLINE"];
+  const offlineEnv =
+    stepOffline === true ||
+    stepOffline === "true" ||
+    /(?:^|\s)CARGO_NET_OFFLINE=["']?true["']?\s/u.test(cargoPart);
+  return (
+    flags.has("--frozen") ||
+    (flags.has("--locked") && (flags.has("--offline") || offlineEnv))
+  );
+};
+
+test("desktop Rust lint contract accepts only locked offline cargo", () => {
+  const base = "cargo clippy --workspace --all-targets";
+  expect(lockedOfflineCargo(`${base} --frozen -- -D warnings`)).toBe(true);
+  expect(lockedOfflineCargo(`${base} --locked --offline -- -D warnings`)).toBe(
+    true,
+  );
+  expect(
+    lockedOfflineCargo(`${base} --locked -- -D warnings`, {
+      CARGO_NET_OFFLINE: "true",
+    }),
+  ).toBe(true);
+  expect(
+    lockedOfflineCargo(
+      `CARGO_NET_OFFLINE=true ${base} --locked -- -D warnings`,
+    ),
+  ).toBe(true);
+  expect(lockedOfflineCargo(`${base} --locked -- -D warnings`)).toBe(false);
+  expect(lockedOfflineCargo(`${base} --offline -- -D warnings`)).toBe(false);
+  expect(
+    lockedOfflineCargo(`${base} -- -D warnings`, { CARGO_NET_OFFLINE: "true" }),
+  ).toBe(false);
+  expect(lockedOfflineCargo(`${base} -- -D warnings --frozen`)).toBe(false);
 });
 
 test("every bounded-install implementation and fixture selects Windows", () => {
@@ -6344,7 +6390,9 @@ test("API planning only loads dependencies after installation and emits install-
     ] of [
       ["pull_request", "false", "false", "", "", "", "0"],
       ["pull_request", "true", "false", "", "", "", "3"],
-      ["pull_request", "false", "true", "", "", "", "3"],
+      // Without package checks no API test runs, even when the API scope is
+      // unknown: ci_tests_required is the one gate of ci-tests.
+      ["pull_request", "false", "true", "", "", "", "0"],
       ["merge_group", "true", "false", "", "", "", "3"],
       ["workflow_dispatch", "true", "false", "", "", "", "3"],
       [
@@ -6394,6 +6442,9 @@ test("API planning only loads dependencies after installation and emits install-
         expect(values).toContain(
           "api_test_files<<API_TEST_FILES_END\nsrc/a.test.ts\nsrc/b.test.ts\nAPI_TEST_FILES_END\n",
         );
+      } else if (packages !== "true") {
+        expect(values).toContain("ci_tests_required=false\n");
+        expect(values).toContain('ci_tests_matrix={"shard":["rest-web"]}\n');
       } else if (selected) {
         expect(values).toContain("ci_tests_required=true\n");
         expect(values).toContain(

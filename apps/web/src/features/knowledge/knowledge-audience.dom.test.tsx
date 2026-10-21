@@ -339,7 +339,7 @@ const createApp = (initialEntry = "/knowledge/templates") => {
     getParentRoute: () => rootRoute,
     path: "/knowledge",
     // The frame and provider scopes the real layout declares pick the frame.
-    staticData: KnowledgeLayoutRoute.options.staticData,
+    staticData: { ...KnowledgeLayoutRoute.options.staticData },
     component: componentOf(KnowledgeLayoutRoute.options.component),
   });
   const templatesRoute = router.createRoute({
