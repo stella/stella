@@ -94,6 +94,18 @@ describe("online DDL lock census", () => {
     expect(censusOnlineDdlSource(source)).toEqual([]);
   });
 
+  test("every resolved lock-taking conditional branch must be classified", () => {
+    const source = `${ownerSource}\nconst fixture = lockTaking("probe", condition ? "ALTER TABLE probe ADD COLUMN added text" : "SELECT 1; CREATE MATERIALIZED VIEW hidden AS SELECT 1;");`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /unclassified SQL statement: SELECT 1/iu,
+    );
+  });
+
+  test("every statement in a lock-taking literal must be classified", () => {
+    const source = `${ownerSource}\nconst fixture = lockTaking("probe", "ALTER TABLE probe ADD COLUMN first text; ALTER TABLE probe ADD COLUMN second text;");`;
+    expect(censusOnlineDdlSource(source)).toEqual([]);
+  });
+
   test("the private statement brand cannot be manufactured with a cast", () => {
     const source = `${ownerSource}\nconst counterfeit = {} as LockTakingStatement;`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(

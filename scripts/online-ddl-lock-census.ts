@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { parseMigrationStatements } from "./check-migration-safety";
 import { censusSql, DDL_FORMS } from "./migration-lock-census";
 
 const OWNER_PATH = "apps/api/src/db/online-ddl.ts";
@@ -370,30 +371,50 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
   const checked = new Set<ts.Node>();
   const checkSql = (text: string, node: ts.Node, context: string): void => {
     const variants = text.split("\n-- variant --\n");
-    for (const sql of variants) {
-      if (!isSql(sql)) {
-        continue;
-      }
-      const result = censusSql(sql);
+    for (const variant of variants) {
       const line =
         source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
-      for (const error of result.errors) {
-        errors.push(`${context} at line ${line}: ${error}`);
+      const statements = parseMigrationStatements(variant);
+      if (statements.length === 0) {
+        errors.push(`${context} at line ${line} has an empty SQL variant`);
+        continue;
       }
-      if (result.forms.length === 0 && result.errors.length === 0) {
-        errors.push(`${context} at line ${line} has no classified DDL form`);
+      let classifiedForms = 0;
+      for (const statement of statements) {
+        if (!isSql(statement.raw)) {
+          errors.push(
+            `${context} at line ${line} has an unclassified SQL statement: ${statement.raw.trim().slice(0, 140)}`,
+          );
+          continue;
+        }
+        const result = censusSql(statement.raw);
+        for (const error of result.errors) {
+          errors.push(`${context} at line ${line}: ${error}`);
+        }
+        if (result.forms.length === 0 && result.errors.length === 0) {
+          errors.push(`${context} at line ${line} has no classified DDL form`);
+        }
+        classifiedForms += result.forms.length;
+        for (const form of result.forms) {
+          if (!Object.hasOwn(DDL_FORMS, form.form)) {
+            errors.push(
+              `${context} at line ${line} classified an unknown DDL form: ${form.form}`,
+            );
+          }
+          if (
+            form.lockMode === "ACCESS EXCLUSIVE" &&
+            !isWithinLockTaking(node)
+          ) {
+            errors.push(
+              `ACCESS EXCLUSIVE ${form.form} SQL at line ${line} must be passed through lockTaking`,
+            );
+          }
+        }
       }
-      for (const form of result.forms) {
-        if (!Object.hasOwn(DDL_FORMS, form.form)) {
-          errors.push(
-            `${context} at line ${line} classified an unknown DDL form: ${form.form}`,
-          );
-        }
-        if (form.lockMode === "ACCESS EXCLUSIVE" && !isWithinLockTaking(node)) {
-          errors.push(
-            `ACCESS EXCLUSIVE ${form.form} SQL at line ${line} must be passed through lockTaking`,
-          );
-        }
+      if (classifiedForms === 0) {
+        errors.push(
+          `${context} at line ${line} has no classified lock-taking statement`,
+        );
       }
     }
     checked.add(node);
@@ -424,12 +445,6 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
           `lockTaking SQL argument at line ${line} has an unresolved SQL variant`,
         );
       }
-    }
-    if (!variants.some(({ text }) => isSql(text))) {
-      errors.push(
-        `lockTaking SQL argument at line ${line} has no recognizable DDL form`,
-      );
-      continue;
     }
     for (const variant of variants) {
       if (variant.resolved) {
