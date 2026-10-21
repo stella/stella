@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   ADAPTER_KEYS,
   type AdapterKey,
@@ -62,6 +64,47 @@ export type ParserVersionScopes<
     version: Versions[Key];
     scope: ParserReparseScope<Registry>;
   };
+};
+
+/** Evaluate a declared scope against the selectors present on one stored row. */
+export const matchesParserReparseScope = <
+  Registry extends Record<string, ParserReparseFeature>,
+>(
+  scope: ParserReparseScope<Registry>,
+  matchesFeature: (feature: Registry[keyof Registry]) => boolean,
+  registry: Registry,
+): boolean => {
+  switch (scope.type) {
+    case "all":
+      return true;
+    case "features":
+      return scope.features.some((feature) =>
+        matchesFeature(registry[feature]),
+      );
+    default:
+      scope satisfies never;
+      return panic(`Unhandled parser re-parse scope: ${String(scope)}`);
+  }
+};
+
+export const storedFeaturesForParserReparseScope = <
+  Registry extends Record<string, ParserReparseFeature>,
+>(
+  scope: ParserReparseScope<Registry>,
+  registry: Registry,
+): readonly ParserReparseFeature[] => {
+  switch (scope.type) {
+    case "all":
+      return [];
+    case "features":
+      return scope.features.map(
+        (feature) =>
+          registry[feature] ?? panic(`Unregistered parser feature: ${feature}`),
+      );
+    default:
+      scope satisfies never;
+      return panic(`Unhandled parser re-parse scope: ${String(scope)}`);
+  }
 };
 
 export const PARSER_VERSION_SCOPES = {
