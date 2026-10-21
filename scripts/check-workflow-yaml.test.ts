@@ -135,7 +135,7 @@ describe("workflow YAML validation", () => {
         `Bun.spawnSync(["${runtime}", "-e", "puts 1"]);\n`,
       );
       const rejection = await rejectionOf(validateNoRubyProcessSpawns(root));
-      expect(rejection.message).toContain(
+      expect(rejection instanceof Error ? rejection.message : "").toContain(
         "spawning Ruby from scripts is not allowed",
       );
     } finally {

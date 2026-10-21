@@ -120,12 +120,12 @@ const digest = (value: unknown) => sha256(JSON.stringify(canonicalize(value)));
 const project = (
   value: JsonRecord,
   scope: keyof typeof CLASSIFICATION_EXCLUSIONS,
-) =>
-  Object.fromEntries(
-    Object.entries(value).filter(
-      ([key]) => !CLASSIFICATION_EXCLUSIONS[scope].includes(key as never),
-    ),
+) => {
+  const excluded: readonly string[] = CLASSIFICATION_EXCLUSIONS[scope];
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => !excluded.includes(key)),
   );
+};
 
 const secretRefs = (value: unknown): string[] => {
   if (typeof value === "string") {
