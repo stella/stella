@@ -1120,6 +1120,11 @@ export const toolErrorLines = (
   },
   flagPaths?: ReadonlySet<string>,
 ): string[] => {
+  if (envelope.code === "unknown_tool") {
+    return [
+      "this CLI is too old for this server; run npm i -g @stll/cli@latest",
+    ];
+  }
   const admission = readCliActionAdmissionRefusal(envelope);
   if (admission !== undefined) {
     return actionAdmissionRefusalLines(admission);

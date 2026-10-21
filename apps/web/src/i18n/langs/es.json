@@ -1615,6 +1615,9 @@
         "team": "Habilidades del equipo"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "También consultadas ({count, number})"
+    },
     "sourcePlaceholder": "Chat sobre {title}",
     "sourcePlaceholderAction": "Chat sobre",
     "sources": "Fuentes:",

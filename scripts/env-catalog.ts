@@ -1398,6 +1398,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_PLAYWRIGHT_IMAGE",
   "POSTGRES_IMAGE",
   "REDIS_IMAGE",
+  // The merge-group ancestor check: the group's base and its bounded wait.
+  "ANCESTOR_POLL_SECONDS",
+  "ANCESTOR_WAIT_SECONDS",
+  "MERGE_GROUP_BASE_REF",
+  "MERGE_GROUP_BASE_SHA",
   // The scan engine drift check builds into a scratch directory and compares it.
   "SCAN_ENGINE_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
@@ -1507,6 +1512,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "FLAKY_TEST_QUARANTINE_REPORT_DIR",
   "GH_READ_TOKEN",
   "HEAD_SHA",
+  "HEAVY_ONLY",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
   "JOURNEY_CLI_URL",
   "JOURNEY_MAIN_REF",
@@ -1550,6 +1556,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "OXLINT_RULE_COVERAGE_PATH",
   "PGLITE_TEST_SNAPSHOT",
   "PR_HEAD_SHA",
+  "PR_TITLE",
   "PRODUCT_MEDIA_S3_BUCKET",
   "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
   "PROPERTY_TEST_NUM_RUNS_FACTOR",
@@ -1644,6 +1651,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_UPDATE_PLAN_CONTRACTS",
   "STORED_AGENT_TEST_CREDENTIAL",
   "STORED_AGENT_TEST_VALUE",
+  "SUITE_DEPTH",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TEST_API_ERROR",
   "TEST_LATER",

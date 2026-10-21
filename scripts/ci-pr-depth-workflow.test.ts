@@ -184,6 +184,36 @@ test("PR-depth jobs retain reuse guards; other jobs stay off the main PR-depth r
   ).toEqual(["ci-tests"]);
 });
 
+// A PR-depth run checks a dispatched commit, which differs from the workflow's
+// own ref for a release candidate. A producer and its consumers that check out
+// different commits restore generated sources that belong to another tree.
+const TARGET_REF = [
+  "$",
+  "{{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}",
+].join("");
+const checkoutRef = (job: string) => {
+  const checkout = (ciJobs[job]?.steps ?? [])
+    .map((step) =>
+      v.parse(
+        v.looseObject({
+          uses: v.optional(v.string()),
+          with: v.optional(v.record(v.string(), v.unknown())),
+        }),
+        step,
+      ),
+    )
+    .find(({ uses }) => uses?.startsWith("actions/checkout@"));
+  return checkout?.with?.["ref"] ?? null;
+};
+
+test("every PR-depth job checks out the commit the run checks", () => {
+  const depthJobs = prDepthJobs(ci);
+  expect(depthJobs).toContain("generated-sources");
+  expect(depthJobs.filter((job) => checkoutRef(job) !== TARGET_REF)).toEqual(
+    [],
+  );
+});
+
 test("reused PR-depth evidence still schedules every merge-group code check", () => {
   for (const event of ["pull_request", "merge_group"]) {
     for (const queueDepth of ["thin", "full"]) {
