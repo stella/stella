@@ -21,7 +21,7 @@
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 9784,
+          "maxLength": 12282,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -247,12 +247,12 @@
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, POL. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
-              "admitted": ["CZE"],
+              "admitted": ["CZE", "POL"],
               "tool": "search_case_law"
             }
           }
@@ -1111,7 +1111,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_statute",
-    "description": "Read one statute by ELI as it stood on a date: `as_of` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, `versions` (the newest page of the work's consolidations), `outline` (its heading anchors, the input read_statute_provisions takes) on page 1, plus its plain text. Later pages omit outline and versions; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and `textWithheldReason` in place of the text. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+    "description": "Read one statute by ELI as it stood on a date: `as_of` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, `pendingChanges` (publisher-stated future or undated effects), `versions` (the newest page of the work's consolidations, with `amendedBy` effects), `outline` (its heading anchors, the input read_statute_provisions takes) on page 1, plus its plain text. Later pages omit outline and versions; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and `textWithheldReason` in place of the text. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["eli"],

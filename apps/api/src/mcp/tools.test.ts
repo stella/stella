@@ -715,6 +715,7 @@ const createStatuteAst = () => ({
 const createStatuteReadResult = ({
   allowsDerivedAi = true,
 }: { allowsDerivedAi?: boolean } = {}) => ({
+  pendingChanges: null,
   allowsDerivedAi,
   citationCaseCount: 0,
   country: "CZE",
@@ -4449,8 +4450,10 @@ describe("OpenAI-compatible MCP tools", () => {
         versionValidFrom: "2014-01-01",
         versionValidTo: null,
         ...EFFECTIVE_LABEL,
+        pendingChanges: null,
         versions: [
           {
+            amendedBy: null,
             documentId: STATUTE_ID,
             resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
             versionValidFrom: "2014-01-01",
@@ -4458,6 +4461,7 @@ describe("OpenAI-compatible MCP tools", () => {
             ...EFFECTIVE_LABEL,
           },
           {
+            amendedBy: null,
             documentId: STATUTE_PRIOR_ID,
             resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
             versionValidFrom: "2012-03-22",
@@ -6162,7 +6166,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(error["issues"]).toEqual([
       {
         path: "country",
-        message: '"XAA" is not a country code, one of CZE.',
+        message: `"XAA" is not a country code, one of ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}.`,
       },
     ]);
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();

@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract";
+
 import { normalizeProviderRegion } from "@/api/lib/ai-config";
 import type {
   DataRegion,
@@ -36,6 +38,7 @@ export const storedAIConfigUnreadableError = (cause: unknown) =>
 
 export const ownAIKeyRequiredError = () =>
   new HandlerError({
+    code: AI_FAILURE_CODES.own_key_required,
     status: 403,
     message:
       "AI is not available for this organization without its own key. " +

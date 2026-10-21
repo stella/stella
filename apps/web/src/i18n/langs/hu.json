@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Minden mérlegelést igénylő állítás rendezve van.</strong> {count, plural, one {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.} other {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.}}",
       "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong> — ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, vitatott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
+      "documentView": {
+        "label": "Dokumentumnézet",
+        "original": "Eredeti",
+        "reading": "Olvasási nézet"
+      },
+      "notLocated": "{count, plural, one {# állítás nem található az eredetiben} other {# állítás nem található az eredetiben}}",
       "selectClaim": "Válasszon egy állítást a kapcsolódó nyilvántartás megtekintéséhez.",
       "showQueue": "Várólista megjelenítése",
       "stats": {
@@ -1009,6 +1015,9 @@
       "saved": "{count, plural, one {# határozat} other {# határozat}} elmentve ide: {matter}"
     },
     "newestDecisions": "Legújabb határozatok",
+    "noResults": {
+      "hint": "Próbáljon más szavakat, javítsa a keresést AI-val, vagy tegye fel a kérdést a csevegésben."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Emberi"
@@ -1081,6 +1090,10 @@
         "medium": "Közepes",
         "short": "Rövid"
       }
+    },
+    "rewritten": {
+      "line": "Nincs pontos találat erre: <bdi>{original}</bdi>; találatok erre: <bdi>{query}</bdi>",
+      "searchOriginal": "Az eredeti szavaim keresése"
     },
     "sameCaseNumber": "{count, plural, one {# határozat viseli} other {# határozat viseli}} ezt az ügyszámot. Válasszon bíróságot.",
     "searchLabel": "Keresés a joggyakorlatban",
@@ -1603,6 +1616,9 @@
         "private": "Saját készségek",
         "team": "A csapat készségei"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Szintén áttekintve ({count, number})"
     },
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
@@ -2692,6 +2708,10 @@
       "aiConfigModelInvalid": "Az AI-modell beállítása érvénytelen. Ellenőrizze a kiválasztott modelleket.",
       "aiConfigProviderInvalid": "Az AI-szolgáltató beállítása érvénytelen. Ellenőrizze a szolgáltató beállításait.",
       "aiConfigProviderValidationFailed": "Az AI-szolgáltató elutasította a beállítást. Ellenőrizze az API-kulcsot és a modellt.",
+      "aiOutputInvalid": "Az AI válasza váratlan formátumú volt. Próbálja újra.",
+      "aiOutputModerated": "Az AI-szolgáltató moderálta a kimenetet. Fogalmazza át a kérést, vagy válasszon másik modellt.",
+      "aiProviderTaskUnsupported": "A beállított AI-szolgáltató nem képes erre a feladatra. Válasszon olyat, amelyik képes rá.",
+      "aiUnknown": "Az AI-kérés sikertelen volt. Próbálja újra.",
       "clauseDirectivesInvalid": "Egy kapcsolt záradék érvénytelen direktívákat tartalmaz. Javítsa a záradékot a sablon kitöltése előtt.",
       "clauseDirectivesInvalidDetails": "A(z) {slotName} mezőben lévő {clauseName} záradék érvénytelen direktívákat tartalmaz. Nyissa meg a záradékszerkesztőt, javítsa ki a megadott bekezdéseket, és töltse ki újra a sablont.",
       "clauseDirectivesOverrideInvalidDetails": "A(z) {clauseName} záradék felülírt szövege a(z) {slotName} mezőben érvénytelen direktívákat tartalmaz. Javítsa ki a szöveget ehhez a kitöltéshez, majd próbálja újra.",
@@ -4238,6 +4258,10 @@
     "archivedEmpty": "Nincs archivált emlék.",
     "archivedToast": "Emlék archiválva",
     "createdToast": "Elmentve a memóriába",
+    "deleteConfirmation": "A megerősítéshez írja be: {confirmation}",
+    "deleteDescription": "Ez véglegesen törli ezt az emléket. A művelet nem vonható vissza.",
+    "deleteTitle": "Törli az emléket?",
+    "deletedToast": "Emlék törölve",
     "empty": "Még nincs semmi a memóriában.",
     "kinds": {
       "decision": "Döntés",
@@ -5166,6 +5190,8 @@
     "outline": "Tartalom",
     "outlineJumpLabel": "Ugrás rendelkezéshez",
     "outlineJumpPlaceholder": "§ 10 vagy cím",
+    "pendingChanges": "Közelgő módosítások",
+    "pendingChangesIncomplete": "Előfordulhat, hogy a közzétevő adatai nem tartalmazzák az összes közelgő módosítást.",
     "provisionAskContextPrompt": "\n\nA rendelkezést alkalmazó részletek a legnagyobb súlyú határozatokból:\n{passages}\n\nAz ítélkezési gyakorlat eszközeivel bármelyik határozatot teljes terjedelmében elolvashatod, vagy további, a rendelkezésre hivatkozó határozatokat kereshetsz.",
     "provisionAskPlaceholder": "Kérdezzen erről a rendelkezésről",
     "provisionAskQuestionPrompt": "{subject} kapcsán: {question}",

@@ -125,6 +125,7 @@ const nullableStringSchema = nullableBoundedString(bytes.date);
 const decisionIdentifierSchema = t.Object(
   {
     type: t.Union([
+      t.Literal(DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER),
       t.Literal(DECISION_IDENTIFIER_TYPES.CASE_NUMBER),
       t.Literal(DECISION_IDENTIFIER_TYPES.ECLI),
       t.Literal(DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION),
