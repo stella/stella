@@ -55,11 +55,11 @@ export function rehypeScopeAnswerIds() {
       }
     }
     for (const element of elements) {
-      const href = element.properties["href"];
+      const href = element.properties.href;
       if (typeof href === "string" && href.startsWith("#")) {
         const fragment = href.slice(1);
         if (declared.has(fragment)) {
-          element.properties["href"] = `#${scoped(fragment)}`;
+          element.properties.href = `#${scoped(fragment)}`;
         }
       }
       for (const property of ID_REFERENCE_PROPERTIES) {
