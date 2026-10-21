@@ -10,7 +10,7 @@ export class TypeScriptApiError extends TaggedError("TypeScriptApiError")<{
   cause?: unknown;
 }> {}
 
-export type SourceText = {
+type SourceText = {
   readonly fileName: string;
   readonly text: string;
 };
