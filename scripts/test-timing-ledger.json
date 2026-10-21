@@ -255,16 +255,6 @@
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
   {
-    "id": "no-polling-loop::apps/web/src/features/chat/chat-runtime-stop.test.ts::<module>::for",
-    "count": 1,
-    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
-  },
-  {
-    "id": "no-polling-loop::apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx::commitRateWhileStreaming::for",
-    "count": 1,
-    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
-  },
-  {
     "id": "no-polling-loop::apps/web/src/features/knowledge/playbook-editor/playbook-editor-lifecycle.dom.test.tsx::<module>::while",
     "count": 3,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
@@ -322,11 +312,6 @@
   {
     "id": "no-polling-loop::scripts/gh-retry-processes.test.ts::waitForFile::while",
     "count": 1,
-    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
-  },
-  {
-    "id": "no-polling-loop::scripts/parser-output-diff.test.ts::<module>::while",
-    "count": 3,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
   {
@@ -1215,11 +1200,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/web/src/features/chat/chat-runtime-stop.test.ts::<module>::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/web/src/features/chat/chat-runtime-stop.test.ts::tick::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -1236,11 +1216,6 @@
   },
   {
     "id": "no-real-time-wait::apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx::commitRateWhileStreaming::@stll/concurrency/sleep#sleep",
-    "count": 2,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx::pull::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
@@ -1517,11 +1492,6 @@
   {
     "id": "no-real-time-wait::scripts/gh-retry-processes.test.ts::waitForFile::Bun.sleep",
     "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::scripts/parser-output-diff.test.ts::<module>::Bun.sleep",
-    "count": 3,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {

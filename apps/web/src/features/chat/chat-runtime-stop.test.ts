@@ -47,6 +47,8 @@ type OpenChatRequest = {
 type Server = {
   /** Stop requests, in the order the page sent them. */
   cancels: { answer: Deferred; turnId: string }[];
+  /** Settles once the page has sent `count` stop requests. */
+  cancelsReceived: (count: number) => Promise<void>;
   /** Chat requests past the planned turns, held until the test answers. */
   held: Deferred[];
   /** Chat requests, in the order the page sent them. */
@@ -176,7 +178,21 @@ const installServer = (
   turnIds: readonly string[],
   answer: Answer = "streaming",
 ): Server => {
-  const server: Server = { cancels: [], chats: [], held: [], log: [] };
+  const cancelWaiters: { count: number; resolve: () => void }[] = [];
+  const server: Server = {
+    cancels: [],
+    cancelsReceived: async (count) => {
+      if (server.cancels.length >= count) {
+        return;
+      }
+      const { promise, resolve } = Promise.withResolvers<undefined>();
+      cancelWaiters.push({ count, resolve: () => resolve(undefined) });
+      await promise;
+    },
+    chats: [],
+    held: [],
+    log: [],
+  };
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       await Promise.resolve();
@@ -186,6 +202,11 @@ const installServer = (
         server.log.push(`cancel ${cancel}`);
         const stopAnswer = deferred();
         server.cancels.push({ answer: stopAnswer, turnId: cancel });
+        for (const waiter of cancelWaiters) {
+          if (server.cancels.length >= waiter.count) {
+            waiter.resolve();
+          }
+        }
         return await stopAnswer.promise;
       }
       const turnId = turnIds[server.chats.length];
@@ -534,9 +555,7 @@ describe("the composer's Stop", () => {
       ),
     );
     // The page asks again after its poll interval (500 ms).
-    for (let poll = 0; poll < 300 && server.cancels.length < 2; poll += 1) {
-      await Bun.sleep(10);
-    }
+    await server.cancelsReceived(2);
     // The fixture must reach the fault: the page asks again.
     expect(server.cancels).toHaveLength(2);
     server.cancels[1]?.answer.resolve(
