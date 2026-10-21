@@ -333,7 +333,7 @@ test("a writing replay goes through the pipeline, and replaying again converges"
   expect(converged).toEqual({
     contentHash: beforeUnchanged.contentHash,
     fulltext: NEW_PARSER_TEXT,
-    parserVersion: 5,
+    parserVersion: 1,
     projectionEpoch: beforeUnchanged.projectionEpoch,
     sourceHash: "hash-from-the-new-parser",
     sourceRawS3Key: contentAddressedKey,

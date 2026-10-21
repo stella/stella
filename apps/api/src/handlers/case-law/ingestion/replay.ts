@@ -47,7 +47,6 @@ import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-pol
 import { composeWithStoredSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import type { WithdrawCaseLawDecisionDocumentOutcome } from "@/api/handlers/case-law/withdraw-document";
-import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   corpusCarriesDocument,
@@ -69,8 +68,8 @@ import {
   PARSER_VERSION_SCOPES,
   storedFeaturesForParserReparseScope,
 } from "@/api/lib/legal-search/parser-reparse-scopes";
+import type { ParserReparseScope } from "@/api/lib/legal-search/parser-reparse-scopes";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
-import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 import {
   REPLAY_PREVIEW_FAILURE,
@@ -353,13 +352,17 @@ const replaySelectionPredicate = (
   }
 };
 
+const parserReparseScopeForAdapter = (
+  adapterKey: AdapterKey,
+): ParserReparseScope => PARSER_VERSION_SCOPES[adapterKey].scope;
+
 const parserScopePredicate = (
   adapterKey: AdapterKey | undefined,
 ): SQL | undefined => {
   if (adapterKey === undefined) {
     return undefined;
   }
-  const scope = PARSER_VERSION_SCOPES[adapterKey].scope;
+  const scope = parserReparseScopeForAdapter(adapterKey);
   if (scope.type === "all") {
     return undefined;
   }
@@ -1099,42 +1102,6 @@ const replayWouldChangeRow = async ({
   }));
 };
 
-const recordUnchangedParserVersion = async ({
-  row,
-  parserVersion,
-  scopedDb,
-}: {
-  row: ReplayDecisionRow;
-  parserVersion: number;
-  scopedDb: ScopedDb;
-}): Promise<boolean> => {
-  const updated = await scopedDb(async (tx) => {
-    const rows = await tx
-      .update(caseLawDecisions)
-      .set({
-        parserVersion,
-        // Parser provenance is not a content revision. Preserve the token
-        // used to fence this exact re-parse and avoid projection triggers.
-        updatedAt: sql`${caseLawDecisions.updatedAt}`,
-      })
-      .where(
-        and(
-          eq(caseLawDecisions.id, row.id),
-          eq(sql`${caseLawDecisions.updatedAt}::text`, row.updateToken),
-        ),
-      )
-      .returning({ id: caseLawDecisions.id });
-    if (rows.length === 1) {
-      await recordSystemAudit(tx, "system:case-law-background-replay", {
-        subject: createSafeId<"systemScriptRun">(),
-        counts: { attempted: 1, applied: 0, blocked: 0, failed: 0 },
-      });
-    }
-    return rows;
-  });
-  return updated.length === 1;
-};
-
 /**
  * Apply one re-parsed result, or say what applying it would do.
  *
@@ -1227,20 +1194,6 @@ const replayRow = async ({
   });
 
   if (!changed) {
-    if (
-      sourceLease !== null &&
-      !(await recordUnchangedParserVersion({
-        row,
-        parserVersion: reparsed.result.parserVersion ?? 0,
-        scopedDb,
-      }))
-    ) {
-      return {
-        ...base,
-        outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
-        detail: "decision changed while recording parser provenance",
-      };
-    }
     return { ...base, outcome: REPLAY_ROW_OUTCOME.UNCHANGED };
   }
   const candidate = {
@@ -1699,10 +1652,10 @@ export const replayCaseLawSource = async ({
   const replayPage = async (
     page: readonly ReplayDecisionRow[],
     index = 0,
-  ): Promise<boolean> => {
+  ): Promise<{ type: "complete" } | { type: "halted" }> => {
     const row = page.at(index);
     if (row === undefined) {
-      return true;
+      return { type: "complete" };
     }
 
     const attempted = await Result.tryPromise({
@@ -1733,7 +1686,7 @@ export const replayCaseLawSource = async ({
     if (Result.isError(attempt)) {
       failure = classifyReplayFailure(attempt.error);
       haltReason = `${row.caseNumber} (${row.language}) could not be replayed: ${failureDetail(attempt.error)}`;
-      return false;
+      return { type: "halted" };
     }
     const rowReport = attempt.value;
     await onRow?.({ row, report: rowReport });
@@ -1769,13 +1722,13 @@ export const replayCaseLawSource = async ({
     if (rowReport.outcome === REPLAY_ROW_OUTCOME.RETRYABLE) {
       failure = replayFailure("writer-retryable");
       haltReason = `retryable outcome on ${row.caseNumber} (${row.language}): ${rowReport.detail ?? ""}`;
-      return false;
+      return { type: "halted" };
     }
     resumeAfter = row.id;
     if (Result.isError(recorded)) {
       failure = replayFailure("receipt-write");
       haltReason = `result of ${row.caseNumber} (${row.language}) could not be recorded (${failureDetail(recorded.error)}): ${JSON.stringify(rowReport)}`;
-      return false;
+      return { type: "halted" };
     }
     return await replayPage(page, index + 1);
   };
@@ -1807,7 +1760,7 @@ export const replayCaseLawSource = async ({
     if (page.length === 0) {
       return;
     }
-    if (await replayPage(page)) {
+    if ((await replayPage(page)).type === "complete") {
       await walk();
     }
   };

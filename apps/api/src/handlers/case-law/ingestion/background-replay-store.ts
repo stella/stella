@@ -1446,7 +1446,7 @@ const checkReplayCompletion = ({
   }
   if (
     receipt.outcome === "unchanged" &&
-    ((decision.parserVersion ?? -1) < batch.targetParserVersion ||
+    (decision.parserVersion !== batch.parserVersionFrom ||
       report.checkedUpdateToken === undefined ||
       decision.updateToken !== report.checkedUpdateToken)
   ) {
@@ -1577,9 +1577,8 @@ const completeBatch = async (
     const rowDisposition = completionDisposition(terminal);
     const successful = rowDisposition !== "blocked";
     // A recovered write is applied even when the replay reports unchanged.
-    // Both changed and unchanged rows require the target parser stamp. An
-    // unchanged replay preserves the content revision token while recording
-    // provenance, so the exact input fence still settles its receipt.
+    // Changed rows require the parser stamp; unchanged rows retain their stamp
+    // and are fenced by the exact checked input token. Both settle the receipt.
     await tx
       .update(caseLawReplayBatches)
       .set({

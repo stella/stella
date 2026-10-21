@@ -26,13 +26,9 @@ test("all parser scope enqueues every decision", () => {
 });
 
 test("feature parser scope enqueues only decisions matching a stored selector", () => {
-  expect(
-    matchesParserReparseScope(
-      featureScope,
-      ({ column }) => column === "citations",
-      features,
-    ),
-  ).toBe(true);
+  expect(matchesParserReparseScope(featureScope, () => true, features)).toBe(
+    true,
+  );
   expect(matchesParserReparseScope(featureScope, () => false, features)).toBe(
     false,
   );

@@ -6,7 +6,7 @@ import { assertProperty } from "@stll/property-testing";
 import { parsedOutputRequiresWrite } from "./replay";
 
 const hash = fc
-  .array(fc.constantFrom(..."0123456789abcdef"), {
+  .array(fc.constantFrom(...Array.from("0123456789abcdef")), {
     minLength: 64,
     maxLength: 64,
   })

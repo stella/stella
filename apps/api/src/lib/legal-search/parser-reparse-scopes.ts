@@ -97,13 +97,10 @@ export const storedFeaturesForParserReparseScope = <
     case "all":
       return [];
     case "features":
-      return scope.features.map((feature) => {
-        const registered = registry[feature];
-        if (registered === undefined) {
-          return panic(`Unregistered parser feature: ${feature}`);
-        }
-        return registered;
-      });
+      return scope.features.map(
+        (feature) =>
+          registry[feature] ?? panic(`Unregistered parser feature: ${feature}`),
+      );
     default:
       scope satisfies never;
       return panic(`Unhandled parser re-parse scope: ${String(scope)}`);
