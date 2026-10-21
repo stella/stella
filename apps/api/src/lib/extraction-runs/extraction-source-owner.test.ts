@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
-import { chooseExtractionSource } from "@/api/lib/extraction-source-owner";
+import { chooseExtractionSource } from "@/api/lib/extraction-runs/extraction-source-owner";
 
 const fileContent = (id: string): FieldContent => ({
   type: "file",

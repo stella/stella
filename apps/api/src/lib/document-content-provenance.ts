@@ -1,6 +1,6 @@
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chooseExtractionSource } from "@/api/lib/extraction-source-owner";
+import { chooseExtractionSource } from "@/api/lib/extraction-runs/extraction-source-owner";
 
 type ExtractedContentProvenance = {
   extractedAt: Date;

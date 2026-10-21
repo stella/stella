@@ -13,7 +13,7 @@ import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import type { ContactType } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chooseExtractionSource } from "@/api/lib/extraction-source-owner";
+import { chooseExtractionSource } from "@/api/lib/extraction-runs/extraction-source-owner";
 
 /** Narrow an unknown value to a valid EntityKind. Internal callers read
  *  kinds straight off our own rows, so a miss is a broken invariant, not a
