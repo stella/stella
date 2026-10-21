@@ -318,7 +318,7 @@ const scopedDb: ScopedDb = async (callback) => {
               new TimeoutError({
                 message: "decision write exceeded deadline",
                 label: "ingestion-db-transaction",
-                timeoutMs: 10,
+                timeoutMs: 10, // timeout under test
               }),
             );
           }
