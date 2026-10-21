@@ -189,6 +189,7 @@ const extractDeadlines = async ({
   })(
     async ({ admission }) =>
       await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "chat",
         organizationId: run.organizationId,

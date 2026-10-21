@@ -135,7 +135,7 @@
     "setup:mcp": "bun install --cwd .claude/mcp --frozen-lockfile",
     "setup:worktree": "bash scripts/setup-worktree.sh",
     "hooks:install": "lefthook install",
-    "knip": "bun apps/api/scripts/generate-capability-runtime.ts && knip-bun",
+    "knip": "bun scripts/knip-generated-entries.ts && bun apps/api/scripts/generate-capability-runtime.ts && knip-bun",
     "hooks:uninstall": "lefthook uninstall",
     "postinstall": "bun run lint:ws && bun run generate",
     "dependencies:check": "DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies,unlisted",
@@ -155,7 +155,6 @@
     "@stll/typescript-config": "workspace:^0.0.0",
     "@tanstack/eslint-plugin-query": "catalog:",
     "@tanstack/eslint-plugin-router": "catalog:",
-    "@typescript/native": "npm:typescript@7.0.2",
     "better-result": "catalog:",
     "bun-types": "catalog:",
     "cheerio": "^1.2.0",
@@ -178,6 +177,7 @@
     "tailwindcss": "catalog:",
     "turbo": "2.11.7",
     "typescript": "catalog:",
+    "typescript6": "catalog:",
     "valibot": "catalog:"
   },
   "resolutions": {
@@ -188,7 +188,7 @@
     "@expo/cli": "57.0.28",
     "@expo/router-server": "57.0.12",
     "@expo/ui": "57.0.22",
-    "@modelcontextprotocol/sdk": "1.31.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@stll/folio-core": "0.60.0",
     "adm-zip": "0.6.1",
     "brace-expansion": "5.0.11",
@@ -199,6 +199,7 @@
     "http-cache-semantics": "4.3.0",
     "ioredis": "6.0.0",
     "ip-address": "10.7.2",
+    "launch-editor": "2.14.2",
     "lucide-react": "1.41.0",
     "mailauth/joi": "18.2.9",
     "mailauth/nodemailer": "10.0.13",
@@ -278,6 +279,7 @@
     "franc": "6.2.0",
     "jszip": "3.10.2",
     "lucide-react": "1.41.0",
+    "lzma1": "0.4.0",
     "oxc-transform-react": "0.152.0",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
@@ -288,7 +290,8 @@
     "tailwindcss": "4.3.3",
     "temporal-polyfill": "1.0.5",
     "tsdown": "0.23.0",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
+    "typescript6": "npm:typescript@6.0.3",
     "use-intl": "4.14.9",
     "valibot": "1.5.0",
     "vite": "8.3.4",
@@ -313,6 +316,9 @@
       "@types/react-dom": "^19.3.0",
       "react": "^19.3.0",
       "react-dom": "^19.3.0"
+    },
+    "ts6": {
+      "typescript": "6.0.3"
     }
   },
   "patchedDependencies": {
@@ -323,7 +329,7 @@
     "@better-auth/oauth-provider@1.7.6": "patches/@better-auth%2Foauth-provider@1.7.6.patch",
     "@better-auth/cimd@1.7.6": "patches/@better-auth%2Fcimd@1.7.6.patch",
     "@better-auth/drizzle-adapter@1.7.6": "patches/@better-auth%2Fdrizzle-adapter@1.7.6.patch",
-    "happy-dom@20.14.5": "patches/happy-dom@20.14.5.patch",
+    "happy-dom@21.0.1": "patches/happy-dom@21.0.1.patch",
     "@tanstack/ai@0.65.1": "patches/@tanstack%2Fai@0.65.1.patch",
     "@tanstack/ai-code-mode@0.4.21": "patches/@tanstack%2Fai-code-mode@0.4.21.patch",
     "@tanstack/openai-base@0.12.4": "patches/@tanstack%2Fopenai-base@0.12.4.patch",
@@ -333,7 +339,8 @@
     "@tanstack/ai-mistral@0.6.14": "patches/@tanstack%2Fai-mistral@0.6.14.patch",
     "@tanstack/ai-openrouter@0.21.1": "patches/@tanstack%2Fai-openrouter@0.21.1.patch",
     "@tanstack/ai-mcp@0.8.0": "patches/@tanstack%2Fai-mcp@0.8.0.patch",
-    "@libpdf/core@0.5.2": "patches/@libpdf%2Fcore@0.5.2.patch"
+    "@libpdf/core@0.5.2": "patches/@libpdf%2Fcore@0.5.2.patch",
+    "oxlint-tailwindcss@1.16.0": "patches/oxlint-tailwindcss@1.16.0.patch"
   },
   "trustedDependencies": [
     "lefthook"

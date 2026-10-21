@@ -16,7 +16,7 @@ import {
   MCP_STATELESS_ALLOW_HEADER,
   ROOT_MCP_DISCOVERY_PATH,
   STELLA_API_CONTRACT,
-  STELLA_CLI_MAXIMUM_VERSION,
+  STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
 } from "@/api/mcp/constants";
@@ -58,7 +58,7 @@ describe("MCP protected resource discovery routes", () => {
       stella_compatibility: {
         api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
         cli_version: {
-          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          maximum: STELLA_CLI_LATEST_VERSION,
           minimum: STELLA_CLI_MINIMUM_VERSION,
         },
       },

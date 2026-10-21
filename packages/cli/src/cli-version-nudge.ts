@@ -1,6 +1,6 @@
-// CLI update nudge (spec 051 addendum). The latest published version comes from
-// npm's release channel while the server independently advertises its minimum
-// supported version. This module is pure (no I/O): version parsing is
+// CLI update nudge (spec 051 addendum). The server advertises its minimum and
+// latest supported versions on the startup response. This module is pure (no
+// I/O): version parsing is
 // Valibot-validated and any unparsable or missing input yields no nudge
 // (fail-silent). The nudge never touches stdout or the exit code.
 
@@ -8,6 +8,13 @@ import * as v from "valibot";
 
 // Mirror of the server-owned minimum-policy header.
 export const CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
+export const CLI_LATEST_HEADER = "x-stella-cli-latest";
+const updateCommandFor = (
+  entrypoint: string = process.argv[1] ?? "",
+): string =>
+  entrypoint.includes("bunx") || entrypoint.includes(".bun/")
+    ? "bunx @stll/cli@latest"
+    : "npm i -g @stll/cli@latest";
 
 const SemVerSchema = v.pipe(v.string(), v.regex(/^\d+\.\d+\.\d+$/u));
 
@@ -48,6 +55,7 @@ const compareVersions = (
 export type VersionNudge = {
   line?: string;
   nudgeVersion?: string;
+  unsupported?: true;
 };
 
 /**
@@ -61,20 +69,19 @@ export const buildVersionNudge = ({
   latest,
   minimum,
   lastNudged,
+  updateCommand = updateCommandFor(),
 }: {
   current: string;
   latest: string | undefined;
   minimum: string | undefined;
   lastNudged: string | undefined;
+  updateCommand?: string;
 }): VersionNudge => {
   if (minimum !== undefined && compareVersions(current, minimum) === -1) {
-    const target = latest ?? minimum;
-    if (target === lastNudged) {
-      return {};
-    }
     return {
-      line: `stella ${current} is no longer supported (server requires >= ${minimum}); upgrade with: npm i -g @stll/cli`,
-      nudgeVersion: target,
+      line: `this CLI is too old for this server: ${current} < ${minimum}; run ${updateCommand}`,
+      nudgeVersion: latest ?? minimum,
+      unsupported: true,
     };
   }
 
@@ -83,7 +90,7 @@ export const buildVersionNudge = ({
       return {};
     }
     return {
-      line: `stella ${current} -> ${latest} available; npm i -g @stll/cli`,
+      line: `update available: ${current} -> ${latest}, run ${updateCommand}`,
       nudgeVersion: latest,
     };
   }
