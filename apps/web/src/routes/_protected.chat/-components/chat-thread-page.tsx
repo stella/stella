@@ -281,6 +281,7 @@ export const ChatThreadPage = ({
     approvalPendingMessageId,
   } = useChatSession({
     chat,
+    timingSurface: "chat-thread",
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,

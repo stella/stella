@@ -32,7 +32,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { analyse } from "scslre";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 

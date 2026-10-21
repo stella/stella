@@ -630,6 +630,12 @@ const noZodImport = {
   message: "Use 'valibot' instead of 'zod'.",
 };
 
+const noClassicTypeScriptImport = {
+  name: "typescript",
+  message:
+    "TypeScript 7 exposes no compiler API at 'typescript'. Use 'typescript6' for the classic API, or 'typescript/unstable/*' for the TypeScript 7 API.",
+};
+
 const webLocalApiImportGroup = ["@/api/*", "@/api/**/*"];
 
 const webProtectedRouteImportGroup = [
@@ -1158,7 +1164,10 @@ const config = defineConfig({
     // get/set pairs are essentially absent — so the rule fires on
     // nothing while taking ~10% of lint time.
     "eslint/grouped-accessor-pairs": "off",
-    "no-restricted-imports": ["error", { paths: [noZodImport] }],
+    "no-restricted-imports": [
+      "error",
+      { paths: [noZodImport, noClassicTypeScriptImport] },
+    ],
     "no-bare-error/no-bare-error": "error",
     "no-raw-eden-telemetry/no-raw-eden-telemetry": "error",
     "capability-request/capability-request": "error",
@@ -1189,6 +1198,7 @@ const config = defineConfig({
     "no-ad-hoc-chat-request/no-ad-hoc-chat-request": "error",
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
+    "no-document-xml-element-regex/no-document-xml-element-regex": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
     "no-direct-entity-insert/no-direct-entity-insert": "error",
     "no-direct-field-write/no-direct-field-write": "error",
@@ -1606,6 +1616,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ad-hoc-chat-request.ts",
     "./.oxlint-plugins/scanned-file-boundary.ts",
     "./.oxlint-plugins/no-raw-zip-load.ts",
+    "./.oxlint-plugins/no-document-xml-element-regex.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-field-write.ts",
     "./.oxlint-plugins/no-chat-table-write.ts",
@@ -3465,8 +3476,6 @@ const config = defineConfig({
         "packages/*/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-raw-date-parsing.fixture.ts",
       ],
-      // The package that owns the helpers and the named day length.
-      excludeFiles: ["packages/time/src/**"],
       rules: {
         "no-raw-date-parsing/no-raw-date-parsing": "error",
       },
@@ -3544,7 +3553,11 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, uiPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              uiPragmaticDragAdapterImport,
+            ],
             patterns: [
               ...uiStandaloneImports,
               pragmaticDragAdapterDeepImportBan,
@@ -3562,7 +3575,7 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport],
+            paths: [noZodImport, noClassicTypeScriptImport],
             patterns: [
               ...uiStandaloneImports,
               pragmaticDragAdapterDeepImportBan,
@@ -3686,6 +3699,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -3719,7 +3733,11 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, ...webFolioAllLocalesImports],
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3935,6 +3953,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -3961,6 +3980,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -3995,6 +4015,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -4040,6 +4061,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4083,6 +4105,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4317,10 +4340,6 @@ const config = defineConfig({
               "apps/api/src/server.ts",
               // The one reader of NODE_ENV and the local development opt-in.
               "packages/runtime-mode/src/index.ts",
-              // The test network guard refuses to install while the process
-              // routes fetch through a remote proxy from the environment.
-              "packages/test-kit/src/network.ts",
-              "packages/test-kit/src/regenerate.ts",
               // The web server entrypoint reads its listen address from Bun's
               // environment before any app module loads; the web app's env
               // contract is the Vite build, not this process.
@@ -4853,6 +4872,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -4880,6 +4900,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               {
                 name: "@/api/db/root",
                 message:
@@ -4911,6 +4932,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -4929,6 +4951,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -4950,6 +4973,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5417,6 +5441,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               {
                 name: "@/api/lib/branded-types",
@@ -5467,7 +5492,13 @@ const config = defineConfig({
       rules: {
         "no-restricted-imports": [
           "error",
-          { paths: [noZodImport, apiValibotJsonSchemaImport] },
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              apiValibotJsonSchemaImport,
+            ],
+          },
         ],
       },
     },
@@ -5536,6 +5567,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5623,6 +5655,7 @@ const config = defineConfig({
         "apps/api/src/handlers/hosted-usage-webhook/routes.ts",
         "apps/api/src/handlers/notifications/routes.ts",
         "apps/api/src/handlers/smoke/routes.ts",
+        "apps/api/src/handlers/synthetic/routes.ts",
         "apps/api/src/handlers/verify/routes.ts",
         "apps/api/src/handlers/well-known/routes.ts",
       ],

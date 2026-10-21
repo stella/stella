@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 5.1.1
+
+### Patch Changes
+
+- [#6304](https://github.com/stella/stella/pull/6304) [`8554dd6`](https://github.com/stella/stella/commit/8554dd6fbe7ffbb9eb24f46859e4ba294e62df6b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add Poland to case-law search.
+
 ## 5.1.0
 
 ### Minor Changes

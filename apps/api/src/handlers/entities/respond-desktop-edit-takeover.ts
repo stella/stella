@@ -109,7 +109,9 @@ export const respondDesktopEditTakeoverHandler = async ({
     }
 
     if (approved) {
-      const newToken = createDesktopEditSessionToken();
+      const newToken = createDesktopEditSessionToken({
+        userId: session.takeoverRequestedBy,
+      });
       const newTokenHash = hashDesktopEditSessionToken(newToken);
 
       await tx
