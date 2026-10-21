@@ -13,6 +13,7 @@ import { cn } from "@stll/ui/utils";
 
 import { messageComponents } from "@/components/ai-elements/message-response-components";
 import { rehypeMarkdownSourceOffsets } from "@/components/chat/rehype-markdown-source-offsets";
+import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
   sourceOffsets?: boolean;
@@ -41,7 +42,9 @@ export const MessageResponseImpl = memo(
         // Streamdown's raw HTML, sanitize and harden chain always runs first:
         // a caller's `rehypePlugins` only add to it. Replacing it would render
         // raw HTML as literal text and leave link hardening to the components.
+        // Ids and names from raw HTML then move into the answer namespace.
         ...Object.values(defaultRehypePlugins),
+        rehypeScopeAnswerIds,
         ...(rehypePlugins ?? []),
         ...(sourceOffsets ? [rehypeMarkdownSourceOffsets] : []),
         rehypeChatLinks,

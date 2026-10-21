@@ -29,6 +29,7 @@ const MAX_BLOCKS = 5;
 const MAX_STREAM_CUTS = 8;
 const MAX_LIST_ITEMS = 3;
 const AT_LEAST_ONE = 1;
+const IN_PAGE_LINK_WEIGHT = 4;
 
 /** Text no generated word contains, so a restoration for it never matches. */
 const ABSENT_ORIGINAL = "Zephyrine Quandt";
@@ -56,6 +57,10 @@ const UNSAFE_DESTINATIONS: readonly string[] = [
   "vbscript:msgbox(1)",
 ];
 
+// Names a prompt-injected answer could give elements to collide with page ids
+// or shadow `window` globals.
+const MODEL_NAMES: readonly string[] = ["root", "top", "getElementById"];
+
 const inline = fc.oneof(
   words,
   words.map((text) => `**${text}**`),
@@ -73,6 +78,12 @@ const inline = fc.oneof(
   fc.constant("<script>alert(1)</script>"),
   fc.constant("&lt;b&gt;escaped&lt;/b&gt;"),
   fc.constant("note[^1]"),
+  fc
+    .constantFrom(...MODEL_NAMES)
+    .map((name) => `<span id="${name}">named</span>`),
+  fc.constant('<a name="top">anchor</a>'),
+  // Weighted so a link and its target often land in different blocks.
+  { arbitrary: fc.constant("[jump](#top)"), weight: IN_PAGE_LINK_WEIGHT },
 );
 
 const paragraph = fc
@@ -123,6 +134,10 @@ const block = fc.oneof(
   fc.constant("[^1]: footnote text"),
   fc.constant("| a | b |\n| - | - |\n| 1 | 2 |"),
   words.map((text) => `<div>${text}</div>`),
+  {
+    arbitrary: words.map((text) => `<h2 id="top">${text}</h2>`),
+    weight: IN_PAGE_LINK_WEIGHT,
+  },
   fc.constant("---"),
 );
 
@@ -159,6 +174,8 @@ const { IntlProvider } = await import("use-intl");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const { MessageResponseImpl } = await import("./message-response");
 const { rehypeAnonSpans } = await import("@/components/chat/rehype-anon-spans");
+const { ANSWER_ID_PREFIX } =
+  await import("@/components/chat/rehype-scope-answer-ids");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
@@ -294,9 +311,55 @@ const activeContent = (root: Element): string[] =>
     return found;
   });
 
-const duplicateIds = (root: Element): string[] => {
+/** Ids and names the answer's own raw HTML declares. */
+const modelNames = (source: string): Set<string> =>
+  new Set(
+    Array.from(
+      source.matchAll(/\b(?:id|name)="([^"]+)"/gu),
+      (match) => match[1] ?? "",
+    ),
+  );
+
+/** Repeats among ids the renderer generates; a model may repeat its own. */
+const duplicateIds = (root: Element, source: string): string[] => {
+  const declared = modelNames(source);
   const ids = [...root.querySelectorAll("[id]")].map((node) => node.id);
-  return ids.filter((id, index) => ids.indexOf(id) !== index);
+  return ids.filter(
+    (id, index) =>
+      ids.indexOf(id) !== index &&
+      !declared.has(id.slice(ANSWER_ID_PREFIX.length)),
+  );
+};
+
+/** Element names in the answer outside its namespace: page collisions. */
+const unscopedNames = (root: Element): string[] =>
+  [...root.querySelectorAll("[id], [name]")].flatMap((node) =>
+    ["id", "name"].flatMap((attribute) => {
+      const value = node.getAttribute(attribute);
+      return value === null || value.startsWith(ANSWER_ID_PREFIX)
+        ? []
+        : [`${attribute}=${value}`];
+    }),
+  );
+
+/**
+ * In-page links that miss: a scoped fragment must name an element of the
+ * answer, and an unscoped one must not name an element that was scoped.
+ */
+const brokenFragments = (root: Element): string[] => {
+  const named = (fragment: string) =>
+    root.querySelector(
+      `[id="${CSS.escape(fragment)}"], [name="${CSS.escape(fragment)}"]`,
+    );
+  return [...root.querySelectorAll('a[href^="#"]')].flatMap((link) => {
+    const fragment = decodeURIComponent(
+      link.getAttribute("href")?.slice(1) ?? "",
+    );
+    const broken = fragment.startsWith(ANSWER_ID_PREFIX)
+      ? named(fragment) === null
+      : named(`${ANSWER_ID_PREFIX}${fragment}`) !== null;
+    return broken ? [`#${fragment}`] : [];
+  });
 };
 
 describe("streamed chat answers", () => {
@@ -317,7 +380,11 @@ describe("streamed chat answers", () => {
                 prefix,
                 active: activeContent(view.root),
               }).toEqual({ config: config.name, prefix, active: [] });
-              expect(duplicateIds(view.root)).toEqual([]);
+              expect(duplicateIds(view.root, prefix)).toEqual([]);
+              expect({ prefix, names: unscopedNames(view.root) }).toEqual({
+                prefix,
+                names: [],
+              });
             }
             // Re-rendering a growing prefix in place leaves no stale nodes behind.
             expect(view.root.innerHTML).toBe(
@@ -331,6 +398,8 @@ describe("streamed chat answers", () => {
               await renderedHtml(answer, settled),
             );
             expect(activeContent(view.root)).toEqual([]);
+            expect(unscopedNames(view.root)).toEqual([]);
+            expect(brokenFragments(view.root)).toEqual([]);
             // Restorations can arrive after the text (server metadata): the
             // mounted answer must pick up the new plugin set, not keep the old.
             const restored = { ...settled, rehypePlugins: LATE_RESTORATION };
@@ -410,8 +479,63 @@ describe("streamed chat answers", () => {
       expect(view.root.querySelectorAll("h1")).toHaveLength(2);
       // The fixture reaches the id-producing path: footnotes carry ids.
       expect(view.root.querySelectorAll("[id]").length).toBeGreaterThan(0);
-      expect(duplicateIds(view.root)).toEqual([]);
+      expect(duplicateIds(view.root, source)).toEqual([]);
       await view.unmount();
+    }
+  });
+
+  test("names from raw HTML stay inside the answer and in-page links still resolve", async () => {
+    const source = [
+      '<h2 id="root">Heading</h2>',
+      'Jump to [the heading](#root). <img name="getElementById" alt="picture"> <a name="x">anchor</a>',
+      "Claim[^1] and again[^1].",
+      "[^1]: Source.",
+    ].join("\n\n");
+    for (const config of RENDERER_CONFIGS) {
+      for (const sourceOffsets of [false, true]) {
+        const view = await mountAnswer(source, {
+          ...config.options,
+          sourceOffsets,
+        });
+        const label = { config: config.name, sourceOffsets };
+        expect({ ...label, names: unscopedNames(view.root) }).toEqual({
+          ...label,
+          names: [],
+        });
+        // The page's own lookups and globals cannot reach answer elements.
+        expect(document.querySelector("#root")).toBeNull();
+        expect(document.querySelectorAll("[name='x']")).toHaveLength(0);
+        expect(
+          document.querySelectorAll("[name='getElementById']"),
+        ).toHaveLength(0);
+        expect(typeof document.getElementById).toBe("function");
+        // The fixture reaches the naming path: the heading keeps a scoped id.
+        expect(
+          view.root.querySelector(`h2[id="${ANSWER_ID_PREFIX}root"]`)
+            ?.textContent,
+        ).toBe("Heading");
+        if (sourceOffsets) {
+          // Settled answers parse as one document, so links cross blocks.
+          const fragments = [...view.root.querySelectorAll('a[href^="#"]')].map(
+            (link) => link.getAttribute("href"),
+          );
+          expect(fragments).toEqual([
+            `#${ANSWER_ID_PREFIX}root`,
+            `#${ANSWER_ID_PREFIX}fn-1`,
+            `#${ANSWER_ID_PREFIX}fn-1`,
+            `#${ANSWER_ID_PREFIX}fnref-1`,
+            `#${ANSWER_ID_PREFIX}fnref-1-2`,
+          ]);
+          expect({
+            ...label,
+            broken: brokenFragments(view.root),
+          }).toEqual({
+            ...label,
+            broken: [],
+          });
+        }
+        await view.unmount();
+      }
     }
   });
 });
