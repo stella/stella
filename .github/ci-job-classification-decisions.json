@@ -117,7 +117,7 @@
   "candidate:.github/workflows/ci.yml/ci-plan": {
     "kind": "support",
     "qualifier": "Plans trust, scopes and prerequisites for merge-required checks.",
-    "reviewedDigest": "4726d1e82abf4b8baa66d31763651c586eff3c234783569022b94b6b776c73eb"
+    "reviewedDigest": "64c09ebf5d470e4713c975125043564ae5385ca8e4aa02080af7dd03bc8b5bce"
   },
   "candidate:.github/workflows/ci.yml/generated-sources": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "b2ef303f82437268a2263597683a1320dec93ca63cc059b5df28f58ea481027d"
+    "reviewedDigest": "67fb133b363563cfdf02c17b705df1967504976b7fe553918a268f7131bfd9ce"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "c2b42b51c92c90b4cce8f7afe8535a9d63c5145e232dda8bb4a10b5f0eb8cce6"
+    "reviewedDigest": "a839dd1ff920c6576e90ecd15c0bc269cce0f5bde3d8bc428d2450dd9645267e"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
