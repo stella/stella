@@ -1064,7 +1064,7 @@ describe("chat run admission follows owned settlement", () => {
             const error = new TimeoutError({
               message: "Upstream cleanup timed out",
               label: options.label,
-              timeoutMs: options.timeoutMs,
+              timeoutMs: options.timeoutMs, // timeout: error payload copied from the caller, not a deadline
             });
             controller.abort(error);
             throw error;

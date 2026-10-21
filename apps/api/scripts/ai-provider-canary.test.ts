@@ -971,7 +971,7 @@ const runProbeWithoutBackoff = async ({
   await runCanaryProbe({
     retryDelayMs: 0,
     run,
-    timeoutMs,
+    timeoutMs, // timeout: forwarded from the caller
     wait: async () => {},
   });
 

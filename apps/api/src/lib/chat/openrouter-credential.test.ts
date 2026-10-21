@@ -213,7 +213,7 @@ const createHarness = ({
       clock.advance(delayMs);
     },
     random,
-    timeoutMs,
+    timeoutMs, // timeout: fixture default, elapsed only on the fake clock
   });
   return {
     provider,

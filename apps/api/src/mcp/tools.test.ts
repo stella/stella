@@ -8534,7 +8534,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
     expect(withTimeoutMock).toHaveBeenCalledWith(
       expect.any(Function),
-      expect.objectContaining({ timeoutMs: expect.any(Number) }),
+      expect.objectContaining({ timeoutMs: expect.any(Number) }), // timeout: asserted call argument, not a deadline
     );
   });
 

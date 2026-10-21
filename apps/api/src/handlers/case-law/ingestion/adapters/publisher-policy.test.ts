@@ -361,17 +361,17 @@ describe("a run-scoped publisher rate limit", () => {
         const listing = await fetchPublisher(`${publisher}/listing`, {
           fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST, // timeout: production adapter deadline under the gate's fake clock
         });
         const notice = await fetchPublisher(`${publisher}/notice`, {
           fetchStage: "document",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST, // timeout: production adapter deadline under the gate's fake clock
         });
         const html = await fetchPublisher(`${publisher}/html`, {
           fetchStage: "document",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST, // timeout: production adapter deadline under the gate's fake clock
         });
         const formex = await fetchWithRetry(`${publisher}/formex`, undefined, {
           fetchStage: "document",
@@ -438,7 +438,7 @@ describe("a run-scoped publisher rate limit", () => {
           {
             fetchStage: "document",
             adapterKey: ADAPTER_KEYS.EU_ECJ,
-            timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+            timeoutMs: ADAPTER_TIMEOUT.REQUEST, // timeout: production adapter deadline under the gate's fake clock
           },
         );
         const second = await fetchPublisher(
@@ -446,7 +446,7 @@ describe("a run-scoped publisher rate limit", () => {
           {
             fetchStage: "document",
             adapterKey: ADAPTER_KEYS.EU_ECJ,
-            timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+            timeoutMs: ADAPTER_TIMEOUT.REQUEST, // timeout: production adapter deadline under the gate's fake clock
           },
         );
         return { deferred, sharedDeadline, first, second };

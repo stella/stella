@@ -43,4 +43,44 @@ describe("API test timeout guard", () => {
       findApiTestTimeoutViolations("request({ timeoutMs: 500 + 500 });"),
     ).toHaveLength(1);
   });
+
+  test("rejects every deadline it cannot prove long", () => {
+    for (const source of [
+      "const SETTLE_MS = 500;\nrequest({ timeoutMs: SETTLE_MS * 2 });",
+      "const SETTLE_MS = 5_000;\nrequest({ timeoutMs: SETTLE_MS * 2 });",
+      "const timeoutMs = 500;\nrequest({ timeoutMs });",
+      'import { SETTLE_MS } from "./timeouts";\nrequest({ timeoutMs: SETTLE_MS });',
+      "request({ timeoutMs: slow ? 5_000 : 500 });",
+      "let SETTLE_MS = 5_000;\nrequest({ timeoutMs: SETTLE_MS });",
+      "request({ timeoutMs: options.timeoutMs });",
+      "request({ timeoutMs: HAPPY_PATH_TIMEOUT_MS / 100 });",
+      'request({ "timeoutMs": 500 });',
+    ]) {
+      expect(findApiTestTimeoutViolations(source), source).toHaveLength(1);
+    }
+  });
+
+  test("an unproven value passes only with a reasoned marker", () => {
+    expect(
+      findApiTestTimeoutViolations(
+        "request({ timeoutMs: options.timeoutMs }); // timeout: forwarded from the caller",
+      ),
+    ).toEqual([]);
+    expect(
+      findApiTestTimeoutViolations(
+        "request({ timeoutMs: options.timeoutMs }); // timeout:",
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("accepts provably long deadlines through const chains and shorthand", () => {
+    for (const source of [
+      "const timeoutMs = 5_000;\nrequest({ timeoutMs });",
+      "const BASE = 5_000 as const;\nconst SETTLE_MS = BASE;\nrequest({ timeoutMs: SETTLE_MS });",
+      "request({ timeoutMs: (HAPPY_PATH_TIMEOUT_MS) });",
+      "type Options = { timeoutMs: number };",
+    ]) {
+      expect(findApiTestTimeoutViolations(source), source).toEqual([]);
+    }
+  });
 });
