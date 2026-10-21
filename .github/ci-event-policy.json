@@ -76,6 +76,7 @@
     "release-desktop.yml/promote-latest": "main",
     "release-desktop.yml/carry-forward": "main",
     "release-mobile-ios.yml/testflight": "main",
+    "publish-mobile-update.yml/publish": "main",
     "mcp-canary.yml/mcp-canary": "main",
     "mcp-canary.yml/desktop-transport-canary": "main",
     "cla.yml/verify-signatures": "pr-fast",
