@@ -898,6 +898,54 @@ describe("publisher scheduler", () => {
     );
   });
 
+  test("aborting a wait on a signal-ignoring sleep releases the origin queue", async () => {
+    let now = 0;
+    let sleepCalls = 0;
+    const controller = new AbortController();
+    let markSleepStarted!: () => void;
+    const sleepStarted = new Promise<void>((resolve) => {
+      markSleepStarted = resolve;
+    });
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      clock: {
+        now: () => now,
+        sleep: async (ms) => {
+          sleepCalls += 1;
+          if (sleepCalls === 1) {
+            markSleepStarted();
+            await new Promise<never>(() => {
+              // Ignores its signal and never settles.
+            });
+          }
+          now += ms;
+        },
+      },
+      fetcher: async (input) =>
+        input.url.pathname === "/robots.txt"
+          ? new Response("User-agent: *\nCrawl-delay: 1\nAllow: /")
+          : new Response("ok"),
+    });
+    const options = {};
+    await request("https://publisher.example/one", options);
+    now = 1;
+    const stalled = request("https://publisher.example/two", {
+      ...options,
+      init: { signal: controller.signal },
+    });
+    await sleepStarted;
+    controller.abort();
+    const aborted = await stalled;
+    expect(aborted.isErr() && aborted.error._tag).toBe(
+      "publisher_request_aborted",
+    );
+
+    const next = await request("https://publisher.example/three", options);
+
+    expect(next.isOk()).toBe(true);
+    expect(sleepCalls).toBe(2);
+  });
+
   test("an aborted queued caller does not wait or consume a schedule slot", async () => {
     let now = 0;
     const sleeps: { ms: number; finish: () => void }[] = [];

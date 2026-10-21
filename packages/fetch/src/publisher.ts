@@ -835,7 +835,9 @@ const createOriginScheduler = (clock: Clock) => {
     );
     try {
       if (delay > 0) {
-        await clock.sleep(delay, signal);
+        // An injected sleep may ignore the signal; racing it keeps an
+        // aborted caller from holding the origin queue past `finally`.
+        await raceAbort(clock.sleep(delay, signal), signal);
       }
       nextAllowedAt.set(origin, clock.now() + intervalMs);
       return delay;
