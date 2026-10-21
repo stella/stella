@@ -424,7 +424,7 @@ export const resetMetricLineSinkForTesting = (): void => {
   metricLineSink = null;
 };
 
-const writeMetricLine = (record: object): void => {
+export const writeMetricLine = (record: object): void => {
   const line = JSON.stringify(record);
   if (metricLineSink !== null) {
     metricLineSink(line);
@@ -438,6 +438,76 @@ const writeMetricLine = (record: object): void => {
   }
   process.stdout.write(`${line}\n`);
 };
+
+export const CASE_LAW_FRESHNESS_METRIC = {
+  projectionBacklogItems: "CaseLawProjectionBacklogItems",
+  oldestUnpublishedAgeSeconds: "CaseLawOldestUnpublishedAgeSeconds",
+  sourceSyncAgeSeconds: "CaseLawSourceSyncAgeSeconds",
+  projectionConvergence: "CaseLawProjectionConvergence",
+} as const satisfies Record<string, string>;
+
+const buildCaseLawMetricRecord = ({
+  dimensions,
+  name,
+  unit,
+  value,
+}: {
+  dimensions: readonly string[];
+  name: (typeof CASE_LAW_FRESHNESS_METRIC)[keyof typeof CASE_LAW_FRESHNESS_METRIC];
+  unit: "Count" | "Seconds";
+  value: number;
+}) => ({
+  _aws: {
+    Timestamp: Temporal.Now.instant().epochMilliseconds,
+    CloudWatchMetrics: [
+      {
+        Namespace: METRIC_NAMESPACE,
+        Dimensions: [[...dimensions]],
+        Metrics: [{ Name: name, Unit: unit }],
+      },
+    ],
+  },
+  [name]: value,
+});
+
+export const buildCaseLawProjectionBacklogMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    dimensions: [],
+    name: CASE_LAW_FRESHNESS_METRIC.projectionBacklogItems,
+    unit: "Count",
+    value,
+  });
+
+export const buildCaseLawOldestUnpublishedAgeMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    dimensions: [],
+    name: CASE_LAW_FRESHNESS_METRIC.oldestUnpublishedAgeSeconds,
+    unit: "Seconds",
+    value,
+  });
+
+export const buildCaseLawSourceSyncAgeMetric = (
+  source: string,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    dimensions: ["source"],
+    name: CASE_LAW_FRESHNESS_METRIC.sourceSyncAgeSeconds,
+    unit: "Seconds",
+    value,
+  }),
+  source,
+});
+
+export const buildCaseLawProjectionConvergenceMetric = (status: string) => ({
+  ...buildCaseLawMetricRecord({
+    dimensions: ["status"],
+    name: CASE_LAW_FRESHNESS_METRIC.projectionConvergence,
+    unit: "Count",
+    value: 1,
+  }),
+  status,
+});
 
 export const REQUEST_CLASSES = [
   "ai",

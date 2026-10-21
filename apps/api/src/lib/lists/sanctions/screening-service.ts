@@ -370,6 +370,14 @@ type SanctionsListMatchFailure =
       code: "warming" | "load-failed";
       stage: "public-warmup";
       reason: null;
+    }
+  // The index cache reports its own load failure once, with its cause, and
+  // remembers it: every screening that waits on that load or meets it in the
+  // memo window answers without a report of its own.
+  | {
+      code: "load-failed";
+      stage: "index-cache";
+      reason: null;
     };
 
 type SanctionsListMatcher = (props: {
@@ -439,8 +447,8 @@ const screenList = async ({
     if (index.isErr()) {
       return Result.err({
         code: index.error.code,
-        reason: "index-load" as const,
-        stage: "list-screening" as const,
+        stage: "index-cache" as const,
+        reason: null,
       });
     }
     const screened = screen(index.value, query, {
