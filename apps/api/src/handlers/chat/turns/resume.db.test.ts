@@ -558,9 +558,7 @@ describe("chat turn resume", () => {
           handler,
           status: response.status,
           stream: response.result instanceof Response,
-          leaked: JSON.stringify(response.result ?? null).includes(
-            "privileged",
-          ),
+          leaked: JSON.stringify(response.result).includes("privileged"),
         }).toEqual({ name, handler, status, stream: false, leaked: false });
       }
     }
