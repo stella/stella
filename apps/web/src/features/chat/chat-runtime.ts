@@ -44,6 +44,7 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
 import {
+  BrowserBridgeUnmountedError,
   getBrowserClientCapability,
   isBrowserExtensionBridgeMounted,
 } from "@/features/chat/browser-control/browser-extension-bridge";
@@ -655,8 +656,7 @@ export const createChatRuntime = ({
       providerDiagnostic = undefined;
       if (!isBrowserExtensionBridgeMounted()) {
         getAnalytics().captureError(
-          new ChatRequestError({
-            kind: "browser_bridge_unmounted",
+          new BrowserBridgeUnmountedError({
             message:
               "Chat sent without the browser extension bridge mounted; the browser tool is unavailable for this turn",
           }),
