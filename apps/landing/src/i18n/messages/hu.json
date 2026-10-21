@@ -97,13 +97,13 @@
     "chooseLanguage": "Válasszon nyelvet",
     "docxEditor": "Önálló DOCX-szerkesztő",
     "featurePreviews": {
-      "matters": {
-        "open": "Nyitott",
-        "inProgress": "Folyamatban",
-        "done": "Kész"
-      },
       "documents": {
         "comments": "Megjegyzések"
+      },
+      "matters": {
+        "done": "Kész",
+        "inProgress": "Folyamatban",
+        "open": "Nyitott"
       },
       "research": {
         "caseLaw": "Ítélkezési gyakorlat"

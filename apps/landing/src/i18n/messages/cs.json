@@ -97,13 +97,13 @@
     "chooseLanguage": "Vyberte jazyk",
     "docxEditor": "Samostatný DOCX editor",
     "featurePreviews": {
-      "matters": {
-        "open": "Otevřený",
-        "inProgress": "Rozpracovaný",
-        "done": "Hotový"
-      },
       "documents": {
         "comments": "Komentáře"
+      },
+      "matters": {
+        "done": "Hotový",
+        "inProgress": "Rozpracovaný",
+        "open": "Otevřený"
       },
       "research": {
         "caseLaw": "Judikatura"

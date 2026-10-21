@@ -97,13 +97,13 @@
     "chooseLanguage": "Pasirinkite kalbą",
     "docxEditor": "Atskiras DOCX redaktorius",
     "featurePreviews": {
-      "matters": {
-        "open": "Atvira",
-        "inProgress": "Vykdoma",
-        "done": "Atlikta"
-      },
       "documents": {
         "comments": "Komentarai"
+      },
+      "matters": {
+        "done": "Atlikta",
+        "inProgress": "Vykdoma",
+        "open": "Atvira"
       },
       "research": {
         "caseLaw": "Teismų praktika"

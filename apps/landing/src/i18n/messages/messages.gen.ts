@@ -100,13 +100,13 @@ type Messages = {
     "chooseLanguage": "Choose a language";
     "docxEditor": "Standalone DOCX editor";
     "featurePreviews": {
-      "matters": {
-        "open": "Open";
-        "inProgress": "In progress";
-        "done": "Done";
-      };
       "documents": {
         "comments": "Comments";
+      };
+      "matters": {
+        "done": "Done";
+        "inProgress": "In progress";
+        "open": "Open";
       };
       "research": {
         "caseLaw": "Case law";

@@ -97,13 +97,13 @@
     "chooseLanguage": "Izvēlieties valodu",
     "docxEditor": "Atsevišķs DOCX redaktors",
     "featurePreviews": {
-      "matters": {
-        "open": "Atvērts",
-        "inProgress": "Izpildē",
-        "done": "Pabeigts"
-      },
       "documents": {
         "comments": "Komentāri"
+      },
+      "matters": {
+        "done": "Pabeigts",
+        "inProgress": "Izpildē",
+        "open": "Atvērts"
       },
       "research": {
         "caseLaw": "Judikatūra"

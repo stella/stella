@@ -97,13 +97,13 @@
     "chooseLanguage": "Choisir une langue",
     "docxEditor": "Éditeur DOCX autonome",
     "featurePreviews": {
-      "matters": {
-        "open": "Ouvert",
-        "inProgress": "En cours",
-        "done": "Terminé"
-      },
       "documents": {
         "comments": "Commentaires"
+      },
+      "matters": {
+        "done": "Terminé",
+        "inProgress": "En cours",
+        "open": "Ouvert"
       },
       "research": {
         "caseLaw": "Jurisprudence"
