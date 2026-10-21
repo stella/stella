@@ -9,6 +9,7 @@ import {
   DOCUMENT_OUTSTANDING_DATE_INDEX,
   DOCUMENT_OUTSTANDING_INDEX,
 } from "@/api/lib/legal-search/sk-document-outstanding-index";
+import { MONITORING_SESSION_INDEXES } from "@/api/lib/synthetic-principal/indexes";
 
 import {
   REWRITTEN_MIGRATION_INDEXES,
@@ -171,6 +172,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "legislation_documents_legacy_current_lang_idx",
     tableName: "legislation_documents",
   },
+  ...MONITORING_SESSION_INDEXES,
   ...Object.values(CHAT_CONTENT_V3_SOURCES).map(({ table: tableName }) => ({
     createSql: `CREATE INDEX CONCURRENTLY "${tableName}_content_v3_pending_idx" ON public."${tableName}" (id) WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb`,
     definitionBody: `ON public.${tableName} USING btree (id) WHERE ((content -> 'version'::text) IS DISTINCT FROM '3'::jsonb)`,

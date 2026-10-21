@@ -40,7 +40,7 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/sha256": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/time": "0.4.1",
     "@stll/ui": "workspace:*",
     "@tanstack/charts": "catalog:",
     "better-result": "catalog:",
@@ -51,7 +51,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.14.5",
+    "@happy-dom/global-registrator": "21.0.1",
     "@stll/portable-path": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/scripts": "workspace:*",

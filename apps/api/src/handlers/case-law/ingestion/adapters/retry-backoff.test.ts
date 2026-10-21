@@ -5,6 +5,7 @@ import { propertyConfig } from "@stll/property-testing";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   PublisherRateLimitRefusalError,
@@ -17,7 +18,7 @@ const URL = "https://publications.europa.eu/test";
 const INIT = {
   adapterKey: ADAPTER_KEYS.EU_ECJ,
   fetchStage: "listing",
-  timeoutMs: 1000,
+  timeoutMs: HAPPY_PATH_TIMEOUT_MS,
 } as const;
 
 describe("publisher throttling and transient failures", () => {

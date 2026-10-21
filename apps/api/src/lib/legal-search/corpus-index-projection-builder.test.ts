@@ -4,12 +4,23 @@ import { resolveUsCourt } from "@stll/api-contract/us-courts";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  PROVISION_KEY_MAX_BYTES,
+  PROVISION_KEYS_MAX_COUNT,
+  PROVISION_KEYS_MAX_SERIALIZED_BYTES,
+} from "@/api/lib/case-law/provision-keys";
+import {
+  PROJECTION_GENERATION_FIELD,
+  UNDATED_DECISION_TIMESTAMP,
+} from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexGroupConfig,
   corpusIndexGroupContractForJurisdiction,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
-import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  CORPUS_INDEX_MANIFESTS,
+  corpusIndexGenerationField,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   buildCaseLawProjectionDocuments,
   buildCorpusProjectionDocuments,
@@ -20,7 +31,10 @@ import type {
   CaseLawProjectionInput,
   LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
-import { CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+  CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+} from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { LIMITS } from "@/api/lib/limits";
@@ -39,6 +53,8 @@ const CASE_LAW_INPUT = {
   redistributionEligible: true,
   redacted: false,
   listingOnly: false,
+  provisionKeys: [],
+  vacatedFrom: null,
   caseNumber: "4 As 3/2008",
   identifiers: [
     { type: "source", value: "NSS-4-AS-3-2008" },
@@ -871,6 +887,155 @@ test("a group under its manifest's contract writes the documents it wrote before
     });
     for (const document of documents) {
       expect("court_partition" in document).toBe(false);
+    }
+  }
+});
+
+const PROVISION_KEYS = [
+  "262/2006 Sb.|par_316",
+  "262/2006 Sb.|par_316-odst_2",
+  "262/2006 Sb.|par_316-odst_2-pism_a",
+];
+
+test("a Czech decision in the building generation carries its provision keys on every passage", () => {
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v9;
+  const documents = buildCaseLawProjectionDocuments({
+    manifest,
+    input: {
+      ...DATED_CASE_LAW_INPUT,
+      provisionKeys: PROVISION_KEYS.toReversed(),
+    },
+    payload: {
+      text: `${"first ".repeat(400)}\n\n${"second ".repeat(400)}`,
+      ast: null,
+    },
+    revision: REVISION,
+  });
+  expect(documents.length).toBeGreaterThan(1);
+  // Every passage, not only the opening one: a provision filter is one exact
+  // term, and any passage a query reaches has to answer it. Sorted, so the
+  // same links write the same bytes.
+  expect(documents.map((document) => document.provision_keys)).toEqual(
+    documents.map(() => PROVISION_KEYS),
+  );
+  // Strict mapping: every emitted field is one the group's effective contract
+  // maps.
+  const mapped = new Set(
+    corpusIndexGroupConfig(
+      corpusIndexGroupContractForJurisdiction(manifest, "CZE"),
+    ).doc_mapping.field_mappings.map(({ name }) => name),
+  );
+  for (const document of documents) {
+    expect(Object.keys(document).filter((key) => !mapped.has(key))).toEqual([]);
+  }
+});
+
+test("a Czech decision with no recorded link writes no provision keys field", () => {
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v9,
+    input: DATED_CASE_LAW_INPUT,
+    payload: { text: "Právní věta", ast: null },
+    revision: REVISION,
+  });
+  expect(documents.length).toBeGreaterThan(0);
+  for (const document of documents) {
+    expect("provision_keys" in document).toBe(false);
+  }
+});
+
+test("the serving generations write the documents they wrote before, whatever keys the input holds", () => {
+  // The same Czech decision is projected into v8 beside v9; its v8 copy is
+  // byte for byte what it was, and no other group ever carries the field.
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+    CORPUS_INDEX_MANIFESTS.case_law_v8,
+  ]) {
+    for (const input of [
+      DATED_CASE_LAW_INPUT,
+      { ...DATED_CASE_LAW_INPUT, jurisdiction: "POL", language: "pl" },
+    ]) {
+      const documents = buildCaseLawProjectionDocuments({
+        manifest,
+        input: { ...input, provisionKeys: PROVISION_KEYS },
+        payload: { text: "Právní věta", ast: null },
+        revision: REVISION,
+      });
+      const plain = buildCaseLawProjectionDocuments({
+        manifest,
+        input,
+        payload: { text: "Právní věta", ast: null },
+        revision: REVISION,
+      });
+      expect(documents).toEqual(plain);
+      for (const document of documents) {
+        expect("provision_keys" in document).toBe(false);
+        expect(PROJECTION_GENERATION_FIELD in document).toBe(false);
+        expect("court_partition" in document).toBe(false);
+      }
+    }
+  }
+});
+
+test("a key set at the cap fits a passage and one past it is refused", () => {
+  const atCap = Array.from(
+    { length: PROVISION_KEYS_MAX_COUNT },
+    (_, index) =>
+      `${"x".repeat(PROVISION_KEY_MAX_BYTES - 2 - 8)}${String(index).padStart(8, "0")}`,
+  );
+  const [document] = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v9,
+    input: { ...DATED_CASE_LAW_INPUT, provisionKeys: atCap },
+    payload: { text: "Právní věta", ast: null },
+    revision: REVISION,
+  });
+  expect(document?.provision_keys).toHaveLength(PROVISION_KEYS_MAX_COUNT);
+  // The field as the projection sends it fits the budget the cap is derived
+  // from, and that budget is a small part of the single-document ceiling a
+  // request is split against.
+  expect(
+    Buffer.byteLength(JSON.stringify(document?.provision_keys), "utf-8"),
+  ).toBeLessThanOrEqual(PROVISION_KEYS_MAX_SERIALIZED_BYTES);
+  expect(PROVISION_KEYS_MAX_SERIALIZED_BYTES).toBeLessThanOrEqual(
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES / 8,
+  );
+  expect(Buffer.byteLength(JSON.stringify(document), "utf-8") + 1).toBeLessThan(
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES / 8,
+  );
+  expect(() =>
+    buildCaseLawProjectionDocuments({
+      manifest: CORPUS_INDEX_MANIFESTS.case_law_v9,
+      input: {
+        ...DATED_CASE_LAW_INPUT,
+        provisionKeys: [...atCap, "one past the cap"],
+      },
+      payload: { text: "Právní věta", ast: null },
+      revision: REVISION,
+    }),
+  ).toThrow("Provision keys exceed");
+});
+
+test("every passage carries its generation origin exactly when its mapping supports it", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    if (manifest.family !== "case_law") {
+      continue;
+    }
+    const documents = buildCaseLawProjectionDocuments({
+      manifest,
+      input: DATED_CASE_LAW_INPUT,
+      payload: {
+        text: `${"first ".repeat(400)}\n\n${"second ".repeat(400)}`,
+        ast: null,
+      },
+      revision: REVISION,
+    });
+    expect(documents.length).toBeGreaterThan(1);
+    const field = corpusIndexGenerationField(manifest);
+    for (const document of documents) {
+      expect(PROJECTION_GENERATION_FIELD in document).toBe(field !== null);
+      if (field !== null) {
+        expect(document[field]).toBe(manifest.generation);
+      }
     }
   }
 });
