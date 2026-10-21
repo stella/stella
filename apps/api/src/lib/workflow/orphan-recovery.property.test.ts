@@ -23,7 +23,7 @@ const claimedCell = fc.record({
 
 test("scheduled workflow reconciliation drives claimed cells to a terminal fixed point", async () => {
   await assertProperty(
-    "workflow pending cells reach a terminal fixed point",
+    "scheduled workflow reconciliation drives claimed cells to a terminal fixed point",
     fc.asyncProperty(
       fc.array(claimedCell, { minLength: 1, maxLength: 100 }),
       async (cells) => {

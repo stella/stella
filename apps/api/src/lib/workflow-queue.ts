@@ -1454,7 +1454,7 @@ const processOneBatch = async ({
   serviceTier,
   forcedPropertyIds,
   recoveryAttempt,
-}: ProcessOneBatchArgs) => {
+}: ProcessOneBatchArgs): Promise<void> => {
   const { workspaceId, organizationId, userId, runId: requestId } = actor;
   signal.throwIfAborted();
   const isCurrentRequest = await isCurrentWorkflowRequest({
