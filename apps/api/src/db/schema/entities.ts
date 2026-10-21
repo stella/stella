@@ -14,6 +14,7 @@ import {
 import type { FolioCollabSavedSnapshotCut } from "@/api/lib/folio-collab-room-contract";
 import type { SkippedSkillFile } from "@/api/lib/skills/skill-package";
 
+import { session as authSession } from "../auth-schema";
 import {
   entityFeatureGateChecks,
   entityFeatureGateColumns,
@@ -951,6 +952,9 @@ export const folioCollabRoomTokens = p.pgTable(
       .text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    sourceSessionId: p
+      .text("source_session_id")
+      .references(() => authSession.id, { onDelete: "cascade" }),
     tokenHash: p.varchar("token_hash", { length: 64 }).notNull(),
     generation: p.bigint("generation", { mode: "number" }).notNull(),
     permissions: jsonb("permissions")
@@ -966,6 +970,10 @@ export const folioCollabRoomTokens = p.pgTable(
       .on(table.workspaceId, table.expiresAt),
     p.index("folio_collab_room_tokens_room_id_idx").on(table.roomId),
     p.index("folio_collab_room_tokens_user_id_idx").on(table.userId),
+    p
+      .index("folio_collab_room_tokens_source_session_idx")
+      .on(table.sourceSessionId)
+      .where(sql`${table.sourceSessionId} IS NOT NULL`),
     p
       .uniqueIndex("folio_collab_room_tokens_token_hash_uidx")
       .on(table.tokenHash),
