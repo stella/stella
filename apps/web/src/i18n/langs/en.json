@@ -855,7 +855,6 @@
         "unavailable": "AI analysis is not available for this decision."
       },
       "generate": "Generate AI headnotes",
-      "holdingAnchor": "Go to paragraph",
       "invitation": "With a free account, AI drafts working notes on this decision.",
       "topics": "Topics",
       "treatment": "Later treatment"
@@ -1111,6 +1110,8 @@
         "hint": "Drop or widen a filter and search again.",
         "message": "Nothing matched under the filters you narrowed with."
       },
+      "partialMatch": "Partial match",
+      "partialMatches": "Partial matches for: <bdi>{query}</bdi>",
       "resultsFor": "Results for: <bdi>{query}</bdi>",
       "searchEveryWord": "Search every word"
     },
@@ -1148,6 +1149,7 @@
       "judges": "Judges",
       "legalArea": "Legal area",
       "legalSentence": "Legal sentence",
+      "paragraphReference": "Paragraph {number}",
       "popularName": "Popular name",
       "portraitCredit": "Portrait source: {source}",
       "provisionMentions": "{count, number}×",
@@ -1614,6 +1616,9 @@
         "private": "Your skills",
         "team": "Team skills"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Also consulted ({count, number})"
     },
     "sourcePlaceholder": "Chat about {title}",
     "sourcePlaceholderAction": "Chat about",

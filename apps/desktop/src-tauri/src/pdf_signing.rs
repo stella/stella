@@ -269,11 +269,11 @@ pub fn submit_dialog_choice(
 /// Release a dialog that was closed with the window control rather than with
 /// a button, so the flow does not wait out its timeout.
 fn cancel_dialog() {
-  if let Some(bridge) = DIALOG_BRIDGE
+  let bridge = DIALOG_BRIDGE
     .lock()
     .unwrap_or_else(|e| e.into_inner())
-    .take()
-  {
+    .take();
+  if let Some(bridge) = bridge {
     let _ = bridge.choice.send(DialogChoice::Cancel);
   }
 }
