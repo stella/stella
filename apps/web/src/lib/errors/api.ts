@@ -54,8 +54,12 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
 }> {}
 
 const MAX_API_RETRY_COUNT = 3;
+const CLIENT_ERROR_STATUS = 400;
 const TOO_MANY_REQUESTS_STATUS = 429;
 const SERVER_ERROR_STATUS = 500;
+
+const isClientErrorStatus = (status: number): boolean =>
+  status >= CLIENT_ERROR_STATUS && status < SERVER_ERROR_STATUS;
 
 export const shouldRetryAPIRequest = (
   failureCount: number,
@@ -283,7 +287,11 @@ export const apiFieldIssueMessage = (
   error: unknown,
   field: string,
 ): string | undefined => {
-  if (!APIError.is(error) || error.code !== API_VALIDATION_ERROR_CODE) {
+  if (
+    !APIError.is(error) ||
+    error.code !== API_VALIDATION_ERROR_CODE ||
+    !isClientErrorStatus(error.status)
+  ) {
     return undefined;
   }
   const issue = parseApiValidationIssues(error.details).find(
@@ -344,7 +352,7 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
   // Only a rejected request (4xx) is a validation answer. An outage that
   // carries the code must keep the unavailable/retry message.
   const issue =
-    code === API_VALIDATION_ERROR_CODE && status < SERVER_ERROR_STATUS
+    code === API_VALIDATION_ERROR_CODE && isClientErrorStatus(status)
       ? parseApiValidationIssues(details).at(0)
       : undefined;
   if (issue !== undefined) {
@@ -353,7 +361,7 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
   if (
     code &&
     isKnownErrorCode(code) &&
-    !(code === API_VALIDATION_ERROR_CODE && status >= SERVER_ERROR_STATUS)
+    !(code === API_VALIDATION_ERROR_CODE && !isClientErrorStatus(status))
   ) {
     return translateError(CODE_ERROR_KEYS[code]);
   }
