@@ -85,7 +85,9 @@ test("a route with no app frame still has the extension bridge, across navigatio
     });
 
     await testing.act(async () => {
-      await appRouter.navigate({ to: "/other" });
+      // The test router has its own route tree, outside the app's typed paths.
+      appRouter.history.push("/other");
+      await sleep(20);
     });
     await testing.waitFor(() => view.getByTestId("other"));
     expect(isBrowserExtensionBridgeMounted()).toBe(true);
