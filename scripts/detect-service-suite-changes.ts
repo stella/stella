@@ -471,18 +471,19 @@ type DependencyGraph =
   | ReturnType<typeof devSeedDependencies>;
 
 // An unreadable graph cannot prove a change outside it.
-const graphSelects = (graph: DependencyGraph, files: readonly string[]) => {
-  switch (graph.status) {
-    case "unresolved":
-      console.error(graph.message);
-      return true;
-    case "complete":
-      return files.some(
-        (file) =>
-          graph.dependencies.has(file) ||
-          [...graph.packageScopes].some((scope) => file.startsWith(scope)),
-      );
+const graphSelects = (
+  graph: DependencyGraph,
+  files: readonly string[],
+): boolean => {
+  if (graph.status === "unresolved") {
+    console.error(graph.message);
+    return true;
   }
+  return files.some(
+    (file) =>
+      graph.dependencies.has(file) ||
+      [...graph.packageScopes].some((scope) => file.startsWith(scope)),
+  );
 };
 
 const suiteGraphs = new Map<
