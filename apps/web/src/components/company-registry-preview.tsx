@@ -58,28 +58,33 @@ export const CompanyRegistryPreview = ({
   }
 
   if (data?.type === "name-search-not-found") {
+    if (data.candidates.length === 0) {
+      return (
+        <p className="text-muted-foreground p-6 text-sm">
+          {t("common.noResults")}
+        </p>
+      );
+    }
     return (
       <div className="space-y-3 p-6">
         <p className="text-muted-foreground text-sm">
           {t("search.registryNameSearchNotFound")}
         </p>
-        {data.candidates.length > 0 ? (
-          <ul className="space-y-2">
-            {data.candidates.map((candidate) => (
-              <li className="text-sm" key={candidate.id}>
-                <bdi className="font-medium tabular-nums">{candidate.id}</bdi>
-                <span className="text-muted-foreground">
-                  {" — "}
-                  {candidate.reason === "name-mismatch"
-                    ? t("search.registryCandidateNameMismatch", {
-                        officialName: candidate.officialName ?? candidate.id,
-                      })
-                    : t("search.registryCandidateNoOfficialRecord")}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        <ul className="space-y-2">
+          {data.candidates.map((candidate) => (
+            <li className="text-sm" key={candidate.id}>
+              <bdi className="font-medium tabular-nums">{candidate.id}</bdi>
+              <span className="text-muted-foreground">
+                {" — "}
+                {candidate.reason === "name-mismatch"
+                  ? t("search.registryCandidateNameMismatch", {
+                      officialName: candidate.officialName ?? candidate.id,
+                    })
+                  : t("search.registryCandidateNoOfficialRecord")}
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
     );
   }

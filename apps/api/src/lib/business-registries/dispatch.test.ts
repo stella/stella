@@ -641,6 +641,59 @@ describe("executeRegistryLookup — verified web candidates", () => {
     });
   });
 
+  test.each([
+    ["sp. z o.o.", "Fikcyjna Firma sp. z o.o."],
+    ["Fikcyjna Firma sp. z o.o.", "S.A."],
+  ])(
+    "rejects an empty normalized name on either side",
+    async (query, officialName) => {
+      const result = await executeRegistryLookup({
+        observer: "unobserved",
+        permit,
+        handler: krsWebHandler(async (id) => krsHit(id, officialName)),
+        query,
+        webSearch: {
+          provider: webProviderWith([{ title: "KRS 0000123456" }]),
+          observer: () => undefined,
+        },
+      });
+
+      expect(result).toMatchObject({
+        type: "name-search-not-found",
+        candidates: [{ id: "0000123456", reason: "name-mismatch" }],
+      });
+    },
+  );
+
+  test("maps a rejected web search to retryable upstream unavailability", async () => {
+    const cause = new Error("provider unavailable");
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async () => null),
+      query: "Fikcyjna Firma",
+      webSearch: {
+        provider: {
+          name: "tavily",
+          search: async () => {
+            throw cause;
+          },
+        },
+        observer: () => undefined,
+      },
+    });
+
+    expect(result).toBeInstanceOf(HandlerError);
+    if (!(result instanceof HandlerError)) {
+      throw new TypeError("expected a handler error");
+    }
+    expect(result).toMatchObject({
+      status: 502,
+      code: "upstream_unavailable",
+      cause,
+    });
+  });
+
   test("deduplicates candidates and verifies no more than the cap", async () => {
     const lookedUp: string[] = [];
     const ids = Array.from({ length: 7 }, (_, index) =>

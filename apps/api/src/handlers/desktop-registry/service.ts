@@ -48,6 +48,9 @@ export type DesktopRegistryContext = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   scopedDb: ScopedDb;
+  testDependencies?: {
+    getOrganizationRegistryHandler?: typeof getOrganizationRegistryHandler;
+  };
 };
 
 type DesktopRegistrySearch = {
@@ -156,7 +159,10 @@ export const searchDesktopRegistry = async (
   }
   const configured = await Result.tryPromise({
     try: async () =>
-      await getOrganizationRegistryHandler({
+      await (
+        context.testDependencies?.getOrganizationRegistryHandler ??
+        getOrganizationRegistryHandler
+      )({
         ...context,
         registry,
       }),
@@ -188,6 +194,16 @@ export const searchDesktopRegistry = async (
   });
   if (lookup instanceof HandlerError) {
     return Result.err(lookup);
+  }
+  if (lookup.type === "name-search-unavailable") {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        code: "upstream_unavailable",
+        retryable: true,
+        message: "Business registry name search is unavailable",
+      }),
+    );
   }
   const formats = await loadFormats(context, registry);
   const results: DesktopRegistrySearchResult[] = [];

@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import type {
   BusinessRegistryLookupDetail,
   BusinessRegistrySlug,
@@ -1938,16 +1940,33 @@ const searchRegistryByWebCandidates = async ({
   observer,
   permit,
   webSearch,
-}: SearchRegistryByWebCandidatesOptions): Promise<RegistryLookupResponse> => {
-  const { results } = await searchWeb({
-    provider: webSearch.provider,
-    observer: webSearch.observer,
-    abortSignal: webSearch.abortSignal,
-    query: `${query} ${capability.identifyingWords}`,
-    jurisdiction: "global",
-    freshness: "any",
-    maxResults: 10,
+}: SearchRegistryByWebCandidatesOptions): Promise<
+  RegistryLookupResponse | HandlerError
+> => {
+  const searched = await Result.tryPromise({
+    try: async () =>
+      await searchWeb({
+        provider: webSearch.provider,
+        observer: webSearch.observer,
+        abortSignal: webSearch.abortSignal,
+        query: `${query} ${capability.identifyingWords}`,
+        jurisdiction: "global",
+        freshness: "any",
+        maxResults: 10,
+      }),
+    catch: (cause) =>
+      new HandlerError({
+        status: 502,
+        code: "upstream_unavailable",
+        retryable: true,
+        message: `Registry '${handler.slug}' name search is unavailable`,
+        cause,
+      }),
   });
+  if (searched.isErr()) {
+    return searched.error;
+  }
+  const { results } = searched.value;
   const candidateIds: string[] = [];
   const seen = new Set<string>();
   const matcher = new RegExp(
@@ -1984,7 +2003,12 @@ const searchRegistryByWebCandidates = async ({
       candidates.push({ id, reason: "no-official-record" });
       continue;
     }
-    if (normalizeRegisteredCompanyName(hit.name) !== expectedName) {
+    const officialName = normalizeRegisteredCompanyName(hit.name);
+    if (
+      expectedName === null ||
+      officialName === null ||
+      officialName !== expectedName
+    ) {
       candidates.push({
         id,
         reason: "name-mismatch",

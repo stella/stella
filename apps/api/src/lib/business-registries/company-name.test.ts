@@ -9,9 +9,17 @@ describe("registered company name normalization", () => {
     ["Zażółć Gęślą S.A.", "zazolc gesla"],
     ["Zażółć Gęślą spółka akcyjna", "zazolc gesla"],
     ["Kowalski i Wspólnicy sp.k.", "kowalski i wspolnicy"],
+    ["Kowalski i Wspólnicy SPÓŁKA KOMANDYTOWA", "kowalski i wspolnicy"],
     ["Kowalski—Nowak SP.J.", "kowalski nowak"],
     ["  'Acme'   Polska  ", "acme polska"],
   ])("normalizes %s", (input, expected) => {
-    expect(normalizeRegisteredCompanyName(input)).toBe(expected);
+    expect(String(normalizeRegisteredCompanyName(input))).toBe(expected);
   });
+
+  test.each(["sp. z o.o.", "S.A."])(
+    "rejects a suffix-only name: %s",
+    (input) => {
+      expect(normalizeRegisteredCompanyName(input)).toBeNull();
+    },
+  );
 });

@@ -50,6 +50,7 @@ import type {
   OrgAIConfigReader,
   OrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/anonymization-allowlist";
 import type { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -110,7 +111,7 @@ import type {
 import type { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import {
   type OrgWebSearchKeyRow,
-  resolveWebSearchProvidersFromOrgSettingsRow,
+  resolveWebSearchProvidersResultFromOrgSettingsRow,
 } from "@/api/lib/web-search/load-org-keys";
 import type { WebSearchProvider } from "@/api/lib/web-search/types";
 import type { withTimeout } from "@/api/lib/with-timeout";
@@ -391,7 +392,14 @@ export const loadAccessibleMcpWorkspaces = async ({
   return outcome.value.workspaces;
 };
 
-const resolveEnabledMcpWebSearchProvider = async ({
+type McpWebSearchAvailability =
+  | { status: "available"; provider: WebSearchProvider }
+  | {
+      status: "unavailable";
+      reason: "not-configured" | "key-unreadable";
+    };
+
+export const resolveEnabledMcpWebSearchProvider = async ({
   disabledNativeToolSlugs,
   organizationId,
   row,
@@ -399,11 +407,23 @@ const resolveEnabledMcpWebSearchProvider = async ({
   disabledNativeToolSlugs: readonly string[] | undefined;
   organizationId: SafeId<"organization">;
   row: OrgWebSearchKeyRow | null | undefined;
-}): Promise<WebSearchProvider | null> =>
-  disabledNativeToolSlugs?.includes("web-search")
-    ? null
-    : (await resolveWebSearchProvidersFromOrgSettingsRow(organizationId, row))
-        .webSearchProvider;
+}): Promise<McpWebSearchAvailability> => {
+  if (disabledNativeToolSlugs?.includes("web-search")) {
+    return { status: "unavailable", reason: "not-configured" };
+  }
+  const resolved = await resolveWebSearchProvidersResultFromOrgSettingsRow(
+    organizationId,
+    row,
+  );
+  if (resolved.isErr()) {
+    captureError(resolved.error, { source: "mcp-web-search-key-resolution" });
+    return { status: "unavailable", reason: "key-unreadable" };
+  }
+  if (resolved.value.webSearchProvider === null) {
+    return { status: "unavailable", reason: "not-configured" };
+  }
+  return { status: "available", provider: resolved.value.webSearchProvider };
+};
 
 const credentialPermissionContext = (
   session: McpSession,
@@ -412,6 +432,29 @@ const credentialPermissionContext = (
   session.credential?.type === "personal_api_key"
     ? { credentialPermissions: session.credential.permissions }
     : {};
+
+const providerFromMcpWebSearchAvailability = (
+  availability: McpWebSearchAvailability,
+): WebSearchProvider | null =>
+  availability.status === "available" ? availability.provider : null;
+
+const loadMcpOrganizationSettings = async (
+  safeDb: SafeDb,
+  organizationId: SafeId<"organization">,
+) =>
+  await safeDb((tx) =>
+    tx.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: organizationId } },
+      columns: {
+        practiceJurisdictions: true,
+        nativeToolOverrides: true,
+        webSearchApiKeyEncrypted: true,
+        webSearchApiKeyIv: true,
+        urlFetchApiKeyEncrypted: true,
+        urlFetchApiKeyIv: true,
+      },
+    }),
+  );
 
 export const resolveMcpSessionContext = async (
   session: McpSession,
@@ -437,16 +480,11 @@ export const resolveMcpSessionContext = async (
     organizationId,
     userId,
   });
-
   if (!authorization) {
     throw new McpOrganizationAccessError({
       message: "User is not a member of this organization",
     });
   }
-
-  // A restricted account is refused its operation here, and an account bound
-  // to one organization opens no other, whatever grant or membership the
-  // credential was issued under.
   const accountOperation = checkAccountOperation(authorization.email);
   const accountAccess = Result.isError(accountOperation)
     ? accountOperation
@@ -459,7 +497,6 @@ export const resolveMcpSessionContext = async (
       message: accountAccess.error.message,
     });
   }
-
   // OAuth access tokens issued before the member_id claim existed carry none
   // and open on live membership alone. Remove this allowance (require the
   // claim on OAuth client tokens) once every such token has expired, i.e.
@@ -472,17 +509,14 @@ export const resolveMcpSessionContext = async (
       message: "Token was issued for a previous membership",
     });
   }
-
   if (!isMemberRole(authorization.role)) {
     panic("User has an invalid member role");
   }
-
   const auditExecution = await resolveAgentAuditExecution({
     credential: session.credential,
     organizationId,
     userId,
   });
-
   const memberRole = authorization.role;
   const bootstrapScopedDb = createMembershipScopedDb(rlsDb, {
     organizationId,
@@ -493,9 +527,6 @@ export const resolveMcpSessionContext = async (
     organizationId,
     scopedDb: bootstrapScopedDb,
   });
-  // Business-logic fields exclude deleting workspaces so MCP tools don't
-  // surface content from sealed workspaces. RLS derives membership from the
-  // organization/user transaction settings independently.
   const usableWorkspaces = filterUsableMcpWorkspaces({
     accessibleWorkspaces,
     tokenWorkspaceIds: session.workspaceIds,
@@ -518,7 +549,6 @@ export const resolveMcpSessionContext = async (
         }
         return true;
       });
-
     // A workspace_ids claim is a signed attenuation boundary, not just a
     // tool-discovery hint. After intersecting it with live authorization
     // above, carry that exact subset into RLS explicit mode so root/list
@@ -535,7 +565,6 @@ export const resolveMcpSessionContext = async (
         ),
       };
     }
-
     const databaseIdentity = {
       organizationId,
       serverValidatedWorkspaceIds,
@@ -561,19 +590,7 @@ export const resolveMcpSessionContext = async (
         );
 
   const [settingsResult, registryDispatch] = await Promise.all([
-    requestDatabaseScope.safeDb((tx) =>
-      tx.query.organizationSettings.findFirst({
-        where: { organizationId: { eq: organizationId } },
-        columns: {
-          practiceJurisdictions: true,
-          nativeToolOverrides: true,
-          webSearchApiKeyEncrypted: true,
-          webSearchApiKeyIv: true,
-          urlFetchApiKeyEncrypted: true,
-          urlFetchApiKeyIv: true,
-        },
-      }),
-    ),
+    loadMcpOrganizationSettings(requestDatabaseScope.safeDb, organizationId),
     getOrganizationRegistryDispatch({
       organizationId,
       scopedDb: requestDatabaseScope.scopedDb,
@@ -591,13 +608,18 @@ export const resolveMcpSessionContext = async (
           disabledNativeToolSlugs,
           dispatch: registryDispatch,
         }).map((handler) => handler.slug);
-  const webSearchProvider = Result.isError(settingsResult)
-    ? null
+  const webSearchAvailability: McpWebSearchAvailability = Result.isError(
+    settingsResult,
+  )
+    ? { status: "unavailable", reason: "not-configured" }
     : await resolveEnabledMcpWebSearchProvider({
         disabledNativeToolSlugs,
         organizationId,
         row: settingsResult.value,
       });
+  const webSearchProvider = providerFromMcpWebSearchAvailability(
+    webSearchAvailability,
+  );
 
   return {
     ...(auditExecution ? { auditExecution } : {}),

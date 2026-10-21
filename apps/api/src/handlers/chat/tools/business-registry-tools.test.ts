@@ -92,6 +92,20 @@ describe("createBusinessRegistryTools", () => {
     );
   });
 
+  test("does not advertise verified KRS name search without web search", () => {
+    const tools = createBusinessRegistryTools({
+      organizationId: toSafeId<"organization">("fixture-org"),
+      enabledHandlers: [BUSINESS_REGISTRY_DISPATCH.krs],
+      webSearchProvider: null,
+    });
+    const lookupTool = tools[BUSINESS_REGISTRY_LOOKUP_TOOL_NAME];
+
+    expect(lookupTool?.description).not.toContain(
+      "KRS company-name matches are verified",
+    );
+    expect(lookupTool?.description).toContain("PL/KRS requires the KRS number");
+  });
+
   test("executes with the same organization-bound handler it advertises", async () => {
     let lookupCalls = 0;
     const boundHandler = {
