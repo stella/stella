@@ -12,6 +12,13 @@ const inputs = rootCheckInputs(graph);
 // whole tree or loses its real reader fails here.
 const CASES = [
   {
+    // The step runs this package test directly; it is covered through the
+    // tooling packages every narrow declaration includes.
+    check: "ci-checks-rest/Generated source artifact contract",
+    inside: "packages/scripts/src/prepared-generated-sources.test.ts",
+    outside: "apps/landing/src/probe.ts",
+  },
+  {
     check: "ci-checks-rest/Chat mutation targets",
     inside: "apps/api/src/lib/chat/probe.ts",
     outside: "apps/landing/src/probe.ts",

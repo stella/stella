@@ -16,9 +16,12 @@ import {
 import * as BedrockRuntime from "@aws-sdk/client-bedrock-runtime";
 import { describe, expect, test } from "bun:test";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract";
+
 import {
   classifyAIError,
   classifyAIBoundaryFailure,
+  aiHandlerError,
   isAnticipatedAIFailure,
   isUnanticipatedAIFailure,
   providerStatusCode,
@@ -33,7 +36,9 @@ import {
   ModelDeadlineExceededError,
   ModelOutputIncompleteError,
   ModelOutputInvalidError,
+  ModelOutputModeratedError,
   ModelRunError,
+  ModelRunUnfinishedError,
 } from "@/api/lib/errors/provider-call-error";
 import {
   AIGenerationCancelledError,
@@ -84,6 +89,43 @@ const providerErrorBody = (code: number, status: string) =>
       status,
     },
   }) satisfies Record<string, unknown>;
+
+describe("AI REST failure codes", () => {
+  const model = { provider: "google", keySource: "byok" } as const;
+  const cases = [
+    [apiCallError(429), "quota_exhausted", 429],
+    [apiCallError(402), "provider_billing", 402],
+    [apiCallError(401), "provider_credentials_rejected", 502],
+    [apiCallError(404), "model_unavailable", 502],
+    [apiCallError(503), "provider_unavailable", 502],
+    [new ModelRunUnfinishedError({ model }), "provider_stream_incomplete", 502],
+    [new ModelOutputIncompleteError({ model }), "output_incomplete", 502],
+    [new ModelOutputModeratedError({ model }), "output_moderated", 502],
+    [new ModelOutputInvalidError({ model }), "output_invalid", 502],
+    [
+      new ModelDeadlineExceededError({ deadlineMs: 1 }),
+      "deadline_exceeded",
+      502,
+    ],
+    [new ChatLoopDetectedError({ message: "loop" }), "loop_detected", 502],
+    [
+      new ChatEmptyCompletionError({ message: "empty" }),
+      "empty_completion",
+      502,
+    ],
+    [new Error("unknown"), "unknown", 500],
+  ] as const;
+
+  test.each(cases)("maps %s to %s", (error, kind, status) => {
+    const result = aiHandlerError(error, {
+      status: 500,
+      message: "AI failed",
+    });
+
+    expect(result.status).toBe(status);
+    expect(result.code).toBe(AI_FAILURE_CODES[kind]);
+  });
+});
 
 describe("classifyAIError", () => {
   test("classifies configured provider availability errors consistently", () => {

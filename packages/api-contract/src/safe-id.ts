@@ -1,5 +1,4 @@
-// parser-output-unchanged: Adding the citation doctrine review ID kind does not change parser IDs or parsed records.
-// parser-output-unchanged: Adding search-history, chat revision and reader answer ID kinds does not change parser IDs or parsed records.
+// parser-output-unchanged: Adding citation doctrine review, search-history, chat revision, reader answer and chat tool grant ID kinds does not change parser IDs or parsed records.
 // parser-output-unchanged: [at-asylgh] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
 // parser-output-unchanged: [at-bks] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
 // parser-output-unchanged: [at-bvwg] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
@@ -71,6 +70,7 @@ export type SafeIdType =
   | "chatTurn"
   | "chatThreadCompaction"
   | "chatThread"
+  | "chatToolGrant"
   | "fileChatThread"
   | "templateChatThread"
   | "templateDeletionCleanupRequest"

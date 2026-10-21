@@ -36,6 +36,7 @@ import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-conta
 
 import { getTranslator } from "@/i18n/translator";
 import type { TranslationKey } from "@/i18n/types";
+import { AI_FAILURE_ERROR_KEYS } from "@/lib/errors/ai-failure";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import { ClientOperationError } from "@/lib/errors/client";
 import {
@@ -55,7 +56,12 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
 }> {}
 
 const MAX_API_RETRY_COUNT = 3;
+const CLIENT_ERROR_STATUS = 400;
 const TOO_MANY_REQUESTS_STATUS = 429;
+const SERVER_ERROR_STATUS = 500;
+
+const isClientErrorStatus = (status: number): boolean =>
+  status >= CLIENT_ERROR_STATUS && status < SERVER_ERROR_STATUS;
 
 export const shouldRetryAPIRequest = (
   failureCount: number,
@@ -156,11 +162,13 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
 
 const PUBLIC_COUNTRY_ERROR_KEYS = {
   caseLaw: {
+    identity_public: "errors.api.caseLawIdentityOnly",
     pending_public: "errors.api.caseLawCountryUnavailable",
     withdrawn: "errors.api.caseLawCountryUnavailable",
     pages_public: "errors.api.caseLawSearchUnavailable",
   },
   legislation: {
+    identity_public: "errors.api.legislationIdentityOnly",
     pending_public: "errors.api.legislationCountryUnavailable",
     withdrawn: "errors.api.legislationCountryUnavailable",
     pages_public: "errors.api.legislationSearchUnavailable",
@@ -185,6 +193,7 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
 const CODE_ERROR_KEYS = {
   [IDEMPOTENCY_IN_PROGRESS_CODE]: "errors.apiCodes.idempotencyInProgress",
   [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
+  ...AI_FAILURE_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
@@ -282,7 +291,11 @@ export const apiFieldIssueMessage = (
   error: unknown,
   field: string,
 ): string | undefined => {
-  if (!APIError.is(error) || error.code !== API_VALIDATION_ERROR_CODE) {
+  if (
+    !APIError.is(error) ||
+    error.code !== API_VALIDATION_ERROR_CODE ||
+    !isClientErrorStatus(error.status)
+  ) {
     return undefined;
   }
   const issue = parseApiValidationIssues(error.details).find(
@@ -340,14 +353,20 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
   if (isActionAdmissionCode(code)) {
     return translateError(ACTION_ADMISSION_ERROR_KEYS[code]);
   }
+  // Only a rejected request (4xx) is a validation answer. An outage that
+  // carries the code must keep the unavailable/retry message.
   const issue =
-    code === API_VALIDATION_ERROR_CODE
+    code === API_VALIDATION_ERROR_CODE && isClientErrorStatus(status)
       ? parseApiValidationIssues(details).at(0)
       : undefined;
   if (issue !== undefined) {
     return validationIssueMessage(issue);
   }
-  if (code && isKnownErrorCode(code)) {
+  if (
+    code &&
+    isKnownErrorCode(code) &&
+    !(code === API_VALIDATION_ERROR_CODE && !isClientErrorStatus(status))
+  ) {
     return translateError(CODE_ERROR_KEYS[code]);
   }
   if (

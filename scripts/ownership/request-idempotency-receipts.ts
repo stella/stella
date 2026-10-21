@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 

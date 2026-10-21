@@ -1,10 +1,11 @@
 import { useState } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
-import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
@@ -16,10 +17,10 @@ import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -49,8 +50,14 @@ export const BillingCodesDialog = ({
     billingCodesManagementOptions(workspaceId, activeTab),
   );
   const analytics = useAnalytics();
+  const matter = resourceRef({
+    type: RESOURCE_TYPE.WORKSPACE,
+    id: toSafeId<"workspace">(workspaceId),
+  });
 
-  const createCode = useIdempotentMutation({
+  const createCode = useCapabilityMutation({
+    capability: "billing-codes.create",
+    target: matter,
     mutationFn: async (
       {
         workspaceId: ws,
@@ -80,19 +87,27 @@ export const BillingCodesDialog = ({
       analytics.captureError(error);
     },
   });
-  const deleteCode = useMutation({
-    mutationFn: async ({
-      workspaceId: ws,
-      id,
-    }: {
-      workspaceId: string;
-      id: string;
-    }) => {
+  const deleteCode = useCapabilityMutation({
+    capability: "billing-codes.delete",
+    target: matter,
+    mutationFn: async (
+      {
+        workspaceId: ws,
+        id,
+      }: {
+        workspaceId: string;
+        id: string;
+      },
+      request,
+    ) => {
       const response = await api["billing-codes"]({
         workspaceId: toSafeId<"workspace">(ws),
-      }).delete({
-        id: toSafeId<"billingCode">(id),
-      });
+      }).delete(
+        {
+          id: toSafeId<"billingCode">(id),
+        },
+        request,
+      );
 
       return unwrapEden(response);
     },
@@ -110,14 +125,22 @@ export const BillingCodesDialog = ({
     sortOrder: number;
   }>;
 
-  const updateCode = useMutation({
-    mutationFn: async ({ workspaceId: ws, ...body }: UpdateBillingCodeVars) => {
+  const updateCode = useCapabilityMutation({
+    capability: "billing-codes.update",
+    target: matter,
+    mutationFn: async (
+      { workspaceId: ws, ...body }: UpdateBillingCodeVars,
+      request,
+    ) => {
       const response = await api["billing-codes"]({
         workspaceId: toSafeId<"workspace">(ws),
-      }).patch({
-        ...body,
-        id: toSafeId<"billingCode">(body.id),
-      });
+      }).patch(
+        {
+          ...body,
+          id: toSafeId<"billingCode">(body.id),
+        },
+        request,
+      );
 
       return unwrapEden(response);
     },

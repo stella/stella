@@ -1600,6 +1600,7 @@ const resolveModels = async (modelIds: readonly string[]) => {
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",

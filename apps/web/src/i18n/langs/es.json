@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Se han resuelto todas las afirmaciones que requerían una valoración.</strong> {count, plural, one {La # determinación rutinaria no requiere revisión individual.} other {Las # determinaciones rutinarias no requieren revisión individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# afirmación requiere} other {# afirmaciones requieren}} su valoración</strong>: conflictos e interpretaciones cuestionadas. {routineCount, plural, one {La otra # es rutinaria y no requiere aprobación individual.} other {Las otras # son rutinarias y no requieren aprobación individual.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, cuestionada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, impugnada} other {}})",
+      "documentView": {
+        "label": "Vista del documento",
+        "original": "Original",
+        "reading": "Vista de lectura"
+      },
+      "notLocated": "{count, plural, one {# afirmación no se ha localizado en el original} other {# afirmaciones no se han localizado en el original}}",
       "selectClaim": "Seleccione una afirmación para examinar el registro.",
       "showQueue": "Mostrar cola",
       "stats": {
@@ -849,7 +855,6 @@
         "unavailable": "El análisis con IA no está disponible para esta resolución."
       },
       "generate": "Generar sumarios con IA",
-      "holdingAnchor": "Ir al párrafo",
       "invitation": "Con una cuenta gratuita, la IA prepara notas de trabajo sobre esta resolución.",
       "topics": "Temas",
       "treatment": "Tratamiento posterior"
@@ -1009,6 +1014,9 @@
       "saved": "{count, plural, one {# resolución guardada} other {# resoluciones guardadas}} en {matter}"
     },
     "newestDecisions": "Resoluciones más recientes",
+    "noResults": {
+      "hint": "Pruebe otras palabras, mejore la consulta con IA o haga la pregunta en el chat."
+    },
     "notesFilter": {
       "ai": "IA",
       "human": "Humanas"
@@ -1082,6 +1090,10 @@
         "short": "Corto"
       }
     },
+    "rewritten": {
+      "line": "No hay coincidencias exactas para <bdi>{original}</bdi>; se muestran resultados para <bdi>{query}</bdi>",
+      "searchOriginal": "Buscar mis palabras originales"
+    },
     "sameCaseNumber": "{count, plural, one {# resolución lleva} other {# resoluciones llevan}} este número de asunto. Elija el tribunal.",
     "searchLabel": "Buscar jurisprudencia",
     "searchPlaceholder": "Número de asunto, ECLI o palabras, p. ej. 22 Cdo 2653/2012",
@@ -1098,6 +1110,8 @@
         "hint": "Quite o amplíe un filtro y vuelva a buscar.",
         "message": "Nada coincide con los filtros aplicados."
       },
+      "partialMatch": "Coincidencia parcial",
+      "partialMatches": "Coincidencias parciales para: <bdi>{query}</bdi>",
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Buscar todas las palabras"
     },
@@ -1135,6 +1149,7 @@
       "judges": "Jueces",
       "legalArea": "Área jurídica",
       "legalSentence": "Fundamento jurídico",
+      "paragraphReference": "Párrafo {number}",
       "popularName": "Nombre popular",
       "portraitCredit": "Fuente de los retratos: {source}",
       "provisionMentions": "{count, number}×",
@@ -1601,6 +1616,9 @@
         "private": "Tus habilidades",
         "team": "Habilidades del equipo"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "También consultadas ({count, number})"
     },
     "sourcePlaceholder": "Chat sobre {title}",
     "sourcePlaceholderAction": "Chat sobre",
@@ -2662,10 +2680,12 @@
     "api": {
       "badRequest": "No se pudo completar la solicitud.",
       "caseLawCountryUnavailable": "La jurisprudencia de este país no está disponible. Elige otro país.",
+      "caseLawIdentityOnly": "Para este país solo están disponibles la búsqueda exacta y la lectura de resoluciones.",
       "caseLawSearchUnavailable": "La búsqueda de jurisprudencia de este país no está disponible. Puedes seguir consultando sus resoluciones públicas.",
       "conflict": "La solicitud entra en conflicto con el estado actual.",
       "forbidden": "No tienes permiso para hacer esto.",
       "legislationCountryUnavailable": "La legislación de este país no está disponible. Elige otro país.",
+      "legislationIdentityOnly": "Para este país solo están disponibles la búsqueda exacta y la lectura de legislación.",
       "legislationSearchUnavailable": "La búsqueda de legislación de este país no está disponible. Puedes seguir consultando su legislación pública.",
       "notFound": "No pudimos encontrar lo solicitado.",
       "payloadTooLarge": "La solicitud es demasiado grande.",
@@ -2688,6 +2708,11 @@
       "aiConfigModelInvalid": "La configuración del modelo de IA no es válida. Revisa los modelos seleccionados.",
       "aiConfigProviderInvalid": "La configuración del proveedor de IA no es válida. Revisa los ajustes del proveedor.",
       "aiConfigProviderValidationFailed": "El proveedor de IA rechazó la configuración. Revisa la clave de API y el modelo.",
+      "aiDeadlineExceeded": "La IA no respondió a tiempo. Inténtalo de nuevo en un momento.",
+      "aiOutputInvalid": "La respuesta de IA tenía un formato inesperado. Inténtalo de nuevo.",
+      "aiOutputModerated": "El proveedor de IA moderó la respuesta. Reformula la solicitud o elige otro modelo.",
+      "aiProviderTaskUnsupported": "El proveedor de IA configurado no puede realizar esta tarea. Elige uno que sí pueda.",
+      "aiUnknown": "La solicitud de IA ha fallado. Inténtalo de nuevo.",
       "clauseDirectivesInvalid": "Una cláusula vinculada contiene directivas no válidas. Corrija la cláusula antes de rellenar la plantilla.",
       "clauseDirectivesInvalidDetails": "La cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Abra el editor de cláusulas, corrija los párrafos indicados y vuelva a rellenar la plantilla.",
       "clauseDirectivesOverrideInvalidDetails": "La sustitución de la cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Corrija la sustitución de este formulario antes de volver a rellenarlo.",
@@ -4236,6 +4261,10 @@
     "archivedEmpty": "No hay recuerdos archivados.",
     "archivedToast": "Recuerdo archivado",
     "createdToast": "Guardado en la memoria",
+    "deleteConfirmation": "Escriba {confirmation} para confirmar",
+    "deleteDescription": "Esto elimina este recuerdo de forma permanente. Esta acción no se puede deshacer.",
+    "deleteTitle": "¿Eliminar el recuerdo?",
+    "deletedToast": "Recuerdo eliminado",
     "empty": "Aún no hay nada en la memoria.",
     "kinds": {
       "decision": "Decisión",
@@ -5164,6 +5193,8 @@
     "outline": "Índice",
     "outlineJumpLabel": "Ir a una disposición",
     "outlineJumpPlaceholder": "§ 10 o un título",
+    "pendingChanges": "Próximas modificaciones",
+    "pendingChangesIncomplete": "Es posible que los datos del editor no incluyan todas las próximas modificaciones.",
     "provisionAskContextPrompt": "\n\nPasajes que aplican la disposición en las resoluciones de mayor autoridad:\n{passages}\n\nUsa las herramientas de jurisprudencia para leer íntegramente cualquiera de estas resoluciones o para encontrar otras que citen la disposición.",
     "provisionAskPlaceholder": "Pregunte sobre este precepto",
     "provisionAskQuestionPrompt": "Sobre {subject}: {question}",

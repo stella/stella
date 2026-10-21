@@ -28,6 +28,10 @@ import {
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import {
+  REPORT_CASE_LAW_FRESHNESS_TASK,
+  reportCaseLawFreshnessTask,
+} from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   backfillCaseLawProvisionState,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
@@ -68,6 +72,10 @@ import {
   BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK,
   backfillCorpusIndexJobDetail,
 } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
+import {
+  CHECK_DATA_INVARIANTS_TASK,
+  checkDataInvariants,
+} from "@/api/lib/scheduler/tasks/data-invariants";
 import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
   expireDesktopEditSessions,
@@ -218,6 +226,7 @@ const SCHEDULER_TASKS = {
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
   [BACKFILL_HEARTBEAT_TASK]: emitBackfillHeartbeats,
+  [CHECK_DATA_INVARIANTS_TASK]: checkDataInvariants,
   "scheduler.noop": noopTask,
   "scheduler.dispatchBullMq": createBullMqDispatchTask(),
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
@@ -239,6 +248,7 @@ const SCHEDULER_TASKS = {
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
   [REFRESH_CASE_LAW_BROWSE_FACETS_TASK]: refreshCaseLawBrowseFacetsTask,
+  [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,
   [REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK]: refreshCaseLawSourceArrivalsTask,
   [REFRESH_LEGISLATION_FACETS_TASK]: refreshLegislationFacetsTask,
   [REFRESH_STATUTE_SITEMAP_SHARDS_TASK]: refreshStatuteSitemapShardsTask,

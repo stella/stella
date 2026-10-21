@@ -95,76 +95,89 @@ afterEach(() => {
 });
 afterAll(async () => unregisterDomEnvironment());
 
-test("same-decision repetitions stay compact while two actually cited decisions sharing a court expand", async () => {
+test("two decisions from one court render each case number once as the accessible link trigger", async () => {
   const client = clientWithDecisions();
-  const renderAnswer = (markdown: string) => (
+  const screen = mount(
+    client,
     <ChatAnswerDecisionProvider
-      message={answer(markdown)}
+      message={answer(
+        `[${first.caseNumber}](${href(first.id)}) [${second.caseNumber}](${href(second.id)})`,
+      )}
       isAwaitingUser={false}
     >
       <p>
         <ChatDecisionCitation
           decisionId={first.id}
-          passage={paragraph}
+          passage={first.caseNumber}
           interactive
         />
-      </p>
-      <p>
-        <ChatDecisionCitation
-          decisionId={first.id}
-          passage={paragraph}
-          interactive
-        />
-      </p>
-      <p>
+        {" · "}
         <ChatDecisionCitation
           decisionId={second.id}
-          passage={paragraph}
+          passage={second.caseNumber}
           interactive
         />
       </p>
-    </ChatAnswerDecisionProvider>
+    </ChatAnswerDecisionProvider>,
   );
-  const screen = mount(
+  await waitFor(() =>
+    expect(
+      screen.container.querySelectorAll(
+        '[data-citation-presentation="inline"]',
+      ),
+    ).toHaveLength(2),
+  );
+  const rendered = screen.container.querySelector("p")?.textContent ?? "";
+  expect(rendered.split(first.caseNumber)).toHaveLength(2);
+  expect(rendered.split(second.caseNumber)).toHaveLength(2);
+  for (const trigger of screen.container.querySelectorAll(
+    "a[data-decision-citation]",
+  )) {
+    expect(trigger.getAttribute("aria-label")).toContain(
+      trigger.textContent.replace("NS", ""),
+    );
+  }
+});
+
+const mountSingle = (caseNumber: string, passage: string) => {
+  const decision = { ...first, caseNumber };
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
+    },
+  });
+  clients.push(client);
+  client.setQueryData(decisionOptions(decision.id).queryKey, decision);
+  return mount(
     client,
-    renderAnswer(`[First](${href(first.id)}) [repeat](${href(first.id)})`),
+    <ChatDecisionCitation
+      decisionId={decision.id}
+      passage={passage}
+      interactive
+    />,
   );
+};
+
+test("different registry suffixes keep the prose and show the verified number beside it", async () => {
+  const screen = mountSingle("23 Cdo 651/2023-7", "23 Cdo 651/2023-123");
   await waitFor(() =>
     expect(
-      screen.container.querySelectorAll(
-        '[data-citation-presentation="compact"]',
-      ),
-    ).toHaveLength(3),
+      screen.container.querySelector("[data-decision-citation]")?.textContent,
+    ).toContain("23 Cdo 651/2023-7"),
   );
-  expect(
-    screen.container.querySelector("[data-decision-citation]")?.textContent,
-  ).toBe("NS");
-  screen.rerender(
-    <ChatThreadTestRouter>
-      <QueryClientProvider client={client}>
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <FormattingProvider locale="en" timeZone="UTC">
-            {renderAnswer(
-              `[First](${href(first.id)}) [Second](${href(second.id)})`,
-            )}
-          </FormattingProvider>
-        </IntlProvider>
-      </QueryClientProvider>
-    </ChatThreadTestRouter>,
-  );
+  expect(screen.container.textContent).toContain("23 Cdo 651/2023-123");
+  expect(screen.container.textContent).not.toContain("-7-123");
+});
+
+test("a link label that does not name the case still shows the verified identity", async () => {
+  const screen = mountSingle("23 Cdo 651/2023", "Decision A");
   await waitFor(() =>
     expect(
-      screen.container.querySelectorAll(
-        '[data-citation-presentation="expanded"]',
-      ),
-    ).toHaveLength(3),
+      screen.container.querySelector("[data-decision-citation]")?.textContent,
+    ).toContain("23 Cdo 651/2023"),
   );
-  expect(
-    screen.container.querySelector("[data-decision-citation]")?.textContent,
-  ).not.toContain(paragraph);
-  expect(screen.container.querySelector("p")?.firstChild?.textContent).toBe(
-    paragraph,
-  );
+  expect(screen.container.textContent).toContain("Decision A");
+  expect(screen.container.textContent.split("23 Cdo 651/2023")).toHaveLength(2);
 });
 
 test("a real slug cache read contributes its resolved canonical decision to answer disambiguation", async () => {
@@ -205,9 +218,7 @@ test("a real slug cache read contributes its resolved canonical decision to answ
   );
   await waitFor(() =>
     expect(
-      screen.container.querySelectorAll(
-        '[data-citation-presentation="expanded"]',
-      ),
+      screen.container.querySelectorAll("[data-decision-citation]"),
     ).toHaveLength(2),
   );
   expect(
@@ -217,17 +228,12 @@ test("a real slug cache read contributes its resolved canonical decision to answ
     ...second,
     courtAbbreviation: "NSS",
   });
-  await waitFor(() =>
-    expect(
-      screen.container.querySelectorAll(
-        '[data-citation-presentation="compact"]',
-      ),
-    ).toHaveLength(2),
-  );
+  await waitFor(() => expect(client.isFetching()).toBe(0));
   expect(
     screen.container.querySelector(`[data-decision-citation="${second.id}"]`)
       ?.textContent,
-  ).toBe("NSS");
+  ).toContain(second.caseNumber);
+  expect(screen.container.textContent).toContain(paragraph);
   expect(client.isFetching()).toBe(0);
 });
 
@@ -290,8 +296,9 @@ test("passive answer links and complete carried source metadata schedule no deci
   await waitFor(() =>
     expect(
       active.container.querySelector("[data-decision-citation]")?.textContent,
-    ).toBe("NS"),
+    ).toContain(first.caseNumber),
   );
+  expect(active.container.textContent).toContain(paragraph);
   expect(client.isFetching()).toBe(0);
 });
 
@@ -383,10 +390,12 @@ test("the court's number the link carries shows at first paint, from a read or a
   const chips = view.container.querySelectorAll("[data-decision-citation]");
   expect(chips).toHaveLength(3);
   const [carried, read, unnumbered] = chips;
-  expect(carried?.textContent).toBe("NS¶ 8");
+  expect(carried?.textContent).toEndWith("¶ 8");
+  expect(carried?.textContent).not.toContain(paragraph);
+  expect(view.container.textContent).toContain(paragraph);
   expect(carried?.getAttribute("aria-label")).toEndWith(", paragraph 8");
-  expect(read?.textContent).toBe("NS¶ 9");
-  expect(unnumbered?.textContent).toBe("NS");
+  expect(read?.textContent).toEndWith("¶ 9");
+  expect(unnumbered?.textContent).not.toContain("¶");
   expect(unnumbered?.getAttribute("aria-label")).not.toContain("paragraph");
   expect(client.isFetching()).toBe(0);
 });

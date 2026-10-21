@@ -95,6 +95,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "chat_run_logs",
   "chat_secrets",
   "chat_threads",
+  "chat_tool_grants",
   "chat_turns",
   "clause_categories",
   "clause_variants",

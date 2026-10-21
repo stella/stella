@@ -7,7 +7,6 @@ import { useTranslations } from "use-intl";
 
 import { INVOICE_DUE_DAY_PRESETS } from "@stll/api-contract";
 import type { InvoiceTotals, VatTreatment } from "@stll/invoicing";
-import { parsePlainDate } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
@@ -55,6 +54,11 @@ import {
 } from "@/lib/workspaces/queries/invoices";
 import type { InvoicePrefill } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import {
+  MEDIUM_DATE,
+  plainDateEpoch,
+  SHORT_DATE,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-plain-date";
 import { InvoicePdfDownloadButton } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button";
 
 import {
@@ -119,19 +123,6 @@ type IssuedInvoice = {
   currency: string;
   dueDate: string | null;
 };
-
-const epochOf = (date: string) =>
-  parsePlainDate(date)?.toZonedDateTime("UTC").epochMilliseconds ?? 0;
-
-const SHORT_DATE = {
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-} as const satisfies Intl.DateTimeFormatOptions;
-const MEDIUM_DATE = {
-  dateStyle: "medium",
-  timeZone: "UTC",
-} as const satisfies Intl.DateTimeFormatOptions;
 
 /** A muted note saying where a prefilled value came from. */
 const SourceHint = ({ children }: { children: ReactNode }) => (
@@ -647,7 +638,10 @@ const TimeEntriesTable = ({
                   className="text-muted-foreground tabular-nums"
                   excluded={excluded}
                 >
-                  {format.dateTime(epochOf(entry.dateWorked), SHORT_DATE)}
+                  {format.dateTime(
+                    plainDateEpoch(entry.dateWorked),
+                    SHORT_DATE,
+                  )}
                 </RowText>
               </TableCell>
               <TableCell className="min-w-0">
@@ -744,7 +738,10 @@ const ExpensesTable = ({
                   className="text-muted-foreground tabular-nums"
                   excluded={!included}
                 >
-                  {format.dateTime(epochOf(expense.dateIncurred), SHORT_DATE)}
+                  {format.dateTime(
+                    plainDateEpoch(expense.dateIncurred),
+                    SHORT_DATE,
+                  )}
                 </RowText>
               </TableCell>
               <TableCell className="min-w-0">
@@ -872,7 +869,7 @@ const DetailsStep = ({
                 {t("billing.invoiceComposer.taxableSupplyDate")}
               </span>
               <span className="text-sm tabular-nums">
-                {format.dateTime(epochOf(supplyDate), MEDIUM_DATE)}
+                {format.dateTime(plainDateEpoch(supplyDate), MEDIUM_DATE)}
               </span>
               <SourceHint>
                 {t("billing.invoiceComposer.sources.lastWorkDay")}
@@ -901,7 +898,7 @@ const DetailsStep = ({
               ))}
               {dueDate !== null && (
                 <span className="text-muted-foreground text-xs tabular-nums">
-                  {format.dateTime(epochOf(dueDate), MEDIUM_DATE)}
+                  {format.dateTime(plainDateEpoch(dueDate), MEDIUM_DATE)}
                 </span>
               )}
             </div>
@@ -980,7 +977,7 @@ const IssueStep = ({
           <DetailsItem label={t("billing.invoices.dueDate")}>
             {dueDate === null
               ? "—"
-              : format.dateTime(epochOf(dueDate), MEDIUM_DATE)}
+              : format.dateTime(plainDateEpoch(dueDate), MEDIUM_DATE)}
           </DetailsItem>
           <DetailsItem label={t("billing.invoices.totalAmount")}>
             <span className="font-medium tabular-nums">
@@ -1141,7 +1138,7 @@ const IssuedState = ({ workspaceId, invoice, buyerName }: IssuedStateProps) => {
     invoice.dueDate === null
       ? null
       : t("billing.invoiceComposer.dueOn", {
-          date: format.dateTime(epochOf(invoice.dueDate), MEDIUM_DATE),
+          date: format.dateTime(plainDateEpoch(invoice.dueDate), MEDIUM_DATE),
         }),
   ].filter((part) => part !== null);
   return (

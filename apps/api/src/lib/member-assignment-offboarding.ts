@@ -32,6 +32,7 @@ import {
   flowDefinitions,
   flowRunSteps,
   mcpUserConnections,
+  chatToolGrants,
   sharepointConnections,
   sharepointOAuthState,
   mcpOAuthState,
@@ -1621,6 +1622,14 @@ export const removeOrganizationMemberInTransaction = async (
       ),
     );
   await tx
+    .delete(chatToolGrants)
+    .where(
+      and(
+        eq(chatToolGrants.organizationId, organizationId),
+        eq(chatToolGrants.userId, userId),
+      ),
+    );
+  await tx
     .delete(mcpOAuthState)
     .where(
       and(
@@ -1714,6 +1723,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [mcpOAuthState.userId, "cleared"],
   [sharepointConnections.userId, "cleared"],
   [sharepointOAuthState.userId, "cleared"],
+  [chatToolGrants.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],
   // Revoked by `removeOrganizationMemberWithAuthArtifacts`.

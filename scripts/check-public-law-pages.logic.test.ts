@@ -10,6 +10,7 @@ import {
   readDecisionMetadata,
   readRobotsMeta,
   renderMarkdown,
+  runPublicLawCheck,
   shuffled,
   visibleText,
 } from "./check-public-law-pages.logic";
@@ -270,5 +271,176 @@ describe("sitemap helpers", () => {
     expect(shuffled([1, 2, 3, 4], () => 0.5).toSorted((a, b) => a - b)).toEqual(
       [1, 2, 3, 4],
     );
+  });
+});
+
+describe("public law fetch failures", () => {
+  const baseUrl = "https://deployment.test";
+  const shardPath = "/sitemaps/law-cases/svk/2024/01.xml";
+  const shardUrl = `${baseUrl}${shardPath}`;
+  const indexXml = `<sitemapindex><loc>https://canonical.test${shardPath}</loc></sitemapindex>`;
+  const response = (
+    body: string,
+    status = 200,
+    contentType = "application/xml",
+  ) => new Response(body, { headers: { "content-type": contentType }, status });
+  const run = async (
+    fetch: (url: string) => Promise<Response>,
+    sampleSize = 1,
+  ) =>
+    await runPublicLawCheck({
+      baseUrl,
+      country: "svk",
+      expectedRobots: "noindex",
+      fetch,
+      random: () => 0,
+      sampleSize,
+    });
+
+  test("explains a missing sitemap index", async () => {
+    const result = await run(async () => response("missing", 404));
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        step: "sitemap index",
+        status: 404,
+        url: `${baseUrl}/sitemaps/law.xml`,
+      });
+      expect(result.error.message).toContain(
+        `sitemap index fetch failed at ${baseUrl}/sitemaps/law.xml (HTTP 404)`,
+      );
+    }
+  });
+
+  test("explains a missing country shard", async () => {
+    const result = await run(async (url) =>
+      url.endsWith("/sitemaps/law.xml")
+        ? response(indexXml)
+        : response("missing", 404),
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        step: "country shard",
+        status: 404,
+        url: shardUrl,
+      });
+      expect(result.error.message).toBe(
+        `country svk has no sitemap shard at ${shardUrl} (HTTP 404): is the jurisdiction pages_public on this deployment?`,
+      );
+    }
+  });
+
+  test("reports an unavailable country shard without missing-shard guidance", async () => {
+    const result = await run(async (url) =>
+      url.endsWith("/sitemaps/law.xml")
+        ? response(indexXml)
+        : response("unavailable", 503),
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toBe(
+        `country shard fetch failed at ${shardUrl} (HTTP 503)`,
+      );
+      expect(result.error.message).not.toContain("pages_public");
+    }
+  });
+
+  test("reports a country shard timeout without missing-shard guidance", async () => {
+    const timeout = new DOMException("The operation timed out", "TimeoutError");
+    const result = await run(async (url) => {
+      if (url.endsWith("/sitemaps/law.xml")) {
+        return response(indexXml);
+      }
+      throw timeout;
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        cause: timeout,
+        step: "country shard",
+        url: shardUrl,
+      });
+      expect(result.error.message).toBe(
+        `country shard fetch failed at ${shardUrl}: The operation timed out`,
+      );
+      expect(result.error.message).not.toContain("pages_public");
+    }
+  });
+
+  test("reports a failed page while checking the remaining sample", async () => {
+    const goodUrl = "https://canonical.test/law/svk/good";
+    const badUrl = "https://canonical.test/law/svk/bad";
+    const requested: string[] = [];
+    const result = await run(async (url) => {
+      requested.push(url);
+      if (url.endsWith("/sitemaps/law.xml")) {
+        return response(indexXml);
+      }
+      if (url === shardUrl) {
+        return response(
+          `<urlset><loc>${goodUrl}</loc><loc>${badUrl}</loc></urlset>`,
+        );
+      }
+      if (url.endsWith("/bad")) {
+        return response("unavailable", 503, "text/html");
+      }
+      return response(page({ robots: "noindex" }), 200, "text/html");
+    }, 2);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.report.pass).toBe(false);
+      expect(result.value.report.checked).toBe(1);
+      expect(result.value.report.fetchErrors).toEqual([
+        `page sample fetch failed at ${baseUrl}/law/svk/bad (HTTP 503)`,
+      ]);
+      expect(renderMarkdown(result.value.report)).toContain(
+        `- page sample fetch failed at ${baseUrl}/law/svk/bad (HTTP 503)`,
+      );
+    }
+    expect(requested).toContain(`${baseUrl}/law/svk/good`);
+    expect(requested).toContain(`${baseUrl}/law/svk/bad`);
+  });
+
+  test("reports a malformed sitemap location while checking the valid page", async () => {
+    const goodUrl = "https://canonical.test/law/svk/good";
+    const result = await run(async (url) => {
+      if (url.endsWith("/sitemaps/law.xml")) {
+        return response(indexXml);
+      }
+      if (url === shardUrl) {
+        return response(
+          `<urlset><loc>not a url</loc><loc>${goodUrl}</loc></urlset>`,
+        );
+      }
+      return response(page({ robots: "noindex" }), 200, "text/html");
+    }, 2);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.report.checked).toBe(1);
+      expect(result.value.report.fetchErrors).toEqual([
+        "sitemap location is not a URL: not a url",
+      ]);
+      expect(result.value.sampledUrls).toEqual([`${baseUrl}/law/svk/good`]);
+    }
+  });
+
+  test("returns a passing report for successful fetches", async () => {
+    const pageUrl = "https://canonical.test/law/svk/good";
+    const result = await run(async (url) => {
+      if (url.endsWith("/sitemaps/law.xml")) {
+        return response(indexXml);
+      }
+      if (url === shardUrl) {
+        return response(`<urlset><loc>${pageUrl}</loc></urlset>`);
+      }
+      return response(page({ robots: "noindex" }), 200, "text/html");
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.report).toMatchObject({ checked: 1, pass: true });
+      expect(result.value.report.fetchErrors).toEqual([]);
+      expect(result.value.sampledUrls).toEqual([`${baseUrl}/law/svk/good`]);
+    }
   });
 });
