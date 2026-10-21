@@ -242,6 +242,7 @@ const resolveFieldChat = async ({
     workspaceIds: tenantWorkspaceIds,
   }),
   model: await resolveTextModel({
+    userId: admission.userId,
     dataClass: "customer",
     task: "short-text",
     orgAIConfig,
@@ -261,6 +262,7 @@ const generateFieldText = async (
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
   return await collectTanStackTextRun({
+    userId: input.admission.userId,
     admission: input.admission,
     model,
     adapter: textAdapterWithNormalizedStops(model),
@@ -295,6 +297,7 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
   return await generateTanStackChatObject({
+    userId: input.admission.userId,
     admission: input.admission,
     model,
     adapter: model.adapter,
@@ -504,6 +507,7 @@ export const buildAiConditionDecider = ({
           ? { ...aiAnalytics.usageMetering, callId: Bun.randomUUIDv7() }
           : undefined,
         generation: {
+          userId: admission.userId,
           dataClass: "customer",
           task: "classify",
           serviceTier: "standard",

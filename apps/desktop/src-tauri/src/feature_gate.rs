@@ -135,6 +135,7 @@ impl FeatureGates {
     state.namespace = namespace;
     state.expires_at = expires_at;
     state.enabled = enabled;
+    drop(state);
     Some(changed)
   }
 

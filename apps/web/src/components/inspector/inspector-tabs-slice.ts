@@ -31,6 +31,7 @@ import {
   adoptLegalDocumentChatThread,
   ensureLegalDocumentChatThread,
 } from "@/features/chat/legal-document-chat-threads";
+import { documentOpenTiming } from "@/lib/analytics/document-open-timing";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
@@ -385,11 +386,17 @@ export const createInspectorTabsSlice = (
       );
     }),
 
-  openFile: (tab) =>
+  openFile: (tab) => {
+    // Only a new tab mounts a new editor; activating an existing one may
+    // reuse a mounted viewer whose layout never reports again.
+    if (!get().tabs.some((existing) => existing.id === tab.id)) {
+      documentOpenTiming.requested(tab.id, "inspector");
+    }
     openTabs(set, {
       targets: [{ type: "pdf", ...tab }],
       activeId: tab.id,
-    }),
+    });
+  },
 
   openFileForEntity: (tab) =>
     set((state) => {

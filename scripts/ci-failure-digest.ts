@@ -188,6 +188,11 @@ const logLines = (rawLines: readonly string[]): LogLine[] =>
 export const POOLED_FAILURE_PREFIX = "FAILED check: ";
 const POOLED_FAILURE_SEPARATOR = " -- ";
 
+// The pool's cause for a check that printed no failed test or error line
+// (exitCodeDetail in ci-check-pool.ts; a test binds the two). It says nothing
+// about why, so the check's own log group supplies the lines.
+export const BARE_EXIT_CAUSE = /^exit code -?\d+$/u;
+
 // The pool opens each check's log group with `<name>: <outcome> in <n> s`.
 const POOLED_GROUP_HEADER =
   /^##\[group\](.*): (?:passed|FAILED(?: \(continue-on-error\))?) in [\d.]+ s$/u;
@@ -1158,7 +1163,10 @@ export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
         segment === undefined ? [] : pooledFailureRecords(segment.lines);
       if (pooled.length > 0) {
         return pooled.map(({ name, cause, groupLines }) => {
-          const lines = [{ message: cause }];
+          const own = BARE_EXIT_CAUSE.test(cause)
+            ? failureLines(groupLines)
+            : [];
+          const lines = own.length > 0 ? own : [{ message: cause }];
           return {
             job: job.name,
             step: name,

@@ -17,6 +17,7 @@ import {
   processLauncher,
   resolveEnv,
   runChecks,
+  selectChecks,
   summaryTable,
   type CheckResult,
   type Launched,
@@ -49,6 +50,18 @@ const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
   continueOnError: undefined,
   step: { name },
   ...extra,
+});
+
+test("an exact named subset retains manifest order", () => {
+  const checks = [check("First"), check("Second"), check("Third")];
+  expect(selectChecks(checks, "Third,First").map(({ name }) => name)).toEqual([
+    "First",
+    "Third",
+  ]);
+  expect(selectChecks(checks, undefined)).toEqual(checks);
+  expect(() => selectChecks(checks, "First,Missing")).toThrow(
+    "Unknown check name(s): Missing",
+  );
 });
 
 test("failed checks emit one annotation with their first actionable cause", () => {
@@ -230,6 +243,45 @@ test("pooled conditions keep change selection, receipt reuse and event gates", (
   );
   expect(reused).not.toContain("Test unsignalled skip detection");
   expect(reused).toContain("Ratchet scanner invariants");
+});
+
+test("an unset root check selection keeps every pooled check, as GitHub reads it", () => {
+  // A main PR-depth run whose planner was unavailable writes no root_checks
+  // output, so toJSON(needs) omits the key. GitHub evaluates the selection
+  // gate `root_checks == ''` as true for the unset output; the pool must
+  // agree, or main skips the checks every pull request then inherits as red.
+  for (const job of CHECK_POOL_JOBS) {
+    const checks = readCheckPool(job);
+    const names = (rootChecks: Value | undefined) =>
+      planChecks(
+        checks,
+        poolContext({
+          github: { event_name: "workflow_dispatch", ref: "refs/heads/main" },
+          needs: {
+            "ci-plan": {
+              outputs: {
+                package_checks_required: "true",
+                ...(rootChecks === undefined
+                  ? {}
+                  : { root_checks: rootChecks }),
+              },
+            },
+          },
+          steps: {
+            checkout: { outcome: "success", outputs: {} },
+            install: { outcome: "success", outputs: {} },
+          },
+          inputs: { depth: "fast", heavy_only: false, pr_depth_only: true },
+        }),
+      ).flatMap((entry) =>
+        entry.status === "selected" ? [entry.check.name] : [],
+      );
+    const all = JSON.stringify(
+      Object.keys(ROOT_CHECK_INPUTS[job]).map((name) => `${job}/${name}`),
+    );
+    expect(names(undefined), job).toEqual(names(""));
+    expect(names(undefined), job).toEqual(names(all));
+  }
 });
 
 const EXPRESSION = (body: string) => `\${{ ${body} }}`;

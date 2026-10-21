@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -143,10 +143,13 @@ describe.serial("suppression IDs follow their configured spelling", () => {
   });
 
   test("the installed rule catalog resolves identically under Node and Bun", async () => {
-    const output = path.join(
-      import.meta.dirname,
-      "../../scripts/.oxlint-rule-ids-node.mjs",
+    // A directory of its own: concurrent runs share this checkout. Like
+    // scripts/, it sits one level below the root, so the module's
+    // `../node_modules` still names the repository's packages.
+    const directory = mkdtempSync(
+      path.join(import.meta.dirname, "../../.oxlint-rule-ids-"),
     );
+    const output = path.join(directory, "node.mjs");
     const build = await Bun.build({
       entrypoints: [
         path.join(import.meta.dirname, "../../scripts/oxlint-rule-ids.ts"),
@@ -176,7 +179,7 @@ describe.serial("suppression IDs follow their configured spelling", () => {
       new Response(child.stderr).text(),
       child.exited,
     ]);
-    rmSync(output, { force: true });
+    rmSync(directory, { force: true, recursive: true });
     expect(
       childExitStatus({ exitCode, signalCode: child.signalCode }),
       stderr,
