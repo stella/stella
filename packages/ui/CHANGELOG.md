@@ -1,5 +1,15 @@
 # @stll/ui
 
+## 0.49.0
+
+### Minor Changes
+
+- [#6310](https://github.com/stella/stella/pull/6310) [`f68baf7`](https://github.com/stella/stella/commit/f68baf7f2240db328e62201120dde71f3baf2b7b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Prose` sets an 80-character measure for narrative text.
+
+### Patch Changes
+
+- [#6206](https://github.com/stella/stella/pull/6206) [`6787bf4`](https://github.com/stella/stella/commit/6787bf4a6e33a5fa97538d91428d928ffffaabc8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The floating outline opens from its tick strip (hover, focus or tap) and no longer draws a toggle button; Escape closes it and returns focus to the tick.
+
 ## 0.48.0
 
 ### Minor Changes

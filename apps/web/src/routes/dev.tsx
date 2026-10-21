@@ -2,7 +2,10 @@ import type { ComponentType, ReactElement } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 
-import { APP_FRAME_SCOPE, PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
+import {
+  APP_FRAME_SCOPE,
+  MEMBER_PROVIDER_SCOPES,
+} from "@/routes/-app-frame-scope";
 import { visualRegistry } from "@/routes/dev/-visual-metadata";
 import type { VisualLayout } from "@/routes/dev/-visual-metadata";
 import {
@@ -35,7 +38,8 @@ const visualLayouts = {
 export const Route = createFileRoute("/dev")({
   staticData: {
     appFrame: APP_FRAME_SCOPE.none,
-    providerScopes: [PROVIDER_SCOPE.composer],
+    // Playground fixtures host their own auth, AI and composer providers.
+    providerScopes: MEMBER_PROVIDER_SCOPES,
   },
   validateSearch: visualSearchSchema,
   component: DevRouteComponent,

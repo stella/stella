@@ -190,6 +190,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-eden-telemetry.fixture.ts", [
     "no-raw-eden-telemetry/no-raw-eden-telemetry",
   ]),
+  fixtureRuleOverride("capability-request.fixture.ts", [
+    "capability-request/capability-request",
+  ]),
   fixtureRuleOverride("no-unsafe-controller-editor-access.fixture.ts", [
     "no-unsafe-controller-editor-access/no-unsafe-controller-editor-access",
   ]),
@@ -454,6 +457,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-untranslated-jsx-literal.fixture.tsx", [
     "no-untranslated-jsx-literal/no-untranslated-jsx-literal",
+  ]),
+  fixtureRuleOverride("narrative-prose-component.fixture.tsx", [
+    "narrative-prose-component/require-prose",
   ]),
   fixtureRuleOverride("bun-test-hygiene.fixture.ts", [
     "bun-test-hygiene/no-focused-tests",
@@ -1167,6 +1173,7 @@ const config = defineConfig({
     ],
     "no-bare-error/no-bare-error": "error",
     "no-raw-eden-telemetry/no-raw-eden-telemetry": "error",
+    "capability-request/capability-request": "error",
     "no-minted-auth-provider-id/no-minted-auth-provider-id": "error",
     "ai-output-strict-schema/ai-output-strict-schema": "error",
     "decision-shaped-output-schema/decision-shaped-output-schema": "error",
@@ -1576,6 +1583,7 @@ const config = defineConfig({
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
     "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
+    "./.oxlint-plugins/narrative-prose-component.ts",
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
     "./.oxlint-plugins/no-raw-deployment-feature-read.ts",
@@ -1595,6 +1603,7 @@ const config = defineConfig({
     "./.oxlint-plugins/sql-perf.ts",
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/no-raw-eden-telemetry.ts",
+    "./.oxlint-plugins/capability-request.ts",
     "./.oxlint-plugins/no-unsafe-controller-editor-access.ts",
     "./.oxlint-plugins/no-minted-auth-provider-id.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
@@ -1722,6 +1731,20 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      // Page-level narrative copy owns a readable measure. Reusable component
+      // internals and task-shaped surfaces are outside this narrow enrolment.
+      files: [
+        "apps/landing/src/components/ProductPage.astro",
+        "apps/landing/src/pages/security.astro",
+        "apps/landing/src/pages/support.astro",
+        "apps/web/src/routes/tools/-components/public-tools-index.tsx",
+        ".oxlint-plugins/__fixtures__/narrative-prose-component.fixture.tsx",
+      ],
+      rules: {
+        "narrative-prose-component/require-prose": "error",
+      },
+    },
     {
       files: [
         "apps/api/**/*.{ts,tsx,js,mjs}",

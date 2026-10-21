@@ -488,6 +488,7 @@ fn write_history_item(
       .then(|| manager.image(id))
       .transpose()
       .map_err(copy_error)?;
+    drop(manager);
     (image, item)
   };
   let image = image
@@ -543,6 +544,7 @@ pub fn clipboard_copy_items(
     let combined = manager.compose_items(&ids, format).map_err(copy_error)?;
     if let Err(message) = manager.write_item(&combined, None, format) {
       manager.clear_suppression();
+      drop(manager);
       return Err(copy_error(message));
     }
   }

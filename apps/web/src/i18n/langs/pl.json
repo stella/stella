@@ -2708,6 +2708,7 @@
       "aiConfigModelInvalid": "Konfiguracja modelu AI jest nieprawidłowa. Sprawdź wybrane modele.",
       "aiConfigProviderInvalid": "Konfiguracja dostawcy AI jest nieprawidłowa. Sprawdź ustawienia dostawcy.",
       "aiConfigProviderValidationFailed": "Dostawca AI odrzucił konfigurację. Sprawdź klucz API i model.",
+      "aiDeadlineExceeded": "AI nie odpowiedziała na czas. Spróbuj ponownie za chwilę.",
       "aiOutputInvalid": "Odpowiedź AI miała nieoczekiwany format. Spróbuj ponownie.",
       "aiOutputModerated": "Dostawca AI objął odpowiedź moderacją. Przeformułuj żądanie lub wybierz inny model.",
       "aiProviderTaskUnsupported": "Skonfigurowany dostawca AI nie może wykonać tego zadania. Wybierz dostawcę, który może.",
