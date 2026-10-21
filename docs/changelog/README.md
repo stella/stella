@@ -10,6 +10,12 @@ every other stable release note must embed at least one screenshot or video
 (see the example below). `scripts/check-release-changelog.sh` refuses the
 release pull request and the tag otherwise.
 
+A version that is never tagged is not a release, so it keeps no page. When
+`bun run release:maintenance` finds the current `VERSION` untagged, it folds
+that version's note into the new release's note and removes the old file: the
+older heading and media stay, and its package bullets come before the new
+ones, linked to the new tag.
+
 Prereleases (`vX.Y.Z-rc.N`, `vX.Y.Z-beta.N`, `vX.Y.Z-alpha.N`) stay off the
 public changelog page. Their generated GitHub release notes are enough.
 

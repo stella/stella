@@ -121,6 +121,10 @@ import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-dec
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
+import {
+  searchTiming,
+  useSearchResultsTiming,
+} from "@/lib/analytics/search-timing";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
@@ -212,6 +216,23 @@ const pageDecisions = (
   page: { decisions: readonly Decision[] } | undefined,
 ): readonly Decision[] => page?.decisions ?? EMPTY_DECISIONS;
 
+/** Times a search until its own page of results, not a held one, is drawn. */
+const useCaseLawResultsTiming = ({
+  query,
+  page,
+  isPlaceholderData,
+}: {
+  query: string | undefined;
+  page: { decisions: readonly Decision[] } | undefined;
+  isPlaceholderData: boolean;
+}) => {
+  useSearchResultsTiming(
+    "case-law",
+    query ?? "",
+    page !== undefined && !isPlaceholderData,
+  );
+};
+
 type PublicCaseLawIndexProps = {
   /** Whether the router has this page's rows yet. */
   routeState: PublicLawRouteState;
@@ -293,6 +314,7 @@ export function PublicCaseLawIndex({
   // this value is the field's own write coming back, not somebody else's.
   const [requestedQuery, setRequestedQuery] = useState(search.q ?? "");
   const writeQuery = useDebouncedCallback((value: string) => {
+    searchTiming.requested("case-law", value);
     detached(
       navigate({
         replace: true,
@@ -341,6 +363,11 @@ export function PublicCaseLawIndex({
     // The rows on screen stay while another page or another search arrives,
     // so a step never blanks the table.
     placeholderData: keepPreviousData,
+  });
+  useCaseLawResultsTiming({
+    query: search.q,
+    page: pageData,
+    isPlaceholderData,
   });
   // The loader warms these after search; background navigations keep the
   // same order without suspending the page on optional filter choices.

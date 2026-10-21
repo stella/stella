@@ -131,6 +131,7 @@ pub async fn time_entry_search_matters(
   let account = linked_account(&caller, &gates, &accounts).await?;
   let matters = time_entry_submit::search_matters(&account, &query).await?;
   require_account(&caller, &gates, &account)?;
+  drop(account);
   Ok(matters)
 }
 
@@ -143,6 +144,7 @@ pub async fn time_entry_candidates(
   let account = linked_account(&caller, &gates, &accounts).await?;
   let candidates = time_entry_submit::candidates(&account).await?;
   require_account(&caller, &gates, &account)?;
+  drop(account);
   Ok(candidates)
 }
 
@@ -236,6 +238,8 @@ pub async fn time_entry_submit_batch_confirmed(
       .map_err(|_| SubmitError::Uncertain)?;
     manager.finish_batch(day, markers).is_ok()
   };
+  // The account request lease covers the submission and its marker.
+  drop(account);
   let _ = app.emit(activity::CHANGED_EVENT, ());
   Ok(SubmitResult {
     entries: created.entries,

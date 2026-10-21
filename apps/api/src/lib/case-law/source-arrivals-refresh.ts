@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { sql, type SQLWrapper } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { caseLawSourceArrivals } from "@/api/db/schema";
@@ -23,17 +23,24 @@ type RefreshDb = {
  * written, not yet vacuumed range: seconds on a busy week, which is why the
  * count runs on the scheduler and never on a public request. The upper bound
  * is the stored `counted_at`, so the week a row states is the week it counted.
+ * The ingestion invariant counts a day through the same statement, so both
+ * read the window off the same index range.
  */
-const sourceArrivalsCountSql = ({
+export const sourceArrivalsCountSql = ({
   since,
+  sourceId,
   until,
 }: {
   since: Date;
+  /** The outer query's source id column the count correlates with. */
+  sourceId: SQLWrapper;
   until: Date;
-}) => sql`
+}) =>
+  // sql-perf-allow: index case_law_decisions_source_arrivals_published_idx, one created_at range per source
+  sql`
   SELECT count(*)::integer AS added_last_week
   FROM case_law_published_decisions d
-  WHERE d.source_id = s.id
+  WHERE d.source_id = ${sourceId}
     AND d.created_at >= ${since.toISOString()}::timestamptz
     AND d.created_at < ${until.toISOString()}::timestamptz
 `;
@@ -44,6 +51,7 @@ export const sourceArrivalsRefreshQuery = (now: Date) => sql`
   FROM case_law_sources s
   CROSS JOIN LATERAL (${sourceArrivalsCountSql({
     since: new Date(now.getTime() - SOURCE_ARRIVALS_WINDOW_MS),
+    sourceId: sql`s.id`,
     until: now,
   })}) AS recent
 `;
