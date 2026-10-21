@@ -76,6 +76,7 @@ const decision = {
 } satisfies PublicCaseLawDecision;
 
 const statute = {
+  pendingChanges: null,
   expressionKind: "consolidation",
   windowDisposition: "effective",
   windowDispositionBasis: null,
