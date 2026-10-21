@@ -229,12 +229,7 @@ export const DOC_SOURCES = {
     url: "https://oxc.rs/llms.txt",
   },
   Streamdown: {
-    dependencies: [
-      "streamdown",
-      "@streamdown/cjk",
-      "@streamdown/math",
-      "@streamdown/mermaid",
-    ],
+    dependencies: ["streamdown", "@streamdown/cjk", "@streamdown/math"],
     url: "https://streamdown.dev/llms.txt",
   },
   BetterResult: {
@@ -444,6 +439,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
       explanation:
         "https://myriad-dreamin.github.io/typst.ts/llms.txt and https://typst.app/llms.txt return 404. Use the typst.ts guide at https://myriad-dreamin.github.io/typst.ts/cookery/ and the Typst reference at https://typst.app/docs/ directly.",
       expiresAt: "2026-11-12T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-19T00:00:00.000Z",
+      dependency: "pele",
+      explanation:
+        "https://pele.run/llms.txt and https://raw.githubusercontent.com/obsidianmd/pele/main/llms.txt return 404. Use the documentation at https://pele.run and the README at https://github.com/obsidianmd/pele#readme directly.",
+      expiresAt: "2026-11-18T00:00:00.000Z",
       reason: "no-llms-txt",
     },
     {
