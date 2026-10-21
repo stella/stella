@@ -124,7 +124,7 @@ describe("CI drift checks that request autofix", () => {
 
   test("cover every shrink-only baseline autofix prunes", () => {
     for (const { write } of PRUNABLE_BASELINE_WRITERS) {
-      const script = write[1] ?? "";
+      const script = write[1];
       const aliases = packageScripts
         .filter(([, command]) => command.split(" ").includes(script))
         .map(([alias]) => `bun run ${alias}`);
