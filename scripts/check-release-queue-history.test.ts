@@ -1,9 +1,16 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import {
   assertReleaseQueueHistory,
   formatReleaseQueueHistoryNotice,
   parseOptions,
+  previousReleaseTag,
   ReleaseQueueHistoryError,
   releaseQueueHistoryWarning,
   runReleaseQueueHistoryCli,
@@ -465,6 +472,13 @@ describe("release queue history options", () => {
     });
   });
 
+  test("leaves the previous tag to the history when --from is omitted", () => {
+    expect(parseOptions(["--base", BASE_SHA])).toEqual({
+      baseSha: BASE_SHA,
+      strict: false,
+    });
+  });
+
   test("rejects unknown, repeated or missing options", () => {
     for (const args of [
       ["--from", "v1.2.3"],
@@ -568,5 +582,188 @@ describe("strict release queue history", () => {
 
     expect(exitCode).toBe(0);
     expect(lines.at(0)).toStartWith("::warning::Release history");
+  });
+});
+
+const REPOSITORY_ROOT = nodePath.resolve(import.meta.dirname, "..");
+const histories: string[] = [];
+
+afterEach(() => {
+  for (const root of histories.splice(0)) {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
+
+const git = (cwd: string) => (command: readonly string[]) => {
+  const result = Bun.spawnSync([...command], {
+    cwd,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: "2026-10-01T00:00:00Z",
+      GIT_COMMITTER_DATE: "2026-10-01T00:00:00Z",
+    },
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  if (!result.success) {
+    throw new Error(`${command.join(" ")}: ${result.stderr.toString()}`);
+  }
+  return result.stdout.toString().trim();
+};
+
+// One linear main history: each step either lands an ordinary change or a
+// version commit, and a version commit is tagged or left untagged (superseded
+// by the next one).
+type Step = { kind: "change" } | { kind: "version"; tagged: boolean };
+
+const buildHistory = (steps: readonly Step[]) => {
+  const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-history-"));
+  histories.push(root);
+  const run = git(root);
+  run(["git", "init", "--quiet", "--initial-branch=main"]);
+  run(["git", "config", "user.email", "release@example.com"]);
+  run(["git", "config", "user.name", "Release"]);
+  run(["git", "config", "commit.gpgsign", "false"]);
+  run(["git", "config", "tag.gpgsign", "false"]);
+  let patch = 0;
+  const tags: string[] = [];
+  // The first release is always tagged, so a previous release exists.
+  for (const [index, step] of [
+    { kind: "version", tagged: true } as const,
+    ...steps,
+  ].entries()) {
+    if (step.kind === "version") {
+      patch += 1;
+      writeFileSync(nodePath.join(root, "VERSION"), `1.0.${String(patch)}\n`);
+    } else {
+      writeFileSync(nodePath.join(root, "change.txt"), `${String(index)}\n`);
+    }
+    run(["git", "add", "--all"]);
+    run(["git", "commit", "--quiet", "-m", `step ${String(index)}`]);
+    if (step.kind === "version" && step.tagged) {
+      run(["git", "tag", `v1.0.${String(patch)}`]);
+      tags.push(`v1.0.${String(patch)}`);
+    }
+  }
+  return { root, run, tags };
+};
+
+describe("previous release tag", () => {
+  test("is the nearest tag before the base, never v + an untagged VERSION", () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.oneof(
+            fc.constant<Step>({ kind: "change" }),
+            fc.boolean().map<Step>((tagged) => ({ kind: "version", tagged })),
+          ),
+          { maxLength: 6, minLength: 1 },
+        ),
+        (steps) => {
+          const { root, run } = buildHistory(steps);
+          const base = run(["git", "rev-parse", "HEAD"]);
+          // Expected: the last tag on a commit before the base, read from the
+          // history the property built, not from git describe.
+          const parents = run(["git", "rev-list", "--reverse", `${base}^`])
+            .split("\n")
+            .filter(Boolean);
+          const tagged = parents
+            .map((sha) => run(["git", "tag", "--points-at", sha]))
+            .filter(Boolean);
+          expect(previousReleaseTag(base, run)).toBe(tagged.at(-1) ?? "");
+          const version = readFileSync(
+            nodePath.join(root, "VERSION"),
+            "utf-8",
+          ).trim();
+          if (run(["git", "tag", "--list", `v${version}`]) === "") {
+            expect(previousReleaseTag(base, run)).not.toBe(`v${version}`);
+          }
+        },
+      ),
+      propertyConfig({ numRuns: 25 }),
+    );
+  });
+
+  test("reads the history of a base whose VERSION was never tagged", () => {
+    const { run } = buildHistory([
+      { kind: "change" },
+      { kind: "version", tagged: false },
+      { kind: "change" },
+    ]);
+    const base = run(["git", "rev-parse", "HEAD"]);
+    const ranges: string[] = [];
+    const report = assertReleaseQueueHistory({
+      baseSha: base,
+      command: (command) => {
+        if (command[0] === "git" && command[1] === "rev-list") {
+          ranges.push(command.at(-1) ?? "");
+          return "";
+        }
+        if (command[0] === "git") {
+          return run(command);
+        }
+        return "[]";
+      },
+      ghRetryScript: "/fake/gh-retry.sh",
+      strict: true,
+    });
+    expect(ranges).toEqual([`v1.0.1..${base}`]);
+    expect(report.validated).toBe(true);
+  });
+});
+
+// Every checked-in reader of the VERSION file, with why an untagged VERSION
+// (a version commit superseded by the next one) cannot mislead it. A new
+// reader fails here until it is classified; one that needs the previous
+// release takes it from previousReleaseTag.
+const VERSION_READERS: Record<string, string> = {
+  ".github/ci-checks/ci-checks-rest.yml":
+    "VERSION changed against the base; the previous release comes from previousReleaseTag",
+  ".github/workflows/ci.yml":
+    "VERSION changed in the commit, and the image build label",
+  ".github/workflows/publish-npm.yml":
+    "VERSION equals the release tag being published",
+  ".github/workflows/release.yml": "VERSION equals the tag being built",
+  "scripts/check-cli-release-coupling.ts":
+    "VERSION changed against the merge base; compared with npm, not with tags",
+  "scripts/check-railway-template-shape.ts": "watch pattern",
+  "scripts/check-release-candidate.sh":
+    "the pending version commit; its tag is the one to create",
+  "scripts/check-release-changelog.sh":
+    "VERSION changed against the base; names the new changelog file",
+  "scripts/ci-package-scope.ts": "changed-path scope",
+  "scripts/ci-plan-scope.ts": "changed-path scope",
+  "scripts/ci-root-check-inputs.json": "changed-path scope",
+  "scripts/prepare-maintenance-release.ts":
+    "readPreviousRelease answers superseded for an untagged VERSION",
+  "scripts/verify-release-tree-proof.sh": "VERSION modified in the PR",
+};
+const NOT_VERSION_READERS = new Set([
+  "scripts/check-parser-versions.ts",
+  "scripts/desktop-release-step.ts",
+  "scripts/env-catalog.ts",
+]);
+const VERSION_FILE_READ =
+  /git show [^\n]*:VERSION\b|<\s*VERSION\b|"VERSION"|-- VERSION\b|cat VERSION\b|-f VERSION\b|\/VERSION"/u;
+
+describe("VERSION reader census", () => {
+  test("classifies every reader of the VERSION file", () => {
+    const files = git(REPOSITORY_ROOT)([
+      "git",
+      "ls-files",
+      "scripts",
+      ".github",
+    ])
+      .split("\n")
+      .filter((file) => !/\.test\.|\/fixtures?\//u.test(file));
+    const readers = files
+      .filter((file) => !NOT_VERSION_READERS.has(file))
+      .filter((file) =>
+        VERSION_FILE_READ.test(
+          readFileSync(nodePath.join(REPOSITORY_ROOT, file), "utf-8"),
+        ),
+      )
+      .toSorted();
+    expect(readers).toEqual(Object.keys(VERSION_READERS).toSorted());
   });
 });
