@@ -245,6 +245,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/mcp/oauth/callback": "crud",
   "GET /v1/mcp/oauth/cli-client-metadata.json": "crud",
   "GET /v1/mcp/oauth/client-metadata.json": "crud",
+  "GET /v1/mcp/oauth/mobile-client-metadata.json": "crud",
   "GET /v1/me/data-exports/": "crud",
   "GET /v1/me/data-exports/:exportId": "crud",
   "GET /v1/me/data-exports/:exportId/download": "crud",
