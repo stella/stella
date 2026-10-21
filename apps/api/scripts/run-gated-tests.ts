@@ -35,6 +35,12 @@ type RunGatedTestsOptions = {
   validateTestPlan?:
     | ((apiRoot: string, testPaths: readonly string[]) => Promise<void>)
     | undefined;
+  withTestRun?:
+    | ((
+        testPaths: readonly string[],
+        run: () => Promise<number>,
+      ) => Promise<number>)
+    | undefined;
 };
 
 const apiRoot = path.resolve(import.meta.dir, "..");
@@ -178,6 +184,7 @@ export const runGatedTests = async ({
   spawnTestProcess,
   validateTestPlan,
   shardTestFiles,
+  withTestRun,
 }: RunGatedTestsOptions): Promise<number> => {
   const runner = packageJson.ciGateTestRunners[script];
   const missing = requiredEnv.filter((name) => !process.env[name]);
@@ -254,13 +261,17 @@ export const runGatedTests = async ({
   console.log(
     `Running ${String(testFiles.length)} ${runner.gate} test files in ${String(batches.length)} process batches.`,
   );
-  return runTestBatches({
-    batches,
-    bunArguments,
-    cwd: apiRoot,
-    gate: runner.gate,
-    gateValue: runner.gateValue,
-    ...(spawnTestProcess === undefined ? {} : { spawn: spawnTestProcess }),
-    preload,
-  });
+  const run = async () =>
+    await runTestBatches({
+      batches,
+      bunArguments,
+      cwd: apiRoot,
+      gate: runner.gate,
+      gateValue: runner.gateValue,
+      ...(spawnTestProcess === undefined ? {} : { spawn: spawnTestProcess }),
+      preload,
+    });
+  return withTestRun === undefined
+    ? await run()
+    : await withTestRun(testFiles, run);
 };

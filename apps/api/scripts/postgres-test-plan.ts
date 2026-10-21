@@ -25,6 +25,33 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/lib/scheduler/tasks/registration-retention.postgres.test.ts",
   ]);
 
+/** Suites that clone the runner-owned copy of the fully migrated test database. */
+export const TEMPLATE_DATABASE_TEST_PATHS: ReadonlySet<string> = new Set([
+  "src/db/online-repairs-beside-writer.postgres.test.ts",
+]);
+
+export const assertTemplateDatabaseTestsAreExclusive = (
+  templatePaths = TEMPLATE_DATABASE_TEST_PATHS,
+  exclusivePaths = EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+): void => {
+  const sharedPaths = [...templatePaths].filter(
+    (testPath) => !exclusivePaths.has(testPath),
+  );
+  if (sharedPaths.length === 0) {
+    return;
+  }
+  panic(
+    `PostgreSQL tests that clone the migrated template require an exclusive test process:\n${sharedPaths
+      .map((testPath) => `  ${testPath}`)
+      .join("\n")}\nAdd each path to EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS.`,
+  );
+};
+
+export const needsTemplateDatabase = (
+  testPaths: readonly string[],
+  templatePaths = TEMPLATE_DATABASE_TEST_PATHS,
+): boolean => testPaths.some((testPath) => templatePaths.has(testPath));
+
 export const isolateSharedTableDdlTests = (
   testPaths: readonly string[],
   isolatedPaths = EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,

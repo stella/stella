@@ -1,14 +1,6 @@
 import { panic } from "better-result";
 import type { ReservedSQL, SQL } from "bun";
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
-import nodePath from "node:path";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
 
@@ -21,7 +13,6 @@ import {
   writerGapReport,
 } from "../../../../scripts/migration-rehearsal-writer-gap";
 import { withGatedTestClients } from "../tests/gated-test-database";
-import { runMigrations } from "./migration-runner";
 import { createUngatedTableGateForTests } from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import { ONLINE_MIGRATION_REPAIRS } from "./online-migrations";
@@ -29,14 +20,19 @@ import { terminateReserved } from "./sql-close";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const templateDatabase = process.env["STELLA_TEST_TEMPLATE_DATABASE"];
 const DEADLINE_MS = 30_000;
 const GAP_BUDGET_SECONDS = 2;
 const WRITER_HOLD_MS = 10;
 const ID = "00000000-0000-4000-8000-000000000001";
 const ID_2 = "00000000-0000-4000-8000-000000000002";
 const ID_3 = "00000000-0000-4000-8000-000000000003";
-const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
-const templateDatabase = `online_rows_template_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+
+if (enabled && templateDatabase === undefined) {
+  panic(
+    "STELLA_TEST_TEMPLATE_DATABASE is required when the online-repairs PostgreSQL suite is enabled; run it through test:postgres",
+  );
+}
 
 setDefaultTimeout(120_000);
 
@@ -336,6 +332,9 @@ const adapter = (connection: ReservedSQL): OnlineMigrationConnection => ({
   terminate: async () => await terminateReserved(connection),
 });
 
+const quoteIdentifier = (identifier: string) =>
+  `"${identifier.replaceAll('"', '""')}"`;
+
 const withScratch = async (
   name: string,
   work: (openClient: () => SQL) => Promise<void>,
@@ -343,26 +342,34 @@ const withScratch = async (
   if (databaseUrl === undefined) {
     panic("DATABASE_URL required");
   }
-  await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-    const admin = openClient().sql;
-    const database = `online_rows_${name.replaceAll(/[^a-z0-9]/gu, "_")}_${Bun.randomUUIDv7().replaceAll("-", "")}`;
-    await admin.unsafe(
-      `CREATE DATABASE "${database}" TEMPLATE "${templateDatabase}"`,
-    );
-    const url = new URL(databaseUrl);
-    url.pathname = `/${database}`;
-    try {
-      await withGatedTestClients(
-        url.toString(),
-        async ({ openClient: open }) => {
-          await work(() => open().sql);
-        },
-        { closeMode: "force" },
+  if (templateDatabase === undefined) {
+    panic("STELLA_TEST_TEMPLATE_DATABASE required");
+  }
+  const maintenanceUrl = new URL(databaseUrl);
+  maintenanceUrl.pathname = "/postgres";
+  await withGatedTestClients(
+    maintenanceUrl.toString(),
+    async ({ openClient }) => {
+      const admin = openClient().sql;
+      const database = `online_rows_${name.replaceAll(/[^a-z0-9]/gu, "_")}_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      await admin.unsafe(
+        `CREATE DATABASE ${quoteIdentifier(database)} TEMPLATE ${quoteIdentifier(templateDatabase)}`,
       );
-    } finally {
-      await admin.unsafe(`DROP DATABASE "${database}"`);
-    }
-  });
+      const url = new URL(databaseUrl);
+      url.pathname = `/${database}`;
+      try {
+        await withGatedTestClients(
+          url.toString(),
+          async ({ openClient: open }) => {
+            await work(() => open().sql);
+          },
+          { closeMode: "force" },
+        );
+      } finally {
+        await admin.unsafe(`DROP DATABASE ${quoteIdentifier(database)}`);
+      }
+    },
+  );
 };
 
 const assertRegistryAndSeedsMatch = () => {
@@ -509,68 +516,6 @@ const exercise = async (repair: (typeof ONLINE_MIGRATION_REPAIRS)[number]) => {
 };
 
 describe.skipIf(!enabled)("online repairs run beside writers", () => {
-  beforeAll(async () => {
-    const url = databaseUrl ?? panic("DATABASE_URL required");
-    const sourceDatabase = decodeURIComponent(
-      new URL(url).pathname.slice(1),
-    ).replaceAll('"', '""');
-    const adminUrl = new URL(url);
-    adminUrl.pathname = "/postgres";
-    await withGatedTestClients(adminUrl.toString(), async ({ openClient }) => {
-      const admin = openClient().sql;
-      await admin`
-        SELECT pg_terminate_backend(pid)
-        FROM pg_stat_activity
-        WHERE datname = ${decodeURIComponent(new URL(url).pathname.slice(1))}
-          AND pid <> pg_backend_pid()
-      `;
-      await admin.unsafe(
-        `CREATE DATABASE "${templateDatabase}" TEMPLATE "${sourceDatabase}"`,
-      );
-    });
-    const templateUrl = new URL(url);
-    templateUrl.pathname = `/${templateDatabase}`;
-    await withGatedTestClients(
-      templateUrl.toString(),
-      async ({ openClient }) => {
-        const connection = await openClient({ max: 1 }).sql.reserve();
-        try {
-          await runMigrations({
-            connection,
-            migrationsFolder,
-            databaseUrl: templateUrl.toString(),
-            ebs: { type: "disabled" },
-          });
-          await connection.unsafe(`
-            DO $$
-            DECLARE tables text;
-            BEGIN
-              SELECT string_agg(format('%I.%I', schemaname, tablename), ', ')
-                INTO tables
-                FROM pg_tables
-                WHERE schemaname = 'public';
-              IF tables IS NOT NULL THEN
-                EXECUTE 'TRUNCATE TABLE ' || tables || ' CASCADE';
-              END IF;
-            END $$
-          `);
-        } finally {
-          connection.release();
-        }
-      },
-      { closeMode: "force" },
-    );
-  });
-
-  afterAll(async () => {
-    const url = databaseUrl ?? panic("DATABASE_URL required");
-    await withGatedTestClients(url, async ({ openClient }) => {
-      await openClient().sql.unsafe(
-        `DROP DATABASE IF EXISTS "${templateDatabase}"`,
-      );
-    });
-  });
-
   test(
     "the seed map exactly enumerates the repair registry",
     assertRegistryAndSeedsMatch,
