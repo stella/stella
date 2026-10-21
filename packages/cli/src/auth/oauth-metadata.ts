@@ -3,6 +3,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { apiFetch } from "../api-fetch.js";
 import {
   AUTH_FETCH_TIMEOUT_MS,
   AUTHORIZATION_SERVER_METADATA_PATHS,
@@ -39,7 +40,7 @@ const fetchCandidate = async (
   url: string,
 ): Promise<AuthorizationServerMetadata | undefined> => {
   const attempt = await Result.tryPromise(async () => {
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(AUTH_FETCH_TIMEOUT_MS),
     });

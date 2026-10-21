@@ -839,12 +839,21 @@ type ResolveRepoPathOptions = {
   readonly checkouts: readonly CheckoutSource[];
 };
 
+const preservedToolingFile = (target: string) =>
+  target === "$RUNNER_TEMP/ci-pr-jobs-cli.ts"
+    ? "scripts/ci-pr-jobs-cli.ts"
+    : undefined;
+
 const resolveRepoPath = ({
   cwd,
   root,
   target,
   checkouts,
 }: ResolveRepoPathOptions): ResolvedPath => {
+  const preserved = preservedToolingFile(target);
+  if (preserved !== undefined) {
+    return { path: preserved, type: "file" };
+  }
   if (isComputed(target) || isComputed(cwd)) {
     return { reason: `${target} is computed at run time`, type: "invalid" };
   }
@@ -1256,7 +1265,10 @@ const classifyBun = ({
   if (subcommand === undefined) {
     return single(unclassified("names no script, file or subcommand"));
   }
-  if (isComputed(subcommand)) {
+  if (
+    isComputed(subcommand) &&
+    preservedToolingFile(subcommand) === undefined
+  ) {
     return single(unclassified(`${subcommand} is computed at run time`));
   }
   if (filter !== undefined) {
