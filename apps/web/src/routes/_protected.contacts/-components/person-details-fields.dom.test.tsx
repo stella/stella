@@ -7,7 +7,7 @@ import messages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts" });
-const { act, cleanup, fireEvent, render, screen } =
+const { act, cleanup, fireEvent, render, screen, within } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -44,16 +44,20 @@ const mount = async (initial?: string[]) =>
   });
 
 const searchInput = () =>
-  screen.getByRole("combobox", { name: messages.contacts.searchCountries });
+  screen.getByRole("combobox", {
+    name: messages.contacts.fields.nationalities,
+  });
 
 test("the country list is closed until the field is focused", async () => {
   await mount();
-  expect(screen.queryAllByRole("option")).toHaveLength(0);
+  expect(screen.queryByRole("listbox")).toBeNull();
   await act(async () => {
     searchInput().focus();
     fireEvent.focus(searchInput());
   });
-  expect(screen.getAllByRole("option").length).toBeGreaterThan(10);
+  expect(
+    within(screen.getByRole("listbox")).getAllByRole("option").length,
+  ).toBeGreaterThan(10);
 });
 
 test("typing filters the list and selecting adds a removable chip", async () => {
@@ -62,20 +66,26 @@ test("typing filters the list and selecting adds a removable chip", async () => 
     fireEvent.focus(searchInput());
     fireEvent.change(searchInput(), { target: { value: "Slovak" } });
   });
-  const options = screen.getAllByRole("option");
+  const options = within(screen.getByRole("listbox")).getAllByRole("option");
   expect(options).toHaveLength(1);
-  expect(options[0]?.textContent).toContain("Slovakia");
+  const option = options.at(0);
+  if (!option) {
+    throw new Error("Expected the filtered nationality option");
+  }
+  expect(option.textContent).toContain("Slovakia");
   await act(async () => {
-    fireEvent.click(options[0] as HTMLElement);
+    fireEvent.click(option);
   });
   const chip = document.querySelector('[data-slot="combobox-chip"]');
   expect(chip?.textContent).toContain("Slovakia");
+  const removeButton = document.querySelector(
+    '[data-slot="combobox-chip-remove"]',
+  );
+  if (!removeButton) {
+    throw new Error("Expected the selected nationality remove button");
+  }
   await act(async () => {
-    fireEvent.click(
-      document.querySelector(
-        '[data-slot="combobox-chip-remove"]',
-      ) as HTMLElement,
-    );
+    fireEvent.click(removeButton);
   });
   expect(document.querySelector('[data-slot="combobox-chip"]')).toBeNull();
 });
@@ -87,5 +97,5 @@ test("existing nationalities render as chips while the list is closed", async ()
     expect.stringContaining("Czechia"),
     expect.stringContaining("Poland"),
   ]);
-  expect(screen.queryAllByRole("option")).toHaveLength(0);
+  expect(screen.queryByRole("listbox")).toBeNull();
 });

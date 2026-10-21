@@ -2,6 +2,8 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { isCountryCode } from "@stll/country-codes";
+import type { CountryCode } from "@stll/country-codes";
 import {
   Combobox,
   ComboboxChip,
@@ -29,7 +31,7 @@ type PersonDetailsFieldsProps = {
   birthDate: BirthDateDraft;
   onBirthDateChange: (value: BirthDateDraft) => void;
   nationalityCodes: readonly string[];
-  onNationalityCodesChange: (value: string[]) => void;
+  onNationalityCodesChange: (value: CountryCode[]) => void;
 };
 
 export const PersonDetailsFields = ({
@@ -43,6 +45,7 @@ export const PersonDetailsFields = ({
   const locale = useLocale();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const parsedNationalityCodes = nationalityCodes.filter(isCountryCode);
   const allCountries = createCountryOptions(locale, format.displayName);
   const nameByCode = new Map(
     allCountries.map(({ code, name }) => [code, name]),
@@ -136,19 +139,19 @@ export const PersonDetailsFields = ({
         <Combobox
           filter={null}
           inputValue={query}
-          itemToStringLabel={(code: string) => nameByCode.get(code) ?? code}
+          itemToStringLabel={(code) => nameByCode.get(code) ?? code}
           items={visibleCodes}
           multiple
           onInputValueChange={setQuery}
           onOpenChange={setOpen}
-          onValueChange={(codes: string[]) => onNationalityCodesChange(codes)}
+          onValueChange={onNationalityCodesChange}
           open={open}
-          value={[...nationalityCodes]}
+          value={parsedNationalityCodes}
         >
           <ComboboxChips startAddon={<SearchIcon />}>
             <ComboboxValue>
-              {(codes: string[]) =>
-                codes.map((code) => (
+              {(codes: CountryCode[]) =>
+                codes.map((code: CountryCode) => (
                   <ComboboxChip
                     aria-label={nameByCode.get(code) ?? code}
                     key={code}
@@ -162,7 +165,7 @@ export const PersonDetailsFields = ({
               aria-label={t("contacts.searchCountries")}
               onFocus={() => setOpen(true)}
               placeholder={
-                nationalityCodes.length === 0
+                parsedNationalityCodes.length === 0
                   ? t("contacts.searchCountries")
                   : undefined
               }
@@ -171,7 +174,7 @@ export const PersonDetailsFields = ({
           <ComboboxPopup>
             <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
             <ComboboxList>
-              {(code: string) => (
+              {(code: CountryCode) => (
                 <ComboboxItem key={code} value={code}>
                   <span className="flex items-center gap-2">
                     <span className="flex-1">
