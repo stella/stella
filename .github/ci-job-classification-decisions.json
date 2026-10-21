@@ -67,22 +67,22 @@
   "candidate:.github/workflows/autofix.yml/regenerate-requested-files": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "b998a27f8453a4c1cad11d9731f1d0b265e8ef40ca6dce2a8f22210ff75d6864"
+    "reviewedDigest": "2e727cf504bdcc912858c3c894ebf5dbbf86aeacee9420ff5024ab44eae76b96"
   },
   "candidate:.github/workflows/autofix.yml/dependabot-bun-autofix": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "98e6f14505d392ab4791bb945fc3317a5c8ba58699916c3ff7b6a2e5d9a6204f"
+    "reviewedDigest": "a87efb8d21c8eaea70a571d1c390f25e1f4ad897994b0375ef5118144b3b2d00"
   },
   "candidate:.github/workflows/autofix.yml/regenerate-scope": {
     "kind": "ordinary",
     "qualifier": "Plans pull-request autofix scope using settled-run evidence; no release publication, tag creation, or deployment.",
-    "reviewedDigest": "d3dd0e203386248532558822f8292f726498d5cf09c3c9944defbc516f930edb"
+    "reviewedDigest": "466e1c5234bff59076c499902dd4bea241e90fc31238d4ee0ccc8e3d6cfa3f79"
   },
   "candidate:.github/workflows/autofix.yml/regenerate-derived-files": {
     "kind": "ordinary",
     "qualifier": "Regenerates and pushes scoped pull-request autofix commits; no release publication, tag creation, or deployment.",
-    "reviewedDigest": "b6d6b0e02ba27f82460f03ebb604caafb00a2ad5285370da0db81d1ccc11383a"
+    "reviewedDigest": "fe0a8e4f13e588683afbeb9446e4331307fa650ffc4abdc832a21491ebfa2770"
   },
   "candidate:.github/workflows/bot-refresh-auto-merge.yml/arm": {
     "kind": "ordinary",
@@ -142,12 +142,12 @@
   "candidate:.github/workflows/ci.yml/ci-checks-policy": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "4df32e8b2810e62658ca92da5291062cd82e00df79f092be13d6f584fa418237"
+    "reviewedDigest": "7f0b8063a5ec62688e49d8ccc931531384315d0f485c1093fc3c380ba6dea654"
   },
   "candidate:.github/workflows/ci.yml/ci-checks-rest": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "3b885e216ec0668beea4699d56e6e866f1dca35ae042333fb9efeded024d29a4"
+    "reviewedDigest": "ce95b36ea6bbece33dd2f4248bcfabc703ed35299d05371579263fa27e3176e2"
   },
   "candidate:.github/workflows/ci.yml/ci-tests": {
     "kind": "support",
@@ -167,12 +167,12 @@
   "candidate:.github/workflows/ci.yml/code-quality-api": {
     "kind": "support",
     "qualifier": "Runs API code-quality checks required by the merge verdict.",
-    "reviewedDigest": "7f4582f6d3928bb8b1346c07100fa71e8348d10dad4c13b23f635ce874003bfc"
+    "reviewedDigest": "9348a91367aaac85b617a0bd882023393a867217f8541f3bb6e26fbd5fad72a4"
   },
   "candidate:.github/workflows/ci.yml/code-quality-web-rest": {
     "kind": "support",
     "qualifier": "Runs web and remaining code-quality checks required by the merge verdict.",
-    "reviewedDigest": "6cf343a50f10f80e758fe1ec393a161f42c030cf712f79fb53492c3055c792d3"
+    "reviewedDigest": "2c7cec78e5abf19358d50949acb79007c0e6fee8473ebca6584907cca08bc0fe"
   },
   "candidate:.github/workflows/ci.yml/query-perf": {
     "kind": "support",
@@ -302,7 +302,7 @@
   "candidate:.github/workflows/ci.yml/desktop-rust-lint": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "809713e63c6ef0877cc6a0bff5b942ae57d1df378a8e63db9a3048262c1c811f"
+    "reviewedDigest": "1c5fe52480da12162d6cef9d9dc41fd50eb844103139192edfc6fdb7b311c386"
   },
   "candidate:.github/workflows/ci.yml/dependency-malware": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "515eab50b5e4080e1ac0ce1f9577f0603fd0efece0eab81954e69507ffe3b1a0"
+    "reviewedDigest": "711c9da0105d3316b66e214c0da1b4dfeb20c9451793eeff34d563dfa70e858c"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "7ddce88966b0c089c803c434b1b0710fc59279cb5d5d977e08714f64bcb1ca69"
+    "reviewedDigest": "cd7ae7afded0d215e3e1564bc4dc44cc77f2689d512680c5bd83acc8c2bb3d80"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
