@@ -1139,6 +1139,23 @@ const isCanonicalChatUIMessage = (
       isCanonicalBuiltInToolCall(part),
   );
 
+/** Messages already checked. A message object never changes, so a streamed
+ *  chunk checks only the messages it replaced. */
+const canonicalChatUIMessages = new WeakSet<PersistedChatMessage>();
+
+const isKnownCanonicalChatUIMessage = (
+  message: PersistedChatMessage,
+): message is ChatUIMessage => {
+  if (canonicalChatUIMessages.has(message)) {
+    return true;
+  }
+  if (!isCanonicalChatUIMessage(message)) {
+    return false;
+  }
+  canonicalChatUIMessages.add(message);
+  return true;
+};
+
 /**
  * Project known tool names and protocol-shaped payloads into the UI.
  * This checks object shape, not the current tool schema. Persisted payloads
@@ -1151,7 +1168,7 @@ export const projectCanonicalChatUIMessages = (
 ): ChatUIMessage[] => {
   const projected: ChatUIMessage[] = [];
   for (const message of messages) {
-    if (!isCanonicalChatUIMessage(message)) {
+    if (!isKnownCanonicalChatUIMessage(message)) {
       return panic("Chat runtime produced a non-canonical tool call");
     }
     projected.push(message);
