@@ -6,7 +6,10 @@ import {
   versionBumpTime,
   type RegistryResult,
 } from "./check-npm-publish-lag";
-import { ALL_PACKAGE_ORDER } from "./publish-packages";
+import {
+  ALL_PACKAGE_ORDER,
+  MOVED_PACKAGE_REPOSITORIES,
+} from "./publish-packages";
 
 const git = (args: string[]) => {
   const result = Bun.spawnSync(["git", ...args], {
@@ -58,7 +61,7 @@ if (import.meta.main) {
             result = await checkRegistry({
               name: manifest.name,
               version: manifest.version,
-              repository: manifest.repository,
+              movedRepository: MOVED_PACKAGE_REPOSITORIES[directory],
               bumpedAt: versionBumpTime(history),
               now,
               registry,

@@ -44,7 +44,7 @@ const run = async ({
     const result = await checkRegistry({
       name: "@stll/fixture",
       version: "1.2.3",
-      repository: "github.com/stella/stella",
+      movedRepository: undefined,
       bumpedAt,
       now: NOW,
       registry: server.url.toString(),
@@ -315,6 +315,8 @@ const MOVED_LATEST = {
 
 const runRepositoryCheck = async ({
   latest = MOVED_LATEST,
+  movedRepository = "github.com/stella/moved",
+  bumpedAt = NOW - 60,
   installedVersion = "1.2.4",
   npmResults = [
     { exitCode: 0, stdout: "" },
@@ -322,6 +324,8 @@ const runRepositoryCheck = async ({
   ],
 }: {
   latest?: Record<string, unknown>;
+  movedRepository?: string | undefined;
+  bumpedAt?: number | undefined;
   installedVersion?: string;
   npmResults?: { exitCode: number; stdout: string }[];
 } = {}) => {
@@ -351,8 +355,8 @@ const runRepositoryCheck = async ({
     const result = await checkRegistry({
       name: "@stll/fixture",
       version: "1.2.3",
-      repository: "github.com/stella/stella",
-      bumpedAt: NOW - 60,
+      movedRepository,
+      bumpedAt,
       now: NOW,
       registry: server.url.toString(),
       timeoutMs: 5000,
@@ -397,7 +401,7 @@ describe("published repository provenance", () => {
           await checkRegistry({
             name: "@stll/fixture",
             version: "1.2.3",
-            repository: "github.com/stella/stella",
+            movedRepository: undefined,
             bumpedAt,
             now: NOW,
             registry: server.url.toString(),
@@ -523,6 +527,31 @@ describe("published repository provenance", () => {
     expect(result).toEqual(UNATTESTED);
   });
 
+  test.each([
+    [
+      "a package that is not on the moved list",
+      undefined,
+      "https://github.com/stella/stella",
+    ],
+    [
+      "a declared repository other than the listed move",
+      "github.com/stella/moved",
+      "https://github.com/stella/other",
+    ],
+  ])(
+    "compares versions for %s without consulting provenance",
+    async (_, movedRepository, declared) => {
+      const { result, npmCalls } = await runRepositoryCheck({
+        movedRepository,
+        // Outside the publication window, so only an exact match could pass.
+        bumpedAt: NOW - 2 * 24 * 60 * 60,
+        latest: { version: "1.2.4", repository: declared },
+      });
+      expect(result).toEqual({ status: "failed", reason: "version_mismatch" });
+      expect(npmCalls).toHaveLength(0);
+    },
+  );
+
   test("rejects a verified audit when npm installed another version", async () => {
     const { result } = await runRepositoryCheck({ installedVersion: "1.2.3" });
     expect(result).toEqual(UNATTESTED);
@@ -588,7 +617,7 @@ describe("published version policy matrix", () => {
           const result = await checkRegistry({
             name: pkg.name,
             version: pkg.version,
-            repository: undefined,
+            movedRepository: undefined,
             bumpedAt: NOW - (window === "recent" ? 86_399 : 86_400),
             now: NOW,
             registry: server.url.toString(),

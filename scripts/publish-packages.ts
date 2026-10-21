@@ -27,3 +27,12 @@ export const LIBRARY_PACKAGE_ORDER = [
 ] as const;
 
 export const ALL_PACKAGE_ORDER = [...LIBRARY_PACKAGE_ORDER, "cli"] as const;
+
+// Packages whose releases moved to another repository, by package directory,
+// with that repository as `github.com/<owner>/<name>`. The journey canary
+// accepts npm's latest for one of these only with npm-verified provenance
+// from exactly this repository; any other repository declaration falls back
+// to the exact version comparison.
+export const MOVED_PACKAGE_REPOSITORIES: Partial<
+  Record<(typeof ALL_PACKAGE_ORDER)[number], string>
+> = { time: "github.com/stella/tooling" };

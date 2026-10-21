@@ -346,7 +346,8 @@ const verifyPackageWithNpm = async ({
 type CheckRegistryOptions = {
   name: string;
   version: string;
-  repository: string | undefined;
+  /** The allow-listed repository this package's releases moved to, if any. */
+  movedRepository: string | undefined;
   bumpedAt: number | undefined;
   now: number;
   registry: string;
@@ -362,7 +363,7 @@ export const checkRegistry = async ({
   now,
   registry,
   timeoutMs,
-  repository,
+  movedRepository,
   npmRunner = runNpm,
 }: CheckRegistryOptions): Promise<RegistryResult> => {
   try {
@@ -384,7 +385,10 @@ export const checkRegistry = async ({
     const npmRepository = normalizeGitHubRepository(
       repositoryField(payload["repository"]),
     );
-    if (npmRepository !== undefined && npmRepository !== repository) {
+    // Only an allow-listed move takes the provenance path, and only when npm
+    // declares exactly that repository; any other declaration is judged by
+    // the exact version comparison below, as before the move.
+    if (movedRepository !== undefined && npmRepository === movedRepository) {
       const verified = await verifyPackageWithNpm({
         name,
         version: payload["version"],
@@ -393,7 +397,7 @@ export const checkRegistry = async ({
             .split("/")
             .map(encodeURIComponent)
             .join("/")}@${payload["version"]}`,
-          repository: npmRepository,
+          repository: movedRepository,
         },
         registry,
         timeoutMs,
@@ -450,7 +454,6 @@ type PublishablePackage = {
   readonly directory: string;
   readonly name: string;
   readonly version: string;
-  readonly repository?: string | undefined;
 };
 
 type PackageLagStatus =
@@ -570,14 +573,10 @@ export const readPackageManifest = ({
       `packages/${directory}/package.json has an invalid name or version`,
     );
   }
-  const repository = normalizeGitHubRepository(
-    repositoryField(manifest["repository"]),
-  );
   return {
     directory,
     name: manifest["name"],
     version: manifest["version"],
-    ...(repository === undefined ? {} : { repository }),
   };
 };
 
