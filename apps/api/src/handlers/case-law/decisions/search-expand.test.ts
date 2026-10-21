@@ -132,7 +132,10 @@ const providerRequestOf = (
 
 const answeringFetch: typeof globalThis.fetch = Object.assign(
   async (input: Parameters<typeof globalThis.fetch>[0], init?: RequestInit) => {
-    const request = new Request(input, init);
+    const request =
+      input instanceof Request
+        ? new Request(input, init)
+        : new Request(String(input), init);
     const parsed: unknown = await request.json();
     const providerRequest = providerRequestOf(
       new URL(request.url),
@@ -201,7 +204,7 @@ const orgConfig = (name: Provider, fastModelId?: string): OrgAIConfig => ({
 const EXPANDED = {
   alternatives: [{ term: "kauce", alternatives: ["jistota"] }],
   outcome: "expanded",
-};
+} satisfies Awaited<ReturnType<typeof proposeLegalAlternatives>>;
 
 const onlyRequest = () => {
   expect(sent).toHaveLength(1);

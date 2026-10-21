@@ -9,7 +9,7 @@ import {
 import { EXPECTED_TEXT } from "@/api/tests/helpers/provider-wire-contract";
 
 /** A recorded provider stream's body and headers, ready for a `Response`. */
-export const recordedStreamBody = (
+const recordedStreamBody = (
   cassette: ProviderWireCassette,
 ): { body: string; headers: Record<string, string> } => {
   const exchange = cassette.exchanges.at(0);
