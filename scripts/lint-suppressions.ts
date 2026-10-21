@@ -20,7 +20,7 @@
 // budgets and the security budget rises on its own.
 
 import { panic } from "better-result";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { parseSource } from "./parse-memo";
 

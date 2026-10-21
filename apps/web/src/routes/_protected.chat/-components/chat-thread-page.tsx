@@ -260,6 +260,7 @@ export const ChatThreadPage = ({
     turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
+    confirmStoredApprovalGrant,
     handleApprove,
     handleAllowInConversation,
     handleDeny,
@@ -279,6 +280,7 @@ export const ChatThreadPage = ({
     approvalPendingMessageId,
   } = useChatSession({
     chat,
+    timingSurface: "chat-thread",
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,
@@ -604,6 +606,7 @@ export const ChatThreadPage = ({
             activeOrganizationId,
             alwaysApprovedTools,
             conversationApprovedTools,
+            confirmStoredApprovalGrant,
             handleAllowInConversation,
             handleAlwaysAllow,
             handleApprove,

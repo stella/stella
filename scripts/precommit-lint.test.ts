@@ -1,20 +1,9 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { repoRelativePath } from "@stll/portable-path";
 
 import {
   RECEIVER_TYPED_AUTOFIX_RULES,
@@ -27,8 +16,10 @@ import {
 setDefaultTimeout(60_000);
 
 const ROOT = path.resolve(import.meta.dir, "..");
-// Inside the repository so oxlint.config.ts applies exactly as in the hook.
-const DIR = path.join("scripts", `__precommit_lint_${process.pid}__`);
+// Inside the repository so oxlint.config.ts applies exactly as in the hook;
+// a directory of its own, since concurrent runs share this checkout.
+const DIRECTORY = mkdtempSync(path.join(ROOT, "scripts", "__precommit_lint_"));
+const DIR = repoRelativePath(ROOT, DIRECTORY);
 
 // One fixture per rule whose autofix assumes a receiver type. Each is valid
 // code the fix would break or change.
@@ -80,18 +71,15 @@ const fixturePath = (name: string) =>
 
 const writeFixture = (name: string, body: string): string => {
   const file = fixturePath(name);
-  writeFileSync(path.join(ROOT, file), `${body}\n`);
+  // oxlint-disable-next-line no-shared-checkout-mutation/no-shared-checkout-mutation -- the name is a rule id with "/" replaced, inside this run's own mkdtemp directory
+  writeFileSync(path.join(DIRECTORY, path.basename(file)), `${body}\n`);
   return file;
 };
 
 const read = (file: string) => readFileSync(path.join(ROOT, file), "utf-8");
 
-beforeAll(() => {
-  mkdirSync(path.join(ROOT, DIR), { recursive: true });
-});
-
 afterAll(() => {
-  rmSync(path.join(ROOT, DIR), { recursive: true, force: true });
+  rmSync(DIRECTORY, { recursive: true, force: true });
 });
 
 describe("pre-commit lint", () => {

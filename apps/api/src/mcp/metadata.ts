@@ -7,11 +7,13 @@ import {
   getMcpProtectedResourceMetadataUrl,
   getMcpResourceUrl,
   MCP_ALLOWED_HEADERS,
+  MCP_DISCOVERY_ALLOWED_HEADERS,
   MCP_DISCOVERY_ALLOW_HEADER,
   MCP_EXPOSE_HEADERS,
   MCP_STATELESS_ALLOW_HEADER,
   STELLA_API_CONTRACT,
-  STELLA_CLI_MAXIMUM_VERSION,
+  STELLA_CLI_LATEST_HEADER,
+  STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MINIMUM_HEADER,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_HEADER,
@@ -22,10 +24,11 @@ export const createMcpMetadataHeaders = () =>
   new Headers({
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": MCP_DISCOVERY_ALLOW_HEADER,
-    "Access-Control-Allow-Headers": MCP_ALLOWED_HEADERS.join(", "),
+    "Access-Control-Allow-Headers": MCP_DISCOVERY_ALLOWED_HEADERS.join(", "),
     "Access-Control-Expose-Headers": MCP_EXPOSE_HEADERS.join(", "),
     [STELLA_MCP_API_CONTRACT_HEADER]: String(STELLA_MCP_API_CONTRACT_VERSION),
     [STELLA_CLI_MINIMUM_HEADER]: STELLA_CLI_MINIMUM_VERSION,
+    [STELLA_CLI_LATEST_HEADER]: STELLA_CLI_LATEST_VERSION,
   });
 
 export const createMcpCorsHeaders = () =>
@@ -37,6 +40,7 @@ export const createMcpCorsHeaders = () =>
     "Access-Control-Max-Age": String(PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS),
     [STELLA_MCP_API_CONTRACT_HEADER]: String(STELLA_MCP_API_CONTRACT_VERSION),
     [STELLA_CLI_MINIMUM_HEADER]: STELLA_CLI_MINIMUM_VERSION,
+    [STELLA_CLI_LATEST_HEADER]: STELLA_CLI_LATEST_VERSION,
   });
 
 /**
@@ -97,7 +101,7 @@ export const getMcpProtectedResourceMetadata = (mode: McpMode = "default") => ({
     api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
     cli_version: {
       minimum: STELLA_CLI_MINIMUM_VERSION,
-      maximum: STELLA_CLI_MAXIMUM_VERSION,
+      maximum: STELLA_CLI_LATEST_VERSION,
     },
   },
 });
