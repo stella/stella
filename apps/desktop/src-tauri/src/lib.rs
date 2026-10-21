@@ -67,7 +67,6 @@ macro_rules! generate_stella_handler {
 }
 
 use clipboard::{ClipboardAppState, ClipboardManager};
-use clipboard_commands::ClipboardEditorState;
 use commands::AppState;
 use session_manager::SessionManager;
 use std::sync::Arc;
@@ -139,7 +138,7 @@ pub fn run() {
     .manage::<AppState>(Arc::clone(&manager))
     .manage::<account::AccountState>(Arc::clone(&account))
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
-    .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
+    .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),

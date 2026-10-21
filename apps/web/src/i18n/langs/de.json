@@ -855,7 +855,6 @@
         "unavailable": "Für diese Entscheidung ist keine KI-Analyse verfügbar."
       },
       "generate": "KI-Leitsätze erzeugen",
-      "holdingAnchor": "Zum Absatz",
       "invitation": "Mit einem kostenlosen Konto erstellt die KI Arbeitsnotizen zu dieser Entscheidung.",
       "topics": "Themen",
       "treatment": "Spätere Rezeption"
@@ -1111,6 +1110,8 @@
         "hint": "Entfernen oder erweitern Sie einen Filter und suchen Sie erneut.",
         "message": "Nichts entspricht den gewählten Filtern."
       },
+      "partialMatch": "Teilweiser Treffer",
+      "partialMatches": "Teilweise Treffer für: <bdi>{query}</bdi>",
       "resultsFor": "Ergebnisse für: <bdi>{query}</bdi>",
       "searchEveryWord": "Alle Wörter suchen"
     },
@@ -1148,6 +1149,7 @@
       "judges": "Richter",
       "legalArea": "Rechtsgebiet",
       "legalSentence": "Leitsatz",
+      "paragraphReference": "Absatz {number}",
       "popularName": "Populärer Name",
       "portraitCredit": "Quelle der Porträts: {source}",
       "provisionMentions": "{count, number}×",
@@ -1614,6 +1616,9 @@
         "private": "Ihre Skills",
         "team": "Team-Skills"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Ebenfalls konsultiert ({count, number})"
     },
     "sourcePlaceholder": "Chat über {title}",
     "sourcePlaceholderAction": "Chat über",
