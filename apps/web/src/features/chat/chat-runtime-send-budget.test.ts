@@ -62,22 +62,28 @@ const loadedThread = ({
         id: `question-${String(pair)}`,
         parts: [{ content: `Question ${String(pair)}`, type: "text" }],
         role: "user",
-      },
+      } satisfies PersistedChatMessage,
       {
         id: `answer-${String(pair)}`,
         parts: [
-          ...Array.from({ length: calls }, (_unused, call) => ({
-            arguments: "{}",
-            id: `call-${String(pair)}-${String(call)}`,
-            name: "list_templates",
-            output: { templates: [{ id: "template", name: "Template" }] },
-            state: "complete",
-            type: "tool-call",
-          })),
+          ...Array.from(
+            { length: calls },
+            (_unused, call) =>
+              ({
+                arguments: "{}",
+                id: `call-${String(pair)}-${String(call)}`,
+                name: "list_templates",
+                output: {
+                  templates: [{ id: "template", name: "Template" }],
+                },
+                state: "complete",
+                type: "tool-call",
+              }) satisfies PersistedChatMessage["parts"][number],
+          ),
           { content: `Answer ${String(pair)}`, type: "text" },
         ],
         role: "assistant",
-      },
+      } satisfies PersistedChatMessage,
     ] satisfies PersistedChatMessage[];
   }).flat();
 };
