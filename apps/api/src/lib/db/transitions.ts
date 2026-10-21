@@ -1767,6 +1767,7 @@ export const claimInvoiceTimeEntries = async ({
     )
     .returning({
       id: timeEntries.id,
+      dateWorked: timeEntries.dateWorked,
       billedMinutes: timeEntries.billedMinutes,
       rateAtEntry: timeEntries.rateAtEntry,
       narrative: timeEntries.narrative,

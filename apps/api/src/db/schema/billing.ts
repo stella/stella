@@ -956,10 +956,7 @@ export const invoices = p.pgTable(
     clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
       onDelete: "restrict",
     }),
-    workspaceId: safeWorkspaceId("workspace_id").references(
-      () => workspaces.id,
-      { onDelete: "cascade" },
-    ),
+    workspaceId: safeWorkspaceId("workspace_id"),
     invoiceNumber: p.varchar("invoice_number", { length: 64 }),
     documentType: p
       .text("document_type", { enum: NUMBER_SERIES_DOCUMENT_TYPES })
@@ -1052,7 +1049,14 @@ export const invoices = p.pgTable(
         foreignColumns: [workspaces.id, workspaces.organizationId],
         name: "invoices_workspace_organization_fk",
       })
-      .onDelete("cascade"),
+      .onDelete("no action"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId],
+        foreignColumns: [workspaces.id],
+        name: "invoices_workspace_id_workspaces_id_fkey",
+      })
+      .onDelete("no action"),
     p.unique("invoices_id_workspace_unique").on(table.id, table.workspaceId),
     p.foreignKey({
       columns: [table.originalInvoiceId, table.workspaceId],
@@ -1097,6 +1101,10 @@ const INVOICE_LINE_SOURCE_SQL_VALUES = INVOICE_LINE_SOURCES.map((source) =>
  * so the entry can be billed again. A released line may lose its source
  * reference when that entry is later deleted; a line that still bills its
  * entry must keep it, so deleting a billed entry is refused.
+ *
+ * Matter deletion is refused while lines reference it. NO ACTION also lets
+ * an explicit organization deletion remove the matter, invoice and lines
+ * through its own cascades.
  */
 export const invoiceLines = p.pgTable(
   "invoice_lines",
@@ -1107,7 +1115,7 @@ export const invoiceLines = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
+      .references(() => workspaces.id, { onDelete: "no action" }),
     invoiceId: safeUuid<"invoice">("invoice_id")
       .notNull()
       .references(() => invoices.id, { onDelete: "cascade" }),
@@ -1175,10 +1183,13 @@ export const invoiceLines = p.pgTable(
         foreignColumns: [workspaces.id, workspaces.organizationId],
         name: "invoice_lines_workspace_organization_fk",
       })
-      .onDelete("cascade"),
+      .onDelete("no action"),
     p
       .index("invoice_lines_invoice_position_idx")
       .on(table.invoiceId, table.position, table.id),
+    p
+      .index("invoice_lines_workspace_organization_idx")
+      .on(table.workspaceId, table.organizationId),
     p.index("invoice_lines_time_entry_idx").on(table.timeEntryId),
     p.index("invoice_lines_expense_idx").on(table.expenseId),
     p
