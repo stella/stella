@@ -18,6 +18,7 @@ export type DesktopMattersResponse = v.InferOutput<
 >;
 
 export const DESKTOP_ACTIVITY_REVIEW_LIMIT = 100;
+export const DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH = 10_000;
 export const desktopMatterCandidateSchema = v.strictObject({
   ...desktopMatterSchema.entries,
   clientName: v.nullable(v.pipe(v.string(), v.maxLength(1024))),
@@ -50,7 +51,10 @@ export const desktopTimeEntryBatchItemSchema = v.strictObject({
     v.minValue(1),
     v.maxValue(1440),
   ),
-  narrative: v.pipe(v.string(), v.maxLength(10_000)),
+  narrative: v.pipe(
+    v.string(),
+    v.maxLength(DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH),
+  ),
   billable: v.boolean(),
 });
 export const desktopTimeEntryBatchSchema = v.strictObject({

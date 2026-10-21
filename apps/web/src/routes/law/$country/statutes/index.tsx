@@ -83,6 +83,10 @@ import {
 import { useHydrated } from "@/hooks/use-hydrated";
 import { getTranslator } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
+import {
+  searchTiming,
+  useSearchResultsTiming,
+} from "@/lib/analytics/search-timing";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import {
@@ -265,7 +269,9 @@ function PublicStatuteFullText({ query }: { query: string }) {
   const country = Route.useParams({
     select: ({ country: routeCountry }) => routeCountry,
   });
-  const search = Route.useSearch({ select: ({ type }) => ({ type }) });
+  const search = Route.useSearch({
+    select: ({ asOf, q, type }) => ({ asOf, q, type }),
+  });
   const navigate = Route.useNavigate();
   const [input, setInput] = useState(query);
   const [requestedQuery, setRequestedQuery] = useState(query);
@@ -277,6 +283,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
     }
   }
   const writeQuery = useDebouncedCallback((value: string) => {
+    searchTiming.requested("legislation", value);
     detached(
       navigate({
         replace: true,
@@ -288,12 +295,18 @@ function PublicStatuteFullText({ query }: { query: string }) {
   }, 300);
   const dataQuery = useInfiniteQuery({
     ...statuteSearchInfiniteOptions({
+      ...(search.asOf === undefined ? {} : { asOf: search.asOf }),
       country: country.toUpperCase(),
       query,
       ...(search.type === undefined ? {} : { documentType: search.type }),
     }),
     enabled: hydrated,
   });
+  useSearchResultsTiming(
+    "legislation",
+    search.q ?? "",
+    dataQuery.data !== undefined && !dataQuery.isPlaceholderData,
+  );
   const { fetchNextPage, hasNextPage, isFetchingNextPage, isPending } =
     dataQuery;
   const dataView = useQueryView(dataQuery, {
@@ -468,6 +481,7 @@ function PublicStatuteList({
   // this value is the field's own write coming back, not somebody else's.
   const [requestedQuery, setRequestedQuery] = useState(search.q ?? "");
   const writeQuery = useDebouncedCallback((value: string) => {
+    searchTiming.requested("legislation", value);
     detached(
       navigate({
         replace: true,
@@ -516,6 +530,11 @@ function PublicStatuteList({
     isLoading,
     isPlaceholderData,
   } = dataQuery;
+  useSearchResultsTiming(
+    "legislation",
+    search.q ?? "",
+    dataQuery.data !== undefined && !isPlaceholderData,
+  );
   const dataView = useQueryView(dataQuery, {
     isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
   });

@@ -456,6 +456,8 @@ describe("notice publication outcomes", () => {
           ecli: refused.ecli ?? null,
           metadata: refused.metadata,
           sourceDescriptor: null,
+          provisionKeys: [],
+          vacatedFrom: null,
         }),
       );
       expect(projection.action).toBe("upsert");

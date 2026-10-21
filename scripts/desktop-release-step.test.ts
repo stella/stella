@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { DESKTOP_WINDOWS_DRY_RUN_INPUTS } from "./ci-plan-scope";
 import {
   configureWindowsSigning,
   desktopArtifacts,
@@ -107,24 +108,17 @@ const releaseToolingViolations = (workflowSource: string): string[] => {
       ) {
         violations.push(`${jobName}: script does not use preserved tooling`);
       }
-      if (
-        uses.includes("desktop-windows-build") &&
-        uses !== "./.release-tooling/desktop-windows-build"
-      ) {
-        violations.push(`${jobName}: action does not use restored tooling`);
-      }
       if (uses.includes("desktop-windows-build")) {
+        const destination = uses.slice(2);
         const actionRestored = steps
           .slice(releaseCheckoutIndex + 1, index)
           .some(
             (candidate) =>
               record(candidate) &&
               typeof candidate["run"] === "string" &&
+              candidate["run"].includes(`rm -rf ${destination}`) &&
               candidate["run"].includes(
-                "$RELEASE_TOOLING/actions/desktop-windows-build",
-              ) &&
-              candidate["run"].includes(
-                ".release-tooling/desktop-windows-build",
+                `cp -R "$RELEASE_TOOLING/actions/desktop-windows-build" ${destination}`,
               ),
           );
         if (!actionRestored) {
@@ -194,13 +188,22 @@ test("release jobs preserve workflow tooling before checking out release source"
       "bun scripts/desktop-release-step.ts stamp",
     )
     .replace(
-      "uses: ./.release-tooling/desktop-windows-build",
-      "uses: ./.github/actions/desktop-windows-build",
+      'cp -R "$RELEASE_TOOLING/actions/desktop-windows-build" .github/actions/desktop-windows-build',
+      "echo action restore omitted",
     );
   expect(releaseToolingViolations(brokenWorkflow)).toEqual([
     "build: script does not use preserved tooling",
-    "build: action does not use restored tooling",
+    "build: action is not restored after checkout",
   ]);
+
+  expect(
+    releaseToolingViolations(
+      releaseWorkflow.replace(
+        "rm -rf .github/actions/desktop-windows-build",
+        "echo cleanup omitted",
+      ),
+    ),
+  ).toEqual(["build: action is not restored after checkout"]);
 });
 
 test("the preserved release script imports only Node built-ins", () => {
@@ -312,19 +315,28 @@ test("configure-windows dry-run disables signing and updater artifacts", () => {
   expect(result.bundle.createUpdaterArtifacts).toBe(false);
 });
 
-test("the CI dry-run selector covers every script referenced by the release workflow", () => {
-  const references = [
-    ...releaseWorkflow.matchAll(/(?:bash|bun)\s+(scripts\/[\w./-]+)/gu),
-  ].map((match) => match[1]);
-  expect(references.length).toBeGreaterThan(0);
-  expect(
-    references.every((reference) => reference?.startsWith("scripts/")),
-  ).toBe(true);
-  const ciWorkflow = readFileSync(
-    new URL("../.github/workflows/ci.yml", import.meta.url),
+test("the CI dry-run selector covers every script the release build runs", () => {
+  const windowsBuild = readFileSync(
+    new URL(
+      "../.github/actions/desktop-windows-build/action.yml",
+      import.meta.url,
+    ),
     "utf-8",
   );
-  expect(ciWorkflow).toContain("apps/desktop/*|scripts/*|");
+  const references = [
+    ...`${releaseWorkflow}\n${windowsBuild}`.matchAll(
+      /\b(scripts\/[\w-]+(?:\.[\w-]+)*\.(?:sh|ts))\b/gu,
+    ),
+  ].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
+  expect(references.length).toBeGreaterThan(0);
+  const patterns = [...DESKTOP_WINDOWS_DRY_RUN_INPUTS];
+  expect(patterns).not.toContain("scripts/*");
+  for (const reference of new Set(references)) {
+    expect(
+      patterns.some((pattern) => new Bun.Glob(pattern).match(reference)),
+      reference,
+    ).toBe(true);
+  }
 });
 
 test("artifact discovery is recursive, stable, and rejects unrelated files", () => {

@@ -5,7 +5,13 @@ import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
-import { LandmarkIcon, SkillIcon } from "@stll/ui/icons";
+import {
+  Building2Icon,
+  LandmarkIcon,
+  LibraryIcon,
+  PlugIcon,
+  SkillIcon,
+} from "@stll/ui/icons";
 import { resolveMatterColor } from "@stll/ui/matter-colors";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
@@ -224,6 +230,16 @@ const ReferenceGlyphIcon = ({
       return <LandmarkIcon className={GLYPH_CLASS} />;
     case "skill":
       return <SkillIcon className={GLYPH_CLASS} />;
+    case "corpus":
+      return glyph.corpus === "case_law" ? (
+        <LandmarkIcon className={GLYPH_CLASS} />
+      ) : (
+        <LibraryIcon className={GLYPH_CLASS} />
+      );
+    case "registry":
+      return <Building2Icon className={GLYPH_CLASS} />;
+    case "connector":
+      return <PlugIcon className={GLYPH_CLASS} />;
     case "user":
       return (
         <UserIdentityAvatar
@@ -342,7 +358,11 @@ export const useReferenceActivation = (reference: ChatReference) => {
           navigate(skillRefDestination(reference.slug)),
           "reference-chip.open-skill",
         );
+    // A person has no page here; a source scope is not a document to open.
     case "user":
+    case "corpus":
+    case "registry":
+    case "connector":
       return undefined;
     default:
       reference satisfies never;

@@ -66,6 +66,7 @@ export const readPublicDecisionLanguageAlternatesQuery =
     async (
       tx: CaseLawPublicReadTransaction,
       languageGroupKeys: readonly string[],
+      countries: readonly string[] = PUBLIC_CASE_LAW_PAGE_COUNTRIES,
     ): Promise<PublicDecisionLanguageAlternateRow[]> => {
       const versions = tx
         .select({
@@ -92,9 +93,7 @@ export const readPublicDecisionLanguageAlternatesQuery =
             inArray(publishedCaseLawDecisions.languageGroupKey, [
               ...languageGroupKeys,
             ]),
-            inArray(publishedCaseLawDecisions.country, [
-              ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
-            ]),
+            inArray(publishedCaseLawDecisions.country, [...countries]),
             redistributableCaseLawSource,
             sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
           ),
@@ -222,6 +221,7 @@ export const readPublicDecisionLanguageAlternatesForGroupKeys = async (
 export const readPublicDecisionLanguageAlternatesInTx = async (
   tx: CaseLawPublicReadTransaction,
   languageGroupKeys: readonly (string | null)[],
+  countries: readonly string[] = PUBLIC_CASE_LAW_PAGE_COUNTRIES,
 ): Promise<PublicDecisionLanguageAlternatesByGroup> => {
   const keys = [
     ...new Set(languageGroupKeys.filter((key): key is string => key !== null)),
@@ -229,7 +229,7 @@ export const readPublicDecisionLanguageAlternatesInTx = async (
   return groupPublicDecisionLanguageAlternates(
     keys.length === 0
       ? []
-      : await readPublicDecisionLanguageAlternatesQuery(tx, keys),
+      : await readPublicDecisionLanguageAlternatesQuery(tx, keys, countries),
   );
 };
 
@@ -237,9 +237,11 @@ export const readPublicDecisionLanguageAlternatesInTx = async (
 export const listPublicDecisionLanguageAlternates = async ({
   tx,
   languageGroupKey,
+  countries,
 }: {
   tx: CaseLawPublicReadTransaction;
   languageGroupKey: string | null;
+  countries: readonly string[];
 }): Promise<
   readonly (PublicDecisionLanguageAlternate & { hasDocument: boolean })[]
 > => {
@@ -273,9 +275,7 @@ export const listPublicDecisionLanguageAlternates = async ({
     .where(
       and(
         eq(publishedCaseLawDecisions.languageGroupKey, languageGroupKey),
-        inArray(publishedCaseLawDecisions.country, [
-          ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
-        ]),
+        inArray(publishedCaseLawDecisions.country, [...countries]),
         redistributableCaseLawSource,
         sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
       ),

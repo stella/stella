@@ -11,6 +11,7 @@ import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { resetAuthTransition } from "@/lib/session-cache-guard";
+import { matchedAppFrameScope } from "@/routes/-app-frame-scope";
 import {
   frameVisitor,
   selectAppFrame,
@@ -32,6 +33,11 @@ const LazyProtectedAppFrame = lazy(async () => {
 const LazyKnowledgePublicFrame = lazy(async () => {
   const module = await import("@/routes/-knowledge-public-frame");
   return { default: module.KnowledgePublicFrame };
+});
+
+const LazyAdminAppFrame = lazy(async () => {
+  const module = await import("@/routes/-admin-app-frame");
+  return { default: module.AdminAppFrame };
 });
 
 const ROUTE_ID_SEPARATOR = "\n";
@@ -75,16 +81,21 @@ type AppFrameHostProps = {
   children: ReactElement;
   frames?: {
     member: ComponentType<{ children: ReactElement; user: AuthenticatedUser }>;
+    admin?: ComponentType<{ children: ReactElement; user: AuthenticatedUser }>;
     public: ComponentType<{ children: ReactElement }>;
   };
 };
 
 export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
   const MemberFrame = frames?.member ?? LazyProtectedAppFrame;
+  const AdminFrame = frames?.admin ?? LazyAdminAppFrame;
   const PublicFrame = frames?.public ?? LazyKnowledgePublicFrame;
   const routeIdKey = useRouterState({
     select: (state) =>
       state.matches.map((match) => match.routeId).join(ROUTE_ID_SEPARATOR),
+  });
+  const scope = useRouterState({
+    select: (state) => matchedAppFrameScope(state.matches),
   });
   const routeUser = useRouterState({
     select: (state) => routeUserOf(state.matches),
@@ -93,6 +104,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
   const publicKnowledge = isPublicKnowledgeEnabled();
   const needsAudience =
     selectAppFrame({
+      scope,
       routeIds,
       hasRouteUser: routeUser !== undefined,
       publicKnowledge,
@@ -102,6 +114,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
   const authStatus = useClientAuthStatus({ enabled: needsAudience });
   const audience = needsAudience ? audienceOf(authStatus) : undefined;
   const frame = selectAppFrame({
+    scope,
     routeIds,
     hasRouteUser: routeUser !== undefined,
     publicKnowledge,
@@ -157,19 +170,22 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
   }
 
   switch (frame) {
-    case "member":
+    case "admin":
+    case "member": {
+      const SignedInFrame = frame === "admin" ? AdminFrame : MemberFrame;
       return memberUser === undefined ? (
         <ProtectedPendingSkeleton />
       ) : (
         <Suspense fallback={<ProtectedPendingSkeleton />}>
-          <MemberFrame
+          <SignedInFrame
             key={`${memberUser.activeOrganizationId}:${memberUser.id}`}
             user={memberUser}
           >
             {children}
-          </MemberFrame>
+          </SignedInFrame>
         </Suspense>
       );
+    }
     case "public":
       return (
         <Suspense fallback={<ProtectedPendingSkeleton />}>

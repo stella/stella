@@ -1,6 +1,6 @@
 {
   "name": "@stll/mcp-kit",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Framework-free MCP tool registry, compact schemas, and lazy capability discovery",
   "keywords": [
     "discovery",
@@ -21,12 +21,14 @@
   "files": [
     "dist",
     "src",
+    "package.json",
     "README.md"
   ],
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"

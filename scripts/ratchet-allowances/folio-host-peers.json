@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 53,
+  "reason": "Folio core and React publish host-managed ProseMirror and Yjs peers. API, web, landing and playground declare the required peers so each resolves to the catalog-pinned singleton; the deriving folio peer dependency test checks required host declarations and lockfile uniqueness."
+}

@@ -4,7 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import fc from "fast-check";
 
 import { roles } from "@stll/permissions";
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -303,7 +303,7 @@ describe.skipIf(!runPostgresTests)(
             }
           });
         }),
-        { numRuns: 12 },
+        propertyConfig({ numRuns: 12 }),
       );
     });
   },
