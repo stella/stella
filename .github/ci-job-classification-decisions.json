@@ -933,5 +933,10 @@
     "kind": "support",
     "qualifier": "Dispatches health evaluation after successful stable production promotion to supply evidence for the next release gate.",
     "reviewedDigest": "76a70d6588524c64dc9199a9e60087b247c95b11020d6bda9a9b78afc486b147"
+  },
+  "candidate:.github/workflows/queue-admission.yml/admission": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment.",
+    "reviewedDigest": "d7314118f0938bde6fef2c4bbcdad6f3638726507a776fe89b86537b858188f9"
   }
 }
