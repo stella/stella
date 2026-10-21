@@ -25,7 +25,7 @@ export const formatRenderReport = (
     ].join(" "),
   );
   return [
-    `${String(snapshot.commits)} commits, ${String(snapshot.renders)} component renders, widest commit ${String(snapshot.widestCommit)}`,
+    `${String(snapshot.commits)} commits, ${String(snapshot.renders)} component renders, widest commit ${String(snapshot.widestCommit)}, ${String(snapshot.causes.parent)} with unchanged props`,
     header,
     ...lines,
   ].join("\n");

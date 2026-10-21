@@ -54,6 +54,11 @@ export type RenderSnapshot = {
   renders: number;
   /** The most components one commit rendered. */
   widestCommit: number;
+  /**
+   * Component renders by cause, across all components. `parent` counts the
+   * renders a memo boundary would have spared.
+   */
+  causes: Record<RenderCause, number>;
   /** By component name. */
   components: Record<string, ComponentRenders>;
 };
@@ -259,6 +264,16 @@ export const createRenderProbe = () => {
     };
   };
 
+  const causeTotals = () => {
+    const causes = emptyCauses();
+    for (const entry of components.values()) {
+      for (const cause of RENDER_CAUSES) {
+        causes[cause] += entry.causes[cause];
+      }
+    }
+    return causes;
+  };
+
   const probe: RenderProbe = {
     reset: () => {
       totals = { commits: 0, renders: 0, widestCommit: 0 };
@@ -266,6 +281,7 @@ export const createRenderProbe = () => {
     },
     snapshot: () => ({
       ...totals,
+      causes: causeTotals(),
       components: Object.fromEntries(
         [...components].map(([name, entry]) => [
           name,

@@ -178,7 +178,7 @@ describe("the render probe", () => {
     const report = formatRenderReport(probe.snapshot());
     // The second row was capitalized already: only the other two render.
     expect(report.split("\n")[0]).toBe(
-      "1 commits, 4 component renders, widest commit 4",
+      "1 commits, 4 component renders, widest commit 4, 1 with unchanged props",
     );
     expect(report.split("\n")[2]).toStartWith("Row");
   });
