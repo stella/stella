@@ -1,6 +1,8 @@
-import { api } from "@/lib/api";
-import { invokeCapability } from "@/lib/capabilities/capability-request";
-import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
+// Relative imports: the rule resolves `@/` against the importing app, and this
+// fixture lives outside apps/web.
+import { api } from "../../apps/web/src/lib/api.ts";
+import { invokeCapability } from "../../apps/web/src/lib/capabilities/capability-request.ts";
+import { useCapabilityMutation } from "../../apps/web/src/lib/capabilities/use-capability-mutation.ts";
 
 declare const body: { title: string };
 declare const capability: "chat.threads.update";
