@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.49.1
+
+### Patch Changes
+
+- [#6437](https://github.com/stella/stella/pull/6437) [`bbede41`](https://github.com/stella/stella/commit/bbede4118c2a62a39bb4a709ef51f4545de7055e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Prose` accepts `tone` and `size` variants for muted and small narrative copy.
+
 ## 0.49.0
 
 ### Minor Changes
