@@ -640,6 +640,10 @@ export default defineConfig(({ mode, command }) => {
         "@stll/aho-corasick-wasm",
         "@stll/fuzzy-search-wasm",
         "@stll/regex-set-wasm",
+        // Pre-bundling would inline its `temporal-polyfill/full` import
+        // without running temporalRuntimePlugin, so the browser would load the
+        // polyfill implementation even when native Temporal exists.
+        "@stll/time",
       ],
     },
     resolve: {

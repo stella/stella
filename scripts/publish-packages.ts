@@ -21,7 +21,6 @@ export const LIBRARY_PACKAGE_ORDER = [
   "workspace-model",
   "workspace-ui",
   "stable-stringify",
-  "time",
   "agent-input",
   "mcp-kit",
 ] as const;

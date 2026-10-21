@@ -102,6 +102,44 @@ describe("stella CLI shell", () => {
   });
 });
 
+describe("stella CLI version admission", () => {
+  test("a cached below-minimum version refuses commands but permits recovery paths", async () => {
+    const home = mkdtempSync(path.join(os.tmpdir(), "stella-cli-version-"));
+    const server = "https://version.example";
+    await writeCacheFile(cachePathFor(server, { XDG_CACHE_HOME: home }), {
+      version: CACHE_SCHEMA_VERSION,
+      serverOrigin: server,
+      fetchedAt: new Date().toISOString(),
+      ttlSeconds: 86_400,
+      cliMinimum: "999.0.0",
+      cliLatest: "999.0.0",
+    });
+    const run = (args: readonly string[]) =>
+      Bun.spawnSync({
+        cmd: ["bun", CLI_ENTRYPOINT, ...args],
+        env: {
+          ...process.env,
+          HOME: home,
+          XDG_CACHE_HOME: home,
+          XDG_CONFIG_HOME: path.join(home, ".config"),
+          STELLA_SERVER_URL: server,
+        },
+        stderr: "pipe",
+        stdout: "pipe",
+      });
+
+    const refused = run(["matter", "list", "--schema"]);
+    expect(refused.exitCode).toBe(4);
+    expect(refused.stderr.toString().trim()).toEndWith(
+      "run npm i -g @stll/cli@latest",
+    );
+    expect(refused.stderr.toString()).not.toContain("server registry differs");
+    for (const args of [["--version"], ["--help"], ["update"]]) {
+      expect(run(args).exitCode).toBe(0);
+    }
+  }, 20_000);
+});
+
 // Legacy caller listings cannot project commands in an offline invocation.
 // No token is stored, so nothing reaches the network.
 describe("stella CLI: offline registry projection", () => {

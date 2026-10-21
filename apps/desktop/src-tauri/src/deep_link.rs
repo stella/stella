@@ -846,11 +846,11 @@ pub(crate) async fn show_connection_confirmation(
       window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Destroyed) {
           set_self_host_connect_response(false);
-          if let Some(sender) = closed_sender
+          let sender = closed_sender
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take()
-          {
+            .take();
+          if let Some(sender) = sender {
             let _ = sender.send(());
           }
         }

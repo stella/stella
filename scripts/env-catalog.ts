@@ -1398,6 +1398,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_PLAYWRIGHT_IMAGE",
   "POSTGRES_IMAGE",
   "REDIS_IMAGE",
+  // The merge-group ancestor check: the group's base and its bounded wait.
+  "ANCESTOR_POLL_SECONDS",
+  "ANCESTOR_WAIT_SECONDS",
+  "MERGE_GROUP_BASE_REF",
+  "MERGE_GROUP_BASE_SHA",
   // The scan engine drift check builds into a scratch directory and compares it.
   "SCAN_ENGINE_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
