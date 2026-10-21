@@ -35,6 +35,7 @@ type RunGatedTestsOptions = {
   validateTestPlan?:
     | ((apiRoot: string, testPaths: readonly string[]) => Promise<void>)
     | undefined;
+  prepare?: (() => Promise<void>) | undefined;
 };
 
 const apiRoot = path.resolve(import.meta.dir, "..");
@@ -177,6 +178,7 @@ export const runGatedTests = async ({
   exclusiveTestPaths = new Set(),
   spawnTestProcess,
   validateTestPlan,
+  prepare,
   shardTestFiles,
 }: RunGatedTestsOptions): Promise<number> => {
   const runner = packageJson.ciGateTestRunners[script];
@@ -226,6 +228,8 @@ export const runGatedTests = async ({
     );
     return 0;
   }
+
+  await prepare?.();
 
   // The same derived sources the package `test` script generates first: the
   // suites import the capability runtime, which is never committed.

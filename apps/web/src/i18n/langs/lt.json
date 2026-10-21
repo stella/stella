@@ -1615,6 +1615,9 @@
         "team": "Komandos įgūdžiai"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Taip pat peržiūrėta ({count, number})"
+    },
     "sourcePlaceholder": "Kalbėtis apie {title}",
     "sourcePlaceholderAction": "Kalbėtis apie",
     "sources": "Šaltiniai:",

@@ -899,8 +899,15 @@ const conditionTokens = (condition: string) =>
 type ScopeOptions = {
   current: Record<string, unknown>;
   base: Record<string, unknown>;
+  job?: string | undefined;
+  releaseHoldRemoved?: boolean;
 };
-const expectScope = ({ current, base }: ScopeOptions) => {
+const expectScope = ({
+  current,
+  base,
+  job,
+  releaseHoldRemoved,
+}: ScopeOptions) => {
   const { if: condition, ...scope } = current;
   const { if: originalCondition, ...originalScope } = base;
   // The generated-source producer is a job of its own, so its consumers
@@ -942,6 +949,21 @@ const expectScope = ({ current, base }: ScopeOptions) => {
       CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
     });
   const migrated = { ...scope };
+  // The retired changeset hold was the check legs' only pull-request reader.
+  if (
+    job !== undefined &&
+    ["ci-checks-generated", "ci-checks-policy", "ci-checks-rest"].includes(
+      job,
+    ) &&
+    releaseHoldRemoved === true &&
+    isDeepStrictEqual(originalScope["permissions"], {
+      contents: "read",
+      "pull-requests": "read",
+    }) &&
+    isDeepStrictEqual(scope["permissions"], { contents: "read" })
+  ) {
+    originalScope["permissions"] = { contents: "read" };
+  }
   // Normalize only an added handoff. A baseline that owns it must retain it.
   if (hydrationDependency) {
     const { CI_GENERATED_SOURCES_MANIFEST: _added, ...environment } = v.parse(
@@ -1056,6 +1078,47 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  // The classification check derives its manifest instead of reading a
+  // committed one, and exposes its sensitive-change output by step id.
+  if (
+    step.name === "Check workflow job classifications" &&
+    step["id"] === undefined
+  ) {
+    return { ...step, id: "job-classification" };
+  }
+  if (step.name === "Checkout workflow classification tooling") {
+    const checkout = v.parse(
+      v.looseObject({ "sparse-checkout": v.string() }),
+      step["with"],
+    );
+    return {
+      ...step,
+      with: {
+        ...checkout,
+        "fetch-depth": 0,
+        "sparse-checkout": checkout["sparse-checkout"].replace(
+          ".github/ci-job-classification.json\n",
+          "",
+        ),
+      },
+    };
+  }
+  if (
+    step.name === "Test release policy scripts" &&
+    fields.run?.includes(
+      "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
+    )
+  ) {
+    return {
+      ...step,
+      run: fields.run
+        .replace(
+          "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
+          "bun test scripts/release-version-dispatch.test.ts\n",
+        )
+        .replace("bash scripts/release-pending.test.sh\n", ""),
+    };
+  }
   if (
     step.name === "Test oxlint plugins" &&
     fields.run ===
@@ -1309,7 +1372,14 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       );
     }
     expect(originalSetup).toHaveLength(setupPrerequisites.size);
-    expectScope({ current: scope, base: originalScope });
+    expectScope({
+      current: scope,
+      base: originalScope,
+      job: partitionIds.at(index),
+      releaseHoldRemoved:
+        baseSteps.some(({ name }) => name === "Release CLI changeset hold") &&
+        !actualSteps.some(({ name }) => name === "Release CLI changeset hold"),
+    });
     // While the merge base still runs typecheck-baseline as its own job, the
     // generated leg that absorbs it carries both budgets.
     const absorbedBaseline = baseJobs["typecheck-baseline"];
@@ -1348,6 +1418,41 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
         : withInstallCache(installStep, partition)["run"],
     ).toBe("bash scripts/retry.sh bun ci --ignore-scripts");
   }
+});
+
+test("retiring the release hold removes only its check legs' pull-request read permission", () => {
+  const base = {
+    if: "needs.ci-plan.outputs.trusted == 'true'",
+    permissions: { contents: "read", "pull-requests": "read" },
+  };
+  const current = { ...base, permissions: { contents: "read" } };
+  for (const job of [
+    "ci-checks-generated",
+    "ci-checks-policy",
+    "ci-checks-rest",
+  ]) {
+    expectScope({ current, base, job, releaseHoldRemoved: true });
+    for (const permissions of [
+      { contents: "write" },
+      {},
+      { contents: "read", issues: "read" },
+    ]) {
+      expect(() =>
+        expectScope({
+          current: { ...current, permissions },
+          base,
+          job,
+          releaseHoldRemoved: true,
+        }),
+      ).toThrow("toEqual");
+    }
+  }
+  expect(() =>
+    expectScope({ current, base, job: "other-job", releaseHoldRemoved: true }),
+  ).toThrow("toEqual");
+  expect(() => expectScope({ current, base, job: "ci-checks-rest" })).toThrow(
+    "toEqual",
+  );
 });
 
 test("CI check scope permits only the heavy-only wrapper around the unchanged condition", () => {
