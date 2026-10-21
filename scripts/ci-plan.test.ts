@@ -577,13 +577,15 @@ const jobScopes = v.parse(
 );
 
 /**
- * What a heavy job reads besides its scope once ci-plan succeeded: a pull
- * request's heavy-suite gate passed, and any other event skipped it.
+ * What a gated job reads besides its scope once ci-plan and the generated
+ * sources succeeded: a pull request's gate passed, and any other event
+ * skipped it.
  */
 const heavyGateContext = (event: string) => ({
   values: {
     "github.event_name": event,
     "needs.ci-plan.result": "success",
+    "needs.generated-sources.result": "success",
     "needs.pr-heavy-gate.result":
       event === EVENT.pullRequest ? "success" : "skipped",
   },
