@@ -1011,7 +1011,7 @@ describe("MCP upstream connection lifecycle", () => {
           rawMcpUrl: connectorUrl,
           permit: outboundPermit,
           dependencies: {
-            timeoutMs: 5,
+            timeoutMs: 5, // timeout under test
             validateOutboundFetchTarget: async (rawUrl: string | URL) =>
               Result.ok({ url: new URL(rawUrl), addresses: [] }),
             safeOutboundFetchBytes: async () => {

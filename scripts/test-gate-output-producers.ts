@@ -68,7 +68,7 @@ export const TRUSTED_OUTPUT_PRODUCERS = [
       "windows_scripts_required",
     ],
     semantics: "selection",
-    proofTest: "scripts/ci-plan.test.ts",
+    proofTest: "scripts/ci-plan-scope.test.ts",
   },
   {
     workflow: ".github/workflows/ci.yml",
@@ -98,7 +98,7 @@ export const TRUSTED_OUTPUT_PRODUCERS = [
     workflow: ".github/workflows/ci.yml",
     job: "ci-plan",
     stepId: "api-tests",
-    outputNames: ["ci_tests_matrix"],
+    outputNames: ["ci_tests_matrix", "ci_tests_required"],
     semantics: "selection",
     proofTest: "scripts/ci-plan.test.ts",
     declaredShards: FULL_TEST_JOB_SHARDS,

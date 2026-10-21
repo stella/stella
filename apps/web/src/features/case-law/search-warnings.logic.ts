@@ -39,6 +39,11 @@ const CASE_LAW_SEARCH_WARNING_DISPLAY = {
     messageKey: "caseLaw.searchWarnings.resultsFor",
     actionKey: "caseLaw.searchWarnings.searchEveryWord",
   },
+  partial_matches_appended: {
+    surface: "resultsLine",
+    messageKey: "caseLaw.searchWarnings.partialMatches",
+    actionKey: "caseLaw.searchWarnings.searchEveryWord",
+  },
   no_hits: {
     surface: "emptyState",
     messageKey: "caseLaw.searchWarnings.noHits.message",
@@ -102,6 +107,9 @@ export const caseLawWarningSurfaces = (
     return { emptyState, resultsLine };
   }
   for (const { code } of answered.warnings) {
+    if (code === "function_words_optional" && resultsLine !== null) {
+      continue;
+    }
     const display = CASE_LAW_SEARCH_WARNING_DISPLAY[code];
     switch (display.surface) {
       // Both branches carry the narrowed entry itself rather than a new

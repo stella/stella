@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "typescript6";
 
 export const unwrapTransparentExpression = (
   expression: ts.Expression,
