@@ -105,6 +105,7 @@ import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-ra
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
+import { syntheticRoute } from "@/api/handlers/synthetic/routes";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
 import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
@@ -531,6 +532,7 @@ const api = new Elysia()
   )
   .use(localDevPublicRoutes)
   .use(smokeRoute)
+  .use(syntheticRoute)
   .mount(getAuth().handler)
   .group(STELLA_API_VERSION_PREFIX, (app) =>
     app

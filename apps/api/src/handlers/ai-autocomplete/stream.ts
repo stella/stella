@@ -148,6 +148,7 @@ const autocompleteStream = createSafeRootHandler(
     const stream = yield* Result.try({
       try: () =>
         streamTanStackTextForTask({
+          userId: user.id,
           dataClass: "customer",
           task: "short-text",
           serviceTier: "standard",

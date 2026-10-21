@@ -22,6 +22,13 @@ import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api
 import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
 import { CHECK_POOL_JOBS } from "./ci-check-pool-registry";
 import {
+  computeChangedFileScope,
+  DEFAULT_DETECTORS,
+  MODEL_CATALOG_DRIFT_INPUTS,
+  ROUTE_TREE_INPUTS,
+  type ScopeOutput,
+} from "./ci-plan-scope";
+import {
   GENERATORS,
   CI_GENERATED_FILES,
   CI_GENERATED_OUTPUTS,
@@ -601,7 +608,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
   );
   for (const file of [
     "apps/api/src/lib/format.ts",
-    "packages/time/src/format.ts",
+    "packages/agent-input/src/format.ts",
   ]) {
     const selected = new Set(generatorsForFiles([file]).map(({ id }) => id));
     for (const id of requiredIds) {
@@ -845,34 +852,39 @@ const ciGeneratedStepRun = (name: string): string => {
   return run;
 };
 
-const casePatternsAfter = (marker: string) => {
-  const section = ci.slice(ci.indexOf(marker));
-  const match = /case "\$file" in\n\s+([^\n]+)\)/u.exec(section);
-  expect(match, marker).not.toBeNull();
-  return (match?.[1] ?? "").split("|");
-};
+const scopedOutput = (file: string, output: ScopeOutput) =>
+  computeChangedFileScope(
+    {
+      changedFiles: [file],
+      comparisonBase: "base",
+      scopeUnknown: false,
+      eventName: "pull_request",
+      suiteDepth: "fast",
+      heavyOnly: false,
+      prTitle: "",
+    },
+    {
+      ...DEFAULT_DETECTORS,
+      packageChecks: () => true,
+      landingBuild: () => false,
+      landingDeploy: () => false,
+      desktopBrowser: () => false,
+    },
+  )[output];
 
 test("route-tree CI scope covers every manifest input and output", () => {
   const routeTree = generator("route-tree");
   const paths = [...routeTree.inputs, ...routeTree.outputs].map((glob) =>
     glob.replace(/\/\*\*$/u, "/*"),
   );
-  expect(
-    casePatternsAfter(
-      "# The route-tree generator reads the web package script",
-    ).toSorted(),
-  ).toEqual(paths.toSorted());
+  expect(paths.toSorted()).toEqual([...ROUTE_TREE_INPUTS].toSorted());
 });
 
 test("CI rate snapshot scope stays pinned to the manifest", () => {
   const inputs = generator("model-rates").inputs.map((glob) =>
     glob.replace(/\/\*\*$/u, "/*"),
   );
-  expect(
-    casePatternsAfter(
-      "# The committed rate and capability snapshots",
-    ).toSorted(),
-  ).toEqual(inputs.toSorted());
+  expect(inputs.toSorted()).toEqual([...MODEL_CATALOG_DRIFT_INPUTS].toSorted());
 });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -900,11 +912,10 @@ const generationInputs = (name: string) => {
 };
 
 test("CI determinism selectors cover the cached generators' input contracts", () => {
-  for (const [name, marker] of [
-    ["generate:api-types", "# The web API types"],
-    ["generate:route-tree", "# The route-tree generator"],
+  for (const [name, output] of [
+    ["generate:api-types", "web_api_types_required"],
+    ["generate:route-tree", "route_tree_required"],
   ] as const) {
-    const selectors = casePatternsAfter(marker);
     for (const glob of generationInputs(name)) {
       const rooted = glob.startsWith("$TURBO_ROOT$/")
         ? glob.replace("$TURBO_ROOT$/", "")
@@ -915,11 +926,9 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
         .replace(/\*/gu, "fixture")
         .replace(/\?/gu, "x");
       expect(
-        selectors.some((selector) =>
-          new Bun.Glob(selector.replace(/\*+/gu, "**")).match(sample),
-        ),
+        scopedOutput(sample, output),
         `${name} CI selector covers ${rooted}`,
-      ).toBe(true);
+      ).toBe("true");
     }
   }
 });
