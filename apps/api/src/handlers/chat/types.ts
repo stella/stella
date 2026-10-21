@@ -42,6 +42,8 @@ import type {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import type {
+  PersistedJsonObject,
+  PersistedToolProviderMetadata,
   PersistedToolCallPart,
   PersistedToolResultPart,
   persistedChatMessageContentV3Proof,
@@ -109,12 +111,21 @@ export type ChatAttachmentPart =
 
 type SdkChatPart = MessagePart<ChatClientTools>;
 export type ChatTanStackPart =
-  | Exclude<SdkChatPart, { type: "thinking" | "tool-call" }>
+  | Exclude<SdkChatPart, { type: "text" | "thinking" | "tool-call" }>
+  | (Extract<SdkChatPart, { type: "text" }> & {
+      /** Provider artefacts a writer stored with the text, kept as stored. */
+      providerMetadata?: PersistedJsonObject;
+    })
   | (Extract<SdkChatPart, { type: "tool-call" }> &
-      Pick<ToolCallPart, "metadata">)
+      Pick<ToolCallPart, "metadata"> & {
+        /** Provider artefacts a writer stored with the call, kept as stored. */
+        providerMetadata?: PersistedToolProviderMetadata;
+      })
   | (ThinkingPart & {
       /** Server-issued replay identity; historical parts may have none. */
       provenance?: ReasoningProvenance;
+      /** Provider artefacts a writer stored with the reasoning, kept as stored. */
+      providerMetadata?: PersistedJsonObject;
     });
 
 export type ChatPart = ChatTanStackPart;

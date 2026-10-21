@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 

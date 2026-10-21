@@ -28,7 +28,8 @@ import type {
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 
-import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
+// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
+import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import {
   buildValidationHtml,
   validateAndLog,
