@@ -5,7 +5,10 @@ import * as pele from "pele/lazy";
 import { IntlProvider } from "use-intl";
 
 import { renderDiagram } from "@/components/ai-elements/mermaid-diagram";
-import { DiagramBlockView } from "@/components/ai-elements/mermaid-diagram-block";
+import {
+  DiagramBlockView,
+  diagramZoom,
+} from "@/components/ai-elements/mermaid-diagram-block";
 import type { DiagramBlockState } from "@/components/ai-elements/mermaid-diagram-block";
 import en from "@/i18n/langs/en.json";
 
@@ -55,8 +58,21 @@ describe("mermaid diagram block", () => {
       render,
     });
     expect(markup).toContain('data-diagram-state="rendered"');
+    expect(markup).toContain('data-diagram-controls="true"');
+    expect(markup).toContain('data-diagram-viewport="true"');
+    expect(markup).toContain(`aria-label="${en.common.zoomOut}"`);
+    expect(markup).toContain(`aria-label="${en.common.zoomIn}"`);
+    expect(markup).toContain(`aria-label="${en.common.copy}"`);
+    expect(markup).toContain(`aria-label="${en.common.download}"`);
     expect(markup).toContain("<svg");
     expect(markup).not.toContain("<pre");
+  });
+
+  test("zoom stays within the pannable diagram canvas bounds", () => {
+    expect(diagramZoom(1, "out")).toBe(1);
+    expect(diagramZoom(1, "in")).toBe(1.5);
+    expect(diagramZoom(2, "out")).toBe(1.5);
+    expect(diagramZoom(3, "in")).toBe(3);
   });
 
   test("a fence still streaming shows only its source", () => {
