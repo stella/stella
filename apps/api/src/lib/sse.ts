@@ -35,6 +35,7 @@ import {
   publishWorkspaceEvent,
   REDIS_CHANNEL,
 } from "@/api/lib/sse-broadcast";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 /** Keep-alive interval in milliseconds (20 seconds). */
 const KEEP_ALIVE_INTERVAL_MS = 20_000;
@@ -304,6 +305,7 @@ export const subscribe = ({
   userId,
   workspaceId,
 }: SubscribeOptions): ReadableStream<Uint8Array> => {
+  requireSessionCredentialIssuer("realtime", { userId, organizationId });
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       // The request signal can already be aborted here: the async auth
@@ -359,6 +361,7 @@ export const subscribeUser = ({
   signal,
   userId,
 }: SubscribeUserOptions): ReadableStream<Uint8Array> => {
+  requireSessionCredentialIssuer("realtime", { userId, organizationId });
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       // Same hazard as `subscribe`: the async auth macro awaits before this

@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 
 import {
   listReconciliationSlice,
@@ -63,6 +63,29 @@ test("keys each identity once and counts what it could not key", async () => {
   expect(listing.unidentifiable).toBe(2);
   // Paced between pages, never before the first.
   expect(sleeps).toEqual([1000]);
+});
+
+test("completed page delays remove their aborted-signal listeners", async () => {
+  const controller = new AbortController();
+  const addListener = spyOn(controller.signal, "addEventListener");
+  const removeListener = spyOn(controller.signal, "removeEventListener");
+
+  unwrapListing(
+    await listReconciliationSlice({
+      adapterKey: "fake",
+      listSlicePage: pagedListing([[], [], [], []]),
+      pageDelayMs: 0,
+      pageTimeoutMs: 5000,
+      slice: "2026-01-01",
+      sleep: async () => {
+        await Promise.resolve();
+      },
+      signal: controller.signal,
+    }),
+  );
+
+  expect(addListener).toHaveBeenCalledTimes(3);
+  expect(removeListener).toHaveBeenCalledTimes(3);
 });
 
 test("an empty slice lists nothing after one request", async () => {

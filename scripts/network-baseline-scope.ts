@@ -8,6 +8,9 @@ import {
 import path from "node:path";
 
 const MAX_BASELINE_BYTES = 5 * 1024 * 1024;
+// The route waterfall depth method of apps/web/e2e/helpers/network.ts; this
+// script runs standalone, and a test keeps the two equal.
+export const NETWORK_DEPTH_METHOD = "round-barrier-v1";
 
 type BaselineEntry = {
   depth: number;
@@ -222,7 +225,19 @@ const applyNetworkBudgetDeclarations = (
       fail(`Duplicate network budget declaration for ${route}`);
     }
     declared.add(route);
-    baseline[route] = declaration["budget"];
+    const budget = declaration["budget"];
+    // A declaration is written against the current depth method, so the
+    // recording keeps its depth as a floor instead of replacing it with one
+    // timing-dependent sample. A declaration for another method is stale.
+    if (
+      budget.depthMethod !== undefined &&
+      budget.depthMethod !== NETWORK_DEPTH_METHOD
+    ) {
+      fail(
+        `Invalid network budget declaration: ${route} uses depth method ${budget.depthMethod}; declare depth for ${NETWORK_DEPTH_METHOD}`,
+      );
+    }
+    baseline[route] = { ...budget, depthMethod: NETWORK_DEPTH_METHOD };
     notices.push(`- ${code(route)}: ${code(declaration["reason"])}`);
   }
   return { baseline, notices };

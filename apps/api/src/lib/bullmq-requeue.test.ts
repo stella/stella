@@ -65,7 +65,7 @@ describe("requeueDeterministicJob", () => {
     expect(rejection).toBeInstanceOf(TimeoutError);
     expect(rejection).toMatchObject({
       label: `queue-requeue.${command}`,
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
   });
 

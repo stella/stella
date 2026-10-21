@@ -7,6 +7,7 @@ import * as v from "valibot";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
 import serviceImages from "./ci-service-images.json" with { type: "json" };
 import {
   contextFromNested,
@@ -118,59 +119,39 @@ const context = (
   event: string,
   heavyOnly: boolean,
   plan: Record<string, string>,
-) => ({
-  github: {
-    event_name: event,
-    event: {
-      action: "synchronize",
-      pull_request: { draft: false, labels: [] },
+) => {
+  const value = ciExpressionContext({
+    event: modelledEvent(event),
+    heavyOnly,
+    plan,
+    needsResults: Object.fromEntries(
+      ciNeeds.map((job) => [
+        job,
+        heavyOnly && THIN_JOBS.some((thin) => thin === job)
+          ? "skipped"
+          : "success",
+      ]),
+    ),
+    stepOutputs: {
+      "marketing-release": {
+        required: plan["marketing_screenshots_required"] ?? "false",
+      },
     },
-  },
-  inputs: {
-    heavy_only: heavyOnly,
-    pr_depth_only: false,
-    query_perf_mode: "compare",
-  },
-  // Repository switches at their defaults: unset reads as "".
-  vars: { CI_POSTGRES_PR_SELECTION: "" },
-  steps: {
+  });
+  value.steps = {
     "changed-files": { outputs: plan },
     "marketing-release": {
-      outputs: { required: plan["marketing_screenshots_required"] },
+      outputs: { required: plan["marketing_screenshots_required"] ?? "false" },
     },
-    // The completed-depth lookup: a run reuses evidence exactly when the plan
-    // says so; otherwise it tests its own head and plans its heavy suites.
     "completed-depth": {
       outputs: {
         run_required: plan["run_required"] ?? "true",
         pr_heavy_suites: "run",
       },
     },
-  },
-  needs: Object.fromEntries(
-    ciNeeds.map((job) => [
-      job,
-      {
-        result:
-          heavyOnly && THIN_JOBS.some((thin) => thin === job)
-            ? "skipped"
-            : "success",
-        outputs:
-          job === "ci-plan"
-            ? {
-                run_required: "true",
-                coverage_profile: "normal-v1",
-                queue_required_jobs: "[]",
-                pr_depth_reused: "false",
-                ...plan,
-              }
-            : {},
-      },
-    ]),
-  ),
-  always: () => true,
-  cancelled: () => false,
-});
+  };
+  return value;
+};
 
 const planned = (plan: Record<string, string>, job: string) => {
   const scope = scopes[job];
@@ -447,6 +428,26 @@ test("main heavy scheduling equals the gated jobs minus thin checks", () => {
   expect(planner?.run).toContain(
     'git show "$WORKFLOW_SHA:scripts/main-heavy-plan.ts"',
   );
+  // The copied planner runs from packages/scripts, so every script it reaches
+  // through a relative import must be copied beside it.
+  const pending = ["main-heavy-plan"];
+  for (const seen = new Set<string>(); pending.length > 0;) {
+    const name = pending.pop() ?? "";
+    if (seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    const script = readFileSync(
+      path.resolve(import.meta.dirname, `${name}.ts`),
+      "utf-8",
+    );
+    for (const [, imported = ""] of script.matchAll(/from "\.\/([\w.-]+)"/gu)) {
+      expect(planner?.run).toContain(
+        `git show "$WORKFLOW_SHA:scripts/${imported}.ts" > packages/scripts/${imported}.ts`,
+      );
+      pending.push(imported);
+    }
+  }
   expect(planner?.env?.["WORKFLOW_SHA"]).toBe(`\${{ github.workflow_sha }}`);
 });
 

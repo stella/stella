@@ -499,6 +499,7 @@ const runAiStep = async ({
   // unchanged under `USE_MOCK_AI` (model resolution short-circuits to the mock
   // adapter). No tools are ever passed.
   const markdown = await generateTextForTask({
+    userId: admission.userId,
     dataClass: "customer",
     task: "chat",
     organizationId,
@@ -519,10 +520,8 @@ const runAiStep = async ({
       scopeKey: organizationId,
     }),
     serviceTier: "standard",
-    abortSignal: AbortSignal.any([
-      signal,
-      AbortSignal.timeout(FLOW_AI_GENERATION_TIMEOUT_MS),
-    ]),
+    abortSignal: signal,
+    deadlineMs: FLOW_AI_GENERATION_TIMEOUT_MS,
   });
 
   return { kind: "ai", markdown };

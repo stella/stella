@@ -479,7 +479,7 @@ describe("processExtraction", () => {
     expect(objectReadKeys()).toEqual([key]);
     expect(extractFileTextResultMock).toHaveBeenCalledWith(expect.anything(), {
       signal: lifecycleSignal,
-      timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
+      timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs, // timeout: asserted call argument, not a deadline
     });
     const extracted = extractFileTextResultMock.mock.calls.at(0)?.[0];
     // The bytes reach the extractor as a stored file under the run's key.

@@ -37,6 +37,13 @@ const MIGRATION = new URL(
   import.meta.url,
 );
 const migration = await Bun.file(MIGRATION).text();
+// Later sources replace the URL contract function; install the shipped one.
+const urlContractMigration = await Bun.file(
+  new URL(
+    "../../../drizzle/20261020093000_cz_uohs_metadata_url_contract/migration.sql",
+    import.meta.url,
+  ),
+).text();
 const tables = [
   caseLawDecisions,
   caseLawDecisionSupplements,
@@ -214,6 +221,7 @@ const withFixture = async (fn: (client: TransactionSQL) => Promise<void>) => {
       const fileNodesBefore =
         await tx`SELECT relname, relfilenode FROM pg_class WHERE relnamespace = current_schema()::regnamespace AND relkind = 'r' ORDER BY relname`;
       await tx.unsafe(migration);
+      await tx.unsafe(urlContractMigration);
       const fileNodesAfter =
         await tx`SELECT relname, relfilenode FROM pg_class WHERE relnamespace = current_schema()::regnamespace AND relkind = 'r' ORDER BY relname`;
       expect(fileNodesAfter).toEqual(fileNodesBefore);
