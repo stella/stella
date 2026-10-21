@@ -9,6 +9,7 @@ import {
   APP_SEARCH_FIXTURE,
   APP_UNAVAILABLE_FIXTURE,
 } from "@stll/api-contract/mcp-app.fixtures";
+import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 import { UI_LOCALES } from "@stll/locales";
 import {
   filterDefaults,
@@ -169,6 +170,7 @@ describe("MCP app registry and contracts", () => {
   test("citation graph links its read tool and declares both read contracts", () => {
     expect(CITATION_GRAPH_APP.linkedTools).toEqual(["read_case_law_citations"]);
     expect(CITATION_GRAPH_APP.callableTools).toEqual([
+      MCP_WEB_HANDOFF_TOOL_NAME,
       "read_case_law_citations",
       "open_case_law_decision",
     ]);
