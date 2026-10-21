@@ -1,4 +1,4 @@
-import { EventType, uiMessagesToWire } from "@tanstack/ai";
+import { EventType } from "@tanstack/ai";
 import type { StreamChunk, UIMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -27,6 +27,7 @@ import { createChatRunLog } from "@/api/lib/chat/run-log";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { handlerFailure } from "@/api/tests/helpers/agent-skill-db";
+import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -341,10 +342,7 @@ describe("chat turn resume", () => {
     const deltaCount = 300;
     const chunks: StreamChunk[] = [
       { type: EventType.RUN_STARTED, threadId: run.threadId, runId: run.runId },
-      {
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: uiMessagesToWire(history),
-      },
+      buildWireSnapshot(history),
       {
         type: EventType.TEXT_MESSAGE_START,
         messageId: answerId,
