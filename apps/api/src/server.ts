@@ -163,7 +163,6 @@ import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
-import { startCaseLawFreshnessMetricLoop } from "@/api/lib/observability/case-law-freshness-metrics";
 import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -218,11 +217,7 @@ import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
-import {
-  isLocalDevOpen,
-  isLocalTestRun,
-  runtimeMode,
-} from "@/api/runtime-mode";
+import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
 import {
   API_SHUTDOWN_OUTCOME,
@@ -816,10 +811,6 @@ const startServer = async (): Promise<void> => {
   await initBuiltinReportTemplates();
 
   const closeManagedProviderChecks = await startManagedProviderChecks();
-  // Local test runs boot the API without a reporter.
-  const closeCaseLawFreshnessMetrics = isLocalTestRun()
-    ? undefined
-    : startCaseLawFreshnessMetricLoop();
   const backgroundWorkers = await initApiBackgroundWorkers(
     env.SCHEDULED_JOBS_MODE,
   );
@@ -876,10 +867,7 @@ const startServer = async (): Promise<void> => {
     logger.info("api.shutdown_started", { signal });
     const outcome = await shutdownApiServices({
       closeBackgroundWorkers: async () => {
-        await Promise.all([
-          backgroundWorkers.close(),
-          closeCaseLawFreshnessMetrics?.(),
-        ]);
+        await backgroundWorkers.close();
       },
       closeManagedProviderChecks,
       closeDatabaseLoginProbe,

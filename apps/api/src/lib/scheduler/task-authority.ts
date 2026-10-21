@@ -93,6 +93,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-raw-storage.ts",
     "Public legal corpus storage census.",
   ),
+  "caseLaw.reportFreshness": platform(
+    "case-law-freshness-report.ts",
+    "Reports public legal corpus freshness metrics.",
+  ),
   "caseLaw.reconcileCorpusUploadIntents": platform(
     "case-law-corpus-upload-cleanup.ts",
     "Public legal corpus upload cleanup.",

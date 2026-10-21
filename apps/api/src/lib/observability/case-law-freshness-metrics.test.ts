@@ -1,14 +1,14 @@
 import { afterEach, expect, test } from "bun:test";
 
 import "@/api/tests/setup-env";
-import {
-  emitCaseLawFreshnessReport,
-  runCaseLawFreshnessMetricTick,
-} from "@/api/lib/observability/case-law-freshness-metrics";
+import { emitCaseLawFreshnessReport } from "@/api/lib/observability/case-law-freshness-metrics";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { reportCaseLawFreshnessTask } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 afterEach(resetMetricLineSinkForTesting);
 
@@ -76,33 +76,22 @@ test("emits one owned EMF record per metric with only its bounded dimension", ()
   ]);
 });
 
-test("two loop instances sharing the advisory lock emit once", async () => {
+test("the scheduler task reads and emits one report per run", async () => {
   const lines: string[] = [];
   setMetricLineSinkForTesting((line) => {
     lines.push(line);
   });
-  let held = false;
-  const openSession = async (
-    work: (session: {
-      tryLock: () => Promise<boolean>;
-      read: () => typeof report;
-    }) => Promise<void>,
-  ) => {
-    await work({
-      tryLock: async () => {
-        if (held) {
-          return false;
-        }
-        held = true;
-        return true;
-      },
-      read: () => report,
-    });
-  };
-
-  await Promise.all([
-    runCaseLawFreshnessMetricTick(openSession),
-    runCaseLawFreshnessMetricTick(openSession),
-  ]);
+  let transactions = 0;
+  await reportCaseLawFreshnessTask(
+    asTestRaw<SchedulerTaskContext>({
+      db: asTestRaw({
+        transaction: async () => {
+          transactions += 1;
+          return await Promise.resolve(report);
+        },
+      }),
+    }),
+  );
+  expect(transactions).toBe(1);
   expect(lines).toHaveLength(4);
 });

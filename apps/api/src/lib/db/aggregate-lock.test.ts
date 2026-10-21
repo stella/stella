@@ -17,75 +17,10 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   AGGREGATE_CHAINS,
   AGGREGATE_LOCKS,
-  readUnderCaseLawFreshnessSessionLock,
   withAggregateLock,
   withAutomatedFlowRunCapLock,
   withSkipLockedBatch,
 } from "./aggregate-lock";
-
-/** A reserved session that records its statements and answers the lock queries. */
-const freshnessSession = (acquired: boolean) => {
-  const statements: string[] = [];
-  return {
-    statements,
-    connection: {
-      unsafe: async (query: string) => {
-        statements.push(query.includes("unlock") ? "unlock" : "lock");
-        return await Promise.resolve(
-          query.includes("unlock") ? [{ released: true }] : [{ acquired }],
-        );
-      },
-    },
-  };
-};
-
-/** A database whose transaction runs the read directly. */
-const passThroughDatabase = {
-  transaction: async <Result>(read: (tx: Transaction) => Promise<Result>) =>
-    await read(asTestRaw<Transaction>({})),
-};
-
-describe("case-law freshness session lock", () => {
-  test("is released after a read, so a reused session starts unlocked", async () => {
-    const session = freshnessSession(true);
-    const database = passThroughDatabase;
-    for (const value of [1, 2]) {
-      expect(
-        await readUnderCaseLawFreshnessSessionLock({
-          connection: session.connection,
-          database,
-          read: async () => await Promise.resolve(value),
-        }),
-      ).toEqual({ status: "locked", value });
-    }
-    expect(session.statements).toEqual(["lock", "unlock", "lock", "unlock"]);
-  });
-
-  test("is released when the read fails", async () => {
-    const session = freshnessSession(true);
-    const failure = await rejectionOf(
-      readUnderCaseLawFreshnessSessionLock({
-        connection: session.connection,
-        database: passThroughDatabase,
-        read: async () => await Promise.reject(new TypeError("read failed")),
-      }),
-    );
-    expect(failure).toMatchObject({ message: "read failed" });
-    expect(session.statements).toEqual(["lock", "unlock"]);
-  });
-
-  test("is not released when it was not acquired", async () => {
-    const session = freshnessSession(false);
-    expect(
-      await readUnderCaseLawFreshnessSessionLock({
-        connection: session.connection,
-        database: passThroughDatabase,
-        read: async () => await Promise.resolve(0),
-      }),
-    ).toEqual({ status: "skipped" });
-    expect(session.statements).toEqual(["lock"]);
-  });
-});
 
 test("the flow cap owner opens one transaction and awaits its fence before running the decision", async () => {
   const events: string[] = [];
