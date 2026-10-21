@@ -1103,6 +1103,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           E2E_PRODUCTION_REQUIRED: ${{ steps.changed-files.outputs.e2e_production_required }}
+          ROUTE_SMOKE_REQUIRED: ${{ steps.changed-files.outputs.route_smoke_required }}
           SELECTED_MATRIX: ${{ steps.e2e-pr-selection.outputs.matrix }}
           SELECTED_MODE: ${{ steps.e2e-pr-selection.outputs.mode }}
           SELECTED_SPECS: ${{ steps.e2e-pr-selection.outputs.specs }}
@@ -1117,6 +1118,11 @@ jobs:
             matrix=$SELECTED_MATRIX
             mode=$SELECTED_MODE
             specs=$SELECTED_SPECS
+          fi
+          # route-smoke runs the same seeded network proof for affected merge
+          # groups, so do not start a second production stack for that leg.
+          if [[ "$EVENT_NAME" == merge_group && "$ROUTE_SMOKE_REQUIRED" == true ]]; then
+            matrix=$(jq -c '.shard -= ["network-baseline"]' <<< "$matrix")
           fi
           {
             echo "matrix=$matrix"
