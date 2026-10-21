@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import ts from "typescript";
+import ts from "typescript6";
 
 import {
   declaredAppFrameScope,
