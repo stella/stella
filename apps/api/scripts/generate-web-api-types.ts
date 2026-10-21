@@ -42,7 +42,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { printError } from "@stll/errors";
@@ -1232,53 +1232,36 @@ const renderIdentityCheck = (names: readonly string[]): string => {
   ].join("\n");
 };
 
-type VerifyIdentityOptions = {
-  names: readonly string[];
-  // The printout with response dates as declared, served in place of the
-  // output file so the check compares it against the contract.
-  declaredOutput: string;
-  output: string;
-};
-
-const verifyIdentity = ({
-  names,
-  declaredOutput,
-  output,
-}: VerifyIdentityOptions): readonly ts.Diagnostic[] => {
-  const program = createApiProgram({
-    virtualFiles: new Map([
-      [CHECK_PATH, renderIdentityCheck(names)],
-      [OUTPUT_PATH, declaredOutput],
-      [WIRE_CHECK_PATH, output],
-    ]),
-  });
-  const check = program.getSourceFile(CHECK_PATH);
-  const generated = program.getSourceFile(OUTPUT_PATH);
-  const wire = program.getSourceFile(WIRE_CHECK_PATH);
-  if (check === undefined || generated === undefined || wire === undefined) {
-    return panic("generate-web-api-types: identity check files not loaded");
-  }
-  return [
-    ...program.getSyntacticDiagnostics(generated),
-    ...program.getSemanticDiagnostics(generated),
-    ...program.getSyntacticDiagnostics(wire),
-    ...program.getSemanticDiagnostics(wire),
-    ...program.getSemanticDiagnostics(check),
-  ];
-};
-
 // --- CLI --------------------------------------------------------------------------
 
 type GenerateOptions = {
-  validation: "identity" | "print";
+  validation:
+    | { type: "identity"; declared: string; wire: string | Uint8Array }
+    | { type: "print"; includeDeclared?: boolean };
   recorder?: CompilerInputRecorder;
 };
 
 type Printed = {
   output: string;
-  // Only for identity validation: the printout with response dates as
-  // declared, and the contract members it names.
-  declared?: { output: string; names: string[] };
+  declared?: string;
+  diagnostics?: readonly ts.Diagnostic[];
+};
+
+const exportedTypeNames = (output: string): string[] => {
+  const source = ts.createSourceFile(
+    OUTPUT_PATH,
+    output,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  return source.statements.flatMap((statement) =>
+    ts.isTypeAliasDeclaration(statement) &&
+    statement.modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+    ) === true
+      ? [statement.name.text]
+      : [],
+  );
 };
 
 // Builds the API program and returns strings only, so the program and its
@@ -1287,10 +1270,26 @@ const printWithProgram = ({
   validation,
   recorder,
 }: GenerateOptions): Printed => {
+  const declared =
+    validation.type === "identity" ? validation.declared : undefined;
+  const wire =
+    validation.type === "identity"
+      ? Buffer.from(validation.wire).toString("utf-8")
+      : undefined;
+  const names = declared === undefined ? [] : exportedTypeNames(declared);
+  const programStarted = performance.now();
   const program = createApiProgram({
-    virtualFiles: new Map(),
+    virtualFiles:
+      declared === undefined || wire === undefined
+        ? new Map()
+        : new Map([
+            [CHECK_PATH, renderIdentityCheck(names)],
+            [OUTPUT_PATH, declared],
+            [WIRE_CHECK_PATH, wire],
+          ]),
     ...(recorder === undefined ? {} : { recorder }),
   });
+  const programCreated = performance.now();
   const contractSource =
     program.getSourceFile(CONTRACT_PATH) ??
     panic("generate-web-api-types: eden-contract.ts not in program");
@@ -1304,6 +1303,15 @@ const printWithProgram = ({
     responseDates: RESPONSE_DATES.wire,
   });
   const output = renderOutput(result);
+  const printed = performance.now();
+  const stage =
+    validation.type === "identity" ? "generation 2" : "generation 1";
+  console.log(
+    `generate-web-api-types: ${stage}: program ${Math.round(programCreated - programStarted)} ms, ` +
+      `check/print ${Math.round(printed - programCreated)} ms, types ${program.getTypeCount()}, ` +
+      `instantiations ${program.getInstantiationCount()}, identifiers ${program.getIdentifierCount()}, ` +
+      `RSS ${Math.round(process.memoryUsage().rss / 1024 / 1024)} MiB`,
+  );
 
   for (const [reason, occurrences] of result.fallbacks) {
     console.error(
@@ -1319,48 +1327,61 @@ const printWithProgram = ({
 
   // Consumer tasks only need the printout. The dedicated CI --check owns
   // identity validation and determinism, without charging each compiler job.
-  if (validation === "print") {
-    return { output };
+  if (declared === undefined) {
+    return validation.type === "print" && validation.includeDeclared === true
+      ? {
+          output,
+          declared: renderOutput(
+            printContract({
+              program,
+              contractSource,
+              webDependencies,
+              responseDates: RESPONSE_DATES.declared,
+            }),
+          ),
+        }
+      : { output };
   }
-  return {
-    output,
-    declared: {
-      output: renderOutput(
-        printContract({
-          program,
-          contractSource,
-          webDependencies,
-          responseDates: RESPONSE_DATES.declared,
-        }),
-      ),
-      names: result.declarations.map(({ name }) => name),
-    },
-  };
+  const check = program.getSourceFile(CHECK_PATH);
+  const generated = program.getSourceFile(OUTPUT_PATH);
+  const wireSource = program.getSourceFile(WIRE_CHECK_PATH);
+  if (
+    check === undefined ||
+    generated === undefined ||
+    wireSource === undefined
+  ) {
+    return panic("generate-web-api-types: identity check files not loaded");
+  }
+  const identityStarted = performance.now();
+  const diagnostics = [
+    ...program.getSyntacticDiagnostics(generated),
+    ...program.getSemanticDiagnostics(generated),
+    ...program.getSyntacticDiagnostics(wireSource),
+    ...program.getSemanticDiagnostics(wireSource),
+    ...program.getSemanticDiagnostics(check),
+  ];
+  console.log(
+    `generate-web-api-types: identity: check ${Math.round(performance.now() - identityStarted)} ms, ` +
+      `types ${program.getTypeCount()}, instantiations ${program.getInstantiationCount()}, ` +
+      `identifiers ${program.getIdentifierCount()}, RSS ${Math.round(process.memoryUsage().rss / 1024 / 1024)} MiB`,
+  );
+  return { output, diagnostics };
 };
 
 const generate = ({ validation, recorder }: GenerateOptions) => {
   const started = performance.now();
-  const { output, declared } = printWithProgram({
+  const { output, declared, diagnostics } = printWithProgram({
     validation,
     ...(recorder === undefined ? {} : { recorder }),
   });
   const printed = performance.now();
-  if (declared === undefined) {
+  if (diagnostics === undefined) {
     console.log(
       `generate-web-api-types: printed in ${Math.round(printed - started)} ms`,
     );
-    return output;
+    return { output, declared };
   }
 
-  // The identity check builds its own program; collecting the printing one
-  // first keeps a single checker alive, roughly halving peak memory. Reusing
-  // it as oldProgram would only save parse time and would keep its checker.
-  Bun.gc(true);
-  const diagnostics = verifyIdentity({
-    names: declared.names,
-    declaredOutput: declared.output,
-    output,
-  });
   if (diagnostics.length > 0) {
     console.error(formatDiagnostics(diagnostics));
     console.error(
@@ -1370,10 +1391,9 @@ const generate = ({ validation, recorder }: GenerateOptions) => {
   }
 
   console.log(
-    `generate-web-api-types: printed in ${Math.round(printed - started)} ms, ` +
-      `identity verified in ${Math.round(performance.now() - printed)} ms`,
+    `generate-web-api-types: printed and identity verified in ${Math.round(performance.now() - started)} ms`,
   );
-  return output;
+  return { output };
 };
 
 const writeAtomically = (file: string, bytes: string | Uint8Array) => {
@@ -1514,27 +1534,37 @@ const main = async () => {
     return;
   }
   const recorder = createCompilerInputRecorder();
-  const output = generate({
-    validation: check ? "identity" : "print",
+  const first = generate({
+    validation: { type: "print", ...(check ? { includeDeclared: true } : {}) },
     recorder,
   });
-  // A fallback determinism run starts after the identity check's program is
-  // collected, so it too runs alone.
+  let output = first.output;
+  let outcome = "wrote";
   if (check) {
+    if (first.declared === undefined) {
+      panic("generate-web-api-types: declared printout was not produced");
+    }
     Bun.gc(true);
+    const prepared = preparedGeneratedFile(
+      REPO_ROOT,
+      repoRelativePath(REPO_ROOT, OUTPUT_PATH),
+    );
+    const reference = prepared ?? output;
+    const second = generate({
+      validation: {
+        type: "identity",
+        declared: first.declared,
+        wire: reference,
+      },
+    });
+    const proof = verifyDeterminism({
+      output: second.output,
+      prepared,
+      regenerate: () => output,
+    });
+    output = second.output;
+    outcome = `verified deterministic against ${proof}`;
   }
-  // The generated-sources job's printout for these exact inputs, when it is
-  // still on disk, is the independent second generation.
-  const outcome = check
-    ? `verified deterministic against ${verifyDeterminism({
-        output,
-        prepared: preparedGeneratedFile(
-          REPO_ROOT,
-          repoRelativePath(REPO_ROOT, OUTPUT_PATH),
-        ),
-        regenerate: () => generate({ validation: "print" }),
-      })}`
-    : "wrote";
   writeAtomically(OUTPUT_PATH, output);
   // The copy first: a stamp never names a printout that is not on disk.
   writeAtomically(CACHED_OUTPUT_PATH, output);

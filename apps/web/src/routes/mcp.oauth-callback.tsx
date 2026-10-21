@@ -16,6 +16,7 @@ import { detached } from "@/lib/detached";
 import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { pageTitle } from "@/lib/page-title";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 
 const KNOWLEDGE_MCP_PATH = "/knowledge/tools";
 const FALLBACK_NAVIGATE_DELAY_MS = 150;
@@ -27,6 +28,7 @@ const searchSchema = v.object({
 });
 
 export const Route = createFileRoute("/mcp/oauth-callback")({
+  staticData: { appFrame: APP_FRAME_SCOPE.none },
   validateSearch: searchSchema,
   head: () => ({
     meta: [{ title: pageTitle("knowledge.sections.mcp.title") }],

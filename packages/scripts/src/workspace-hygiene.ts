@@ -55,23 +55,33 @@ const EXACT_PACKAGE_VERSION_PATTERN =
 const BABEL_TOOLCHAINS = [
   { expectedMajor: 7, packagePath: "apps/mobile/package.json" },
 ] as const;
+// `typescript` is the TypeScript 7 compiler (the version `bun check` embeds).
+// TypeScript 7 exposes no classic compiler API, so tools built on it import
+// TypeScript 6 through the `typescript6` alias, and Astro's checker, which
+// supports only TypeScript 5 and 6, gets its own pinned copy.
 const TYPESCRIPT_TOOLCHAIN = {
-  native: "npm:typescript@7.0.2",
   oxlint: "1.87.0",
   oxlintConfig: "1.4.0",
   tsgolint: "7.0.2003",
-  typescript6Compatibility: "6.0.3",
+  typescript: "7.0.2",
+  typescript6Api: "npm:typescript@6.0.3",
+  typescript6Astro: "6.0.3",
 } as const;
 const TYPESCRIPT6_COMPATIBILITY = {
   astro: {
-    dependency: "@astrojs/check",
+    dependency: "typescript",
     packagePath: "apps/landing/package.json",
     script:
       "bun --cwd=../../packages/cli run codegen:runtime && bun --bun astro check",
+    specifier: "catalog:ts6",
+  },
+  astroCheck: {
+    dependency: "@astrojs/check",
+    packagePath: "apps/landing/package.json",
     specifier: "^0.9.9",
   },
   compilerApi: {
-    dependency: "typescript",
+    dependency: "typescript6",
     packagePath: "packages/scripts/package.json",
     specifier: "catalog:",
   },
@@ -325,9 +335,9 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       specifier: TYPESCRIPT_TOOLCHAIN.oxlintConfig,
     },
     {
-      dependency: "@typescript/native",
+      dependency: "typescript6",
       field: "devDependencies",
-      specifier: TYPESCRIPT_TOOLCHAIN.native,
+      specifier: "catalog:",
     },
     {
       dependency: "oxlint-tsgolint",
@@ -347,7 +357,12 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
     {
       dependency: "typescript",
       field: "catalog",
-      specifier: TYPESCRIPT_TOOLCHAIN.typescript6Compatibility,
+      specifier: TYPESCRIPT_TOOLCHAIN.typescript,
+    },
+    {
+      dependency: "typescript6",
+      field: "catalog",
+      specifier: TYPESCRIPT_TOOLCHAIN.typescript6Api,
     },
   ] as const;
 
@@ -359,6 +374,19 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
 
     issues.push({
       message: `${field}.${dependency} must be ${specifier}; found ${actual ?? "missing"}`,
+      path: "package.json",
+    });
+  }
+
+  const catalogs = rootPackage?.["catalogs"];
+  const astroTypeScript = readStringProperty(
+    isRecord(catalogs) ? catalogs : null,
+    "ts6",
+    "typescript",
+  );
+  if (astroTypeScript !== TYPESCRIPT_TOOLCHAIN.typescript6Astro) {
+    issues.push({
+      message: `catalogs.ts6.typescript must be ${TYPESCRIPT_TOOLCHAIN.typescript6Astro}; found ${astroTypeScript ?? "missing"}`,
       path: "package.json",
     });
   }
@@ -441,23 +469,25 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
         });
       }
 
-      const typescript = readDependencySpecifier(packageJsonPath, "typescript");
       if (
-        typescript !== null &&
+        readDependencySpecifier(packageJsonPath, "typescript") !== null &&
+        relativePackagePath !== TYPESCRIPT6_COMPATIBILITY.astro.packagePath
+      ) {
+        issues.push({
+          message:
+            "typescript is the root-owned TypeScript 7 compiler; only apps/landing pins its own TypeScript 6 for Astro's checker",
+          path: relativePackagePath,
+        });
+      }
+
+      if (
+        readDependencySpecifier(packageJsonPath, "typescript6") !== null &&
         relativePackagePath !==
           TYPESCRIPT6_COMPATIBILITY.compilerApi.packagePath
       ) {
         issues.push({
           message:
-            "TypeScript 6 is compatibility-only and may only be declared by packages/scripts for the compiler API",
-          path: relativePackagePath,
-        });
-      }
-
-      if (readDependencySpecifier(packageJsonPath, "@typescript/native")) {
-        issues.push({
-          message:
-            "@typescript/native is a root-owned TypeScript 7 compiler dependency",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by packages/scripts (and the root)",
           path: relativePackagePath,
         });
       }

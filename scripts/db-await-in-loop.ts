@@ -84,7 +84,7 @@
 import { panic } from "better-result";
 import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
