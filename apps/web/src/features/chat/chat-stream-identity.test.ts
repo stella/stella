@@ -1,4 +1,4 @@
-import { EventType, uiMessagesToWire } from "@tanstack/ai";
+import { EventType } from "@tanstack/ai";
 import type { ModelMessage, StreamChunk } from "@tanstack/ai";
 import { ChatClient, fetchServerSentEvents } from "@tanstack/ai-client";
 import type { RunAgentInputContext, UIMessage } from "@tanstack/ai-client";
@@ -35,6 +35,8 @@ import {
 } from "@/features/chat/chat-snapshot-history";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
+
+import { buildWireSnapshot } from "../../../../api/src/tests/helpers/chat-fixtures";
 
 // A memoized message row or part card skips a render only when the chunk
 // leaves its object as it was. These tests drive the SDK client the runtime
@@ -423,10 +425,7 @@ const streamSession = async ({
     yield { type: EventType.TEXT_MESSAGE_END, messageId: answerId };
     if (spec.end === "snapshot") {
       // The server's history equals what the page holds.
-      yield {
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: uiMessagesToWire(latest),
-      };
+      yield buildWireSnapshot(latest);
     }
     if (awaited !== undefined) {
       approvalId = `approval-${awaited}`;
@@ -1134,10 +1133,7 @@ describe("the chat runtime keeps settled messages while an answer streams", () =
     server.push({ type: "TEXT_MESSAGE_END", messageId: ANSWER_ID });
     await expectFresh();
     server.push(
-      {
-        type: "MESSAGES_SNAPSHOT",
-        messages: uiMessagesToWire(replay.getMessages()),
-      },
+      { ...buildWireSnapshot(replay.getMessages()) },
       {
         type: "RUN_FINISHED",
         runId: "run-identity",
