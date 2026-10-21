@@ -270,9 +270,33 @@ const provenanceStatement = ({
   },
 });
 
-// The shape npm 10 prints for `npm audit signatures --json` when every
-// signature and attestation verifies: failures only, no verified list.
-const NPM_AUDIT_VERIFIED = JSON.stringify({ invalid: [], missing: [] });
+// The shape npm 11.20.0 prints for `npm audit signatures --json
+// --include-attestations` when the target's signature and provenance verify.
+const verifiedEntry = (
+  version: string,
+  predicateTypes: readonly string[] = [
+    "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
+    "https://slsa.dev/provenance/v1",
+  ],
+) => ({
+  name: "@stll/fixture",
+  version,
+  location: "node_modules/@stll/fixture",
+  registry: "https://registry.npmjs.org/",
+  attestations: {
+    url: `https://registry.npmjs.org/-/npm/v1/attestations/@stll%2ffixture@${version}`,
+    provenance: { predicateType: "https://slsa.dev/provenance/v1" },
+  },
+  attestationBundles: predicateTypes.map((predicateType) => ({
+    predicateType,
+    bundle: {},
+  })),
+});
+const NPM_AUDIT_VERIFIED = JSON.stringify({
+  invalid: [],
+  missing: [],
+  verified: [verifiedEntry("1.2.4")],
+});
 
 const runRepositoryCheck = async ({
   latest,
@@ -423,7 +447,18 @@ describe("published repository provenance", () => {
         "--registry",
         expect.any(String),
       ],
-      ["audit", "signatures", "--json", "--registry", expect.any(String)],
+      [
+        "exec",
+        "--yes",
+        "npm@11.20.0",
+        "--",
+        "audit",
+        "signatures",
+        "--json",
+        "--include-attestations",
+        "--registry",
+        expect.any(String),
+      ],
     ]);
     expect(npmCalls.at(0)?.env["npm_config_cache"]).toStartWith(
       npmCalls.at(0)?.cwd ?? "not-called",
@@ -449,26 +484,33 @@ describe("published repository provenance", () => {
     ],
     [
       "another package version",
-      {
-        invalid: [],
-        missing: [],
-        verified: [
-          {
-            name: "@stll/fixture",
-            version: "9.9.9",
-            attestations: [{}],
-          },
-        ],
-      },
+      { invalid: [], missing: [], verified: [verifiedEntry("9.9.9")] },
     ],
     [
       "an invalid dependency signature",
       {
         invalid: [{ name: "@stll/fixture-dependency", version: "1.0.0" }],
         missing: [],
+        verified: [verifiedEntry("1.2.4")],
       },
     ],
-    ["a report without its failure lists", {}],
+    [
+      "failures only, with no verified record (older npm)",
+      { invalid: [], missing: [] },
+    ],
+    [
+      "a verified signature without a provenance bundle",
+      {
+        invalid: [],
+        missing: [],
+        verified: [
+          verifiedEntry("1.2.4", [
+            "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
+          ]),
+        ],
+      },
+    ],
+    ["a report without its lists", {}],
   ])("rejects npm reporting %s", async (_, auditReport) => {
     const { result } = await runRepositoryCheck({
       latest: {
@@ -483,40 +525,6 @@ describe("published repository provenance", () => {
       ],
     });
     expect(result).toEqual({ status: "failed", reason: "unattested_publish" });
-  });
-
-  test("accepts a verified list from newer npm when it names the target", async () => {
-    const { result } = await runRepositoryCheck({
-      latest: {
-        version: "1.2.4",
-        repository: "https://github.com/stella/moved",
-        dist: "fixture",
-      },
-      attestations: attestationDocument(provenanceStatement()),
-      npmResults: [
-        { exitCode: 0, stdout: "" },
-        {
-          exitCode: 0,
-          stdout: JSON.stringify({
-            invalid: [],
-            missing: [],
-            verified: [
-              {
-                name: "@stll/fixture",
-                version: "1.2.4",
-                attestations: [
-                  { predicateType: "https://slsa.dev/provenance/v1" },
-                ],
-              },
-            ],
-          }),
-        },
-      ],
-    });
-    expect(result).toEqual({
-      status: "passed",
-      reason: "published_from_declared_repository",
-    });
   });
 
   test("rejects a verified audit when npm installed another version", async () => {

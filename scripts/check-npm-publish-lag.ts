@@ -203,10 +203,25 @@ const packageEntryMatches = (
 ): boolean =>
   isRecord(value) && value["name"] === name && value["version"] === version;
 
+// The audit runs on a pinned npm whose `--include-attestations` JSON lists
+// each verified package with its verified attestation bundles. Older npm
+// prints failures only, which is no evidence that an attestation was checked.
+const NPM_AUDIT_VERSION = "11.20.0";
+const SLSA_PROVENANCE_V1 = "https://slsa.dev/provenance/v1";
+
+const hasVerifiedProvenance = (entry: unknown): boolean =>
+  isRecord(entry) &&
+  Array.isArray(entry["attestationBundles"]) &&
+  entry["attestationBundles"].some(
+    (bundle) =>
+      isRecord(bundle) && bundle["predicateType"] === SLSA_PROVENANCE_V1,
+  );
+
 // npm is the trust anchor here: it verifies the registry signature, Sigstore
 // root and signer identity, and binds the attestation subject digest to the
-// published tarball. The decoded metadata checks only decide which repository
-// owns this package version.
+// published tarball. A pass needs npm's affirmative record of a verified
+// provenance bundle for this exact version; the decoded metadata checks only
+// decide which repository owns it.
 const verifyPackageWithNpm = async ({
   name,
   version,
@@ -222,11 +237,7 @@ const verifyPackageWithNpm = async ({
 }): Promise<boolean> => {
   const directory = await mkdtemp(path.join(tmpdir(), "npm-provenance-"));
   const cache = path.join(directory, "cache");
-  const env = {
-    ...process.env,
-    npm_config_cache: cache,
-    npm_config_include_attestations: "true",
-  };
+  const env = { ...process.env, npm_config_cache: cache };
   try {
     await Bun.write(
       path.join(directory, "package.json"),
@@ -249,7 +260,18 @@ const verifyPackageWithNpm = async ({
       return false;
     }
     const audit = await npmRunner({
-      args: ["audit", "signatures", "--json", "--registry", registry],
+      args: [
+        "exec",
+        "--yes",
+        `npm@${NPM_AUDIT_VERSION}`,
+        "--",
+        "audit",
+        "signatures",
+        "--json",
+        "--include-attestations",
+        "--registry",
+        registry,
+      ],
       cwd: directory,
       env,
       timeoutMs,
@@ -261,28 +283,19 @@ const verifyPackageWithNpm = async ({
     if (
       !isRecord(report) ||
       !Array.isArray(report["invalid"]) ||
-      !Array.isArray(report["missing"])
+      !Array.isArray(report["missing"]) ||
+      !Array.isArray(report["verified"])
     ) {
       return false;
     }
-    // npm's JSON report lists only failures ({ invalid, missing }); it verifies
-    // every attestation the registry advertises, and the caller already
-    // required this version to advertise one. Newer npm versions may also list
-    // the verified packages; when they do, the target must be among them.
     const targetMatches = (entry: unknown) =>
       packageEntryMatches(entry, name, version);
-    const verified = report["verified"];
     if (
       report["invalid"].length > 0 ||
       report["missing"].some(targetMatches) ||
-      (Array.isArray(verified) &&
-        !verified.some(
-          (entry) =>
-            targetMatches(entry) &&
-            isRecord(entry) &&
-            Array.isArray(entry["attestations"]) &&
-            entry["attestations"].length > 0,
-        ))
+      !report["verified"].some(
+        (entry) => targetMatches(entry) && hasVerifiedProvenance(entry),
+      )
     ) {
       return false;
     }
