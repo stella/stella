@@ -158,6 +158,7 @@ import {
 import {
   createScopedDbMock,
   createSelectQueryMock,
+  findNoDocumentProcessingRun,
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
 
@@ -863,6 +864,7 @@ type MockMcpTransaction = {
       } | null>;
     };
     documentProcessingRuns: {
+      findFirst: typeof findNoDocumentProcessingRun;
       findMany: (input?: MockProcessingRunQueryInput) => Promise<unknown[]>;
     };
     entityVersions: {
@@ -1031,6 +1033,7 @@ const createScopedDb = (
               findFirst: async () => extractedContentRow,
             },
             documentProcessingRuns: {
+              findFirst: findNoDocumentProcessingRun,
               findMany: async (input) => {
                 const filtered = (processingState.runs ?? []).filter((run) => {
                   if (typeof run !== "object" || run === null) {
@@ -9809,53 +9812,51 @@ describe("OpenAI-compatible MCP tools", () => {
   };
 
   const createVersionHistoryScopedDb = (rows: VersionHistoryRow[]) =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
-      mock(async (callback: (tx: unknown) => unknown) => {
+    createScopedDbMock({
+      query: {
+        entities: {
+          findFirst: async () => ({
+            createdAt: new Date("2025-12-01T00:00:00.000Z"),
+            kind: "document",
+            name: "Secret Doc for John Smith",
+            updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+            workspaceId: WORKSPACE_ID,
+            extractedContent: null,
+            currentVersion: {
+              createdAt: new Date("2026-01-01T00:00:00.000Z"),
+              id: "ver_current",
+              fields: [],
+            },
+            versions: [{ id: "ver_current" }],
+          }),
+        },
+        documentProcessingRuns: { findMany: async () => [] },
+        entityVersions: {
+          findFirst: async () => ({ id: "ver_current" }),
+        },
+        extractedContent: { findFirst: async () => null },
+        fields: {
+          findMany: async () => [],
+        },
+        organizationSettings: {
+          findFirst: async () => ({ documentProcessingMode: "off" }),
+        },
+        searchDocuments: {
+          findFirst: async () => ({
+            updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+          }),
+        },
+      },
+      select: () => {
         const selectBuilder = {
           from: () => selectBuilder,
           where: () => selectBuilder,
           orderBy: () => selectBuilder,
           limit: () => rows,
         };
-        return await callback({
-          query: {
-            entities: {
-              findFirst: async () => ({
-                createdAt: new Date("2025-12-01T00:00:00.000Z"),
-                kind: "document",
-                name: "Secret Doc for John Smith",
-                updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-                workspaceId: WORKSPACE_ID,
-                extractedContent: null,
-                currentVersion: {
-                  createdAt: new Date("2026-01-01T00:00:00.000Z"),
-                  id: "ver_current",
-                  fields: [],
-                },
-                versions: [{ id: "ver_current" }],
-              }),
-            },
-            documentProcessingRuns: { findMany: async () => [] },
-            entityVersions: {
-              findFirst: async () => ({ id: "ver_current" }),
-            },
-            extractedContent: { findFirst: async () => null },
-            fields: {
-              findMany: async () => [],
-            },
-            organizationSettings: {
-              findFirst: async () => ({ documentProcessingMode: "off" }),
-            },
-            searchDocuments: {
-              findFirst: async () => ({
-                updatedAt: new Date("2026-01-02T00:00:00.000Z"),
-              }),
-            },
-          },
-          select: () => selectBuilder,
-        });
-      }),
-    );
+        return selectBuilder;
+      },
+    }).scopedDb;
 
   test("read_document anonymizes version-history labels and descriptions", async () => {
     anonymizeTextFieldsMock.mockResolvedValue(
