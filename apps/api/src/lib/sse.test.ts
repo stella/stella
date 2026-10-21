@@ -122,6 +122,14 @@ const clearIntervalSpy = spyOn(globalThis, "clearInterval");
 const { broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
   await import("@/api/lib/sse");
 
+// What the import itself did, read before any test can start the module: the
+// tests run in any order, so the spies' later state says nothing about it.
+const importEffects = {
+  clientsCreated: createdClients.length,
+  redisClientsRequested: createRedisClientMock.mock.calls.length,
+  intervalsStarted: setIntervalSpy.mock.calls.length,
+};
+
 // Let the fire-and-forget subscribe promise inside startSse settle. A timer
 // turn drains the whole pending microtask queue, so this does not depend on
 // how many `await` points the module's attach path happens to have — counting
@@ -222,9 +230,11 @@ const broadcastTestEvent = (
 
 describe("sse module import", () => {
   test("importing the module opens no Redis connection and starts no timer", () => {
-    expect(createdClients).toHaveLength(0);
-    expect(setIntervalSpy).not.toHaveBeenCalled();
-    expect(createRedisClientMock).not.toHaveBeenCalled();
+    expect(importEffects).toEqual({
+      clientsCreated: 0,
+      redisClientsRequested: 0,
+      intervalsStarted: 0,
+    });
   });
 
   test("registering a local connection before startSse does not throw", () => {
@@ -246,10 +256,16 @@ describe("sse module import", () => {
 
 /** The intervals `startSse` runs: the registry keep-alive and the sweep that
  *  ends streams whose credential no longer holds. */
-const LIFECYCLE_INTERVALS_MS = [20_000, LIMITS.sseCredentialRecheckMs];
+const ascending = (a: number, b: number): number => a - b;
 
+const LIFECYCLE_INTERVALS_MS = [20_000, LIMITS.sseCredentialRecheckMs].toSorted(
+  ascending,
+);
+
+/** The delays of the intervals started since the spy was cleared, ascending.
+ *  An omitted delay is 0, as the timer itself reads it. */
 const startedIntervals = () =>
-  setIntervalSpy.mock.calls.map(([, ms]) => ms).toSorted();
+  setIntervalSpy.mock.calls.map(([, ms]) => ms ?? 0).toSorted(ascending);
 
 describe("startSse / stopSse lifecycle", () => {
   test("startSse starts the keep-alive and credential sweep timers and connects the Redis subscriber", async () => {
@@ -258,7 +274,7 @@ describe("startSse / stopSse lifecycle", () => {
 
     startTestSse();
 
-    expect(startedIntervals()).toEqual(LIFECYCLE_INTERVALS_MS.toSorted());
+    expect(startedIntervals()).toEqual(LIFECYCLE_INTERVALS_MS);
 
     await settlePendingWork();
 
@@ -277,7 +293,7 @@ describe("startSse / stopSse lifecycle", () => {
     startTestSse();
     startTestSse();
 
-    expect(startedIntervals()).toEqual(LIFECYCLE_INTERVALS_MS.toSorted());
+    expect(startedIntervals()).toEqual(LIFECYCLE_INTERVALS_MS);
 
     await settlePendingWork();
 

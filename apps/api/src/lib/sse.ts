@@ -12,7 +12,9 @@ import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { createRedisClient } from "@/api/lib/redis-client";
 import {
   brandPersistedDesktopEditSessionId,
@@ -157,6 +159,19 @@ export const isEventStreamResponse = (response: Response): boolean =>
 // outlives its credential by more than one interval
 // (`LIMITS.sseCredentialRecheckMs`), on any path a credential can end.
 
+const SESSION_LIVENESS_READ_FAILURE_SINK = failureSink({
+  event: "sse.session_liveness_read_failed",
+  expected: [],
+});
+const CREDENTIAL_REVALIDATION_FAILURE_SINK = failureSink({
+  event: "sse.credential_revalidation_failed",
+  expected: [],
+});
+const BOUND_STREAM_CANCEL_FAILURE_SINK = failureSink({
+  event: "sse.bound_stream_cancel_failed",
+  expected: [],
+});
+
 /** What authorized an event stream. */
 export type SseStreamBinding =
   /** A session: the stream ends once the session is gone or expired. */
@@ -206,9 +221,7 @@ export const sweepBoundStreams = async (
           async () => await readLiveSessions([...sessions.values()]),
         );
   if (Result.isError(live)) {
-    logger.warn("sse.session_liveness_read_failed", {
-      "error.type": errorTag(live.error),
-    });
+    observeFailure(live.error, { sink: SESSION_LIVENESS_READ_FAILURE_SINK });
   }
   await Promise.all(
     streams.map(async ({ binding, end }) => {
@@ -220,8 +233,8 @@ export const sweepBoundStreams = async (
       }
       const held = await Result.tryPromise(binding.revalidate);
       if (Result.isError(held)) {
-        logger.warn("sse.credential_revalidation_failed", {
-          "error.type": errorTag(held.error),
+        observeFailure(held.error, {
+          sink: CREDENTIAL_REVALIDATION_FAILURE_SINK,
         });
         return;
       }
@@ -298,9 +311,7 @@ const withHeartbeatFrames = (
           closeHeartbeat();
           closeControllerQuietly(controller);
           reader.cancel(CREDENTIAL_ENDED).catch((error: unknown) => {
-            logger.warn("sse.bound_stream_cancel_failed", {
-              "error.type": errorTag(error),
-            });
+            observeFailure(error, { sink: BOUND_STREAM_CANCEL_FAILURE_SINK });
           });
         },
       };
