@@ -5769,6 +5769,13 @@ jobs:
           CHANNEL: prod
         run: bun scripts/desktop-release-step.ts stamp
 
+      # The build action compiles offline; the locked crates download here,
+      # retried as a unit.
+      - name: Fetch Rust dependencies
+        if: github.event_name == 'merge_group' || steps.receipt.outputs.reused != 'true'
+        timeout-minutes: 10
+        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target x86_64-pc-windows-msvc
+
       - name: Exercise Windows desktop release build
         if: github.event_name == 'merge_group' || steps.receipt.outputs.reused != 'true'
         uses: ./.github/actions/desktop-windows-build
@@ -5915,7 +5922,8 @@ jobs:
           key: scan-engine-wasm-${{ runner.os }}-${{ hashFiles('packages/scan-engine/Cargo.lock', 'packages/scan-engine/rust-toolchain.toml') }}
 
       - name: Fetch Rust dependencies and wasm-bindgen
-        run: bash packages/scan-engine/scripts/wasm-toolchain.sh
+        timeout-minutes: 15
+        run: bash scripts/retry.sh bash packages/scan-engine/scripts/wasm-toolchain.sh
 
       - name: Check generated WebAssembly from a fresh Cargo cache
         id: wasm-check
@@ -6017,22 +6025,29 @@ jobs:
           targets: ${{ matrix.target }}
           components: clippy
 
+      # The locked crates download once, retried as a unit; every later
+      # cargo command runs --frozen and never reaches the registry itself.
+      - &desktop_rust_fetch
+        name: Fetch Rust dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target ${{ matrix.target }}
+
       # No cargo cache action here: the job is path-filtered to desktop
       # changes, so it runs rarely and a cold compile (well under the
       # timeout) is acceptable. It also keeps the LGPL-3.0 rust-cache
       # action out of the dependency-review-enforced diff.
       - name: Check
         shell: pwsh
-        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
+        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen
 
       - name: Test
         if: matrix.os == 'macos'
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen
 
       - name: Build test binaries
         if: matrix.os == 'windows'
         shell: pwsh
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked --no-run
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen --no-run
 
       # The signer crates link no Tauri, so their tests do run here: against
       # throwaway certificates in the runner's own current-user store, one
@@ -6071,7 +6086,7 @@ jobs:
       - name: Test signer against the certificate store
         if: matrix.os == 'windows'
         shell: pwsh
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p stella-desktop-windows-signing -p stella-desktop-signing-core --target ${{ matrix.target }} --locked -- --include-ignored
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p stella-desktop-windows-signing -p stella-desktop-signing-core --target ${{ matrix.target }} --frozen -- --include-ignored
 
       - name: Remove signing test certificates
         if: always() && matrix.os == 'windows'
@@ -6112,7 +6127,7 @@ jobs:
             sleep 0.1
           done
           test -s "$url_file"
-          STELLA_DESKTOP_SMOKE_API_URL="$(cat "$url_file")" cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --locked registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact
+          STELLA_DESKTOP_SMOKE_API_URL="$(cat "$url_file")" cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --frozen registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact
           wait "$server_pid"
 
       - name: Install cargo-deny
@@ -6138,7 +6153,7 @@ jobs:
 
       - name: Docs
         shell: pwsh
-        run: cargo doc --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --no-deps --target ${{ matrix.target }} --locked
+        run: cargo doc --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --no-deps --target ${{ matrix.target }} --frozen
         env:
           RUSTDOCFLAGS: -D warnings
 
@@ -6171,9 +6186,10 @@ jobs:
     steps:
       - *desktop_rust_checkout
       - *desktop_rust_toolchain
+      - *desktop_rust_fetch
       - name: Clippy
         shell: pwsh
-        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked -- -D warnings
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen -- -D warnings
       - *merge_group_cancel
 
   dependency-malware:
