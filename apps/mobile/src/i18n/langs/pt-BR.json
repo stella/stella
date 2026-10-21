@@ -1,0 +1,44 @@
+{
+  "tabs": {
+    "chat": "Chat",
+    "tasks": "Tarefas",
+    "matters": "Casos",
+    "settings": "Configurações"
+  },
+  "chat": {
+    "description": "Mantenha o trabalho em andamento por perto e continue de qualquer dispositivo.",
+    "emptyTitle": "Ainda não há conversas",
+    "emptyDescription": "Novas conversas e tópicos recentes aparecerão aqui."
+  },
+  "tasks": {
+    "description": "Veja o que precisa de atenção sem abrir todo o espaço de trabalho.",
+    "emptyTitle": "Nenhuma tarefa em aberto",
+    "emptyDescription": "Tarefas atribuídas e futuras aparecerão aqui."
+  },
+  "matters": {
+    "description": "Encontre um caso e obtenha rapidamente o contexto essencial.",
+    "emptyTitle": "Ainda não há casos",
+    "emptyDescription": "Seus casos recentes aparecerão aqui.",
+    "loadFailed": "Não foi possível carregar seus casos.",
+    "retry": "Tente novamente"
+  },
+  "signIn": {
+    "title": "Entre no stella",
+    "description": "Informe o endereço do seu servidor stella. Você aprova o login no navegador.",
+    "serverLabel": "Endereço do servidor",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "Continuar",
+    "sessionEnded": "Sua sessão terminou. Entre novamente.",
+    "errors": {
+      "address": "Informe um endereço https, como stella.example.com.",
+      "unreachable": "Nenhum servidor stella respondeu neste endereço.",
+      "denied": "O login não foi aprovado.",
+      "failed": "O login não foi concluído. Tente novamente."
+    }
+  },
+  "settings": {
+    "accountTitle": "Conta",
+    "server": "Servidor",
+    "signOut": "Sair"
+  }
+}

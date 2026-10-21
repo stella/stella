@@ -1,0 +1,44 @@
+{
+  "tabs": {
+    "chat": "Chat",
+    "tasks": "Úkoly",
+    "matters": "Spisy",
+    "settings": "Nastavení"
+  },
+  "chat": {
+    "description": "Mějte rozpracovanou práci po ruce a pokračujte z jakéhokoli zařízení.",
+    "emptyTitle": "Zatím žádné konverzace",
+    "emptyDescription": "Zde se zobrazí nové konverzace a nedávná vlákna."
+  },
+  "tasks": {
+    "description": "Podívejte se, co vyžaduje pozornost, aniž byste otevírali celý pracovní prostor.",
+    "emptyTitle": "Žádné otevřené úkoly",
+    "emptyDescription": "Zde se zobrazí přidělená a nadcházející práce."
+  },
+  "matters": {
+    "description": "Najděte spis a rychle získejte potřebný kontext.",
+    "emptyTitle": "Zatím žádné spisy",
+    "emptyDescription": "Zde se zobrazí vaše nedávné spisy.",
+    "loadFailed": "Vaše spisy se nepodařilo načíst.",
+    "retry": "Zkusit znovu"
+  },
+  "signIn": {
+    "title": "Přihlaste se do aplikace stella",
+    "description": "Zadejte adresu svého serveru stella. Přihlášení potvrdíte v prohlížeči.",
+    "serverLabel": "Adresa serveru",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "Pokračovat",
+    "sessionEnded": "Vaše relace skončila. Přihlaste se znovu.",
+    "errors": {
+      "address": "Zadejte adresu https, například stella.example.com.",
+      "unreachable": "Na této adrese neodpověděl žádný server stella.",
+      "denied": "Přihlášení nebylo schváleno.",
+      "failed": "Přihlášení se nedokončilo. Zkuste to znovu."
+    }
+  },
+  "settings": {
+    "accountTitle": "Účet",
+    "server": "Server",
+    "signOut": "Odhlásit se"
+  }
+}

@@ -6,6 +6,7 @@ import { createSha256 } from "@stll/sha256/bun";
 
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
+import { isEveryClientOAuthResource } from "@/api/mcp/resource-policy-contract";
 import { readOAuthApplicationType } from "@/api/scripts/better-auth-migration-audit.logic";
 import type {
   BetterAuthExpectedOAuthResource,
@@ -620,10 +621,12 @@ export const runBetterAuth17BackfillInTransaction = async ({
   if (Result.isError(accounts)) {
     return accounts;
   }
+  // Every client gains each MCP audience; the API resource is linked only to
+  // stella's own apps, by the deploy repair and at their registration.
   const clients = await backfillOAuthClients(
     transaction,
     batchSize,
-    expectedOAuthResources,
+    expectedOAuthResources.filter(isEveryClientOAuthResource),
   );
   if (Result.isError(clients)) {
     return clients;

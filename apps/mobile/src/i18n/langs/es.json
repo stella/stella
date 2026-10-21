@@ -1,0 +1,44 @@
+{
+  "tabs": {
+    "chat": "Chat",
+    "tasks": "Tareas",
+    "matters": "Asuntos",
+    "settings": "Configuración"
+  },
+  "chat": {
+    "description": "Ten a mano el trabajo en curso y continúa desde cualquier dispositivo.",
+    "emptyTitle": "Aún no hay conversaciones",
+    "emptyDescription": "Aquí aparecerán las conversaciones nuevas y los hilos recientes."
+  },
+  "tasks": {
+    "description": "Consulta lo que requiere atención sin abrir todo el espacio de trabajo.",
+    "emptyTitle": "No hay tareas abiertas",
+    "emptyDescription": "Aquí aparecerán las tareas asignadas y próximas."
+  },
+  "matters": {
+    "description": "Encuentra un asunto y obtén rápidamente el contexto esencial.",
+    "emptyTitle": "Aún no hay asuntos",
+    "emptyDescription": "Aquí aparecerán tus asuntos recientes.",
+    "loadFailed": "No se pudieron cargar tus asuntos.",
+    "retry": "Reintentar"
+  },
+  "signIn": {
+    "title": "Inicia sesión en stella",
+    "description": "Introduce la dirección de tu servidor stella. Aprobarás el inicio de sesión en el navegador.",
+    "serverLabel": "Dirección del servidor",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "Continuar",
+    "sessionEnded": "Tu sesión ha terminado. Vuelve a iniciar sesión.",
+    "errors": {
+      "address": "Introduce una dirección https, por ejemplo stella.example.com.",
+      "unreachable": "Ningún servidor stella respondió en esta dirección.",
+      "denied": "No se aprobó el inicio de sesión.",
+      "failed": "El inicio de sesión no se completó. Inténtalo de nuevo."
+    }
+  },
+  "settings": {
+    "accountTitle": "Cuenta",
+    "server": "Servidor",
+    "signOut": "Cerrar sesión"
+  }
+}

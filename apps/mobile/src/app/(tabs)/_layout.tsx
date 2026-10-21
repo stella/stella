@@ -1,9 +1,11 @@
 import { Tabs } from "expo-router";
+import { useTranslations } from "use-intl";
 
 import { useAppColors } from "@/theme";
 
 const TabLayout = () => {
   const colors = useAppColors();
+  const t = useTranslations("tabs");
 
   return (
     <Tabs
@@ -18,9 +20,10 @@ const TabLayout = () => {
         },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Chats" }} />
-      <Tabs.Screen name="tasks" options={{ title: "Tasks" }} />
-      <Tabs.Screen name="matters" options={{ title: "Matters" }} />
+      <Tabs.Screen name="index" options={{ title: t("chat") }} />
+      <Tabs.Screen name="tasks" options={{ title: t("tasks") }} />
+      <Tabs.Screen name="matters" options={{ title: t("matters") }} />
+      <Tabs.Screen name="settings" options={{ title: t("settings") }} />
     </Tabs>
   );
 };

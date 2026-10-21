@@ -4,6 +4,8 @@ import type { SQL, SQLChunk } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { mobileClientMetadataUrl } from "@stll/api-contract/mobile-client";
+
 import {
   oauthClient,
   oauthClientResource,
@@ -16,7 +18,12 @@ import {
 } from "@/api/lib/db/better-auth-oauth-policy-census";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { MCP_LAW_HTTP_PATH } from "@/api/mcp/constants";
-import { predecessorOAuthResourceScopes } from "@/api/mcp/resource-policy-contract";
+import {
+  buildApiOAuthResource,
+  buildEveryClientOAuthResources,
+  isEveryClientOAuthResource,
+  predecessorOAuthResourceScopes,
+} from "@/api/mcp/resource-policy-contract";
 import type {
   TestDatabase,
   TestDatabaseTransaction,
@@ -111,10 +118,17 @@ const onlineConnection = (transaction: TestDatabaseTransaction) => {
   };
 };
 
-/** The resources a deployment served before the law audience was added. */
+/**
+ * The resources a deployment served before the law audience and the REST API
+ * resource were added.
+ */
 const preUpgradeResources = () =>
   getBetterAuthOAuthResources()
-    .filter(({ identifier }) => !identifier.endsWith(MCP_LAW_HTTP_PATH))
+    .filter(
+      (resource) =>
+        isEveryClientOAuthResource(resource) &&
+        !resource.identifier.endsWith(MCP_LAW_HTTP_PATH),
+    )
     .map((resource) => ({
       ...resource,
       allowedScopes: predecessorOAuthResourceScopes(resource.allowedScopes),
@@ -128,6 +142,16 @@ const lawResourceIdentifier = (): string => {
     throw new Error("the law audience is not a configured OAuth resource");
   }
   return law.identifier;
+};
+
+const apiResourceIdentifier = (): string => {
+  const api = getBetterAuthOAuthResources().find(
+    (resource) => !isEveryClientOAuthResource(resource),
+  );
+  if (api === undefined) {
+    throw new Error("the REST API is not a configured OAuth resource");
+  }
+  return api.identifier;
 };
 
 /** The pre-upgrade deployment: the resources it served, and a linked client. */
@@ -254,9 +278,16 @@ test("the deploy repair adds a new audience to an existing database", async () =
           updatedAt: expect.any(String),
         });
       }
-      // And the registration that existed before the upgrade can request it.
+      // And the registration that existed before the upgrade can request it,
+      // but not the REST API, which only stella's own apps reach.
       expect(await linkedResourceIds(transaction)).toContainEqual({
         resourceId: lawResourceIdentifier(),
+      });
+      expect(await resourceIdentifiers(transaction)).toContainEqual({
+        identifier: apiResourceIdentifier(),
+      });
+      expect(await linkedResourceIds(transaction)).not.toContainEqual({
+        resourceId: apiResourceIdentifier(),
       });
 
       transaction.rollback();
@@ -287,6 +318,86 @@ test("a second repair run changes nothing", async () => {
       expect(await resourceIdentifiers(transaction)).toEqual(resources);
       expect(await resourcePolicies(transaction)).toEqual(policies);
       expect(await linkedResourceIds(transaction)).toEqual(links);
+
+      transaction.rollback();
+    });
+  } catch (error) {
+    if (!(error instanceof TransactionRollbackError)) {
+      throw error;
+    }
+  }
+});
+
+test("the API resource reaches stella's own app and no other client", async () => {
+  // An https deployment, where the app has a metadata document client id.
+  const origin = "https://stella-api.example.test";
+  const mobileClientId = mobileClientMetadataUrl(origin) ?? "";
+  const apiResource = buildApiOAuthResource(origin).identifier;
+  const linksOf = async (
+    transaction: TestDatabaseTransaction,
+    clientId: string,
+  ) =>
+    (
+      await transaction.execute(sql`
+        SELECT resource_id AS "resourceId"
+          FROM oauth_client_resource
+         WHERE client_id = ${clientId}
+         ORDER BY resource_id
+      `)
+    ).rows;
+  try {
+    await database.transaction(async (transaction) => {
+      await transaction.execute(sql`
+        TRUNCATE "user", account, oauth_client_resource, oauth_resource,
+                 oauth_client CASCADE
+      `);
+      const mcpResources = buildEveryClientOAuthResources(origin);
+      await transaction.insert(oauthResource).values(
+        mcpResources.map((resource, index) => ({
+          allowedScopes: [...resource.allowedScopes],
+          id: `own-app-resource-${index}`,
+          identifier: resource.identifier,
+          name: resource.name,
+        })),
+      );
+      await transaction.insert(oauthClient).values([
+        {
+          clientId: CLIENT_ID,
+          id: "own-app-third-party-row",
+          redirectUris: ["https://client.example.invalid/callback"],
+        },
+        {
+          clientId: mobileClientId,
+          id: "own-app-mobile-row",
+          redirectUris: ["app.stll:/oauth/callback"],
+        },
+      ]);
+      await transaction.insert(oauthClientResource).values(
+        [CLIENT_ID, mobileClientId].flatMap((clientId) =>
+          mcpResources.map((resource) => ({
+            clientId,
+            id: `own-app-link-${clientId}-${resource.identifier}`,
+            resourceId: resource.identifier,
+          })),
+        ),
+      );
+      const connection = onlineConnection(transaction);
+
+      await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.repair(connection);
+      expect(
+        await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.readCompletion(connection),
+      ).toEqual({ type: "complete" });
+
+      expect(await linksOf(transaction, mobileClientId)).toContainEqual({
+        resourceId: apiResource,
+      });
+      expect(await linksOf(transaction, CLIENT_ID)).not.toContainEqual({
+        resourceId: apiResource,
+      });
+
+      const links = await linksOf(transaction, mobileClientId);
+      await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.repair(connection);
+      expect(await linksOf(transaction, mobileClientId)).toEqual(links);
 
       transaction.rollback();
     });

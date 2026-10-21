@@ -1,10 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
 import { MCP_OAUTH_PROTOCOL_SCOPES } from "@stll/api-contract";
+import {
+  API_OAUTH_RESOURCE_NAME,
+  API_OAUTH_RESOURCE_SCOPES,
+} from "@stll/api-contract/api-oauth-resource";
 
 import {
+  buildApiOAuthResource,
   buildBetterAuthOAuthResources,
+  buildEveryClientOAuthResources,
   getMcpResourceScopes,
+  isEveryClientOAuthResource,
   LEGAL_RESOLVE_RESOURCE_ROUTES,
   MCP_MODES,
   MCP_RESOURCE_MODE_CONFIG,
@@ -43,14 +50,57 @@ describe("Better Auth OAuth resource policy contract", () => {
       buildBetterAuthOAuthResources("https://api.stll.app").map(
         ({ identifier }) => identifier,
       ),
-    ).toEqual(
-      MCP_MODES.map((mode) =>
+    ).toEqual([
+      ...MCP_MODES.map((mode) =>
         new URL(
           MCP_RESOURCE_MODE_CONFIG[mode].httpPath,
           "https://api.stll.app",
         ).toString(),
       ),
+      "https://api.stll.app/v1",
+    ]);
+  });
+
+  test("links every client to the MCP audiences and only them", () => {
+    const origin = "https://api.stll.app";
+    const everyClient = buildEveryClientOAuthResources(origin);
+    const api = buildApiOAuthResource(origin);
+    expect(buildBetterAuthOAuthResources(origin)).toEqual([
+      ...everyClient,
+      api,
+    ]);
+    expect(everyClient.map(({ identifier }) => identifier)).not.toContain(
+      api.identifier,
     );
+    for (const resource of buildBetterAuthOAuthResources(origin)) {
+      expect(isEveryClientOAuthResource(resource)).toBe(
+        resource.identifier !== api.identifier,
+      );
+    }
+  });
+
+  test("the API resource is told apart however the deployment's base URL is shaped", () => {
+    // A base under a path moves the identifier; the classification holds.
+    for (const base of [
+      "https://host.example",
+      "https://host.example/stella",
+    ]) {
+      const resources = buildBetterAuthOAuthResources(base);
+      expect(
+        resources.filter((resource) => !isEveryClientOAuthResource(resource)),
+      ).toEqual([buildApiOAuthResource(base)]);
+    }
+  });
+
+  test("the API resource grants its route scopes plus the protocol scopes", () => {
+    expect(buildApiOAuthResource("https://api.stll.app")).toEqual({
+      allowedScopes: [
+        ...API_OAUTH_RESOURCE_SCOPES,
+        ...MCP_OAUTH_PROTOCOL_SCOPES,
+      ],
+      identifier: "https://api.stll.app/v1",
+      name: API_OAUTH_RESOURCE_NAME,
+    });
   });
 
   test("accepts only a credential-free HTTPS origin", () => {

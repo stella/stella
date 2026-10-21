@@ -56,11 +56,14 @@ import { panic, Result } from "better-result";
 import { type SQL, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { linkOwnNativeClientResources } from "../lib/auth/oauth-own-client-links";
 import { assertBetterAuthOAuthPolicyCensus } from "../lib/db/better-auth-oauth-policy-census";
 import { executedRows } from "../lib/db/executed-rows";
 import { isRecord } from "../lib/type-guards";
 import {
   buildBetterAuthOAuthResources,
+  buildEveryClientOAuthResources,
+  isEveryClientOAuthResource,
   releasedOAuthResourceNames,
 } from "../mcp/resource-policy-contract";
 import {
@@ -297,9 +300,13 @@ const reconcileStoredResources = async (
   const moves = changes.flatMap(({ identifier: from, removed }) =>
     removed.flatMap((scope) =>
       expectedResources
+        // A consent only ever gains an MCP audience: the API resource belongs
+        // to stella's own apps alone, whatever scopes it shares.
         .filter(
-          ({ allowedScopes, identifier }) =>
-            identifier !== from && allowedScopes.includes(scope),
+          (resource) =>
+            resource.identifier !== from &&
+            isEveryClientOAuthResource(resource) &&
+            resource.allowedScopes.includes(scope),
         )
         .map(({ identifier: to }) => ({ from, scope, to })),
     ),
@@ -372,11 +379,13 @@ const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
     const linked = await backfillOAuthClients(
       transaction,
       CLIENT_PAGE_SIZE,
-      expectedResources,
+      buildEveryClientOAuthResources(origin),
     );
     if (Result.isError(linked)) {
       throw linked.error;
     }
+
+    await linkOwnNativeClientResources(transaction, origin);
 
     await connection.execute("COMMIT");
   } catch (error: unknown) {

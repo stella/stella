@@ -1,0 +1,44 @@
+{
+  "tabs": {
+    "chat": "Pokalbis",
+    "tasks": "Užduotys",
+    "matters": "Bylos",
+    "settings": "Nustatymai"
+  },
+  "chat": {
+    "description": "Turėkite vykdomą darbą po ranka ir tęskite bet kuriame įrenginyje.",
+    "emptyTitle": "Pokalbių dar nėra",
+    "emptyDescription": "Čia bus rodomi nauji pokalbiai ir naujausios gijos."
+  },
+  "tasks": {
+    "description": "Matykite, kam reikia dėmesio, neatidarydami visos darbo erdvės.",
+    "emptyTitle": "Atvirų užduočių nėra",
+    "emptyDescription": "Čia bus rodomos priskirtos ir artėjančios užduotys."
+  },
+  "matters": {
+    "description": "Raskite bylą ir greitai susipažinkite su svarbiausiu kontekstu.",
+    "emptyTitle": "Bylų dar nėra",
+    "emptyDescription": "Čia bus rodomos jūsų naujausios bylos.",
+    "loadFailed": "Nepavyko įkelti jūsų bylų.",
+    "retry": "Bandyti dar kartą"
+  },
+  "signIn": {
+    "title": "Prisijunkite prie stella",
+    "description": "Įveskite savo stella serverio adresą. Prisijungimą patvirtinsite naršyklėje.",
+    "serverLabel": "Serverio adresas",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "Tęsti",
+    "sessionEnded": "Jūsų sesija baigėsi. Prisijunkite dar kartą.",
+    "errors": {
+      "address": "Įveskite https adresą, pavyzdžiui, stella.example.com.",
+      "unreachable": "Šiuo adresu neatsakė joks stella serveris.",
+      "denied": "Prisijungimas nebuvo patvirtintas.",
+      "failed": "Prisijungimas nebuvo baigtas. Bandykite dar kartą."
+    }
+  },
+  "settings": {
+    "accountTitle": "Paskyra",
+    "server": "Serveris",
+    "signOut": "Atsijungti"
+  }
+}

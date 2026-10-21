@@ -28,40 +28,77 @@ export const EmptyStateScreen = ({
       style={[styles.screen, { backgroundColor: colors.background }]}
     >
       <ScrollView contentContainerStyle={styles.content} style={styles.screen}>
-        <View style={styles.heading}>
-          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-          <Text style={[styles.description, { color: colors.muted }]}>
-            {description}
-          </Text>
-        </View>
-
+        <ScreenHeading description={description} title={title} />
         {children}
-
-        <View
-          style={[
-            styles.emptyState,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            {emptyTitle}
-          </Text>
-          <Text style={[styles.emptyDescription, { color: colors.muted }]}>
-            {emptyDescription}
-          </Text>
-        </View>
+        <EmptyCard description={emptyDescription} title={emptyTitle} />
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
+export const ScreenHeading = ({
+  description,
+  title,
+}: {
+  description?: string | undefined;
+  title: string;
+}) => {
+  const colors = useAppColors();
+
+  return (
+    <View style={styles.heading}>
+      <Text
+        accessibilityRole="header"
+        style={[styles.title, { color: colors.text }]}
+      >
+        {title}
+      </Text>
+      {description === undefined ? null : (
+        <Text style={[styles.description, { color: colors.muted }]}>
+          {description}
+        </Text>
+      )}
+    </View>
+  );
+};
+
+export const EmptyCard = ({
+  children,
+  description,
+  title,
+}: React.PropsWithChildren<{ description: string; title: string }>) => {
+  const colors = useAppColors();
+
+  return (
+    <View
+      style={[
+        styles.emptyState,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
+      <Text style={[styles.emptyDescription, { color: colors.muted }]}>
+        {description}
+      </Text>
+      {children}
+    </View>
+  );
+};
+
+export const screenStyles = StyleSheet.create({
   content: {
     flexGrow: 1,
     gap: 24,
     padding: 20,
     paddingTop: 28,
   },
+  screen: {
+    flex: 1,
+  },
+});
+
+const styles = StyleSheet.create({
+  ...screenStyles,
   description: {
     fontSize: 16,
     lineHeight: 23,
@@ -77,6 +114,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     flex: 1,
+    gap: 8,
     justifyContent: "center",
     minHeight: 260,
     padding: 32,
@@ -84,13 +122,9 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: "600",
-    marginBottom: 8,
   },
   heading: {
     gap: 8,
-  },
-  screen: {
-    flex: 1,
   },
   title: {
     fontSize: 34,
