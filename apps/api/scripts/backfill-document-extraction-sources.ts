@@ -57,6 +57,7 @@ while (true) {
     .orderBy(entities.id)
     .limit(ENTITY_PAGE_SIZE)
     .as("entity_page");
+  // db-await-in-loop: keyset page read; each page resumes after the previous page's last entity
   const rows = await rootDb
     .select({
       entityId: entityPage.entityId,
@@ -114,6 +115,7 @@ while (true) {
   }
 
   if (write && pageRequests.length > 0) {
+    // db-await-in-loop: one bounded insert per page, capped by ENTITY_PAGE_SIZE
     const runIds = await requestNativeExtractionRunsAsOwner(pageRequests);
     await Promise.all(runIds.map(enqueueDocumentProcessingRun));
   }
