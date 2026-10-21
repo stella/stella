@@ -81,6 +81,16 @@ checks:
       bun test --timeout 12000 --preload ./apps/api/src/tests/setup-env.ts
       apps/api/scripts/*.test.ts
 
+  - name: API test timeout guard
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: api_test_timeout_guard
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/API test timeout guard')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_api_test_timeout_guard != 'true') }}
+    run: |
+      bun test scripts/api-test-timeout-guard.test.ts
+      bun scripts/api-test-timeout-guard.ts
+
   - name: Test CLI runtime package parity
     env:
       CI_CHECK_KIND: CONTEXTUAL
