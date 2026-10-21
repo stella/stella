@@ -459,6 +459,18 @@ const usageProblems = (usage: TokenUsage | undefined): string[] => {
   return problems;
 };
 
+type ExpectedUsage = NonNullable<ProviderWireCassette["expect"]["usage"]>;
+
+/** Whether `reported` is other than the usage a cassette expects; reasoning
+ *  is compared where the cassette states it. */
+const usageDiffers = (expected: ExpectedUsage, reported: TokenUsage): boolean =>
+  reported.promptTokens !== expected.promptTokens ||
+  reported.completionTokens !== expected.completionTokens ||
+  reported.totalTokens !== expected.totalTokens ||
+  (expected.reasoningTokens !== undefined &&
+    reported.completionTokensDetails?.reasoningTokens !==
+      expected.reasoningTokens);
+
 /**
  * A provider that reported usage before the run failed billed it: the run
  * error carries exactly that, and no usage the wire never reported.
@@ -476,12 +488,7 @@ const runErrorUsageProblems = (
       : [{ expected: null, got: failed.usage }];
   }
   const problems: unknown[] = usageProblems(failed.usage);
-  if (
-    failed.usage !== undefined &&
-    (failed.usage.promptTokens !== expected.promptTokens ||
-      failed.usage.completionTokens !== expected.completionTokens ||
-      failed.usage.totalTokens !== expected.totalTokens)
-  ) {
+  if (failed.usage !== undefined && usageDiffers(expected, failed.usage)) {
     problems.push({ expected, got: failed.usage });
   }
   return problems;
@@ -598,9 +605,7 @@ export const findWireContractViolations = ({
       if (
         expected.usage !== undefined &&
         reported !== undefined &&
-        (reported.promptTokens !== expected.usage.promptTokens ||
-          reported.completionTokens !== expected.usage.completionTokens ||
-          reported.totalTokens !== expected.usage.totalTokens)
+        usageDiffers(expected.usage, reported)
       ) {
         usage.push({ expected: expected.usage, got: reported });
       }

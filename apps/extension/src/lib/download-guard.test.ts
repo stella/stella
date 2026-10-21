@@ -10,6 +10,7 @@ import {
   judgeDownload,
   recordDownloadNotice,
   loadDownloadScope,
+  setDownloadScope,
   takeDownloadNotices,
 } from "./download-guard";
 
@@ -128,6 +129,10 @@ const installFakeChrome = ({
       userTabIds: [1],
     },
   };
+  // The guard keeps its owners in module state for the whole process, and
+  // test files share one: another file's containment change would otherwise
+  // outlive it. Publish the owners this session stores, as the worker does.
+  setDownloadScope({ contained: [3], user: [1] });
   Object.defineProperty(globalThis, "chrome", {
     configurable: true,
     value: {

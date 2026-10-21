@@ -201,7 +201,19 @@ exec '${process.execPath}' "$@"
           source + extra,
         );
       } else {
-        expect(fixed.exitCode).not.toBe(0);
+        // Preparation errors stop the step; a fix its project rejects only
+        // drops the lint rewrites, so formatting and generators still run.
+        if (failure === "prepare") {
+          expect(fixed.exitCode).not.toBe(0);
+        } else {
+          expect(
+            fixed.exitCode,
+            fixed.stdout.toString() + fixed.stderr.toString(),
+          ).toBe(0);
+          expect(fixed.stdout.toString()).toContain(
+            "::warning title=Autofix lint fixes dropped::",
+          );
+        }
         expect(readFileSync(path.join(root, "changed.ts"), "utf-8")).toBe(
           source + extra,
         );
@@ -242,10 +254,12 @@ exec '${process.execPath}' "$@"
         const rewritten = readFileSync(path.join(root, "changed.ts"), "utf-8");
         expect(rewritten).not.toBe(source);
         expect(generated).toBe(rewritten);
-      } else if (failure === "unfixed") {
-        expect(generated).toBe(source + extra);
-      } else {
+      } else if (failure === "prepare") {
         expect(generated).toBe("fixture");
+      } else {
+        // Unfixed sources and rejected fixes both regenerate from the
+        // byte-identical source.
+        expect(generated).toBe(source + extra);
       }
       expect(readFileSync(path.join(root, "unchanged.ts"), "utf-8")).toBe(
         source,
