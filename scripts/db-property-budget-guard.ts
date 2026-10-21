@@ -1,5 +1,5 @@
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 const API_TEST_GLOB = "apps/api/src/**/*.test.ts";
 
@@ -34,14 +34,16 @@ const isDatabaseBacked = (
 ) =>
   DATABASE_SUITE_NAME.test(relativePath) ||
   DATABASE_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
-  parsed.statements.some(
-    (statement) =>
-      ts.isImportDeclaration(statement) &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      DATABASE_PROVIDER_IMPORTS.some((pattern) =>
-        pattern.test((statement.moduleSpecifier as ts.StringLiteral).text),
-      ),
-  );
+  parsed.statements.some((statement) => {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      return false;
+    }
+    const specifier = statement.moduleSpecifier.text;
+    return DATABASE_PROVIDER_IMPORTS.some((pattern) => pattern.test(specifier));
+  });
 
 const collectBindings = (parsed: ts.SourceFile): PropertyBindings => {
   const bindings: PropertyBindings = {

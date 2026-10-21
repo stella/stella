@@ -46,6 +46,7 @@ import {
   OUTPUT_ORDER,
   type ScopeOutput,
 } from "./ci-plan-scope";
+import { prHeavyJobs } from "./ci-pr-jobs";
 import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { GENERATORS } from "./generated-files";
@@ -283,47 +284,8 @@ const jobIf = (job: unknown) =>
 
 const ciJobs = workflowJobs(workflow);
 
-// What the planner's own derivation step publishes as pr_heavy_jobs.
-const derivePrHeavyJobs = () => {
-  const { steps } = v.parse(
-    v.object({
-      steps: v.array(
-        v.looseObject({
-          id: v.optional(v.string()),
-          run: v.optional(v.string()),
-        }),
-      ),
-    }),
-    ciJobs["ci-plan"],
-  );
-  const script = v.parse(
-    v.string(),
-    steps.find(({ id }) => id === "pr-heavy-plan")?.run,
-  );
-  const runnerTemp = mkdtempSync(nodePath.join(tmpdir(), "pr-heavy-plan-"));
-  try {
-    writeFileSync(nodePath.join(runnerTemp, "ci-workflow.yml"), workflow);
-    const output = nodePath.join(runnerTemp, "output");
-    writeFileSync(output, "");
-    const result = Bun.spawnSync(["ruby", "-e", script], {
-      cwd: runnerTemp,
-      env: { ...process.env, GITHUB_OUTPUT: output, RUNNER_TEMP: runnerTemp },
-    });
-    if (result.exitCode !== 0) {
-      panic(`PR heavy-job derivation failed: ${result.stderr.toString()}`);
-    }
-    const published = /^pr_heavy_jobs=(.*)$/u.exec(
-      readFileSync(output, "utf-8").trim(),
-    )?.[1];
-    return v.parse(
-      v.array(v.string()),
-      JSON.parse(published ?? panic("No pr_heavy_jobs output")),
-    );
-  } finally {
-    rmSync(runnerTemp, { recursive: true, force: true });
-  }
-};
-const PR_HEAVY_JOBS = derivePrHeavyJobs();
+// The planner and tests share the dependency-closure owner.
+const PR_HEAVY_JOBS = prHeavyJobs({ jobs: ciJobs });
 const releaseJobs = workflowJobs(
   readFileSync(
     new URL("../.github/workflows/release.yml", import.meta.url),
@@ -615,13 +577,15 @@ const jobScopes = v.parse(
 );
 
 /**
- * What a heavy job reads besides its scope once ci-plan succeeded: a pull
- * request's heavy-suite gate passed, and any other event skipped it.
+ * What a gated job reads besides its scope once ci-plan and the generated
+ * sources succeeded: a pull request's gate passed, and any other event
+ * skipped it.
  */
 const heavyGateContext = (event: string) => ({
   values: {
     "github.event_name": event,
     "needs.ci-plan.result": "success",
+    "needs.generated-sources.result": "success",
     "needs.pr-heavy-gate.result":
       event === EVENT.pullRequest ? "success" : "skipped",
   },
@@ -1122,10 +1086,6 @@ test("the result gate evaluates every job in the workflow", () => {
 
 test("each job's plan scope is the ci-plan output its `if:` selects it by", () => {
   const declaredAdditionalScopes = {
-    "ci-tests": [
-      "package_checks_required",
-      "The planned shard matrix only narrows ci-tests; package checks still decide whether it may run.",
-    ],
     "service-suites": [
       "corpus_suites_required",
       "Corpus changes start the shared service job without opting PRs into Postgres or Valkey steps.",
@@ -2034,29 +1994,23 @@ test("a skipped plan passes only while the pull request is still a draft", () =>
     }),
   ).toBe(0);
 
-  // A push to a draft, then marking it ready at once: the ready run starts
-  // first and is cancelled by the draft run queued after it, whose payload
-  // still says draft and whose plan skips. The cancelled run may pass, but
-  // the run that stands must not certify a ready pull request unchecked.
-  const cancelledReadyRun = Object.fromEntries(
-    resultJob.needs.map((job) => [job, "cancelled"]),
+  // A push to a draft, then marking it ready at once: the draft run's
+  // payload still says draft and its plan skips. It must not certify a ready
+  // pull request unchecked, and since re-running it replays the draft event,
+  // it points at a fresh run instead of a re-run.
+  const staleDraftOptions: EvaluateResultOptions = {
+    event,
+    results: skippedPlan,
+    suiteDepth: "",
+    liveDraft: false,
+  };
+  const staleDraft = onlyOutcome(
+    evaluateResults([staleDraftOptions], (item) => item),
   );
-  expect(
-    evaluateResult({
-      event,
-      results: cancelledReadyRun,
-      liveDraft: false,
-      cancellationEvidence: "superseded",
-    }),
-  ).toBe(0);
-  expect(
-    evaluateResult({
-      event,
-      results: skippedPlan,
-      suiteDepth: "",
-      liveDraft: false,
-    }),
-  ).toBe(1);
+  expect(staleDraft.exitCode).toBe(1);
+  expect(staleDraft.stdout).toContain("Re-running this run cannot start CI");
+  expect(staleDraft.stdout).toContain("push a commit");
+  expect(staleDraft.stdout).not.toContain("re-run CI Checks");
 
   // An unanswered lookup is not a draft either.
   expect(evaluateResult({ event, results: skippedPlan, suiteDepth: "" })).toBe(
@@ -2267,6 +2221,7 @@ test("desktop Rust lint is required on PRs and every merge-group depth", () => {
         v.looseObject({
           run: v.optional(v.string()),
           if: v.optional(v.string()),
+          env: v.optional(v.record(v.string(), v.unknown())),
         }),
       ),
     }),
@@ -2278,8 +2233,53 @@ test("desktop Rust lint is required on PRs and every merge-group depth", () => {
   ]);
   const clippy = job.steps.find(({ run }) => run?.includes("cargo clippy"));
   expect(clippy?.run).toContain("--workspace --all-targets");
-  expect(clippy?.run).toContain("--locked -- -D warnings");
+  expect(clippy?.run).toEndWith(" -- -D warnings");
+  expect(clippy?.run && lockedOfflineCargo(clippy.run, clippy.env)).toBe(true);
   expect(clippy?.if).toBeUndefined();
+});
+
+// Cargo's own flags (before ` -- `) must pin the lockfile and keep cargo off
+// the network: `--frozen`, or `--locked` with `--offline` or
+// CARGO_NET_OFFLINE=true (inline or in the step env).
+const lockedOfflineCargo = (
+  run: string,
+  env: Readonly<Record<string, unknown>> = {},
+): boolean => {
+  const [cargoPart = ""] = run.split(" -- ");
+  const flags = new Set(cargoPart.split(/\s+/u));
+  const stepOffline = env["CARGO_NET_OFFLINE"];
+  const offlineEnv =
+    stepOffline === true ||
+    stepOffline === "true" ||
+    /(?:^|\s)CARGO_NET_OFFLINE=["']?true["']?\s/u.test(cargoPart);
+  return (
+    flags.has("--frozen") ||
+    (flags.has("--locked") && (flags.has("--offline") || offlineEnv))
+  );
+};
+
+test("desktop Rust lint contract accepts only locked offline cargo", () => {
+  const base = "cargo clippy --workspace --all-targets";
+  expect(lockedOfflineCargo(`${base} --frozen -- -D warnings`)).toBe(true);
+  expect(lockedOfflineCargo(`${base} --locked --offline -- -D warnings`)).toBe(
+    true,
+  );
+  expect(
+    lockedOfflineCargo(`${base} --locked -- -D warnings`, {
+      CARGO_NET_OFFLINE: "true",
+    }),
+  ).toBe(true);
+  expect(
+    lockedOfflineCargo(
+      `CARGO_NET_OFFLINE=true ${base} --locked -- -D warnings`,
+    ),
+  ).toBe(true);
+  expect(lockedOfflineCargo(`${base} --locked -- -D warnings`)).toBe(false);
+  expect(lockedOfflineCargo(`${base} --offline -- -D warnings`)).toBe(false);
+  expect(
+    lockedOfflineCargo(`${base} -- -D warnings`, { CARGO_NET_OFFLINE: "true" }),
+  ).toBe(false);
+  expect(lockedOfflineCargo(`${base} -- -D warnings --frozen`)).toBe(false);
 });
 
 test("every bounded-install implementation and fixture selects Windows", () => {
@@ -2703,8 +2703,10 @@ test("a manual run supersedes only an older manual run on the same branch", () =
   expect(concurrency.group).toContain(
     "github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref)",
   );
+  // A draft run has its own group: queued after the ready run of the same
+  // head, it would otherwise cancel the only run that can prove it.
   expect(concurrency.group).toContain(
-    "format('pr-{0}', github.event.pull_request.number || github.ref)",
+    "format('pr-{0}{1}', github.event.pull_request.number || github.ref, github.event.pull_request.draft && '-draft' || '')",
   );
   expect(concurrency.group).toContain("format('run-{0}', github.run_id)");
 });
@@ -6375,19 +6377,39 @@ test("API planning only loads dependencies after installation and emits install-
   const directory = mkdtempSync(nodePath.join(tmpdir(), "api-plan-output-"));
   const output = nodePath.join(directory, "output");
   try {
-    for (const [event, packages, unknown, selected, shards, expected] of [
-      ["pull_request", "false", "false", "", "", "0"],
-      ["pull_request", "true", "false", "", "", "3"],
-      ["pull_request", "false", "true", "", "", "3"],
-      ["merge_group", "true", "false", "", "", "3"],
-      ["workflow_dispatch", "true", "false", "", "", "3"],
+    for (const [
+      event,
+      packages,
+      unknown,
+      selectedRequired,
+      selected,
+      shards,
+      expected,
+    ] of [
+      ["pull_request", "false", "false", "", "", "", "0"],
+      ["pull_request", "true", "false", "", "", "", "3"],
+      // Without package checks no API test runs, even when the API scope is
+      // unknown: ci_tests_required is the one gate of ci-tests.
+      ["pull_request", "false", "true", "", "", "", "0"],
+      ["merge_group", "true", "false", "", "", "", "3"],
+      ["workflow_dispatch", "true", "false", "", "", "", "3"],
       [
         "pull_request",
         "true",
         "false",
+        "true",
         '{"shard":["api-1","rest-web"]}',
         "1",
         "1",
+      ],
+      [
+        "pull_request",
+        "true",
+        "false",
+        "",
+        '{"shard":["api-1","rest-web"]}',
+        "1",
+        "3",
       ],
     ]) {
       writeFileSync(output, "");
@@ -6400,6 +6422,7 @@ test("API planning only loads dependencies after installation and emits install-
             EVENT_NAME: event,
             PACKAGE_CHECKS_REQUIRED: packages,
             API_SCOPE_UNKNOWN: unknown,
+            SELECTED_REQUIRED: selectedRequired,
             SELECTED_MATRIX: selected,
             SELECTED_SHARDS: shards,
             SELECTED_FILES: selected ? "src/a.test.ts\nsrc/b.test.ts" : "",
@@ -6411,10 +6434,19 @@ test("API planning only loads dependencies after installation and emits install-
       expect(result.exitCode, result.stderr.toString()).toBe(0);
       const values = readFileSync(output, "utf-8");
       expect(values).toContain(`api_test_shards=${String(expected)}\n`);
-      if (selected) {
-        expect(values).toContain(`ci_tests_matrix=${selected}\n`);
+      if (selectedRequired) {
+        expect(values).toContain(`ci_tests_required=${selectedRequired}\n`);
+        expect(values).toContain(`ci_tests_matrix=${String(selected)}\n`);
         expect(values).toContain(
           "api_test_files<<API_TEST_FILES_END\nsrc/a.test.ts\nsrc/b.test.ts\nAPI_TEST_FILES_END\n",
+        );
+      } else if (packages !== "true") {
+        expect(values).toContain("ci_tests_required=false\n");
+        expect(values).toContain('ci_tests_matrix={"shard":["rest-web"]}\n');
+      } else if (selected) {
+        expect(values).toContain("ci_tests_required=true\n");
+        expect(values).toContain(
+          'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}\n',
         );
       }
     }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 const apiRoot = path.resolve(import.meta.dir, "../../..");
 const decisionOwner = "src/lib/workflow/decisions/decide.ts";

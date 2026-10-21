@@ -87,6 +87,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["local:module-loader"],
   },
   {
+    path: "apps/api/scripts/run-postgres-tests.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Creates and drops per-worker test databases on the Postgres server DATABASE_URL names.",
+    transports: ["global:Bun.SQL"],
+  },
+  {
     path: "apps/api/scripts/ai-provider-cassette-probe.ts",
     class: "vendor-sdk",
     reason:
@@ -1174,24 +1181,10 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:node:http"],
   },
   {
-    path: "packages/cli/src/auth/oauth-client-registration.ts",
+    path: "packages/cli/src/api-fetch.ts",
     class: "package-owned-client",
     reason:
-      "Standalone CLI owns OAuth client registration requests to discovered endpoints.",
-    transports: ["global:fetch"],
-  },
-  {
-    path: "packages/cli/src/auth/oauth-metadata.ts",
-    class: "package-owned-client",
-    reason:
-      "Standalone CLI owns OAuth authorization-server metadata discovery.",
-    transports: ["global:fetch"],
-  },
-  {
-    path: "packages/cli/src/auth/token-exchange.ts",
-    class: "package-owned-client",
-    reason:
-      "Standalone CLI owns OAuth token exchange and refresh requests to discovered endpoints.",
+      "Standalone CLI stamps its client identity on API requests through the shared fetch owner.",
     transports: ["global:fetch"],
   },
   {
@@ -1202,18 +1195,11 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
-    path: "packages/cli/src/compatibility.ts",
-    class: "package-owned-client",
-    reason:
-      "Standalone CLI owns compatibility discovery against the configured server.",
-    transports: ["global:fetch"],
-  },
-  {
     path: "packages/cli/src/mcp-client.ts",
     class: "package-owned-client",
     reason:
       "Standalone CLI owns MCP transport and observes response evidence and action-admission refusals.",
-    transports: ["global:fetch", "module:@modelcontextprotocol/client"],
+    transports: ["module:@modelcontextprotocol/client"],
   },
   {
     path: "packages/cli/src/upload-document.ts",

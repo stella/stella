@@ -236,7 +236,7 @@ test("the CI guard runs after Bun setup under the checkout trust condition", () 
   );
   const checkout = planJob.steps.find((step) => step["name"] === "Checkout");
   const setupBun = planJob.steps.find(
-    (step) => step["name"] === "Setup Bun for dependency scope",
+    (step) => step["name"] === "Setup Bun for planning",
   );
   const guard = planJob.steps.find(
     (step) => step["name"] === "Check tracked repository hygiene",

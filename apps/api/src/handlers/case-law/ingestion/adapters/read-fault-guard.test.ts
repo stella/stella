@@ -57,6 +57,7 @@ import {
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
+  czUohsFixture,
   czUsFixture,
   euEcjFixture,
   huBhgyFixture,
@@ -86,6 +87,7 @@ import {
   type RefusalOutcome,
 } from "@/api/tests/helpers/read-fault-drivers";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import { readPublisherText } from "./publisher-read";
 
@@ -98,6 +100,7 @@ const READ_FAULT_COVERAGE = {
   [ADAPTER_KEYS.CZ_NSS]: czNssFixture,
   [ADAPTER_KEYS.CZ_US]: czUsFixture,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
+  [ADAPTER_KEYS.CZ_UOHS]: czUohsFixture,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
   [ADAPTER_KEYS.SK_US]: skUsFixture,
   [ADAPTER_KEYS.PL_COURTS]: plCourtsFixture,
@@ -330,7 +333,7 @@ test("a read through readPublisherText surfaces every fault", async () => {
     const outcome = await readPublisherText(PUBLISHER, {
       adapterKey: ADAPTER_KEYS.CZ_NSS,
       fetchStage: "listing",
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
     return outcome.type === "present"
       ? { fulltext: outcome.value }
@@ -366,7 +369,7 @@ const servedDocumentAndNotice = () => {
 const readInit = {
   adapterKey: ADAPTER_KEYS.CZ_NSS,
   fetchStage: "listing",
-  timeoutMs: 1000,
+  timeoutMs: HAPPY_PATH_TIMEOUT_MS,
 } as const;
 
 const refusalOutcomes = async (

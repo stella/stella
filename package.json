@@ -155,7 +155,6 @@
     "@stll/typescript-config": "workspace:^0.0.0",
     "@tanstack/eslint-plugin-query": "catalog:",
     "@tanstack/eslint-plugin-router": "catalog:",
-    "@typescript/native": "npm:typescript@7.0.2",
     "better-result": "catalog:",
     "bun-types": "catalog:",
     "cheerio": "^1.2.0",
@@ -178,6 +177,7 @@
     "tailwindcss": "catalog:",
     "turbo": "2.11.7",
     "typescript": "catalog:",
+    "typescript6": "catalog:",
     "valibot": "catalog:"
   },
   "resolutions": {
@@ -199,6 +199,7 @@
     "http-cache-semantics": "4.3.0",
     "ioredis": "6.0.0",
     "ip-address": "10.7.2",
+    "launch-editor": "2.14.2",
     "lucide-react": "1.41.0",
     "mailauth/joi": "18.2.9",
     "mailauth/nodemailer": "10.0.13",
@@ -289,7 +290,8 @@
     "tailwindcss": "4.3.3",
     "temporal-polyfill": "1.0.5",
     "tsdown": "0.23.0",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
+    "typescript6": "npm:typescript@6.0.3",
     "use-intl": "4.14.9",
     "valibot": "1.5.0",
     "vite": "8.3.4",
@@ -314,6 +316,9 @@
       "@types/react-dom": "^19.3.0",
       "react": "^19.3.0",
       "react-dom": "^19.3.0"
+    },
+    "ts6": {
+      "typescript": "6.0.3"
     }
   },
   "patchedDependencies": {
