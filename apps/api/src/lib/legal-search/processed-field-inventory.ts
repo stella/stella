@@ -1,3 +1,4 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: declarations about parser output; no parser reads this module.
 /**
  * What each case-law source's parsed decision carries, field by field.
@@ -367,6 +368,15 @@ export const PROCESSED_FIELD_INVENTORY = {
       "the PDF parser has no paragraph-number handling; the recorded PDFs have not been checked for numbered reasoning",
       unrecordedEvidence(
         "the recorded PDFs have not been checked for numbered reasoning",
+      ),
+    ),
+  },
+  [ADAPTER_KEYS.CZ_UOHS]: {
+    "court-paragraph-numbers": providedField(
+      PARAGRAPH_NUMBERS_FROM_TEXT,
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-R0137.pdf",
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-S0383.pdf",
       ),
     ),
   },

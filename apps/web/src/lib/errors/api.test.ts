@@ -47,6 +47,10 @@ describe("AI API failures", () => {
     ],
     [AI_FAILURE_CODES.unknown, messages.errors.apiCodes.aiUnknown],
     [
+      AI_FAILURE_CODES.deadline_exceeded,
+      messages.errors.apiCodes.aiDeadlineExceeded,
+    ],
+    [
       AI_FAILURE_CODES.provider_task_unsupported,
       messages.errors.apiCodes.aiProviderTaskUnsupported,
     ],

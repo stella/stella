@@ -20,6 +20,7 @@ import {
   strandSandboxHostWorkForTest,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 registerSandboxTestHygiene();
 
@@ -1251,7 +1252,7 @@ describe("awaitSandboxAdmissionIdle", () => {
 
     let thrown: unknown;
     try {
-      await awaitSandboxAdmissionIdle({ timeoutMs: 250 });
+      await awaitSandboxAdmissionIdle({ timeoutMs: 250 }); // timeout under test
     } catch (error) {
       thrown = error;
     }
@@ -1268,6 +1269,6 @@ describe("awaitSandboxAdmissionIdle", () => {
 
     // The strand was evicted, so a subsequent drain resolves instead of
     // cascading the poison into the next test or file.
-    await awaitSandboxAdmissionIdle({ timeoutMs: 250 });
+    await awaitSandboxAdmissionIdle({ timeoutMs: HAPPY_PATH_TIMEOUT_MS });
   });
 });
