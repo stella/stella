@@ -42,6 +42,7 @@ const BLOCK_MARKUP_LINE =
   /^(?: {4}|\t|[^\S\r\n]*(?:[#>|]|[-*+]\s|\d+[.)]\s|`{3}|~{3}))/u;
 const MAINTENANCE_CHANGELOG =
   "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n";
+const PACKAGES_HEADING = "## Packages";
 const CHANGESET_DIRECTORY = ".changeset";
 /** Declares which files a version run generates; the CI gate reads the same. */
 const CHANGESET_POLICY_PATH = "scripts/changeset-policy.json";
@@ -65,7 +66,8 @@ type StableVersion = {
 /**
  * What GitHub knows about the release VERSION names. A version commit that was
  * never tagged is superseded by the next one: it is not a release, so it gets
- * no publication record.
+ * no publication record and no page of its own. Its notes fold into the next
+ * release's changelog, and its changelog file is removed.
  */
 export type PreviousRelease =
   | { kind: "published"; publishedAt: string }
@@ -86,6 +88,11 @@ type PreparedMaintenanceRelease = {
   changelogPath: string;
   /** Names of the `.changeset` entries this run consumed, in read order. */
   changesets: readonly string[];
+  /**
+   * The superseded version's changelog this run folded into the release and
+   * removed; null when the previous version was tagged.
+   */
+  foldedChangelogPath: string | null;
   previousTag: string;
   version: string;
 };
@@ -213,7 +220,73 @@ export const maintenanceChangelog = (
       return `- ${links.join(", ")}: ${excerpt}\n`;
     })
     .join("");
-  return `${MAINTENANCE_CHANGELOG}\n## Packages\n\n${entries}`;
+  return `${MAINTENANCE_CHANGELOG}\n${PACKAGES_HEADING}\n\n${entries}`;
+};
+
+type ChangelogSections = {
+  /** Everything before the packages section, ending in one newline. */
+  body: string;
+  /** The packages section's bullets, one line each, without newlines. */
+  entries: readonly string[];
+};
+
+/**
+ * Splits a changelog note at its packages section. The section holds only the
+ * one-line bullets `maintenanceChangelog` writes; anything else under it is a
+ * hand edit this fold cannot place, so it fails rather than reorder it.
+ */
+const splitChangelog = (markdown: string, name: string): ChangelogSections => {
+  const lines = markdown.replaceAll("\r\n", "\n").split("\n");
+  const headingIndex = lines.findIndex(
+    (line) => line.trimEnd() === PACKAGES_HEADING,
+  );
+  const bodyLines = headingIndex === -1 ? lines : lines.slice(0, headingIndex);
+  const entries =
+    headingIndex === -1
+      ? []
+      : lines.slice(headingIndex + 1).filter((line) => line.trim() !== "");
+  const unplaced = entries.find((line) => !line.startsWith("- "));
+  if (unplaced !== undefined) {
+    throw new MaintenanceReleaseError(
+      `The ${name} changelog holds a line the release cannot fold under ${PACKAGES_HEADING}: ${unplaced}`,
+    );
+  }
+  return { body: `${bodyLines.join("\n").trimEnd()}\n`, entries };
+};
+
+/**
+ * The release note of a cut that supersedes a version never tagged. That
+ * version is not a release, so it keeps no page: its notes become this
+ * release's. A superseded note that shows a change keeps its heading and
+ * media, which the release guard then requires of this release; a maintenance
+ * note stays the maintenance note it is. Package bullets of both follow,
+ * oldest first, with links moved to this release's tag, since the superseded
+ * tag does not exist. Folding is transitive: a superseded note already holds
+ * the notes it superseded.
+ */
+export const foldSupersededChangelog = ({
+  next,
+  superseded,
+  supersededVersion,
+  version,
+}: {
+  /** The note this cut writes on its own, from `maintenanceChangelog`. */
+  next: string;
+  superseded: string;
+  supersededVersion: string;
+  version: string;
+}): string => {
+  const retagged = superseded.replaceAll(
+    `https://github.com/stella/stella/blob/v${supersededVersion}/`,
+    () => `https://github.com/stella/stella/blob/v${version}/`,
+  );
+  const older = splitChangelog(retagged, `v${supersededVersion}`);
+  const newer = splitChangelog(next, `v${version}`);
+  const entries = [...new Set([...older.entries, ...newer.entries])];
+  if (entries.length === 0) {
+    return older.body;
+  }
+  return `${older.body}\n${PACKAGES_HEADING}\n\n${entries.map((entry) => `${entry}\n`).join("")}`;
 };
 
 export const parseStableVersion = (value: string): StableVersion => {
@@ -416,13 +489,20 @@ export const prepareMaintenanceReleaseFiles = ({
   const current = parseStableVersion(readFileSync(versionPath, "utf-8").trim());
   const next = nextPatchVersion(current);
   const previousTag = `v${current.value}`;
-  if (
-    !existsSync(nodePath.join(rootDir, "docs/changelog", `${previousTag}.md`))
-  ) {
+  const previousChangelogPath = `docs/changelog/${previousTag}.md`;
+  const absolutePreviousChangelogPath = nodePath.join(
+    rootDir,
+    previousChangelogPath,
+  );
+  if (!existsSync(absolutePreviousChangelogPath)) {
     throw new MaintenanceReleaseError(
-      `Previous release changelog is missing: docs/changelog/${previousTag}.md`,
+      `Previous release changelog is missing: ${previousChangelogPath}`,
     );
   }
+  const supersededChangelog =
+    previousRelease.kind === "superseded"
+      ? readFileSync(absolutePreviousChangelogPath, "utf-8")
+      : null;
 
   const changelogPath = `docs/changelog/v${next.value}.md`;
   const absoluteChangelogPath = nodePath.join(rootDir, changelogPath);
@@ -460,15 +540,30 @@ export const prepareMaintenanceReleaseFiles = ({
       }
       // VERSION is the commit marker: every dependent file is durable before
       // it advances. Atomic sibling renames prevent truncated files.
+      const changelog = maintenanceChangelog(changesets, next.value);
       writeFile(
         absoluteChangelogPath,
-        maintenanceChangelog(changesets, next.value),
+        supersededChangelog === null
+          ? changelog
+          : foldSupersededChangelog({
+              next: changelog,
+              superseded: supersededChangelog,
+              supersededVersion: current.value,
+              version: next.value,
+            }),
       );
+      // A version that was never tagged publishes no page: its notes now
+      // live in this release's, and the landing changelog lists every file.
+      if (supersededChangelog !== null) {
+        rmSync(absolutePreviousChangelogPath);
+      }
       writeFile(releaseDatesPath, `${JSON.stringify(releaseDates, null, 2)}\n`);
       writeFile(versionPath, `${next.value}\n`);
       return {
         changelogPath,
         changesets: changesets.map(({ file }) => file),
+        foldedChangelogPath:
+          supersededChangelog === null ? null : previousChangelogPath,
         previousTag,
         version: next.value,
       };
@@ -477,6 +572,7 @@ export const prepareMaintenanceReleaseFiles = ({
       versionPath,
       releaseDatesPath,
       absoluteChangelogPath,
+      absolutePreviousChangelogPath,
       emptyChangesetPath,
       ...versionRollbackPaths(rootDir, changesets),
     ],
@@ -773,6 +869,7 @@ const main = async () => {
       nodePath.join(ROOT_DIR, "VERSION"),
       nodePath.join(ROOT_DIR, RELEASE_DATES_PATH),
       nodePath.join(ROOT_DIR, `docs/changelog/v${next.value}.md`),
+      nodePath.join(ROOT_DIR, `docs/changelog/v${current.value}.md`),
       nodePath.join(ROOT_DIR, CHANGESET_DIRECTORY, `release-v${next.value}.md`),
       ...versionRollbackPaths(ROOT_DIR, pending),
     ],
@@ -782,6 +879,11 @@ const main = async () => {
       `maintenance-release: prepared ${prepared.version}`,
       `  VERSION`,
       `  ${prepared.changelogPath}`,
+      ...(prepared.foldedChangelogPath === null
+        ? []
+        : [
+            `  ${prepared.foldedChangelogPath} (removed: never tagged, notes folded into ${prepared.changelogPath})`,
+          ]),
       `  ${RELEASE_DATES_PATH} (${prepared.previousTag}${PREVIOUS_RELEASE_NOTE[previousRelease.kind]})`,
       ...(prepared.changesets.length === 0
         ? []
