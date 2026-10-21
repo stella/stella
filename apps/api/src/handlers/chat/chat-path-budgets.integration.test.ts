@@ -764,7 +764,11 @@ describe("chat path budgets", () => {
     // How many appends a stream takes depends on when batches flush, so the
     // thread-length check holds each append's plan, not their number.
     expectFlatStatements(
-      ({ send }) => [...new Set(send.appendStatements)].toSorted(),
+      ({ send }) =>
+        // Unique after the Set, so no two entries compare equal.
+        [...new Set(send.appendStatements)].toSorted((a, b) =>
+          a < b ? -1 : 1,
+        ),
       budget.statementsPerAppend,
     );
     for (const { send } of [measured.short, measured.long]) {
