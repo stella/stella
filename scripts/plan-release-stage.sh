@@ -23,10 +23,27 @@ commits='[]'
 if [[ -n "${RELEASE_BASE_SHA:-}" ]]; then
   [[ "$RELEASE_BASE_SHA" =~ ^[0-9a-f]{40}$ && "${RELEASE_HEAD_SHA:-}" =~ ^[0-9a-f]{40}$ ]] \
     || { echo '::error::RELEASE_STAGE_PLAN_REFUSED: invalid comparison commits' >&2; exit 1; }
-  git merge-base --is-ancestor "$RELEASE_BASE_SHA" "$RELEASE_HEAD_SHA"
+  base="$RELEASE_BASE_SHA"
+  if [[ "${EVENT_NAME:-}" == merge_group ]]; then
+    # A queue entry is built on its base; any other history is not this group.
+    git merge-base --is-ancestor "$base" "$RELEASE_HEAD_SHA" \
+      || { echo '::error::RELEASE_STAGE_PLAN_REFUSED: queue base is not an ancestor of its head' >&2; exit 1; }
+  else
+    # A pull request's base moves with main; compare from its branch point.
+    base=$(git merge-base "$base" "$RELEASE_HEAD_SHA") \
+      || { echo '::error::RELEASE_STAGE_PLAN_REFUSED: no merge base for the comparison commits' >&2; exit 1; }
+  fi
   # The first-parent queue commits are the identities main fast-forwards to;
   # original PR commits on secondary parents cannot carry the staging receipt.
-  versions=$(git log --first-parent --format=%H "$RELEASE_BASE_SHA..$RELEASE_HEAD_SHA" -- VERSION)
+  versions=$(git log --first-parent --format=%H "$base..$RELEASE_HEAD_SHA" -- VERSION)
   commits=$(jq -Rsc 'split("\n") | map(select(length > 0))' <<< "$versions")
+  # Only a release entry stages its own commit. A VERSION change in any other
+  # entry could never receive staging/verified, so refuse it while planning
+  # instead of waiting out the staging deadline.
+  if [[ "${EVENT_NAME:-}" == merge_group && "$is_release" != true ]] \
+    && grep -Fxq "$RELEASE_HEAD_SHA" <<< "$versions"; then
+    echo '::error::RELEASE_STAGE_PLAN_REFUSED: VERSION changed outside a release pull request' >&2
+    exit 1
+  fi
 fi
 printf 'release_stage_required=%s\nrelease_pr_required=%s\nrelease_version_commits=%s\n' "$required" "$is_release" "$commits"

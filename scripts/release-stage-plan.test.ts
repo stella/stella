@@ -221,6 +221,59 @@ test("release entry plans staging; inherited version identities remain visible t
     );
     expect(invalid.code).toBe(1);
     expect(invalid.error).toContain("RELEASE_STAGE_PLAN_REFUSED");
+
+    // A pull request whose base moved past its branch point compares from
+    // the branch point instead of requiring ancestry.
+    git("checkout", "-qb", "moved-main", base);
+    writeFileSync(nodePath.join(directory, "MAIN.md"), "moved\n");
+    git("add", ".");
+    git("commit", "-qm", "main moves");
+    const movedMain = git("rev-parse", "HEAD");
+    git("checkout", "-q", head);
+    const behind = run(
+      ["bash", nodePath.join(root, "scripts/plan-release-stage.sh")],
+      {
+        cwd: directory,
+        env: {
+          ...env,
+          EVENT_NAME: "pull_request",
+          PR_NUMBER: "8",
+          RELEASE_BASE_SHA: movedMain,
+        },
+      },
+    );
+    expect(behind.code, behind.error).toBe(0);
+    expect(behind.out).toContain(`release_version_commits=["${version}"]\n`);
+
+    // A non-release queue entry that changes VERSION itself can never be
+    // staged, so planning refuses it; the release entry plans staging.
+    writeFileSync(nodePath.join(directory, "VERSION"), "1.0.2\n");
+    git("commit", "-qam", "unreleased version");
+    const versionHead = git("rev-parse", "HEAD");
+    for (const [number, code] of [
+      ["8", 1],
+      ["7", 0],
+    ] as const) {
+      const entry = run(
+        ["bash", nodePath.join(root, "scripts/plan-release-stage.sh")],
+        {
+          cwd: directory,
+          env: {
+            ...env,
+            EVENT_NAME: "merge_group",
+            PR_NUMBER: number,
+            MERGE_GROUP_HEAD_REF: `refs/heads/gh-readonly-queue/main/pr-${number}-${base}`,
+            RELEASE_HEAD_SHA: versionHead,
+          },
+        },
+      );
+      expect(entry.code, entry.error).toBe(code);
+      if (code === 1) {
+        expect(entry.error).toContain(
+          "RELEASE_STAGE_PLAN_REFUSED: VERSION changed outside a release pull request",
+        );
+      }
+    }
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

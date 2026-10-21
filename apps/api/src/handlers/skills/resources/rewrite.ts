@@ -136,6 +136,7 @@ const rewriteSkillResource = createSafeRootHandler(
     const generation = await Result.tryPromise({
       try: async () =>
         await generateTanStackTextForTask({
+          userId: user.id,
           dataClass: "customer",
           admission: configuredModelAdmission({ modelAdmission }),
           deadlineMs: REWRITE_TIMEOUT_MS,

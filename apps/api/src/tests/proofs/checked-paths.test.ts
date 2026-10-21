@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { MODEL_TASKS } from "@stll/ai-catalog";

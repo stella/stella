@@ -73,6 +73,7 @@ const seamDriver = (
             serviceTier: "standard",
             task: "chat",
             tenantWorkspaceIds: [],
+            userId: null,
           }),
         catch: (error: unknown) => error,
       });

@@ -28,7 +28,8 @@ export const generatedInputIdentity = (root: string) => {
     v.object({ version: v.string() }),
     JSON.parse(
       readFileSync(
-        path.join(root, "node_modules/typescript/package.json"),
+        // The generators run on the TypeScript 6 compiler API.
+        path.join(root, "node_modules/typescript6/package.json"),
         "utf-8",
       ),
     ),

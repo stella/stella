@@ -2,14 +2,22 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { isPublicLawRouteEnabled } from "@/lib/public-law-launch";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
-import { isPublicLawRouteEnabled } from "@/lib/public-law-launch";
+import {
+  APP_FRAME_SCOPE,
+  MEMBER_PROVIDER_SCOPES,
+} from "@/routes/-app-frame-scope";
 import { PublicLawShell } from "@/routes/law/-components/public-law-shell";
 
 export const Route = createFileRoute("/law")({
+  staticData: {
+    appFrame: APP_FRAME_SCOPE.none,
+    providerScopes: MEMBER_PROVIDER_SCOPES,
+  },
   beforeLoad: () => {
     if (!isPublicLawRouteEnabled()) {
       throw notFound();
