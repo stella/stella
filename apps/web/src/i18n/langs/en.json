@@ -2708,6 +2708,7 @@
       "aiConfigModelInvalid": "The AI model configuration is invalid. Check the selected models.",
       "aiConfigProviderInvalid": "The AI provider configuration is invalid. Check the provider settings.",
       "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.",
+      "aiDeadlineExceeded": "The AI did not answer in time. Try again in a moment.",
       "aiOutputInvalid": "The AI answer had an unexpected format. Try again.",
       "aiOutputModerated": "The AI provider moderated the output. Rephrase the request or choose another model.",
       "aiProviderTaskUnsupported": "The configured AI provider cannot do this task. Choose a provider that can.",

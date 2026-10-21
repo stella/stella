@@ -7082,7 +7082,7 @@ describe("decision passage court numbers", () => {
           // Intentionally left pending.
         });
       },
-      timeoutMs: 10,
+      timeoutMs: 10, // timeout under test
     });
     const text = `[as held](${passage(EARLIER_ID, "p-4:2")})`;
     await stamper.prepare(text);

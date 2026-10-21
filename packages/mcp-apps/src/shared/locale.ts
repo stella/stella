@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { createTranslator } from "use-intl";
 
-import { normalizeLocale } from "@stll/agent-input";
+import { normalizeLocale } from "@stll/agent-input/locale";
 import messages from "@stll/api-contract/mcp-app-messages";
 import { getUiLocaleDirection, resolveUiLocale } from "@stll/locales";
 

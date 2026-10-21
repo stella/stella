@@ -118,7 +118,7 @@ describe("entity deletion cleanup queue", () => {
     expect(rejection).toBeInstanceOf(TimeoutError);
     expect(rejection).toMatchObject({
       label: "entity-deletion-cleanup.storage-delete",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
     expect(failChunk).toHaveBeenCalledWith(claim, rejection);
   });
@@ -180,7 +180,7 @@ describe("entity deletion cleanup queue", () => {
           throw new TimeoutError({
             label: "entity-deletion-cleanup.queue.get-job",
             message: "queue timed out",
-            timeoutMs: 5,
+            timeoutMs: 5, // timeout under test
           });
         }
       },
