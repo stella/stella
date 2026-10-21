@@ -13,18 +13,39 @@ export const MOBILE_CLIENT_METADATA_PATH =
   "/v1/mcp/oauth/mobile-client-metadata.json" as const;
 
 /**
- * RFC 8252 §7.1 private-use URI scheme: the reverse of a domain stella
- * controls, so no unrelated app plausibly claims it. The app registers it as
- * its only scheme (`apps/mobile/app.json`).
+ * The builds of the app, installable side by side: a development client, an
+ * internal preview, and the store release (`apps/mobile/app.config.ts`).
  */
-export const MOBILE_REDIRECT_SCHEME = "app.stll" as const;
+export const MOBILE_APP_VARIANTS = [
+  "development",
+  "preview",
+  "production",
+] as const;
+
+export type MobileAppVariant = (typeof MOBILE_APP_VARIANTS)[number];
+
+/**
+ * RFC 8252 §7.1 private-use URI schemes: the reverse of a domain stella
+ * controls, so no unrelated app plausibly claims one. Each variant registers
+ * its own, so a sign-in returns to the build that started it even with all
+ * three installed.
+ */
+export const MOBILE_REDIRECT_SCHEMES = {
+  development: "app.stll.dev",
+  preview: "app.stll.preview",
+  production: "app.stll",
+} as const satisfies Record<MobileAppVariant, string>;
 
 /** The path the authorization server redirects to; no screen of the app. */
 export const MOBILE_REDIRECT_PATH = "/oauth/callback" as const;
 
 /** RFC 8252 §7.1: a private-use redirect has a single slash after the scheme. */
-export const MOBILE_REDIRECT_URI =
-  `${MOBILE_REDIRECT_SCHEME}:${MOBILE_REDIRECT_PATH}` as const;
+export const mobileRedirectUri = (variant: MobileAppVariant): string =>
+  `${MOBILE_REDIRECT_SCHEMES[variant]}:${MOBILE_REDIRECT_PATH}`;
+
+/** Every variant's redirect, which the one published client document lists. */
+export const MOBILE_REDIRECT_URIS: readonly string[] =
+  MOBILE_APP_VARIANTS.map(mobileRedirectUri);
 
 export const MOBILE_CLIENT_NAME = "stella mobile" as const;
 
@@ -47,7 +68,7 @@ export type MobileClientMetadataDocument = {
   readonly client_name: typeof MOBILE_CLIENT_NAME;
   readonly application_type: "native";
   readonly grant_types: readonly ["authorization_code", "refresh_token"];
-  readonly redirect_uris: readonly [typeof MOBILE_REDIRECT_URI];
+  readonly redirect_uris: readonly string[];
   readonly response_types: readonly ["code"];
   readonly scope: string;
   readonly token_endpoint_auth_method: "none";
@@ -76,7 +97,7 @@ export const buildMobileClientMetadataDocument = (
   client_name: MOBILE_CLIENT_NAME,
   application_type: "native",
   grant_types: ["authorization_code", "refresh_token"],
-  redirect_uris: [MOBILE_REDIRECT_URI],
+  redirect_uris: MOBILE_REDIRECT_URIS,
   response_types: ["code"],
   scope: MOBILE_SCOPES.join(" "),
   token_endpoint_auth_method: "none",

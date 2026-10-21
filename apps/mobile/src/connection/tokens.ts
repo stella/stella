@@ -1,8 +1,6 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { MOBILE_REDIRECT_URI } from "@stll/api-contract/mobile-client";
-
 import { TokenError } from "./errors";
 import { fetchWithTimeout } from "./http";
 import type { Fetch } from "./http";
@@ -68,6 +66,7 @@ export const redeemAuthorizationCode = async ({
   code,
   codeVerifier,
   fetch,
+  redirectUri,
   resource,
   tokenEndpoint,
 }: {
@@ -75,6 +74,8 @@ export const redeemAuthorizationCode = async ({
   readonly code: string;
   readonly codeVerifier: string;
   readonly fetch: Fetch;
+  /** The redirect the authorization request named; RFC 6749 §4.1.3 requires the same one. */
+  readonly redirectUri: string;
   readonly resource: string;
   readonly tokenEndpoint: string;
 }): Promise<Result<TokenResponse, TokenError>> =>
@@ -83,7 +84,7 @@ export const redeemAuthorizationCode = async ({
     client_id: clientId,
     code,
     code_verifier: codeVerifier,
-    redirect_uri: MOBILE_REDIRECT_URI,
+    redirect_uri: redirectUri,
     resource,
   });
 
