@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { deepEquals } from "bun";
 import { eq } from "drizzle-orm";
 
@@ -21,6 +21,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
@@ -401,7 +402,7 @@ export const resolveTemplateProperties = async ({
     await recordAuditEvent(tx, auditEvents);
   }
 
-  await recreateTemplateDependencies({
+  const recreatedDependencies = await recreateTemplateDependencies({
     tx,
     workspaceId,
     templateProperties,
@@ -410,6 +411,9 @@ export const resolveTemplateProperties = async ({
     recordAuditEvent,
     systemFilePropertyId: systemFileProperty?.id,
   });
+  if (Result.isError(recreatedDependencies)) {
+    return Result.err(recreatedDependencies.error);
+  }
 
   remapLayoutPropertyIds(layout, propertyIdBySourceId);
   prependSystemFileToColumnOrder(layout, systemFileProperty);
@@ -493,7 +497,8 @@ const recreateTemplateDependencies = async ({
   createdPropertySourceIds: ReadonlySet<string>;
   recordAuditEvent: AuditRecorder;
   systemFilePropertyId: string | undefined;
-}): Promise<void> => {
+}): Promise<Result<void, HandlerError>> => {
+  let inputError: HandlerError | undefined;
   const rows = templateProperties.flatMap((templateProperty) => {
     if (!createdPropertySourceIds.has(templateProperty.sourceId)) {
       return [];
@@ -545,9 +550,8 @@ const recreateTemplateDependencies = async ({
         inputs: resolvedEdges,
       });
       if (Result.isError(inputs)) {
-        // The caller already established the workspace system-file invariant.
-        // Failure here means the template remapping violated that invariant.
-        return panic(inputs.error.message);
+        inputError = computedColumnInputHandlerError(inputs.error);
+        return [];
       }
       return inputs.value.map(({ dependsOnPropertyId, condition }) => ({
         workspaceId,
@@ -560,8 +564,12 @@ const recreateTemplateDependencies = async ({
     return resolvedEdges;
   });
 
+  if (inputError) {
+    return Result.err(inputError);
+  }
+
   if (rows.length === 0) {
-    return;
+    return Result.ok(undefined);
   }
 
   await tx
@@ -591,6 +599,7 @@ const recreateTemplateDependencies = async ({
       },
     })),
   );
+  return Result.ok(undefined);
 };
 
 const hasTemplateDependencyCycle = ({

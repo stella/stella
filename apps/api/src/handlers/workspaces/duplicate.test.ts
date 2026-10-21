@@ -572,7 +572,7 @@ describe("duplicateWorkspace", () => {
     );
   });
 
-  test("copies and remaps image thumbnail refs when duplicating content", async () => {
+  test("copies and remaps image thumbnail refs with a tool-less property", async () => {
     requestNativeExtractionRunsMock.mockClear();
     enqueueDocumentProcessingRunMock.mockClear();
     enqueueWorkspaceSearchRepairsMock.mockClear();

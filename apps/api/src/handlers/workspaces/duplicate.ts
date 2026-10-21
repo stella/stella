@@ -446,6 +446,9 @@ const cleanupCopiedS3Keys = async ({
 };
 
 type DuplicatedDependency = typeof propertyDependencies.$inferInsert;
+type DuplicatedProperty = Omit<typeof properties.$inferInsert, "tool"> & {
+  tool: (typeof properties.$inferInsert)["tool"] | null;
+};
 
 /** "Name (n)" when earlier copies exist, else the original name. */
 const duplicatedMatterName = (name: string, earlierCopies: number) =>
@@ -459,7 +462,7 @@ const wireDuplicatedComputedInputs = ({
   dependencies,
   workspaceId,
 }: {
-  newProperties: readonly (typeof properties.$inferInsert)[];
+  newProperties: readonly DuplicatedProperty[];
   dependencies: readonly DuplicatedDependency[];
   workspaceId: DuplicatedDependency["workspaceId"];
 }): Result<DuplicatedDependency[], HandlerError> => {
@@ -468,7 +471,7 @@ const wireDuplicatedComputedInputs = ({
     candidate.id ? [{ id: candidate.id, content: candidate.content }] : [],
   );
   for (const property of newProperties) {
-    if (property.tool.type !== "ai-model") {
+    if (property.tool?.type !== "ai-model") {
       continue;
     }
     if (!property.id) {
