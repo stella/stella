@@ -165,7 +165,16 @@ export const withTypeScriptSession = async <T>(
     const closing = await close();
     return closing.status === "error" ? closing : Result.ok(value);
   } catch (error) {
-    await close();
+    const closing = await close();
+    if (closing.status === "error") {
+      // Both failures stay visible: the run's error and the failed close.
+      throw new TypeScriptApiError({
+        message:
+          "TypeScript 7 session run failed and the session could not close.",
+        capability: closing.error.capability,
+        cause: { run: error, close: closing.error },
+      });
+    }
     throw error;
   }
 };

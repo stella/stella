@@ -6340,7 +6340,9 @@ test("API planning only loads dependencies after installation and emits install-
     ] of [
       ["pull_request", "false", "false", "", "", "", "0"],
       ["pull_request", "true", "false", "", "", "", "3"],
-      ["pull_request", "false", "true", "", "", "", "3"],
+      // Without package checks no API test runs, even when the API scope is
+      // unknown: ci_tests_required is the one gate of ci-tests.
+      ["pull_request", "false", "true", "", "", "", "0"],
       ["merge_group", "true", "false", "", "", "", "3"],
       ["workflow_dispatch", "true", "false", "", "", "", "3"],
       [
@@ -6390,6 +6392,9 @@ test("API planning only loads dependencies after installation and emits install-
         expect(values).toContain(
           "api_test_files<<API_TEST_FILES_END\nsrc/a.test.ts\nsrc/b.test.ts\nAPI_TEST_FILES_END\n",
         );
+      } else if (packages !== "true") {
+        expect(values).toContain("ci_tests_required=false\n");
+        expect(values).toContain('ci_tests_matrix={"shard":["rest-web"]}\n');
       } else if (selected) {
         expect(values).toContain("ci_tests_required=true\n");
         expect(values).toContain(
