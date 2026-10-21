@@ -15,12 +15,11 @@ import {
 } from "@/api/db/schema";
 import {
   ATTACHED_ENTRY_LINE_VAT,
+  attachedEntryLineDrafts,
   checkInvoiceLineCapacity,
-  expenseLineDraft,
   insertInvoiceLines,
   requireDraftInvoiceForEntryChanges,
   recalculateInvoiceTotals,
-  timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -436,6 +435,7 @@ const addEntries = createSafeHandler(
 
       let attachedTimeEntries: {
         id: SafeId<"timeEntry">;
+        dateWorked: string;
         billedMinutes: number;
         rateAtEntry: CentsAmount;
         narrative: string;
@@ -466,6 +466,7 @@ const addEntries = createSafeHandler(
           )
           .returning({
             id: timeEntries.id,
+            dateWorked: timeEntries.dateWorked,
             billedMinutes: timeEntries.billedMinutes,
             rateAtEntry: timeEntries.rateAtEntry,
             narrative: timeEntries.narrative,
@@ -508,14 +509,11 @@ const addEntries = createSafeHandler(
       await insertInvoiceLines(
         tx,
         { ...scope, organizationId: session.activeOrganizationId },
-        [
-          ...attachedTimeEntries.map((entry) =>
-            timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT),
-          ),
-          ...attachedExpenses.map((expense) =>
-            expenseLineDraft(expense, ATTACHED_ENTRY_LINE_VAT),
-          ),
-        ],
+        attachedEntryLineDrafts({
+          timeEntryRows: attachedTimeEntries,
+          expenseRows: attachedExpenses,
+          vat: ATTACHED_ENTRY_LINE_VAT,
+        }),
         { recordAuditEvent },
       );
       const totals = await recalculateInvoiceTotals(

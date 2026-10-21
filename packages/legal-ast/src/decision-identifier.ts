@@ -28,6 +28,7 @@
 // parser-output-unchanged: [hu-bhgy] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
 // parser-output-unchanged: [pl-kis] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
 // parser-output-unchanged: [pl-uodo] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: the authority decision number type adds a union member; parsers that never emit it produce identical output.
 import { panic } from "better-result";
 import * as v from "valibot";
 
@@ -36,6 +37,7 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { stripDangerousChars } from "./text-sanitize.js";
 
 export const DECISION_IDENTIFIER_TYPES = {
+  AUTHORITY_DECISION_NUMBER: "authority-decision-number",
   CASE_NUMBER: "case-number",
   COMMISSION_CASE_NUMBER: "commission-case-number",
   ECLI: "ecli",
@@ -58,6 +60,11 @@ export const DECISION_PRIMARY_REFERENCE_TYPES = [
 
 export type DecisionPrimaryReferenceType =
   (typeof DECISION_PRIMARY_REFERENCE_TYPES)[number];
+
+export type AuthorityDecisionNumberIdentifier = {
+  type: typeof DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER;
+  value: string;
+};
 
 export type CaseNumberIdentifier = {
   type: typeof DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
@@ -85,6 +92,7 @@ export type ReporterCitationIdentifier = {
 };
 
 export type DecisionIdentifier =
+  | AuthorityDecisionNumberIdentifier
   | CaseNumberIdentifier
   | CommissionCaseNumberIdentifier
   | EcliIdentifier
@@ -145,6 +153,10 @@ export const reporterCitationIdentifierSchema = v.strictObject({
 export const decisionIdentifierSchema: v.GenericSchema<DecisionIdentifier> =
   v.variant("type", [
     v.strictObject({
+      type: v.literal(DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER),
+      value: identifierValueSchema,
+    }),
+    v.strictObject({
       type: v.literal(DECISION_IDENTIFIER_TYPES.CASE_NUMBER),
       value: identifierValueSchema,
     }),
@@ -176,7 +188,10 @@ export const isDecisionIdentifier = (
  * normalize them with its case-number policy.
  */
 export const normalizeStructuredDecisionIdentifier = (
-  identifier: Exclude<DecisionIdentifier, CaseNumberIdentifier>,
+  identifier: Exclude<
+    DecisionIdentifier,
+    AuthorityDecisionNumberIdentifier | CaseNumberIdentifier
+  >,
 ): string => {
   switch (identifier.type) {
     case DECISION_IDENTIFIER_TYPES.ECLI:

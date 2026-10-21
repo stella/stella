@@ -12,6 +12,7 @@ import {
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
+  DECISION_SEARCH_MATCHES,
   FACET_COUNT_TYPE,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGE_REACH,
@@ -305,6 +306,7 @@ const recordOutboundFetches = async <TResult>(
  * outline and the plain text are both derived from.
  */
 const statuteDocumentFixture = (documentId: string) => ({
+  pendingChanges: null,
   id: documentId,
   eli: "/eli/cz/sb/2012/89",
   slug: "89-2012-sb-obcansky-zakonik",
@@ -1486,8 +1488,8 @@ const CONTRACT_CORPUS = {
     },
   ],
   search_case_law: [
-    {
-      mode: "search",
+    ...DECISION_SEARCH_MATCHES.map((match) => ({
+      mode: `search-${match}`,
       buildArgs: () => ({ country: "CZE", queries: ["dobré mravy"] }),
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
@@ -1524,6 +1526,7 @@ const CONTRACT_CORPUS = {
               language: "cs",
               textWithheldReason: null,
               matchingPassages: 3,
+              match,
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               languageAlternates: [],
@@ -1539,7 +1542,8 @@ const CONTRACT_CORPUS = {
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],
-    },
+      expectPayloadContains: [JSON.stringify({ match }).slice(1, -1)],
+    })),
     {
       // Page one of a single query carries the filter rail. A source facet's
       // value is the source's own id, which an agent passes back as
@@ -1600,6 +1604,7 @@ const CONTRACT_CORPUS = {
               language: "cs",
               textWithheldReason: null,
               matchingPassages: 3,
+              match: "all_terms",
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               languageAlternates: [],

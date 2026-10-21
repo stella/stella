@@ -26,6 +26,7 @@ export const INVOICE_DETAIL_RELATIONS = {
       status: true,
       invoiceAttachment: true,
     },
+    orderBy: { dateWorked: "asc", id: "asc" },
     extras: {
       workItemId: (table: typeof timeEntries) =>
         timeEntryContext.id(table.workItemId),
@@ -47,6 +48,7 @@ export const INVOICE_DETAIL_RELATIONS = {
       billable: true,
       markup: true,
     },
+    orderBy: { dateIncurred: "asc", id: "asc" },
     extras: {
       matterId: (table: typeof expenses) => expenseContext.id(table.matterId),
       matterReference: (table: typeof expenses) =>

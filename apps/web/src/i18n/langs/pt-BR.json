@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Todas as alegações que exigiam julgamento foram decididas.</strong> {count, plural, one {A # determinação de rotina não requer revisão individual.} other {As # determinações de rotina não requerem revisão individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# alegação precisa} other {# alegações precisam}} do seu julgamento</strong> — conflitos e interpretações contestadas. {routineCount, plural, one {A outra # é de rotina e não precisa de aprovação individual.} other {As outras # são de rotina e não precisam de aprovação individual.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contestada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, em disputa} other {}})",
+      "documentView": {
+        "label": "Visualização do documento",
+        "original": "Original",
+        "reading": "Modo de leitura"
+      },
+      "notLocated": "{count, plural, one {# alegação não foi localizada no original} other {# alegações não foram localizadas no original}}",
       "selectClaim": "Selecione uma alegação para inspecionar o registro.",
       "showQueue": "Mostrar fila",
       "stats": {
@@ -865,7 +871,6 @@
         "unavailable": "A análise por IA não está disponível para esta decisão."
       },
       "generate": "Gerar ementas com IA",
-      "holdingAnchor": "Ir para o parágrafo",
       "invitation": "Com uma conta gratuita, a IA prepara notas de trabalho sobre esta decisão.",
       "topics": "Temas",
       "treatment": "Tratamento posterior"
@@ -1025,6 +1030,9 @@
       "saved": "{count, plural, one {# decisão salva} many {# decisões salvas} other {# decisões salvas}} em {matter}"
     },
     "newestDecisions": "Decisões mais recentes",
+    "noResults": {
+      "hint": "Tente outras palavras, melhore a consulta com IA ou faça a pergunta no chat."
+    },
     "notesFilter": {
       "ai": "IA",
       "human": "Humanas"
@@ -1098,6 +1106,10 @@
         "short": "Curto"
       }
     },
+    "rewritten": {
+      "line": "Nenhuma correspondência exata para <bdi>{original}</bdi>; mostrando resultados para <bdi>{query}</bdi>",
+      "searchOriginal": "Pesquisar minhas palavras originais"
+    },
     "sameCaseNumber": "{count, plural, one {# decisão tem} other {# decisões têm}} este número de processo. Escolha o tribunal.",
     "searchLabel": "Pesquisar jurisprudência",
     "searchPlaceholder": "Número do processo, ECLI ou palavras, p. ex. 22 Cdo 2653/2012",
@@ -1114,6 +1126,8 @@
         "hint": "Remova ou amplie um filtro e pesquise novamente.",
         "message": "Nada corresponde aos filtros aplicados."
       },
+      "partialMatch": "Correspondência parcial",
+      "partialMatches": "Correspondências parciais para: <bdi>{query}</bdi>",
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Pesquisar todas as palavras"
     },
@@ -1151,6 +1165,7 @@
       "judges": "Juízes",
       "legalArea": "Área jurídica",
       "legalSentence": "Tese jurídica",
+      "paragraphReference": "Parágrafo {number}",
       "popularName": "Nome popular",
       "portraitCredit": "Fonte dos retratos: {source}",
       "provisionMentions": "{count, number}×",
@@ -1617,6 +1632,9 @@
         "private": "Suas habilidades de IA",
         "team": "Habilidades de IA da equipe"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Também consultadas ({count, number})"
     },
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
@@ -2706,6 +2724,11 @@
       "aiConfigModelInvalid": "A configuração do modelo de IA é inválida. Verifique os modelos selecionados.",
       "aiConfigProviderInvalid": "A configuração do provedor de IA é inválida. Verifique as configurações do provedor.",
       "aiConfigProviderValidationFailed": "O provedor de IA rejeitou a configuração. Verifique a chave de API e o modelo.",
+      "aiDeadlineExceeded": "A IA não respondeu a tempo. Tente novamente em instantes.",
+      "aiOutputInvalid": "A resposta da IA tinha um formato inesperado. Tente novamente.",
+      "aiOutputModerated": "O provedor de IA moderou a resposta. Reformule a solicitação ou escolha outro modelo.",
+      "aiProviderTaskUnsupported": "O provedor de IA configurado não consegue realizar esta tarefa. Escolha um provedor que consiga.",
+      "aiUnknown": "A solicitação de IA falhou. Tente novamente.",
       "clauseDirectivesInvalid": "Uma cláusula vinculada contém diretivas inválidas. Corrija a cláusula antes de preencher o modelo.",
       "clauseDirectivesInvalidDetails": "A cláusula {clauseName} no campo {slotName} contém diretivas inválidas. Abra o editor de cláusulas, corrija os parágrafos indicados e preencha o modelo novamente.",
       "clauseDirectivesOverrideInvalidDetails": "O texto substituto da cláusula {clauseName} no campo {slotName} contém diretivas inválidas. Corrija o texto substituto deste preenchimento antes de tentar novamente.",
@@ -4252,6 +4275,10 @@
     "archivedEmpty": "Nenhuma memória arquivada.",
     "archivedToast": "Memória arquivada",
     "createdToast": "Salvo na memória",
+    "deleteConfirmation": "Digite {confirmation} para confirmar",
+    "deleteDescription": "Isso remove esta memória permanentemente. Esta ação não pode ser desfeita.",
+    "deleteTitle": "Excluir memória?",
+    "deletedToast": "Memória excluída",
     "empty": "Ainda não há nada na memória.",
     "kinds": {
       "decision": "Decisão",
@@ -5180,6 +5207,8 @@
     "outline": "Sumário",
     "outlineJumpLabel": "Ir para um dispositivo",
     "outlineJumpPlaceholder": "§ 10 ou um título",
+    "pendingChanges": "Próximas alterações",
+    "pendingChangesIncomplete": "Os dados do editor podem não incluir todas as próximas alterações.",
     "provisionAskContextPrompt": "\n\nTrechos que aplicam o dispositivo nas decisões de maior autoridade:\n{passages}\n\nUse as ferramentas de jurisprudência para ler qualquer uma dessas decisões na íntegra ou encontrar outras decisões que citem o dispositivo.",
     "provisionAskPlaceholder": "Pergunte sobre este dispositivo",
     "provisionAskQuestionPrompt": "Sobre {subject}: {question}",

@@ -90,11 +90,305 @@ export const SOFT_LAW_ATTEMPT_STATES = [
   "rejected",
   "retryable",
 ] as const;
+type SoftLawAuthorityDefinition = {
+  domain: "data-protection" | "competition";
+  jurisdiction: string;
+  name: string;
+};
+
 export const SOFT_LAW_AUTHORITIES = {
-  "cz-uoou": { jurisdiction: "CZE", name: "Úřad pro ochranu osobních údajů" },
-  "eu-edpb": { jurisdiction: "EU", name: "European Data Protection Board" },
-  "eu-wp29": { jurisdiction: "EU", name: "Article 29 Working Party" },
-} as const;
+  "cz-uoou": {
+    domain: "data-protection",
+    jurisdiction: "CZE",
+    name: "Úřad pro ochranu osobních údajů",
+  },
+  "eu-edpb": {
+    domain: "data-protection",
+    jurisdiction: "EU",
+    name: "European Data Protection Board",
+  },
+  "eu-wp29": {
+    domain: "data-protection",
+    jurisdiction: "EU",
+    name: "Article 29 Working Party",
+  },
+  "at-dsb": {
+    domain: "data-protection",
+    jurisdiction: "AUT",
+    name: "Austria DSB",
+  },
+  "be-apd": {
+    domain: "data-protection",
+    jurisdiction: "BEL",
+    name: "Belgium APD/GBA",
+  },
+  "bg-cpdp": {
+    domain: "data-protection",
+    jurisdiction: "BGR",
+    name: "Bulgaria CPDP",
+  },
+  "hr-azop": {
+    domain: "data-protection",
+    jurisdiction: "HRV",
+    name: "Croatia AZOP",
+  },
+  "cy-dpa": {
+    domain: "data-protection",
+    jurisdiction: "CYP",
+    name: "Cyprus DPA",
+  },
+  "dk-datatilsynet": {
+    domain: "data-protection",
+    jurisdiction: "DNK",
+    name: "Denmark Datatilsynet",
+  },
+  "ee-aki": {
+    domain: "data-protection",
+    jurisdiction: "EST",
+    name: "Estonia AKI",
+  },
+  "fi-ombudsman": {
+    domain: "data-protection",
+    jurisdiction: "FIN",
+    name: "Finland Data Protection Ombudsman",
+  },
+  "fr-cnil": {
+    domain: "data-protection",
+    jurisdiction: "FRA",
+    name: "France CNIL",
+  },
+  "de-bfdi": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Germany BfDI",
+  },
+  "el-hdpa": {
+    domain: "data-protection",
+    jurisdiction: "GRC",
+    name: "Greece HDPA",
+  },
+  "hu-naih": {
+    domain: "data-protection",
+    jurisdiction: "HUN",
+    name: "Hungary NAIH",
+  },
+  "is-personuvernd": {
+    domain: "data-protection",
+    jurisdiction: "ISL",
+    name: "Iceland Persónuvernd",
+  },
+  "ie-dpc": {
+    domain: "data-protection",
+    jurisdiction: "IRL",
+    name: "Ireland DPC",
+  },
+  "it-garante": {
+    domain: "data-protection",
+    jurisdiction: "ITA",
+    name: "Italy Garante",
+  },
+  "lv-dvi": {
+    domain: "data-protection",
+    jurisdiction: "LVA",
+    name: "Latvia DVI",
+  },
+  "li-dss": {
+    domain: "data-protection",
+    jurisdiction: "LIE",
+    name: "Liechtenstein DSS",
+  },
+  "lt-vdai": {
+    domain: "data-protection",
+    jurisdiction: "LTU",
+    name: "Lithuania VDAI",
+  },
+  "lu-cnpd": {
+    domain: "data-protection",
+    jurisdiction: "LUX",
+    name: "Luxembourg CNPD",
+  },
+  "mt-idpc": {
+    domain: "data-protection",
+    jurisdiction: "MLT",
+    name: "Malta IDPC",
+  },
+  "nl-ap": {
+    domain: "data-protection",
+    jurisdiction: "NLD",
+    name: "Netherlands AP",
+  },
+  "no-datatilsynet": {
+    domain: "data-protection",
+    jurisdiction: "NOR",
+    name: "Norway Datatilsynet",
+  },
+  "pl-uodo": {
+    domain: "data-protection",
+    jurisdiction: "POL",
+    name: "Poland UODO",
+  },
+  "pt-cnpd": {
+    domain: "data-protection",
+    jurisdiction: "PRT",
+    name: "Portugal CNPD",
+  },
+  "ro-anspdcp": {
+    domain: "data-protection",
+    jurisdiction: "ROU",
+    name: "Romania ANSPDCP",
+  },
+  "sk-uoou": {
+    domain: "data-protection",
+    jurisdiction: "SVK",
+    name: "Slovakia ÚOOÚ",
+  },
+  "si-ip": {
+    domain: "data-protection",
+    jurisdiction: "SVN",
+    name: "Slovenia IP",
+  },
+  "es-aepd": {
+    domain: "data-protection",
+    jurisdiction: "ESP",
+    name: "Spain AEPD",
+  },
+  "se-imy": {
+    domain: "data-protection",
+    jurisdiction: "SWE",
+    name: "Sweden IMY",
+  },
+  "eu-edps": { domain: "data-protection", jurisdiction: "EU", name: "EDPS" },
+  "de-dsk": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Germany DSK joint publisher",
+  },
+  "de-bw": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Baden-Württemberg LfDI",
+  },
+  "de-by-baylfd": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Bavaria BayLfD (public)",
+  },
+  "de-by-baylda": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Bavaria BayLDA (private)",
+  },
+  "de-be": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Berlin BlnBDI",
+  },
+  "de-bb": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Brandenburg LDA",
+  },
+  "de-hb": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Bremen LfDI",
+  },
+  "de-hh": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Hamburg HmbBfDI",
+  },
+  "de-he": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Hesse HBDI",
+  },
+  "de-mv": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Mecklenburg-Vorpommern LfDI",
+  },
+  "de-ni": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Lower Saxony LfD",
+  },
+  "de-nw": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "North Rhine-Westphalia LDI",
+  },
+  "de-rp": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Rhineland-Palatinate LfDI",
+  },
+  "de-sl": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Saarland UDZ",
+  },
+  "de-sn": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Saxony SächsDSB",
+  },
+  "de-st": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Saxony-Anhalt LfD",
+  },
+  "de-sh": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Schleswig-Holstein ULD",
+  },
+  "de-th": {
+    domain: "data-protection",
+    jurisdiction: "DEU",
+    name: "Thuringia TLfDI",
+  },
+  "es-apdcat": {
+    domain: "data-protection",
+    jurisdiction: "ESP",
+    name: "Catalonia APDCAT",
+  },
+  "es-avpd": {
+    domain: "data-protection",
+    jurisdiction: "ESP",
+    name: "Basque AVPD",
+  },
+  "es-ctpd": {
+    domain: "data-protection",
+    jurisdiction: "ESP",
+    name: "Andalusia CTPDA",
+  },
+  "at-pdk": {
+    domain: "data-protection",
+    jurisdiction: "AUT",
+    name: "Austria PDK",
+  },
+  "be-vtc": {
+    domain: "data-protection",
+    jurisdiction: "BEL",
+    name: "Flemish VTC",
+  },
+  "be-coc": {
+    domain: "data-protection",
+    jurisdiction: "BEL",
+    name: "Belgian COC",
+  },
+  "be-comitei": {
+    domain: "data-protection",
+    jurisdiction: "BEL",
+    name: "Belgian Permanent R",
+  },
+  "be-comitep": {
+    domain: "data-protection",
+    jurisdiction: "BEL",
+    name: "Belgian Permanent P",
+  },
+} as const satisfies Record<string, SoftLawAuthorityDefinition>;
 export type SoftLawAuthority = keyof typeof SOFT_LAW_AUTHORITIES;
 export type SoftLawStated<T> =
   | { state: "stated"; value: T }

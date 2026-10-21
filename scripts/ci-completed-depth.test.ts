@@ -577,7 +577,10 @@ const recordEvidence = (
         JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
         FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
         FAST_REQUIRED: resultEnv["FAST_REQUIRED"] ?? "",
-        PLAN: JSON.stringify({ package_checks_required: "true" }),
+        PLAN: JSON.stringify({
+          ci_tests_required: "true",
+          package_checks_required: "true",
+        }),
         NEEDS: JSON.stringify(
           Object.fromEntries(
             Object.entries(results).map(([job, outcome]) => [

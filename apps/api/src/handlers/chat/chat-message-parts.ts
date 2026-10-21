@@ -43,7 +43,9 @@ import type {
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  isPersistedJsonObject,
   isPersistedJsonValue,
+  isPersistedToolProviderMetadata,
   proveParsedToolInput,
   proveParsedToolOutput,
   provePersistedChatMessageContentV3,
@@ -260,12 +262,16 @@ const persistedV3PartToChatPart = ({
       arguments:
         persistedInput.status === "raw"
           ? persistedInput.rawArguments
-          : stringifyPersistedJsonValue(persistedInput.value),
+          : (persistedInput.rawArguments ??
+            stringifyPersistedJsonValue(persistedInput.value)),
       id: part.id,
       ...(input === undefined ? {} : { input }),
       ...(part.metadata === undefined ? {} : { metadata: part.metadata }),
       name: part.name,
       ...(part.output === undefined ? {} : { output }),
+      ...(part.providerMetadata === undefined
+        ? {}
+        : { providerMetadata: part.providerMetadata }),
       state: part.state,
       type: "tool-call",
     };
@@ -336,7 +342,11 @@ const decodePersistedToolInput = (input: unknown): PersistedToolInput => {
       : panic("Stored v3 tool call has invalid raw arguments");
   }
   if (input["status"] === "parsed" && "value" in input) {
-    return proveParsedToolInput(input["value"]);
+    const rawArguments = input["rawArguments"];
+    if (rawArguments !== undefined && typeof rawArguments !== "string") {
+      return panic("Stored v3 tool call has invalid raw arguments");
+    }
+    return proveParsedToolInput(input["value"], rawArguments);
   }
   return panic("Stored v3 tool call has invalid input state");
 };
@@ -952,16 +962,23 @@ const CHAT_PART_VALIDATORS = {
   image: isContentPartWithSource,
   "structured-output": isStructuredOutputPart,
   subagent: () => false,
-  text: (part) => typeof part["content"] === "string",
+  text: (part) =>
+    typeof part["content"] === "string" &&
+    (part["providerMetadata"] === undefined ||
+      isPersistedJsonObject(part["providerMetadata"])),
   thinking: (part) =>
     typeof part["content"] === "string" &&
     (part["provenance"] === undefined ||
-      isReasoningProvenance(part["provenance"])),
+      isReasoningProvenance(part["provenance"])) &&
+    (part["providerMetadata"] === undefined ||
+      isPersistedJsonObject(part["providerMetadata"])),
   "tool-call": (part) =>
     typeof part["id"] === "string" &&
     typeof part["name"] === "string" &&
     typeof part["arguments"] === "string" &&
-    isTanStackToolCallState(part["state"]),
+    isTanStackToolCallState(part["state"]) &&
+    (part["providerMetadata"] === undefined ||
+      isPersistedToolProviderMetadata(part["providerMetadata"])),
   "tool-result": (part) =>
     typeof part["toolCallId"] === "string" &&
     isTanStackToolResultContent(part["content"]) &&
@@ -1303,6 +1320,9 @@ const chatPartToPersistedV3Part = ({
       ...(part.output === undefined
         ? {}
         : { output: proveParsedToolOutput(part.output) }),
+      ...(part.providerMetadata === undefined
+        ? {}
+        : { providerMetadata: part.providerMetadata }),
       state: part.state,
       type: "tool-call",
     };
@@ -1341,7 +1361,14 @@ const persistedToolInputFromChatPart = (
   if (part.input === undefined) {
     return { rawArguments: part.arguments, status: "raw" };
   }
-  return proveParsedToolInput(part.input);
+  // Keep the argument text only when the parsed input cannot reproduce it.
+  const reproduced = Result.try((): unknown => JSON.parse(part.arguments));
+  return proveParsedToolInput(
+    part.input,
+    reproduced.isOk() && deepEquals(reproduced.value, part.input)
+      ? undefined
+      : part.arguments,
+  );
 };
 
 const persistedToolResultContentFromChatContent = (

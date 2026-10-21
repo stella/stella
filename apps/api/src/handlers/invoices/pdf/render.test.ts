@@ -256,6 +256,7 @@ describe("invoice PDF", () => {
     expect(text).not.toContain("STALE-NUMBER");
     expect(buildInvoicePaymentPayload(draft)?.unwrap()).toEqual({
       status: "payable",
+      errorCorrection: "M",
       payload:
         "SPD*1.0*ACC:CZ3301000000000002970297*AM:555.55*CC:CZK*X-VS:0987654321*DT:20261014",
     });
@@ -266,9 +267,71 @@ describe("invoice QR payment", () => {
   test("matches canonical SPAYD account, amount, symbol, due date and message", () => {
     expect(buildInvoicePaymentPayload(options)?.unwrap()).toEqual({
       status: "payable",
+      errorCorrection: "M",
       payload:
         "SPD*1.0*ACC:CZ3301000000000002970297*AM:555.55*CC:CZK*X-VS:0987654321*DT:20261014*MSG:2026-001",
     });
+  });
+
+  test("a Slovak account gets PAY by square, which Slovak banking apps read", () => {
+    const slovak = {
+      ...options,
+      invoice: { ...options.invoice, currency: "EUR" },
+      seller: { ...options.seller, iban: "SK96 1100 0000 0029 1859 9669" },
+    } satisfies RenderInvoicePdfOptions;
+    const payment = buildInvoicePaymentPayload(slovak)?.unwrap();
+    expect(payment?.status).toBe("payable");
+    // The header bytes 0x02 0x00 (pay, version 1.2.0) read "080" in base32hex.
+    expect(payment?.status === "payable" && payment.payload).toMatch(
+      /^080[0-9A-V]+$/u,
+    );
+    expect(
+      buildInvoicePaymentPayload({
+        ...slovak,
+        seller: { ...slovak.seller, legalName: " " },
+      })?.isErr(),
+    ).toBe(true);
+  });
+
+  test("a Polish account gets the ZBP code, at error correction L", async () => {
+    const polish = {
+      ...options,
+      invoice: { ...options.invoice, currency: "PLN" },
+      seller: {
+        ...options.seller,
+        legalName: "Kancelaria Nowak i Wspólnicy sp.k.",
+        vatId: "PL 526-000-12-46",
+        iban: "PL61 1090 1014 0000 0712 1981 2874",
+      },
+    } satisfies RenderInvoicePdfOptions;
+    expect(buildInvoicePaymentPayload(polish)?.unwrap()).toEqual({
+      status: "payable",
+      errorCorrection: "L",
+      payload:
+        "5260001246|PL|61109010140000071219812874|055555|Kancelaria Nowak i W|2026-001|||",
+    });
+    // Not PLN: the ZBP code carries domestic transfers only.
+    expect(
+      buildInvoicePaymentPayload({
+        ...polish,
+        invoice: { ...polish.invoice, currency: "EUR" },
+      })?.unwrap(),
+    ).toEqual({
+      status: "not_payable",
+      reason: "not_pln",
+      errorCorrection: "L",
+    });
+    // No NIP on the seller profile, or a foreign VAT ID on a firm that banks
+    // in Poland: no code, and the PDF still renders.
+    for (const vatId of [null, "CZ27082440", "PL 526-000-12-47"]) {
+      const seller = { ...polish.seller, vatId };
+      expect(buildInvoicePaymentPayload({ ...polish, seller })).toBeNull();
+    }
+    const czechSeller = {
+      ...polish,
+      seller: { ...polish.seller, vatId: "CZ27082440" },
+    } satisfies RenderInvoicePdfOptions;
+    expect((await textOf(czechSeller)).text).toContain("Kancelaria Nowak");
   });
 
   test("skips QR for zero, negative, credit notes or missing IBAN", () => {

@@ -26,7 +26,7 @@
 //      unclassified.
 
 import { panic } from "better-result";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 

@@ -19,12 +19,12 @@ import {
 import { claimInvoiceExpenses } from "@/api/handlers/invoices/entries/add";
 import {
   ATTACHED_ENTRY_LINE_VAT,
-  expenseLineDraft,
+  type AttachedEntryLineDraftsOptions,
+  attachedEntryLineDrafts,
   insertInvoiceLines,
   type LineVat,
   manualLineDraft,
   recalculateInvoiceTotals,
-  timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -221,19 +221,19 @@ const validateCreationExpenses = async (
 };
 
 const createInvoiceLineDrafts = (
-  entries: readonly Parameters<typeof timeEntryLineDraft>[0][],
-  attachedExpenses: readonly Parameters<typeof expenseLineDraft>[0][],
+  entries: AttachedEntryLineDraftsOptions["timeEntryRows"],
+  attachedExpenses: AttachedEntryLineDraftsOptions["expenseRows"],
   flatFee: CentsAmount | null,
   vat: LineVat,
 ) => {
-  const expenseLines = attachedExpenses.map((expense) =>
-    expenseLineDraft(expense, vat),
-  );
   if (flatFee === null) {
-    return Result.ok([
-      ...entries.map((entry) => timeEntryLineDraft(entry, vat)),
-      ...expenseLines,
-    ]);
+    return Result.ok(
+      attachedEntryLineDrafts({
+        timeEntryRows: entries,
+        expenseRows: attachedExpenses,
+        vat,
+      }),
+    );
   }
   return manualLineDraft({
     description: "Flat fee",
