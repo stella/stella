@@ -1465,7 +1465,6 @@
         "$TURBO_ROOT$/apps/web/public/stella-logo-512.png",
         "$TURBO_ROOT$/apps/desktop/src-tauri/src/http_client.rs",
         "$TURBO_ROOT$/packages/mcp-apps/src/**",
-        "$TURBO_ROOT$/packages/mcp-kit/src/local-client-identity.ts",
         "$TURBO_ROOT$/packages/skills/blueprints/**",
         "$TURBO_ROOT$/packages/skills/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",
