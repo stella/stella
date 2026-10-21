@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 2,
+  "reason": "apps/api declares parse5 and parse5-htmlparser2-tree-adapter (both already in the lockfile through cheerio) so the email preview serializes with the same parse5 options it parsed with (scripting disabled, htmlparser2 tree adapter); cheerio's own renderer does not take those options, and a parse/serialize mismatch on untrusted email HTML changes what the sandboxed preview renders."
+}
