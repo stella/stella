@@ -10,6 +10,7 @@ import {
   readPackageManifest,
   readPublishablePackages,
   versionBumpTime,
+  type NpmRunner,
   type RegistryResult,
 } from "./check-npm-publish-lag";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
@@ -272,10 +273,33 @@ const provenanceStatement = ({
 const runRepositoryCheck = async ({
   latest,
   attestations,
+  npmResults = [
+    { exitCode: 0, stdout: "" },
+    {
+      exitCode: 0,
+      stdout: JSON.stringify({
+        invalid: [],
+        missing: [],
+        verified: [
+          {
+            name: "@stll/fixture",
+            version: "1.2.4",
+            attestations: [{ predicateType: "https://slsa.dev/provenance/v1" }],
+          },
+        ],
+      }),
+    },
+  ],
 }: {
   latest: Record<string, unknown>;
   attestations?: unknown;
+  npmResults?: { exitCode: number; stdout: string }[];
 }) => {
+  const npmCalls: Parameters<NpmRunner>[0][] = [];
+  const npmRunner: NpmRunner = async (options) => {
+    npmCalls.push(options);
+    return npmResults.at(npmCalls.length - 1) ?? { exitCode: 1, stdout: "" };
+  };
   const server = Bun.serve({
     port: 0,
     fetch(request) {
@@ -292,7 +316,7 @@ const runRepositoryCheck = async ({
     },
   });
   try {
-    return await checkRegistry({
+    const result = await checkRegistry({
       name: "@stll/fixture",
       version: "1.2.3",
       repository: "github.com/stella/stella",
@@ -300,7 +324,9 @@ const runRepositoryCheck = async ({
       now: NOW,
       registry: server.url.toString(),
       timeoutMs: 5000,
+      npmRunner,
     });
+    return { result, npmCalls };
   } finally {
     await server.stop(true);
   }
@@ -367,19 +393,108 @@ describe("published repository provenance", () => {
   );
 
   test("accepts a moved package only with matching provenance", async () => {
-    expect(
-      await runRepositoryCheck({
-        latest: {
-          version: "1.2.4",
-          repository: "https://github.com/stella/moved",
-          dist: "fixture",
-        },
-        attestations: attestationDocument(provenanceStatement()),
-      }),
-    ).toEqual({
+    const { result, npmCalls } = await runRepositoryCheck({
+      latest: {
+        version: "1.2.4",
+        repository: "https://github.com/stella/moved",
+        dist: "fixture",
+      },
+      attestations: attestationDocument(provenanceStatement()),
+    });
+    expect(result).toEqual({
       status: "passed",
       reason: "published_from_declared_repository",
     });
+    expect(npmCalls.map(({ args }) => args)).toEqual([
+      [
+        "install",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        "--registry",
+        expect.any(String),
+      ],
+      ["audit", "signatures", "--json", "--registry", expect.any(String)],
+    ]);
+    expect(npmCalls.at(0)?.env["npm_config_cache"]).toStartWith(
+      npmCalls.at(0)?.cwd ?? "not-called",
+    );
+  });
+
+  test.each([
+    [
+      "an invalid attestation",
+      {
+        invalid: [{ name: "@stll/fixture", version: "1.2.4" }],
+        missing: [],
+        verified: [],
+      },
+    ],
+    [
+      "a missing attestation",
+      {
+        invalid: [],
+        missing: [{ name: "@stll/fixture", version: "1.2.4" }],
+        verified: [],
+      },
+    ],
+    [
+      "another package version",
+      {
+        invalid: [],
+        missing: [],
+        verified: [
+          {
+            name: "@stll/fixture",
+            version: "9.9.9",
+            attestations: [{}],
+          },
+        ],
+      },
+    ],
+  ])("rejects npm reporting %s", async (_, auditReport) => {
+    const { result } = await runRepositoryCheck({
+      latest: {
+        version: "1.2.4",
+        repository: "https://github.com/stella/moved",
+        dist: "fixture",
+      },
+      attestations: attestationDocument(provenanceStatement()),
+      npmResults: [
+        { exitCode: 0, stdout: "" },
+        { exitCode: 0, stdout: JSON.stringify(auditReport) },
+      ],
+    });
+    expect(result).toEqual({ status: "failed", reason: "unattested_publish" });
+  });
+
+  test.each([
+    ["an install failure", [{ exitCode: 1, stdout: "" }]],
+    [
+      "an audit failure",
+      [
+        { exitCode: 0, stdout: "" },
+        { exitCode: 1, stdout: "{}" },
+      ],
+    ],
+    [
+      "malformed audit JSON",
+      [
+        { exitCode: 0, stdout: "" },
+        { exitCode: 0, stdout: "not JSON" },
+      ],
+    ],
+  ])("rejects npm returning %s", async (_, npmResults) => {
+    const { result } = await runRepositoryCheck({
+      latest: {
+        version: "1.2.4",
+        repository: "https://github.com/stella/moved",
+        dist: "fixture",
+      },
+      attestations: attestationDocument(provenanceStatement()),
+      npmResults,
+    });
+    expect(result).toEqual({ status: "failed", reason: "unattested_publish" });
   });
 
   test.each([
@@ -448,10 +563,15 @@ describe("published repository provenance", () => {
   ] as const)(
     "rejects a moved package with %s",
     async (_, latest, attestations) => {
-      expect(await runRepositoryCheck({ latest, attestations })).toEqual({
+      const { result, npmCalls } = await runRepositoryCheck({
+        latest,
+        attestations,
+      });
+      expect(result).toEqual({
         status: "failed",
         reason: "unattested_publish",
       });
+      expect(npmCalls).toHaveLength(0);
     },
   );
 });

@@ -28,6 +28,8 @@
 // Exit codes: 0 every package is on npm, 1 a package lags, 2 bad arguments or
 // manifests, 3 the guard itself failed.
 
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
@@ -166,6 +168,122 @@ type VerifyProvenanceOptions = {
   expectedSubject: string;
   registry: string;
   timeoutMs: number;
+  npmRunner: NpmRunner;
+};
+
+type NpmRunOptions = {
+  args: readonly string[];
+  cwd: string;
+  env: Record<string, string | undefined>;
+  timeoutMs: number;
+};
+
+export type NpmRunResult = { exitCode: number; stdout: string };
+export type NpmRunner = (options: NpmRunOptions) => Promise<NpmRunResult>;
+
+const runNpm: NpmRunner = async ({ args, cwd, env, timeoutMs }) => {
+  const child = Bun.spawn(["npm", ...args], {
+    cwd,
+    env,
+    stdout: "pipe",
+    stderr: "ignore",
+    timeout: timeoutMs,
+  });
+  const [exitCode, stdout] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+  ]);
+  return { exitCode, stdout };
+};
+
+const packageEntryMatches = (
+  value: unknown,
+  name: string,
+  version: string,
+): boolean =>
+  isRecord(value) && value["name"] === name && value["version"] === version;
+
+// npm is the trust anchor here: it verifies the registry signature, Sigstore
+// root and signer identity, and binds the attestation subject digest to the
+// published tarball. The decoded metadata checks only decide which repository
+// owns this package version.
+const verifyPackageWithNpm = async ({
+  name,
+  version,
+  registry,
+  timeoutMs,
+  npmRunner,
+}: {
+  name: string;
+  version: string;
+  registry: string;
+  timeoutMs: number;
+  npmRunner: NpmRunner;
+}): Promise<boolean> => {
+  const directory = await mkdtemp(path.join(tmpdir(), "npm-provenance-"));
+  const cache = path.join(directory, "cache");
+  const env = {
+    ...process.env,
+    npm_config_cache: cache,
+    npm_config_include_attestations: "true",
+  };
+  try {
+    await Bun.write(
+      path.join(directory, "package.json"),
+      JSON.stringify({ private: true, dependencies: { [name]: version } }),
+    );
+    const install = await npmRunner({
+      args: [
+        "install",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        "--registry",
+        registry,
+      ],
+      cwd: directory,
+      env,
+      timeoutMs,
+    });
+    if (install.exitCode !== 0) {
+      return false;
+    }
+    const audit = await npmRunner({
+      args: ["audit", "signatures", "--json", "--registry", registry],
+      cwd: directory,
+      env,
+      timeoutMs,
+    });
+    if (audit.exitCode !== 0) {
+      return false;
+    }
+    const report: unknown = JSON.parse(audit.stdout);
+    if (!isRecord(report)) {
+      return false;
+    }
+    const invalid = Array.isArray(report["invalid"]) ? report["invalid"] : [];
+    const missing = Array.isArray(report["missing"]) ? report["missing"] : [];
+    const verified = Array.isArray(report["verified"])
+      ? report["verified"]
+      : [];
+    const targetMatches = (entry: unknown) =>
+      packageEntryMatches(entry, name, version);
+    return (
+      !invalid.some(targetMatches) &&
+      !missing.some(targetMatches) &&
+      verified.some(
+        (entry) =>
+          targetMatches(entry) &&
+          isRecord(entry) &&
+          Array.isArray(entry["attestations"]) &&
+          entry["attestations"].length > 0,
+      )
+    );
+  } catch {
+    return false;
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 };
 
 const verifyProvenance = async ({
@@ -174,6 +292,7 @@ const verifyProvenance = async ({
   expectedSubject,
   registry,
   timeoutMs,
+  npmRunner,
 }: VerifyProvenanceOptions): Promise<boolean> => {
   try {
     const url = new URL(attestationUrl);
@@ -223,11 +342,22 @@ const verifyProvenance = async ({
     const attestedRepository = isRecord(workflow)
       ? normalizeGitHubRepository(repositoryField(workflow["repository"]))
       : undefined;
-    return (
+    const metadataMatches =
       subjects.some(
         (subject) => isRecord(subject) && subject["name"] === expectedSubject,
-      ) && attestedRepository === expectedRepository
-    );
+      ) && attestedRepository === expectedRepository;
+    if (!metadataMatches) {
+      return false;
+    }
+    const subject = expectedSubject.slice("pkg:npm/".length);
+    const separator = subject.lastIndexOf("@");
+    return await verifyPackageWithNpm({
+      name: decodeURIComponent(subject.slice(0, separator)),
+      version: subject.slice(separator + 1),
+      registry,
+      timeoutMs,
+      npmRunner,
+    });
   } catch {
     return false;
   }
@@ -241,6 +371,7 @@ type CheckRegistryOptions = {
   now: number;
   registry: string;
   timeoutMs: number;
+  npmRunner?: NpmRunner;
 };
 
 // This is the network boundary: exceptions become fixed, credential-free reasons.
@@ -252,6 +383,7 @@ export const checkRegistry = async ({
   registry,
   timeoutMs,
   repository,
+  npmRunner = runNpm,
 }: CheckRegistryOptions): Promise<RegistryResult> => {
   try {
     const response = await fetch(
@@ -290,6 +422,7 @@ export const checkRegistry = async ({
             .join("/")}@${payload["version"]}`,
           registry,
           timeoutMs,
+          npmRunner,
         }));
       return verified
         ? { status: "passed", reason: "published_from_declared_repository" }
