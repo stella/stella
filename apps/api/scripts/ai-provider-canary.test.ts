@@ -22,6 +22,7 @@ import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispa
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   CANARY_TEXT_FINISH_POLICY,
@@ -287,7 +288,7 @@ describe("AI provider canary overload backoff", () => {
           throw new ProviderStatusError(503);
         }
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       wait: async (delayMs) => {
         waits.push(delayMs);
       },
@@ -576,7 +577,7 @@ describe("AI provider canary retry contract", () => {
             calls += 1;
             throw new ProviderStatusError(status);
           },
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           wait: async () => {},
         });
         return { calls, result, retryable, status };
@@ -610,7 +611,7 @@ describe("AI provider canary retry contract", () => {
           throw new CanaryProviderRunError({}, "before-tool-call");
         }
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       wait: async () => {},
     });
 
@@ -630,7 +631,7 @@ describe("AI provider canary retry contract", () => {
           });
         }
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       wait: async () => {},
     });
 
@@ -649,7 +650,7 @@ describe("AI provider canary retry contract", () => {
         calls += 1;
         throw error;
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       wait: async () => {},
     });
 
@@ -970,7 +971,7 @@ const runProbeWithoutBackoff = async ({
   await runCanaryProbe({
     retryDelayMs: 0,
     run,
-    timeoutMs,
+    timeoutMs, // timeout: forwarded from the caller
     wait: async () => {},
   });
 
@@ -1089,7 +1090,7 @@ describe("AI provider canary credential rejection", () => {
           "Authentication failed: Please make sure your API Key is valid.",
         );
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       wait: async () => {},
     });
 
@@ -1112,7 +1113,7 @@ describe("AI provider canary credential rejection", () => {
           "Authentication failed: Please make sure your API Key is valid.",
         );
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     }));
 
     const failure = await runCanaryProbeSequence({
@@ -1147,7 +1148,7 @@ describe("AI provider canary credential rejection", () => {
           throw new CanaryError({ message: "Provider returned no text." });
         }
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     }));
 
     const failures = await runCanaryProbeSequence({
@@ -1173,7 +1174,7 @@ describe("AI provider canary credential rejection", () => {
           invoked.push(label);
           throw new ProviderStatusError(429);
         },
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       }),
     );
 

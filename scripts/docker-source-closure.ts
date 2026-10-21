@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { builtinModules } from "node:module";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { GENERATORS, type Generator } from "./generated-files";

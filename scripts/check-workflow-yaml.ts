@@ -114,6 +114,60 @@ export const validateActionMetadata = (value: unknown, file: string): void => {
 
 const YAML_EXTENSIONS = [".yml", ".yaml"] as const;
 
+export const validateNoRubyShell = (value: unknown, file: string): void => {
+  if (Array.isArray(value)) {
+    for (const child of value) {
+      validateNoRubyShell(child, file);
+    }
+    return;
+  }
+  if (!isRecord(value)) {
+    return;
+  }
+  const shell = value["shell"];
+  // Any command word naming ruby, so a path or an env launcher cannot hide it.
+  if (
+    typeof shell === "string" &&
+    shell
+      .split(/\s+/u)
+      .some((word) => /^ruby[\d.]*$/u.test(word.split("/").at(-1) ?? ""))
+  ) {
+    throw new WorkflowYamlError({
+      message: `${file}: Ruby workflow shells are not allowed`,
+      file,
+    });
+  }
+  for (const child of Object.values(value)) {
+    validateNoRubyShell(child, file);
+  }
+};
+
+export const validateNoRubyProcessSpawns = async (
+  root: string,
+): Promise<void> => {
+  const scriptsDirectory = path.join(root, "scripts");
+  if (!existsSync(scriptsDirectory)) {
+    return;
+  }
+  const spawnPattern = new RegExp(
+    `${String.raw`(?:Bun\.(?:spawn|spawnSync)|\b(?:spawn|spawnSync|execFile|execFileSync)\s*\()\s*(?:\{[^}]*cmd\s*:\s*)?\[?\s*["']`}ruby${String.raw`["']`}`,
+    "su",
+  );
+  for await (const relative of new Bun.Glob(
+    "**/*.{ts,tsx,mts,cts,js,mjs,cjs}",
+  ).scan({
+    cwd: scriptsDirectory,
+  })) {
+    const file = path.join(root, "scripts", relative);
+    if (spawnPattern.test(await Bun.file(file).text())) {
+      throw new WorkflowYamlError({
+        message: `${file}: spawning Ruby from scripts is not allowed`,
+        file,
+      });
+    }
+  }
+};
+
 const localActionReferences = (value: unknown): string[] => {
   if (!isRecord(value)) {
     return [];
@@ -269,8 +323,10 @@ export const checkWorkflowYaml = async (root: string): Promise<void> => {
   for (const name of workflowNames) {
     const file = path.join(workflowDirectory, name);
     validateWorkflowSize(Bun.file(file).size, file);
+    const value = await parseWorkflowYaml(file);
+    validateNoRubyShell(value, file);
     validateLocalActionReferences({
-      value: await parseWorkflowYaml(file),
+      value,
       root,
       file,
     });
@@ -299,9 +355,11 @@ export const checkWorkflowYaml = async (root: string): Promise<void> => {
       metadata[0] ?? panic("action metadata missing"),
     );
     const action = await parseWorkflowYaml(file);
+    validateNoRubyShell(action, file);
     validateActionMetadata(action, file);
     validateLocalActionReferences({ value: action, root, file });
   }
+  await validateNoRubyProcessSpawns(root);
 };
 
 if (import.meta.main) {

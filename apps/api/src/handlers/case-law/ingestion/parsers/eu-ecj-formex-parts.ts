@@ -1,9 +1,10 @@
+// parser-output-unchanged: imports byte-identical raw-envelope codecs from their pure owner.
 import { panic } from "better-result";
 
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@/api/lib/legal-search/source-raw-envelope";
 
 export const FORMEX_ARCHIVE_PREFIX = "formex-archive:";
 

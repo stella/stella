@@ -350,7 +350,9 @@ describe("pull request workflow concurrency", () => {
           (file === "deploy-landing.yml" &&
             group === `deploy-landing-\${{ github.ref }}`) ||
           (file === "manual-checks.yml" &&
-            group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`);
+            group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`) ||
+          (file === "queue-admission.yml" &&
+            group === `queue-admission-\${{ inputs.pr }}`);
         if (deliberate) {
           return [];
         }

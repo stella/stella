@@ -213,7 +213,7 @@ const createHarness = ({
       clock.advance(delayMs);
     },
     random,
-    timeoutMs,
+    timeoutMs, // timeout: fixture default, elapsed only on the fake clock
   });
   return {
     provider,
@@ -437,7 +437,7 @@ describe("managed OpenRouter credentials", () => {
 
   test("bounds a hanging successful response body parse and stops after three attempts", async () => {
     const harness = createHarness({
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
       exchangeFetcher: async () =>
         new Response(new ReadableStream<Uint8Array>(), { status: 200 }),
     });
@@ -557,7 +557,7 @@ describe("managed OpenRouter credentials", () => {
 
   test("bounds a hanging exchange with the injected timeout", async () => {
     const harness = createHarness({
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
       exchangeFetcher: async () => await new Promise<Response>(() => {}),
     });
     managedUnavailable(await harness.provider.get());
