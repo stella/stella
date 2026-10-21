@@ -2,7 +2,6 @@ import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
-  useMutation,
   useQuery,
   useQueryClient,
   useSuspenseQuery,
@@ -12,6 +11,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { Minimize2Icon, NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -75,6 +75,7 @@ import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-l
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { roleOptions } from "@/lib/auth-queries";
+import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
 import {
   getChatSendMode,
   useChatAnonymized,
@@ -910,19 +911,21 @@ const useChatWebSearchSeed = ({
 }: ChatWebSearchSeedProps) => {
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const { mutate } = useMutation({
-    mutationFn: async () => {
-      const response = await api.chat
-        .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
-        .patch(
-          { webSearchEnabled: true },
-          {
-            query:
-              threadRef.scope === "workspace"
-                ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
-                : {},
-          },
-        );
+  const threadId = toSafeId<"chatThread">(threadRef.threadId);
+  const { mutate } = useCapabilityMutation({
+    capability: "chat.threads.update",
+    target: resourceRef({ type: RESOURCE_TYPE.CHAT_THREAD, id: threadId }),
+    mutationFn: async (_variables, request) => {
+      const response = await api.chat.threads({ threadId }).patch(
+        { webSearchEnabled: true },
+        {
+          ...request,
+          query:
+            threadRef.scope === "workspace"
+              ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
+              : {},
+        },
+      );
       // Eden returns `{ error }` on non-2xx responses; without this
       // throw onSuccess fires and the thread is marked seeded for
       // the session, leaving web search silently off.
@@ -930,10 +933,7 @@ const useChatWebSearchSeed = ({
     },
     onSuccess: () => {
       detached(
-        invalidateChatThreadAcrossScopes({
-          queryClient,
-          threadId: toSafeId<"chatThread">(threadRef.threadId),
-        }),
+        invalidateChatThreadAcrossScopes({ queryClient, threadId }),
         "chat-thread-page.invalidate-chat-thread-across-scopes",
       );
       onSettled(threadRef.threadId, true);

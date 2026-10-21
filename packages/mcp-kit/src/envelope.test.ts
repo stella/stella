@@ -1,7 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import fc from "fast-check";
-
-import { assertProperty } from "@stll/property-testing";
 
 import {
   closestNames,
@@ -10,6 +7,7 @@ import {
   KIT_INTERNAL_MESSAGE,
   success,
   toCallResult,
+  toolNameDistance,
 } from "./envelope";
 import type { McpJsonValue, ToolCallResult } from "./types";
 
@@ -28,51 +26,6 @@ const INTERNAL_RESULT = {
   ],
   isError: true,
 } satisfies ToolCallResult;
-
-const legacyEditDistance = (left: string, right: string): number => {
-  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
-  for (let row = 1; row <= left.length; row += 1) {
-    const current = [row];
-    for (let column = 1; column <= right.length; column += 1) {
-      const substitution =
-        (previous[column - 1] ?? 0) +
-        (left[row - 1] === right[column - 1] ? 0 : 1);
-      current[column] = Math.min(
-        (previous[column] ?? 0) + 1,
-        (current[column - 1] ?? 0) + 1,
-        substitution,
-      );
-    }
-    previous = current;
-  }
-  return previous[right.length] ?? 0;
-};
-
-const legacyClosestNames = (
-  name: string,
-  known: readonly string[],
-): string[] => {
-  const lowered = name.toLowerCase();
-  return known
-    .map((candidate) => {
-      const lower = candidate.toLowerCase();
-      const contains = lower.includes(lowered) || lowered.includes(lower);
-      return {
-        candidate,
-        distance: contains ? 0 : legacyEditDistance(lowered, lower),
-      };
-    })
-    .filter(
-      ({ distance }) => distance <= Math.max(2, Math.floor(name.length / 3)),
-    )
-    .toSorted(
-      (left, right) =>
-        left.distance - right.distance ||
-        left.candidate.localeCompare(right.candidate),
-    )
-    .slice(0, 3)
-    .map(({ candidate }) => candidate);
-};
 
 describe("tool results preserve JSON data or return a safe error", () => {
   test("preserves primitive and nested JSON values and normalization notes", () => {
@@ -192,6 +145,26 @@ describe("tool results preserve JSON data or return a safe error", () => {
 });
 
 describe("closest tool names", () => {
+  test("bounds distance work for long names", () => {
+    const startedAt = performance.now();
+    expect(toolNameDistance("x".repeat(10_000), "search_documents")).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+    expect(toolNameDistance("search_documents", "x".repeat(10_000))).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+    expect(performance.now() - startedAt).toBeLessThan(50);
+  });
+
+  test("bounds suggestion work and preserves short near matches", () => {
+    const startedAt = performance.now();
+    expect(closestNames("x".repeat(10_000), ["search_documents"])).toEqual([]);
+    expect(performance.now() - startedAt).toBeLessThan(50);
+    expect(closestNames("search_documnts", ["search_documents"])).toEqual([
+      "search_documents",
+    ]);
+  });
+
   test("matches contained names and returns at most three closest names", () => {
     expect(closestNames("eta", ["theta", "beta"])).toEqual(["beta", "theta"]);
     expect(closestNames("cat", ["rat", "mat", "hat", "bat"])).toEqual([
@@ -225,33 +198,15 @@ describe("closest tool names", () => {
     expect(closestNames("Novákem", ["Novák"])).toEqual(["Novák"]);
   });
 
-  test("ASCII closest-name ranking matches the previous algorithm", () => {
-    const asciiCharacters = [
-      ...Array.from(
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-      ),
-      "-",
-      "_",
-      " ",
-      "\t",
-      "\n",
-      ".",
-    ];
-    const asciiText = fc
-      .array(fc.constantFrom(...asciiCharacters), { maxLength: 12 })
-      .map((characters) => characters.join(""));
-
-    assertProperty(
-      "ASCII closest-name ranking matches the previous algorithm",
-      fc.property(
-        asciiText,
-        fc.array(asciiText, { maxLength: 8 }),
-        (name, known) => {
-          expect(closestNames(name, known)).toEqual(
-            legacyClosestNames(name, known),
-          );
-        },
-      ),
-    );
+  test("matches reordered words and comparison keys", () => {
+    expect(
+      closestNames("parts_delete_widgets", [
+        "widgets_delete_parts",
+        "list_matters",
+      ]),
+    ).toEqual(["widgets_delete_parts"]);
+    expect(closestNames("ListMatters", ["list_matters"])).toEqual([
+      "list_matters",
+    ]);
   });
 });
