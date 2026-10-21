@@ -4,7 +4,7 @@ import type { EntityType, SanctionsEntry } from "./entry";
 import { buildNameIndex, matchNames } from "./name-match";
 import type { ScreeningWorkBudget } from "./name-match";
 import { nameReading } from "./normalise";
-import type { ScreeningQuery } from "./screening";
+import type { ScreeningQuery, ScreeningWorkUsage } from "./screening";
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "./screening";
 
 const version = {
@@ -135,10 +135,16 @@ test("dense common names screen normally within the warm work bound", () => {
     screen(index, { name, entityType }, { cutoff: DEFAULT_CUTOFF });
     for (const kind of [entityType, undefined]) {
       const started = performance.now();
+      const reported: ScreeningWorkUsage[] = [];
       const result = screen(
         index,
         kind === undefined ? { name } : { name, entityType: kind },
-        { cutoff: DEFAULT_CUTOFF },
+        {
+          cutoff: DEFAULT_CUTOFF,
+          onWork: (usage) => {
+            reported.push(usage);
+          },
+        },
       );
       const milliseconds = performance.now() - started;
       timings.push({
@@ -151,6 +157,11 @@ test("dense common names screen normally within the warm work bound", () => {
       if (result.isOk() && result.value.possibleMatches.length === 0) {
         expect(result.value.truncated).toBe(false);
       }
+      expect(reported).toHaveLength(1);
+      const usage = reported.at(0);
+      expect(usage?.spent ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
+        usage?.limit ?? 0,
+      );
     }
   }
   console.info(JSON.stringify({ denseNames: timings }));

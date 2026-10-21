@@ -64,7 +64,6 @@ macro_rules! generate_stella_handler {
 }
 
 use clipboard::{ClipboardAppState, ClipboardManager};
-use clipboard_commands::ClipboardEditorState;
 use commands::AppState;
 use session_manager::SessionManager;
 use std::sync::Arc;
@@ -136,7 +135,7 @@ pub fn run() {
     .manage::<AppState>(Arc::clone(&manager))
     .manage::<account::AccountState>(Arc::clone(&account))
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
-    .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
+    .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage(feature_gate::FeatureGates::default())
     .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
@@ -341,8 +340,7 @@ pub fn run() {
                 }
               }
               tray::MenuAction::OpenEditRoot => {
-                let mgr = manager.lock().await;
-                mgr.open_edit_root().await;
+                manager.lock().await.open_edit_root().await;
               }
               tray::MenuAction::CopyDiagnostics => {
                 let mgr = manager.lock().await;
@@ -369,6 +367,7 @@ pub fn run() {
                   mgr.persist_sessions_public().await;
                   mgr.retry_session(&id).await;
                 }
+                drop(mgr);
               }
               tray::MenuAction::RetrySession(id) => {
                 let mut mgr = manager.lock().await;
@@ -376,6 +375,7 @@ pub fn run() {
                   mgr.persist_sessions_public().await;
                   mgr.retry_session(&id).await;
                 }
+                drop(mgr);
               }
             }
           });

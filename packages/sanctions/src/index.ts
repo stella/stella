@@ -31,6 +31,7 @@ export {
   ScreeningWorkLimitError,
   buildScreeningIndex,
   buildScreeningIndexCooperatively,
+  cloneScreeningIndexWithoutCache,
   screen,
 } from "./screening";
 export type {

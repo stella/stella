@@ -1,5 +1,26 @@
 # @stll/chat
 
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [[`6787bf4`](https://github.com/stella/stella/commit/6787bf4a6e33a5fa97538d91428d928ffffaabc8), [`f68baf7`](https://github.com/stella/stella/commit/f68baf7f2240db328e62201120dde71f3baf2b7b)]:
+  - @stll/ui@0.49.0
+
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [[`ed25af1`](https://github.com/stella/stella/commit/ed25af1211e6e5f091842ddf553f2795f5c16622)]:
+  - @stll/ui@0.48.0
+
+## 0.2.2
+
+### Patch Changes
+
+- [#6211](https://github.com/stella/stella/pull/6211) [`a2b5091`](https://github.com/stella/stella/commit/a2b5091f41d9786b93415df0321dbf1ab7bacffa) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the unused shared composer shell and action component while retaining
+  composer action-mode resolution for host-owned controls.
+
 ## 0.2.1
 
 ### Patch Changes

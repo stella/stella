@@ -218,6 +218,7 @@ const buildProposalRequest = ({
   return {
     analytics,
     options: {
+      userId: admission.userId,
       dataClass: "customer" as const,
       task: MODEL_TASK,
       orgAIConfig,
@@ -230,10 +231,8 @@ const buildProposalRequest = ({
       tenantWorkspaceIds: [workspaceId],
       system: SYSTEM_PROMPT,
       messages,
-      abortSignal: AbortSignal.any([
-        abortSignal,
-        AbortSignal.timeout(timeoutMs),
-      ]),
+      abortSignal,
+      deadlineMs: timeoutMs,
       outputSchema: proposedPositionsSchema,
     },
   };
