@@ -163,7 +163,7 @@ describe("MCP session telemetry audience", () => {
   const handshake = (session: McpSession) => {
     record({
       capabilities: {},
-      clientInfo: { name: "stella-mcp-canary", version: "1.0.0" },
+      clientInfo: { name: "claude-ai", version: "1.0.0" },
       mode: "default",
       session,
     });
@@ -197,7 +197,7 @@ describe("MCP session telemetry audience", () => {
     for (const credential of [
       {
         id: "key_1",
-        name: "canary",
+        name: "automation",
         permissions: { workspace: ["read"] },
         type: "machine_api_key",
       },

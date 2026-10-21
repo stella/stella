@@ -67,7 +67,7 @@ describe("productUsagePrincipal", () => {
     ).toEqual({ distinctId: "user_1", organizationId: "org_1" });
   });
 
-  test("has no principal for the monitoring identities", () => {
+  test("has no principal for the service's own identities", () => {
     expect(
       productUsagePrincipal(
         { organizationId: "org_review", userId: "user_review" },

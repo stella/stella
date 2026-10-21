@@ -189,7 +189,7 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
       }
     | {
         // Product usage: only a principal classified as a customer may send
-        // it (`principal-audience.ts`), so monitoring traffic never counts.
+        // it (`principal-audience.ts`).
         distinctId: CustomerDistinctId;
         event: typeof SERVER_ANALYTICS_EVENTS.mcpSessionInitialized;
         properties: McpSessionInitializedProperties;

@@ -2,10 +2,9 @@ import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
 import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
 
 /**
- * Whose activity a server event describes. Product analytics count customers.
- * The synthetic monitor and the restricted review account (the identity the
- * deployed MCP canary runs as) are Stella's own principals: their traffic is
- * monitoring, and counted as usage it outweighs every customer.
+ * Whose activity a server event describes. Product analytics count customers;
+ * the synthetic principal and the restricted review account are the service's
+ * own, and their activity is not product usage.
  */
 export const PRINCIPAL_AUDIENCE = {
   customer: "customer",
@@ -63,7 +62,7 @@ export type ProductUsagePrincipal = {
   organizationId: string;
 };
 
-/** The principal as product usage, or null when its activity is Stella's own. */
+/** The principal as product usage, or null when it is the service's own. */
 export const productUsagePrincipal = (
   principal: AudiencePrincipal,
   reviewAccount: ReviewAccountConfig,

@@ -96,9 +96,8 @@ export type RecordMcpSessionInitialized = (args: {
  * this handshake is the only point at which a client identifies itself on the
  * 2025-era protocol; later requests carry no identity to attribute.
  *
- * Only a customer's handshake is product usage. The synthetic monitor and the
- * review account the deployed canary runs as open sessions on a schedule, so
- * their handshakes are left out here, by the principal's audience.
+ * Only a customer's handshake is product usage: the service's own principals
+ * (`principal-audience.ts`) are left out by their audience.
  */
 export const createRecordMcpSessionInitialized =
   (readReviewAccount: () => ReviewAccountConfig): RecordMcpSessionInitialized =>
