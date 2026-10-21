@@ -8,10 +8,12 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import {
   assertPostgresWorkerBudget,
   planPostgresWorkers,
+  POSTGRES_IDENTIFIER_BYTES,
   PostgresTemplateConnectionError,
   PostgresWorkerBudgetError,
   runPostgresWorkers,
   type PostgresAdmin,
+  workerDatabaseName,
 } from "./postgres-test-workers";
 import { runTestBatches } from "./run-gated-tests";
 
@@ -222,6 +224,7 @@ test("template cloning refuses and names foreign connections", async () => {
         exited: Promise.resolve(0),
         exitCode: 0,
         signalCode: null,
+        kill: () => undefined,
       }),
     }),
   );
@@ -338,4 +341,28 @@ test("signal kills workers before cloned database cleanup", async () => {
   );
   expect(kill).toBeGreaterThan(-1);
   expect(drop).toBeGreaterThan(kill);
+});
+
+test("clone database names fit the identifier limit and stay distinct", () => {
+  for (const template of [
+    "template_db",
+    "t".repeat(63),
+    "š".repeat(40),
+    `${"x".repeat(50)}_suffix_that_used_to_be_truncated`,
+  ]) {
+    const names = [1, 2, 10].flatMap((worker) =>
+      ["4242_k1", "4242_k2"].map((runId) =>
+        workerDatabaseName({ template, runId, worker }),
+      ),
+    );
+    for (const name of names) {
+      expect(Buffer.byteLength(name), name).toBeLessThanOrEqual(
+        POSTGRES_IDENTIFIER_BYTES,
+      );
+    }
+    expect(new Set(names).size).toBe(names.length);
+  }
+  expect(
+    workerDatabaseName({ template: "template_db", runId: "1_a", worker: 1 }),
+  ).toStartWith("template_db_test_w1_");
 });

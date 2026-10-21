@@ -1,8 +1,12 @@
 import { TaggedError } from "better-result";
 
+import { sha256Hex } from "@stll/sha256/bun";
+
 import { partitionTestFiles } from "./test-file-shards";
 
 export const POSTGRES_TEST_CONNECTION_RESERVE = 10;
+// PostgreSQL truncates identifiers to NAMEDATALEN - 1 bytes without an error.
+export const POSTGRES_IDENTIFIER_BYTES = 63;
 export const POSTGRES_TEST_POOL_MAX_PER_WORKER = 10;
 
 export class PostgresWorkerBudgetError extends TaggedError(
@@ -90,11 +94,36 @@ export type PostgresAdmin = {
   close: () => Promise<void>;
 };
 
+/**
+ * A clone name that fits PostgreSQL's identifier limit: the template prefix is
+ * shortened by whole characters, and the worker number plus a hash of the
+ * template and run keep every clone of every run distinct.
+ */
+export const workerDatabaseName = ({
+  template,
+  runId,
+  worker,
+}: {
+  template: string;
+  runId: string;
+  worker: number;
+}) => {
+  const tail = `_w${worker}_${sha256Hex(`${template}\0${runId}`).slice(0, 12)}`;
+  const head = [...`${template}_test`];
+  while (
+    head.length > 0 &&
+    Buffer.byteLength(head.join("") + tail) > POSTGRES_IDENTIFIER_BYTES
+  ) {
+    head.pop();
+  }
+  return head.join("") + tail;
+};
+
 type Child = {
   exited: Promise<number>;
   exitCode: number | null;
   signalCode: string | number | null;
-  kill?: (signal?: NodeJS.Signals) => void;
+  kill: (signal?: NodeJS.Signals) => void;
 };
 
 type RunPostgresWorkersOptions = PlanPostgresWorkersOptions & {
@@ -212,16 +241,16 @@ export const runPostgresWorkers = async ({
     exclusivePaths,
     workers,
   });
-  const suffix = `${process.pid}_${Date.now().toString(36)}`;
-  const databaseNames = plan.map(
-    (_, index) => `${template}_test_${suffix}_${index + 1}`,
+  const runId = `${process.pid}_${Date.now().toString(36)}`;
+  const databaseNames = plan.map((_, index) =>
+    workerDatabaseName({ template, runId, worker: index + 1 }),
   );
   const children: Child[] = [];
   let signal: NodeJS.Signals | undefined;
   const unregister = registerSignal((received) => {
     signal = received;
     for (const child of children) {
-      child.kill?.(received);
+      child.kill(received);
     }
   });
   try {

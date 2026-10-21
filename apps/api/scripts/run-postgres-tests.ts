@@ -7,6 +7,7 @@ import path from "node:path";
 import { buildApiTestCommand } from "./api-test-command";
 import {
   mergeJunitReports,
+  missingBatchReport,
   planBatchReporterArguments,
 } from "./junit-batch-report";
 import { loadTestEnv } from "./load-test-env";
@@ -125,21 +126,27 @@ process.exitCode = await runGatedTests({
           });
         },
       });
+      let missingReport = false;
       if (reporterPlan.type === "file") {
         const reports = await Promise.all(
           reporterPlan.batchOutfiles
             .slice(0, invocation)
-            .map(async (source) => ({
-              source,
-              xml: await Bun.file(source).text(),
-            })),
+            .map(async (source) => {
+              const report = Bun.file(source);
+              if (await report.exists()) {
+                return { source, xml: await report.text() };
+              }
+              missingReport = true;
+              return { source, xml: missingBatchReport(source) };
+            }),
         );
         await Bun.write(
           path.resolve(import.meta.dir, "..", reporterPlan.requestedOutfile),
           mergeJunitReports(reports),
         );
       }
-      return status;
+      // A batch without a report failed even if its process exited cleanly.
+      return status === 0 && missingReport ? 1 : status;
     } finally {
       await sql.close();
       await rm(temporaryDirectory, { recursive: true, force: true });
