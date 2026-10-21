@@ -29,7 +29,7 @@ jobs:
       && github.event.workflow_run.path == '.github/workflows/marketing-screenshots-capture.yml'
       && github.event.workflow_run.event == 'workflow_dispatch'
       && github.event.workflow_run.head_repository.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       # Reading the capture run's artifact.

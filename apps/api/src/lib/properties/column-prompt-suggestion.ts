@@ -380,6 +380,7 @@ export const suggestColumnPrompt = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        userId,
         admission,
         tenantWorkspaceIds: scope.tenantWorkspaceIds,
         analytics: aiAnalytics,
@@ -402,10 +403,8 @@ export const suggestColumnPrompt = async ({
             }),
           },
         ],
-        abortSignal: AbortSignal.any([
-          abortSignal,
-          AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
-        ]),
+        abortSignal,
+        deadlineMs: SUGGEST_TIMEOUT_MS,
       }),
     catch: (error) => {
       aiAnalytics.captureError(error);

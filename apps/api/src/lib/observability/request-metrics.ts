@@ -34,6 +34,73 @@ const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
 
+const REQUEST_STAGE_FAMILIES = {
+  legislation_search: [
+    "index_scan",
+    "candidate_hydration",
+    "work_collapse_ranking",
+    "response_serialization",
+  ],
+  chat_turn: ["request_setup", "provider_first_token", "stream_finish"],
+} as const;
+
+export type RequestStage =
+  (typeof REQUEST_STAGE_FAMILIES)[keyof typeof REQUEST_STAGE_FAMILIES][number];
+
+const REQUEST_STAGE_FAMILY = {
+  index_scan: "legislation_search",
+  candidate_hydration: "legislation_search",
+  work_collapse_ranking: "legislation_search",
+  response_serialization: "legislation_search",
+  request_setup: "chat_turn",
+  provider_first_token: "chat_turn",
+  stream_finish: "chat_turn",
+} as const satisfies Record<RequestStage, keyof typeof REQUEST_STAGE_FAMILIES>;
+
+export type RequestStageOutcome =
+  | "completed"
+  | "failed"
+  | "refused"
+  | "cancelled";
+
+type RequestStageRecordInput = {
+  route: string;
+  tool?: string;
+  stage: RequestStage;
+  durationMs: number;
+  rounds?: number;
+  candidateCount?: number;
+  resultCount?: number;
+  outcome: RequestStageOutcome;
+};
+
+/** Log-only stage detail: no stage, route, tool, or outcome becomes an EMF dimension. */
+export const buildRequestStageRecord = ({
+  route,
+  tool,
+  stage,
+  durationMs,
+  rounds,
+  candidateCount,
+  resultCount,
+  outcome,
+}: RequestStageRecordInput) => ({
+  event: "request.stage",
+  class: REQUEST_STAGE_FAMILY[stage],
+  "http.route": route,
+  ...(tool === undefined ? {} : { tool }),
+  stage,
+  durationMs: Math.max(0, Math.round(durationMs)),
+  ...(rounds === undefined ? {} : { rounds }),
+  ...(candidateCount === undefined ? {} : { candidateCount }),
+  ...(resultCount === undefined ? {} : { resultCount }),
+  outcome,
+});
+
+export const emitRequestStage = (input: RequestStageRecordInput): void => {
+  writeMetricLine(buildRequestStageRecord(input));
+};
+
 type McpRequestMetricInput = {
   method: string;
   mode: string;

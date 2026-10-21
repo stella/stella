@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Alle Behauptungen, die eine Entscheidung erfordern, wurden bearbeitet.</strong> {count, plural, one {Die # routinemäßige Feststellung muss nicht einzeln geprüft werden.} other {Die # routinemäßigen Feststellungen müssen nicht einzeln geprüft werden.}}",
       "attentionOpen": "<strong>{count, plural, one {# Behauptung erfordert} other {# Behauptungen erfordern}} Ihre Entscheidung</strong> – Widersprüche und strittige Auslegungen. {routineCount, plural, one {Die andere # ist routinemäßig und muss nicht einzeln freigegeben werden.} other {Die anderen # sind routinemäßig und müssen nicht einzeln freigegeben werden.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, strittig} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} other {}})",
+      "documentView": {
+        "label": "Dokumentansicht",
+        "original": "Original",
+        "reading": "Leseansicht"
+      },
+      "notLocated": "{count, plural, one {# Behauptung wurde im Original nicht gefunden} other {# Behauptungen wurden im Original nicht gefunden}}",
       "selectClaim": "Wählen Sie eine Behauptung aus, um den Bestand zu prüfen.",
       "showQueue": "Warteschlange anzeigen",
       "stats": {
@@ -1009,6 +1015,9 @@
       "saved": "{count, plural, one {# Entscheidung} other {# Entscheidungen}} in {matter} gespeichert"
     },
     "newestDecisions": "Neueste Entscheidungen",
+    "noResults": {
+      "hint": "Versuchen Sie andere Wörter, verbessern Sie die Anfrage mit KI oder stellen Sie die Frage im Chat."
+    },
     "notesFilter": {
       "ai": "KI",
       "human": "Mensch"
@@ -1081,6 +1090,10 @@
         "medium": "Mittel",
         "short": "Kurz"
       }
+    },
+    "rewritten": {
+      "line": "Keine genauen Treffer für <bdi>{original}</bdi>; Ergebnisse für <bdi>{query}</bdi>",
+      "searchOriginal": "Meine ursprünglichen Wörter suchen"
     },
     "sameCaseNumber": "{count, plural, one {# Entscheidung trägt} other {# Entscheidungen tragen}} dieses Aktenzeichen. Wählen Sie das Gericht.",
     "searchLabel": "Rechtsprechung durchsuchen",
@@ -1601,6 +1614,9 @@
         "private": "Ihre Skills",
         "team": "Team-Skills"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Ebenfalls konsultiert ({count, number})"
     },
     "sourcePlaceholder": "Chat über {title}",
     "sourcePlaceholderAction": "Chat über",
@@ -2662,10 +2678,12 @@
     "api": {
       "badRequest": "Die Anfrage konnte nicht abgeschlossen werden.",
       "caseLawCountryUnavailable": "Die Rechtsprechung dieses Landes ist nicht verfügbar. Wählen Sie ein anderes Land.",
+      "caseLawIdentityOnly": "Für dieses Land sind nur die genaue Suche und das Lesen von Entscheidungen verfügbar.",
       "caseLawSearchUnavailable": "Die Suche in der Rechtsprechung dieses Landes ist nicht verfügbar. Die öffentlichen Entscheidungen können Sie weiterhin lesen.",
       "conflict": "Die Anfrage steht im Konflikt mit dem aktuellen Zustand.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "legislationCountryUnavailable": "Die Rechtsvorschriften dieses Landes sind nicht verfügbar. Wählen Sie ein anderes Land.",
+      "legislationIdentityOnly": "Für dieses Land sind nur die genaue Suche und das Lesen von Rechtsvorschriften verfügbar.",
       "legislationSearchUnavailable": "Die Suche in den Rechtsvorschriften dieses Landes ist nicht verfügbar. Die öffentlichen Rechtsvorschriften können Sie weiterhin lesen.",
       "notFound": "Das Angeforderte konnte nicht gefunden werden.",
       "payloadTooLarge": "Die Anfrage ist zu groß.",
@@ -2688,6 +2706,10 @@
       "aiConfigModelInvalid": "Die KI-Modellkonfiguration ist ungültig. Prüfen Sie die ausgewählten Modelle.",
       "aiConfigProviderInvalid": "Die Konfiguration des KI-Anbieters ist ungültig. Prüfen Sie die Anbietereinstellungen.",
       "aiConfigProviderValidationFailed": "Der KI-Anbieter hat die Konfiguration abgelehnt. Prüfen Sie API-Schlüssel und Modell.",
+      "aiOutputInvalid": "Die KI-Antwort hatte ein unerwartetes Format. Versuchen Sie es erneut.",
+      "aiOutputModerated": "Der KI-Anbieter hat die Ausgabe moderiert. Formulieren Sie die Anfrage um oder wählen Sie ein anderes Modell.",
+      "aiProviderTaskUnsupported": "Der konfigurierte KI-Anbieter kann diese Aufgabe nicht ausführen. Wählen Sie einen Anbieter, der sie unterstützt.",
+      "aiUnknown": "Die KI-Anfrage ist fehlgeschlagen. Versuchen Sie es erneut.",
       "clauseDirectivesInvalid": "Eine verknüpfte Klausel enthält ungültige Anweisungen. Korrigieren Sie die Klausel, bevor Sie die Vorlage ausfüllen.",
       "clauseDirectivesInvalidDetails": "Die Klausel {clauseName} im Platzhalter {slotName} enthält ungültige Direktiven. Öffnen Sie den Klauseleditor, korrigieren Sie die angegebenen Absätze und füllen Sie die Vorlage erneut aus.",
       "clauseDirectivesOverrideInvalidDetails": "Die Überschreibung für Klausel {clauseName} im Platzhalter {slotName} enthält ungültige Anweisungen. Korrigieren Sie die Überschreibung für diesen Ausfüllvorgang und versuchen Sie es erneut.",
@@ -4234,6 +4256,10 @@
     "archivedEmpty": "Keine archivierten Erinnerungen.",
     "archivedToast": "Erinnerung archiviert",
     "createdToast": "Im Gedächtnis gespeichert",
+    "deleteConfirmation": "Zur Bestätigung {confirmation} eingeben",
+    "deleteDescription": "Dadurch wird diese Erinnerung dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "deleteTitle": "Erinnerung löschen?",
+    "deletedToast": "Erinnerung gelöscht",
     "empty": "Noch nichts im Gedächtnis.",
     "kinds": {
       "decision": "Entscheidung",
@@ -5162,6 +5188,8 @@
     "outline": "Inhalt",
     "outlineJumpLabel": "Zu einer Vorschrift springen",
     "outlineJumpPlaceholder": "§ 10 oder Überschrift",
+    "pendingChanges": "Bevorstehende Änderungen",
+    "pendingChangesIncomplete": "Die Daten des Herausgebers enthalten möglicherweise nicht alle bevorstehenden Änderungen.",
     "provisionAskContextPrompt": "\n\nPassagen, die die Vorschrift in den maßgeblichsten Entscheidungen anwenden:\n{passages}\n\nNutze die Rechtsprechungswerkzeuge, um eine dieser Entscheidungen vollständig zu lesen oder weitere Entscheidungen zu finden, die die Vorschrift zitieren.",
     "provisionAskPlaceholder": "Zu dieser Vorschrift fragen",
     "provisionAskQuestionPrompt": "Zu {subject}: {question}",
