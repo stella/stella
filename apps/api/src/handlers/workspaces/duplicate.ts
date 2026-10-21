@@ -58,10 +58,8 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
-import {
-  computedColumnInputHandlerError,
-  requireComputedColumnInputs,
-} from "@/api/lib/properties/computed-column-input";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
@@ -470,7 +468,7 @@ const wireDuplicatedComputedInputs = ({
     candidate.id ? [{ id: candidate.id, content: candidate.content }] : [],
   );
   for (const property of newProperties) {
-    if (property.tool?.type !== "ai-model") {
+    if (property.tool.type !== "ai-model") {
       continue;
     }
     if (!property.id) {

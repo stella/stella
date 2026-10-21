@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { ConditionNode } from "@stll/conditions";
 
@@ -90,9 +90,7 @@ export type PropertyBatch = {
 
 export type ExecutionLevel = PropertyBatch[];
 
-export class ComputedColumnPlanError extends TaggedError(
-  "ComputedColumnPlanError",
-)<{
+class ComputedColumnPlanError extends TaggedError("ComputedColumnPlanError")<{
   message: string;
   code: "ai-column-input-required";
   propertyIds: string[];
@@ -296,21 +294,22 @@ export const buildLevelBatches = (
 export const getPropertyExecutionPlan = ({
   properties,
   dependencies,
-}: ExecutionPlanData): ExecutionLevel[] => {
+}: ExecutionPlanData): Result<ExecutionLevel[], ComputedColumnPlanError> => {
   const inputlessComputedPropertyIds = properties
     .filter(
       ({ id, tool }) =>
-        COMPUTED_PROPERTY_TOOL_TYPES.includes(
-          tool.type as "ai-model" | "playbook-verdict",
-        ) && !dependencies.some(({ propertyId }) => propertyId === id),
+        (tool.type === "ai-model" || tool.type === "playbook-verdict") &&
+        !dependencies.some(({ propertyId }) => propertyId === id),
     )
     .map(({ id }) => id);
   if (inputlessComputedPropertyIds.length > 0) {
-    throw new ComputedColumnPlanError({
-      code: "ai-column-input-required",
-      message: "Stored computed columns have no input dependencies",
-      propertyIds: inputlessComputedPropertyIds,
-    });
+    return Result.err(
+      new ComputedColumnPlanError({
+        code: "ai-column-input-required",
+        message: "Stored computed columns have no input dependencies",
+        propertyIds: inputlessComputedPropertyIds,
+      }),
+    );
   }
 
   const graph = buildDependencyGraph({ properties, dependencies });
@@ -339,5 +338,5 @@ export const getPropertyExecutionPlan = ({
   }
 
   // The first level contains user-entered source properties only.
-  return levels.slice(1);
+  return Result.ok(levels.slice(1));
 };

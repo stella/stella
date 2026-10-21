@@ -4,7 +4,6 @@ import type { ConditionNode } from "@stll/conditions";
 
 import type { PropertyContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const AI_COLUMN_INPUT_REQUIRED_CODE = "ai-column-input-required";
 
@@ -26,16 +25,6 @@ export class AIColumnInputRequiredError extends TaggedError(
   candidateFileColumnIds: SafeId<"property">[];
 }> {}
 
-export const computedColumnInputHandlerError = (
-  error: AIColumnInputRequiredError,
-) =>
-  new HandlerError({
-    status: 422,
-    code: error.code,
-    message: error.message,
-    hint: `Candidate file columns: ${error.candidateFileColumnIds.join(", ") || "none"}`,
-  });
-
 type InputCandidate = {
   id: SafeId<"property">;
   content: Pick<PropertyContent, "type">;
@@ -55,7 +44,10 @@ export const requireComputedColumnInputs = ({
   inputs: readonly PropertyInput[];
 }): Result<NonEmptyPropertyInputs, AIColumnInputRequiredError> => {
   if (inputs.length > 0) {
-    return Result.ok(inputs as NonEmptyPropertyInputs);
+    const [first, ...rest] = inputs;
+    if (first) {
+      return Result.ok([first, ...rest]);
+    }
   }
 
   const candidateFileColumnIds = candidates

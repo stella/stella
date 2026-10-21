@@ -7,7 +7,7 @@ import { sql } from "drizzle-orm";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
-import { rootDb } from "@/api/db/root";
+import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 
 type CensusRow = {
   organizationId: string;
@@ -18,7 +18,8 @@ type CensusRow = {
 };
 
 await runScriptWithErrorOutput(async () => {
-  const rows = await rootDb.execute<CensusRow>(sql`
+  const db = openMaintenanceDb({ readOnly: true });
+  const rows = await db.execute<CensusRow>(sql`
       select
         w.organization_id as "organizationId",
         p.workspace_id as "workspaceId",
@@ -46,7 +47,7 @@ await runScriptWithErrorOutput(async () => {
     counts.set(row.organizationId, (counts.get(row.organizationId) ?? 0) + 1);
     const proposed =
       row.candidateFilePropertyIds.length === 1
-        ? row.candidateFilePropertyIds.at(0)
+        ? row.candidateFilePropertyIds.join("")
         : "none (owner would refuse: expected exactly one file column)";
     console.log(
       `${row.organizationId}\t${row.workspaceId}\t${row.propertyId}\t${row.propertyName}\twould wire: ${proposed}`,

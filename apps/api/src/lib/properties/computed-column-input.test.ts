@@ -5,9 +5,9 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   AIColumnInputRequiredError,
-  computedColumnInputHandlerError,
   requireComputedColumnInputs,
 } from "./computed-column-input";
+import { computedColumnInputHandlerError } from "./computed-column-input-handler-error";
 
 const file = (id: string) => ({
   id: toSafeId<"property">(id),
@@ -16,10 +16,15 @@ const file = (id: string) => ({
 
 describe("computed column input ownership", () => {
   test("wires the sole document file column when no input was supplied", () => {
-    expect(
-      requireComputedColumnInputs({ candidates: [file("file")], inputs: [] })
-        .value,
-    ).toEqual([
+    const result = requireComputedColumnInputs({
+      candidates: [file("file")],
+      inputs: [],
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      return;
+    }
+    expect(result.value).toEqual([
       { dependsOnPropertyId: toSafeId<"property">("file"), condition: null },
     ]);
   });
@@ -29,6 +34,10 @@ describe("computed column input ownership", () => {
       candidates: [file("one"), file("two")],
       inputs: [],
     });
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      return;
+    }
     expect(result.error).toBeInstanceOf(AIColumnInputRequiredError);
     expect(result.error).toMatchObject({
       code: "ai-column-input-required",

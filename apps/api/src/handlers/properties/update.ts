@@ -31,10 +31,8 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
-import {
-  computedColumnInputHandlerError,
-  requireComputedColumnInputs,
-} from "@/api/lib/properties/computed-column-input";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
   DOCUMENT_TYPE_CLASSIFIER_ROLE,
   isDocumentTypeClassifierProperty,
@@ -461,7 +459,7 @@ const updateProperty = createSafeHandler(
             inputs: dependencies,
           });
           if (Result.isError(resolved)) {
-            throw computedColumnInputHandlerError(resolved.error);
+            return Result.err(computedColumnInputHandlerError(resolved.error));
           }
           dependencies = [...resolved.value];
         }
@@ -607,16 +605,20 @@ const updateProperty = createSafeHandler(
       }),
     );
 
-    if (!txResult.ok) {
+    if ("status" in txResult && txResult.status === "error") {
+      return txResult;
+    }
+    const transactionValue = txResult;
+    if (!transactionValue.ok) {
       return Result.err(
         new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-          ...("code" in txResult
+          status: transactionValue.status,
+          message: transactionValue.message,
+          ...("code" in transactionValue
             ? {
-                code: txResult.code,
-                retryable: txResult.retryable,
-                hint: txResult.hint,
+                code: transactionValue.code,
+                retryable: transactionValue.retryable,
+                hint: transactionValue.hint,
               }
             : {}),
         }),

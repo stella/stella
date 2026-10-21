@@ -9,10 +9,8 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  computedColumnInputHandlerError,
-  requireComputedColumnInputs,
-} from "@/api/lib/properties/computed-column-input";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
   buildPropertyParts,
   createPropertyBodySchema,
@@ -98,7 +96,7 @@ const createProperty = createSafeHandler(
             inputs: requestedDependencies,
           });
           if (Result.isError(resolved)) {
-            throw computedColumnInputHandlerError(resolved.error);
+            return Result.err(computedColumnInputHandlerError(resolved.error));
           }
           dependencies = [...resolved.value];
         }
@@ -181,6 +179,9 @@ const createProperty = createSafeHandler(
       }),
     );
 
+    if ("status" in txResult) {
+      return txResult;
+    }
     return Result.ok({ id: txResult.id });
   },
 );

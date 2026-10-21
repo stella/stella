@@ -7,13 +7,17 @@ import {
   buildDependencyGraph,
   buildLevelBatches,
   COMPUTED_PROPERTY_TOOL_TYPES,
-  getPropertyExecutionPlan,
+  getPropertyExecutionPlan as getPropertyExecutionPlanResult,
 } from "@/api/lib/workflow/get-execution-plan";
 import type {
   BatchPropertyDependency,
   ExecutionPlanProperty,
   PropertyDependencyEdge,
 } from "@/api/lib/workflow/get-execution-plan";
+
+const getPropertyExecutionPlan = (
+  input: Parameters<typeof getPropertyExecutionPlanResult>[0],
+) => getPropertyExecutionPlanResult(input).unwrap();
 
 const aiModelTool = {
   version: 1 as const,
@@ -386,9 +390,17 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("p2"),
     ];
 
-    expect(() =>
-      getPropertyExecutionPlan({ properties, dependencies: [] }),
-    ).toThrow("Stored computed columns have no input dependencies");
+    const result = getPropertyExecutionPlanResult({
+      properties,
+      dependencies: [],
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      return;
+    }
+    expect(result.error.message).toBe(
+      "Stored computed columns have no input dependencies",
+    );
   });
 
   test("first level does not contain properties without dependencies", () => {
