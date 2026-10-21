@@ -494,6 +494,32 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    // Refreshes only the reviewed digests of jobs whose kind, qualifier and
+    // privilege are unchanged since the merge base; new, reclassified and
+    // privileged jobs keep failing the check until a human reviews them.
+    // This file loads without imports in reduced checkouts, so the paths are
+    // spelled out; a test binds them to scripts/ci-job-classification/inputs.ts.
+    id: "ci-job-classification-digests",
+    outputKind: "committed",
+    outputs: [".github/ci-job-classification-decisions.json"],
+    inputs: [
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/ci-job-classification-decisions.json",
+      ".github/ci-job-classification-sources.json",
+      "scripts/check-ci-job-classification.ts",
+      "scripts/ci-job-classification/**",
+      "packages/collation/src/collation.ts",
+      "packages/sha256/src/node.ts",
+      "packages/sha256/src/types.ts",
+    ],
+    write: ["bun", "scripts/check-ci-job-classification.ts", "--write"],
+    check: null,
+    checkedBy: "Check workflow job classifications",
+    autofix: true,
+    after: [],
+  },
+  {
     id: "design-tokens",
     outputKind: "committed",
     outputs: ["DESIGN.md"],

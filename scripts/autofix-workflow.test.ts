@@ -35,43 +35,64 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 // This test runs before the dependency install, so it narrows the workflow by
-// hand instead of with a schema library.
-const autofixTriggerPaths = (): string[] => {
+// hand instead of with a schema library. Undefined means no path filter.
+const autofixTriggerPaths = (): string[] | undefined => {
   const workflow: unknown = Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8"));
   const on = isRecord(workflow) ? workflow["on"] : undefined;
   const pullRequest = isRecord(on) ? on["pull_request"] : undefined;
-  const paths: unknown = isRecord(pullRequest)
-    ? pullRequest["paths"]
-    : undefined;
+  if (!isRecord(pullRequest)) {
+    throw new TypeError("autofix must trigger on pull_request");
+  }
+  expect(pullRequest["paths-ignore"]).toBeUndefined();
+  const paths: unknown = pullRequest["paths"];
+  if (paths === undefined) {
+    return undefined;
+  }
   if (
     !Array.isArray(paths) ||
     !paths.every((path): path is string => typeof path === "string")
   ) {
-    throw new TypeError("autofix must declare pull_request paths");
+    throw new TypeError("autofix pull_request paths must be strings");
   }
   return paths;
 };
 
 // Workflow files are never format or lint targets, so only a workflow that a
 // generator or the Tauri alignment reads (or this workflow) can need autofix.
+// When every workflow is read, the trigger filters nothing.
 test("the PR trigger drops exactly the workflow files autofix never reads", () => {
-  const workflows = readdirSync(
-    new URL("../.github/workflows", import.meta.url),
-  )
+  const all = readdirSync(new URL("../.github/workflows", import.meta.url))
     .map((name) => `.github/workflows/${name}`)
-    .filter(
-      (file) =>
-        file === ".github/workflows/autofix.yml" ||
-        generatorsForFiles([file]).length > 0 ||
-        requiresTauriAlignment([file]),
-    )
     .toSorted();
+  const workflows = all.filter(
+    (file) =>
+      file === ".github/workflows/autofix.yml" ||
+      generatorsForFiles([file]).length > 0 ||
+      requiresTauriAlignment([file]),
+  );
   expect(workflows).toContain(".github/workflows/ci.yml");
-  expect(autofixTriggerPaths()).toEqual([
-    "**",
-    "!.github/workflows/**",
-    ...workflows,
-  ]);
+  expect(autofixTriggerPaths()).toEqual(
+    workflows.length === all.length
+      ? undefined
+      : ["**", "!.github/workflows/**", ...workflows],
+  );
+});
+
+test("every workflow edit selects the classification digest refresh", () => {
+  for (const file of [
+    ".github/workflows/deploy-staging.yml",
+    ".github/actions/ci-install/action.yml",
+    ".github/ci-job-classification-decisions.json",
+    "scripts/ci-job-classification/yaml.ts",
+  ]) {
+    expect(
+      generatorsForFiles([file]).map(({ id }) => id),
+      file,
+    ).toContain("ci-job-classification-digests");
+  }
+  expect(
+    generatorsForFiles(["apps/web/src/main.tsx"]).map(({ id }) => id),
+  ).not.toContain("ci-job-classification-digests");
 });
 
 const namedCiStep = (workflow: unknown, name: string) => {
@@ -233,12 +254,13 @@ describe("Dependabot Bun autofix boundary", () => {
     const checkCall = `bun --no-install --no-env-file scripts/dependabot-changeset.ts \\
             --base "$BASE_SHA" --head "$HEAD_SHA" --output "$DEPENDABOT_CHANGESET_PATH" --check`;
 
-    // The path filter keeps every non-workflow file, so a package.json-only
-    // bump still runs; the Dependabot job scopes itself by head ref.
-    expect(autofixTriggerPaths().slice(0, 2)).toEqual([
-      "**",
-      "!.github/workflows/**",
-    ]);
+    // No path filter, or one that keeps every non-workflow file, so a
+    // package.json-only bump still runs; the Dependabot job scopes itself by
+    // head ref.
+    const paths = autofixTriggerPaths();
+    if (paths !== undefined) {
+      expect(paths.slice(0, 2)).toEqual(["**", "!.github/workflows/**"]);
+    }
     expect(workflow).toContain(
       `DEPENDABOT_CHANGESET_PATH: .changeset/dependabot-dependencies-\${{ github.event.pull_request.number }}.md`,
     );
