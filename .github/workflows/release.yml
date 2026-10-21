@@ -867,6 +867,7 @@ jobs:
       - name: Build and verify the production Chrome extension ZIP
         id: extension-zip
         if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+        timeout-minutes: 20
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
           WXT_STELLA_ORIGINS: ""
