@@ -540,15 +540,42 @@ const chunkMayReplace = (
     case EventType.REASONING_MESSAGE_CONTENT:
       return part === parts.findLast(({ type }) => type === "thinking");
     case EventType.TOOL_CALL_START:
+    case "TOOL_CALL_START":
     case EventType.TOOL_CALL_ARGS:
     case EventType.TOOL_CALL_END:
+    case "TOOL_CALL_END":
     case EventType.TOOL_CALL_RESULT:
       return (
         (part.type === "tool-call" && part.id === chunk.toolCallId) ||
         (part.type === "tool-result" && part.toolCallId === chunk.toolCallId)
       );
-    default:
+    // Chunks that carry no part of the answer the page already showed.
+    case "ACTIVITY_DELTA":
+    case "ACTIVITY_SNAPSHOT":
+    case "CUSTOM":
+    case EventType.TEXT_MESSAGE_START:
+    case EventType.TEXT_MESSAGE_CHUNK:
+    case EventType.TOOL_CALL_CHUNK:
+    case EventType.STATE_SNAPSHOT:
+    case EventType.STATE_DELTA:
+    case EventType.MESSAGES_SNAPSHOT:
+    case EventType.RAW:
+    case EventType.RUN_STARTED:
+    case EventType.RUN_ERROR:
+    case EventType.STEP_STARTED:
+    case EventType.STEP_FINISHED:
+    case EventType.REASONING_START:
+    case EventType.REASONING_MESSAGE_START:
+    case EventType.REASONING_MESSAGE_END:
+    case EventType.REASONING_MESSAGE_CHUNK:
+    case EventType.REASONING_END:
+    case EventType.REASONING_ENCRYPTED_VALUE:
+    case EventType.SUBAGENT_STARTED:
+    case EventType.SUBAGENT_FINISHED:
+    case EventType.SUBAGENT_ERROR:
       return false;
+    default:
+      return chunk satisfies never;
   }
 };
 
