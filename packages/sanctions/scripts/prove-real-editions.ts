@@ -31,6 +31,9 @@ const { values } = parseArgs({
     },
     copies: { type: "string", default: "1" },
     generated: { type: "boolean", default: false },
+    // The nightly proof commits every fixture, so an unreadable edition there
+    // is a defect rather than missing local data.
+    "require-coverage": { type: "boolean", default: false },
   },
 });
 const copies = Number(values.copies);
@@ -352,3 +355,10 @@ assert.equal(
   0,
   `Edition proof failed: ${failures.join(", ")}`,
 );
+if (values["require-coverage"]) {
+  assert.equal(
+    notCovered.length,
+    0,
+    `Edition proof did not cover: ${notCovered.join(", ")}`,
+  );
+}
