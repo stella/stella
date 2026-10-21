@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { getEmailAttachmentPreviewId } from "@/components/inspector/email-attachments-facet.logic";
@@ -75,38 +75,60 @@ export const useEmailAttachmentSelection = ({
     emailPreviewOverlayActivation,
     emailSidepeekOverlayActivation,
     selectedEmailAttachmentPreviewId,
-  } = getEmailAttachmentState({
-    isActive,
-    scaleOffsets,
-    selectedEmailAttachmentId,
-    tab,
-  });
-  const openEmailAttachment = (attachmentId: string | null) => {
-    setSelectedEmailAttachmentId(attachmentId);
-    setFileFacet(tab.id, "attachments");
-  };
-  const resetEmailAttachmentZoom = () => {
+  } = useMemo(
+    () =>
+      getEmailAttachmentState({
+        isActive,
+        scaleOffsets,
+        selectedEmailAttachmentId,
+        tab,
+      }),
+    [isActive, scaleOffsets, selectedEmailAttachmentId, tab],
+  );
+  const openEmailAttachment = useCallback(
+    (attachmentId: string | null) => {
+      setSelectedEmailAttachmentId(attachmentId);
+      setFileFacet(tab.id, "attachments");
+    },
+    [setFileFacet, tab.id],
+  );
+  const resetEmailAttachmentZoom = useCallback(() => {
     if (selectedEmailAttachmentPreviewId) {
       handleResetZoom(selectedEmailAttachmentPreviewId);
     }
-  };
-  const zoomEmailAttachment = (direction: "in" | "out") => {
-    if (selectedEmailAttachmentPreviewId) {
-      handleZoom(selectedEmailAttachmentPreviewId, direction);
-    }
-  };
+  }, [handleResetZoom, selectedEmailAttachmentPreviewId]);
+  const zoomEmailAttachment = useCallback(
+    (direction: "in" | "out") => {
+      if (selectedEmailAttachmentPreviewId) {
+        handleZoom(selectedEmailAttachmentPreviewId, direction);
+      }
+    },
+    [handleZoom, selectedEmailAttachmentPreviewId],
+  );
 
-  return {
-    emailAttachmentOverlayActivation,
-    emailAttachmentScaleOffset,
-    emailPreviewOverlayActivation,
-    emailSidepeekOverlayActivation,
-    openEmailAttachment,
-    resetEmailAttachmentZoom,
-    selectedEmailAttachmentId,
-    setSelectedEmailAttachmentId,
-    zoomEmailAttachment,
-  };
+  return useMemo(
+    () => ({
+      emailAttachmentOverlayActivation,
+      emailAttachmentScaleOffset,
+      emailPreviewOverlayActivation,
+      emailSidepeekOverlayActivation,
+      openEmailAttachment,
+      resetEmailAttachmentZoom,
+      selectedEmailAttachmentId,
+      setSelectedEmailAttachmentId,
+      zoomEmailAttachment,
+    }),
+    [
+      emailAttachmentOverlayActivation,
+      emailAttachmentScaleOffset,
+      emailPreviewOverlayActivation,
+      emailSidepeekOverlayActivation,
+      openEmailAttachment,
+      resetEmailAttachmentZoom,
+      selectedEmailAttachmentId,
+      zoomEmailAttachment,
+    ],
+  );
 };
 
 export type EmailAttachmentSelection = ReturnType<

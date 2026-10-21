@@ -122,6 +122,7 @@ export const suggestTemplateFields = async ({
   const { suggestions } = await (
     generateObjectForTask ?? generateTanStackObjectForTask
   )({
+    userId: admission.userId,
     dataClass: "customer",
     task: "short-text",
     orgAIConfig,
@@ -139,7 +140,7 @@ export const suggestTemplateFields = async ({
     system: SYSTEM_PROMPT,
     prompt: buildPrompt(documentText, instructions),
     outputSchema: fieldSuggestionsSchema,
-    abortSignal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
+    deadlineMs: SUGGEST_TIMEOUT_MS,
     serviceTier: "standard",
   });
   // The schema models "absent" as null (OpenAI strict mode); FieldSuggestion

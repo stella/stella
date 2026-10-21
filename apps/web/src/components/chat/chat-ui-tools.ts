@@ -12,6 +12,10 @@ import {
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
+import {
+  isApprovalGatedBuiltInChatTool,
+  isGrantableChatTool,
+} from "@stll/api-contract/chat-tool-grants";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
@@ -23,7 +27,6 @@ import type {
   ChatPart as TanStackChatPart,
   ChatUITools,
 } from "@/lib/api-contract";
-import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
 import type { WebApiRoutes } from "@/lib/eden-client";
 import { toAPIError } from "@/lib/errors/api";
 import { withProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
@@ -409,83 +412,14 @@ export const isPublicOfficialChatToolName = (
 ): toolName is PublicOfficialToolName =>
   toolName in PUBLIC_OFFICIAL_CHAT_TOOL_NAMES;
 
-const CHAT_TOOL_GRANT_POLICY_KIND = {
-  /** May be covered by a stored "allow in conversation" or "always allow" grant. */
-  grantable: "grantable",
-  /** May only be approved once or denied per call — never a persistent grant. */
-  approveOnce: "approve-once",
-  /**
-   * May never be auto-approved by a stored grant or any shared auto-approve
-   * path, which is stronger than `approveOnce`. The one exception is the
-   * opt-in browser page-read allowance for `use-browser`.
-   */
-  neverAuto: "never-auto",
-} as const;
-
-type ChatToolGrantPolicy =
-  (typeof CHAT_TOOL_GRANT_POLICY_KIND)[keyof typeof CHAT_TOOL_GRANT_POLICY_KIND];
-
-type GeneratedMcpGrantToolName = keyof typeof MCP_CHAT_TOOL_GRANT_POLICIES;
-type ManualGrantToolName = Exclude<
-  Extract<BuiltInApprovalToolName, ApprovalRequiredBuiltInChatToolName>,
-  GeneratedMcpGrantToolName
->;
-
-/** Approval policy for built-in tools that do not project from MCP. */
-const MANUAL_CHAT_TOOL_GRANT_POLICY = {
-  add_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  boe_search_legislation: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  "create-current-skill-resource": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  create_matter_document: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  fetch_url: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  fill_template: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  remember: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  reply_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  resolve_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  "search-all-past-chats": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  use_connector_secret: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
-  // Only the server-executed apply variant ever requests approval; it writes
-  // a new document version, so each call is approved on its own.
-  suggest_changes: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
-  "update-current-skill-body": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  "update-current-skill-resource": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  "update-entity-fields": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  // Page reads (`snapshot`) alone may run unasked once the user opts in, and
-  // only after a successful browser command: `isBrowserCommandAutoApproved`
-  // in features/chat/browser-control/browser-approval-mode.ts is that single
-  // exception. Every action asks every time.
-  "use-browser": CHAT_TOOL_GRANT_POLICY_KIND.neverAuto,
-  web_search: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-} as const satisfies Record<ManualGrantToolName, ChatToolGrantPolicy>;
-
-/**
- * Total approval policy: MCP-projected writes come from the registry-generated
- * map; web-only tools make their decision in the disjoint manual map above.
- */
-const CHAT_TOOL_GRANT_POLICY = {
-  ...MANUAL_CHAT_TOOL_GRANT_POLICY,
-  ...MCP_CHAT_TOOL_GRANT_POLICIES,
-} as const satisfies Record<
-  Extract<BuiltInApprovalToolName, ApprovalRequiredBuiltInChatToolName>,
-  ChatToolGrantPolicy
->;
-
-const isChatToolWithGrantPolicy = (
-  toolName: string,
-): toolName is keyof typeof CHAT_TOOL_GRANT_POLICY =>
-  Object.hasOwn(CHAT_TOOL_GRANT_POLICY, toolName);
-
-const getChatToolGrantPolicy = (toolName: string): ChatToolGrantPolicy =>
-  isChatToolWithGrantPolicy(toolName)
-    ? CHAT_TOOL_GRANT_POLICY[toolName]
-    : CHAT_TOOL_GRANT_POLICY_KIND.grantable;
-
+// The grant policy is shared with the API, which enforces it when storing a
+// grant and when deciding which calls skip the approval prompt.
 export const isApprovalOnceChatToolName = (toolName: ApprovalToolName) =>
-  getChatToolGrantPolicy(toolName) !== CHAT_TOOL_GRANT_POLICY_KIND.grantable;
+  !isGrantableChatTool(toolName);
 
 /** Chat tools that require per-call approval instead of a persistent grant. */
 export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
-  getChatToolGrantPolicy(toolName) !== CHAT_TOOL_GRANT_POLICY_KIND.grantable;
+  !isGrantableChatTool(toolName);
 
 /**
  * Chat tools whose approval card renders the shared registry-write summary
@@ -682,7 +616,7 @@ export const isApprovalPart = (part: unknown): part is ApprovalToolPart => {
 const isApprovalGatedChatToolName = (
   toolName: string,
 ): toolName is ApprovalToolName =>
-  isExternalMcpToolName(toolName) || isChatToolWithGrantPolicy(toolName);
+  isExternalMcpToolName(toolName) || isApprovalGatedBuiltInChatTool(toolName);
 
 export type PendingApprovalToolPart = RegisteredChatUIToolCallPart & {
   name: ApprovalToolName;

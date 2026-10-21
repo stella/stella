@@ -161,6 +161,7 @@ export const createProposeMessageSpanEdit = ({
         Result.tryPromise({
           try: async () =>
             await generateObject({
+              userId: admission.userId,
               dataClass: "customer",
               admission,
               task: "chat",
@@ -200,8 +201,8 @@ export const createProposeMessageSpanEdit = ({
               abortSignal: AbortSignal.any([
                 request.signal,
                 ...(actionSignal ? [actionSignal] : []),
-                AbortSignal.timeout(SPAN_EDIT_TIMEOUT_MS),
               ]),
+              deadlineMs: SPAN_EDIT_TIMEOUT_MS,
             }),
           catch: (cause) => {
             analytics.captureError(cause);

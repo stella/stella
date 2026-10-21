@@ -1682,6 +1682,7 @@ test("everything CI runs without the dependency install imports only built-ins",
     "scripts/detect-e2e-changes.test.ts",
     "scripts/e2e-spec-shards-core.ts",
     "scripts/install-free-ci.test.ts",
+    "scripts/ci-pr-jobs-cli.ts",
   ]) {
     expect(loaded).toContain(file);
   }
