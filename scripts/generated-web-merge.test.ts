@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 const repository = path.resolve(import.meta.dir, "..");
 const generators = ["apps/api/scripts/generate-web-api-types.ts"];

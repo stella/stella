@@ -18,7 +18,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";

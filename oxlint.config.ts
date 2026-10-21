@@ -627,6 +627,12 @@ const noZodImport = {
   message: "Use 'valibot' instead of 'zod'.",
 };
 
+const noClassicTypeScriptImport = {
+  name: "typescript",
+  message:
+    "TypeScript 7 exposes no compiler API at 'typescript'. Use 'typescript6' for the classic API, or 'typescript/unstable/*' for the TypeScript 7 API.",
+};
+
 const webLocalApiImportGroup = ["@/api/*", "@/api/**/*"];
 
 const webProtectedRouteImportGroup = [
@@ -1155,7 +1161,10 @@ const config = defineConfig({
     // get/set pairs are essentially absent — so the rule fires on
     // nothing while taking ~10% of lint time.
     "eslint/grouped-accessor-pairs": "off",
-    "no-restricted-imports": ["error", { paths: [noZodImport] }],
+    "no-restricted-imports": [
+      "error",
+      { paths: [noZodImport, noClassicTypeScriptImport] },
+    ],
     "no-bare-error/no-bare-error": "error",
     "no-raw-eden-telemetry/no-raw-eden-telemetry": "error",
     "no-minted-auth-provider-id/no-minted-auth-provider-id": "error",
@@ -3537,7 +3546,11 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, uiPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              uiPragmaticDragAdapterImport,
+            ],
             patterns: [
               ...uiStandaloneImports,
               pragmaticDragAdapterDeepImportBan,
@@ -3555,7 +3568,7 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport],
+            paths: [noZodImport, noClassicTypeScriptImport],
             patterns: [
               ...uiStandaloneImports,
               pragmaticDragAdapterDeepImportBan,
@@ -3679,6 +3692,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -3712,7 +3726,11 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, ...webFolioAllLocalesImports],
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3928,6 +3946,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -3954,6 +3973,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -3988,6 +4008,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -4033,6 +4054,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4076,6 +4098,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4842,6 +4865,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -4869,6 +4893,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               {
                 name: "@/api/db/root",
                 message:
@@ -4900,6 +4925,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -4918,6 +4944,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -4939,6 +4966,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5406,6 +5434,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               {
                 name: "@/api/lib/branded-types",
@@ -5456,7 +5485,13 @@ const config = defineConfig({
       rules: {
         "no-restricted-imports": [
           "error",
-          { paths: [noZodImport, apiValibotJsonSchemaImport] },
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              apiValibotJsonSchemaImport,
+            ],
+          },
         ],
       },
     },
@@ -5525,6 +5560,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
