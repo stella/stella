@@ -216,7 +216,7 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
 };
 
 /**
- * The bridge is mounted once by the signed-in app frame, so every chat send
+ * The bridge is mounted once by `AppFrameHost`, above every frame, so every chat send
  * sees the extension's pairing. A send while it is unmounted drops the browser
  * tool silently, which the send path reports.
  */

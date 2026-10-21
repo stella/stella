@@ -405,7 +405,7 @@ describe("the bridge outlives every chat surface", () => {
 });
 
 describe("the bridge mount site", () => {
-  test("only the signed-in app frame mounts the bridge", async () => {
+  test("only the app frame host mounts the bridge", async () => {
     const root = new URL("../../..", import.meta.url).pathname;
     const mounters: string[] = [];
     for await (const file of new Bun.Glob("**/*.{ts,tsx}").scan(root)) {
@@ -424,6 +424,6 @@ describe("the bridge mount site", () => {
       }
     }
 
-    expect(mounters).toEqual(["routes/-protected-app.tsx"]);
+    expect(mounters).toEqual(["routes/-app-frame-host.tsx"]);
   });
 });
