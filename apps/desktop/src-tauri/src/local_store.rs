@@ -299,16 +299,10 @@ pub(crate) fn local_file_creation_child(test_name: &str) -> bool {
   if std::env::var_os("STELLA_LOCAL_FILE_CHILD").is_some() {
     return false;
   }
-  let result = std::process::Command::new("python3")
-    .args([
-      "-c",
-      "import os, subprocess, sys
-old = os.umask(0)
-try:
- sys.exit(subprocess.call(sys.argv[1:]))
-finally:
- os.umask(old)",
-    ])
+  // `/bin/sh` exists on every Unix host; the crate forbids the unsafe
+  // `pre_exec` hook that would set the child's umask in-process.
+  let result = std::process::Command::new("/bin/sh")
+    .args(["-c", "umask 0; exec \"$0\" \"$@\""])
     .arg(std::env::current_exe().unwrap())
     .args(["--exact", test_name, "--nocapture"])
     .env("STELLA_LOCAL_FILE_CHILD", "1")

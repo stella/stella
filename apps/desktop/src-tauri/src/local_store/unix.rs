@@ -118,7 +118,18 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
     .get_or_init(Mutex::default)
     .lock()
     .map_err(|_| io::Error::other("local directory registry unavailable"))?;
-  if let Some(directory) = opened.get(&root_path) {
+  // A root moved or deleted while the app runs leaves the cached handle on an
+  // unlinked directory; reuse it only while the path still names that inode.
+  let cached = opened.get(&root_path).filter(|directory| {
+    use std::os::unix::fs::MetadataExt;
+    match (directory.metadata(), std::fs::symlink_metadata(&root_path)) {
+      (Ok(held), Ok(current)) => {
+        held.dev() == current.dev() && held.ino() == current.ino()
+      }
+      _ => false,
+    }
+  });
+  if let Some(directory) = cached {
     if !temporary_anchor {
       check_owner(directory)?;
     }
@@ -127,6 +138,7 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
     }
     return Ok((Arc::clone(directory), relative));
   }
+  opened.remove(&root_path);
   // Only the platform-supplied temporary anchor may contain a system alias.
   // All descendants, including test fixtures, still use no-follow traversal.
   #[cfg(test)]
@@ -135,8 +147,18 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
   } else {
     root_path.clone()
   };
+  // The platform base may contain system or user symlinks; resolve it once.
+  // The application directory and every descendant keep no-follow traversal.
   #[cfg(not(test))]
-  let physical_root = root_path.clone();
+  let physical_root = {
+    let base = root_path.parent().ok_or_else(invalid_path)?;
+    let name = root_path.file_name().ok_or_else(invalid_path)?;
+    match base.canonicalize() {
+      Ok(base) => base.join(name),
+      Err(error) if error.kind() == io::ErrorKind::NotFound => root_path.clone(),
+      Err(error) => return Err(error),
+    }
+  };
   let directory = absolute_directory(&physical_root)?;
   if !temporary_anchor {
     check_owner(&directory)?;
