@@ -291,7 +291,7 @@ describe("streaming list downloads", () => {
           fetchStreamRequest: async (options) => {
             const target = await validateOutboundFetchTarget(options.url, {
               signal: options.signal,
-              timeoutMs: options.timeoutMs,
+              timeoutMs: options.timeoutMs, // timeout: forwarded from the caller
               resolveAddresses: async (hostname) => {
                 const address =
                   hostname === declaredHost ? blockedAddress : "93.184.216.34";

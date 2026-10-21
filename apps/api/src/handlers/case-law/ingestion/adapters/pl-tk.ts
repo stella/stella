@@ -1,4 +1,5 @@
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
+// parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.
 import { panic, Result } from "better-result";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
@@ -102,6 +103,7 @@ import {
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   listPlTkPageFields,
+  parsePlTkPage,
   parsePlTkText,
   parsePolishDate,
   PL_TK_ORIGIN,
@@ -109,6 +111,7 @@ import {
   readPlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import type {
+  ParsedPlTkPage,
   PlTkCaseRecord,
   PlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
@@ -783,7 +786,7 @@ const openStageListing = async (
     stage,
     cursor,
     signal,
-    pages: new Map(),
+    pages: new Map<number, { page: PlTkListingPage; url: string }>(),
   });
 };
 
@@ -1014,6 +1017,8 @@ export type AssemblePlTkDecisionOptions = {
   row: PlTkListingRow;
   /** The case page, where one was read. */
   casePage: string | undefined;
+  /** The already parsed case page when the caller owns one. */
+  parsedPage?: ParsedPlTkPage | undefined;
   rawParts: SourceRawParts;
 };
 
@@ -1026,6 +1031,7 @@ export type AssemblePlTkDecisionOptions = {
  */
 export const assemblePlTkDecision = ({
   casePage,
+  parsedPage: suppliedPage,
   rawParts,
   row,
 }: AssemblePlTkDecisionOptions): PlTkBuildResult => {
@@ -1033,8 +1039,12 @@ export const assemblePlTkDecision = ({
   if (!isPersistableSourceDocumentId(id)) {
     return { type: "unkeyable" };
   }
-  const page = casePage === undefined ? null : readPlTkCasePage(casePage);
-  const ruling = casePage === undefined ? null : readPlTkRuling(casePage, id);
+  const parsedPage =
+    suppliedPage ??
+    (casePage === undefined ? undefined : parsePlTkPage(casePage));
+  const page = parsedPage === undefined ? null : readPlTkCasePage(parsedPage);
+  const ruling =
+    parsedPage === undefined ? null : readPlTkRuling(parsedPage, id);
   const statedCaseNumber = page?.record.caseNumber ?? row.caseNumber;
   // A row that states no docket still has to be stored under one; the audit
   // id stands in and is flagged as a placeholder.
@@ -1069,6 +1079,9 @@ export const assemblePlTkDecision = ({
       : Result.try({
           try: () =>
             parsePlTkText({
+              page:
+                parsedPage ??
+                panic("a ruling cannot exist without its parsed page"),
               caseNumber,
               court,
               decisionDate,
@@ -1172,11 +1185,39 @@ export const plTkRawPartsOf = (
   ...(casePage === undefined ? {} : { [PL_TK_RAW_PART.CASE_PAGE]: casePage }),
 });
 
+export type PlTkPageCache = {
+  /** Raw responses remain reusable for a case revisited later in the batch. */
+  html: Map<string, string>;
+  parse: (caseId: string, html: string) => ParsedPlTkPage;
+  parsedSize: () => number;
+};
+
+/** A batch keeps raw pages, but owns only the currently assembled case's DOM. */
+export const createPlTkPageCache = (
+  parsePage: (html: string) => ParsedPlTkPage = parsePlTkPage,
+): PlTkPageCache => {
+  let parsed: { caseId: string; page: ParsedPlTkPage } | undefined;
+  return {
+    html: new Map<string, string>(),
+    parse: (caseId, html) => {
+      if (parsed?.caseId === caseId) {
+        return parsed.page;
+      }
+      // Release the previous case's DOM before constructing the next one.
+      parsed = undefined;
+      const page = parsePage(html);
+      parsed = { caseId, page };
+      return page;
+    },
+    parsedSize: () => (parsed === undefined ? 0 : 1),
+  };
+};
+
 /**
  * Fetch a listed ruling's case page and assemble it. A refused request is
  * the ruling's failure, not its absence, so it comes back as an `Err`.
  */
-const buildPlTkDecision = async ({
+export const buildPlTkDecision = async ({
   cursor,
   pageCache,
   row,
@@ -1185,7 +1226,7 @@ const buildPlTkDecision = async ({
 }: {
   cursor: string;
   /** Case pages already read in this call, by case page path. */
-  pageCache: Map<string, string>;
+  pageCache: PlTkPageCache;
   row: PlTkListingRow;
   session: Session;
   signal: AbortSignal | undefined;
@@ -1208,7 +1249,11 @@ const buildPlTkDecision = async ({
   }
   const path = casePagePath(row);
   let casePage =
-    row.caseId === undefined ? undefined : pageCache.get(row.caseId);
+    row.caseId === undefined ? undefined : pageCache.html.get(row.caseId);
+  let parsedPage =
+    row.caseId === undefined || casePage === undefined
+      ? undefined
+      : pageCache.parse(row.caseId, casePage);
   if (casePage === undefined) {
     const first = await requestTk({
       cursor,
@@ -1262,7 +1307,8 @@ const buildPlTkDecision = async ({
         ),
       );
     }
-    if (readPlTkCasePage(response.body) === null) {
+    parsedPage = pageCache.parse(row.caseId ?? row.documentId, response.body);
+    if (readPlTkCasePage(parsedPage) === null) {
       // A 200 that is not a case page is the portal's shell for a session
       // it no longer holds: the ruling was not refused, it was not served.
       return Result.err(
@@ -1271,13 +1317,14 @@ const buildPlTkDecision = async ({
     }
     casePage = response.body;
     if (row.caseId !== undefined) {
-      pageCache.set(row.caseId, casePage);
+      pageCache.html.set(row.caseId, casePage);
     }
   }
   return Result.ok(
     assemblePlTkDecision({
       row,
       casePage,
+      parsedPage,
       rawParts: plTkRawPartsOf(row, casePage),
     }),
   );
@@ -1412,7 +1459,7 @@ const PL_TK_SOURCE_FIELDS = {
 
 const listPlTkSourceFields = (parts: SourceRawParts): readonly string[] => {
   const page = parts[PL_TK_RAW_PART.CASE_PAGE];
-  return page === undefined ? [] : listPlTkPageFields(page);
+  return page === undefined ? [] : listPlTkPageFields(parsePlTkPage(page));
 };
 
 /**
@@ -1561,7 +1608,7 @@ const plTkFetchPage = async (
   }
   const decisions: IngestionResult[] = [];
   let itemBuildFailures = 0;
-  const pageCache = new Map<string, string>();
+  const pageCache = createPlTkPageCache();
   let consumed = 0;
   for (let offset = window.from; offset >= window.to; offset -= 1) {
     if (signal?.aborted) {
@@ -1809,7 +1856,7 @@ const buildPlTkFromPayload = async (
   }
   const attempted = await buildPlTkDecision({
     cursor: label,
-    pageCache: new Map(),
+    pageCache: createPlTkPageCache(),
     row,
     session: session.value,
     signal,

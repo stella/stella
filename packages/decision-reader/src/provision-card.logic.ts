@@ -76,7 +76,7 @@ type ProvisionCitation = { id: string; target: CitedProvisionTarget };
  * distinct part of it the paragraph cites, in citation order. `id` is the
  * first citation's, stable while the paragraph is.
  */
-type ProvisionCardCitations = {
+export type ProvisionCardCitations = {
   citations: CitedProvisionTarget[];
   id: string;
   provision: ProvisionInVersionKey;

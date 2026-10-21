@@ -88,7 +88,7 @@ test("default discovery and invocation preserve their serialized wire contracts"
         inputSchema: {
           type: "object",
           properties: {
-            capability: { type: "string" },
+            capability: { type: "string", maxLength: 128 },
             detail: { type: "string", enum: ["compact", "full"] },
           },
           required: ["capability"],
@@ -101,7 +101,7 @@ test("default discovery and invocation preserve their serialized wire contracts"
         inputSchema: {
           type: "object",
           properties: {
-            capability: { type: "string" },
+            capability: { type: "string", maxLength: 128 },
             input: { type: "object" },
             validate_only: { type: "boolean" },
           },

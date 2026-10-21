@@ -49,6 +49,7 @@ const generateBoundingBoxes = createSafeHandler(
     managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
+    request,
   }) {
     const accessError = memberAIAccessError(orgAIConfigStatus);
     if (accessError) {
@@ -86,7 +87,8 @@ const generateBoundingBoxes = createSafeHandler(
 
     for (const pageNumber of preparedData.pageNumbers) {
       const pageBoxesResult = await generateFn({
-        abortSignal: AbortSignal.timeout(60_000),
+        abortSignal: request.signal,
+        deadlineMs: 60_000,
         admission: configuredModelAdmission({ modelAdmission }),
         justificationId,
         organizationId,

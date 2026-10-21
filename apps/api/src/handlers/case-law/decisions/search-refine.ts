@@ -146,6 +146,7 @@ const refineCaseLawSearch = createSafeRootHandler(
       const generated = await Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForTask({
+            userId: user.id,
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
             task: "search-expand",
@@ -164,10 +165,8 @@ const refineCaseLawSearch = createSafeRootHandler(
             prompt,
             outputSchema: caseLawRefineOutputSchema,
             maxOutputTokens: 120,
-            abortSignal: AbortSignal.any([
-              request.signal,
-              AbortSignal.timeout(CASE_LAW_REFINE_TIMEOUT_MS),
-            ]),
+            abortSignal: request.signal,
+            deadlineMs: CASE_LAW_REFINE_TIMEOUT_MS,
           }),
         catch: (error: unknown) => {
           analytics.captureError(error);

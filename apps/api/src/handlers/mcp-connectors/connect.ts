@@ -31,6 +31,7 @@ import {
   buildAuthorizeUrl,
   buildMcpClientMetadataDocument,
   clientRegistrationMode,
+  createAuthorizationResponseBinding,
   createOAuthState,
   createPkce,
   discoverOAuthMetadataForApproval,
@@ -220,6 +221,10 @@ export const createConnectMcpConnectorHandler = ({
             redirectUri,
             resourceUrl: metadata.protectedResource.resource,
             authorizationServerUrl: metadata.authorizationServer.issuer,
+            authorizationResponseBinding: createAuthorizationResponseBinding({
+              authorizationServer: metadata.authorizationServer,
+              registrationMode,
+            }),
           }),
         ),
       );
