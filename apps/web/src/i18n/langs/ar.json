@@ -855,7 +855,6 @@
         "unavailable": "تحليل الذكاء الاصطناعي غير متاح لهذا الحكم."
       },
       "generate": "توليد خلاصات الحكم بالذكاء الاصطناعي",
-      "holdingAnchor": "الانتقال إلى الفقرة",
       "invitation": "مع حساب مجاني، يُعِدّ الذكاء الاصطناعي ملاحظات عمل حول هذا الحكم.",
       "topics": "الموضوعات",
       "treatment": "المعالجة اللاحقة"
@@ -1111,6 +1110,8 @@
         "hint": "أزل أحد عوامل التصفية أو وسّعه ثم ابحث مرة أخرى.",
         "message": "لا شيء يطابق عوامل التصفية المحددة."
       },
+      "partialMatch": "تطابق جزئي",
+      "partialMatches": "نتائج تطابق جزئي للبحث: <bdi>{query}</bdi>",
       "resultsFor": "نتائج البحث عن: <bdi>{query}</bdi>",
       "searchEveryWord": "البحث عن كل الكلمات"
     },
@@ -1148,6 +1149,7 @@
       "judges": "القضاة",
       "legalArea": "المجال القانوني",
       "legalSentence": "الجملة القانونية",
+      "paragraphReference": "الفقرة {number}",
       "popularName": "الاسم الشائع",
       "portraitCredit": "مصدر الصور: {source}",
       "provisionMentions": "{count, number}×",
@@ -1614,6 +1616,9 @@
         "private": "مهاراتك",
         "team": "مهارات الفريق"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "تمت مراجعتها أيضًا ({count, number})"
     },
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",

@@ -485,6 +485,26 @@ type PlanAndEnqueueWorkflowOptions = Omit<
 const normalizeRecoveryAttempt = (attempt: 1 | undefined): 0 | 1 =>
   attempt === 1 ? 1 : 0;
 
+const executionPlanInput = ({
+  data,
+  inputEntityIds,
+  inputPropertyIds,
+}: {
+  data: Parameters<typeof getPropertyExecutionPlan>[0];
+  inputEntityIds: readonly SafeId<"entity">[] | undefined;
+  inputPropertyIds: readonly SafeId<"property">[] | undefined;
+}) =>
+  (inputEntityIds && inputEntityIds.length > 0) ||
+  (inputPropertyIds && inputPropertyIds.length > 0)
+    ? {
+        ...data,
+        properties: data.properties.map((property) => ({
+          ...property,
+          status: "stale" as const,
+        })),
+      }
+    : data;
+
 const planAndEnqueueWorkflow = async (
   {
     workspaceId,
@@ -548,19 +568,17 @@ const planAndEnqueueWorkflow = async (
     // column") both need the property in the plan even if it is
     // marked fresh. The per-entity / per-property targeting below
     // still scopes the actual computation correctly.
-    const planInput =
-      (inputEntityIds && inputEntityIds.length > 0) ||
-      (inputPropertyIds && inputPropertyIds.length > 0)
-        ? {
-            ...executionPlanData,
-            properties: executionPlanData.properties.map((p) => ({
-              ...p,
-              status: "stale" as const,
-            })),
-          }
-        : executionPlanData;
+    const planInput = executionPlanInput({
+      data: executionPlanData,
+      inputEntityIds,
+      inputPropertyIds,
+    });
 
-    const fullExecutionPlan = getPropertyExecutionPlan(planInput);
+    const planned = getPropertyExecutionPlan(planInput);
+    if (Result.isError(planned)) {
+      return await releaseClaimAndFail(planned.error);
+    }
+    const fullExecutionPlan = planned.value;
 
     const executionPlan =
       inputPropertyIds && inputPropertyIds.length > 0

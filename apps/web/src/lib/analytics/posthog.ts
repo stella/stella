@@ -846,6 +846,7 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
         case WEB_ANALYTICS_EVENTS.followupShown:
         case WEB_ANALYTICS_EVENTS.followupSelected:
+        case WEB_ANALYTICS_EVENTS.keyActionTimed:
           return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
         default: {
           event.event satisfies never;
@@ -970,6 +971,9 @@ export const createPostHogAnalytics = ({
     },
     captureFollowupSelected: (properties) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.followupSelected, properties);
+    },
+    captureKeyActionTiming: (properties) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.keyActionTimed, properties);
     },
     captureRouteErrorLifecycle: async (properties) =>
       import("@/lib/analytics/posthog-route-error")

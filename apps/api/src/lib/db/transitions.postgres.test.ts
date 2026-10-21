@@ -11,7 +11,7 @@ import {
 import fc from "fast-check";
 
 import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "@stll/api-contract";
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { jsonb, timestamptz } from "@/api/db/columns";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
@@ -514,7 +514,7 @@ if (!databaseUrl || !enabled) {
               fc.constantFrom(...FLOW_RUN_STATUSES),
               checkPair,
             ),
-            { numRuns: 24 },
+            propertyConfig({ numRuns: 24 }),
           );
         } finally {
           await fixture.cleanup();

@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "typescript6";
 
 export type BundledConsumerSite = Readonly<{
   file: string;

@@ -205,7 +205,7 @@ describe("readPublishablePackages", () => {
       ["ui", manifestFor("ui", { private: true })],
     ]);
     const packages = readPublishablePackages({
-      only: ["cli", "ui", "time"],
+      only: ["cli", "ui", "chat"],
       readManifest: (directory) => manifests.get(directory),
     });
     expect(packages.map((pkg) => pkg.directory)).toEqual(["cli"]);
