@@ -161,8 +161,11 @@ expect_failure 'receipt with unreadable queue history' 'merge-group receipt = no
 reset_health
 use_receipt
 TEST_TIMELINE=$(queue_timeline MergedEvent)
-bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE" > "$fixture/output"
+# Captured: the history check reports the admin merge as a workflow ::error::
+# command, which would otherwise annotate this passing job as failed.
+bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE" > "$fixture/output" 2> "$fixture/error"
 grep -qx "sha=$TEST_CANDIDATE" "$fixture/output"
+grep -q 'not validated through the merge queue' "$fixture/error"
 echo 'ok   an admin merge still releases with green heavy statuses'
 reset_health
 TEST_HEAVY_STATUS=$(jq '.state="failure"' <<< "$TEST_HEAVY_STATUS")
