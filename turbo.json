@@ -994,6 +994,7 @@
         "$TURBO_ROOT$/packages/legal-atlas/**",
         "$TURBO_ROOT$/packages/locales/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
+        "$TURBO_ROOT$/packages/mcp-kit/**",
         "$TURBO_ROOT$/packages/mojibake/**",
         "$TURBO_ROOT$/packages/money/**",
         "$TURBO_ROOT$/packages/permissions/**",
@@ -1218,6 +1219,7 @@
         "$TURBO_ROOT$/packages/legal-atlas/**",
         "$TURBO_ROOT$/packages/locales/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
+        "$TURBO_ROOT$/packages/mcp-kit/**",
         "$TURBO_ROOT$/packages/mojibake/**",
         "$TURBO_ROOT$/packages/money/**",
         "$TURBO_ROOT$/packages/permissions/**",
@@ -1298,6 +1300,7 @@
         "$TURBO_ROOT$/packages/legal-atlas/**",
         "$TURBO_ROOT$/packages/locales/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
+        "$TURBO_ROOT$/packages/mcp-kit/**",
         "$TURBO_ROOT$/packages/mojibake/**",
         "$TURBO_ROOT$/packages/money/**",
         "$TURBO_ROOT$/packages/permissions/**",
@@ -1437,6 +1440,7 @@
     "@stll/api#test:property": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
       "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_DURATIONS_FILE"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/mcp-kit/src/**"],
       "cache": false
     },
     "@stll/api#test": {

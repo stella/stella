@@ -149,6 +149,7 @@
     "@stll/legal-atlas": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/mcp-apps": "workspace:*",
+    "@stll/mcp-kit": "workspace:^",
     "@stll/mojibake": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
