@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "Moved to another device",
     "sessionNeedsAttention": "Needs attention",
     "sessionOpeningInOffice": "Opening in Office",
-    "sessionSavingDraft": "Saving draft"
+    "sessionSavingDraft": "Saving draft",
+    "reconnectAccount": "Reconnect to stella web…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Changes stay local and will retry automatically",
@@ -209,7 +210,23 @@
     "startOnLoginDescription": "Launch stella desktop automatically when you log in.",
     "stellaDesktop": "stella desktop",
     "support": "Support",
-    "title": "Settings"
+    "title": "Settings",
+    "serverLabel": "Server",
+    "connectToHost": "Connect to {host}",
+    "connectToHostDescription": "Opens {host} in your browser so you can approve this computer.",
+    "reconnectNeeded": "Reconnect needed",
+    "reconnect": "Reconnect",
+    "reconnectHostDescription": "The link to {host} has to be renewed. Approve this computer again in your browser.",
+    "permissions": "Permissions",
+    "permissionNotificationsDescription": "Tells you when a document is ready or a sync needs attention.",
+    "permissionAccessibility": "Accessibility",
+    "permissionAccessibilityDescription": "Lets the activity timeline record window titles, only if you turn on details.",
+    "permissionAllowed": "Allowed",
+    "permissionAllow": "Allow",
+    "permissionOpenSettings": "Open settings",
+    "permissionDenied": "Turned off in system settings.",
+    "permissionManaged": "Managed by your organization",
+    "errorPermissions": "stella desktop could not read or change this permission."
   },
   "clipboard": {
     "registryUnavailable": "No registries are enabled for your practice jurisdictions.",
@@ -466,5 +483,45 @@
     "rangeEnd": "Range end",
     "reviewToday": "Review today",
     "welcomePreviewMatter": "Riverside lease renewal"
+  },
+  "shortcut": {
+    "title": "Clipboard shortcut",
+    "description": "Opens your clipboard history from any app.",
+    "change": "Change",
+    "reset": "Reset to {shortcut}",
+    "recording": "Press the new shortcut. Esc cancels.",
+    "waiting": "Waiting for keys…",
+    "addKey": "Now add a key…",
+    "confirm": "Open the clipboard with {shortcut}?",
+    "use": "Use {shortcut}",
+    "cancel": "Cancel",
+    "same": "That is already your shortcut.",
+    "errorSave": "stella desktop could not save the shortcut.",
+    "needsModifier": "Add {modifiers} so the shortcut does not just type a letter.",
+    "unsupportedKey": "That key cannot be part of a shortcut. Try a letter, a number or a function key.",
+    "systemReserved": "The system already uses {shortcut} for {action}. Choose another.",
+    "windowsKeyReserved": "Windows keeps shortcuts with the Windows key for itself. Use Ctrl or Alt.",
+    "taken": "Another app already uses {shortcut}. Choose another.",
+    "unavailable": "Another app uses {shortcut}, so it does not open the clipboard. Choose another shortcut.",
+    "action": {
+      "copy": "Copy",
+      "paste": "Paste",
+      "cut": "Cut",
+      "undo": "Undo",
+      "redo": "Redo",
+      "selectAll": "Select All",
+      "quit": "Quit",
+      "closeWindow": "Close Window",
+      "hide": "Hide",
+      "minimize": "Minimize",
+      "appSwitcher": "App Switcher",
+      "spotlight": "Spotlight",
+      "inputSource": "Input Source",
+      "screenshot": "Screenshot",
+      "forceQuit": "Force Quit",
+      "windowMenu": "Window Menu",
+      "start": "Start",
+      "taskManager": "Task Manager"
+    }
   }
 }

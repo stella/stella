@@ -6,6 +6,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
@@ -349,6 +350,7 @@ export const MatterMetadataPanel = ({
             className="rounded-md shadow-none"
             disabled={updateWorkspace.isPending}
             onBlur={handleSaveName}
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onChange={(e) => {
               setNameDirty(true);
               setNameValue(e.target.value);

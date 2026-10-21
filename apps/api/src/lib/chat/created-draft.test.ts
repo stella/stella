@@ -120,10 +120,10 @@ describe("generated document draft boundary", () => {
     });
   });
 
-  test("rejects legacy or malformed persisted content", () => {
+  test("rejects malformed persisted content", () => {
     expect(
       getGeneratedDocumentDraftState({
-        persistedContent: { data: [], version: 1 },
+        persistedContent: { data: [null], version: 3 },
         fileName: "Power of attorney.docx",
         toolCallId: "tool-create-document-1",
       }),

@@ -1,5 +1,6 @@
 import { panic, TaggedError } from "better-result";
 
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -38,6 +39,8 @@ export type ReaderSourceOptions = {
   phase: "blocks" | "citations" | "provisions";
   referenceCursor?: string | undefined;
   audience: ReaderAudience;
+  /** The surface the read serves; its country list decides publication. */
+  surface: PublicCountrySurface;
   /** The per-source reader setting; a test seam over the source registry. */
   appReaderTextOf?: (adapterKey: string) => AppReaderText;
 };
@@ -90,7 +93,7 @@ type ProvisionAnchor = {
   pieceId: string;
   start: number;
   end: number;
-  appUrl: string | null;
+  url: string | null;
   provision: { document_id: string; anchor: string; cited_anchor: string };
 };
 
@@ -102,6 +105,7 @@ type LocateProvisionAnchorsOptions = {
   >;
   decisionDate: string | null;
   legislationDb: LegislationReadDb;
+  surface: PublicCountrySurface;
 };
 
 /** Stored provision spans that still address this projection's exact text. */
@@ -110,12 +114,14 @@ const locateProvisionAnchors = async ({
   page,
   decisionDate,
   legislationDb,
+  surface,
 }: LocateProvisionAnchorsOptions) => {
   const provisionAnchors: ProvisionAnchor[] = [];
   const attached = await attachDecisionProvisionPreviews({
     page,
     decisionDate,
     legislationDb,
+    surface,
   });
   const previews = new Map(
     attached.previews.map((preview) => [preview.key, preview]),
@@ -157,7 +163,7 @@ const locateProvisionAnchors = async ({
       pieceId: row.printPieceId,
       start: row.printStart,
       end: row.printEnd,
-      appUrl: preview.appUrl,
+      url: preview.url,
       provision: {
         document_id: preview.documentId,
         anchor: provisionHeadingAnchor(row.anchor),
@@ -174,12 +180,14 @@ export const readDecisionReaderSource = async ({
   phase,
   referenceCursor,
   audience,
+  surface,
   appReaderTextOf = appReaderTextForSource,
   caseLawDb = caseLawPublicReadDb,
   legislationDb = legislationPublicReadDb,
 }: ReaderSourceOptions) => {
   const read = await withRedistributableSubject(
     caseLawDb,
+    surface,
     { kind: "id", id: decisionId },
     async (subject) => {
       const decision = await readDecisionHandler({
@@ -203,6 +211,7 @@ export const readDecisionReaderSource = async ({
               tx: subject.tx,
               decisionId: subject.id,
               cursor: referenceCursor,
+              countries: subject.countries,
             })
           : null;
       const provisions =
@@ -230,7 +239,7 @@ export const readDecisionReaderSource = async ({
     end: number;
     citationId: string;
     decisionId: string;
-    appUrl: string | null;
+    url: string | null;
   }[] = [];
   if (citations !== null) {
     if (!("items" in citations)) {
@@ -254,7 +263,7 @@ export const readDecisionReaderSource = async ({
           end: span.end,
           citationId: span.source.id,
           decisionId: span.source.citedDecisionId,
-          appUrl: span.source.appUrl,
+          url: span.source.url,
         });
       }
     }
@@ -272,6 +281,7 @@ export const readDecisionReaderSource = async ({
           page: provisions,
           decisionDate: decision.decisionDate,
           legislationDb,
+          surface,
         })
       : [];
   return {
@@ -295,6 +305,7 @@ export const readDecisionReaderSource = async ({
     ast: textAccess === "readable" ? ast : null,
     citationAnchors,
     provisionAnchors,
+    provisionStatus: provisions?.status ?? null,
     referenceNextCursor:
       citations?.nextCursor ?? provisions?.nextCursor ?? null,
   };

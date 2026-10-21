@@ -46,8 +46,20 @@ const createErrorToasts = {
   },
 };
 
+const requestedPosition = new URLSearchParams(window.location.search).get(
+  "position",
+);
+const position =
+  requestedPosition === "top-left" ||
+  requestedPosition === "top-center" ||
+  requestedPosition === "top-right" ||
+  requestedPosition === "bottom-left" ||
+  requestedPosition === "bottom-center"
+    ? requestedPosition
+    : "bottom-right";
+
 const ToastFixture = () => (
-  <ToastProvider>
+  <ToastProvider position={position}>
     <main>
       {Object.entries(createErrorToasts).map(([entry, create]) => (
         <button

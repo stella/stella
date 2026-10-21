@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -61,6 +62,8 @@ type ProvisionHistoryOptions = {
   anchor: string;
   query: ProvisionHistoryQuery;
   legislationDb: LegislationReadDb;
+  /** The surface this read answers for; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 type VersionCursor = {
@@ -68,7 +71,9 @@ type VersionCursor = {
   id: SafeId<"legislationDocument">;
 };
 
-const decodeVersionCursor = (cursor: string): VersionCursor | null => {
+export const decodeProvisionHistoryCursor = (
+  cursor: string,
+): VersionCursor | null => {
   const parts = decodePaginationCursor(cursor);
 
   if (parts?.length !== 2) {
@@ -86,6 +91,9 @@ const decodeVersionCursor = (cursor: string): VersionCursor | null => {
 
   return { validFrom, id: brandPersistedLegislationDocumentId(id) };
 };
+
+export const encodeProvisionHistoryCursor = (cursor: VersionCursor): string =>
+  encodePaginationCursor([cursor.validFrom, cursor.id]);
 
 const versionColumns = {
   ...versionAstColumns,
@@ -119,6 +127,7 @@ export const readProvisionHistoryHandler = async ({
   anchor,
   query,
   legislationDb,
+  surface,
 }: ProvisionHistoryOptions) => {
   const limit = normalizeTenantPageLimit(
     query.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault,
@@ -126,7 +135,7 @@ export const readProvisionHistoryHandler = async ({
   let cursor: VersionCursor | null = null;
 
   if (query.cursor !== undefined) {
-    cursor = decodeVersionCursor(query.cursor);
+    cursor = decodeProvisionHistoryCursor(query.cursor);
 
     if (cursor === null) {
       return status(400, { message: "Invalid cursor" });
@@ -134,13 +143,13 @@ export const readProvisionHistoryHandler = async ({
   }
 
   const versions = await legislationDb(async (tx) => {
-    const work = await selectWorkKey(tx, documentId);
+    const work = await selectWorkKey(tx, documentId, surface);
 
     if (work === null) {
       return null;
     }
 
-    const conditions: SQL[] = workKeyConditions(work);
+    const conditions: SQL[] = workKeyConditions(work, surface);
 
     if (cursor !== null) {
       conditions.push(
@@ -176,6 +185,7 @@ export const readProvisionHistoryHandler = async ({
     operation: async (version) =>
       extractProvisionText(
         await readVersionBlocks({
+          surface,
           row: version,
           legislationDb,
           step: HISTORY_READ_STEP,

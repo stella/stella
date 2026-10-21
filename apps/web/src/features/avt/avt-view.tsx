@@ -160,7 +160,11 @@ const EvidenceListPicker = ({
         }}
         value={view.layout.listId}
       >
-        <SelectTrigger aria-label={t("avt.view.evidenceList")} size="sm">
+        <SelectTrigger
+          aria-label={t("avt.view.evidenceList")}
+          className="w-auto max-w-72"
+          size="sm"
+        >
           <SelectValue placeholder={t("avt.view.chooseList")} />
         </SelectTrigger>
         <SelectPopup>

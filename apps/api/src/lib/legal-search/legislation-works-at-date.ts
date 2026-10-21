@@ -6,7 +6,7 @@ import * as v from "valibot";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocumentIn } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   eligibleExpression,
   inForceOn,
@@ -100,6 +100,12 @@ const valuesOf = (requests: readonly WorkAtDateRequest[]) =>
 export const resolveWorksAtDate = async (
   tx: LegislationReadTransaction,
   requests: readonly WorkAtDateRequest[],
+  /**
+   * The countries the caller's surface publishes legislation for
+   * (`legislationCountriesFor`): a page read answers for pages-public
+   * countries, a search read only for search-admitted ones.
+   */
+  countries: readonly string[],
 ): Promise<WorksAtDateResolution> => {
   const idByKey = new Map<string, SafeId<"legislationDocument">>();
   const inconsistentKeys = new Set<string>();
@@ -127,7 +133,7 @@ export const resolveWorksAtDate = async (
          AND ${openedBy(documentRef, sql`w.as_of`)}
         JOIN ${legislationSources}
           ON ${legislationSources.id} = ${legislationDocuments.sourceId}
-       WHERE ${publishedLegislationDocument}
+       WHERE ${publishedLegislationDocumentIn(countries)}
          AND (${inForceAtRequest}
               OR NOT EXISTS (
                 SELECT 1
@@ -167,7 +173,7 @@ export const resolveWorksAtDate = async (
            AND ${isInconsistentWindowGapOn(sql`w.as_of`)}
           JOIN ${legislationSources}
             ON ${legislationSources.id} = ${legislationDocuments.sourceId}
-         WHERE ${publishedLegislationDocument}
+         WHERE ${publishedLegislationDocumentIn(countries)}
       `),
     ).map((row) => v.parse(inconsistentWorkSchema, row));
 

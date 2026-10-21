@@ -2295,7 +2295,7 @@ fn emit_changed(app: &AppHandle) {
   refresh_tray(app);
 }
 
-fn refresh_tray(app: &AppHandle) {
+pub(crate) fn refresh_tray(app: &AppHandle) {
   let Some(state) = app.try_state::<crate::commands::AppState>() else {
     return;
   };
@@ -2317,6 +2317,7 @@ pub fn tray_snapshot(app: &AppHandle) -> Option<TrayActivitySnapshot> {
   let manager = state.lock().ok()?;
   manager.require_account_binding(&binding).ok()?;
   let snapshot = manager.tray_snapshot(Utc::now())?;
+  drop(manager);
   if gates
     .account_binding(DesktopFeature::ActivityTimeline)
     .as_ref()
@@ -4553,6 +4554,7 @@ mod tests {
             while !*released {
               released = ready.wait(released).unwrap();
             }
+            drop(released);
             let key = existing.unwrap_or_else(|| {
               let generation = creations.fetch_add(1, Ordering::SeqCst) + 1;
               let key = [u8::try_from(generation).unwrap(); 32];
@@ -4589,6 +4591,7 @@ mod tests {
     manager.observe(at(0), active("word"));
     manager.observe(at(5), active("word"));
     manager.stop(at(5)).unwrap();
+    drop(manager);
     let key = stored_key.lock().unwrap().unwrap();
     let reopened = ActivityStore::new(key, root.clone());
     let segments = reopened.load_day(local_date(at(0))).unwrap();
@@ -4646,6 +4649,7 @@ mod tests {
           )
           .unwrap()
       );
+      drop(manager);
       assert!(store.load_day(local_date(at(0))).unwrap().is_empty());
       ActivityStore::remove(&root).unwrap();
     }
@@ -4831,6 +4835,7 @@ mod tests {
       let manager = manager.lock().unwrap();
       assert!(manager.open.is_none(), "{transition}");
       assert!(manager.days.is_empty(), "{transition}");
+      drop(manager);
     }
   }
 

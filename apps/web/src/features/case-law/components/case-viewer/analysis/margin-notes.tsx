@@ -12,17 +12,22 @@ import type { RefObject } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { Button } from "@stll/ui/button";
-import { Building2Icon, LockIcon, Trash2Icon } from "@stll/ui/icons";
+import { Building2Icon, Trash2Icon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { CitedProvisionExpansion } from "@/components/legal-reader/cited-provision-link";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
 
+import { ReaderAnswerCard } from "../reader-answer-card";
+import type { ReaderAnswerCardProps } from "../reader-answer-card";
+import { AnnotationVisibilityToggle } from "./annotation-visibility-toggle";
 import type { AnchoredNote, NotePlacement } from "./margin-notes.logic";
 import {
   gutterIsAvailable,
@@ -79,10 +84,25 @@ export type ComposerMarginItem = {
   onSubmit: (body: string, visibility: "private" | "shared") => void;
 };
 
+export type AnswerMarginItem = ReaderAnswerCardProps & {
+  kind: "answer";
+  id: string;
+  startAnchorId: string;
+};
+
+export type ProvisionMarginItem = {
+  kind: "provision";
+  id: string;
+  startAnchorId: string;
+  citations: readonly CitedProvisionTarget[];
+};
+
 export type MarginItem =
   | AnalysisMarginItem
   | CommentMarginItem
-  | ComposerMarginItem;
+  | ComposerMarginItem
+  | AnswerMarginItem
+  | ProvisionMarginItem;
 
 type MarginNotesProps =
   | {
@@ -161,7 +181,7 @@ const resolveItemAnchor = (
     }
   }
   return scrollContainer.querySelector<HTMLElement>(
-    `#${CSS.escape(item.startAnchorId)}`,
+    `[data-anchor="${CSS.escape(item.startAnchorId)}"], #${CSS.escape(item.startAnchorId)}`,
   );
 };
 
@@ -229,7 +249,8 @@ const GutterNotes = ({
     const h = el.offsetHeight;
     if (heights.get(id) !== h) {
       heights.set(id, h);
-      requestAnimationFrame(recalc);
+      // Commit measured placement before an activated answer's reveal frame.
+      recalc();
     }
   };
 
@@ -317,14 +338,19 @@ const GutterNotes = ({
         // otherwise draw the bracket straight across them.
         const from = Math.max(item.anchorTop, 0);
         const drift = item.top - from;
-        if (drift < 16 || item.kind === "composer") {
+        if (
+          (drift < 16 && item.kind !== "answer") ||
+          item.kind === "composer"
+        ) {
           return null;
         }
-        if (hoveredId !== item.id) {
+        if (hoveredId !== item.id && item.kind !== "answer") {
           return null;
         }
         const color =
-          item.kind === "comment"
+          item.kind === "comment" ||
+          item.kind === "answer" ||
+          item.kind === "provision"
             ? "var(--option-sky)"
             : `var(${getCategoryVar(item.category)})`;
         return (
@@ -337,10 +363,12 @@ const GutterNotes = ({
               className="absolute end-0 top-0 h-0.5 w-3 rounded-full"
               style={{ backgroundColor: color }}
             />
-            <div
-              className="absolute end-2.5 top-0 w-px"
-              style={{ backgroundColor: color, height: drift + 6 }}
-            />
+            {drift >= 16 && (
+              <div
+                className="absolute end-2.5 top-0 w-px"
+                style={{ backgroundColor: color, height: drift + 6 }}
+              />
+            )}
           </div>
         );
       })}
@@ -387,7 +415,46 @@ const MarginNoteBody = ({
   placement,
   presence = "normal",
 }: MarginNoteProps) => {
+  const observeSize = (el: HTMLElement | null) => {
+    if (el === null || measureRef === undefined) {
+      return undefined;
+    }
+    measureRef(el, item.id);
+    const observer = new ResizeObserver(() => measureRef(el, item.id));
+    observer.observe(el);
+    return () => observer.disconnect();
+  };
+
   switch (item.kind) {
+    case "provision": {
+      const position = notePlacementPresentation(placement);
+      return (
+        <div
+          className={position.className}
+          style={position.style}
+          ref={observeSize}
+        >
+          <CitedProvisionExpansion
+            citations={item.citations}
+            placement={placement.type}
+          />
+        </div>
+      );
+    }
+    case "answer": {
+      const position = notePlacementPresentation(placement);
+      return (
+        <div
+          className={position.className}
+          style={position.style}
+          ref={observeSize}
+          onMouseEnter={() => onHover?.(true)}
+          onMouseLeave={() => onHover?.(false)}
+        >
+          <ReaderAnswerCard {...item} />
+        </div>
+      );
+    }
     case "comment": {
       return (
         <CommentNote
@@ -615,10 +682,6 @@ const ComposerNote = ({
   const position = notePlacementPresentation(placement);
   const [body, setBody] = useState("");
   const [visibility, setVisibility] = useState<"private" | "shared">("private");
-  const shared = visibility === "shared";
-  const visibilityLabel = shared
-    ? t("legalReader.annotations.visibilityShared")
-    : t("knowledge.agentSkills.scopePrivate");
   const submit = () => {
     const trimmed = body.trim();
     if (trimmed !== "") {
@@ -648,6 +711,9 @@ const ComposerNote = ({
         className="min-h-14 text-xs"
         onChange={(event) => setBody(event.target.value)}
         onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing) {
+            return;
+          }
           if (event.key === "Escape") {
             event.preventDefault();
             item.onCancel();
@@ -662,24 +728,12 @@ const ComposerNote = ({
         value={body}
       />
       <div className="flex items-center justify-between gap-1">
-        <Tooltip
-          content={visibilityLabel}
-          render={
-            <button
-              aria-label={visibilityLabel}
-              aria-pressed={shared}
-              className="text-foreground-disabled hover:text-foreground rounded-sm p-0.5"
-              onClick={() => setVisibility(shared ? "private" : "shared")}
-              type="button"
-            />
+        <AnnotationVisibilityToggle
+          visibility={visibility}
+          onToggle={() =>
+            setVisibility(visibility === "private" ? "shared" : "private")
           }
-        >
-          {shared ? (
-            <Building2Icon className="size-3.5" />
-          ) : (
-            <LockIcon className="size-3.5" />
-          )}
-        </Tooltip>
+        />
         <div className="flex items-center gap-1">
           <Button
             className="text-2xs h-6 px-2"
@@ -789,31 +843,10 @@ const CommentNote = ({
               : "opacity-0 group-hover/comment:opacity-100 focus-within:opacity-100",
           )}
         >
-          <Tooltip
-            content={
-              shared
-                ? t("knowledge.agentSkills.scopePrivate")
-                : t("legalReader.annotations.visibilityShared")
-            }
-            render={
-              <button
-                aria-label={
-                  shared
-                    ? t("knowledge.agentSkills.scopePrivate")
-                    : t("legalReader.annotations.visibilityShared")
-                }
-                className="text-foreground-disabled hover:text-foreground rounded-sm p-0.5"
-                onClick={item.onToggleVisibility}
-                type="button"
-              />
-            }
-          >
-            {shared ? (
-              <LockIcon className="size-3" />
-            ) : (
-              <Building2Icon className="size-3" />
-            )}
-          </Tooltip>
+          <AnnotationVisibilityToggle
+            visibility={item.visibility}
+            onToggle={item.onToggleVisibility}
+          />
           <Tooltip
             content={t("common.delete")}
             render={

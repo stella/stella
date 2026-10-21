@@ -58,6 +58,14 @@ export const parseApiTestImpact = (output: string): ApiTestImpact => {
 };
 
 type TestJobShard = (typeof FULL_TEST_JOB_SHARDS)[number];
+type NonEmptyTestJobShards = readonly [TestJobShard, ...TestJobShard[]];
+type CiApiTestPlan =
+  | {
+      type: "run";
+      impact: ApiTestImpact;
+      matrix: { shard: NonEmptyTestJobShards };
+    }
+  | { type: "skip"; impact: ApiTestImpact };
 type CiApiTestPlanOptions = {
   event: string;
   scopeUnknown: boolean;
@@ -69,7 +77,7 @@ export const planCiApiTests = ({
   scopeUnknown,
   testJobs,
   select,
-}: CiApiTestPlanOptions) => {
+}: CiApiTestPlanOptions): CiApiTestPlan => {
   let impact = allApiTests();
   if ((event === "pull_request" || event === "merge_group") && !scopeUnknown) {
     try {
@@ -84,23 +92,28 @@ export const planCiApiTests = ({
   }
   const fullPlan = fullTestPlan();
   const enabledApiShards = new Set(API_TEST_SHARD_IDS.slice(0, impact.shards));
+  const shards = fullPlan.matrix.shard.filter(
+    (shard) =>
+      (scopeUnknown ||
+        !["pull_request", "merge_group"].includes(event) ||
+        testJobs.includes(shard)) &&
+      (!isApiTestShardId(shard) || enabledApiShards.has(shard)),
+  );
+  const firstShard = shards.at(0);
+  if (firstShard === undefined) {
+    return { type: "skip", impact };
+  }
   return {
+    type: "run",
     impact,
-    matrix: {
-      shard: fullPlan.matrix.shard.filter(
-        (shard) =>
-          (scopeUnknown ||
-            !["pull_request", "merge_group"].includes(event) ||
-            testJobs.includes(shard)) &&
-          (!isApiTestShardId(shard) || enabledApiShards.has(shard)),
-      ),
-    },
+    matrix: { shard: [firstShard, ...shards.slice(1)] },
   };
 };
 
 if (import.meta.main) {
   const root = path.resolve(import.meta.dir, "..");
   let plan;
+  let testScope = "";
   try {
     const event = process.env["EVENT_NAME"] ?? "";
     const scopeUnknown = process.env["API_SCOPE_UNKNOWN"] === "true";
@@ -113,10 +126,41 @@ if (import.meta.main) {
     )
       .split("\0")
       .filter(Boolean);
-    const testJobs =
-      !scopeUnknown && ["pull_request", "merge_group"].includes(event)
-        ? selectedTestJobs(changed, root)
-        : FULL_TEST_JOB_SHARDS;
+    let testJobs = FULL_TEST_JOB_SHARDS;
+    if (!scopeUnknown && ["pull_request", "merge_group"].includes(event)) {
+      const comparisonBase =
+        process.env["COMPARISON_BASE"] ?? panic("Missing COMPARISON_BASE");
+      const scopeResult = Bun.spawnSync(
+        ["bun", "scripts/test-scope.ts", "--base", comparisonBase],
+        { cwd: root, stderr: "pipe", stdout: "pipe" },
+      );
+      if (scopeResult.exitCode !== 0) {
+        panic(`Test scope failed: ${scopeResult.stderr.toString()}`);
+      }
+      testScope = scopeResult.stdout.toString().trim();
+      const scopeArgs = testScope.split(/\s+/u).filter(Boolean);
+      const dryRun = Bun.spawnSync(
+        [
+          "bun",
+          "run",
+          "test",
+          "--",
+          "--concurrency=2",
+          ...scopeArgs,
+          "--dry=json",
+        ],
+        { cwd: root, stderr: "pipe", stdout: "pipe" },
+      );
+      if (dryRun.exitCode !== 0) {
+        panic(`Test plan failed: ${dryRun.stderr.toString()}`);
+      }
+      const output = dryRun.stdout.toString();
+      const jsonStart = output.indexOf("{");
+      if (jsonStart === -1) {
+        panic("Test plan did not contain JSON");
+      }
+      testJobs = selectedTestJobs(output.slice(jsonStart), root);
+    }
     plan = planCiApiTests({
       event,
       scopeUnknown,
@@ -132,8 +176,10 @@ if (import.meta.main) {
       select: allApiTests,
     });
   }
+  const matrix =
+    plan.type === "run" ? plan.matrix : { shard: ["rest-web"] as const };
   appendFileSync(
     process.env["GITHUB_OUTPUT"] ?? panic("Missing GITHUB_OUTPUT"),
-    `ci_tests_matrix=${JSON.stringify(plan.matrix)}\napi_test_shards=${plan.impact.shards}\napi_test_files<<API_TEST_FILES_END\n${plan.impact.files.join("\n")}\nAPI_TEST_FILES_END\n`,
+    `ci_tests_required=${plan.type === "run"}\nci_tests_matrix=${JSON.stringify(matrix)}\napi_test_shards=${plan.impact.shards}\ntest_scope=${testScope}\napi_test_files<<API_TEST_FILES_END\n${plan.impact.files.join("\n")}\nAPI_TEST_FILES_END\n`,
   );
 }

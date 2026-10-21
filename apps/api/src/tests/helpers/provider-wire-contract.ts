@@ -9,7 +9,8 @@ import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+import { BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
@@ -22,7 +23,7 @@ import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import {
   clearByokAdapterCache,
   createTanStackTextAdapterFactory,
-  getTanStackTextModelForRole,
+  getTanStackTextModelForTask,
 } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
@@ -115,7 +116,7 @@ export const UNKNOWN_MODEL_ID = "stella-cassette-no-such-model";
 
 /** The chat model a provider's corpus is recorded with by default. */
 export const wireChatModel = (provider: ProviderWireProvider): string =>
-  BYOK_DEFAULT_MODELS[provider].chat.modelId;
+  MODEL_DEFAULTS_LEDGER.chat[provider].candidate.modelId;
 
 /** A model of the provider's other than `chat`, for side calls such as
  *  thread titles. */
@@ -176,7 +177,7 @@ const prepareWireRequest = ({
   clearByokAdapterCache();
   // The rejected request names a model no provider serves, so its options
   // come from the provider's chat default.
-  const resolved = getTanStackTextModelForRole(
+  const resolved = getTanStackTextModelForTask(
     "chat",
     wireOrgAIConfig({
       apiKey,
@@ -209,7 +210,7 @@ const prepareWireRequest = ({
             })(model),
           },
     modelTools: chatToolMapToArray({ [WIRE_TOOL_NAME]: wireTool() }),
-    role: "chat",
+    task: "chat",
     system: undefined,
     toolCallIds: new ToolCallIdLedger([]),
   });
@@ -458,6 +459,18 @@ const usageProblems = (usage: TokenUsage | undefined): string[] => {
   return problems;
 };
 
+type ExpectedUsage = NonNullable<ProviderWireCassette["expect"]["usage"]>;
+
+/** Whether `reported` is other than the usage a cassette expects; reasoning
+ *  is compared where the cassette states it. */
+const usageDiffers = (expected: ExpectedUsage, reported: TokenUsage): boolean =>
+  reported.promptTokens !== expected.promptTokens ||
+  reported.completionTokens !== expected.completionTokens ||
+  reported.totalTokens !== expected.totalTokens ||
+  (expected.reasoningTokens !== undefined &&
+    reported.completionTokensDetails?.reasoningTokens !==
+      expected.reasoningTokens);
+
 /**
  * A provider that reported usage before the run failed billed it: the run
  * error carries exactly that, and no usage the wire never reported.
@@ -475,12 +488,7 @@ const runErrorUsageProblems = (
       : [{ expected: null, got: failed.usage }];
   }
   const problems: unknown[] = usageProblems(failed.usage);
-  if (
-    failed.usage !== undefined &&
-    (failed.usage.promptTokens !== expected.promptTokens ||
-      failed.usage.completionTokens !== expected.completionTokens ||
-      failed.usage.totalTokens !== expected.totalTokens)
-  ) {
+  if (failed.usage !== undefined && usageDiffers(expected, failed.usage)) {
     problems.push({ expected, got: failed.usage });
   }
   return problems;
@@ -597,9 +605,7 @@ export const findWireContractViolations = ({
       if (
         expected.usage !== undefined &&
         reported !== undefined &&
-        (reported.promptTokens !== expected.usage.promptTokens ||
-          reported.completionTokens !== expected.usage.completionTokens ||
-          reported.totalTokens !== expected.usage.totalTokens)
+        usageDiffers(expected.usage, reported)
       ) {
         usage.push({ expected: expected.usage, got: reported });
       }

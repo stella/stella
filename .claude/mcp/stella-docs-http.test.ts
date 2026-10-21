@@ -6,6 +6,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { connect, createServer } from "node:net";
 
 const children = new Set<ReturnType<typeof Bun.spawn>>();
+const UNBOUNDED_UPLOAD_ITERATIONS = 200;
+const DECLARED_UPLOAD_BYTES = 100 * 1024 * 1024;
+const SENT_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 const getFreePort = async () =>
   await new Promise<number>((resolve, reject) => {
@@ -90,6 +93,47 @@ const listStdioTools = async () => {
     await client.close();
   }
 };
+
+const readEarlyUploadResponse = async (port: string) =>
+  await new Promise<string>((resolve, reject) => {
+    let received = "";
+    let settled = false;
+    const socket = connect(Number(port), "127.0.0.1", () => {
+      socket.write(
+        `POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\ncontent-type: application/json\r\ncontent-length: ${DECLARED_UPLOAD_BYTES}\r\n\r\n`,
+      );
+      // Ten MiB of a declared hundred: past the drain bound, while the upload
+      // remains incomplete. Receiving a response proves the server stopped reading.
+      socket.write(Buffer.alloc(SENT_UPLOAD_BYTES, 120));
+    });
+    const settleFromResponse = () => {
+      const lineEnd = received.indexOf("\r\n");
+      if (lineEnd === -1) {
+        return false;
+      }
+      settled = true;
+      resolve(received.slice(0, lineEnd));
+      socket.destroy();
+      return true;
+    };
+    socket.on("data", (data) => {
+      received += data.toString();
+      settleFromResponse();
+    });
+    socket.on("error", (error) => {
+      if (settled || settleFromResponse()) {
+        return;
+      }
+      reject(error);
+    });
+    socket.on("close", () => {
+      if (!settled && !settleFromResponse()) {
+        reject(
+          new Error("Connection closed before an HTTP status line arrived"),
+        );
+      }
+    });
+  });
 
 afterEach(async () => {
   for (const child of children) {
@@ -215,25 +259,77 @@ describe("shared documentation MCP HTTP server", () => {
   test("answers an unbounded upload with 413 before it finishes", async () => {
     const { baseUrl } = await startHttpServer();
     const { port } = new URL(baseUrl);
-    const statusLine = await new Promise<string>((resolve, reject) => {
-      const socket = connect(Number(port), "127.0.0.1", () => {
+    // Half-open: the client does not close its side when the server's FIN
+    // arrives, so only the server's linger bound can end the connection.
+    const socket = connect(
+      { port: Number(port), host: "127.0.0.1", allowHalfOpen: true },
+      () => {
         socket.write(
           `POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\ncontent-type: application/json\r\ncontent-length: ${100 * 1024 * 1024}\r\n\r\n`,
         );
         // Ten MiB of a declared hundred: past the drain bound, and the upload never completes.
         socket.write(Buffer.alloc(10 * 1024 * 1024, 120));
+      },
+    );
+    // Upload bytes keep arriving after the answer, as from a client that does
+    // not read until it has sent everything.
+    const keepUploading = setInterval(() => {
+      if (socket.writable) {
+        socket.write(Buffer.alloc(256 * 1024, 120));
+      }
+    }, 20);
+    const socketClosed = new Promise<void>((resolve) => {
+      socket.once("close", () => {
+        clearInterval(keepUploading);
+        resolve();
       });
+    });
+    const statusLine = await new Promise<string>((resolve, reject) => {
       let received = "";
       socket.on("data", (data) => {
         received += data.toString();
         if (received.includes("\r\n")) {
           resolve(received.split("\r\n")[0] ?? "");
-          socket.destroy();
         }
       });
-      socket.on("error", reject);
+      // Before the status line any socket error is a failure; after it, the
+      // server's close of the unfinished upload is expected.
+      socket.on("error", (error) => {
+        if (!received.includes("\r\n")) {
+          reject(error);
+        }
+      });
     });
     expect(statusLine).toContain(" 413 ");
+    // The server does not keep reading the unfinished upload indefinitely: it
+    // drops the connection after its linger window, well within this bound. A
+    // server that kept the upload open fails here instead of hanging the test.
+    const closedInTime = await Promise.race([
+      socketClosed.then(() => true),
+      new Promise<boolean>((resolve) => {
+        setTimeout(() => {
+          resolve(false);
+        }, 4000).unref();
+      }),
+    ]);
+    clearInterval(keepUploading);
+    socket.destroy();
+    expect(closedInTime).toBe(true);
+  });
+
+  test("answers every repeated unbounded upload with a 413 status line first", async () => {
+    const { baseUrl } = await startHttpServer();
+    const { port } = new URL(baseUrl);
+    expect(SENT_UPLOAD_BYTES).toBeLessThan(DECLARED_UPLOAD_BYTES);
+    for (
+      let iteration = 0;
+      iteration < UNBOUNDED_UPLOAD_ITERATIONS;
+      iteration += 1
+    ) {
+      expect(await readEarlyUploadResponse(port)).toBe(
+        "HTTP/1.1 413 Payload Too Large",
+      );
+    }
   });
 
   test("applies the body limit to requests of an established session", async () => {

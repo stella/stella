@@ -30,6 +30,7 @@ const SELLER_PROFILE_LIST_COLUMNS = {
   legalName: sellerProfiles.legalName,
   registrationId: sellerProfiles.registrationId,
   vatId: sellerProfiles.vatId,
+  vatPayer: sellerProfiles.vatPayer,
   addressLine1: sellerProfiles.addressLine1,
   addressLine2: sellerProfiles.addressLine2,
   city: sellerProfiles.city,

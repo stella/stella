@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "انتقل إلى جهاز آخر",
     "sessionNeedsAttention": "يتطلب انتباهك",
     "sessionOpeningInOffice": "جارٍ الفتح في Office",
-    "sessionSavingDraft": "حفظ المسودة"
+    "sessionSavingDraft": "حفظ المسودة",
+    "reconnectAccount": "إعادة الاتصال بـ stella web…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — تبقى التغييرات محلية وستُعاد المحاولة تلقائياً",
@@ -209,7 +210,23 @@
     "startOnLoginDescription": "تشغيل stella desktop تلقائياً عند تسجيل دخولك.",
     "stellaDesktop": "stella desktop",
     "support": "الدعم",
-    "title": "الإعدادات"
+    "title": "الإعدادات",
+    "serverLabel": "الخادم",
+    "connectToHost": "الاتصال بـ {host}",
+    "connectToHostDescription": "يفتح {host} في المتصفح لتوافق على هذا الكمبيوتر.",
+    "reconnectNeeded": "يلزم إعادة الاتصال",
+    "reconnect": "إعادة الاتصال",
+    "reconnectHostDescription": "يجب تجديد الاتصال بـ {host}. وافق على هذا الكمبيوتر مرة أخرى في المتصفح.",
+    "permissions": "الأذونات",
+    "permissionNotificationsDescription": "ينبّهك عندما يصبح المستند جاهزاً أو عندما تحتاج المزامنة إلى انتباهك.",
+    "permissionAccessibility": "تسهيلات الاستخدام",
+    "permissionAccessibilityDescription": "يتيح للخط الزمني للنشاط تسجيل عناوين النوافذ، فقط إذا فعّلت التفاصيل.",
+    "permissionAllowed": "مسموح",
+    "permissionAllow": "السماح",
+    "permissionOpenSettings": "فتح الإعدادات",
+    "permissionDenied": "متوقف في إعدادات النظام.",
+    "permissionManaged": "تديره مؤسستك",
+    "errorPermissions": "تعذّر على stella desktop قراءة هذا الإذن أو تغييره."
   },
   "clipboard": {
     "registryUnavailable": "لا توجد سجلات مفعّلة لجهات اختصاص ممارستك.",
@@ -466,5 +483,45 @@
     "rangeEnd": "نهاية الفترة",
     "reviewToday": "مراجعة اليوم",
     "welcomePreviewMatter": "تجديد عقد إيجار ريفرسايد"
+  },
+  "shortcut": {
+    "title": "اختصار الحافظة",
+    "description": "يفتح سجل الحافظة من أي تطبيق.",
+    "change": "تغيير",
+    "reset": "إعادة التعيين إلى {shortcut}",
+    "recording": "اضغط الاختصار الجديد. يلغي مفتاح Esc التسجيل.",
+    "waiting": "في انتظار المفاتيح…",
+    "addKey": "أضف الآن مفتاحاً…",
+    "confirm": "هل تريد فتح الحافظة باستخدام {shortcut}؟",
+    "use": "استخدام {shortcut}",
+    "cancel": "إلغاء",
+    "same": "هذا هو اختصارك بالفعل.",
+    "errorSave": "تعذّر على stella desktop حفظ الاختصار.",
+    "needsModifier": "أضف {modifiers} حتى لا يكتب الاختصار حرفاً فقط.",
+    "unsupportedKey": "لا يمكن أن يكون هذا المفتاح جزءاً من اختصار. جرّب حرفاً أو رقماً أو مفتاح وظيفة.",
+    "systemReserved": "يستخدم النظام {shortcut} بالفعل لأمر «{action}». اختر اختصاراً آخر.",
+    "windowsKeyReserved": "يحتفظ Windows لنفسه بالاختصارات التي تتضمن مفتاح Windows. استخدم Ctrl أو Alt.",
+    "taken": "يستخدم تطبيق آخر {shortcut} بالفعل. اختر اختصاراً آخر.",
+    "unavailable": "يستخدم تطبيق آخر {shortcut}، لذلك لا يفتح الحافظة. اختر اختصاراً آخر.",
+    "action": {
+      "copy": "نسخ",
+      "paste": "لصق",
+      "cut": "قص",
+      "undo": "تراجع",
+      "redo": "إعادة",
+      "selectAll": "تحديد الكل",
+      "quit": "إنهاء",
+      "closeWindow": "إغلاق النافذة",
+      "hide": "إخفاء",
+      "minimize": "تصغير",
+      "appSwitcher": "مبدّل التطبيقات",
+      "spotlight": "Spotlight",
+      "inputSource": "مصدر الإدخال",
+      "screenshot": "لقطة شاشة",
+      "forceQuit": "فرض الإنهاء",
+      "windowMenu": "قائمة النافذة",
+      "start": "ابدأ",
+      "taskManager": "إدارة المهام"
+    }
   }
 }

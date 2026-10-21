@@ -48,11 +48,15 @@ import {
 } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
-import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
 import { isUuid } from "@stll/uuid-codec";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
-import { rootDb, rlsDb } from "@/api/db/root";
+import {
+  authorizeOwnerSyntheticSession,
+  bindOwnerSyntheticSessionAuthorityReader,
+  rootDb,
+  rlsDb,
+} from "@/api/db/root";
 import {
   featureEnrolments,
   userProfessionalUseAcceptances,
@@ -78,7 +82,6 @@ import {
   AUTH_SESSION_STORAGE_OPTIONS,
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
-import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
@@ -116,6 +119,7 @@ import type {
   MemberAuthorization,
   MemberAuthorizationLookup,
 } from "@/api/lib/auth/member-authorization";
+import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
@@ -159,11 +163,17 @@ import {
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
+import { findOtherSessionDevices } from "@/api/lib/auth/session-history";
 import {
   createSessionLifetime,
+  decidePinnedSessionLifetime,
   SESSION_LIFETIME_FIELDS,
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
+import {
+  isSecondFactorAuthSessionPath,
+  isSessionCreatingAuthPath,
+} from "@/api/lib/auth/session-path-classification";
 import {
   createMicrosoftProfileMapper,
   createSocialIdentityValidation,
@@ -175,6 +185,7 @@ import {
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
+import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -276,6 +287,13 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
+import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
+import { isSyntheticSessionPrincipal } from "@/api/lib/synthetic-principal/constants";
+import {
+  checkSyntheticPrincipalAccess,
+  syntheticPrincipalAuthConfig,
+} from "@/api/lib/synthetic-principal/policy";
+import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
 import { includes, isRecord } from "@/api/lib/type-guards";
 import {
   checkMemberAdmission,
@@ -287,6 +305,7 @@ import {
   ORGANIZATION_DELETION_REFUSAL_CODE,
 } from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
+import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MEMBER_ID_CLAIM,
@@ -295,6 +314,9 @@ import {
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 
 /** Access token lifetime in seconds (15 minutes). */
+const syntheticSessionAuthorityReader =
+  bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
+
 const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
@@ -302,14 +324,50 @@ const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
 // A lost rotation response can be replayed idempotently within this window.
 const REFRESH_TOKEN_REUSE_INTERVAL = 30;
 
-const VERIFY_EMAIL_PATH = "/email-otp/verify-email";
 const SEND_VERIFICATION_OTP_PATH = "/email-otp/send-verification-otp";
-const SIGN_IN_EMAIL_PATH = "/sign-in/email";
 const PREFERRED_NAME_MAX_LENGTH = 120;
 const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 
 /** Passwordless email-OTP sign-in path (not a better-auth credential path). */
 const SIGN_IN_EMAIL_OTP_PATH = "/sign-in/email-otp";
+
+export const createSocialProvider = <T extends object>(provider: T) => ({
+  ...provider,
+  disableIdTokenSignIn: true,
+});
+
+type SocialProviderSettings = {
+  googleClientId: string | undefined;
+  googleClientSecret: string | undefined;
+  microsoftClientId: string | undefined;
+  microsoftClientSecret: string | undefined;
+  microsoftTenantId: string | undefined;
+};
+
+export const createSocialProviders = (settings: SocialProviderSettings) => ({
+  ...(settings.googleClientId && settings.googleClientSecret
+    ? {
+        google: createSocialProvider({
+          clientId: settings.googleClientId,
+          clientSecret: settings.googleClientSecret,
+        }),
+      }
+    : {}),
+  ...(settings.microsoftClientId &&
+  settings.microsoftClientSecret &&
+  settings.microsoftTenantId
+    ? {
+        microsoft: createSocialProvider({
+          clientId: settings.microsoftClientId,
+          clientSecret: settings.microsoftClientSecret,
+          tenantId: settings.microsoftTenantId,
+          mapProfileToUser: createMicrosoftProfileMapper(
+            settings.microsoftTenantId,
+          ),
+        }),
+      }
+    : {}),
+});
 
 type SignInEmailOtpBody = {
   email: string;
@@ -461,30 +519,13 @@ export const getNewAccountEmailOtpAction = async (
   }
 };
 
-/**
- * Better Auth handles every social provider (`/callback/google`,
- * `/callback/microsoft`, ...) through the `/callback/:id` endpoint. The MCP
- * OAuth provider plugin uses `/oauth2/*` paths instead, so this prefix
- * matches only social sign-in callbacks.
- */
 const isSocialSignInCallbackPath = (path: string | undefined): boolean =>
   path?.startsWith("/callback/") ?? false;
 
 const isStellaTwoFactorSignInGatePath = (path: string | undefined): boolean =>
-  path === SIGN_IN_EMAIL_OTP_PATH || isSocialSignInCallbackPath(path);
+  isSecondFactorAuthSessionPath(path);
 
-/**
- * Every better-auth path whose response can establish a new session: the two
- * surfaces the second-factor gate already covers (passwordless email-OTP
- * sign-in and the shared social callback), plus first-verification and the
- * self-host credential path, which carry no second factor. Derived from the
- * gate so a sign-in surface added there also raises the new-device notice
- * instead of silently skipping it.
- */
-export const isSessionCreatingAuthPath = (path: string | undefined): boolean =>
-  path === VERIFY_EMAIL_PATH ||
-  path === SIGN_IN_EMAIL_PATH ||
-  isStellaTwoFactorSignInGatePath(path);
+export { isSessionCreatingAuthPath };
 
 /**
  * Frontend route that presents the second-factor challenge (mirrors the path
@@ -849,13 +890,6 @@ const isMcpResourceScope = (
 ): scope is (typeof MCP_ALL_RESOURCE_SCOPES)[number] =>
   includes(MCP_ALL_RESOURCE_SCOPES, scope);
 
-// A device is its browser and OS; a user agent naming neither is no device.
-const newDeviceLoginDeviceKey = ({
-  browser,
-  os,
-}: ParsedUserAgent): string | null =>
-  browser === null && os === null ? null : `${browser ?? ""}|${os ?? ""}`;
-
 // Building an `Intl.DateTimeFormat` re-parses its options every call; cache
 // one per language instead of rebuilding it for every new-device-login email.
 const newDeviceLoginDateTimeFormatCache = new Map<
@@ -1079,6 +1113,7 @@ export const createAuth = (
       capEnabled: env.SESSION_LIFETIME_CAP_ENABLED,
     }),
   });
+  const syntheticAuthHooks = createSyntheticPrincipalAuthHooks();
   const demoConfig = getDemoAccountConfig();
   const reviewConfig = getReviewAccountConfig();
   const resolveSessionAccount = async (userId: SafeId<"user">) =>
@@ -1112,6 +1147,11 @@ export const createAuth = (
   });
   const reviewSessionPolicy = createDemoSessionPolicy({
     config: reviewConfig,
+    resolveUser: resolveSessionAccount,
+    hasMembership: hasSessionMembership,
+  });
+  const syntheticSessionPolicy = createDemoSessionPolicy({
+    config: syntheticPrincipalAuthConfig,
     resolveUser: resolveSessionAccount,
     hasMembership: hasSessionMembership,
   });
@@ -1772,9 +1812,15 @@ export const createAuth = (
       localPasswordEnabled: isSelfhostLocalPasswordAuthEnabled(),
       reviewAccountConfigured: isReviewAccountConfigured(),
     }),
+    emailVerification: { autoSignInAfterVerification: false },
     databaseHooks: {
       account: {
-        create: { before: reviewDatabaseHooks.accountCreateBefore },
+        create: {
+          before: async (account, ctx) => {
+            syntheticAuthHooks.accountCreateBefore(account);
+            await reviewDatabaseHooks.accountCreateBefore(account, ctx);
+          },
+        },
       },
       member: {
         create: { before: reviewDatabaseHooks.memberCreateBefore },
@@ -1784,9 +1830,17 @@ export const createAuth = (
       },
       session: {
         create: {
-          before: async (session) =>
-            (await demoSessionPolicy(session)) ??
-            (await reviewSessionPolicy(session)),
+          before: async (session) => {
+            const accountPolicy =
+              (await demoSessionPolicy(session)) ??
+              (await reviewSessionPolicy(session)) ??
+              (await syntheticSessionPolicy(session));
+            const data = accountPolicy?.data ?? session;
+            const lifetime = decidePinnedSessionLifetime(data);
+            return accountPolicy || lifetime
+              ? { data: { ...data, ...lifetime } }
+              : undefined;
+          },
         },
       },
       user: {
@@ -1795,6 +1849,7 @@ export const createAuth = (
             // Refuses a creation path that has not decided whether it shows
             // the professional-use statement, before the row is written.
             requireUserCreationOrigin(ctx?.path);
+            syntheticAuthHooks.userCreateBefore(user);
             await reviewDatabaseHooks.userCreateBefore(user, ctx);
             const data = Result.gen(function* () {
               yield* checkNewAccountEmailAllowedForCreation({
@@ -1847,35 +1902,25 @@ export const createAuth = (
       },
     },
     database: membershipAuthAdapter,
-    socialProviders: {
-      ...(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET
-        ? {
-            google: {
-              clientId: env.GOOGLE_AUTH_CLIENT_ID,
-              clientSecret: env.GOOGLE_AUTH_CLIENT_SECRET,
-            },
-          }
-        : {}),
-      ...(env.MICROSOFT_AUTH_CLIENT_ID &&
-      env.MICROSOFT_AUTH_CLIENT_SECRET &&
-      env.MICROSOFT_AUTH_TENANT_ID
-        ? {
-            microsoft: {
-              clientId: env.MICROSOFT_AUTH_CLIENT_ID,
-              clientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
-              tenantId: env.MICROSOFT_AUTH_TENANT_ID,
-              mapProfileToUser: createMicrosoftProfileMapper(
-                env.MICROSOFT_AUTH_TENANT_ID,
-              ),
-            },
-          }
-        : {}),
-    },
+    socialProviders: createSocialProviders({
+      googleClientId: env.GOOGLE_AUTH_CLIENT_ID,
+      googleClientSecret: env.GOOGLE_AUTH_CLIENT_SECRET,
+      microsoftClientId: env.MICROSOFT_AUTH_CLIENT_ID,
+      microsoftClientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
+      microsoftTenantId: env.MICROSOFT_AUTH_TENANT_ID,
+    }),
     plugins: [
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
       createAgentUserPlugin(),
       createReviewAccountUserPlugin(reviewConfig),
+      createReviewAccountPlugin({
+        id: "restricted-monitoring-account",
+        config: syntheticPrincipalAuthConfig,
+        localPasswordEnabled: true,
+        checkAccess: checkSyntheticPrincipalAccess,
+        authorizeSession: authorizeOwnerSyntheticSession,
+      }),
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
@@ -2253,97 +2298,50 @@ export const createAuth = (
         return undefined;
       }),
       after: createAuthMiddleware(async (ctx) => {
-        if (!isSessionCreatingAuthPath(ctx.path) || isLocalDevOpen()) {
-          return;
-        }
-
-        if (
-          ctx.path === SIGN_IN_EMAIL_PATH &&
-          !isTransactionalEmailConfigured()
-        ) {
-          return;
-        }
-
         const newSession = ctx.context.newSession;
-        if (!newSession) {
-          return;
-        }
-
-        const notified = await Result.tryPromise({
-          try: async () => {
-            const { user, session } = newSession;
-
-            const previousSessions = await rootDb.query.session.findMany({
-              where: {
-                userId: user.id,
-                id: { ne: session.id },
-              },
-              orderBy: { createdAt: "desc" },
-              limit: LIMITS.newDeviceLoginSessionScanLimit,
-              columns: {
-                ipAddress: true,
-                userAgent: true,
-              },
-            });
-
-            if (previousSessions.length === 0) {
-              return;
-            }
-
-            const knownIPs = new Set<string>();
-            const knownDevices = new Set<string>();
-            for (const previous of previousSessions) {
-              if (previous.ipAddress) {
-                knownIPs.add(previous.ipAddress);
+        await sendNewDeviceNotice({
+          path: ctx.path,
+          newSession: newSession
+            ? {
+                user: {
+                  id: toSafeId<"user">(newSession.user.id),
+                  email: newSession.user.email,
+                },
+                session: {
+                  id: newSession.session.id,
+                  ipAddress: newSession.session.ipAddress,
+                  userAgent: newSession.session.userAgent,
+                  createdAt: newSession.session.createdAt,
+                },
               }
-              const previousDeviceKey = newDeviceLoginDeviceKey(
-                parseUserAgent(previous.userAgent),
+            : null,
+          dependencies: {
+            findPreviousSessions: findOtherSessionDevices,
+            sendNotice: ({ email, device, ipAddress, createdAt }) => {
+              const lang = extractLangFromRequest(ctx.request);
+              const formattedTime =
+                getNewDeviceLoginDateTimeFormat(lang).format(createdAt);
+
+              ctx.context.runInBackground(
+                sendNewDeviceLoginEmail({
+                  email,
+                  device,
+                  ipAddress,
+                  time: formattedTime,
+                  sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
+                  lang,
+                }).catch((error: unknown) => {
+                  captureError(error, { source: "new-device-login-email" });
+                  throw error;
+                }),
               );
-              if (previousDeviceKey !== null) {
-                knownDevices.add(previousDeviceKey);
-              }
-            }
-
-            const currentDevice = parseUserAgent(session.userAgent);
-            const deviceKey = newDeviceLoginDeviceKey(currentDevice);
-            const currentIpAddress = session.ipAddress;
-            const isNewIP =
-              typeof currentIpAddress === "string" &&
-              !knownIPs.has(currentIpAddress);
-            const isNewDevice =
-              deviceKey !== null && !knownDevices.has(deviceKey);
-
-            if (!isNewIP && !isNewDevice) {
-              return;
-            }
-
-            const deviceLabel =
-              currentDevice.browser && currentDevice.os
-                ? `${currentDevice.browser} on ${currentDevice.os}`
-                : (currentDevice.browser ?? currentDevice.os ?? "Unknown");
-            const lang = extractLangFromRequest(ctx.request);
-            const formattedTime = getNewDeviceLoginDateTimeFormat(lang).format(
-              session.createdAt,
-            );
-
-            ctx.context.runInBackground(
-              sendNewDeviceLoginEmail({
-                email: user.email,
-                device: deviceLabel,
-                ipAddress: session.ipAddress ?? "Unknown",
-                time: formattedTime,
-                sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
-                lang,
-              }).catch((error: unknown) => {
-                captureError(error, { source: "new-device-login-email" });
-              }),
-            );
+            },
+            isTransactionalEmailConfigured,
+            isLocalDev: isLocalDevOpen,
+            onError: (error) =>
+              captureError(error, { source: "new-device-login-hook" }),
           },
-          catch: (cause) => cause,
         });
-        if (Result.isError(notified)) {
-          captureError(notified.error, { source: "new-device-login-hook" });
-        }
       }),
     },
   });
@@ -2912,6 +2910,32 @@ const createAuthDatabases = (
   safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
 });
 
+const readOrganizationWorkspaces = async (
+  scopedDb: AuthScopedDb,
+  organizationId: SafeId<"organization">,
+): Promise<AccessibleWorkspace[]> => {
+  const outcome = await scopedDb(
+    async (tx) => await readAuthorizedWorkspaces(tx, { organizationId }),
+  );
+  if (outcome.isErr()) {
+    const { error } = outcome;
+    throw error;
+  }
+  return outcome.value.workspaces;
+};
+
+const hasSyntheticSessionAuthority = async (current: {
+  session: { id: string };
+  user: { id: string };
+}) => {
+  const sessionId = current.session.id;
+  const userId = brandPersistedUserId(current.user.id);
+  return (
+    !isSyntheticSessionPrincipal({ sessionId, principalId: userId }) ||
+    (await syntheticSessionAuthorityReader({ sessionId, userId })) !== null
+  );
+};
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -2935,6 +2959,10 @@ const resolveValidateAuth = async ({
   const rawOrgId = session?.activeOrganizationId;
 
   if (!session || !user || !rawOrgId) {
+    return { ok: false as const, statusCode: 401 as const };
+  }
+
+  if (!(await hasSyntheticSessionAuthority({ session, user }))) {
     return { ok: false as const, statusCode: 401 as const };
   }
 
@@ -3018,12 +3046,9 @@ const resolveValidateAuth = async ({
 
   let accessibleWorkspacesPromise: Promise<AccessibleWorkspace[]> | null = null;
   const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {
-    accessibleWorkspacesPromise ??= scopedDb(
-      async (tx) =>
-        await tx
-          .select({ id: workspaces.id, status: workspaces.status })
-          .from(workspaces)
-          .where(eq(workspaces.organizationId, activeOrganizationId)),
+    accessibleWorkspacesPromise ??= readOrganizationWorkspaces(
+      scopedDb,
+      activeOrganizationId,
     ).then((items) => {
       for (const workspace of items) {
         validatedWorkspaceIdSet.add(workspace.id);
@@ -3108,6 +3133,7 @@ const resolveValidateAuth = async ({
         email: user.email,
       },
       session: {
+        id: session.id,
         activeOrganizationId,
       },
       getActiveWorkspaceIds,

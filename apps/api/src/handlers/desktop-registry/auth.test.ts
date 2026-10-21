@@ -6,7 +6,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { env } from "@/api/env";
@@ -373,7 +373,11 @@ describe("desktop registry API-key configuration", () => {
     ]
       .filter(
         (filename) =>
-          !filename.endsWith(".test.ts") && !filename.endsWith(".spec.ts"),
+          !filename.endsWith(".test.ts") &&
+          !filename.endsWith(".spec.ts") &&
+          // Test fixtures mint keys for the isolation matrix; the census
+          // covers production issuance only.
+          !filename.startsWith("tests/"),
       )
       .map((filename) => ({
         filename,

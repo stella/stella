@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  CHAT_TURN_STATUSES,
   type ChatTurnState,
   type ChatTurnTransition,
   planChatTurnTransition,
 } from "@/api/handlers/chat/chat-turn-state";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 
 const id = toSafeId<"chatTurn">("11111111-1111-4111-8111-111111111111");
 const threadId = toSafeId<"chatThread">("22222222-2222-4222-8222-222222222222");

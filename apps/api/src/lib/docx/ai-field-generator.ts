@@ -191,7 +191,7 @@ const boundedAiSignal = (
  * fast-role model, disables prompt caching (these calls are not cache-shared),
  * threads analytics middleware, and attaches the optional skill tool loop. Skill
  * refs need the agentic loop (load-skill then draft), so these calls go through
- * `chat()` directly rather than the tool-free `generateTanStack*ForRole` helpers.
+ * `chat()` directly rather than the tool-free `generateTanStack*ForTask` helpers.
  */
 type FieldChatInput = {
   abortSignal: AbortSignal;
@@ -234,7 +234,7 @@ const resolveFieldChat = async ({
   abortController: abortControllerFromSignal(abortSignal),
   caching: resolveCaching({
     promptCachingEnabled: false,
-    role: "fast",
+    task: "short-text",
     scopeKey: organizationId,
   }),
   messages: guardModelMessages({
@@ -242,8 +242,9 @@ const resolveFieldChat = async ({
     workspaceIds: tenantWorkspaceIds,
   }),
   model: await resolveTextModel({
+    userId: admission.userId,
     dataClass: "customer",
-    role: "fast",
+    task: "short-text",
     orgAIConfig,
     managedAIResidency,
     organizationId,
@@ -261,6 +262,7 @@ const generateFieldText = async (
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
   return await collectTanStackTextRun({
+    userId: input.admission.userId,
     admission: input.admission,
     model,
     adapter: textAdapterWithNormalizedStops(model),
@@ -295,11 +297,13 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
   return await generateTanStackChatObject({
+    userId: input.admission.userId,
     admission: input.admission,
     model,
     adapter: model.adapter,
     messages,
     outputSchema: input.outputSchema,
+    tenantWorkspaceIds: input.tenantWorkspaceIds,
     abortController,
     ...systemPromptsPatch({ caching, model, system }),
     modelOptions: mergeGenerationOptions({
@@ -503,8 +507,9 @@ export const buildAiConditionDecider = ({
           ? { ...aiAnalytics.usageMetering, callId: Bun.randomUUIDv7() }
           : undefined,
         generation: {
+          userId: admission.userId,
           dataClass: "customer",
-          role: "fast",
+          task: "classify",
           serviceTier: "standard",
           orgAIConfig,
           managedAIResidency,
@@ -517,7 +522,7 @@ export const buildAiConditionDecider = ({
           deadlineMs: AI_CONDITION_TIMEOUT_MS,
           caching: resolveCaching({
             promptCachingEnabled: false,
-            role: "fast",
+            task: "classify",
             scopeKey: organizationId,
           }),
           prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}\n\nKnown details (JSON):\n${JSON.stringify(values)}`,
@@ -573,7 +578,8 @@ const adaptTokenBudget = ({
 
 // strictObject (no optional members): OpenAI strict structured output rejects
 // plain objects and optional properties.
-const occurrenceRenderingsSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const occurrenceRenderingsSchema = v.strictObject({
   renderings: v.array(v.string()),
 });
 

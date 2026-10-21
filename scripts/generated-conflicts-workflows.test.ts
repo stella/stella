@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { MAIN_ONLY_BUN_CACHE_SAVE } from "./workflow-cache-policy";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
@@ -79,6 +81,8 @@ describe("dispatch", () => {
   const run = async (
     nodes: Record<string, unknown>[],
     plannedHeads: string[] = [],
+    refusedRefs: string[] = [],
+    failingStatus?: number,
   ) => {
     const dispatched: Record<string, unknown>[] = [];
     await dispatch.runInNewContext({
@@ -104,6 +108,16 @@ describe("dispatch", () => {
             createWorkflowDispatch: async (
               request: Record<string, unknown>,
             ) => {
+              if (failingStatus !== undefined) {
+                throw Object.assign(new Error("Request failed"), {
+                  status: failingStatus,
+                });
+              }
+              if (refusedRefs.includes(String(request["ref"]))) {
+                throw Object.assign(new Error("Unprocessable Entity"), {
+                  status: 422,
+                });
+              }
               dispatched.push(request);
             },
           },
@@ -182,6 +196,43 @@ describe("dispatch", () => {
       pull({ headRefName: "feat/late", updatedAt: updatedAt(1) }),
     ]);
     expect(dispatched.map((request) => request["ref"])).toEqual(["feat/late"]);
+  });
+
+  test("a branch that refuses the dispatch never takes a slot", async () => {
+    const refused = Array.from({ length: 8 }, (_, index) =>
+      pull({
+        number: 30 + index,
+        headRefName: `old/${String(index)}`,
+        headRefOid: sha(30 + index),
+        updatedAt: updatedAt(20 + index),
+      }),
+    );
+    const dispatched = await run(
+      [
+        ...refused,
+        pull({
+          number: 2,
+          headRefName: "feat/conflicting",
+          headRefOid: sha(2),
+          updatedAt: updatedAt(1),
+        }),
+      ],
+      [],
+      refused.map((entry) => entry.headRefName),
+    );
+    expect(dispatched.map((request) => request["ref"])).toEqual([
+      "feat/conflicting",
+    ]);
+  });
+
+  test("a failure that is not a refused branch fails the run", async () => {
+    for (const status of [403, 429, 502]) {
+      expect(
+        await rejectionOf(
+          run([pull({ updatedAt: updatedAt(1) })], [], [], status),
+        ),
+      ).toMatchObject({ status });
+    }
   });
 
   test("unplanned heads go first, then the most recently updated", async () => {

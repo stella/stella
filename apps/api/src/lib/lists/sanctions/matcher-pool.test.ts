@@ -32,6 +32,9 @@ import type {
 import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
 import { recordingMatcherWorker } from "./test-fixtures/recording-matcher-worker";
 
+// Work usage is asserted where it is produced; replies only carry it.
+const SCREENED_WORK = { spent: expect.any(Number), limit: expect.any(Number) };
+
 const outcomeValue = <T>(outcome: MatcherWorkOutcome<T>): T | null =>
   outcome.status === "completed" ? outcome.value : null;
 
@@ -156,7 +159,7 @@ test("cached worker results match direct screening and replace changed editions"
       await pool
         .run(async (session) => await session.match(first))
         .then(outcomeValue),
-    ).toEqual({ status: "screened", result: expected });
+    ).toEqual({ status: "screened", result: expected, work: SCREENED_WORK });
     const changed = request("Different Enterprise", "second");
     changed.query = first.query;
     const newExpected = screen(
@@ -168,7 +171,7 @@ test("cached worker results match direct screening and replace changed editions"
       await pool
         .run(async (session) => await session.match(changed))
         .then(outcomeValue),
-    ).toEqual({ status: "screened", result: newExpected });
+    ).toEqual({ status: "screened", result: newExpected, work: SCREENED_WORK });
     expect(newExpected.possibleMatches).toHaveLength(0);
     expect(
       await pool
@@ -178,7 +181,7 @@ test("cached worker results match direct screening and replace changed editions"
           return await session.match({ ...changed, list: null });
         })
         .then(outcomeValue),
-    ).toEqual({ status: "screened", result: newExpected });
+    ).toEqual({ status: "screened", result: newExpected, work: SCREENED_WORK });
   } finally {
     await pool.close();
   }
@@ -294,7 +297,11 @@ test("cold construction and adversarial warm matching stay within work budgets",
         .then(outcomeValue);
       const totalMs = performance.now() - start;
       maxGapMs = Math.max(maxGapMs, performance.now() - previous);
-      expect(response).toEqual({ status: "screened", result: expected });
+      expect(response).toEqual({
+        status: "screened",
+        result: expected,
+        work: SCREENED_WORK,
+      });
       // Each query screens once; only the cold query transfers the corpus,
       // in bounded chunks rather than one event-loop-blocking message.
       expect(recorded.work.screenings - before.screenings).toBe(1);
@@ -841,7 +848,7 @@ test("real worker work exhaustion retains its edition and screens the next cache
       }),
     ).toEqual({
       status: "completed",
-      value: { status: "screened", result: expected },
+      value: { status: "screened", result: expected, work: SCREENED_WORK },
     });
     expect(recorded.work.entries).toBe(transferred.entries);
     expect(recorded.work.entryBatches).toBe(transferred.entryBatches);

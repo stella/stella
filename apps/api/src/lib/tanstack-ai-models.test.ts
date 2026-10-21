@@ -7,16 +7,19 @@ import {
   BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
   BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
-  DEFAULT_MODELS,
   getModelReasoningEfforts,
   isBYOKProviderRoleSupported,
-  MODEL_ROLES,
+  MODEL_TASKS,
+  MODEL_TASK_OVERRIDE_GROUP,
   shouldEmitTemperature,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
+import type { ModelOverrideGroup } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import { assertProperty } from "@stll/property-testing";
 
 import { env } from "@/api/env";
+import { resolveOrgAIModelForTask } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
@@ -57,24 +60,26 @@ testState.setConfig("USE_MOCK_AI", false);
 
 const {
   clearByokAdapterCache,
+  getTanStackTextModelInfoForTask,
   getTanStackTextModelInfoById,
-  getTanStackTextModelInfoForRole,
+  getStructuredOutputFallbackModelId,
+  isModelSelectionAvailableForTask,
   getTanStackTextModelById,
-  getTanStackTextModelForRole,
+  getTanStackTextModelForTask,
   hasTanStackInstanceProvider,
   isAllowedBYOKModel,
-  isAllowedBYOKModelForRole,
-  isDeferredServiceTierAvailableForRole,
+  isAllowedBYOKModelForTask,
+  isDeferredServiceTierAvailableForTask,
   isMockTextAdapter,
   isTanStackAIProviderSupported,
   mockAnswersForOrganization,
   modelAcceptsPdfDocumentInput,
   modelAcceptsStreamingToolUse,
   modelAcceptsTextualDocumentInput,
-  requireTanStackAIAvailableForRole,
+  requireTanStackAIAvailableForTask,
   resolveEffectiveServiceTierForProvider,
   resolveTanStackAIProviderSupport,
-  tanStackModelOptionsForRole,
+  tanStackModelOptionsForTask,
 } = await import("@/api/lib/tanstack-ai-models");
 
 const orgId = toSafeId<"organization">("org_test_tanstack_ai");
@@ -166,24 +171,24 @@ describe("isAllowedBYOKModel", () => {
 
   test("rejects catalog models for roles their provider cannot serve", () => {
     expect(
-      isAllowedBYOKModelForRole({
+      isAllowedBYOKModelForTask({
         provider: "mistral",
         modelId: "mistral-large-latest",
-        role: "chat",
+        task: "chat",
       }),
     ).toBe(true);
     expect(
-      isAllowedBYOKModelForRole({
+      isAllowedBYOKModelForTask({
         provider: "mistral",
         modelId: "mistral-large-latest",
-        role: "pdf",
+        task: "pdf",
       }),
     ).toBe(false);
     expect(
-      isAllowedBYOKModelForRole({
+      isAllowedBYOKModelForTask({
         provider: "openai",
         modelId: "gpt-5.4",
-        role: "pdf",
+        task: "pdf",
       }),
     ).toBe(true);
   });
@@ -227,7 +232,7 @@ describe("chat document-attachment capability", () => {
 
   test("Mistral vision models accept PDF but not textual documents; other Mistral models accept neither", () => {
     // Mistral's document_url path takes PDF only, and Mistral is deliberately
-    // not a pdf-role provider, so textual documents must never route to it.
+    // not a pdf-task provider, so textual documents must never route to it.
     expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.mistral).toHaveLength(0);
     const mistralPdfModels: readonly string[] =
       CHAT_PDF_ATTACHMENT_MODEL_OPTIONS.mistral;
@@ -317,15 +322,15 @@ describe("TanStack service tiers", () => {
     ).toBe("standard");
   });
 
-  test("reports deferred availability from the selected role provider", () => {
+  test("reports deferred availability from the selected task provider", () => {
     expect(
-      isDeferredServiceTierAvailableForRole(
+      isDeferredServiceTierAvailableForTask(
         "chat",
         orgConfigForProvider("openrouter"),
       ),
     ).toBe(true);
     expect(
-      isDeferredServiceTierAvailableForRole(
+      isDeferredServiceTierAvailableForTask(
         "chat",
         orgConfigForProvider("anthropic"),
       ),
@@ -358,7 +363,7 @@ describe("TanStack text model resolution", () => {
       testState.deleteEnv("BEDROCK_API_KEY");
 
       expect(() =>
-        getTanStackTextModelForRole("chat", null, {
+        getTanStackTextModelForTask("chat", null, {
           dataClass: "customer",
           managedAIResidency: "eu",
           organizationId: orgId,
@@ -413,7 +418,7 @@ describe("TanStack text model resolution", () => {
       testState.setConfig("MISTRAL_API_KEY", "test-mistral-instance-key");
 
       expect(() =>
-        getTanStackTextModelForRole("chat", null, {
+        getTanStackTextModelForTask("chat", null, {
           dataClass: "customer",
           managedAIResidency: "eu",
           organizationId: orgId,
@@ -432,7 +437,7 @@ describe("TanStack text model resolution", () => {
       "openai::gpt-5.4",
       orgConfigForProvider("openai"),
       {
-        role: "reasoning",
+        task: "reasoning",
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
@@ -457,7 +462,7 @@ describe("TanStack text model resolution", () => {
   test("refuses instance-key dispatch of a model with no published rate", () => {
     expect(() =>
       getTanStackTextModelById("openai::gpt-unrated-experiment", null, {
-        role: "chat",
+        task: "chat",
         dataClass: "public_corpus",
         organizationId: orgId,
         modelTier: MANAGED_MODEL_TIER.standard,
@@ -472,7 +477,7 @@ describe("TanStack text model resolution", () => {
       "openrouter::google/gemini-3.5-flash",
       null,
       {
-        role: "chat",
+        task: "chat",
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: null,
@@ -498,7 +503,7 @@ describe("TanStack text model resolution", () => {
         "google::gemini-3.6-flash",
         orgConfigForProvider("google"),
         {
-          role: "chat",
+          task: "chat",
           dataClass: "customer",
           managedAIResidency: "eu",
           organizationId: null,
@@ -515,7 +520,7 @@ describe("TanStack text model resolution", () => {
   test("resolves Mistral BYOK selections through the TanStack adapter", () => {
     const orgConfig = orgConfigForProvider("mistral");
 
-    const model = getTanStackTextModelForRole("chat", orgConfig, {
+    const model = getTanStackTextModelForTask("chat", orgConfig, {
       dataClass: "customer",
       managedAIResidency: "eu",
       organizationId: orgId,
@@ -535,7 +540,7 @@ describe("TanStack text model resolution", () => {
   test("rejects Mistral BYOK selections for PDF flows", () => {
     let handlerError: unknown;
     try {
-      getTanStackTextModelForRole("pdf", orgConfigForProvider("mistral"), {
+      getTanStackTextModelForTask("pdf", orgConfigForProvider("mistral"), {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
@@ -559,11 +564,11 @@ describe("TanStack text model resolution", () => {
       modelId: "us.amazon.nova-micro-v1:0",
     };
 
-    const unavailable = requireTanStackAIAvailableForRole({
+    const unavailable = requireTanStackAIAvailableForTask({
       configStatus: ORG_AI_CONFIG_STATUS.ok,
       dataClass: "customer",
       orgConfig,
-      role: "pdf",
+      task: "pdf",
     });
 
     expect(unavailable.isErr()).toBe(true);
@@ -574,7 +579,7 @@ describe("TanStack text model resolution", () => {
 
     let handlerError: unknown;
     try {
-      getTanStackTextModelForRole("pdf", orgConfig, {
+      getTanStackTextModelForTask("pdf", orgConfig, {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
@@ -593,17 +598,17 @@ describe("TanStack text model resolution", () => {
   });
 
   test.each(["customer", "public_corpus"] as const)(
-    "rejects unavailable instance requests for %s in role availability preflight",
+    "rejects unavailable instance requests for %s in task availability preflight",
     (dataClass) => {
       const originalProvider = env.AI_PROVIDER;
       try {
         testState.setConfig("AI_PROVIDER", "mistral");
 
-        const unavailable = requireTanStackAIAvailableForRole({
+        const unavailable = requireTanStackAIAvailableForTask({
           configStatus: ORG_AI_CONFIG_STATUS.ok,
           dataClass,
           orgConfig: null,
-          role: "pdf",
+          task: "pdf",
         });
 
         expect(unavailable.isErr()).toBe(true);
@@ -631,7 +636,7 @@ describe("TanStack text model resolution", () => {
       modelId: "us.amazon.nova-lite-v1:0",
     };
 
-    const model = getTanStackTextModelForRole("chat", orgConfig, {
+    const model = getTanStackTextModelForTask("chat", orgConfig, {
       dataClass: "customer",
       managedAIResidency: "eu",
       organizationId: orgId,
@@ -645,7 +650,7 @@ describe("TanStack text model resolution", () => {
   test("resolves Bedrock BYOK selections through the TanStack adapter", () => {
     const orgConfig = orgConfigForProvider("bedrock");
 
-    const model = getTanStackTextModelForRole("chat", orgConfig, {
+    const model = getTanStackTextModelForTask("chat", orgConfig, {
       dataClass: "customer",
       managedAIResidency: "eu",
       organizationId: orgId,
@@ -670,7 +675,7 @@ describe("TanStack text model resolution", () => {
         provider: "bedrock",
         modelId: "us.amazon.nova-lite-v1:0",
       };
-      const model = getTanStackTextModelForRole("chat", orgConfig, {
+      const model = getTanStackTextModelForTask("chat", orgConfig, {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
@@ -772,7 +777,7 @@ describe("TanStack text model resolution", () => {
     async (modelId) => {
       const orgConfig = orgConfigForProvider("bedrock");
       orgConfig.overrideModels.chat = { provider: "bedrock", modelId };
-      const model = getTanStackTextModelForRole("chat", orgConfig, {
+      const model = getTanStackTextModelForTask("chat", orgConfig, {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
@@ -834,7 +839,7 @@ describe("TanStack text model resolution", () => {
   test("normalizes existing Google regional BYOK selections to global", () => {
     const orgConfig = orgConfigForProvider("google", "eu");
 
-    const model = getTanStackTextModelForRole("chat", orgConfig, {
+    const model = getTanStackTextModelForTask("chat", orgConfig, {
       dataClass: "customer",
       managedAIResidency: "eu",
       organizationId: orgId,
@@ -849,21 +854,21 @@ describe("TanStack text model resolution", () => {
     expect(model.adapter.name).toBe("gemini");
   });
 
-  test("reports TanStack availability per selected role", () => {
+  test("reports TanStack availability per selected task", () => {
     expect(
-      requireTanStackAIAvailableForRole({
+      requireTanStackAIAvailableForTask({
         configStatus: ORG_AI_CONFIG_STATUS.ok,
         dataClass: "customer",
         orgConfig: orgConfigForProvider("openai"),
-        role: "chat",
+        task: "chat",
       }).isOk(),
     ).toBe(true);
 
-    const unavailable = requireTanStackAIAvailableForRole({
+    const unavailable = requireTanStackAIAvailableForTask({
       configStatus: ORG_AI_CONFIG_STATUS.ok,
       dataClass: "customer",
       orgConfig: orgConfigForProvider("openai_compatible"),
-      role: "chat",
+      task: "chat",
     });
 
     expect(unavailable.isErr()).toBe(true);
@@ -872,11 +877,11 @@ describe("TanStack text model resolution", () => {
       expect(unavailable.error.message).toContain("OpenAI-compatible");
     }
 
-    const unsupportedRole = requireTanStackAIAvailableForRole({
+    const unsupportedRole = requireTanStackAIAvailableForTask({
       configStatus: ORG_AI_CONFIG_STATUS.ok,
       dataClass: "customer",
       orgConfig: orgConfigForProvider("mistral"),
-      role: "pdf",
+      task: "pdf",
     });
 
     expect(unsupportedRole.isErr()).toBe(true);
@@ -903,11 +908,11 @@ describe("TanStack text model resolution", () => {
       if (status === null) {
         continue;
       }
-      const refused = requireTanStackAIAvailableForRole({
+      const refused = requireTanStackAIAvailableForTask({
         configStatus,
         dataClass: "customer",
         orgConfig: null,
-        role: "chat",
+        task: "chat",
       });
 
       expect(refused.isErr()).toBe(true);
@@ -918,11 +923,11 @@ describe("TanStack text model resolution", () => {
   });
 
   test("refuses a member without a seat assignment on the organization's own key", () => {
-    const refused = requireTanStackAIAvailableForRole({
+    const refused = requireTanStackAIAvailableForTask({
       configStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
       dataClass: "customer",
       orgConfig: orgConfigForProvider("openrouter"),
-      role: "chat",
+      task: "chat",
     });
 
     expect(refused.isErr()).toBe(true);
@@ -933,7 +938,7 @@ describe("TanStack text model resolution", () => {
   });
 
   test("exposes TanStack model metadata without leaking the adapter", () => {
-    const modelInfo = getTanStackTextModelInfoForRole(
+    const modelInfo = getTanStackTextModelInfoForTask(
       "chat",
       orgConfigForProvider("openrouter"),
       {
@@ -967,11 +972,105 @@ type LooseModelOptions = {
 const looseOptions = (options: TanStackModelOptions): LooseModelOptions =>
   options;
 
-describe("tanStackModelOptionsForRole", () => {
+describe("tanStackModelOptionsForTask", () => {
+  test("every task default preserves the emitted provider request baseline", () => {
+    const safetySettings = [
+      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+      {
+        category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        threshold: "BLOCK_ONLY_HIGH",
+      },
+      {
+        category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+        threshold: "BLOCK_ONLY_HIGH",
+      },
+    ];
+    // These are the pre-ledger wire options; Haiku's provider defaults omit
+    // temperature, the sole sampling change accompanying its model cutover.
+    const baseline = {
+      google: {
+        routine: {
+          safetySettings,
+          thinkingConfig: { thinkingLevel: "LOW", includeThoughts: false },
+        },
+        reasoning: {
+          safetySettings,
+          thinkingConfig: { thinkingLevel: "HIGH", includeThoughts: false },
+        },
+        fast: {
+          safetySettings,
+          thinkingConfig: { thinkingLevel: "LOW", includeThoughts: false },
+        },
+      },
+      anthropic: {
+        routine: {},
+        reasoning: { thinking: { type: "adaptive" } },
+        fast: {},
+      },
+      bedrock: {
+        routine: { temperature: 0 },
+        reasoning: { temperature: 0 },
+        fast: {},
+      },
+      mistral: {
+        routine: { temperature: 0 },
+        reasoning: { temperature: 0 },
+        fast: { temperature: 0 },
+      },
+      openai: {
+        routine: { include: ["reasoning.encrypted_content"], store: false },
+        reasoning: {
+          include: ["reasoning.encrypted_content"],
+          store: false,
+          reasoning: { effort: "medium" },
+        },
+        fast: { include: ["reasoning.encrypted_content"], store: false },
+      },
+      openrouter: {
+        routine: {},
+        reasoning: { reasoning: { effort: "high" } },
+        fast: { reasoning: { effort: "none" } },
+      },
+    } satisfies Record<
+      (typeof TANSTACK_AI_PROVIDERS)[number],
+      { routine: unknown; reasoning: unknown; fast: unknown }
+    >;
+    const modeByGroup = {
+      fast: "fast",
+      chat: "routine",
+      reasoning: "reasoning",
+      pdf: "routine",
+    } as const satisfies Record<
+      ModelOverrideGroup,
+      keyof typeof baseline.google
+    >;
+    for (const provider of TANSTACK_AI_PROVIDERS) {
+      for (const task of MODEL_TASKS) {
+        const entry = MODEL_DEFAULTS_LEDGER[task][provider];
+        if (entry.kind === "unsupported") {
+          continue;
+        }
+        const mode = modeByGroup[MODEL_TASK_OVERRIDE_GROUP[task]];
+        // Resolved options carry brands; the baseline states plain values.
+        const options: unknown = tanStackModelOptionsForTask({
+          provider,
+          task,
+          modelId: entry.candidate.modelId,
+          organizationId: null,
+        });
+        expect(
+          options,
+          `${provider}/${task}/${entry.candidate.modelId}`,
+        ).toEqual(baseline[provider][mode]);
+      }
+    }
+  });
+
   test("keeps deterministic sampling for OpenRouter", () => {
     expect(
-      tanStackModelOptionsForRole({
-        role: "chat",
+      tanStackModelOptionsForTask({
+        task: "chat",
         provider: "openrouter",
         modelId: "anthropic/claude-sonnet-4.6",
         organizationId: null,
@@ -992,8 +1091,8 @@ describe("tanStackModelOptionsForRole", () => {
         modelId: "google/gemini-3.5-flash-lite",
       },
     ]) {
-      const options = tanStackModelOptionsForRole({
-        role: "chat",
+      const options = tanStackModelOptionsForTask({
+        task: "chat",
         organizationId: null,
         ...candidate,
       });
@@ -1004,14 +1103,14 @@ describe("tanStackModelOptionsForRole", () => {
     }
   });
 
-  test("clamps the fast-role effort into the model's declared capability", () => {
+  test("clamps the fast-task effort into the model's declared capability", () => {
     // gemini-3.5-flash cannot disable reasoning ("Reasoning is
-    // mandatory" 502 class): the fast role's "none" request must
+    // mandatory" 502 class): the fast task's "none" request must
     // degrade to the model's weakest declared tier.
     expect(
       looseOptions(
-        tanStackModelOptionsForRole({
-          role: "fast",
+        tanStackModelOptionsForTask({
+          task: "short-text",
           provider: "openrouter",
           modelId: "google/gemini-3.5-flash",
           organizationId: null,
@@ -1024,8 +1123,8 @@ describe("tanStackModelOptionsForRole", () => {
     // GPT slugs accept "none"; the request passes through unchanged.
     // No temperature: the GPT-5 family rejects sampling overrides.
     const gptOptions = looseOptions(
-      tanStackModelOptionsForRole({
-        role: "fast",
+      tanStackModelOptionsForTask({
+        task: "short-text",
         provider: "openrouter",
         modelId: "openai/gpt-5.4-mini",
         organizationId: null,
@@ -1035,11 +1134,11 @@ describe("tanStackModelOptionsForRole", () => {
     expect(gptOptions.temperature).toBeUndefined();
   });
 
-  test("preserves OpenRouter reasoning-role effort on capable models", () => {
+  test("preserves OpenRouter reasoning-task effort on capable models", () => {
     expect(
       looseOptions(
-        tanStackModelOptionsForRole({
-          role: "reasoning",
+        tanStackModelOptionsForTask({
+          task: "reasoning",
           provider: "openrouter",
           modelId: "google/gemini-3.1-pro-preview",
           organizationId: null,
@@ -1054,8 +1153,8 @@ describe("tanStackModelOptionsForRole", () => {
   test("manual chat effort reaches each supported provider adapter", () => {
     expect(
       looseOptions(
-        tanStackModelOptionsForRole({
-          role: "chat",
+        tanStackModelOptionsForTask({
+          task: "chat",
           provider: "google",
           modelId: "gemini-3.6-flash",
           organizationId: null,
@@ -1064,8 +1163,8 @@ describe("tanStackModelOptionsForRole", () => {
       ),
     ).toMatchObject({ thinkingConfig: { thinkingLevel: "MEDIUM" } });
     expect(
-      tanStackModelOptionsForRole({
-        role: "chat",
+      tanStackModelOptionsForTask({
+        task: "chat",
         provider: "anthropic",
         modelId: "claude-sonnet-5",
         organizationId: null,
@@ -1076,8 +1175,8 @@ describe("tanStackModelOptionsForRole", () => {
       output_config: { effort: "high" },
     });
     expect(
-      tanStackModelOptionsForRole({
-        role: "chat",
+      tanStackModelOptionsForTask({
+        task: "chat",
         provider: "openai",
         modelId: "gpt-5.5",
         organizationId: null,
@@ -1086,8 +1185,8 @@ describe("tanStackModelOptionsForRole", () => {
     ).toMatchObject({ reasoning: { effort: "xhigh" } });
     expect(
       looseOptions(
-        tanStackModelOptionsForRole({
-          role: "chat",
+        tanStackModelOptionsForTask({
+          task: "chat",
           provider: "openrouter",
           modelId: "openai/gpt-5.5",
           organizationId: null,
@@ -1099,8 +1198,8 @@ describe("tanStackModelOptionsForRole", () => {
 
   test("turns Anthropic thinking off when the selected model offers none", () => {
     expect(
-      tanStackModelOptionsForRole({
-        role: "chat",
+      tanStackModelOptionsForTask({
+        task: "chat",
         provider: "anthropic",
         modelId: "claude-sonnet-5",
         organizationId: null,
@@ -1109,17 +1208,31 @@ describe("tanStackModelOptionsForRole", () => {
     ).toEqual({ thinking: { type: "disabled" } });
   });
 
+  test("rejects an explicitly unsupported provider task before building options", () => {
+    expect(() =>
+      tanStackModelOptionsForTask({
+        provider: "mistral",
+        task: "pdf",
+        modelId: "mistral-medium-latest",
+        organizationId: null,
+      }),
+    ).toThrow("Unsupported Mistral task mode");
+  });
+
   test("never emits a reasoning control outside the model's declared capability", () => {
     // The whole-class invariant behind the "Reasoning is mandatory"
-    // 502: for EVERY offered model and role, any effort (or Gemini
+    // 502: for EVERY offered model and task, any effort (or Gemini
     // thinking level) the builders emit must be in the model's
     // declared capability set, and models without one get nothing.
     for (const provider of TANSTACK_AI_PROVIDERS) {
       for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
-        for (const role of MODEL_ROLES) {
+        for (const task of MODEL_TASKS) {
+          if (MODEL_DEFAULTS_LEDGER[task][provider].kind === "unsupported") {
+            continue;
+          }
           const options = looseOptions(
-            tanStackModelOptionsForRole({
-              role,
+            tanStackModelOptionsForTask({
+              task,
               provider,
               modelId,
               organizationId: null,
@@ -1127,7 +1240,7 @@ describe("tanStackModelOptionsForRole", () => {
           );
           const declared = getModelReasoningEfforts(modelId);
           const declaredValues: readonly string[] = declared ?? [];
-          const context = `${provider} / ${modelId} / ${role}`;
+          const context = `${provider} / ${modelId} / ${task}`;
 
           const effort = options.reasoning?.effort;
           if (effort !== undefined) {
@@ -1160,8 +1273,8 @@ describe("tanStackModelOptionsForRole", () => {
         continue; // safetySettings are always sent; asserted below.
       }
       const options = looseOptions(
-        tanStackModelOptionsForRole({
-          role: "fast",
+        tanStackModelOptionsForTask({
+          task: "short-text",
           provider,
           modelId: "totally-unknown-model",
           organizationId: null,
@@ -1171,8 +1284,8 @@ describe("tanStackModelOptionsForRole", () => {
         provider === "openai" ? { include: [] } : {},
       );
     }
-    const google = tanStackModelOptionsForRole({
-      role: "fast",
+    const google = tanStackModelOptionsForTask({
+      task: "short-text",
       provider: "google",
       modelId: "totally-unknown-model",
       organizationId: null,
@@ -1181,16 +1294,16 @@ describe("tanStackModelOptionsForRole", () => {
     expect(looseOptions(google).thinkingConfig).toBeUndefined();
   });
 
-  test("every OpenAI reasoning model requests stateless replay data in every role", () => {
+  test("every OpenAI reasoning model requests stateless replay data in every task", () => {
     for (const modelId of BYOK_MODEL_OPTIONS.openai) {
-      for (const role of MODEL_ROLES) {
-        const options = tanStackModelOptionsForRole({
+      for (const task of MODEL_TASKS) {
+        const options = tanStackModelOptionsForTask({
           provider: "openai",
           modelId,
-          role,
+          task,
           organizationId: null,
         });
-        expect(options, `${modelId}/${role}`).toMatchObject({
+        expect(options, `${modelId}/${task}`).toMatchObject({
           include: ["reasoning.encrypted_content"],
           store: false,
         });
@@ -1200,8 +1313,8 @@ describe("tanStackModelOptionsForRole", () => {
 
   test("uses TanStack Anthropic snake_case thinking options", () => {
     expect(
-      tanStackModelOptionsForRole({
-        role: "reasoning",
+      tanStackModelOptionsForTask({
+        task: "reasoning",
         provider: "anthropic",
         modelId: "claude-haiku-4-5-20251001",
         organizationId: orgId,
@@ -1216,8 +1329,8 @@ describe("tanStackModelOptionsForRole", () => {
 
   test("uses adaptive Anthropic thinking for newer Claude models", () => {
     expect(
-      tanStackModelOptionsForRole({
-        role: "reasoning",
+      tanStackModelOptionsForTask({
+        task: "reasoning",
         provider: "anthropic",
         modelId: "claude-opus-4-8",
         organizationId: orgId,
@@ -1230,8 +1343,8 @@ describe("tanStackModelOptionsForRole", () => {
   });
 
   test("constructs Haiku 5.5 reasoning requests with adaptive thinking and no sampling", () => {
-    const options = tanStackModelOptionsForRole({
-      role: "reasoning",
+    const options = tanStackModelOptionsForTask({
+      task: "reasoning",
       provider: "anthropic",
       modelId: "claude-haiku-5-5",
       organizationId: orgId,
@@ -1247,8 +1360,8 @@ describe("tanStackModelOptionsForRole", () => {
   });
 
   test("does not emit unsupported Anthropic user metadata", () => {
-    const options = tanStackModelOptionsForRole({
-      role: "chat",
+    const options = tanStackModelOptionsForTask({
+      task: "chat",
       provider: "anthropic",
       modelId: "claude-sonnet-4-6",
       organizationId: orgId,
@@ -1258,8 +1371,8 @@ describe("tanStackModelOptionsForRole", () => {
   });
 
   test("omits sampling for Anthropic fixed-sampling models", () => {
-    const options = tanStackModelOptionsForRole({
-      role: "chat",
+    const options = tanStackModelOptionsForTask({
+      task: "chat",
       provider: "anthropic",
       modelId: "claude-opus-4-8",
       organizationId: null,
@@ -1270,10 +1383,10 @@ describe("tanStackModelOptionsForRole", () => {
 
   test("omits sampling for OpenAI reasoning models in non-reasoning roles", () => {
     // Models whose catalogued temperature policy is "omit" reject any
-    // temperature but the default (a 400), so no role may emit
+    // temperature but the default (a 400), so no task may emit
     // `temperature` for them.
-    const options = tanStackModelOptionsForRole({
-      role: "chat",
+    const options = tanStackModelOptionsForTask({
+      task: "chat",
       provider: "openai",
       modelId: "gpt-5.5",
       organizationId: null,
@@ -1286,8 +1399,8 @@ describe("tanStackModelOptionsForRole", () => {
     // Custom deployments / env overrides have no declared capability;
     // parameters are only sent on positive evidence the model accepts
     // them, so the provider default is the only safe request.
-    const options = tanStackModelOptionsForRole({
-      role: "chat",
+    const options = tanStackModelOptionsForTask({
+      task: "chat",
       provider: "openai",
       modelId: "some-custom-openai-model",
       organizationId: null,
@@ -1314,7 +1427,7 @@ describe("who answers while the local mock is on", () => {
     // A factory an earlier case cached must not answer for this one.
     clearByokAdapterCache();
     try {
-      const model = getTanStackTextModelForRole("chat", orgConfig, {
+      const model = getTanStackTextModelForTask("chat", orgConfig, {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
@@ -1368,7 +1481,7 @@ describe("who answers while the local mock is on", () => {
     try {
       expect(mockAnswersForOrganization(null)).toBe(false);
       expect(() =>
-        getTanStackTextModelForRole("chat", null, {
+        getTanStackTextModelForTask("chat", null, {
           dataClass: "customer",
           managedAIResidency: "eu",
           organizationId: orgId,
@@ -1421,7 +1534,7 @@ const orgConfigForProvider = (
   }) satisfies OrgAIConfig;
 
 describe("Anthropic workspace dispatch", () => {
-  test("every model role receives workspace headers and changed workspace invalidates the cached factory", async () => {
+  test("every model task receives workspace headers and changed workspace invalidates the cached factory", async () => {
     const requests: Headers[] = [];
     const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
       Object.assign(
@@ -1467,8 +1580,8 @@ describe("Anthropic workspace dispatch", () => {
           },
           decision: null,
         } satisfies OrgAIConfig;
-        for (const role of MODEL_ROLES) {
-          const model = getTanStackTextModelForRole(role, config, {
+        for (const task of MODEL_TASKS) {
+          const model = getTanStackTextModelForTask(task, config, {
             organizationId: orgId,
             dataClass: "customer",
             managedAIResidency: "eu",
@@ -1495,35 +1608,38 @@ describe("Anthropic workspace dispatch", () => {
   });
 });
 
-test("unoverridden organization roles dispatch the catalog default with truthful role availability", () => {
+test("unoverridden organization roles dispatch the catalog default with truthful task availability", () => {
   for (const provider of TANSTACK_AI_PROVIDERS) {
     const config = {
       providers: [{ provider, apiKey: "fixture-key" }],
       overrideModels: null,
       decision: null,
     } satisfies OrgAIConfig;
-    for (const role of MODEL_ROLES) {
-      const supported = isBYOKProviderRoleSupported({ provider, role });
-      const available = requireTanStackAIAvailableForRole({
+    for (const task of MODEL_TASKS) {
+      const supported = isBYOKProviderRoleSupported({
+        provider,
+        role: MODEL_TASK_OVERRIDE_GROUP[task],
+      });
+      const available = requireTanStackAIAvailableForTask({
         configStatus: ORG_AI_CONFIG_STATUS.ok,
         dataClass: "customer",
         orgConfig: config,
-        role,
+        task,
       });
       expect(available.isOk()).toBe(supported);
-      const entry = BYOK_DEFAULT_MODELS[provider][role];
+      const entry = MODEL_DEFAULTS_LEDGER[task][provider];
       if (entry.kind === "unsupported") {
         continue;
       }
       expect(
-        getTanStackTextModelInfoForRole(role, config, {
+        getTanStackTextModelInfoForTask(task, config, {
           dataClass: "customer",
           organizationId: orgId,
           modelTier: MANAGED_MODEL_TIER.standard,
         }),
       ).toMatchObject({
         provider,
-        modelId: entry.modelId,
+        modelId: entry.candidate.modelId,
         keySource: "byok",
       });
     }
@@ -1536,8 +1652,8 @@ describe("managed model tier", () => {
     managedAIResidency: "eu",
     organizationId: orgId,
   } as const;
-  // The organization's own key: each role on its own catalog model, so a
-  // role served by the wrong model shows.
+  // The organization's own key: each task on its own catalog model, so a
+  // task served by the wrong model shows.
   const OWN_KEY_CONFIG = {
     providers: [{ provider: "openai", apiKey: "test-org-provider-key" }],
     overrideModels: {
@@ -1571,18 +1687,21 @@ describe("managed model tier", () => {
     }
   };
 
-  test("the fast tier serves every catalog role on the managed fast model", () => {
+  test("the fast tier serves every catalog task on the managed fast model", () => {
     withManagedOpenRouter(() => {
-      const fastModelId = DEFAULT_MODELS.openrouter.fast;
-      // The standard tier keeps per-role models, so the fast tier is visible.
+      const fastModelId =
+        MODEL_DEFAULTS_LEDGER["short-text"].openrouter.candidate.modelId;
+      // The standard tier keeps per-task models, so the fast tier is visible.
       expect(
-        MODEL_ROLES.some(
-          (role) => DEFAULT_MODELS.openrouter[role] !== fastModelId,
+        MODEL_TASKS.some(
+          (task) =>
+            MODEL_DEFAULTS_LEDGER[task].openrouter.candidate.modelId !==
+            fastModelId,
         ),
       ).toBe(true);
-      for (const role of MODEL_ROLES) {
+      for (const task of MODEL_TASKS) {
         expect(
-          getTanStackTextModelForRole(role, null, {
+          getTanStackTextModelForTask(task, null, {
             ...MANAGED_CUSTOMER,
             modelTier: MANAGED_MODEL_TIER.fast,
           }),
@@ -1592,72 +1711,78 @@ describe("managed model tier", () => {
           modelId: fastModelId,
         });
         expect(
-          getTanStackTextModelForRole(role, null, {
+          getTanStackTextModelForTask(task, null, {
             ...MANAGED_CUSTOMER,
             modelTier: MANAGED_MODEL_TIER.standard,
           }).modelId,
-        ).toBe(DEFAULT_MODELS.openrouter[role]);
+        ).toBe(MODEL_DEFAULTS_LEDGER[task].openrouter.candidate.modelId);
       }
     });
   });
 
   test("the fast tier serves a managed per-turn selection on the fast model", () => {
     withManagedOpenRouter(() => {
-      const selection = `openrouter::${DEFAULT_MODELS.openrouter.chat}`;
+      const selection = `openrouter::${MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId}`;
       expect(
         getTanStackTextModelById(selection, null, {
           ...MANAGED_CUSTOMER,
-          role: "chat",
+          task: "chat",
           modelTier: MANAGED_MODEL_TIER.fast,
         }).modelId,
-      ).toBe(DEFAULT_MODELS.openrouter.fast);
+      ).toBe(MODEL_DEFAULTS_LEDGER["short-text"].openrouter.candidate.modelId);
       expect(
         getTanStackTextModelById(selection, null, {
           ...MANAGED_CUSTOMER,
-          role: "chat",
+          task: "chat",
           modelTier: MANAGED_MODEL_TIER.standard,
         }).modelId,
-      ).toBe(DEFAULT_MODELS.openrouter.chat);
+      ).toBe(MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId);
     });
   });
 
-  test("a role resolves its tier's managed model, or the organization's own model under its key", () => {
+  test("a task resolves its tier's managed model, or the organization's own model under its key", () => {
     withManagedOpenRouter(() => {
       assertProperty(
-        "a role resolves its tier's managed model, or the organization's own model under its key",
+        "a task resolves its tier's managed model, or the organization's own model under its key",
         fc.property(
-          fc.constantFrom(...MODEL_ROLES),
+          fc.constantFrom(...MODEL_TASKS),
           fc.constantFrom(...Object.values(MANAGED_MODEL_TIER)),
           fc.constantFrom("managed", "own_key"),
-          fc.option(fc.constantFrom(...MODEL_ROLES), { nil: undefined }),
-          (role, modelTier, credentials, selectedRole) => {
+          fc.option(fc.constantFrom(...MODEL_TASKS), { nil: undefined }),
+          (task, modelTier, credentials, selectedRole) => {
             const orgConfig = credentials === "own_key" ? OWN_KEY_CONFIG : null;
             const ownKey = credentials === "own_key";
             let selectedModelId: string | undefined;
             if (selectedRole !== undefined) {
               selectedModelId = ownKey
-                ? OWN_KEY_CONFIG.overrideModels[selectedRole].modelId
-                : `openrouter::${DEFAULT_MODELS.openrouter[selectedRole]}`;
+                ? OWN_KEY_CONFIG.overrideModels[
+                    MODEL_TASK_OVERRIDE_GROUP[selectedRole]
+                  ].modelId
+                : `openrouter::${MODEL_DEFAULTS_LEDGER[selectedRole].openrouter.candidate.modelId}`;
             }
             // Oracle: the own key serves what the organization configured or
             // selected; the fast tier serves the fast model; the standard
-            // tier serves the selection, else the role's model.
+            // tier serves the selection, else the task's model.
             const managedModelId =
               modelTier === MANAGED_MODEL_TIER.fast
-                ? DEFAULT_MODELS.openrouter.fast
-                : DEFAULT_MODELS.openrouter[selectedRole ?? role];
+                ? MODEL_DEFAULTS_LEDGER["short-text"].openrouter.candidate
+                    .modelId
+                : MODEL_DEFAULTS_LEDGER[selectedRole ?? task].openrouter
+                    .candidate.modelId;
             const expectedModelId = ownKey
-              ? (selectedModelId ?? OWN_KEY_CONFIG.overrideModels[role].modelId)
+              ? (selectedModelId ??
+                OWN_KEY_CONFIG.overrideModels[MODEL_TASK_OVERRIDE_GROUP[task]]
+                  .modelId)
               : managedModelId;
             const dispatched =
               selectedModelId === undefined
-                ? getTanStackTextModelForRole(role, orgConfig, {
+                ? getTanStackTextModelForTask(task, orgConfig, {
                     ...MANAGED_CUSTOMER,
                     modelTier,
                   })
                 : getTanStackTextModelById(selectedModelId, orgConfig, {
                     ...MANAGED_CUSTOMER,
-                    role,
+                    task,
                     modelTier,
                   });
             expect(dispatched.modelId).toBe(expectedModelId);
@@ -1667,7 +1792,7 @@ describe("managed model tier", () => {
             // Metering and analytics resolve the model dispatch serves.
             const info =
               selectedModelId === undefined
-                ? getTanStackTextModelInfoForRole(role, orgConfig, {
+                ? getTanStackTextModelInfoForTask(task, orgConfig, {
                     dataClass: "customer",
                     organizationId: orgId,
                     modelTier,
@@ -1675,7 +1800,7 @@ describe("managed model tier", () => {
                 : getTanStackTextModelInfoById(
                     selectedModelId,
                     orgConfig,
-                    role,
+                    task,
                     { dataClass: "customer", modelTier },
                   );
             expect(info).toMatchObject({
@@ -1687,5 +1812,207 @@ describe("managed model tier", () => {
         ),
       );
     });
+  });
+});
+
+describe("approved structured-output fallback selection", () => {
+  test("structured fallback stays within configured task models", () => {
+    assertProperty(
+      "structured fallback stays within configured task models",
+      fc.property(
+        fc.subarray([...TANSTACK_AI_PROVIDERS]),
+        fc.constantFrom(...MODEL_TASKS),
+        fc.constantFrom(...Object.values(BYOK_MODEL_OPTIONS).flat()),
+        (providers, task, failedModelId) => {
+          const orgAIConfig = {
+            providers: providers.map((provider) => ({
+              provider,
+              apiKey: "test-org-provider-key",
+            })),
+            overrideModels: null,
+            decision: null,
+          } satisfies OrgAIConfig;
+          const options = {
+            failedModelId,
+            orgAIConfig,
+            task,
+            modelTier: MANAGED_MODEL_TIER.standard,
+            dataClass: "customer",
+            managedAIResidency: "eu",
+          } as const;
+          const fallback = getStructuredOutputFallbackModelId(options);
+          const assignedProvider = resolveOrgAIModelForTask(
+            orgAIConfig,
+            task,
+          )?.provider;
+          const availableModels = providers.flatMap((provider) => {
+            const models: readonly string[] = BYOK_MODEL_OPTIONS[provider];
+            return models.filter(
+              (modelId) =>
+                provider === assignedProvider &&
+                modelId !== failedModelId &&
+                isAllowedBYOKModelForTask({ provider, modelId, task }),
+            );
+          });
+          if (fallback === null) {
+            expect(availableModels).toHaveLength(0);
+            return;
+          }
+          const [provider, ...modelParts] = fallback.split("::");
+          const modelId = modelParts.join("::");
+          expect(providers.some((configured) => configured === provider)).toBe(
+            true,
+          );
+          expect(provider).toBe(assignedProvider);
+          expect(availableModels).toContain(modelId);
+          expect(modelId).not.toBe(failedModelId);
+          expect(getStructuredOutputFallbackModelId(options)).toBe(fallback);
+        },
+      ),
+    );
+  });
+
+  test("spare providers cannot override an explicit task assignment", () => {
+    for (const provider of ["openai", "google"] as const) {
+      const failedModelId = BYOK_DEFAULT_MODELS[provider].chat.modelId;
+      const fallback = getStructuredOutputFallbackModelId({
+        failedModelId,
+        orgAIConfig: {
+          providers: [
+            { provider: "google", apiKey: "fixture-google-key" },
+            { provider: "openai", apiKey: "fixture-openai-key" },
+          ],
+          overrideModels: { chat: { provider, modelId: failedModelId } },
+          decision: null,
+        },
+        task: "chat",
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "customer",
+        managedAIResidency: "eu",
+      });
+      expect(fallback).toStartWith(`${provider}::`);
+      expect(fallback).not.toBe(`${provider}::${failedModelId}`);
+    }
+  });
+
+  test("an organization without an approved provider skips fallback", () => {
+    expect(
+      getStructuredOutputFallbackModelId({
+        failedModelId: MODEL_DEFAULTS_LEDGER.chat.openai.candidate.modelId,
+        orgAIConfig: { providers: [], overrideModels: null, decision: null },
+        task: "chat",
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "customer",
+        managedAIResidency: "eu",
+      }),
+    ).toBeNull();
+  });
+
+  test("a configured provider without approved models for the task skips fallback", () => {
+    const orgAIConfig = orgConfigForProvider("mistral");
+    expect(
+      BYOK_MODEL_OPTIONS.mistral.every(
+        (modelId) =>
+          !isAllowedBYOKModelForTask({
+            provider: "mistral",
+            modelId,
+            task: "pdf",
+          }),
+      ),
+    ).toBe(true);
+    expect(
+      getStructuredOutputFallbackModelId({
+        failedModelId: MODEL_DEFAULTS_LEDGER.chat.mistral.candidate.modelId,
+        orgAIConfig,
+        task: "pdf",
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "customer",
+        managedAIResidency: "eu",
+      }),
+    ).toBeNull();
+  });
+
+  test("managed fallback distinguishes public corpus from customer data", () => {
+    testState.setConfig("AI_PROVIDER", "openai");
+    testState.setConfig("OPENAI_API_KEY", "test-openai-instance-key");
+    testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
+    testState.setConfig("USE_MOCK_AI", false);
+    expect(
+      isModelSelectionAvailableForTask({
+        dataClass: "public_corpus",
+        provider: "openai",
+        modelId: MODEL_DEFAULTS_LEDGER.chat.openai.candidate.modelId,
+        orgAIConfig: null,
+        task: "chat",
+      }),
+    ).toBe(true);
+    const publicFallback = getStructuredOutputFallbackModelId({
+      failedModelId: MODEL_DEFAULTS_LEDGER.chat.openai.candidate.modelId,
+      orgAIConfig: null,
+      task: "chat",
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+    });
+    expect(publicFallback).toStartWith("openai::");
+    expect(publicFallback).not.toBe(
+      `openai::${MODEL_DEFAULTS_LEDGER.chat.openai.candidate.modelId}`,
+    );
+    expect(
+      isModelSelectionAvailableForTask({
+        dataClass: "customer",
+        provider: "openai",
+        modelId: MODEL_DEFAULTS_LEDGER.chat.openai.candidate.modelId,
+        orgAIConfig: null,
+        task: "chat",
+      }),
+    ).toBe(false);
+    for (const managedAIResidency of ["eu", "us"] as const) {
+      expect(
+        getStructuredOutputFallbackModelId({
+          failedModelId: MODEL_DEFAULTS_LEDGER.chat.openai.candidate.modelId,
+          orgAIConfig: null,
+          task: "chat",
+          modelTier: MANAGED_MODEL_TIER.standard,
+          dataClass: "customer",
+          managedAIResidency,
+        }),
+      ).toBeNull();
+    }
+  });
+
+  test("managed fallback uses the active provider's regional policy", () => {
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    testState.setConfig("OPENROUTER_API_KEY", "test-openrouter-instance-key");
+    testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
+    testState.setConfig("USE_MOCK_AI", false);
+    for (const managedAIResidency of ["eu", "us"] as const) {
+      const fallback = getStructuredOutputFallbackModelId({
+        failedModelId: MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId,
+        orgAIConfig: null,
+        task: "chat",
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "customer",
+        managedAIResidency,
+      });
+      expect(fallback).toStartWith("openrouter::");
+      expect(fallback).not.toBe(
+        `openrouter::${MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId}`,
+      );
+    }
+  });
+
+  test("managed fast tier skips because model resolution pins its primary", () => {
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    expect(
+      getStructuredOutputFallbackModelId({
+        failedModelId:
+          MODEL_DEFAULTS_LEDGER["short-text"].openrouter.candidate.modelId,
+        orgAIConfig: null,
+        task: "chat",
+        modelTier: MANAGED_MODEL_TIER.fast,
+        dataClass: "customer",
+        managedAIResidency: "eu",
+      }),
+    ).toBeNull();
   });
 });

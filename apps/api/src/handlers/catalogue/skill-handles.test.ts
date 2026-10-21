@@ -15,6 +15,7 @@ describe("resolveCatalogueSkillHandleMaps", () => {
         {
           enabled: true,
           id: teamSkillId,
+          invocation: "auto",
           origin: "bundled",
           scope: "team",
           slug: "review",
@@ -36,6 +37,7 @@ describe("resolveCatalogueSkillHandleMaps", () => {
         {
           enabled: false,
           id: teamSkillId,
+          invocation: "auto",
           origin: "bundled",
           scope: "team",
           slug: "review",
@@ -57,6 +59,7 @@ describe("resolveCatalogueSkillHandleMaps", () => {
         {
           enabled: false,
           id: teamSkillId,
+          invocation: "auto",
           origin: "authored",
           scope: "team",
           slug: "review",

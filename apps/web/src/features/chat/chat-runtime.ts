@@ -17,8 +17,10 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
+  CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
+import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   ChatReconnectError,
@@ -44,7 +46,10 @@ import { createBrowserClientTool } from "@/features/chat/browser-control/browser
 import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
 import { keepShownRejoinMessages } from "@/features/chat/chat-rejoin-messages";
+import { createChatSendTiming } from "@/features/chat/chat-send-timing";
 import { keepPostedMessagesInSnapshots } from "@/features/chat/chat-snapshot-history";
+import { getAnalytics } from "@/lib/analytics/provider";
+import type { ChatTimingSurface } from "@/lib/analytics/types";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import {
@@ -69,7 +74,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
-import { chatFetchClient } from "./chat-fetch";
+import { chatFetchClient, chatResponseError } from "./chat-fetch";
 import { observeChatProviderDiagnostic } from "./chat-provider-diagnostic";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "./chat-query-contract";
 import type {
@@ -99,6 +104,8 @@ export type ChatContinuationRequestBody = {
 };
 export type ChatSendMessageOptions = {
   body?: ChatContinuationRequestBody | undefined;
+  /** Where the message was sent from; a send without it is not timed. */
+  timingSurface?: ChatTimingSurface | undefined;
 };
 export type ChatRouteHandoffStart = {
   messageId: SafeId<"chatMessage">;
@@ -236,15 +243,12 @@ type ActiveToolResultOperation = {
 const toError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
-const isRejectedChatContinuation = (error: unknown): boolean => {
+const hasChatErrorCode = (error: unknown, code: string): boolean => {
   const visited = new Set<Error>();
   let current = error;
 
   while (current instanceof Error && !visited.has(current)) {
-    if (
-      APIError.is(current) &&
-      current.code === CHAT_CONTINUATION_REJECTED_ERROR_CODE
-    ) {
+    if (APIError.is(current) && current.code === code) {
       return true;
     }
     visited.add(current);
@@ -253,6 +257,28 @@ const isRejectedChatContinuation = (error: unknown): boolean => {
 
   return false;
 };
+
+const isRejectedChatContinuation = (error: unknown): boolean =>
+  hasChatErrorCode(error, CHAT_CONTINUATION_REJECTED_ERROR_CODE);
+
+/** The server refused a request for a turn it already settled (failed,
+ *  completed or superseded): its stored outcome is the answer. */
+const isSettledTurnRefusal = (error: unknown): boolean =>
+  hasChatErrorCode(error, CHAT_TURN_NOT_OWNED_ERROR_CODE);
+
+/**
+ * The SDK replays a transport failure as a generic error after its typed
+ * cause reached the page (a refused rejoin ends its stream as a bare
+ * `HTTP error! status: 502`). The typed error already shown stays: losing it
+ * would report an ended session or an admission refusal as a failed send.
+ */
+const keepsShownChatError = (shown: Error | undefined, next: Error): boolean =>
+  (actionAdmissionOutcome(shown) && !actionAdmissionOutcome(next)) ||
+  (chatRefusal(shown) !== null && chatRefusal(next) === null) ||
+  (findChatRequestError(shown) !== undefined &&
+    findChatRequestError(next) === undefined) ||
+  (providerDiagnosticFromThrown(shown) !== undefined &&
+    providerDiagnosticFromThrown(next) === undefined);
 
 const CHAT_RESUME_PROBE_TIMEOUT_MS = 10_000;
 
@@ -329,6 +355,9 @@ export const createChatRuntime = ({
   reloadThread,
   scheduleEmit = scheduleStreamEmit,
 }: CreateChatRuntimeProps): ChatRuntime => {
+  const observeTurnTimings = createChatTurnTimingObserver();
+  observeTurnTimings(initialMessages, performance.now());
+  const sendTiming = createChatSendTiming(getAnalytics);
   const listeners = new Set<() => void>();
   let subscriberCount = 0;
   let replayFloor = activeTurnId === null ? undefined : initialMessages;
@@ -353,11 +382,17 @@ export const createChatRuntime = ({
   let stopBeforeHeaders: "none" | "requested" = "none";
   const isStoppedTurn = (): boolean =>
     stoppedTurnId !== null && stoppedTurnId === turnId;
+  /** The server refused the latest request for a turn it had already
+   *  settled. Kept apart from `snapshot.error`, which stays empty for it, so
+   *  a generic replay of the same failure stays quiet too; the next request
+   *  clears it. */
+  let settledTurnRefused = false;
   /** A new message starts a new turn. Stop waits for its response headers
    *  to name the turn; a stop of the previous turn is over. */
   const startTurn = (): void => {
     turnId = null;
     stoppedTurnId = null;
+    settledTurnRefused = false;
     stopBeforeHeaders = "none";
     if (snapshot.stop.status !== "idle") {
       setSnapshot({ stop: { status: "idle" } });
@@ -394,6 +429,9 @@ export const createChatRuntime = ({
 
   const setSnapshot = (patch: Partial<ChatRuntimeSnapshot>) => {
     snapshot = { ...snapshot, ...patch };
+    if (patch.messages !== undefined) {
+      observeTurnTimings(snapshot.messages, performance.now());
+    }
     emit();
   };
 
@@ -570,10 +608,16 @@ export const createChatRuntime = ({
           if (response.status === 404) {
             return { type: "transcript", turnId };
           }
+          const refused = response.status === 401 || response.status === 403;
           return await Promise.reject(
             new ChatReconnectError({
-              ...(response.status === 401 || response.status === 403
-                ? { code: "refused" as const }
+              // The server's refusal stays the cause, so the page tells an
+              // ended session (sign in again) from lost access.
+              ...(refused
+                ? {
+                    code: "refused" as const,
+                    cause: await chatResponseError(response),
+                  }
                 : {}),
               message: `Chat resume probe failed (${response.status}).`,
             }),
@@ -670,6 +714,22 @@ export const createChatRuntime = ({
       if (isStoppedTurn()) {
         return;
       }
+      // The same holds for a turn the server settled on its own: a
+      // continuation posted after it ended is refused as not owned, and the
+      // page shows what the server stored instead of reporting a failure.
+      if (isSettledTurnRefusal(error)) {
+        if (activeToolResultOperation !== undefined) {
+          activeToolResultOperation.rejection = error;
+        }
+        if (!settledTurnRefused) {
+          settledTurnRefused = true;
+          reloadThread();
+        }
+        return;
+      }
+      if (settledTurnRefused) {
+        return;
+      }
       if (
         activeToolResultOperation !== undefined &&
         isRejectedChatContinuation(error)
@@ -680,27 +740,33 @@ export const createChatRuntime = ({
         normalizeChatStreamError(error),
         providerDiagnostic,
       );
+      if (keepsShownChatError(snapshot.error, normalized)) {
+        return;
+      }
       onError(normalized);
       setSnapshot({ error: normalized });
     },
     onErrorChange: (error) => {
       // The SDK can replay a transport failure as a generic RUN_ERROR after
       // reporting its typed cause. A new request clears the error first.
+      if (error === undefined) {
+        settledTurnRefused = false;
+      } else if (settledTurnRefused) {
+        return;
+      }
       if (
         error !== undefined &&
-        ((actionAdmissionOutcome(snapshot.error) &&
-          !actionAdmissionOutcome(error)) ||
-          (chatRefusal(snapshot.error) !== null &&
-            chatRefusal(error) === null) ||
-          (findChatRequestError(snapshot.error) !== undefined &&
-            findChatRequestError(error) === undefined) ||
-          (providerDiagnosticFromThrown(snapshot.error) !== undefined &&
-            providerDiagnosticFromThrown(error) === undefined &&
-            providerDiagnostic === undefined))
+        keepsShownChatError(
+          snapshot.error,
+          withProviderDiagnostic(error, providerDiagnostic),
+        )
       ) {
         return;
       }
-      if (error === undefined || !isStoppedTurn()) {
+      if (
+        error === undefined ||
+        (!isStoppedTurn() && !isSettledTurnRefusal(error))
+      ) {
         setSnapshot({
           error:
             error === undefined
@@ -732,11 +798,16 @@ export const createChatRuntime = ({
             ? persisted
             : keepShownRejoinMessages(replayFloor, persisted),
       };
+      observeTurnTimings(snapshot.messages, performance.now());
+      sendTiming.messagesChanged(snapshot.messages);
       emitMessagesChange();
     },
     onSessionGeneratingChange: (sessionGenerating) =>
       setSnapshot({ sessionGenerating }),
-    onStatusChange: (status) => setSnapshot({ status }),
+    onStatusChange: (status) => {
+      sendTiming.statusChanged(status);
+      setSnapshot({ status });
+    },
     tools: [browserTool.tool],
   });
 
@@ -913,6 +984,7 @@ export const createChatRuntime = ({
       };
     }
     startTurn();
+    sendTiming.started(options?.timingSurface, message.id);
     return { messageId: message.id, status: "started", stream };
   };
 
@@ -1107,6 +1179,16 @@ export const createChatRuntime = ({
                   : { errorText: result.errorText }),
               });
               if (
+                operation.rejection !== undefined &&
+                isSettledTurnRefusal(operation.rejection)
+              ) {
+                // The turn had settled: the result was never stored, and the
+                // reload shows the turn as the server ended it.
+                client.setMessagesManually(messagesBeforeResult);
+                setSnapshot({ messages: messagesBeforeResult });
+                return;
+              }
+              if (
                 snapshot.error !== undefined &&
                 snapshot.error !== errorBeforeResult
               ) {
@@ -1181,6 +1263,7 @@ export const createChatRuntime = ({
       // Stopping the request does not stop the extension: a browser command
       // already approved would otherwise keep acting on the page.
       browserTool.cancel();
+      sendTiming.abandoned();
       const stoppedTurn = turnId;
       if (stoppedTurn === null && isTurnActive()) {
         // Delivery cancellation no longer ends the accepted server turn.
@@ -1207,7 +1290,10 @@ export const createChatRuntime = ({
       setSnapshot({ stop: { status: "pending", turnId: stoppedTurn } });
       detached(settleStop(stoppedTurn), "chat-runtime.stop");
     },
-    leave: closeRequest,
+    leave: () => {
+      sendTiming.abandoned();
+      closeRequest();
+    },
     subscribe: (listener) => {
       listeners.add(listener);
       subscriberCount += 1;
@@ -1215,7 +1301,13 @@ export const createChatRuntime = ({
       return () => {
         listeners.delete(listener);
         subscriberCount -= 1;
-        if (subscriberCount === 0) {
+        // TanStack's detach aborts an open request, and a run this client
+        // sent itself leaves no resume pointer for the next attach to
+        // rejoin: the runtime would keep generating with only what it had
+        // shown. So the last view going (a route handoff's destination
+        // remounting, a move between surfaces) leaves an open request to
+        // end with its turn; `leave` is what drops delivery on purpose.
+        if (subscriberCount === 0 && !client.getIsLoading()) {
           client.detach();
         }
       };

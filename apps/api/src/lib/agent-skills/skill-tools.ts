@@ -7,6 +7,7 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { RESOURCE_PATH_PATTERN } from "@/api/lib/agent-skills/resource-path";
 import {
   recordSkillReadAudit,
@@ -59,8 +60,13 @@ type CreateSkillToolsProps = {
    */
   recordReadAuditEvent?: AuditRecorder | undefined;
   safeDb: SafeDb;
-  /** The turn's skill catalog; absent when the caller loaded none. */
-  skills?: readonly SkillMetadata[] | undefined;
+  /**
+   * The turn's skill catalog, invocation rule applied; absent when the
+   * caller loaded none. `load-skill` and `read-skill-resource` serve only
+   * these names, so a `manual` skill the user did not invoke stays out of
+   * reach even when the model guesses its slug.
+   */
+  skills?: ModelOfferedSkills<SkillMetadata> | undefined;
   userId: SafeId<"user">;
 };
 

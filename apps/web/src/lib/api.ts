@@ -1,5 +1,6 @@
 export {
   api,
+  linkIconsApi,
   correspondenceApi,
   memoriesApi,
   myTimeEntriesApi,

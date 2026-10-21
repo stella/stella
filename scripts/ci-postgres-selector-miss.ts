@@ -128,20 +128,40 @@ const fullRunJobsSchema = v.object({
 
 type PostgresRunJobs = v.InferOutput<typeof fullRunJobsSchema>["jobs"];
 
-export const hasSuccessfulPostgresShards = (jobs: PostgresRunJobs): boolean =>
-  POSTGRES_TEST_SHARD_IDS.every((shard) => {
-    const name = `postgres-service-suites (${shard})`;
-    return jobs.some(
-      (job) =>
-        (job.name === name || job.name.endsWith(` / ${name}`)) &&
-        job.conclusion === "success" &&
-        job.steps.some(
-          (step) =>
-            step.name === "Run Postgres-gated API suites" &&
-            step.conclusion === "success",
+const POSTGRES_SHARD_JOB = /(?:^| \/ )postgres-service-suites \((\d+)\)$/u;
+
+// A run certifies coverage only when its shard jobs are exactly 1..n for
+// today's shard count n, and every one of them succeeded. Accepting several
+// counts would let an n-shard run that lacks its last shard pass as a
+// smaller topology, so a run from before a shard-count change never
+// certifies; the next full run on main restores the baseline.
+export const hasSuccessfulPostgresShards = (jobs: PostgresRunJobs): boolean => {
+  const shards = new Set(
+    jobs.flatMap((job) => {
+      const shard = POSTGRES_SHARD_JOB.exec(job.name)?.at(1);
+      return shard === undefined ? [] : [Number(shard)];
+    }),
+  );
+  const count = POSTGRES_TEST_SHARD_IDS.length;
+  return (
+    Math.max(0, ...shards) === count &&
+    shards.size === count &&
+    Array.from({ length: count }, (_, index) => index + 1).every(
+      (shard) =>
+        shards.has(shard) &&
+        jobs.some(
+          (job) =>
+            POSTGRES_SHARD_JOB.exec(job.name)?.at(1) === String(shard) &&
+            job.conclusion === "success" &&
+            job.steps.some(
+              (step) =>
+                step.name === "Run Postgres-gated API suites" &&
+                step.conclusion === "success",
+            ),
         ),
-    );
-  });
+    )
+  );
+};
 
 if (import.meta.main) {
   const checked = await Result.tryPromise(async () => {

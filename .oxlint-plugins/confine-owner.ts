@@ -21,7 +21,8 @@
 // import, a star re-export, and a dynamic import, which reach every export; the
 // specifier's other exports stay open, so one package entry point can carry
 // an owned capability next to unrelated ones. A dynamic import counts as the
-// names it is destructured into (`const { a } = await import("m")`) or read
+// names it is destructured into (`const { a } = await import("m")`), including
+// corresponding slots of an awaited `Promise.all` literal without spreads, or read
 // through (`(await import("m")).a`); held in any other shape, the module
 // object reaches every export. A `global-member` row matches
 // the full member chain `<object>.<path...>` on the global, including the
@@ -351,10 +352,65 @@ const bindsOwnedName = (
     return name !== null && names.includes(name);
   });
 
+type ParallelImportBindingOptions = {
+  array: AstNode;
+  imported: AstNode;
+  context: ScopeContext;
+};
+
+const parallelImportBinding = ({
+  array,
+  imported,
+  context,
+}: ParallelImportBindingOptions) => {
+  const call = array.parent;
+  if (
+    !Array.isArray(array.elements) ||
+    array.elements.some(
+      (element) => isAstNode(element) && element.type === "SpreadElement",
+    ) ||
+    !isAstNode(call) ||
+    call.type !== "CallExpression" ||
+    !isMemberAccess(call.callee, "Promise", "all") ||
+    !Array.isArray(call.arguments) ||
+    call.arguments.length !== 1 ||
+    call.arguments.at(0) !== array
+  ) {
+    return null;
+  }
+  if (!isAstNode(call.callee) || !isIdentifierReference(call.callee.object)) {
+    return null;
+  }
+  const promise = resolveVariable(context, call.callee.object);
+  if (promise !== null && promise.defs.length > 0) {
+    return null;
+  }
+  const awaited = call.parent;
+  if (!isAstNode(awaited) || awaited.type !== "AwaitExpression") {
+    return null;
+  }
+  const declaration = awaited.parent;
+  if (
+    !isAstNode(declaration) ||
+    declaration.type !== "VariableDeclarator" ||
+    declaration.init !== awaited ||
+    !isAstNode(declaration.id) ||
+    declaration.id.type !== "ArrayPattern" ||
+    !Array.isArray(declaration.id.elements)
+  ) {
+    return null;
+  }
+  const slot = array.elements.indexOf(imported);
+  return slot === -1 ? null : declaration.id.elements.at(slot);
+};
+
 // The export names a dynamic import is destructured into or read through, or
 // null when the module object is held in a shape that reaches every export
 // (bound whole, passed on, a rest element or a computed key).
-const dynamicImportNames = (node: unknown): readonly string[] | null => {
+const dynamicImportNames = (
+  node: unknown,
+  context: ScopeContext,
+): readonly string[] | null => {
   if (!isAstNode(node)) {
     return null;
   }
@@ -374,17 +430,21 @@ const dynamicImportNames = (node: unknown): readonly string[] | null => {
     const name = memberPropertyName(parent);
     return name === null ? null : [name];
   }
+  const binding =
+    parent.type === "ArrayExpression"
+      ? parallelImportBinding({ array: parent, imported: current, context })
+      : parent.type === "VariableDeclarator" && parent.init === current
+        ? parent.id
+        : null;
   if (
-    parent.type !== "VariableDeclarator" ||
-    parent.init !== current ||
-    !isAstNode(parent.id) ||
-    parent.id.type !== "ObjectPattern" ||
-    !Array.isArray(parent.id.properties)
+    !isAstNode(binding) ||
+    binding.type !== "ObjectPattern" ||
+    !Array.isArray(binding.properties)
   ) {
     return null;
   }
   const names: string[] = [];
-  for (const property of parent.id.properties) {
+  for (const property of binding.properties) {
     if (
       !isAstNode(property) ||
       property.type !== "Property" ||
@@ -906,7 +966,7 @@ export default eslintCompatPlugin({
             if (!isAstNode(node.source) || !isStringLiteral(node.source)) {
               return;
             }
-            const taken = dynamicImportNames(node);
+            const taken = dynamicImportNames(node, context);
             reportOwnedBinding(
               node,
               node.source.value,

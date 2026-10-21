@@ -202,6 +202,8 @@ test("scheduled heavy runs skip only the last completed tested SHA and always al
     actions: "write",
     contents: "read",
     statuses: "read",
+    // Reads the merge-group check-run receipt for the same SHA.
+    checks: "read",
     "pull-requests": "read",
     issues: "read",
   });

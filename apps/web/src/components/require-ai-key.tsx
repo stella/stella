@@ -25,22 +25,25 @@ import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picke
 import {
   createProviderCredentialDraft,
   haveSameRoleModelSelections,
-  createDefaultRoleModels,
-  ensureRoleModelsForProviders,
+  retainRoleOverridesForProviders,
+  roleOverridesFromStoredModels,
   getProviderValues,
+  projectDefaultRoleModels,
+  projectProviderDefaultRoleModels,
   hasUsableProviderDrafts,
   providerDraftsFromStoredProviders,
   roleModelsFromOverrideModels,
-  serializeOverrideModels,
+  serializeRoleOverrides,
   serializeProviderDrafts,
 } from "@/components/ai-config-role-models.logic";
 import type {
   ModelSelection,
   ProviderCredentialDraft,
-  RoleModelSelections,
+  RoleModelOverrides,
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
@@ -52,9 +55,11 @@ import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-ca
 import {
   aiAvailabilityOptions,
   aiConfigOptions,
+  aiDefaultsPreviewOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 type AIAvailabilityContextValue = {
   ensureAIAvailable: () => Promise<boolean>;
@@ -173,15 +178,12 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   );
 };
 
-export const useAIKeyGate = () => {
-  const context = use(AIAvailabilityContext);
-
-  if (!context) {
-    panic("useAIKeyGate must be used within AIAvailabilityProvider");
-  }
-
-  return context;
-};
+export const useAIKeyGate = () =>
+  useRequiredRouteProvider({
+    context: AIAvailabilityContext,
+    scope: PROVIDER_SCOPE.ai,
+    missingMessage: "useAIKeyGate must be used within AIAvailabilityProvider",
+  });
 
 const OpenAIKeyDialogOnMount = ({ open }: { open: () => void }) => {
   useMountEffect(() => {
@@ -253,10 +255,7 @@ export const RequireAIKey = ({
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={openAIKeyDialog}>{t("ai.keyRequired.cta")}</Button>
-          <Button
-            render={<Link to="/settings/organization/ai" />}
-            variant="ghost"
-          >
+          <Button render={<Link to="/admin/ai" />} variant="ghost">
             {t("organization.aiConfig.title")}
           </Button>
         </div>
@@ -298,16 +297,13 @@ export const AIKeyRequiredDialog = ({
   const [providers, setProviders] = useState<ProviderCredentialDraft[]>(
     DEFAULT_PROVIDER_DRAFTS,
   );
-  const [roleModels, setRoleModels] = useState<RoleModelSelections>(
-    createDefaultRoleModels,
-  );
+  const [roleModels, setRoleModels] = useState<RoleModelOverrides>({});
 
   const [initialProviders, setInitialProviders] = useState(
     DEFAULT_PROVIDER_DRAFTS,
   );
-  const [initialRoleModels, setInitialRoleModels] = useState(
-    createDefaultRoleModels,
-  );
+  const [initialRoleModels, setInitialRoleModels] =
+    useState<RoleModelOverrides>({});
 
   // Re-syncs the provider/role-model form drafts from `config` when the
   // dialog opens (or when `configured` flips while it's open), deliberately
@@ -333,13 +329,13 @@ export const AIKeyRequiredDialog = ({
         setProviders(nextProviders);
         setInitialProviders(nextProviders);
         setInitialRoleModels(
-          roleModelsFromOverrideModels({
+          roleOverridesFromStoredModels({
             overrideModels: config.overrideModels,
             providers: providerValues,
           }),
         );
         setRoleModels(
-          roleModelsFromOverrideModels({
+          roleOverridesFromStoredModels({
             overrideModels: config.overrideModels,
             providers: providerValues,
           }),
@@ -348,12 +344,8 @@ export const AIKeyRequiredDialog = ({
         const nextProviders = DEFAULT_PROVIDER_DRAFTS;
         setProviders(nextProviders);
         setInitialProviders(nextProviders);
-        setInitialRoleModels(
-          createDefaultRoleModels(getProviderValues(nextProviders)),
-        );
-        setRoleModels(
-          createDefaultRoleModels(getProviderValues(nextProviders)),
-        );
+        setInitialRoleModels({});
+        setRoleModels({});
       }
     }
   }
@@ -362,9 +354,9 @@ export const AIKeyRequiredDialog = ({
     const providerValues = getProviderValues(nextProviders);
     setProviders(nextProviders);
     setRoleModels((prev) =>
-      ensureRoleModelsForProviders({
+      retainRoleOverridesForProviders({
         providers: providerValues,
-        roleModels: prev,
+        overrides: prev,
       }),
     );
   };
@@ -379,26 +371,39 @@ export const AIKeyRequiredDialog = ({
   const saveMutation = useMutation({
     mutationFn: async () => {
       const providerValues = getProviderValues(providers);
-      const overrideModels = serializeOverrideModels({
+      const serialized = serializeRoleOverrides({
         providers: providerValues,
-        roleModels,
+        overrides: roleModels,
       });
-      if (!overrideModels) {
+      if (serialized.kind === "invalid") {
         // The Configure button is disabled when `canSave` is false, which
-        // checks the same `serializeOverrideModels(...) !== null` invariant.
+        // checks the same serialization invariant.
         // The inline message at the field below renders the translated text.
         panic("ai-config save fired with no valid override models");
       }
 
       const response = await api["organization-settings"]["ai-config"].post({
         providers: serializeProviderDrafts(providers),
-        overrideModels,
+        overrideModels: serialized.overrides,
       });
 
       return unwrapEden(response);
     },
     onSuccess: async (data) => {
-      setProviders(providerDraftsFromStoredProviders(data.providers));
+      const savedProviders = providerDraftsFromStoredProviders(data.providers);
+      queryClient.setQueryData(
+        aiDefaultsPreviewOptions({
+          organizationId: activeOrganizationId,
+          providers: getProviderValues(savedProviders),
+        }).queryKey,
+        {
+          defaultModels: projectDefaultRoleModels(data.defaultModels),
+          providerDefaultModels: projectProviderDefaultRoleModels(
+            data.providerDefaultModels,
+          ),
+        },
+      );
+      setProviders(savedProviders);
       queryClient.setQueryData(
         aiAvailabilityOptions({ organizationId: activeOrganizationId })
           .queryKey,
@@ -425,10 +430,41 @@ export const AIKeyRequiredDialog = ({
   });
 
   const providerValues = getProviderValues(providers);
+  const storedProviderValues = config?.configured
+    ? config.providers.map(({ provider }) => provider)
+    : [];
+  const defaultsQuery = useChromeQuery({
+    ...aiDefaultsPreviewOptions({
+      organizationId: activeOrganizationId,
+      providers: providerValues,
+    }),
+    enabled: open && configQuery.status === "success",
+    ...(config !== undefined &&
+    JSON.stringify(providerValues) === JSON.stringify(storedProviderValues)
+      ? {
+          initialData: {
+            defaultModels: projectDefaultRoleModels(config.defaultModels),
+            providerDefaultModels: projectProviderDefaultRoleModels(
+              config.providerDefaultModels,
+            ),
+          },
+        }
+      : {}),
+  });
+  const defaultsView = useQueryView(defaultsQuery);
+  useQueryViewError(defaultsView);
+  const defaultModels =
+    defaultsView.type === "items" ? defaultsView.items.defaultModels : null;
+  const providerDefaultModels =
+    defaultsView.type === "items"
+      ? defaultsView.items.providerDefaultModels
+      : [];
   const canSave =
     configQuery.status === "success" &&
+    defaultModels !== null &&
     hasUsableProviderDrafts(providers) &&
-    serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
+    serializeRoleOverrides({ providers: providerValues, overrides: roleModels })
+      .kind === "valid";
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -462,13 +498,22 @@ export const AIKeyRequiredDialog = ({
               providers={providers}
             />
 
-            <AIConfigRoleModelPicker
-              compact
-              disabled={saveMutation.isPending}
-              onModelChange={setRoleModel}
-              providers={providerValues}
-              roleModels={roleModels}
-            />
+            {defaultModels === null ? (
+              <QueryViewFeedback view={defaultsView} />
+            ) : (
+              <AIConfigRoleModelPicker
+                compact
+                disabled={saveMutation.isPending}
+                onModelChange={setRoleModel}
+                providers={providerValues}
+                providerDefaultModels={providerDefaultModels}
+                roleModels={roleModelsFromOverrideModels({
+                  overrideModels: roleModels,
+                  providers: providerValues,
+                  defaultModels,
+                })}
+              />
+            )}
 
             {!canSave && (
               <p className="text-destructive-foreground text-xs">

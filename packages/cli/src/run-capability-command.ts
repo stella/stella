@@ -137,7 +137,6 @@ export const runCapabilityCommand = async ({
       result,
       textPath: undefined,
       writers,
-      writeReceipt: spec.access === "write",
     });
   };
   const allActive = spec.paginated && flags[RESERVED_FLAG_KEYS.all] === true;

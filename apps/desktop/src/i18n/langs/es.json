@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "Movido a otro dispositivo",
     "sessionNeedsAttention": "Necesita atención",
     "sessionOpeningInOffice": "Abriendo en Office",
-    "sessionSavingDraft": "Guardando borrador"
+    "sessionSavingDraft": "Guardando borrador",
+    "reconnectAccount": "Volver a conectar con stella web…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Los cambios permanecen locales y se reintentarán automáticamente",
@@ -209,7 +210,23 @@
     "startOnLoginDescription": "Iniciar stella desktop automáticamente al iniciar sesión.",
     "stellaDesktop": "stella desktop",
     "support": "Soporte",
-    "title": "Configuración"
+    "title": "Configuración",
+    "serverLabel": "Servidor",
+    "connectToHost": "Conectar con {host}",
+    "connectToHostDescription": "Abre {host} en el navegador para que apruebes este equipo.",
+    "reconnectNeeded": "Hay que volver a conectar",
+    "reconnect": "Volver a conectar",
+    "reconnectHostDescription": "Hay que renovar la conexión con {host}. Vuelve a aprobar este equipo en el navegador.",
+    "permissions": "Permisos",
+    "permissionNotificationsDescription": "Le avisa cuando un documento está listo o una sincronización requiere atención.",
+    "permissionAccessibility": "Accesibilidad",
+    "permissionAccessibilityDescription": "Permite que la cronología de actividad registre títulos de ventanas, solo si activa los detalles.",
+    "permissionAllowed": "Permitido",
+    "permissionAllow": "Permitir",
+    "permissionOpenSettings": "Abrir ajustes",
+    "permissionDenied": "Desactivado en los ajustes del sistema.",
+    "permissionManaged": "Gestionado por su organización",
+    "errorPermissions": "stella desktop no pudo leer ni cambiar este permiso."
   },
   "clipboard": {
     "registryUnavailable": "No hay registros habilitados para las jurisdicciones donde ejerces.",
@@ -466,5 +483,45 @@
     "rangeEnd": "Fin del intervalo",
     "reviewToday": "Revisar hoy",
     "welcomePreviewMatter": "Renovación del arrendamiento de Riverside"
+  },
+  "shortcut": {
+    "title": "Atajo del portapapeles",
+    "description": "Abre el historial del portapapeles desde cualquier aplicación.",
+    "change": "Cambiar",
+    "reset": "Restablecer a {shortcut}",
+    "recording": "Pulse el nuevo atajo. Esc cancela.",
+    "waiting": "Esperando teclas…",
+    "addKey": "Ahora añada una tecla…",
+    "confirm": "¿Abrir el portapapeles con {shortcut}?",
+    "use": "Usar {shortcut}",
+    "cancel": "Cancelar",
+    "same": "Ese ya es su atajo.",
+    "errorSave": "stella desktop no pudo guardar el atajo.",
+    "needsModifier": "Añada {modifiers} para que el atajo no escriba solo una letra.",
+    "unsupportedKey": "Esa tecla no puede formar parte de un atajo. Pruebe con una letra, un número o una tecla de función.",
+    "systemReserved": "El sistema ya usa {shortcut} para «{action}». Elija otro.",
+    "windowsKeyReserved": "Windows reserva para sí los atajos con la tecla Windows. Use Ctrl o Alt.",
+    "taken": "Otra aplicación ya usa {shortcut}. Elija otro.",
+    "unavailable": "Otra aplicación usa {shortcut}, así que no abre el portapapeles. Elija otro atajo.",
+    "action": {
+      "copy": "Copiar",
+      "paste": "Pegar",
+      "cut": "Cortar",
+      "undo": "Deshacer",
+      "redo": "Rehacer",
+      "selectAll": "Seleccionar todo",
+      "quit": "Salir",
+      "closeWindow": "Cerrar ventana",
+      "hide": "Ocultar",
+      "minimize": "Minimizar",
+      "appSwitcher": "Selector de aplicaciones",
+      "spotlight": "Spotlight",
+      "inputSource": "Fuente de entrada",
+      "screenshot": "Captura de pantalla",
+      "forceQuit": "Forzar salida",
+      "windowMenu": "Menú de ventana",
+      "start": "Inicio",
+      "taskManager": "Administrador de tareas"
+    }
   }
 }

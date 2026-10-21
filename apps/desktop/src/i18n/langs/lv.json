@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "Pārvietots uz citu ierīci",
     "sessionNeedsAttention": "Nepieciešama uzmanība",
     "sessionOpeningInOffice": "Tiek atvērts Office",
-    "sessionSavingDraft": "Tiek saglabāts melnraksts"
+    "sessionSavingDraft": "Tiek saglabāts melnraksts",
+    "reconnectAccount": "Atkārtoti savienot ar stella web…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Izmaiņas paliek lokālas un tiks automātiski mēģinātas vēlreiz",
@@ -209,7 +210,23 @@
     "startOnLoginDescription": "Automātiski palaist stella desktop, piesakoties sistēmā.",
     "stellaDesktop": "stella desktop",
     "support": "Atbalsts",
-    "title": "Iestatījumi"
+    "title": "Iestatījumi",
+    "serverLabel": "Serveris",
+    "connectToHost": "Savienot ar {host}",
+    "connectToHostDescription": "Atver {host} pārlūkā, lai jūs varētu apstiprināt šo datoru.",
+    "reconnectNeeded": "Jāsavieno atkārtoti",
+    "reconnect": "Savienot atkārtoti",
+    "reconnectHostDescription": "Savienojums ar {host} ir jāatjauno. Pārlūkā vēlreiz apstipriniet šo datoru.",
+    "permissions": "Atļaujas",
+    "permissionNotificationsDescription": "Paziņo, kad dokuments ir gatavs vai sinhronizācijai nepieciešama uzmanība.",
+    "permissionAccessibility": "Pieejamība",
+    "permissionAccessibilityDescription": "Ļauj aktivitāšu laika joslai ierakstīt logu nosaukumus, bet tikai tad, ja ieslēdzat detalizētu informāciju.",
+    "permissionAllowed": "Atļauts",
+    "permissionAllow": "Atļaut",
+    "permissionOpenSettings": "Atvērt iestatījumus",
+    "permissionDenied": "Izslēgts sistēmas iestatījumos.",
+    "permissionManaged": "Pārvalda jūsu organizācija",
+    "errorPermissions": "stella desktop nevarēja nolasīt vai mainīt šo atļauju."
   },
   "clipboard": {
     "registryUnavailable": "Jūsu prakses jurisdikcijām nav iespējotu reģistru.",
@@ -466,5 +483,45 @@
     "rangeEnd": "Posma beigas",
     "reviewToday": "Pārskatīt šodienu",
     "welcomePreviewMatter": "Riverside nomas līguma pagarināšana"
+  },
+  "shortcut": {
+    "title": "Starpliktuves īsinājumtaustiņš",
+    "description": "Atver starpliktuves vēsturi no jebkuras lietotnes.",
+    "change": "Mainīt",
+    "reset": "Atiestatīt uz {shortcut}",
+    "recording": "Nospiediet jauno īsinājumtaustiņu. Esc atceļ.",
+    "waiting": "Gaida taustiņus…",
+    "addKey": "Tagad pievienojiet taustiņu…",
+    "confirm": "Vai atvērt starpliktuvi ar {shortcut}?",
+    "use": "Izmantot {shortcut}",
+    "cancel": "Atcelt",
+    "same": "Tas jau ir jūsu īsinājumtaustiņš.",
+    "errorSave": "stella desktop nevarēja saglabāt īsinājumtaustiņu.",
+    "needsModifier": "Pievienojiet {modifiers}, lai īsinājumtaustiņš neievadītu tikai burtu.",
+    "unsupportedKey": "Šis taustiņš nevar būt īsinājumtaustiņa daļa. Mēģiniet burtu, ciparu vai funkciju taustiņu.",
+    "systemReserved": "Sistēma jau izmanto {shortcut} darbībai „{action}”. Izvēlieties citu.",
+    "windowsKeyReserved": "Windows rezervē sev īsinājumtaustiņus ar Windows taustiņu. Izmantojiet Ctrl vai Alt.",
+    "taken": "Cita lietotne jau izmanto {shortcut}. Izvēlieties citu.",
+    "unavailable": "Cita lietotne izmanto {shortcut}, tāpēc tas neatver starpliktuvi. Izvēlieties citu īsinājumtaustiņu.",
+    "action": {
+      "copy": "Kopēt",
+      "paste": "Ielīmēt",
+      "cut": "Izgriezt",
+      "undo": "Atsaukt",
+      "redo": "Atcelt atsaukšanu",
+      "selectAll": "Atlasīt visu",
+      "quit": "Iziet",
+      "closeWindow": "Aizvērt logu",
+      "hide": "Paslēpt",
+      "minimize": "Minimizēt",
+      "appSwitcher": "Lietotņu pārslēdzējs",
+      "spotlight": "Spotlight",
+      "inputSource": "Ievades avots",
+      "screenshot": "Ekrānuzņēmums",
+      "forceQuit": "Piespiedu iziešana",
+      "windowMenu": "Loga izvēlne",
+      "start": "Sākt",
+      "taskManager": "Uzdevumu pārvaldnieks"
+    }
   }
 }

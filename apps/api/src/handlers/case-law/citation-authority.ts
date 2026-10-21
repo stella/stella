@@ -54,7 +54,6 @@ import {
 import { flattenCourtWeightEntries } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
 import { loadLocalCourtWeights } from "@/api/lib/case-law/local-case-law-config";
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
@@ -278,12 +277,11 @@ export const recomputeCitationAuthorityBatch = async (
         FROM batch b
         LEFT JOIN (
           case_law_citations c
-          JOIN case_law_decisions citing_d
+          JOIN case_law_published_decisions citing_d
             ON citing_d.id = c.citing_decision_id
           JOIN case_law_sources citing_src
             ON citing_src.id = citing_d.source_id
            AND ${sql.raw(redistributableCaseLawSourceSqlFor("citing_src"))}
-           AND ${sql.raw(publishedCaseLawDecisionSqlFor("citing_d"))}
         ) ON c.cited_decision_id = b.id
            -- Procedural references name the judgment under review, not an
            -- authority being invoked; counting them would rank a decision by

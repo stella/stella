@@ -2,12 +2,18 @@ export const CASE_LAW_ANSWER_SURFACE = {
   analysis: "analysis",
   research: "research",
   search: "search",
+  ingestionLinking: "ingestion-linking",
 } as const;
 
 export type CaseLawAnswerSurface =
   (typeof CASE_LAW_ANSWER_SURFACE)[keyof typeof CASE_LAW_ANSWER_SURFACE];
 
 export const CASE_LAW_INCOMPLETE_REASON = {
+  "ingestion-linking": [
+    "pending-link",
+    "link-failed",
+    "linked-at-stale-revision",
+  ],
   analysis: ["deadline", "incomplete_output", "invalid_output"],
   research: [
     "cited_passage_unknown",

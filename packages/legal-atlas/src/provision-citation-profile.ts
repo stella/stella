@@ -212,11 +212,31 @@ export type VersionGrammar = {
   monthNames: Readonly<Record<string, number>>;
 };
 
+/**
+ * The designators a canonical citation is written with, one per unit and
+ * level: the profile's term lists carry every spelling in no order, so the
+ * canonical one is named here rather than picked from them.
+ */
+export type CitationTerms = {
+  readonly section: string;
+  readonly article: string;
+  readonly subsection: string;
+  readonly letter: string;
+  readonly point: string;
+};
+
 export type JurisdictionProfile = {
   versionGrammar: VersionGrammar;
   jurisdiction: ProvisionCitationJurisdiction;
   /** BCP-47 primary subtag of the language the profile's vocabulary is in. */
   language: string;
+  citationTerms: CitationTerms;
+  /**
+   * The words that put a bare year as a version of the act (`stav k roku
+   * 2021`, `ve znění z 2012`). A year after anything else is a number, and a
+   * number after the first provision names a further one.
+   */
+  versionYearLeadIns: readonly string[];
   sectionTerms: readonly SectionTermSpec[];
   subdivisionTerms: readonly SubdivisionTermSpec[];
   /** `,` and `;` are always connectors; these are the word-shaped ones. */

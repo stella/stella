@@ -25,14 +25,22 @@
 #                                      are fixed multiples (see
 #                                      apps/api/src/scripts/seed-migration-rehearsal-plan.ts)
 #   REHEARSAL_MIGRATE_BUDGET_SECONDS   default 900
+#   REHEARSAL_WRITER_GAP_BUDGET_SECONDS
+#                                      longest a contending writer session
+#                                      may go without a commit during the
+#                                      upgrade and rerun; default 60
 #
 # The upgrade and the rerun run against a writer that keeps short
 # transactions open on the corpus tables, the way production's ingestion and
 # projection workers do: DDL that needs ACCESS EXCLUSIVE on those tables has
 # to win a gap between writer transactions, and a single short lock wait does
-# not. Exits non-zero when the database is not empty, the base schema cannot
-# be applied, the seed fails, the upgrade fails or outruns its budget, the
-# rerun changes the applied migrations, a CHECK constraint's validity, or the
+# not. The writer records every commit, and the upgrade fails when any of its
+# sessions went longer than the writer gap budget without one: an upgrade
+# that keeps corpus writers out for minutes stalls production's workers for
+# minutes even when it finishes within its own budget. Exits non-zero when
+# the database is not empty, the base schema cannot be applied, the seed
+# fails, the upgrade fails or outruns its budget, corpus writers were kept
+# out for longer than the writer gap budget, the rerun changes the applied migrations, a CHECK constraint's validity, or the
 # rows an online repair rewrites, or the schema drifts from schema.ts.
 #
 # The base image is pulled only when it is not already present, so a caller
@@ -46,6 +54,7 @@ image_repository="${REHEARSAL_BASE_IMAGE_REPOSITORY:-ghcr.io/stella/stella-api}"
 base_database_url="${REHEARSAL_BASE_DATABASE_URL:-$DATABASE_URL}"
 decisions="${REHEARSAL_DECISIONS:-}"
 budget="${REHEARSAL_MIGRATE_BUDGET_SECONDS:-900}"
+writer_gap_budget="${REHEARSAL_WRITER_GAP_BUDGET_SECONDS:-60}"
 summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 stable_tag='^v[0-9]+\.[0-9]+\.[0-9]+$'
@@ -57,6 +66,11 @@ log() {
 fail() {
   echo "::error::$*" >&2
   exit 1
+}
+
+# Epoch milliseconds on the clock the contender stamps its commits with.
+now_ms() {
+  bun -e 'console.log(Date.now())'
 }
 
 resolve_base_ref() {
@@ -81,7 +95,7 @@ bun "$repo_root/scripts/migration-rehearsal-db.ts" assert-empty
 
 log "Applying the base schema from ${base_image}"
 if ! docker image inspect "$base_image" >/dev/null 2>&1; then
-  docker pull --quiet "$base_image" >/dev/null
+  bash "$repo_root/scripts/retry.sh" docker pull --quiet "$base_image"
 fi
 docker run --rm --network host \
   --env "DATABASE_URL=${base_database_url}" \
@@ -110,9 +124,8 @@ stop_contender() {
     kill "$contender_pid" 2>/dev/null || true
     wait "$contender_pid" 2>/dev/null || true
   fi
-  rm -f "$contender_log"
 }
-trap stop_contender EXIT
+trap 'stop_contender; rm -f "$contender_log"' EXIT
 assert_contender_alive() {
   if ! kill -0 "$contender_pid" 2>/dev/null; then
     cat "$contender_log"
@@ -130,6 +143,7 @@ grep -q "contending: locks held" "$contender_log" \
   || fail "The contending writer did not report holding its locks within 60s."
 
 log "Upgrading to this checkout (budget ${budget}s)"
+window_started_ms="$(now_ms)"
 upgrade_started="$(date +%s)"
 if ! (cd "$repo_root/apps/api" && timeout --foreground "$budget" bun run src/db/migrate.ts); then
   upgrade_seconds=$(( $(date +%s) - upgrade_started ))
@@ -152,7 +166,13 @@ if [[ "$state_before" != "$state_after" ]]; then
   fail "Rerunning the migrate entrypoint changed the database: the upgrade is not a fixed point."
 fi
 assert_contender_alive "during the upgrade, so part of it ran without contention."
+window_ended_ms="$(now_ms)"
 stop_contender
+
+log "Checking how long corpus writers were kept out (budget ${writer_gap_budget}s)"
+writer_gap="$(bun "$repo_root/scripts/migration-rehearsal-writer-gap.ts" \
+  "$contender_log" "$window_started_ms" "$window_ended_ms" "$writer_gap_budget")" \
+  || fail "Corpus writers were kept out for longer than ${writer_gap_budget}s during the upgrade (see the error above)."
 
 log "Checking the migrated schema against schema.ts"
 parity_output="$(cd "$repo_root/apps/api" && bun --bun drizzle-kit push --explain 2>&1)" || true
@@ -170,5 +190,6 @@ fi
   echo "| Seed | ${seed_seconds}s |"
   echo "| Upgrade | ${upgrade_seconds}s of ${budget}s, against a contending writer |"
   echo "| Rerun | ${rerun_seconds}s, state unchanged |"
+  echo "| Writer max gap | ${writer_gap} |"
   echo "| Schema parity | no changes detected |"
 } | tee -a "$summary"

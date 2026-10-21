@@ -162,7 +162,7 @@ export const renderSelfhostEnvExample = () => {
     "",
   ].join("\n");
 
-  return renderEnvironmentEntries(apiCatalogEntries(), {
+  const example = renderEnvironmentEntries(apiCatalogEntries(), {
     header,
     isActive: ({ name, requirement }) =>
       requirement === ENV_REQUIREMENT.required ||
@@ -171,6 +171,17 @@ export const renderSelfhostEnvExample = () => {
       SELFHOST_API_EXAMPLE_VALUES.get(entry.name) ??
       exampleValueForCatalogEntry({ ...entry, example: undefined }),
   });
+  const publicLawUrl = '# PUBLIC_LAW_DATABASE_URL=""';
+  if (!example.includes(publicLawUrl)) {
+    panic("Self-host environment example is missing PUBLIC_LAW_DATABASE_URL.");
+  }
+  return example.replace(publicLawUrl, () =>
+    [
+      "# Apply the release migrations before starting the API with an external",
+      "# public-law reader role; its grants must match this release.",
+      publicLawUrl,
+    ].join("\n"),
+  );
 };
 
 const replaceGeneratedBlock = (

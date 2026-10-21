@@ -29,23 +29,29 @@ export class FileScanFailedError extends TaggedError("FileScanFailedError")<{
 
 export type ScanUploadInput = {
   bytes: ArrayBuffer | Uint8Array;
+  /** Transfer detaches an exclusively owned, exact-fit buffer; other inputs copy. */
+  ownership?: "copy" | "transfer";
   declaredMimeType: string;
   fileName: string;
 };
 
 /** Scans untrusted bytes; only a non-rejecting verdict yields a `ScannedFile`. */
 export const scanUpload = async (
-  { bytes, declaredMimeType, fileName }: ScanUploadInput,
+  { bytes, ownership = "copy", declaredMimeType, fileName }: ScanUploadInput,
   scan: typeof scanFile = scanFile,
 ): Promise<
   Result<ScannedFile, FileScanRejectedError | FileScanFailedError>
 > => {
-  // Scan and keep a private copy: a caller still holding its buffer must not
-  // be able to change the bytes after the verdict.
+  const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes;
+  // Detaching the caller's aliases preserves verdict isolation without copying.
+  // Subranges and shared buffers need an exact-fit private copy instead.
   const buffer =
-    bytes instanceof ArrayBuffer
-      ? bytes.slice(0)
-      : new Uint8Array(bytes).buffer;
+    ownership === "transfer" &&
+    view.buffer instanceof ArrayBuffer &&
+    view.byteOffset === 0 &&
+    view.byteLength === view.buffer.byteLength
+      ? view.buffer.transfer()
+      : new Uint8Array(view).buffer;
   const scanned = await scan({
     buffer: new Uint8Array(buffer),
     declaredMimeType,

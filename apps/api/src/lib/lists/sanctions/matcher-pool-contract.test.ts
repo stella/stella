@@ -18,6 +18,9 @@ import type { SanctionsMatcherRequest } from "./matcher-protocol";
 import type { reportSanctionsScreeningFailure } from "./screening-failure";
 import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
 
+// Work usage is asserted where it is produced; replies only carry it.
+const SCREENED_WORK = { spent: expect.any(Number), limit: expect.any(Number) };
+
 const outcomeValue = <T>(outcome: MatcherWorkOutcome<T>): T | null =>
   outcome.status === "completed" ? outcome.value : null;
 
@@ -145,7 +148,11 @@ test.each(multilingualCases)(
           await pool
             .run(async (session) => await session.match(request))
             .then(outcomeValue),
-        ).toEqual({ status: "screened", result: expected });
+        ).toEqual({
+          status: "screened",
+          result: expected,
+          work: SCREENED_WORK,
+        });
         expect(
           await pool
             .run(
@@ -153,7 +160,11 @@ test.each(multilingualCases)(
                 await session.match({ ...request, list: null }),
             )
             .then(outcomeValue),
-        ).toEqual({ status: "screened", result: expected });
+        ).toEqual({
+          status: "screened",
+          result: expected,
+          work: SCREENED_WORK,
+        });
       }
     } finally {
       await pool.close();
@@ -461,7 +472,11 @@ test("real worker honors cutoff and limit on cold and cached requests", async ()
         const cold = await pool
           .run(async (session) => await session.match(request))
           .then(outcomeValue);
-        expect(cold).toEqual({ status: "screened", result: expected });
+        expect(cold).toEqual({
+          status: "screened",
+          result: expected,
+          work: SCREENED_WORK,
+        });
         expect(
           await pool
             .run(

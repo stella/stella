@@ -8,6 +8,7 @@ import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import { defaultRehypePlugins, Streamdown } from "streamdown";
 
+import { rehypeChatLinks } from "@stll/chat/link-markdown";
 import { cn } from "@stll/ui/utils";
 
 import { messageComponents } from "@/components/ai-elements/message-response-components";
@@ -36,13 +37,11 @@ export const MessageResponseImpl = memo(
     ...props
   }: MessageResponseProps) => {
     const effectiveRehypePlugins = useMemo(
-      () =>
-        sourceOffsets
-          ? [
-              ...(rehypePlugins ?? Object.values(defaultRehypePlugins)),
-              rehypeMarkdownSourceOffsets,
-            ]
-          : rehypePlugins,
+      () => [
+        ...(rehypePlugins ?? Object.values(defaultRehypePlugins)),
+        ...(sourceOffsets ? [rehypeMarkdownSourceOffsets] : []),
+        rehypeChatLinks,
+      ],
       [rehypePlugins, sourceOffsets],
     );
     return (
@@ -76,9 +75,7 @@ export const MessageResponseImpl = memo(
           ...components,
           img: components?.img ?? messageComponents.img,
         }}
-        {...(effectiveRehypePlugins
-          ? { rehypePlugins: effectiveRehypePlugins }
-          : {})}
+        rehypePlugins={effectiveRehypePlugins}
         {...props}
         // Streaming parses each block separately, yielding block-local positions.
         // Settled editable answers need one parse of the unchanged full source.

@@ -46,6 +46,12 @@ type CommonFields = {
    * surfaced via the MCP detail flow).
    */
   enabled: boolean | null;
+  /**
+   * Whether the assistant may pick an installed skill by itself (`auto`) or
+   * only when the user invokes it (`manual`). `null` for entries that are not
+   * installed skills.
+   */
+  invocation: "auto" | "manual" | null;
 };
 
 export type CatalogueSkill = CommonFields & {

@@ -36,6 +36,7 @@
     "allow-clipboard-set-item-group",
     "allow-clipboard-open-editor",
     "allow-clipboard-copy-item",
+    "allow-clipboard-copy-items",
     "allow-clipboard-hide",
     "allow-clipboard-open-stella",
     "allow-account-record-use",
@@ -43,6 +44,7 @@
     "allow-desktop-report-timing",
     "allow-account-get-state",
     "allow-account-disconnect",
-    "allow-open-stella-account"
+    "allow-open-stella-account",
+    "allow-shortcut-get-snapshot"
   ]
 }

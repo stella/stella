@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "Presunuté na iné zariadenie",
     "sessionNeedsAttention": "Vyžaduje pozornosť",
     "sessionOpeningInOffice": "Otváranie v Office",
-    "sessionSavingDraft": "Ukladanie konceptu"
+    "sessionSavingDraft": "Ukladanie konceptu",
+    "reconnectAccount": "Znova pripojiť k stella web…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Zmeny zostávajú lokálne a budú automaticky zopakované",
@@ -209,7 +210,23 @@
     "startOnLoginDescription": "Spustiť stella desktop automaticky pri prihlásení.",
     "stellaDesktop": "stella desktop",
     "support": "Podpora",
-    "title": "Nastavenia"
+    "title": "Nastavenia",
+    "serverLabel": "Server",
+    "connectToHost": "Pripojiť k {host}",
+    "connectToHostDescription": "Otvorí {host} v prehliadači, kde tento počítač schválite.",
+    "reconnectNeeded": "Treba znova pripojiť",
+    "reconnect": "Znova pripojiť",
+    "reconnectHostDescription": "Prepojenie s {host} treba obnoviť. Schváľte tento počítač znova v prehliadači.",
+    "permissions": "Povolenia",
+    "permissionNotificationsDescription": "Upozorní vás, keď je dokument pripravený alebo synchronizácia vyžaduje pozornosť.",
+    "permissionAccessibility": "Prístupnosť",
+    "permissionAccessibilityDescription": "Umožní prehľadu aktivity zaznamenávať názvy okien, ale iba ak zapnete podrobnosti.",
+    "permissionAllowed": "Povolené",
+    "permissionAllow": "Povoliť",
+    "permissionOpenSettings": "Otvoriť nastavenia",
+    "permissionDenied": "Vypnuté v nastaveniach systému.",
+    "permissionManaged": "Spravuje vaša organizácia",
+    "errorPermissions": "stella desktop nemohol prečítať alebo zmeniť toto povolenie."
   },
   "clipboard": {
     "registryUnavailable": "Pre vaše jurisdikcie nie sú povolené žiadne registre.",
@@ -466,5 +483,45 @@
     "rangeEnd": "Koniec úseku",
     "reviewToday": "Skontrolovať dnešok",
     "welcomePreviewMatter": "Predĺženie nájmu Riverside"
+  },
+  "shortcut": {
+    "title": "Skratka schránky",
+    "description": "Otvorí históriu schránky z ľubovoľnej aplikácie.",
+    "change": "Zmeniť",
+    "reset": "Obnoviť na {shortcut}",
+    "recording": "Stlačte novú skratku. Esc zruší.",
+    "waiting": "Čakám na klávesy…",
+    "addKey": "Teraz pridajte kláves…",
+    "confirm": "Otvárať schránku skratkou {shortcut}?",
+    "use": "Použiť {shortcut}",
+    "cancel": "Zrušiť",
+    "same": "Túto skratku už používate.",
+    "errorSave": "stella desktop nemohol uložiť skratku.",
+    "needsModifier": "Pridajte {modifiers}, aby skratka len nenapísala písmeno.",
+    "unsupportedKey": "Tento kláves nemôže byť súčasťou skratky. Skúste písmeno, číslicu alebo funkčný kláves.",
+    "systemReserved": "Skratku {shortcut} už systém používa na akciu „{action}“. Vyberte inú.",
+    "windowsKeyReserved": "Skratky s klávesom Windows si Windows vyhradzuje pre seba. Použite Ctrl alebo Alt.",
+    "taken": "Skratku {shortcut} už používa iná aplikácia. Vyberte inú.",
+    "unavailable": "Skratku {shortcut} používa iná aplikácia, takže schránku neotvorí. Vyberte inú skratku.",
+    "action": {
+      "copy": "Kopírovať",
+      "paste": "Prilepiť",
+      "cut": "Vystrihnúť",
+      "undo": "Späť",
+      "redo": "Znova",
+      "selectAll": "Vybrať všetko",
+      "quit": "Ukončiť",
+      "closeWindow": "Zavrieť okno",
+      "hide": "Skryť",
+      "minimize": "Minimalizovať",
+      "appSwitcher": "Prepínač aplikácií",
+      "spotlight": "Spotlight",
+      "inputSource": "Zdroj vstupu",
+      "screenshot": "Snímka obrazovky",
+      "forceQuit": "Vynútiť ukončenie",
+      "windowMenu": "Ponuka okna",
+      "start": "Štart",
+      "taskManager": "Správca úloh"
+    }
   }
 }

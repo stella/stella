@@ -633,24 +633,30 @@ posixTest(
 posixTest(
   "the supervisor counts an over-budget worker under a low-memory leader and kills their group",
   async () => {
+    // The leader is a shell, so only the worker's allocation can cross the
+    // cap: a Bun leader's own startup memory can reach 64 MiB on a busy host.
+    // The worker records its PID before allocating, so the group is never
+    // stopped before the PID exists.
     const fixture = createFixture({
-      memoryLimitBytes: 64 * 1024 ** 2,
+      memoryLimitBytes: 128 * 1024 ** 2,
       childTimeoutMs: 8000,
       deadlineMs: 15_000,
     });
     const workerPidPath = path.join(fixture.directory, "worker.pid");
     const worker = `
     import { writeFileSync } from 'node:fs';
-    const allocation = new Uint8Array(96 * 1024 ** 2).fill(1);
     writeFileSync(${JSON.stringify(workerPidPath)}, String(process.pid));
+    const allocation = new Uint8Array(256 * 1024 ** 2).fill(1);
     setInterval(() => { allocation[0] = allocation[0] === 1 ? 2 : 1; }, 1000);
   `;
     try {
       const result = await fixture.supervisor.run({
         command: () => [
+          "/bin/sh",
+          "-c",
+          '"$0" -e "$1" & wait',
           process.execPath,
-          "-e",
-          `Bun.spawn([process.execPath, '-e', ${JSON.stringify(worker)}], {stdout:'inherit',stderr:'inherit'}); setInterval(()=>{},1000);`,
+          worker,
         ],
         cwd: fixture.directory,
         env: process.env,

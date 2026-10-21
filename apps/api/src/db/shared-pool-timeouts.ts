@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -69,6 +69,67 @@ export const setSharedLockTimeout = async (
   await tx.execute(
     sql`SELECT set_config('lock_timeout', ${`${effectiveTimeout(requestedMs)}ms`}, true)`,
   );
+};
+
+export const setSharedTransactionTimeouts = async (
+  tx: TimeoutTransaction,
+  { statementTimeoutMs, lockTimeoutMs }: SharedQueryTimeouts,
+): Promise<void> => {
+  const lock =
+    lockTimeoutMs === undefined
+      ? sql``
+      : sql`, set_config('lock_timeout', ${`${effectiveTimeout(lockTimeoutMs)}ms`}, true)`;
+  await tx.execute(sql`SELECT
+    set_config('statement_timeout', ${`${effectiveTimeout(statementTimeoutMs)}ms`}, true)
+    ${lock}`);
+};
+
+type TransactionTimeouts = Required<SharedQueryTimeouts>;
+
+/** Restore the captured settings after the caller has settled its savepoint. */
+export const withSharedTransactionTimeoutRestoration = async <T>(
+  tx: TimeoutTransaction,
+  fn: (previous: TransactionTimeouts) => Promise<T>,
+): Promise<T> => {
+  const row = executedRows(
+    await tx.execute(sql`SELECT
+      current_setting('statement_timeout') AS statement_timeout,
+      current_setting('lock_timeout') AS lock_timeout`),
+  ).at(0);
+  if (
+    typeof row !== "object" ||
+    row === null ||
+    !("statement_timeout" in row) ||
+    !("lock_timeout" in row) ||
+    typeof row.statement_timeout !== "string" ||
+    typeof row.lock_timeout !== "string"
+  ) {
+    panic("PostgreSQL did not return transaction timeouts");
+  }
+  const previous = {
+    statementTimeoutMs: parsePostgresTimeoutMs(row.statement_timeout),
+    lockTimeoutMs: parsePostgresTimeoutMs(row.lock_timeout),
+  };
+  const outcome = await Result.tryPromise({
+    try: async () => await fn(previous),
+    catch: (cause) => cause,
+  });
+  // Restore only the captured settings, including disabled timeouts. A failed
+  // savepoint cleanup may leave the transaction aborted; preserve its error.
+  const restoration = await Result.tryPromise({
+    try: async () =>
+      await tx.execute(sql`SELECT
+    set_config('statement_timeout', ${`${previous.statementTimeoutMs}ms`}, true),
+    set_config('lock_timeout', ${`${previous.lockTimeoutMs}ms`}, true)`),
+    catch: (cause) => cause,
+  });
+  if (outcome.isErr()) {
+    throw outcome.error;
+  }
+  if (restoration.isErr()) {
+    throw restoration.error;
+  }
+  return outcome.value;
 };
 
 type SharedReadGuards = {

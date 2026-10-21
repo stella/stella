@@ -47,8 +47,16 @@ describe("source discovery fails closed on contradictory identities", () => {
     "a duplicate %s key cannot overwrite another capability",
     (capability) => {
       const registrations = [
-        { key: "shared", capability: "crawl", source: { key: "shared" } },
-        { key: "shared", capability, source: { key: "shared" } },
+        {
+          key: "shared",
+          capability: "crawl",
+          source: { key: "shared", country: "CZE", language: "cs" },
+        },
+        {
+          key: "shared",
+          capability,
+          source: { key: "shared", country: "CZE", language: "cs" },
+        },
       ];
       expect(() => checkedSourceRegistrations(registrations)).toThrow(
         "Duplicate source registry key: shared",

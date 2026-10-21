@@ -123,9 +123,9 @@ export const SuggestedActions = ({
         "flex max-w-full gap-1.5",
         horizontal
           ? [
-              "scrollbar-none overflow-x-auto",
+              "scrollbar-none overflow-x-auto [&_button]:focus-visible:ring-offset-0 [&_button]:focus-visible:ring-inset",
               moreInlineEnd &&
-                "[mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,black_calc(100%-2.5rem),transparent)]",
+                "[mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] focus-within:[mask-image:none] not-focus-within:rtl:[mask-image:linear-gradient(to_left,black_calc(100%-2.5rem),transparent)]",
             ]
           : "flex-col items-start",
         className,
@@ -133,6 +133,15 @@ export const SuggestedActions = ({
       key={
         horizontal ? actions.map((action) => action.id).join("\n") : undefined
       }
+      onFocusCapture={({ target }) => {
+        if (horizontal && target instanceof HTMLElement) {
+          target.scrollIntoView({
+            block: "nearest",
+            inline: "nearest",
+            behavior: "instant",
+          });
+        }
+      }}
       ref={horizontal ? horizontalRowRef : undefined}
       role="group"
     >

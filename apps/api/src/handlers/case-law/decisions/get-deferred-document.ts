@@ -11,6 +11,8 @@
  * `documentPending` instead; the fetch is wired in here.
  */
 
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+
 import { envBase } from "@/api/env-base";
 import {
   devReparseEnabled,
@@ -198,6 +200,8 @@ export type ReadGatedDecisionOptions = {
   caller: DecisionReadCaller;
   citationsCursor?: string | null | undefined;
   documentHydration: DecisionDocumentHydration;
+  /** The surface the read serves; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 /**
@@ -272,9 +276,11 @@ export const readGatedDecisionWithDocument = async ({
   caller,
   citationsCursor,
   documentHydration,
+  surface,
 }: ReadGatedDecisionOptions): Promise<DecisionRead | null> => {
   const read = await withRedistributableSubject(
     caseLawDb,
+    surface,
     locator,
     async (subject) => await readDecisionHandler({ citationsCursor, subject }),
   );

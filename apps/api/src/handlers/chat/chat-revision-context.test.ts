@@ -44,6 +44,7 @@ const assemble = async (changes: ChatRevisionContextChange[]) =>
     refRegistry: createChatRefRegistry(),
     safeDb: asTestRaw<SafeDb>(async () => Result.ok(changes)),
     messages: [{ id: MESSAGE_ID, role: "assistant" }],
+    requestedSkillNames: new Set(),
     threadId: THREAD_ID,
     toolAvailability: {
       docxEditMode: null,

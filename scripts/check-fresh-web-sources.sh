@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+retry="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/retry.sh"
 export_dir=$(mktemp -d "${RUNNER_TEMP:?}/fresh-web-XXXXXX")
 trap 'rm -rf "$export_dir"' EXIT
 git ls-files --stage > "$export_dir/tracked-index"
@@ -11,7 +12,7 @@ test ! -e apps/web/src/generated/api-routes.gen.ts
 # Metadata lets manifest tests check ignores, while all sources come from archive.
 git init --quiet
 git update-index --index-info < "$export_dir/tracked-index"
-bun ci --ignore-scripts
+bash "$retry" bun ci --ignore-scripts
 cp apps/web/.env.example apps/web/.env
 bun run typegen
 bun run --cwd apps/web typecheck

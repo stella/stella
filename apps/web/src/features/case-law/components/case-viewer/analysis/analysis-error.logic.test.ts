@@ -26,6 +26,7 @@ import sk from "@/i18n/langs/sk.json";
 import {
   ANALYSIS_KEYED_FAILURE_MESSAGE,
   analysisErrorMessage,
+  analysisRetryAt,
   providerLabel,
 } from "./analysis-error.logic";
 
@@ -134,6 +135,35 @@ describe("analysis error messages", () => {
       });
     }
   });
+
+  test("only a failed run whose provider named a retry time has one", () => {
+    const retryAt = new Date("2026-10-16T19:30:00.000Z");
+    const key = { source: "organization", provider: "google" } as const;
+
+    expect(
+      analysisRetryAt({
+        kind: "failed",
+        code: "provider_refused",
+        key,
+        retryAt,
+      }),
+    ).toEqual(retryAt);
+    expect(
+      analysisRetryAt({ kind: "failed", code: "provider_refused", key }),
+    ).toBeUndefined();
+    expect(analysisRetryAt({ kind: "unreadable" })).toBeUndefined();
+  });
+
+  for (const { locale, messages } of catalogs) {
+    test(`the time to retry after reads in the sentence in ${locale}`, () => {
+      const t = createTranslator({ locale, messages });
+      const text = t("caseLaw.analysis.errors.retryAfter", {
+        time: "16 Oct 2026, 21:30",
+      });
+      expect(text).toContain("16 Oct 2026, 21:30");
+      expect(text).not.toContain("{");
+    });
+  }
 
   test("a provider is named as organization settings name it, and an unknown one as given", () => {
     for (const provider of PROVIDER_KEYS) {

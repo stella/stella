@@ -8,6 +8,7 @@ import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { professionalUseOptions, roleOptions } from "@/lib/auth-queries";
+import { stashDesktopAccountLink } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
@@ -38,6 +39,8 @@ export const loadProtectedContext = async ({
   context,
   location,
 }: ProtectedRouteArgs) => {
+  // Before any redirect drops the address-bar fragment.
+  stashDesktopAccountLink();
   const authContext = await loadAuthContext(context.queryClient);
 
   const redirectTo = returnPathOf(location);
@@ -91,7 +94,7 @@ export const loadProtectedContext = async ({
   const onPrefetchError = (error: unknown) => {
     getAnalytics().captureError(error);
   };
-  if (location.pathname === "/settings/organization/time-policy") {
+  if (location.pathname === "/admin/time-policy") {
     detached(
       (async () => {
         if (

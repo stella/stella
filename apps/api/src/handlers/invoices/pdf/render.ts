@@ -13,12 +13,18 @@ import { panic, Result } from "better-result";
 import { encode } from "uqr";
 
 import type { InvoiceStatus } from "@stll/api-contract";
-import { buildCzechQrPaymentPayload } from "@stll/invoicing";
+import {
+  buildCzechQrPaymentPayload,
+  buildPolishQrPaymentPayload,
+  normalizeIban,
+  parseNip,
+} from "@stll/invoicing";
 import type {
   InvoiceDocumentType,
   InvoiceTotals,
   VatTreatment,
 } from "@stll/invoicing";
+import { buildPayBySquarePayload } from "@stll/invoicing/pay-by-square";
 import { formatMoneyCents } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
 
@@ -109,6 +115,7 @@ const EN_LABELS = {
   payment: "Payment",
   notes: "Notes",
   reverse: "Reverse charge",
+  outsideScope: "Outside the scope of VAT",
   exempt: "Exempt",
   nonPayer: "Not a VAT payer",
 } as const;
@@ -137,6 +144,7 @@ export const INVOICE_PDF_LABELS = {
     payment: "Platba",
     notes: "Poznámky",
     reverse: "Přenesení daňové povinnosti",
+    outsideScope: "Plnění není předmětem daně v tuzemsku",
     exempt: "Osvobozeno",
     nonPayer: "Neplátce DPH",
   },
@@ -163,6 +171,7 @@ export const INVOICE_PDF_LABELS = {
     payment: "Platba",
     notes: "Poznámky",
     reverse: "Prenesenie daňovej povinnosti",
+    outsideScope: "Plnenie nie je predmetom dane v tuzemsku",
     exempt: "Oslobodené",
     nonPayer: "Neplatiteľ DPH",
   },
@@ -189,6 +198,7 @@ export const INVOICE_PDF_LABELS = {
     payment: "Zahlung",
     notes: "Anmerkungen",
     reverse: "Steuerschuldnerschaft des Leistungsempfängers",
+    outsideScope: "Im Inland nicht steuerbar",
     exempt: "Steuerbefreit",
     nonPayer: "Nicht umsatzsteuerpflichtig",
   },
@@ -215,6 +225,7 @@ export const INVOICE_PDF_LABELS = {
     payment: "Paiement",
     notes: "Notes",
     reverse: "Autoliquidation",
+    outsideScope: "Hors du champ d'application de la TVA",
     exempt: "Exonéré",
     nonPayer: "Non assujetti à la TVA",
   },
@@ -241,6 +252,7 @@ export const INVOICE_PDF_LABELS = {
     payment: "Pago",
     notes: "Notas",
     reverse: "Inversión del sujeto pasivo",
+    outsideScope: "Fuera del ámbito de aplicación del IVA",
     exempt: "Exento",
     nonPayer: "No sujeto al IVA",
   },
@@ -267,6 +279,7 @@ export const INVOICE_PDF_LABELS = {
     payment: "Pagamento",
     notes: "Observações",
     reverse: "Inversão do sujeito passivo",
+    outsideScope: "Fora do âmbito de aplicação do IVA",
     exempt: "Isento",
     nonPayer: "Não contribuinte do IVA",
   },
@@ -293,6 +306,7 @@ export const INVOICE_PDF_LABELS = {
     payment: "Płatność",
     notes: "Uwagi",
     reverse: "Odwrotne obciążenie",
+    outsideScope: "Niepodlegające opodatkowaniu VAT w kraju",
     exempt: "Zwolnione",
     nonPayer: "Nie jest podatnikiem VAT",
   },
@@ -319,6 +333,7 @@ export const INVOICE_PDF_LABELS = {
     payment: "Fizetés",
     notes: "Megjegyzések",
     reverse: "Fordított adózás",
+    outsideScope: "Az ÁFA hatályán kívül",
     exempt: "Adómentes",
     nonPayer: "Nem ÁFA-alany",
   },
@@ -345,6 +360,7 @@ export const INVOICE_PDF_LABELS = {
     payment: "Makse",
     notes: "Märkused",
     reverse: "Pöördmaksustamine",
+    outsideScope: "Ei kuulu käibemaksu kohaldamisalasse",
     exempt: "Maksuvaba",
     nonPayer: "Ei ole käibemaksukohustuslane",
   },
@@ -371,6 +387,7 @@ export const INVOICE_PDF_LABELS = {
     payment: "Maksājums",
     notes: "Piezīmes",
     reverse: "Apgrieztā maksāšana",
+    outsideScope: "Neietilpst PVN piemērošanas jomā",
     exempt: "Atbrīvots",
     nonPayer: "Nav PVN maksātājs",
   },
@@ -397,6 +414,7 @@ export const INVOICE_PDF_LABELS = {
     payment: "Mokėjimas",
     notes: "Pastabos",
     reverse: "Atvirkštinis apmokestinimas",
+    outsideScope: "Nepatenka į PVM taikymo sritį",
     exempt: "Neapmokestinama",
     nonPayer: "Ne PVM mokėtojas",
   },
@@ -423,6 +441,7 @@ export const INVOICE_PDF_LABELS = {
     payment: "الدفع",
     notes: "ملاحظات",
     reverse: "الاحتساب العكسي",
+    outsideScope: "خارج نطاق ضريبة القيمة المضافة",
     exempt: "معفى",
     nonPayer: "غير مسجل في ضريبة القيمة المضافة",
   },
@@ -440,7 +459,7 @@ export const buildInvoicePaymentPayload = ({
   ) {
     return null;
   }
-  return buildCzechQrPaymentPayload({
+  const payment = {
     documentType: invoice.documentType,
     iban: seller.iban,
     amountMinor: totals.grossAmountMinor,
@@ -452,7 +471,42 @@ export const buildInvoicePaymentPayload = ({
     ...(invoice.status === "draft" || invoice.invoiceNumber === null
       ? {}
       : { message: invoice.invoiceNumber }),
-  });
+  };
+  // The payer scans with a banking app of the account's country: Slovak apps
+  // read PAY by square and Polish apps the ZBP code, not the Czech SPD code.
+  // The address country is free text, so the IBAN's country code decides.
+  // The ZBP recommendation fixes error correction L; the others keep M.
+  const country = normalizeIban(seller.iban)?.slice(0, 2);
+  if (country === "SK") {
+    return buildPayBySquarePayload({
+      ...payment,
+      ...(seller.bic === null ? {} : { bic: seller.bic }),
+      beneficiaryName: seller.legalName,
+    }).map((result) => ({ ...result, errorCorrection: "M" as const }));
+  }
+  if (country === "PL") {
+    // An institutional payee's code needs a Polish NIP. A Polish account does
+    // not make its owner a Polish taxpayer, and the code is optional: a seller
+    // without a valid NIP gets no code rather than a failed PDF.
+    const nip = seller.vatId === null ? null : parseNip(seller.vatId);
+    if (nip === null) {
+      return null;
+    }
+    return buildPolishQrPaymentPayload({
+      documentType: payment.documentType,
+      iban: payment.iban,
+      amountMinor: payment.amountMinor,
+      currency: payment.currency,
+      recipientNip: nip,
+      recipientName: seller.legalName,
+      title:
+        payment.message ?? invoice.reference ?? INVOICE_PDF_LABELS.pl.invoice,
+    }).map((result) => ({ ...result, errorCorrection: "L" as const }));
+  }
+  return buildCzechQrPaymentPayload(payment).map((result) => ({
+    ...result,
+    errorCorrection: "M" as const,
+  }));
 };
 
 const PAGE_WIDTH = 595.28;
@@ -541,11 +595,11 @@ const createInvoiceWriter = async ({ pdf, lang }: InvoiceWriterOptions) => {
       write(`${label}: ${isolate(value)}`);
     }
   };
-  const writeQr = (payload: string) => {
+  const writeQr = (payload: string, ecc: "L" | "M") => {
     if (y < MARGIN + QR_SIZE + LINE_HEIGHT) {
       newPage();
     }
-    const qr = encode(payload, { border: 4, ecc: "M" });
+    const qr = encode(payload, { border: 4, ecc });
     const moduleSize = QR_SIZE / qr.size;
     page.drawRectangle({
       x: MARGIN,
@@ -671,6 +725,7 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
   const treatments = {
     domestic_vat: l.vat,
     reverse_charge: l.reverse,
+    outside_scope: l.outsideScope,
     exempt: l.exempt,
     not_vat_payer: l.nonPayer,
   } satisfies Record<VatTreatment, string>;
@@ -765,7 +820,7 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
     }
     const payable = payment.value;
     if (payable.status === "payable") {
-      writeQr(payable.payload);
+      writeQr(payable.payload, payable.errorCorrection);
     }
   }
   if (invoice.notes !== null) {

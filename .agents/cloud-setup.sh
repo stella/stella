@@ -10,6 +10,14 @@ usage() { echo 'Usage: cloud-setup.sh install|start' >&2; exit 2; }
 case "$1" in install|start) MODE="$1" ;; *) usage ;; esac
 fail() { echo "cloud-setup: $*" >&2; exit 1; }
 trap 'echo "cloud-setup: command failed at line $LINENO" >&2' ERR
+# Each phase logs its start and duration so a stalled phase is visible in the task log.
+step() {
+  local name="$1" started="$SECONDS"
+  shift
+  echo "cloud-setup: $name started" >&2
+  "$@"
+  echo "cloud-setup: $name done in $((SECONDS - started))s" >&2
+}
 [[ -f /etc/os-release ]] || fail 'Ubuntu 24.04 is required'
 . /etc/os-release
 [[ "$ID" == ubuntu && "$VERSION_ID" == 24.04 && "$VERSION_CODENAME" == noble ]] || fail 'Only Ubuntu 24.04 (noble) is supported'
@@ -28,7 +36,15 @@ OUTPUT_USER="$(getent passwd "$OUTPUT_UID" | cut -d: -f1)"
 OUTPUT_HOME="$(getent passwd "$OUTPUT_UID" | cut -d: -f6)"
 [[ -n "$OUTPUT_USER" && "$OUTPUT_HOME" == /* && -d "$OUTPUT_HOME" ]] || fail 'Invoking user requires an existing home directory'
 root() { "$@"; }
-service_run() { runuser -u stll-cloud -- "$@" 9>&-; }
+# Service daemons outlive setup, so they inherit no descriptor beyond stdio: a cloud
+# runner can pass its terminal as extra descriptors and wait until every copy closes.
+service_run() (
+  for descriptor in "/proc/$BASHPID/fd/"*; do
+    descriptor="$(basename -- "$descriptor")"
+    if [[ "$descriptor" =~ ^[0-9]+$ ]] && (( descriptor > 2 )); then eval "exec $descriptor>&-"; fi
+  done
+  exec runuser -u stll-cloud -- "$@"
+)
 BUN_VERSION='1.4.3'
 NODE_VERSION='26.10.0'
 NODE_DIR="/opt/stll-cloud/node/$NODE_VERSION"
@@ -46,22 +62,98 @@ case "$(uname -m)" in
   *) fail 'Only amd64 and arm64 are supported' ;;
 esac
 
+
+release_log_holders() {
+  # Processes left by package scripts may still hold a step log after the command exits.
+  # Setup starts its own services later, so end them rather than let them write into a
+  # deleted log for their whole lifetime.
+  # One find over all descriptor links; no process per descriptor.
+  local log="$1" root="${CLOUD_PROC_ROOT:-/proc}" fd pid
+  while IFS= read -r fd; do
+    pid="${fd%/fd/*}"
+    pid="${pid##*/}"
+    [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] || continue
+    kill -TERM "$pid" 2>/dev/null || true
+  done < <(find "$root" -mindepth 3 -maxdepth 3 -path "$root/[0-9]*/fd/*" -lname "$log" 2>/dev/null)
+}
+network_run() (
+  local host="$1" seconds="$2" status=0
+  shift 2
+  network_log="$(mktemp)" || return "$?"
+  trap 'rm -f -- "$network_log"' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  # Output goes to a file, never a pipe: package scripts may leave processes that keep
+  # inherited descriptors open, and a pipe reader would wait for them past the command.
+  # Input is never the terminal: timeout runs the command outside the foreground process
+  # group, where apt restoring terminal settings on a terminal stdin stops it for good.
+  timeout --signal=TERM --kill-after=5s "$seconds"s "$@" < /dev/null > "$network_log" 2>&1 || status=$?
+  release_log_holders "$network_log"
+  cat -- "$network_log" || fail 'Cannot capture network command output'
+  [[ "$status" != 0 ]] || return 0
+  if [[ "$status" == 124 || "$status" == 137 || "$status" == 28 ]] || grep -Eiq 'timed[[:space:]-]+out|time[[:space:]-]+out|timeout[[:space:]]+(was[[:space:]]+)?(reached|expired)|(connection|operation|socket)[[:space:]-]+timeout' "$network_log"; then
+    fail "download timed out: $host"
+  fi
+  return "$status"
+)
+download_file() {
+  local url="$1" destination="$2" seconds="$3" host
+  host="$(printf '%s\n' "$url" | cut -d/ -f3 | sed 's/.*@//')"
+  [[ "$url" == https://* && -n "$host" ]] || fail 'Downloads require an HTTPS host'
+  network_run "$host" "$seconds" curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 20 --max-time "$seconds" --retry 3 --retry-all-errors --retry-max-time "$seconds" "$url" -o "$destination"
+}
+apt_network() {
+  local hosts
+  # --print-uris reads configured indexes without contacting their servers.
+  hosts="$(set -o pipefail; apt-get --print-uris update | awk -F/ '/^\047https?:\/\// { host=$3; sub(/.*@/, "", host); if (!seen[host]++) { printf "%s%s", separator, host; separator="," } }')" || return "$?"
+  [[ -n "$hosts" ]] || hosts='configured APT hosts'
+  # APT_DEADLINE: whole-call seconds; callers that also unpack packages may extend it.
+  network_run "$hosts" "${APT_DEADLINE:-180}" apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=3 -o APT::Update::Error-Mode=any "$@"
+}
+apt_refresh_for() {
+  # Skip the refresh only when the install downloads nothing: then no package
+  # source is contacted and stale cached indexes cannot point at missing files.
+  local uris
+  if uris="$(DEBIAN_FRONTEND=noninteractive apt-get --print-uris -qq -y --no-install-recommends install "$@" 2>/dev/null)" && [[ -z "$uris" ]]; then
+    return 0
+  fi
+  apt_network update
+}
+
+
+node_ready() {
+  local node_version npm_version npx_version
+  [[ -x "$NODE_DIR/bin/node" && -x "$NODE_DIR/bin/npm" && -x "$NODE_DIR/bin/npx" ]] || return 1
+  node_version="$("$NODE_DIR/bin/node" --version)" || return 1
+  [[ "$node_version" == "v$NODE_VERSION" ]] || return 1
+  npm_version="$("$NODE_DIR/bin/npm" --version)" || return 1
+  [[ "$npm_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  npx_version="$("$NODE_DIR/bin/npx" --version)" || return 1
+  [[ "$npx_version" == "$npm_version" ]] || return 1
+}
 runtime_ready() {
-  [[ -x "$NODE_DIR/bin/node" && "$($NODE_DIR/bin/node --version)" == "v$NODE_VERSION" ]] || fail 'Pinned Node is unavailable; run install'
+  node_ready || fail 'Pinned Node, npm or npx is unavailable; run install'
   [[ -x "$BUN_DIR/bun" && "$($BUN_DIR/bun --version)" == "$BUN_VERSION" ]] || fail 'Pinned Bun is unavailable; run install'
 }
-install_runtimes() {
-  if ! command -v curl >/dev/null || ! command -v unzip >/dev/null || ! command -v xz >/dev/null || ! command -v openssl >/dev/null || ! command -v gpg >/dev/null; then
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt_install ca-certificates curl unzip xz-utils openssl gnupg util-linux
+install_runtimes() (
+  if [[ ! -s /etc/ssl/certs/ca-certificates.crt ]]; then
+    command -v update-ca-certificates >/dev/null || fail 'System CA certificate bundle is missing; restore ca-certificates in the base image offline before install'
+    update-ca-certificates || fail 'System CA certificate bundle could not be repaired offline; restore ca-certificates in the base image before install'
   fi
-  local scratch node_archive bun_archive bun_folder
+  [[ -s /etc/ssl/certs/ca-certificates.crt ]] || fail 'System CA certificate bundle is unavailable after offline repair; restore ca-certificates in the base image before install'
+  if ! command -v curl >/dev/null || ! command -v unzip >/dev/null || ! command -v xz >/dev/null || ! command -v openssl >/dev/null || ! command -v gpg >/dev/null || ! ldconfig -p | awk '$1 == "libatomic.so.1" { found=1 } END { exit !found }'; then
+    apt_refresh_for ca-certificates curl unzip xz-utils openssl gnupg util-linux libatomic1
+    DEBIAN_FRONTEND=noninteractive apt_install ca-certificates curl unzip xz-utils openssl gnupg util-linux libatomic1
+  fi
+  local node_archive bun_archive bun_folder
+  # Subshell scope retains scratch for EXIT cleanup after a failed command.
   scratch="$(mktemp -d)"
-  trap 'rm -rf -- "$scratch"' RETURN
-  if [[ ! -x "$NODE_DIR/bin/node" ]] || [[ "$($NODE_DIR/bin/node --version)" != "v$NODE_VERSION" ]]; then
+  trap 'rm -rf -- "$scratch"' EXIT
+  if ! node_ready; then
     node_archive="node-v$NODE_VERSION-linux-$NODE_ARCH.tar.xz"
-    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 "https://nodejs.org/dist/v$NODE_VERSION/$node_archive" -o "$scratch/$node_archive"
-    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt" -o "$scratch/node-sums"
+    download_file "https://nodejs.org/dist/v$NODE_VERSION/$node_archive" "$scratch/$node_archive" 120
+    download_file "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt" "$scratch/node-sums" 45
     (cd "$scratch"; awk -v name="$node_archive" '$2 == name { print; count++ } END { if (count != 1) exit 1 }' node-sums | sha256sum --strict -c -)
     install -d -m 755 "$NODE_DIR"
     tar -xJf "$scratch/$node_archive" --strip-components=1 -C "$NODE_DIR"
@@ -69,8 +161,8 @@ install_runtimes() {
   if [[ ! -x "$BUN_DIR/bun" ]] || [[ "$($BUN_DIR/bun --version)" != "$BUN_VERSION" ]]; then
     bun_folder="bun-linux-$BUN_ARCH"
     bun_archive="$bun_folder.zip"
-    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 "https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION/$bun_archive" -o "$scratch/$bun_archive"
-    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 "https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION/SHASUMS256.txt" -o "$scratch/bun-sums"
+    download_file "https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION/$bun_archive" "$scratch/$bun_archive" 120
+    download_file "https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION/SHASUMS256.txt" "$scratch/bun-sums" 45
     (cd "$scratch"; awk -v name="$bun_archive" '$2 == name || $2 == "*" name { print $1 "  " name; count++ } END { if (count != 1) exit 1 }' bun-sums | sha256sum --strict -c -)
     unzip -q "$scratch/$bun_archive" -d "$scratch/bun"
     install -d -m 755 "$BUN_DIR"
@@ -81,12 +173,10 @@ install_runtimes() {
   ln -sfnT -- "$NODE_DIR/bin/npm" /usr/local/bin/npm
   ln -sfnT -- "$NODE_DIR/bin/npx" /usr/local/bin/npx
   ln -sfnT -- "$BUN_DIR/bun" /usr/local/bin/bun
-  rm -rf -- "$scratch"
-  trap - RETURN
-}
+)
 
 dependency_install() {
-  local directory
+  local directory download_hosts
   for directory in /var/cache/stll-cloud /var/cache/stll-cloud/bun; do
     [[ ! -L "$directory" ]] || fail 'Dependency cache parent must not be a symlink'
     if [[ -e "$directory" ]]; then
@@ -99,7 +189,26 @@ dependency_install() {
     [[ -d "$BUN_CACHE" && "$(stat -c '%u' "$BUN_CACHE")" == "$OUTPUT_UID" ]] || fail 'Dependency cache ownership differs from the invoking user'
   fi
   install -d -m 700 -o "$OUTPUT_UID" -g "$OUTPUT_GID" "$BUN_CACHE"
-  runuser -u "$OUTPUT_USER" -- env HOME="$OUTPUT_HOME" BUN_INSTALL_CACHE_DIR="$BUN_CACHE" PATH="$PATH" "$BUN_DIR/bun" install --frozen-lockfile
+  # Report hostnames only: lockfile/config URLs may contain credentials.
+  # These are known install hosts; lifecycle scripts can contact other hosts.
+  download_hosts="$(HOME="$OUTPUT_HOME" "$NODE_DIR/bin/node" -e '
+const fs = require("node:fs");
+const path = require("node:path");
+const hosts = new Set(["registry.npmjs.org"]);
+const inputs = [process.env.BUN_CONFIG_REGISTRY ?? "", process.env.NPM_CONFIG_REGISTRY ?? "", process.env.npm_config_registry ?? ""];
+for (const file of ["bun.lock", ".npmrc", "bunfig.toml", path.join(process.env.HOME, ".npmrc"), path.join(process.env.HOME, ".bunfig.toml"), path.join(process.env.XDG_CONFIG_HOME ?? process.env.HOME, ".bunfig.toml")]) {
+  if (fs.existsSync(file)) inputs.push(fs.readFileSync(file, "utf8"));
+}
+for (const input of inputs) {
+  for (const match of input.matchAll(/(?:git\+)?https?:\/\/[^\s"\x27<>\\]+/g)) {
+    try { hosts.add(new URL(match[0].replace(/^git\+/, "")).hostname); } catch {}
+  }
+  if (/github:/.test(input)) { hosts.add("github.com"); hosts.add("codeload.github.com"); }
+}
+process.stdout.write([...hosts].sort().join(","));
+')"
+  # Bun 1.4.3 socket inactivity timeout, in seconds; the outer bound includes scripts.
+  network_run "$download_hosts" 240 runuser -u "$OUTPUT_USER" -- env HOME="$OUTPUT_HOME" BUN_INSTALL_CACHE_DIR="$BUN_CACHE" PATH="$PATH" BUN_CONFIG_HTTP_IDLE_TIMEOUT=20 "$BUN_DIR/bun" install --frozen-lockfile --ignore-scripts
 }
 
 
@@ -135,7 +244,21 @@ apt_install() (
   policy_state=installed
   printf '%s\n' '#!/bin/sh' 'exit 101' > /usr/sbin/policy-rc.d
   chmod 755 /usr/sbin/policy-rc.d
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@"
+  local package
+  for package in "$@"; do
+    if [[ "$package" == */* ]]; then
+      # apt cannot fetch local archives with --download-only, so their installs
+      # stay one call. Package triggers can be slow on cloud filesystems; the
+      # longer whole-call deadline covers them while Acquire timeouts still
+      # bound each network request.
+      APT_DEADLINE=600 DEBIAN_FRONTEND=noninteractive apt_network install -y --no-install-recommends "$@"
+      return
+    fi
+  done
+  # The network deadline covers downloads only; unpacking and maintainer scripts
+  # (for example locale generation or cluster creation) run offline afterwards.
+  DEBIAN_FRONTEND=noninteractive apt_network install -y --no-install-recommends --download-only "$@"
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --no-download "$@"
 )
 
 
@@ -288,7 +411,7 @@ install_services() {
     if [[ "$PGDG_SOURCE_STATE" == missing ]]; then
       local key key_fingerprint
       key="$(mktemp)"
-      curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 https://www.postgresql.org/media/keys/ACCC4CF8.asc -o "$key"
+      download_file https://www.postgresql.org/media/keys/ACCC4CF8.asc "$key" 45
       key_fingerprint="$(pgdg_key_fingerprint "$key")"
       [[ "$key_fingerprint" == B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8 ]] || fail 'PostgreSQL signing key mismatch'
       install -d -m 755 /usr/share/keyrings
@@ -296,7 +419,7 @@ install_services() {
       rm -- "$key"
       printf '%s\n' 'deb [signed-by=/usr/share/keyrings/stll-pgdg.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' > /etc/apt/sources.list.d/stll-pgdg.list
     fi
-    apt-get update
+    apt_refresh_for postgresql-18 postgresql-client-18
     apt_install postgresql-18 postgresql-client-18
   fi
   postgres_ready || fail 'PostgreSQL toolchain is incomplete or differs from the policy major'
@@ -310,15 +433,15 @@ install_services() {
       arm64) server_url='https://download.valkey.io/packaging/valkey-9.1/deb/ubuntu2404/arm64/valkey-server_9.1.1-1.noble_arm64.deb'; server_sha='9fc0bd40755b4fde1409e4b4a2a3f0559a1ee74a064756049221a7fc1396840a'; tools_url='https://download.valkey.io/packaging/valkey-9.1/deb/ubuntu2404/arm64/valkey-tools_9.1.1-1.noble_arm64.deb'; tools_sha='e82b58bd17adc215dcc1d079a0f761e57a0f7427171af252a0c636e776131d8a' ;;
       *) fail 'Unsupported Valkey architecture' ;;
     esac
-    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 "$server_url" -o "$scratch/valkey-server.deb"
-    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 "$tools_url" -o "$scratch/valkey-tools.deb"
+    download_file "$server_url" "$scratch/valkey-server.deb" 120
+    download_file "$tools_url" "$scratch/valkey-tools.deb" 120
     (cd "$scratch"; printf '%s  %s\n' "$server_sha" valkey-server.deb "$tools_sha" valkey-tools.deb | sha256sum --strict -c -)
     for package in valkey-server valkey-tools; do
       [[ "$(dpkg-deb -f "$scratch/$package.deb" Package)" == "$package" ]] || fail 'Valkey artifact package mismatch'
       [[ "$(dpkg-deb -f "$scratch/$package.deb" Version)" == '9.1.1-1.noble' ]] || fail 'Valkey artifact version mismatch'
       [[ "$(dpkg-deb -f "$scratch/$package.deb" Architecture)" == "$ARCH" ]] || fail 'Valkey artifact architecture mismatch'
     done
-    apt-get update
+    apt_refresh_for "$scratch/valkey-server.deb" "$scratch/valkey-tools.deb"
     apt_install "$scratch/valkey-server.deb" "$scratch/valkey-tools.deb"
     rm -rf -- "$scratch"
   fi
@@ -360,7 +483,9 @@ service_process_matches() {
   owner="$(stat -c '%u' "/proc/$pid" 2>/dev/null)" || return 2
   [[ "$owner" =~ ^[0-9]+$ ]] || return 2
   [[ "$owner" == "$SERVICE_UID" ]] || return 1
-  actual="$(readlink -f "/proc/$pid/exe" 2>/dev/null)" || return 2
+  # Read the executable link as its verified owner: container root may lack the ptrace
+  # capability that reading another user's /proc/<pid>/exe requires.
+  actual="$(service_run readlink -f "/proc/$pid/exe" 2>/dev/null)" || return 2
   expected="$(readlink -f "$executable")" || return 2
   [[ -n "$actual" && -n "$expected" && "$actual" != *' (deleted)' ]] || return 2
   [[ "$actual" == "$expected" ]]
@@ -394,7 +519,7 @@ start_services() {
   SERVICE_UID="$(id -u stll-cloud)"
   [[ -d "$STATE" && ! -L "$STATE" && "$(stat -c '%u' "$STATE")" == 0 ]] || fail "Invalid cloud service state directory"
 
-  local pg_bin='/usr/lib/postgresql/18/bin' pg_data="$STATE/postgres" pg_password pg_details pg_pid pg_version
+  local pg_bin='/usr/lib/postgresql/18/bin' pg_data="$STATE/postgres" pg_password pg_details pg_pid pg_version pg_state='already running'
   service_password "$STATE/postgres.password"
   pg_password="$(cat "$STATE/postgres.password")"
   service_directory "$pg_data"
@@ -413,6 +538,7 @@ start_services() {
   service_prune_pid "$pg_data/postmaster.pid" "$pg_bin/postgres" postgres
   if ! service_run env PGHOST=127.0.0.1 PGHOSTADDR=127.0.0.1 "$pg_bin/pg_ctl" -D "$pg_data" status >/dev/null 2>&1; then
     service_run env PGHOST=127.0.0.1 PGHOSTADDR=127.0.0.1 "$pg_bin/pg_ctl" -D "$pg_data" -l "$pg_data/cloud.log" -o "-h 127.0.0.1 -p 55432 -c unix_socket_directories=" -t 10 -w start >/dev/null || fail "PostgreSQL start failed; port 55432 must be available"
+    pg_state=started
   fi
   pg_details="$(env -u PGSERVICE -u PGSERVICEFILE -u PGOPTIONS PGHOSTADDR=127.0.0.1 PGPASSWORD="$pg_password" PGCONNECT_TIMEOUT=2 "$pg_bin/psql" -X -h 127.0.0.1 -p 55432 -U stll_cloud -d postgres -At -v ON_ERROR_STOP=1 -c "SELECT current_setting('data_directory'), current_setting('listen_addresses'), current_setting('port'), current_setting('server_version_num'), current_setting('unix_socket_directories')")" || fail "PostgreSQL authenticated readiness failed"
   pg_version="$(printf '%s\n' "$pg_details" | cut -d '|' -f4)"
@@ -422,8 +548,9 @@ start_services() {
   service_process "$pg_pid" "$pg_bin/postgres"
   [[ "$(env -u PGSERVICE -u PGSERVICEFILE -u PGOPTIONS PGHOSTADDR=127.0.0.1 PGPASSWORD="$pg_password" PGCONNECT_TIMEOUT=2 "$pg_bin/psql" -X -h 127.0.0.1 -p 55432 -U stll_cloud -d postgres -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM pg_database WHERE datname = 'cloud_test'")" == 1 ]] || env -u PGSERVICE -u PGSERVICEFILE -u PGOPTIONS PGHOSTADDR=127.0.0.1 PGPASSWORD="$pg_password" PGCONNECT_TIMEOUT=2 "$pg_bin/createdb" -h 127.0.0.1 -p 55432 -U stll_cloud cloud_test || fail "PostgreSQL test database creation failed"
   DATABASE_URL="postgresql://stll_cloud:$pg_password@127.0.0.1:55432/cloud_test"
+  printf 'postgres: %s\n' "$pg_state"
 
-  local vk_data="$STATE/valkey" vk_password vk_config vk_info vk_pid vk_expected ready=0
+  local vk_data="$STATE/valkey" vk_password vk_config vk_info vk_pid vk_expected ready=0 vk_state='already running'
   service_password "$STATE/valkey.password"
   vk_password="$(cat "$STATE/valkey.password")"
   service_directory "$vk_data"
@@ -443,7 +570,8 @@ start_services() {
   [[ "$(cat "$vk_config")" == "$vk_expected" ]] || fail "Valkey configuration differs from managed settings"
   service_prune_pid "$vk_data/valkey.pid" "$(command -v valkey-server)" valkey
   if [[ ! -e "$vk_data/valkey.pid" ]]; then
-    service_run valkey-server "$vk_config" || fail "Valkey start failed; port 56379 must be available"
+    service_run valkey-server "$vk_config" >/dev/null || fail "Valkey start failed; port 56379 must be available"
+    vk_state=started
   fi
   for ((attempt=0; attempt<20; attempt++)); do
     if vk_info="$(VALKEYCLI_AUTH="$vk_password" timeout 0.2 valkey-cli -h 127.0.0.1 -p 56379 --raw INFO server 2>/dev/null)"; then
@@ -459,9 +587,123 @@ start_services() {
   [[ "$(VALKEYCLI_AUTH="$vk_password" timeout 2 valkey-cli -h 127.0.0.1 -p 56379 --raw CONFIG GET bind)" == $'bind\n127.0.0.1' ]] || fail "Valkey endpoint must bind only loopback"
   [[ "$(VALKEYCLI_AUTH="$vk_password" timeout 2 valkey-cli -h 127.0.0.1 -p 56379 --raw CONFIG GET dir)" == "$(printf 'dir\n%s' "$vk_data")" ]] || fail "Valkey endpoint has a different data directory"
   REDIS_URL="redis://:$vk_password@127.0.0.1:56379/0"
+  printf 'valkey: %s\n' "$vk_state"
 
 }
 
+
+
+fetch_verified() {
+  download_file "$1" "$3" 120
+  printf '%s  %s\n' "$2" "$3" | sha256sum --strict -c - >/dev/null
+}
+
+verify_gitleaks() {
+  [[ -x '/opt/stll-cloud/tools/gitleaks/8.30.1/gitleaks' ]] || return 1
+  [[ "$( '/opt/stll-cloud/tools/gitleaks/8.30.1/gitleaks' --version)" == 'gitleaks version 8.30.1' || "$( '/opt/stll-cloud/tools/gitleaks/8.30.1/gitleaks' --version)" == 'gitleaks version 8.30.1 '* ]]
+}
+install_gitleaks() (
+  local artifact_url artifact_sha
+  # Subshell scope retains scratch for EXIT cleanup after a failed command.
+  if ! verify_gitleaks; then
+    scratch="$(mktemp -d)"
+    trap 'rm -rf -- "$scratch"' EXIT
+    case "$ARCH" in
+  amd64) artifact_url='https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz'; artifact_sha='551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb' ;;
+  arm64) artifact_url='https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_arm64.tar.gz'; artifact_sha='e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080' ;;
+esac
+    fetch_verified "$artifact_url" "$artifact_sha" "$scratch/archive.tar.gz"
+    tar -xzf "$scratch/archive.tar.gz" -C "$scratch"
+    install -d -m 755 '/opt/stll-cloud/tools/gitleaks/8.30.1'
+    case "$ARCH" in
+      amd64)
+        install -m 755 "$scratch/gitleaks" '/opt/stll-cloud/tools/gitleaks/8.30.1/gitleaks'
+        ;;
+      arm64)
+        install -m 755 "$scratch/gitleaks" '/opt/stll-cloud/tools/gitleaks/8.30.1/gitleaks'
+        ;;
+    esac
+    verify_gitleaks || fail 'Installed gitleaks version differs from its pin'
+  fi
+  ln -sfnT -- '/opt/stll-cloud/tools/gitleaks/8.30.1/gitleaks' '/usr/local/bin/gitleaks'
+)
+
+install_tools() {
+  :
+  install_gitleaks
+}
+verify_tools() {
+  :
+  verify_gitleaks || fail 'Pinned gitleaks is unavailable; run install'
+}
+install_shell_environment() (
+  # Subshell scope retains temporary for EXIT cleanup after a failed command.
+  [[ ! -L '/etc/profile.d/stll-cloud.sh' ]] || fail 'Managed shell profile must not be a symlink'
+  if [[ -e '/etc/profile.d/stll-cloud.sh' ]]; then
+    [[ -f '/etc/profile.d/stll-cloud.sh' && "$(stat -c '%h:%u' '/etc/profile.d/stll-cloud.sh')" == 1:0 ]] || fail 'Managed shell profile must be a root-owned single-link file'
+  fi
+  temporary="$(mktemp)"
+  trap 'rm -f -- "$temporary"' EXIT
+  cat > "$temporary" <<'STLL_CLOUD_PROFILE'
+# Generated by stll-cloud-setup; managed cloud shell environment.
+# Remove managed entries before prepending, including repeated shell startup.
+_stll_cloud_remaining="${PATH-}"
+_stll_cloud_result=''
+_stll_cloud_separator=''
+while :; do
+  case "$_stll_cloud_remaining" in
+    *:*) _stll_cloud_part="${_stll_cloud_remaining%%:*}"; _stll_cloud_remaining="${_stll_cloud_remaining#*:}"; _stll_cloud_more=yes ;;
+    *) _stll_cloud_part="$_stll_cloud_remaining"; _stll_cloud_more=no ;;
+  esac
+  case "$_stll_cloud_part" in
+    '/opt/stll-cloud/node/26.10.0/bin'|'/opt/stll-cloud/bun/1.4.3'|/usr/local/bin) ;;
+    *) _stll_cloud_result="$_stll_cloud_result$_stll_cloud_separator$_stll_cloud_part"; _stll_cloud_separator=: ;;
+  esac
+  [ "$_stll_cloud_more" = yes ] || break
+done
+export PATH='/opt/stll-cloud/node/26.10.0/bin:/opt/stll-cloud/bun/1.4.3:/usr/local/bin'"${_stll_cloud_separator:+:}$_stll_cloud_result"
+unset _stll_cloud_remaining _stll_cloud_result _stll_cloud_separator _stll_cloud_part _stll_cloud_more
+STLL_CLOUD_PROFILE
+  if ! cmp -s "$temporary" '/etc/profile.d/stll-cloud.sh'; then install -m 644 "$temporary" '/etc/profile.d/stll-cloud.sh'; fi
+  runuser -u "$OUTPUT_USER" -- env HOME="$OUTPUT_HOME" bash -c '
+set -euo pipefail
+for name in .bashrc .profile .bash_profile .bash_login; do
+  file="$HOME/$name"
+  if [[ ! -e "$file" && ! -L "$file" && "$name" != .bashrc && "$name" != .profile ]]; then continue; fi
+  [[ ! -L "$file" ]] || { echo "cloud-setup: shell startup file must not be a symlink: $name" >&2; exit 1; }
+  if [[ -e "$file" ]]; then
+    [[ -f "$file" && "$(stat -c '\''%h:%u'\'' "$file")" == "1:$(id -u)" ]] || { echo "cloud-setup: shell startup file must be owned and single-link: $name" >&2; exit 1; }
+  fi
+  temporary="$(mktemp "$HOME/.stll-cloud-shell.XXXXXX")"
+  trap '\''rm -f -- "$temporary"'\'' EXIT
+  if [[ "$name" == .bashrc ]]; then
+    printf '\''%s\n'\'' '\''# stll-cloud: early environment'\'' '\''. /etc/profile.d/stll-cloud.sh'\'' > "$temporary"
+  fi
+  if [[ -f "$file" ]]; then
+    # Remove only exact managed blocks; preserve unrelated startup lines and permissions.
+    awk '\''
+      $0 == "# stll-cloud: early environment" || $0 == "# stll-cloud: session environment" {
+        if ((getline following) <= 0 || following != ". /etc/profile.d/stll-cloud.sh") exit 1
+        next
+      }
+      { print }
+    '\'' "$file" >> "$temporary" || { echo "cloud-setup: managed shell startup block differs: $name" >&2; exit 1; }
+  fi
+  printf '\''%s\n'\'' '\''# stll-cloud: session environment'\'' '\''. /etc/profile.d/stll-cloud.sh'\'' >> "$temporary"
+  if [[ -f "$file" ]] && cmp -s "$temporary" "$file"; then rm -- "$temporary"; continue; fi
+  if [[ -f "$file" ]]; then chmod --reference="$file" "$temporary"; else chmod 644 "$temporary"; fi
+  mv -f -- "$temporary" "$file"
+done
+'
+)
+verify_shell_environment() {
+  [[ -f '/etc/profile.d/stll-cloud.sh' && ! -L '/etc/profile.d/stll-cloud.sh' && "$(stat -c '%h:%u' '/etc/profile.d/stll-cloud.sh')" == 1:0 ]] || fail 'Managed shell environment is unavailable; run install'
+  [[ "$(sha256sum -- '/etc/profile.d/stll-cloud.sh' | cut -d ' ' -f1)" == 'a7dedf20b0380fb3ac726140bd85f0324ca3b99a499adcb850809292f82cfc7f' ]] || fail 'Managed shell environment differs; run install'
+}
+
+
+[[ ! -e 'rust-toolchain.toml' && ! -L 'rust-toolchain.toml' ]] || fail 'rust-toolchain.toml appeared; regenerate cloud-setup.sh'
+[[ ! -e 'rust-toolchain' && ! -L 'rust-toolchain' ]] || fail 'rust-toolchain appeared; regenerate cloud-setup.sh'
 
 
 validate_environment() {
@@ -492,16 +734,24 @@ write_environment() {
 }
 
 
+
+
 if [[ "$MODE" == install ]]; then
-  install_runtimes
-  install_services
-  dependency_install
+  step runtimes install_runtimes
+  step services install_services
+  step tools install_tools
+  step shell install_shell_environment
+  step dependencies dependency_install
+
   exit 0
 fi
-runtime_ready
+step runtime-check runtime_ready
+step tool-check verify_tools
+step shell install_shell_environment
+step shell-check verify_shell_environment
 DATABASE_URL=''
 REDIS_URL=''
 validate_environment
-prepare_state
-start_services
+step state prepare_state
+step service-start start_services
 write_environment

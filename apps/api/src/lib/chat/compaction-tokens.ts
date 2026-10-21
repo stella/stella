@@ -22,21 +22,79 @@ const MAX_TRIGGER_TOKENS = 200_000;
 export const MAX_TEXT_PART_CHARS = 8000;
 export const MAX_STRUCTURED_PART_CHARS = 4000;
 /**
- * A summary that reaches its output ceiling cannot replace its source window:
- * doing so would advance the checkpoint past content absent from the summary.
- * Keep the ceiling and completion policy inseparable at every compaction call.
- */
-export const COMPACTION_GENERATION_POLICY = {
-  finishPolicy: "require-complete",
-  maxOutputTokens: 1800,
-} as const;
-
-/**
  * Canonical chars/4 token estimate. Shared with the prompt builders so the
  * meter's prompt/tool parts use the same estimator as the message parts.
  */
 export const estimateTextTokens = (text: string): number =>
   Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
+
+/** The fewest summary tokens a compaction asks for, however short its input. */
+const MIN_SUMMARY_TARGET_TOKENS = 400;
+/** The most summary tokens a compaction asks for, however long its input. */
+const MAX_SUMMARY_TARGET_TOKENS = 1600;
+/** The share of the summarized input the summary may take. */
+const SUMMARY_TARGET_INPUT_SHARE = 0.04;
+/**
+ * Ceiling headroom over the target, as a multiple of it: a model asked for N
+ * words can overshoot, and an overshoot must still end as a whole summary.
+ */
+const SUMMARY_CEILING_HEADROOM_FACTOR = 2;
+/**
+ * Output reserved for reasoning. Compaction asks for no reasoning, but a model
+ * that cannot turn it off still reasons at its lowest effort, and a provider
+ * bills that reasoning against the same output ceiling as the summary.
+ */
+const COMPACTION_REASONING_RESERVE_TOKENS = 4096;
+/** English prose runs about four tokens to three words. */
+const WORDS_PER_TOKEN = 0.75;
+
+/** What every compaction summarizer request sends, from one policy. */
+export type CompactionGenerationRequest = {
+  /**
+   * A summary that reaches its output ceiling cannot replace its source
+   * window: doing so would advance the checkpoint past content absent from
+   * the summary.
+   */
+  finishPolicy: "require-complete";
+  maxOutputTokens: number;
+  /** The summarizer's own effort: compaction needs no deliberation. */
+  reasoningEffort: "none";
+  /** The caller's prompt, with the summary's length bound appended. */
+  prompt: string;
+};
+
+/**
+ * The request a compaction summarizer sends for `prompt`. The prompt bounds
+ * the summary (a word target well under the ceiling, sized to the input), and
+ * the ceiling leaves headroom over that target plus a reasoning reserve, so a
+ * summary that follows its instruction always finishes inside the ceiling.
+ * Every compaction call site builds its request here, so the ceiling, the
+ * completion policy and the length the prompt asks for cannot drift apart.
+ */
+export const compactionGenerationRequest = (
+  prompt: string,
+): CompactionGenerationRequest => {
+  const targetTokens = Math.min(
+    MAX_SUMMARY_TARGET_TOKENS,
+    Math.max(
+      MIN_SUMMARY_TARGET_TOKENS,
+      Math.ceil(estimateTextTokens(prompt) * SUMMARY_TARGET_INPUT_SHARE),
+    ),
+  );
+  const targetWords = Math.floor(targetTokens * WORDS_PER_TOKEN);
+  return {
+    finishPolicy: "require-complete",
+    maxOutputTokens:
+      targetTokens * SUMMARY_CEILING_HEADROOM_FACTOR +
+      COMPACTION_REASONING_RESERVE_TOKENS,
+    reasoningEffort: "none",
+    prompt: [
+      prompt,
+      "",
+      `Keep the checkpoint summary under ${targetWords} words. Keep only what the next assistant needs; drop detail it can do without.`,
+    ].join("\n"),
+  };
+};
 
 /**
  * Per-model compaction trigger: half the model's documented input window,

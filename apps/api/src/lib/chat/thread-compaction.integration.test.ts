@@ -20,6 +20,10 @@ import {
   chatThreads,
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import {
+  createChatAttachmentPart,
+  toPersistedChatMessageContentV3,
+} from "@/api/handlers/chat/chat-message-parts";
 import { invalidateChatCompactionChain } from "@/api/handlers/chat/persistent-compaction";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -151,13 +155,9 @@ const seedThread = async ({
         userId: ids.userA1,
         workspaceId: ids.wsA1,
         role: roleFor(index),
-        // Version-1 payloads, matching the sibling history-window fixture: the
-        // compactor reads persisted content directly, so the legacy `text` key
-        // is the shape most worth covering.
-        content: {
-          version: 1 as const,
-          data: [{ type: "text" as const, text: `message ${index}` }],
-        },
+        content: toPersistedChatMessageContentV3({
+          data: [{ type: "text" as const, content: `message ${index}` }],
+        }),
         memoryExtractionEligible: !optedOut.has(offset),
         createdAt: new Date(base + index),
       };
@@ -314,6 +314,29 @@ const transcriptMessageIds = (transcript: string): string[] =>
     .flatMap((id) => (id === undefined ? [] : [id]));
 
 describe("chat thread compaction", () => {
+  test.each(["application/pdf", "image/png"])(
+    "omits canonical %s attachments from compaction prompts",
+    async (mimeType) => {
+      const threadId = await seedThread({ messageCount: 6 });
+      const sourceUrl = "https://files.example/private-attachment-token";
+      await testDb
+        .update(chatMessages)
+        .set({
+          content: toPersistedChatMessageContentV3({
+            data: [createChatAttachmentPart({ mimeType, url: sourceUrl })],
+          }),
+        })
+        .where(eq(chatMessages.threadId, threadId));
+
+      const run = await runCompaction({ threadId });
+      expect(run.outcome.type).toBe("advanced");
+      const prompt = run.prompts.at(0)?.newMessages;
+      expect(prompt).toContain("attachments are not inlined during compaction");
+      expect(prompt).not.toContain(sourceUrl);
+      expect(prompt).not.toContain("source");
+    },
+  );
+
   test("advances the checkpoint exactly once per run", async () => {
     const threadId = await seedThread({ messageCount: 6 });
 

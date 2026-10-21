@@ -183,7 +183,7 @@ export const citationReviewMayReplace = ({
  * which rule match labels a mention, which mention labels a citation, and
  * whether a recheck's verdict is an improvement on the stored one.
  *
- * Severity first. A court that distinguishes or overrules a decision has
+ * Severity first. A court that rejects or overrules a decision has
  * said something stronger than one that also happens to cite it approvingly,
  * so a negative match must never lose to a positive or supportive one.
  * `positive` and `supportive` are deliberately equal: they differ in how
@@ -236,7 +236,7 @@ export const PROMOTION_THRESHOLD = 5;
 /**
  * What each polarity contributes to citation authority.
  *
- * Binary on purpose. A court that overrules or distinguishes a decision is
+ * Binary on purpose. A court that rejects or overrules a decision is
  * not vouching for it, so a negative treatment confers no authority; every
  * other reading does, in full. `mixed` weighs as `negative` does: the citing
  * court departed somewhere, and a departure is not a vouch. That also keeps

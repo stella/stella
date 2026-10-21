@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { compareByLocale } from "@stll/collation";
 import type { CountryCode } from "@stll/country-codes";
 import { CheckIcon, SearchIcon, StarIcon } from "@stll/ui/icons";
 import {
@@ -12,6 +11,7 @@ import {
 } from "@stll/ui/input-group";
 import { cn } from "@stll/ui/utils";
 
+import { filterJurisdictionOptions } from "@/components/jurisdiction-picker.logic";
 import Tooltip from "@/components/tooltip";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
@@ -42,40 +42,15 @@ export const JurisdictionPicker = ({
     (jurisdiction) => jurisdiction.countryCode,
   );
   const countryOptions = createCountryOptions(locale, format.displayName);
+  const filteredCountries = filterJurisdictionOptions({
+    countries: countryOptions,
+    locale,
+    query,
+    selectedCodes,
+    suggestedCodes: suggestedCountryCodes,
+  });
   const selectedSet = new Set(selectedCodes);
   const suggestedSet = new Set(suggestedCountryCodes);
-
-  const filteredCountries = (() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const compareName = compareByLocale(locale);
-    const sorted = countryOptions.toSorted((a, b) => {
-      const aSelected = selectedSet.has(a.code);
-      const bSelected = selectedSet.has(b.code);
-
-      if (aSelected !== bSelected) {
-        return aSelected ? -1 : 1;
-      }
-
-      const aSuggested = suggestedSet.has(a.code);
-      const bSuggested = suggestedSet.has(b.code);
-
-      if (aSuggested !== bSuggested) {
-        return aSuggested ? -1 : 1;
-      }
-
-      return compareName(a.name, b.name);
-    });
-
-    if (!normalizedQuery) {
-      return sorted;
-    }
-
-    return sorted.filter(
-      (country) =>
-        country.name.toLowerCase().includes(normalizedQuery) ||
-        country.code.toLowerCase().includes(normalizedQuery),
-    );
-  })();
 
   const toggleCountry = (countryCode: CountryCode) => {
     if (selectedSet.has(countryCode)) {

@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
-  toChatMessageContent,
+  toPersistedChatMessageContentV3,
   toPersistableChatMessage,
 } from "./chat-message-parts";
 import {
@@ -22,8 +24,7 @@ const chatMessageId = (id: string) => toSafeId<"chatMessage">(id);
 const stored = (message: PersistableChatMessage) => ({
   id: message.id,
   role: message.role,
-  content: toChatMessageContent({
-    version: 2,
+  content: toPersistedChatMessageContentV3({
     data: message.parts,
     metadata: message.metadata,
   }),
@@ -42,6 +43,7 @@ const createDocumentApprovalRespondedMessage = toPersistableChatMessage({
       type: "tool-call",
       id: "tool-create-document-1",
       name: "create-document",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       arguments: JSON.stringify(createDocumentInput),
       state: "input-complete",
       input: createDocumentInput,
@@ -56,6 +58,7 @@ const createDocumentFinishedMessage = toPersistableChatMessage({
       type: "tool-call",
       id: "tool-create-document-1",
       name: "create-document",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       arguments: JSON.stringify(createDocumentInput),
       state: "complete",
       input: createDocumentInput,
@@ -88,6 +91,7 @@ const updateFieldsApprovalRespondedMessage = toPersistableChatMessage({
       type: "tool-call",
       id: "tool-update-entity-fields-1",
       name: "update-entity-fields",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
       arguments: JSON.stringify({
         matterRef: "mat_1",
         entityRef: "ent_1",
@@ -117,6 +121,7 @@ const updateFieldsFinishedMessage = toPersistableChatMessage({
       type: "tool-call",
       id: "tool-update-entity-fields-1",
       name: "update-entity-fields",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
       arguments: JSON.stringify({
         matterRef: "mat_1",
         entityRef: "ent_1",

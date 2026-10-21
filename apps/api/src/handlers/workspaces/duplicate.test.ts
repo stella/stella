@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { member } from "@/api/db/auth-schema";
 import {
@@ -10,6 +12,7 @@ import {
   fields,
   matterCounters,
   properties,
+  propertyDependencies,
   workspaceMembers,
   workspaceViews,
   workspaces,
@@ -232,7 +235,7 @@ const createContext = ({
 describe("duplicateWorkspace", () => {
   for (const featureStatus of ["hidden", "colleague", "enabled"] as const) {
     test(`${featureStatus} copies a matter with permitted views and its lead`, async () => {
-      const insertedWorkspaces: unknown[] = [];
+      const createdWorkspaces: unknown[][] = [];
       const insertedViews: unknown[] = [];
       const insertedWorkspaceMembers: unknown[] = [];
       const insertedAuditLogs: unknown[] = [];
@@ -362,14 +365,9 @@ describe("duplicateWorkspace", () => {
               insertedViews.push(value);
               return undefined;
             }
-            if (table === workspaces) {
-              insertedWorkspaces.push(value);
-              return undefined;
-            }
-
             if (table === workspaceMembers) {
               insertedWorkspaceMembers.push(value);
-              return undefined;
+              return { onConflictDoNothing: async () => undefined };
             }
 
             if (table === auditLogs) {
@@ -384,7 +382,13 @@ describe("duplicateWorkspace", () => {
           expect(table).toBe(matterCounters);
           return { set: () => ({ where: async () => undefined }) };
         },
-        execute: async () => undefined,
+        execute: async (query: SQL) => {
+          const statement = new PgDialect().sqlToQuery(query);
+          if (statement.sql.includes("stella_create_workspace")) {
+            createdWorkspaces.push(statement.params);
+          }
+          return undefined;
+        },
       });
 
       const result = await duplicateWorkspace.handler(
@@ -392,14 +396,18 @@ describe("duplicateWorkspace", () => {
       );
 
       expect(result).toEqual({ workspaceId: expect.any(String) });
-      expect(insertedWorkspaces).toEqual([
-        expect.objectContaining({
-          billingReference: "BILL-123",
-          clientId: "contact_client123",
-          color: "blue",
-          leadUserId: "user_lead123",
-          name: "Smith v Jones",
-        }),
+      // The database creates the matter: id, client, name, reference,
+      // billing reference, color and lead.
+      expect(createdWorkspaces).toEqual([
+        [
+          expect.any(String),
+          "contact_client123",
+          "Smith v Jones",
+          expect.any(String),
+          "BILL-123",
+          "blue",
+          "user_lead123",
+        ],
       ]);
       expect(insertedWorkspaceMembers).toEqual([
         [
@@ -444,6 +452,17 @@ describe("duplicateWorkspace", () => {
         },
         properties: {
           findMany: async () => [
+            {
+              id: "prop_file",
+              workspaceId: "ws_source123",
+              name: "Documents",
+              status: "active",
+              content: { type: "file", version: 1 },
+              tool: { type: "manual-input", version: 1 },
+              system: true,
+              kinds: ["document"],
+              role: null,
+            },
             {
               id: "prop_document_type",
               workspaceId: "ws_source123",
@@ -520,7 +539,11 @@ describe("duplicateWorkspace", () => {
             return undefined;
           }
 
-          if (table === auditLogs || table === workspaces) {
+          if (
+            table === auditLogs ||
+            table === workspaces ||
+            table === propertyDependencies
+          ) {
             return undefined;
           }
 
@@ -539,17 +562,17 @@ describe("duplicateWorkspace", () => {
     );
 
     expect(result).toEqual({ workspaceId: expect.any(String) });
-    expect(insertedProperties).toEqual([
-      [
+    expect(insertedProperties.at(0)).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
           name: "Type de document",
           role: "document-type-classifier",
         }),
-      ],
-    ]);
+      ]),
+    );
   });
 
-  test("copies and remaps image thumbnail refs when duplicating content", async () => {
+  test("copies and remaps image thumbnail refs with a tool-less property", async () => {
     requestNativeExtractionRunsMock.mockClear();
     enqueueDocumentProcessingRunMock.mockClear();
     enqueueWorkspaceSearchRepairsMock.mockClear();

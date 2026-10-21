@@ -18,6 +18,18 @@ reviewed map with its demo-account class (`sessionless`, `sandbox`,
 and however its lint exemption was granted, fails the census until it is
 classified; an entry whose route is gone fails it too.
 
+### `matter-access-census.test.ts`
+
+Static census over every API module that decides matter access outside
+the workspace row policies. The actor's authorized workspace set comes from
+one owner module (`lib/workspaces/authorized-workspace-ids.ts`), which reads
+the same view the policies consult. A module that names that view, combines
+matter membership with an organization-role rule, or filters the owner
+connection by a workspace-id set must take its set from the owner module or
+appear in `matter-access-census.allowlist.json` with a reason. The allowlist
+only shrinks from the merge base, a stale entry fails the census, and a
+self-test proves an unscreened fixture is flagged.
+
 ### `write-handler-permission-coverage.test.ts`
 
 Static census over every `{ config, handler }` endpoint in the handler

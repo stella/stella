@@ -61,6 +61,7 @@ type ReaderPagerData = {
   blocks: Block[];
   citationAnchors: AvailablePage["citationAnchors"];
   provisionAnchors: AvailablePage["provisionAnchors"];
+  provisionStatus: AvailablePage["provisionStatus"];
   nextCursor: string | null;
   complete: boolean;
   phase: AvailablePage["phase"];
@@ -87,6 +88,7 @@ export const createReaderPager = (
   blocks: [],
   citationAnchors: [],
   provisionAnchors: [],
+  provisionStatus: null,
   nextCursor: null,
   complete: false,
   phase: "blocks",
@@ -141,6 +143,14 @@ const validateReaderPageContent = ({
   return null;
 };
 
+const retainProvisionStatus = ({
+  current,
+  page,
+}: {
+  current: AvailablePage["provisionStatus"];
+  page: AvailablePage["provisionStatus"];
+}) => page ?? current;
+
 export const appendReaderPage = ({
   state,
   page,
@@ -153,9 +163,9 @@ export const appendReaderPage = ({
   const stripFragment = (url: string | null) => url?.split("#", 1).at(0);
   if (
     Object.entries(state.metadata).some(
-      ([key, value]) => key !== "appUrl" && metadataEntries.get(key) !== value,
+      ([key, value]) => key !== "url" && metadataEntries.get(key) !== value,
     ) ||
-    stripFragment(state.metadata.appUrl) !== stripFragment(page.metadata.appUrl)
+    stripFragment(state.metadata.url) !== stripFragment(page.metadata.url)
   ) {
     return invalidPage("Decision metadata changed between pages");
   }
@@ -166,6 +176,7 @@ export const appendReaderPage = ({
       blocks: [],
       citationAnchors: [],
       provisionAnchors: [],
+      provisionStatus: null,
       nextCursor: null,
       complete: true,
       phase: "blocks",
@@ -267,6 +278,10 @@ export const appendReaderPage = ({
         ...state.provisionAnchors,
         ...content.provisionAnchors,
       ],
+      provisionStatus: retainProvisionStatus({
+        current: state.provisionStatus,
+        page: content.provisionStatus,
+      }),
       nextCursor: content.nextCursor,
       complete: content.nextCursor === null,
       phase: content.phase,
@@ -282,7 +297,7 @@ const readerDocumentAst = ({ metadata, blocks }: ReaderPager): DocumentAst => ({
   source: {
     system: metadata.country,
     documentId: metadata.decisionId,
-    webUrl: metadata.appUrl ?? "",
+    webUrl: metadata.url ?? "",
     printUrl: "",
   },
   metadata: {

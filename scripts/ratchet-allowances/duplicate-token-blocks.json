@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 2,
+  "reason": "The citations cassette is one recorded answer kept verbatim as a development fixture; its repeated token runs are recorded content, not logic that could be shared."
+}
