@@ -894,7 +894,7 @@
     "qualifier": "Checks; no publication, tag creation, or deployment.",
     "reviewedDigest": "17aa585fbe532b579ad7ed376a90e33574e8af0a82eb3c031f3a3abe04afb344"
   },
-  "supplier1:.github/workflows/provenance-update.yml/update": {
+  "supplier5:.github/workflows/provenance-update.yml/update": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
     "reviewedDigest": "9eaf5c122a6e9b3eef029290ec0c7c5a93c5160ae26bab2d63ce0b48a27cc595"
