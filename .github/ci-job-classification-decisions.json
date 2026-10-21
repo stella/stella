@@ -12,7 +12,7 @@
   "candidate:.github/workflows/generated-conflicts-resolve.yml/resolve": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "bac521ea5e6bbfe25c89fecbeac5f82cf09551a09f29874efe7a512cc1f6dc15"
+    "reviewedDigest": "724cf55a37d11f00d71fc7dab4cdd98bf8941d1c71f906ac7c4c63dbcc0bdcc2"
   },
   "candidate:.github/workflows/agent-sandbox-canary.yml/real-model-mcp-canary": {
     "kind": "ordinary",
@@ -82,7 +82,7 @@
   "candidate:.github/workflows/autofix.yml/regenerate-derived-files": {
     "kind": "ordinary",
     "qualifier": "Regenerates and pushes scoped pull-request autofix commits; no release publication, tag creation, or deployment.",
-    "reviewedDigest": "b6d6b0e02ba27f82460f03ebb604caafb00a2ad5285370da0db81d1ccc11383a"
+    "reviewedDigest": "565960a6840e39449879703862e8a2fa4290b0442e62c11439fa8545c8841334"
   },
   "candidate:.github/workflows/bot-refresh-auto-merge.yml/arm": {
     "kind": "ordinary",
