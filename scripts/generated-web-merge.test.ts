@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 const repository = path.resolve(import.meta.dir, "..");
 const generators = ["apps/api/scripts/generate-web-api-types.ts"];
@@ -121,6 +121,13 @@ const fixture = () => {
       directory,
       file: ".gitignore",
       source: readFileSync(path.join(repository, ".gitignore"), "utf-8"),
+    });
+    // The generator checks what the compiler read against the Turbo inputs it
+    // declares, as in a real checkout.
+    write({
+      directory,
+      file: "turbo.json",
+      source: readFileSync(path.join(repository, "turbo.json"), "utf-8"),
     });
     write({
       directory,

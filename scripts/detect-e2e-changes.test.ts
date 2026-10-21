@@ -608,9 +608,20 @@ describe("detect-e2e-changes", () => {
       workflowJob("ci-plan"),
       "Plan changed PR e2e shards",
     );
-    const fullMatrix = '{"shard":["full"]}';
+    const fullMatrix = '{"shard":["full","network-baseline"]}';
+    // A merge group that runs route-smoke drops the duplicate network leg.
+    const fullWithoutNetwork = '{"shard":["full"]}';
     const selectedMatrix = '{"shard":["selected"]}';
     const selectedSpecs = '["e2e/specs/selected.spec.ts"]';
+    const planEnv = workflowStepByName(
+      workflowJobSteps(ciWorkflow, "ci-plan"),
+      "Plan changed PR e2e shards",
+    )["env"];
+    const declaredEnv =
+      typeof planEnv === "object" && planEnv !== null
+        ? Object.keys(planEnv)
+        : [];
+    expect(declaredEnv).toContain("ROUTE_SMOKE_REQUIRED");
     const root = mkdtempSync(path.join(tmpdir(), "e2e-plan-outputs-"));
     const output = path.join(root, "outputs");
     try {
@@ -621,8 +632,30 @@ describe("detect-e2e-changes", () => {
       ]) {
         for (const outcome of ["success", "failure", "skipped"]) {
           for (const matrix of ["", '{"shard":[]}', selectedMatrix]) {
-            for (const required of ["true", "false"]) {
+            for (const [required, routeSmoke] of [
+              ["true", "true"],
+              ["true", "false"],
+              ["false", "true"],
+              ["false", "false"],
+            ] as const) {
               writeFileSync(output, "fixture=preserved\n");
+              const env = {
+                PATH: "/usr/bin:/bin",
+                GITHUB_OUTPUT: output,
+                EVENT_NAME: event,
+                SELECTOR_OUTCOME: outcome,
+                SELECTED_MATRIX: matrix,
+                SELECTED_MODE: "selected",
+                SELECTED_SPECS: selectedSpecs,
+                E2E_PRODUCTION_REQUIRED: required,
+                ROUTE_SMOKE_REQUIRED: routeSmoke,
+                FULL_MATRIX: fullMatrix,
+              };
+              // The harness supplies every variable the step declares, so a
+              // new step input fails here instead of as an unbound variable.
+              expect(Object.keys(env)).toEqual(
+                expect.arrayContaining(declaredEnv),
+              );
               const result = Bun.spawnSync(
                 [
                   "/bin/bash",
@@ -634,17 +667,7 @@ describe("detect-e2e-changes", () => {
                 ],
                 {
                   cwd: root,
-                  env: {
-                    PATH: "/usr/bin:/bin",
-                    GITHUB_OUTPUT: output,
-                    EVENT_NAME: event,
-                    SELECTOR_OUTCOME: outcome,
-                    SELECTED_MATRIX: matrix,
-                    SELECTED_MODE: "selected",
-                    SELECTED_SPECS: selectedSpecs,
-                    E2E_PRODUCTION_REQUIRED: required,
-                    FULL_MATRIX: fullMatrix,
-                  },
+                  env,
                   stdout: "pipe",
                   stderr: "pipe",
                 },
@@ -655,9 +678,15 @@ describe("detect-e2e-changes", () => {
                 outcome === "success" &&
                 matrix !== "";
               const emptySelection = usesSelection && matrix === '{"shard":[]}';
+              let expectedMatrix = fullMatrix;
+              if (usesSelection) {
+                expectedMatrix = matrix;
+              } else if (event === "merge_group" && routeSmoke === "true") {
+                expectedMatrix = fullWithoutNetwork;
+              }
               expect(readFileSync(output, "utf-8").trim().split("\n")).toEqual([
                 "fixture=preserved",
-                `matrix=${usesSelection ? matrix : fullMatrix}`,
+                `matrix=${expectedMatrix}`,
                 `mode=${usesSelection ? "selected" : "full"}`,
                 `specs=${usesSelection ? selectedSpecs : "[]"}`,
                 `selection_required=${String(!emptySelection)}`,

@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { afterAll } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import type { AIErrorKind } from "@stll/api-contract";
 import { repoRelativePath } from "@stll/portable-path";

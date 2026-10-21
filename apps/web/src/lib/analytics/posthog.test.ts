@@ -740,6 +740,39 @@ describe("PostHog browser analytics adapter", () => {
     expect(captureExceptionMock).not.toHaveBeenCalled();
   });
 
+  test("key action timings send the action, surface and bucket only", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+
+    analytics.captureKeyActionTiming({
+      action: "search-results",
+      durationBucketMs: 750,
+      surface: "case-law",
+    });
+
+    expect(captureMock).toHaveBeenCalledWith(
+      WEB_ANALYTICS_EVENTS.keyActionTimed,
+      { action: "search-results", durationBucketMs: 750, surface: "case-law" },
+    );
+    expect(
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.keyActionTimed,
+        properties: {
+          action: "search-results",
+          durationBucketMs: 750,
+          surface: "case-law",
+          title: "Client Smith v Example",
+        },
+      })?.properties,
+    ).toEqual({
+      action: "search-results",
+      durationBucketMs: 750,
+      surface: "case-law",
+    });
+  });
+
   test("captureError ignores null and undefined", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",

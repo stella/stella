@@ -4,7 +4,7 @@ import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -455,7 +455,7 @@ if (!databaseUrl || !runPostgresTests) {
               );
             },
           ),
-          { numRuns: 8 },
+          propertyConfig({ numRuns: 8 }),
         );
       });
     }, 120_000);

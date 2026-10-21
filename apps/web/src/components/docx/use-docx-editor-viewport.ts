@@ -7,10 +7,16 @@ import { composeRefs } from "@stll/ui/utils";
 import { useDocxFitZoom } from "@/components/docx-preview-zoom";
 import { useDocxFind } from "@/components/docx/use-docx-find";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import type { DocumentTimingSurface } from "@/lib/analytics/types";
 import { useFindSurface } from "@/lib/find-owner";
 
 /** The inspector docks the editor beside the page; full view owns the page. */
 export type DocxEditorSurface = "fullView" | "inspector";
+
+export const DOCX_TIMING_SURFACE = {
+  fullView: "full-view",
+  inspector: "inspector",
+} as const satisfies Record<DocxEditorSurface, DocumentTimingSurface>;
 
 type UseDocxEditorViewportOptions = {
   containerRef: RefObject<HTMLDivElement | null>;
