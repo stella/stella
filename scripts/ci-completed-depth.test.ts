@@ -428,7 +428,11 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
     outputs: planner.outputs,
   });
   for (const [name, job] of Object.entries(jobs)) {
-    if (name === "ci-plan" || name === "ci-result") {
+    if (
+      name === "ci-plan" ||
+      name === "ci-result" ||
+      name.endsWith("-cancel")
+    ) {
       continue;
     }
     expect(evaluate(job.if ?? "true", reused), name).toBe(
@@ -573,7 +577,10 @@ const recordEvidence = (
         JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
         FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
         FAST_REQUIRED: resultEnv["FAST_REQUIRED"] ?? "",
-        PLAN: JSON.stringify({ package_checks_required: "true" }),
+        PLAN: JSON.stringify({
+          ci_tests_required: "true",
+          package_checks_required: "true",
+        }),
         NEEDS: JSON.stringify(
           Object.fromEntries(
             Object.entries(results).map(([job, outcome]) => [
@@ -998,7 +1005,7 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
   // Even the wall-clock quick checks skip: the merge group runs them on the
   // queued tree, so an enqueued head starts no job besides the plan and result.
   for (const [name, job] of Object.entries(jobs)) {
-    if (["ci-plan", "ci-result"].includes(name)) {
+    if (["ci-plan", "ci-result"].includes(name) || name.endsWith("-cancel")) {
       continue;
     }
     expect(evaluate(job.if ?? "true", enqueued), name).toBe(false);
@@ -1145,6 +1152,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
           "needs.ci-plan.outputs.queue_depth": "thin",
           "needs.ci-plan.result": "success",
           "needs.pr-heavy-gate.result": "skipped",
+          "needs.generated-sources.result": "success",
           "needs.web-build.result": "success",
           "needs.heavy-web-build.result": "skipped",
           "inputs.pr_depth_only": false,

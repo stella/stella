@@ -154,6 +154,7 @@ export const answerRequestError = ({
       capture: captured,
     }),
     request,
+    route: getRouteName(route),
     requestState: {
       answeredStatus: statusCode,
       framework: elysiaFailureReason(code, error),
@@ -258,9 +259,13 @@ export const withFinalResponseCompletion = async (
 // The completion record grades its answer by the failure the request
 // observed. A 5xx with none observed (a handler that returned the status
 // itself) is counted as such, at the severity it always had.
-const completionFailure = (request: Request, statusCode: number) =>
+const completionFailure = (
+  request: Request,
+  statusCode: number,
+  route: string | undefined,
+) =>
   getRequestFailure(request) ??
-  (statusCode >= 500 ? observeUnobserved5xx() : undefined);
+  (statusCode >= 500 ? observeUnobserved5xx(getRouteName(route)) : undefined);
 
 /** The server's `onAfterHandle` hook: the completion record and flush. */
 export const completeRequest = async ({
@@ -295,7 +300,9 @@ export const completeRequest = async ({
       reqCtx,
     });
     const failure =
-      statusCode >= 400 ? completionFailure(request, statusCode) : undefined;
+      statusCode >= 400
+        ? completionFailure(request, statusCode, route)
+        : undefined;
 
     if (statusCode >= 500) {
       logger.request({

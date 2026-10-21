@@ -311,6 +311,7 @@ test("the real generation runtime receives sanitized state and the canonical dec
     generation: {
       task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -371,6 +372,7 @@ test("a generative runtime deadline stays a typed undecided result without cance
     generation: {
       task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -511,6 +513,7 @@ test("choice generation sends a closed probability schema through the real runti
     generation: {
       task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -545,6 +548,7 @@ test("the generation deadline bounds a stalled resolver without aborting the cal
     generation: {
       task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -637,6 +641,7 @@ test.each(["success", "failed-middle", "stalled-middle"])(
       generation: {
         task: "classify",
         dataClass: "customer",
+        userId: null,
         orgAIConfig: null,
         managedAIResidency: "eu",
         organizationId,
@@ -1078,7 +1083,7 @@ describe("a failed call", () => {
       orgAIConfig: null,
       state,
       questions: { signed: signedQuestion },
-      timeoutMs: 1,
+      timeoutMs: 1, // timeout under test
       client: decisionModel(fetcher),
     });
 
@@ -1207,6 +1212,7 @@ test("a question that cannot fit the provider budget fails without dispatching",
     generation: {
       task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
