@@ -47,3 +47,29 @@ clearTimeout(setTimeout(() => undefined, 5));
 // real-time: the delay itself is what this case measures
 // expect-clean: test-timing/no-real-time-wait
 await Bun.sleep(5);
+
+// --- no-polling-loop ---
+
+declare const done: () => boolean;
+
+// a counted loop whose test also asks the system under test
+// oxlint-disable-next-line test-timing/no-polling-loop
+for (let attempt = 0; attempt < 100 && !done(); attempt += 1) {
+  // oxlint-disable-next-line test-timing/no-real-time-wait
+  await sleep(5);
+}
+
+// a conditional exit between scheduler ticks
+// oxlint-disable-next-line test-timing/no-polling-loop
+while (true) {
+  if (done()) {
+    break;
+  }
+  await Promise.resolve();
+}
+
+// a fixed-count flush is not a poll
+// expect-clean: test-timing/no-polling-loop
+for (let pass = 0; pass < 3; pass += 1) {
+  await Promise.resolve();
+}

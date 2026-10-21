@@ -1,5 +1,340 @@
 [
   {
+    "id": "no-polling-loop::apps/api/scripts/test-lanes.test.ts::<module>::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/scripts/test-process-supervisor.test.ts::<module>::for",
+    "count": 2,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/scripts/test-process-supervisor.test.ts::<module>::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/db/backfill-runtime-load-reader.db.test.ts::<module>::while",
+    "count": 2,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts::waitUntilBlocked::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/db/entity-feature-gate-maintenance.postgres.test.ts::waitUntilBlocked::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/db/migration-runner.db.test.ts::<module>::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/db/migration-runner.db.test.ts::<module>::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/db/migration-runner.db.test.ts::waitUntilBlocked::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/db/online-ddl-contention.postgres.test.ts::wait::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/db/online-index-gate.postgres.test.ts::<module>::for",
+    "count": 3,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/db/online-index-gate.postgres.test.ts::wait::for",
+    "count": 2,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/db/online-index-gate.postgres.test.ts::waitForPhase::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/db/online-repair-holds.db.test.ts::wait::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/case-law/ingestion/background-replay.postgres.test.ts::waitForState::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/case-law/ingestion/pipeline-identity.db.test.ts::<module>::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/case-law/ingestion/source-totals.db.test.ts::<module>::while",
+    "count": 2,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/chat/chat-turn-run-ownership.integration.test.ts::<module>::for",
+    "count": 2,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/chat/chat-turn-run-ownership.integration.test.ts::<module>::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.test.ts::waitForCondition::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.test.ts::waitForCondition::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/expenses/immutability.postgres.test.ts::<module>::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/invoices/pdf/typst/session.test.ts::untilExited::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/legal-reader/answers/stream-deadline.postgres.test.ts::observeBlockedSettlement::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/lists/columns/create.postgres.test.ts::<module>::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/rates/default-concurrency.postgres.test.ts::observeBlocking::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/search-history/import-clock.integration.test.ts::acquireClockAfter::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts::<module>::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/case-law/analysis-failure-sweep.postgres.test.ts::<module>::while",
+    "count": 2,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/db-query-counter.test.ts::loop::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/db/member-access-hold.postgres.test.ts::<module>::for",
+    "count": 2,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/db/member-access-hold.postgres.test.ts::expectTransactionToBlockClient::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/db/rls-role-posture.db.test.ts::withElevatedApplicationRole::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/db/tree-parent-guard.postgres.test.ts::observeBlocked::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/email/correspondence/account-erasure-lock.postgres.test.ts::waitForWriterGate::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/email/inbound/sender.postgres.test.ts::<module>::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts::waitForIngestIdle::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/lists/sanctions/monitoring-claims.postgres.test.ts::<module>::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts::blockersFor::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/lists/sanctions/monitoring-opt-out.postgres.test.ts::<module>::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/machine-api-keys/personal-lifecycle.postgres.test.ts::<module>::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/member-removal-locks.postgres.test.ts::waitUntilBlocked::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/member-removal-locks.postgres.test.ts::waitUntilHolding::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/member-role-invariants.postgres.test.ts::waitForMembershipBlock::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/observability/request-context.test.ts::backgroundLoop::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/lib/usage/member-capacity.postgres.test.ts::<module>::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/scripts/corpus-generation.postgres.test.ts::waitingOn::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/scripts/eu-completion-tick.postgres.test.ts::<module>::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/collab/src/server.test.ts::waitFor::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/desktop/tests/browser/clipboard-keyboard.playwright.spec.ts::waitForTooltip::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/web/src/features/chat/chat-runtime-emit.test.ts::waitFor::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/web/src/features/chat/chat-runtime-stop.test.ts::<module>::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx::commitRateWhileStreaming::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/web/src/features/knowledge/playbook-editor/playbook-editor-lifecycle.dom.test.tsx::<module>::while",
+    "count": 3,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/web/src/features/knowledge/playbook-editor/playbook-editor-lifecycle.dom.test.tsx::disposeLifecycleFixture::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/web/src/lib/files/attached-template-upload.test.ts::waitForAttachedTemplatePrompt::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/web/src/lib/upload-queue.test.ts::<module>::while",
+    "count": 2,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.dom.test.tsx::settleAll::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::packages/infosoud/src/client.test.ts::waitForCondition::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::packages/scripts/src/dev-process-groups.test.ts::disposeTree::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::packages/scripts/src/generation-lock.test.ts::waitFor::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::packages/scripts/src/process-memory.test.ts::<module>::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::packages/scripts/src/windows-process-ownership.test.ts::<module>::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::scripts/fetch-public-documents.test.ts::<module>::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::scripts/gh-retry-processes.test.ts::waitForFile::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::scripts/parser-output-diff.test.ts::<module>::while",
+    "count": 3,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::scripts/pre-push-affected.test.ts::<module>::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
     "id": "no-real-time-wait::apps/api/scripts/test-db-snapshot-cache.test.ts::build::Bun.sleep",
     "count": 2,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."

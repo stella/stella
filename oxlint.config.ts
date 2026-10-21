@@ -474,6 +474,7 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("test-timing.fixture.ts", [
     "test-timing/no-real-time-wait",
+    "test-timing/no-polling-loop",
   ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
     "no-untyped-updates/no-untyped-updates",
@@ -1941,6 +1942,7 @@ const config = defineConfig({
       files: ["**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}"],
       rules: {
         "test-timing/no-real-time-wait": "error",
+        "test-timing/no-polling-loop": "error",
       },
     },
     {

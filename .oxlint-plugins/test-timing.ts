@@ -24,6 +24,24 @@
 //       the test advances the clock itself
 //     a site with a `// real-time: <reason>` comment
 //
+// no-polling-loop
+//   Flagged: a `for`, `while` or `do`-`while` loop that waits on the clock or
+//     the scheduler on each pass and keeps going until a predicate holds:
+//       for (let i = 0; i < 100 && !done(); i++) await sleep(5);
+//       while (true) { if (ready()) break; await Bun.sleep(10); }
+//       while (!seen) await new Promise((r) => setImmediate(r));
+//     A wait is any `no-real-time-wait` form, a scheduler tick (`await
+//     Promise.resolve()`, a promise settled from `setImmediate`,
+//     `queueMicrotask` or `requestAnimationFrame`, `setImmediate` from
+//     `timers/promises`), or a call to a function of the same file that
+//     waits, anywhere in the loop's body, test or update (callbacks included:
+//     `await act(async () => sleep(5))` waits too). The loop polls when a
+//     conditional `break`/`return`/`throw` in its body, or a test other than
+//     `true` or a bare counter the loop advances, decides when it stops.
+//   Allowed: a fixed-count flush (`for (let i = 0; i < 3; i++) await tick()`)
+//     and a loop with a `// real-time: <reason>` comment. The fix is to
+//     await the signal that makes the predicate true.
+//
 // Existing sites are budgeted per file, enclosing function and spelling in
 // scripts/test-timing-ledger.json (no line numbers, a reason per row). A hit
 // beyond its budget is reported, and so is a budget the code no longer
@@ -36,6 +54,7 @@ import { createBudgetLedger } from "./budget-ledger.ts";
 import {
   type AstNode,
   type ScopeContext,
+  everyNode,
   filenameForContext,
   isAstNode,
   isIdentifier,
@@ -43,10 +62,12 @@ import {
   memberPropertyName,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
+  stableInitializer,
   unwrapExpression,
 } from "./utils.ts";
 
 const REAL_TIME_WAIT_RULE = "no-real-time-wait";
+const POLLING_LOOP_RULE = "no-polling-loop";
 const LEDGER_PATH = "scripts/test-timing-ledger.json";
 
 const { tracker: budgetTracker, staleMessage: STALE_MESSAGE } =
@@ -100,7 +121,7 @@ const enclosingStatement = (node: AstNode): AstNode => {
 
 type TaggedLookup = {
   comments: readonly SourceComment[];
-  node: AstNode;
+  node: unknown;
   pattern: RegExp;
   text: string;
 };
@@ -123,6 +144,9 @@ const taggedOnLineOf = (
 // in the unbroken run of own-line comments directly above the statement.
 const hasTaggedComment = (lookup: TaggedLookup): boolean => {
   const { comments, node, pattern, text } = lookup;
+  if (!isAstNode(node)) {
+    return false;
+  }
   const statement = enclosingStatement(node);
   if (
     taggedOnLineOf(lookup, node.range[0]) ||
@@ -349,6 +373,180 @@ const installsFakeTimers = (node: unknown): boolean => {
 
 const WAIT_HINT = /sleep|setTimeout|setInterval|waitForTimeout/u;
 
+// --- Polling loops -----------------------------------------------------------
+
+const TICK_SCHEDULERS = [
+  "queueMicrotask",
+  "requestAnimationFrame",
+  "setImmediate",
+] as const;
+
+const TICK_EXPORTS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["node:timers/promises", new Set(["setImmediate"])],
+  ["timers/promises", new Set(["setImmediate"])],
+]);
+
+// A yield to the scheduler rather than to the work.
+const isSchedulerTick = (context: ScopeContext, node: AstNode): boolean => {
+  if (node.type === "NewExpression") {
+    return promiseScheduledBy(context, node, TICK_SCHEDULERS) !== null;
+  }
+  if (node.type !== "CallExpression") {
+    return false;
+  }
+  const callee = unwrapExpression(node.callee);
+  if (
+    isAstNode(callee) &&
+    callee.type === "MemberExpression" &&
+    memberPropertyName(callee) === "resolve" &&
+    isGlobalReference(context, callee.object, "Promise")
+  ) {
+    // `await Promise.resolve()` yields a tick; `Promise.resolve(value)` is a
+    // value a fake hands back.
+    return (
+      Array.isArray(node.arguments) &&
+      node.arguments.length === 0 &&
+      isAstNode(node.parent) &&
+      node.parent.type === "AwaitExpression"
+    );
+  }
+  const binding = resolveImportedExpressionForEnforcement(context, callee);
+  return (
+    binding !== null &&
+    TICK_EXPORTS.get(binding.source)?.has(binding.imported) === true
+  );
+};
+
+// The function a callee names when this file declares it: a function
+// declaration, or a binding assigned once to a function expression.
+const localFunction = (
+  context: ScopeContext,
+  callee: unknown,
+): AstNode | null => {
+  const expression = unwrapExpression(callee);
+  if (!isIdentifierReference(expression)) {
+    return null;
+  }
+  const variable = resolveVariable(context, expression);
+  const definition = variable?.defs.at(0);
+  if (variable === null || definition === undefined) {
+    return null;
+  }
+  if (definition.type === "FunctionName") {
+    return isFunctionNode(definition.node) ? definition.node : null;
+  }
+  const initializer = unwrapExpression(stableInitializer(variable));
+  return isFunctionNode(initializer) ? initializer : null;
+};
+
+// Whether running `root` waits on the clock or the scheduler, directly, in a
+// callback it passes, or through a function of this file it calls.
+const waitsOnClock = (
+  context: ScopeContext,
+  root: unknown,
+  seen = new Set<AstNode>(),
+): boolean =>
+  everyNode(root).some((node) => {
+    if (
+      realTimeWait(context, node) !== null ||
+      isSchedulerTick(context, node)
+    ) {
+      return true;
+    }
+    if (node.type !== "CallExpression") {
+      return false;
+    }
+    const helper = localFunction(context, node.callee);
+    if (helper === null || seen.has(helper)) {
+      return false;
+    }
+    seen.add(helper);
+    return waitsOnClock(context, helper.body, seen);
+  });
+
+const LOOP_PATTERNS: ReadonlyMap<string, string> = new Map([
+  ["DoWhileStatement", "do-while"],
+  ["ForStatement", "for"],
+  ["WhileStatement", "while"],
+]);
+
+const EXIT_TYPES: ReadonlySet<string> = new Set([
+  "BreakStatement",
+  "ReturnStatement",
+  "ThrowStatement",
+]);
+
+// A `break`, `return` or `throw` under an `if` of the loop's own body.
+const hasConditionalExit = (body: unknown): boolean =>
+  ownNodes(body).some(
+    (node) =>
+      node.type === "IfStatement" &&
+      ownNodes([node.consequent, node.alternate]).some((inner) =>
+        EXIT_TYPES.has(inner.type),
+      ),
+  );
+
+const COUNTER_OPERATORS: ReadonlySet<string> = new Set(["<", "<=", ">", ">="]);
+
+const advancesCounter = (positions: unknown, name: string): boolean =>
+  ownNodes(positions).some(
+    (node) =>
+      (node.type === "UpdateExpression" &&
+        isIdentifier(unwrapExpression(node.argument), name)) ||
+      (node.type === "AssignmentExpression" &&
+        (node.operator === "+=" || node.operator === "-=") &&
+        isIdentifier(unwrapExpression(node.left), name)),
+  );
+
+// A bound read without waiting: `3`, `max`, `items.length`,
+// `action.intervals`, `Number(count) + 2`.
+const isCountBound = (node: unknown): boolean =>
+  isAstNode(node) &&
+  ownNodes(node).every((inner) => inner.type !== "AwaitExpression");
+
+// `i < 3`, `attempt <= max + 1`: a counter the loop itself advances, compared
+// with a bound it reads without waiting. Such a loop runs a fixed number of
+// passes whatever the system under test does.
+const isCounterTest = (loop: AstNode): boolean => {
+  const test = unwrapExpression(loop.test);
+  if (
+    !isAstNode(test) ||
+    test.type !== "BinaryExpression" ||
+    typeof test.operator !== "string" ||
+    !COUNTER_OPERATORS.has(test.operator)
+  ) {
+    return false;
+  }
+  const positions = [
+    loop.body,
+    loop.type === "ForStatement" ? loop.update : null,
+  ];
+  return [
+    [test.left, test.right],
+    [test.right, test.left],
+  ].some(([counter, bound]) => {
+    const name = unwrapExpression(counter);
+    return (
+      isIdentifier(name) &&
+      isCountBound(bound) &&
+      advancesCounter(positions, name.name)
+    );
+  });
+};
+
+const isTrueLiteral = (node: unknown): boolean => {
+  const test = unwrapExpression(node);
+  return isAstNode(test) && test.type === "Literal" && test.value === true;
+};
+
+// Whether a predicate, not a pass count, decides when the loop stops.
+const stopsOnPredicate = (loop: AstNode): boolean =>
+  hasConditionalExit(loop.body) ||
+  (isAstNode(loop.test) && !isTrueLiteral(loop.test) && !isCounterTest(loop));
+
+const POLL_HINT =
+  /sleep|setTimeout|setInterval|setImmediate|waitForTimeout|queueMicrotask|requestAnimationFrame|Promise\.resolve/u;
+
 type WaitSite = { node: ESTree.Node; wait: Wait };
 
 export default eslintCompatPlugin({
@@ -424,6 +622,78 @@ export default eslintCompatPlugin({
                 context.report({ node: site, ...report });
               }
             }
+            for (const report of tracker.stale()) {
+              context.report({ node, ...report });
+            }
+          },
+        };
+      },
+    },
+    [POLLING_LOOP_RULE]: {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          poll:
+            "This `{{pattern}}` loop polls: it waits on the clock or the " +
+            "scheduler until a condition holds, so it passes or fails with " +
+            "the machine's load. Await the signal that makes the condition " +
+            "true (the promise the work returns, a `Promise.withResolvers` it " +
+            "settles, an event); when real time is the behaviour under test, " +
+            "say so with `// real-time: <reason>`. Ledger key: {{key}}",
+          stale: STALE_MESSAGE,
+        },
+      },
+      createOnce(context) {
+        const tracker = budgetTracker(POLLING_LOOP_RULE);
+        let hinted = false;
+        let comments: readonly SourceComment[] | null = null;
+
+        const check = (loop: ESTree.Node) => {
+          const node: unknown = loop;
+          const pattern = LOOP_PATTERNS.get(loop.type);
+          if (
+            !hinted ||
+            pattern === undefined ||
+            !isAstNode(node) ||
+            !stopsOnPredicate(node) ||
+            !waitsOnClock(context, [
+              node.body,
+              node.test,
+              node.type === "ForStatement" ? node.update : null,
+            ])
+          ) {
+            return;
+          }
+          comments ??= context.sourceCode
+            .getAllComments()
+            .filter(isSourceComment);
+          if (
+            hasTaggedComment({
+              comments,
+              node,
+              pattern: REAL_TIME_REASON,
+              text: context.sourceCode.text,
+            })
+          ) {
+            return;
+          }
+          const report = tracker.record(loop, pattern, "poll");
+          if (report !== null) {
+            context.report({ node: loop, ...report });
+          }
+        };
+
+        return {
+          before() {
+            tracker.reset(filenameForContext(context));
+            hinted = POLL_HINT.test(context.sourceCode.text);
+            comments = null;
+          },
+          DoWhileStatement: check,
+          ForStatement: check,
+          WhileStatement: check,
+          "Program:exit"(node) {
             for (const report of tracker.stale()) {
               context.report({ node, ...report });
             }
