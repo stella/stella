@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { deepEquals } from "bun";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   generateClassification,
@@ -9,6 +10,10 @@ import {
   readClassificationInputsAtRevision,
 } from "./ci-job-classification/generate";
 import type { DerivedJob } from "./ci-job-classification/generate";
+import {
+  CLASSIFICATION_DECISIONS_PATH,
+  isClassificationInput,
+} from "./ci-job-classification/inputs";
 import { ReviewRequiredError } from "./ci-job-classification/review";
 import { AdmissionError } from "./ci-job-classification/yaml";
 
@@ -59,6 +64,91 @@ const sensitiveChanges = ({
     return current?.privileged || previous?.privileged ? [key] : [];
   });
 
+// A stale digest is a mechanical refresh only when nothing a reviewer decides
+// moved: the job existed at the base, its kind and qualifier are unchanged,
+// and it is not privileged at either revision. New jobs, kind or qualifier
+// edits and every privileged job keep failing until a human reviews them.
+const mechanicalRefreshes = ({
+  head,
+  headDecisions,
+  base,
+  baseDecisions,
+}: SensitiveChangesOptions) =>
+  [...head.jobs].flatMap(([key, job]) => {
+    const decision = headDecisions[key];
+    const previousDecision = baseDecisions[key];
+    const previous = base.jobs.get(key);
+    if (
+      decision === undefined ||
+      decision.reviewedDigest === job.digest ||
+      previousDecision === undefined ||
+      previous === undefined ||
+      decision.kind !== previousDecision.kind ||
+      decision.qualifier !== previousDecision.qualifier ||
+      job.privileged ||
+      previous.privileged
+    ) {
+      return [];
+    }
+    return [{ key, digest: job.digest }];
+  });
+
+const generateBase = (root: string, base: string) => {
+  const inputs = readClassificationInputsAtRevision(root, base);
+  const generation = generateWithJobs(inputs);
+  if (
+    generation.result.isErr() &&
+    !(generation.result.error instanceof ReviewRequiredError)
+  ) {
+    throw generation.result.error;
+  }
+  return { inputs, generation };
+};
+
+const DECISION_FILE = v.record(v.string(), v.record(v.string(), v.unknown()));
+
+// Rewrites only the digests of mechanical refreshes; every other byte of the
+// decisions file is reproduced from its parsed form.
+export const refreshJobClassificationDigests = (root: string, base: string) =>
+  Result.try({
+    try: () => {
+      const headInputs = readClassificationInputs(root);
+      const head = generateWithJobs(headInputs);
+      const baseRevision = generateBase(root, base);
+      const refreshes = mechanicalRefreshes({
+        head,
+        headDecisions: headInputs.decisions,
+        base: baseRevision.generation,
+        baseDecisions: baseRevision.inputs.decisions,
+      });
+      if (refreshes.length > 0) {
+        const file = path.resolve(root, CLASSIFICATION_DECISIONS_PATH);
+        const decisions = v.parse(
+          DECISION_FILE,
+          JSON.parse(readFileSync(file, "utf-8")),
+        );
+        for (const { key, digest } of refreshes) {
+          const decision = decisions[key];
+          if (decision === undefined) {
+            throw new AdmissionError({
+              message: `Decision disappeared while refreshing: ${key}`,
+            });
+          }
+          decision["reviewedDigest"] = digest;
+        }
+        writeFileSync(file, `${JSON.stringify(decisions, null, 2)}\n`);
+      }
+      return { refreshed: refreshes.map(({ key }) => key) };
+    },
+    catch: (cause) =>
+      new AdmissionError({
+        message:
+          cause instanceof Error
+            ? cause.message
+            : "Classification digest refresh failed",
+      }),
+  });
+
 export const checkJobClassification = (root: string, base?: string) =>
   Result.try({
     try: () => {
@@ -66,19 +156,12 @@ export const checkJobClassification = (root: string, base?: string) =>
       const head = generateWithJobs(headInputs);
       const privilegedJobs = base
         ? (() => {
-            const baseInputs = readClassificationInputsAtRevision(root, base);
-            const baseGeneration = generateWithJobs(baseInputs);
-            if (
-              baseGeneration.result.isErr() &&
-              !(baseGeneration.result.error instanceof ReviewRequiredError)
-            ) {
-              throw baseGeneration.result.error;
-            }
+            const baseRevision = generateBase(root, base);
             return sensitiveChanges({
               head,
               headDecisions: headInputs.decisions,
-              base: baseGeneration,
-              baseDecisions: baseInputs.decisions,
+              base: baseRevision.generation,
+              baseDecisions: baseRevision.inputs.decisions,
             });
           })()
         : [];
@@ -122,13 +205,25 @@ const gitMergeBase = (root: string) => {
 const escapeAnnotation = (value: string) =>
   value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
-type CliOptions = { root: string; base?: string };
+// --check (the default) fails closed on every stale or missing review.
+// --write refreshes mechanical digests only and succeeds even when review
+// remains, so the autofix generator never blocks other fixes; the check
+// still fails for whatever it left. --pre-push runs only when the pushed
+// commits touch a classification input, refreshes, and fails when it
+// changed the decisions file or review remains.
+type Mode = "check" | "write" | "pre-push";
+type CliOptions = { root: string; base?: string; mode: Mode };
+const MODE_FLAGS: Readonly<Record<string, Mode>> = {
+  "--check": "check",
+  "--write": "write",
+  "--pre-push": "pre-push",
+};
 const usageError = () =>
   new AdmissionError({
     message:
-      "usage: bun scripts/check-ci-job-classification.ts [ROOT] [--base REF]",
+      "usage: bun scripts/check-ci-job-classification.ts [--check|--write|--pre-push] [ROOT] [--base REF]",
   });
-const parseCli = (args: string[]): CliOptions => {
+const parsePositional = (args: string[]): Omit<CliOptions, "mode"> => {
   const [first, second, third, ...rest] = args;
   if (rest.length > 0) {
     throw usageError();
@@ -150,20 +245,57 @@ const parseCli = (args: string[]): CliOptions => {
   }
   throw usageError();
 };
-
-if (import.meta.main) {
-  const cli = Result.try({
-    try: () => {
-      const options = parseCli(Bun.argv.slice(2));
-      const root = path.resolve(options.root);
-      return checkJobClassification(root, options.base ?? gitMergeBase(root));
-    },
-    catch: (cause) =>
-      new AdmissionError({
-        message: cause instanceof Error ? cause.message : "Invalid arguments",
-      }),
+const parseCli = (args: string[]): CliOptions => {
+  const modes = args.flatMap((arg) => {
+    const mode = MODE_FLAGS[arg];
+    return mode === undefined ? [] : [mode];
   });
-  const result = cli.isOk() ? cli.value : cli;
+  if (modes.length > 1) {
+    throw usageError();
+  }
+  return {
+    ...parsePositional(args.filter((arg) => MODE_FLAGS[arg] === undefined)),
+    mode: modes[0] ?? "check",
+  };
+};
+
+// The pushed commits are those since the merge base; CI rechecks the
+// workflow revision either way.
+const pushTouchesClassification = (root: string, base: string) => {
+  const result = Bun.spawnSync(
+    ["git", "-C", root, "diff", "--name-only", "--no-renames", base, "HEAD"],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (result.exitCode !== 0) {
+    throw new AdmissionError({
+      message:
+        new TextDecoder().decode(result.stderr).trim() ||
+        "Cannot list the pushed paths",
+    });
+  }
+  return new TextDecoder()
+    .decode(result.stdout)
+    .split("\n")
+    .some(isClassificationInput);
+};
+
+const decisionsFileChanged = (root: string) =>
+  Bun.spawnSync(
+    [
+      "git",
+      "-C",
+      root,
+      "diff",
+      "--quiet",
+      "HEAD",
+      "--",
+      CLASSIFICATION_DECISIONS_PATH,
+    ],
+    { stdout: "ignore", stderr: "ignore" },
+  ).exitCode !== 0;
+
+const runCheck = (root: string, base: string) => {
+  const result = checkJobClassification(root, base);
   let privilegedJobs: string[] = [];
   if (result.isErr() && result.error instanceof ReviewRequiredError) {
     privilegedJobs = result.error.privilegedJobs;
@@ -186,10 +318,61 @@ if (import.meta.main) {
   }
   if (result.isErr()) {
     process.stderr.write(`${result.error.message}\n`);
+    return 1;
+  }
+  process.stdout.write(`Classified ${result.value.workflowCount} workflows\n`);
+  return 0;
+};
+
+const runCli = (options: CliOptions) => {
+  const root = path.resolve(options.root);
+  const base = options.base ?? gitMergeBase(root);
+  if (options.mode === "check") {
+    return runCheck(root, base);
+  }
+  if (options.mode === "pre-push" && !pushTouchesClassification(root, base)) {
+    return 0;
+  }
+  const refreshed = refreshJobClassificationDigests(root, base);
+  if (refreshed.isErr()) {
+    process.stderr.write(`${refreshed.error.message}\n`);
+    return 1;
+  }
+  const keys = refreshed.value.refreshed;
+  if (keys.length > 0) {
+    process.stdout.write(
+      `Refreshed ${keys.length} mechanical classification digest(s): ${keys.join(", ")}\n`,
+    );
+  }
+  if (options.mode === "write") {
+    return 0;
+  }
+  if (decisionsFileChanged(root)) {
+    process.stderr.write(
+      `Commit the refreshed ${CLASSIFICATION_DECISIONS_PATH} and push again.\n`,
+    );
+    return 1;
+  }
+  return runCheck(root, base);
+};
+
+if (import.meta.main) {
+  const cli = Result.try({
+    try: () => runCli(parseCli(Bun.argv.slice(2))),
+    catch: (cause) =>
+      new AdmissionError({
+        message: cause instanceof Error ? cause.message : "Invalid arguments",
+      }),
+  });
+  if (cli.isErr()) {
+    // An unusable invocation never proves a change ordinary.
+    const githubOutput = process.env["GITHUB_OUTPUT"];
+    if (githubOutput) {
+      appendFileSync(githubOutput, "privileged_classification_change=true\n");
+    }
+    process.stderr.write(`${cli.error.message}\n`);
     process.exitCode = 1;
   } else {
-    process.stdout.write(
-      `Classified ${result.value.workflowCount} workflows\n`,
-    );
+    process.exitCode = cli.value;
   }
 }
