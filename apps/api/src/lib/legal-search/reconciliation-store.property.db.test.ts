@@ -22,7 +22,6 @@ import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconci
 import {
   parkReconciliationItem,
   RECONCILIATION_RETRY_DELAYS_MS,
-  RECONCILIATION_TERMINAL_ATTEMPTS,
   refreshTrackedReconciliationItems,
   retireReconciliationItem,
 } from "@/api/lib/legal-search/reconciliation-store";
@@ -104,8 +103,9 @@ const assertRevisionSequence = async ({
         if (result.outcome !== "recorded") {
           panic("The revision property fixture must retain its source lease");
         }
-        attempts += 1;
-        terminal = attempts >= RECONCILIATION_TERMINAL_ATTEMPTS;
+        if (!terminal) {
+          attempts += 1;
+        }
         expect(result.attempts).toBe(attempts);
         break;
       }
@@ -164,25 +164,23 @@ const assertRevisionSequence = async ({
       expect(row.lastError).toBeNull();
       expect(row.lastAttemptAt).toBeNull();
       expect(row.nextAttemptAt).toEqual(now);
+    } else if (action === "miss" && terminal) {
+      expect(row).toEqual(previous);
     } else if (action === "miss") {
       expect(row.lastError).toBe("detail-unavailable");
       expect(row.lastAttemptAt).toEqual(now);
-      if (attempts >= RECONCILIATION_TERMINAL_ATTEMPTS) {
-        expect(row.nextAttemptAt).toBeNull();
-      } else {
-        const delay =
-          (
-            row.nextAttemptAt ?? panic("A retryable miss must remain scheduled")
-          ).getTime() - now.getTime();
-        expect(delay).toBeGreaterThanOrEqual(RECONCILIATION_RETRY_DELAYS_MS[0]);
-        expect(delay).toBeLessThanOrEqual(
-          RECONCILIATION_RETRY_DELAYS_MS.at(-1) ??
-            panic("A retry schedule needs an upper bound"),
-        );
-        expect(row.nextAttemptAt?.getTime()).toBeGreaterThanOrEqual(
-          previous.nextAttemptAt?.getTime() ?? now.getTime(),
-        );
-      }
+      const delay =
+        (
+          row.nextAttemptAt ?? panic("A retryable miss must remain scheduled")
+        ).getTime() - now.getTime();
+      expect(delay).toBeGreaterThanOrEqual(RECONCILIATION_RETRY_DELAYS_MS[0]);
+      expect(delay).toBeLessThanOrEqual(
+        RECONCILIATION_RETRY_DELAYS_MS.at(-1) ??
+          panic("A retry schedule needs an upper bound"),
+      );
+      expect(row.nextAttemptAt?.getTime()).toBeGreaterThanOrEqual(
+        previous.nextAttemptAt?.getTime() ?? now.getTime(),
+      );
     }
     previous = row;
   }
@@ -248,7 +246,10 @@ test(
               now,
             };
             if (terminal) {
-              await retireReconciliationItem(scopedDb, miss);
+              await retireReconciliationItem(scopedDb, {
+                ...miss,
+                errorTag: "unkeyable",
+              });
             } else {
               await parkReconciliationItem(scopedDb, miss);
             }
@@ -308,14 +309,10 @@ test(
             });
             const retried = await readItem(sourceId, identityKey);
             expect(retried.attempts).toBe(missed.attempts + 1);
-            if (terminal) {
-              expect(retried.status).toBe(RECONCILIATION_ITEM_STATUS.TERMINAL);
-              expect(retried.nextAttemptAt).toBeNull();
-            } else {
-              expect(retried.nextAttemptAt?.getTime()).toBeGreaterThan(
-                now.getTime(),
-              );
-            }
+            expect(retried.status).toBe(RECONCILIATION_ITEM_STATUS.PARKED);
+            expect(retried.nextAttemptAt?.getTime()).toBeGreaterThan(
+              now.getTime(),
+            );
             const repeated = await refreshTrackedReconciliationItems(scopedDb, {
               revisionOf: (value) => value,
               sourceId,

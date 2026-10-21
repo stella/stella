@@ -111,7 +111,7 @@ test("the generic parser records unsupported shell shapes independently of dedic
         "script": "apps/landing/package.json:test",
       },
       {
-        "command": "([ -n "$TURBO_HASH" ] || bun run generate:route-tree) && bun scripts/run-tests.ts",
+        "command": "([ -n "$TURBO_HASH" ] || bun run generate:web-sources) && bun scripts/run-tests.ts",
         "reason": "shell-expansion",
         "script": "apps/web/package.json:test",
       },

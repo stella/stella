@@ -1,6 +1,7 @@
 {
   "ci-checks-rest": {
     "Resolve static check receipts": ["**"],
+    "Run repository checks": ["**"],
     "Record static check receipts": ["**"],
     "Check AI prompt sync": ["**"],
     "Check AI verification guards": [
@@ -22,6 +23,11 @@
     "Tauri counterpart autofix tests": ["@stll/desktop"],
     "Lockfile release-age guard": ["**"],
     "Restore generated sources": ["**"],
+    "API test timeout guard": [
+      "apps/api/**/*.test.ts",
+      "scripts/api-test-timeout-guard.ts",
+      "scripts/api-test-timeout-guard.test.ts"
+    ],
     "Test oxlint plugins": [
       ".oxlint-plugins/**",
       "oxlint*.ts",
@@ -117,7 +123,6 @@
     "Release changelog guard": ["**"],
     "Release queue history guard": ["**"],
     "Release CLI coupling guard": ["**"],
-    "Release CLI changeset hold": ["**"],
     "CLI contract changeset guard": ["**"],
     "SQL performance suppression summary": ["**"],
     "Release marketing provenance warning": ["**"],
@@ -320,7 +325,7 @@
     "Model catalog generation guard": [
       "@stll/ai-catalog",
       "@stll/fetch",
-      "@stll/time",
+      "@stll/stable-stringify",
       "packages/scripts/fixtures/**",
       "scripts/**"
     ],
@@ -605,6 +610,7 @@
   },
   "ci-checks-policy": {
     "Resolve static check receipts": ["**"],
+    "Run policy checks": ["**"],
     "Record static check receipts": ["**"],
     "Prepare environment": ["**"],
     "Restore generated sources": ["**"],

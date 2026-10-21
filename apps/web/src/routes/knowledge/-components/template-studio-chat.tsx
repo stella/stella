@@ -667,6 +667,7 @@ const TemplateStudioChatInner = ({
     isGenerating,
     alwaysApprovedTools,
     conversationApprovedTools,
+    confirmStoredApprovalGrant,
     handleApprove,
     handleAllowInConversation,
     handleDeny,
@@ -687,6 +688,7 @@ const TemplateStudioChatInner = ({
     approvalPendingMessageId,
   } = useChatSession({
     chat,
+    timingSurface: "template-studio",
     conversationId: threadRef.threadId,
     getSendMode,
     initialOlderCursor: data.olderCursor,
@@ -1333,6 +1335,7 @@ const TemplateStudioChatInner = ({
           activeOrganizationId,
           alwaysApprovedTools,
           conversationApprovedTools,
+          confirmStoredApprovalGrant,
           handleAllowInConversation,
           handleAlwaysAllow,
           handleApprove: handleApproveForTemplate,

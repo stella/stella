@@ -66,7 +66,6 @@ const PURE_AUTOFIX = {
   // temporary paths never enter output and no network commands are invoked.
   "ai-instructions": "sync-ai",
   // Reads `<dir>/en.json` alone and prints its key tree in source order.
-  "i18n-messages-web": "packages/scripts/src/i18n-typegen.ts",
   "i18n-messages-landing": "packages/scripts/src/i18n-typegen.ts",
   "i18n-messages-transactional": "packages/scripts/src/i18n-typegen.ts",
   // Splices the static @stll/locales arrays between fixed markers.
@@ -216,10 +215,12 @@ test("translation content never becomes an autofix output", () => {
       ).toBe(false);
     }
   }
-  const selected = generatorsForFiles(["apps/web/src/i18n/langs/cs.json"]);
-  expect(selected.map(({ id }) => id)).toContain("i18n-messages-web");
+  const selected = generatorsForFiles([
+    "apps/landing/src/i18n/messages/cs.json",
+  ]);
+  expect(selected.map(({ id }) => id)).toContain("i18n-messages-landing");
   const allowed = allowedOutputs(selected);
-  expect(allowed).toContain("apps/web/src/i18n/langs/messages.gen.ts");
+  expect(allowed).toContain("apps/landing/src/i18n/messages/messages.gen.ts");
   for (const catalogue of catalogues) {
     expect(
       allowed.some((output) => matchesGeneratedGlob(output, catalogue)),

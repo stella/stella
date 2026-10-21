@@ -62,7 +62,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Setup regeneration tooling
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: .regeneration-controls/package.json
@@ -195,7 +195,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -488,7 +488,7 @@ jobs:
           git diff --name-only -z --no-renames --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- apps/api/ > "$RUNNER_TEMP/autofix-added-paths"
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -605,9 +605,19 @@ jobs:
 
           if (( ${#lint_paths[@]} > 0 )); then
             # Type-aware fixes need the complete generated type graph. set -e
-            # aborts on preparation or compiler errors before any fixer runs.
+            # aborts on preparation errors before any fixer runs.
             bun scripts/ci-generated-sources.ts prepare
-            bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}"
+            backup="$RUNNER_TEMP/autofix-lint-backup"
+            for path in "${lint_paths[@]}"; do
+              mkdir -p "$backup/$(dirname "$path")"
+              cp -p "$path" "$backup/$path"
+            done
+            # --fix applies safe fixes only. CI's lint job reports anything left.
+            restore_lint_paths() {
+              for path in "${lint_paths[@]}"; do
+                cp -p "$backup/$path" "$path"
+              done
+            }
             # Restrict even safe fixes to the reviewed rule list. Never enable
             # suggestions or dangerous fixes; CI reports all remaining rules.
             bun scripts/autofix-safe-rules.ts > "$RUNNER_TEMP/autofix-safe-rule-args"
@@ -618,7 +628,28 @@ jobs:
             lint_status=0
             bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "${safe_rule_args[@]}" "${lint_paths[@]}" || lint_status=$?
             if (( lint_status > 1 )); then
+              restore_lint_paths
               exit "$lint_status"
+            fi
+            # A type-aware fix is kept only when its project type-checks. A
+            # push the fixer leaves unchanged has nothing to keep, so it skips
+            # the full project check; CI's typecheck reports its types. A
+            # rejected fix drops only the lint rewrites: formatting and the
+            # generators still run and push.
+            fixed=false
+            for path in "${lint_paths[@]}"; do
+              if ! cmp -s "$path" "$backup/$path"; then
+                fixed=true
+                break
+              fi
+            done
+            if [[ "$fixed" == true ]]; then
+              typecheck_status=0
+              bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}" || typecheck_status=$?
+              if (( typecheck_status != 0 )); then
+                restore_lint_paths
+                echo "::warning title=Autofix lint fixes dropped::The type-aware lint fixes did not type-check (exit $typecheck_status); kept formatting and generated files only."
+              fi
             fi
           fi
           if (( ${#format_paths[@]} > 0 )); then

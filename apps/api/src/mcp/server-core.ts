@@ -87,6 +87,7 @@ import { getMcpInstructions } from "@/api/mcp/instructions";
 import {
   createMcpCorsHeaders,
   createMcpPreflightHeaders,
+  getMcpServerIcons,
   getMcpWwwAuthenticateHeader,
   type McpChallengeError,
 } from "@/api/mcp/metadata";
@@ -112,6 +113,7 @@ import {
   closestToolNames,
   didYouMean,
   MCP_INTERNAL_ERROR_HINT,
+  MAX_TOOL_NAME_CHARS,
   oauthScopeRecoveryHint,
   quoteToolName,
   serializeToolResult,
@@ -119,7 +121,6 @@ import {
 } from "@/api/mcp/tool-utils";
 import { mcpToolAuthorityRefusal } from "@/api/mcp/write-tool-authority";
 
-const MAX_TOOL_NAME_SUGGESTION_CHARS = 128;
 const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();
 
 const mcpStructuredErrorResult = (
@@ -150,9 +151,9 @@ const takeStreamReaderOwnership = <T>(body: ReadableStream<T>) =>
   body.getReader();
 
 const formatUnknownToolName = (toolName: string): string =>
-  toolName.length <= MAX_TOOL_NAME_SUGGESTION_CHARS
+  toolName.length <= MAX_TOOL_NAME_CHARS
     ? toolName
-    : `${toolName.slice(0, MAX_TOOL_NAME_SUGGESTION_CHARS)}...`;
+    : `${toolName.slice(0, MAX_TOOL_NAME_CHARS)}...`;
 
 /** `missing_scope` envelope with a CLI command that preserves all grants. */
 const missingScopeResult = ({
@@ -866,7 +867,7 @@ export const createMcpHttpRequestHandler = ({
       // Suggest the closest names the caller can actually see (scope-filtered
       // list), so a typo resolves without leaking tools they lack access to.
       const suggestions =
-        toolName.length <= MAX_TOOL_NAME_SUGGESTION_CHARS
+        toolName.length <= MAX_TOOL_NAME_CHARS
           ? closestToolNames(
               toolName,
               (await listMcpTools(context, mode, session.scopes)).map(
@@ -1018,7 +1019,11 @@ export const createMcpHttpRequestHandler = ({
     // MCP surface independent from the chat tool generics used elsewhere.
     // oxlint-disable-next-line typescript/no-deprecated -- low-level Server is the intended "advanced use case" API per the SDK; McpServer would couple us to chat tool generics
     const server = new Server(
-      { name: getMcpServerName(mode), version: MCP_SERVER_VERSION },
+      {
+        icons: getMcpServerIcons(),
+        name: getMcpServerName(mode),
+        version: MCP_SERVER_VERSION,
+      },
       {
         capabilities: { prompts: {}, resources: {}, tools: {} },
         instructions: getMcpInstructions(mode, context),
