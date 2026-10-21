@@ -88,6 +88,7 @@ export const generateBBoxData = async ({
         },
       };
       const result = await generateObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "pdf",
         serviceTier: "standard",

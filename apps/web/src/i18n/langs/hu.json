@@ -856,7 +856,6 @@
         "unavailable": "Ehhez a határozathoz nem érhető el AI-elemzés."
       },
       "generate": "AI jogi tételek elkészítése",
-      "holdingAnchor": "Ugrás a bekezdésre",
       "invitation": "Ingyenes fiókkal az AI munkajegyzeteket készít ehhez a határozathoz.",
       "topics": "Témák",
       "treatment": "Későbbi megítélés"
@@ -1112,6 +1111,8 @@
         "hint": "Töröljön vagy bővítsen egy szűrőt, és keressen újra.",
         "message": "Semmi nem felel meg a beállított szűrőknek."
       },
+      "partialMatch": "Részleges találat",
+      "partialMatches": "Részleges találatok erre: <bdi>{query}</bdi>",
       "resultsFor": "Találatok erre: <bdi>{query}</bdi>",
       "searchEveryWord": "Minden szó keresése"
     },
@@ -1149,6 +1150,7 @@
       "judges": "Bírák",
       "legalArea": "Jogterület",
       "legalSentence": "Elvi bírósági határozat",
+      "paragraphReference": "{number}. bekezdés",
       "popularName": "Népszerű név",
       "portraitCredit": "A portrék forrása: {source}",
       "provisionMentions": "{count, number}×",
@@ -1615,6 +1617,9 @@
         "private": "Saját készségek",
         "team": "A csapat készségei"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Szintén áttekintve ({count, number})"
     },
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",

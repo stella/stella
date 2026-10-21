@@ -856,7 +856,6 @@
         "unavailable": "L’analyse par IA n’est pas disponible pour cette décision."
       },
       "generate": "Générer les sommaires par IA",
-      "holdingAnchor": "Aller au paragraphe",
       "invitation": "Avec un compte gratuit, l’IA prépare des notes de travail sur cette décision.",
       "topics": "Thèmes",
       "treatment": "Traitement ultérieur"
@@ -1112,6 +1111,8 @@
         "hint": "Supprimez ou élargissez un filtre, puis relancez la recherche.",
         "message": "Aucun résultat ne correspond aux filtres appliqués."
       },
+      "partialMatch": "Correspondance partielle",
+      "partialMatches": "Correspondances partielles pour : <bdi>{query}</bdi>",
       "resultsFor": "Résultats pour : <bdi>{query}</bdi>",
       "searchEveryWord": "Rechercher tous les mots"
     },
@@ -1149,6 +1150,7 @@
       "judges": "Juges",
       "legalArea": "Domaine juridique",
       "legalSentence": "Attendu",
+      "paragraphReference": "Paragraphe {number}",
       "popularName": "Nom courant",
       "portraitCredit": "Source des portraits : {source}",
       "provisionMentions": "{count, number}×",
@@ -1615,6 +1617,9 @@
         "private": "Vos compétences",
         "team": "Compétences de l’équipe"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Également consultés ({count, number})"
     },
     "sourcePlaceholder": "Discuter de {title}",
     "sourcePlaceholderAction": "Discuter de",

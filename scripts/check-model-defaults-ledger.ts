@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import ts from "typescript";
+import ts from "typescript6";
 
 import {
   AI_PROVIDERS,

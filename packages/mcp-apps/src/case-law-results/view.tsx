@@ -9,7 +9,7 @@ import {
   useTranslations,
 } from "use-intl";
 
-import { normalizeStringList } from "@stll/agent-input";
+import { normalizeStringList } from "@stll/agent-input/string-list";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import {
   parseDecisionParagraphFragment,
@@ -201,6 +201,11 @@ const ResultTableRow = ({
               )}
             </PreviewCardPopup>
           </PreviewCard>
+          {row.type === "search" && row.match === "some_terms" && (
+            <span className="text-muted-foreground text-xs">
+              {t("partialMatch")}
+            </span>
+          )}
         </div>
       </TableCell>
       <TableCell className="py-3 max-[480px]:order-last max-[480px]:w-full max-[480px]:pt-0">

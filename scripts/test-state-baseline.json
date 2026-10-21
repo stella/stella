@@ -723,15 +723,5 @@
     "count": 10,
     "owner": "guards",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "packages/time/src/dates.property.test.ts": {
-    "count": 4,
-    "owner": "guards",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "packages/time/src/dates.test.ts": {
-    "count": 8,
-    "owner": "guards",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
   }
 }
