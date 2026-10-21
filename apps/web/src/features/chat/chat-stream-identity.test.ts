@@ -694,7 +694,7 @@ describe("streamed chunks keep what they do not change", () => {
       { numRuns: 60 },
     );
     // The runs reached every path the property claims to cover.
-    expect([...reached].toSorted()).toEqual(
+    expect<readonly string[]>([...reached].toSorted()).toEqual(
       Object.keys(SESSION_PATHS).toSorted(),
     );
   });
@@ -1009,7 +1009,9 @@ describe("the chat runtime keeps settled messages while an answer streams", () =
       const messages = runtime.getSnapshot().messages;
       watch.observe(messages);
       expect(messages.every(isCanonicalChatUIMessage)).toBe(true);
-      expect(projectCanonicalChatUIMessages(messages)).toEqual(messages);
+      expect<readonly PersistedChatMessage[]>(
+        projectCanonicalChatUIMessages(messages),
+      ).toEqual(messages);
     };
 
     const question = {
