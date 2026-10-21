@@ -231,6 +231,11 @@ export const chatKeys = {
     search ?? "",
     workspaceId ?? "",
   ],
+  toolGrants: (
+    activeOrganizationId: string,
+    userId: string,
+    threadId: string,
+  ) => [...chatKeys.all, activeOrganizationId, userId, "tool-grants", threadId],
   modelOptions: (activeOrganizationId: string) => [
     ...chatKeys.all,
     activeOrganizationId,

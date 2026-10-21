@@ -28,6 +28,10 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  CZ_UOHS_SYNTHETIC_LISTING,
+  czUohsSyntheticPdf,
+} from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
 import type { SourceRegistrationKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { AT_ASYLGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
 import { AT_BKS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
@@ -67,6 +71,10 @@ import {
   fetchCzRegionalAffectingDocs,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import {
+  buildCzUohsDecision,
+  parseCzUohsListing,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { buildCzUsListedRecord } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import {
@@ -2717,6 +2725,38 @@ export const plUokikRulingFixture = (): EnrolledAdapterFixture => ({
   },
 });
 
+export const czUohsFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {},
+  buildDecision: async () => {
+    const document = czUohsSyntheticPdf();
+    globalThis.fetch = asFetchMock(
+      async () => await Promise.resolve(new Response(document)),
+    );
+    const record = parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING)[0];
+    const decision = await buildCzUohsDecision(
+      record ?? panic("the ÚOHS fixture lost its first record"),
+    );
+    const objects = Object.fromEntries(
+      Object.entries(decision.sourceRawObjects ?? {}).map(
+        ([part, { bytes, contentType }]) => [
+          part,
+          sourceBinaryRef({
+            family: RAW_SOURCE_FAMILY.CASE_LAW,
+            sourceId: ADAPTER_KEYS.CZ_UOHS,
+            documentId: decision.sourceDocumentId ?? "cz-uohs-fixture",
+            bytes,
+            contentType,
+          }),
+        ],
+      ),
+    );
+    return {
+      ...decision,
+      sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
+    };
+  },
+});
+
 /** Total fixture coverage shared by field inventory and publication invariants. */
 export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [COURTLISTENER_IMPORT_KEY]: courtListenerConformanceFixture,
@@ -2724,6 +2764,7 @@ export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [ADAPTER_KEYS.CZ_NSS]: czNssFixture,
   [ADAPTER_KEYS.CZ_US]: czUsFixture,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
+  [ADAPTER_KEYS.CZ_UOHS]: czUohsFixture,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
   [ADAPTER_KEYS.SK_US]: skUsFixture,
   [ADAPTER_KEYS.PL_COURTS]: plCourtsFixture,

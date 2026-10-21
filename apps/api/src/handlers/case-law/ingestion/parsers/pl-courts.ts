@@ -16,6 +16,7 @@ import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner
+// parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
 import type {
   Block,
   DocumentAst,
@@ -24,7 +25,7 @@ import type {
   TableCell,
 } from "@stll/legal-ast/document-ast";
 
-import { stripHtml } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
 import {
   buildValidationHtml,
   validateAndLog,

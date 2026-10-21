@@ -122,6 +122,7 @@ pub async fn finish_session(
     mgr.persist_sessions_public().await;
     mgr.retry_session(&session_id).await;
   }
+  drop(mgr);
   Ok(result)
 }
 
@@ -136,6 +137,7 @@ pub async fn retry_session(
     mgr.persist_sessions_public().await;
     mgr.retry_session(&session_id).await;
   }
+  drop(mgr);
   Ok(result)
 }
 
