@@ -5,8 +5,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
+import { useMountEffect } from "@/hooks/use-effect";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
@@ -87,6 +89,9 @@ type AppFrameHostProps = {
 };
 
 export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
+  // The one owner of the browser extension bridge: it sits above every frame,
+  // including routes with no frame, so each chat send path sees the pairing.
+  useMountEffect(mountBrowserExtensionBridge);
   const MemberFrame = frames?.member ?? LazyProtectedAppFrame;
   const AdminFrame = frames?.admin ?? LazyAdminAppFrame;
   const PublicFrame = frames?.public ?? LazyKnowledgePublicFrame;
