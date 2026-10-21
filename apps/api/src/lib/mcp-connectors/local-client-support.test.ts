@@ -11,12 +11,13 @@ import {
 const localClientIdentity = (kind: string, version: string): string =>
   `${kind}/${version}`;
 
-const REPOSITORY_ROOT = new URL("../../../../../", import.meta.url);
-const CLIENT_IDENTITY_OWNERS = {
-  cli: "packages/cli/src/api-fetch.ts",
-  "mcp-kit": "packages/mcp-kit/src/local-client-identity.ts",
-  desktop: "apps/desktop/src-tauri/src/http_client.rs",
-} as const satisfies Record<(typeof LOCAL_CLIENT_KINDS)[number], string>;
+// The CLI and MCP kit identities run through their own builders in
+// local-client-wire-contract.test.ts; the Rust desktop client cannot be
+// imported, so its source must reference the header.
+const DESKTOP_IDENTITY_OWNER = new URL(
+  "../../../../../apps/desktop/src-tauri/src/http_client.rs",
+  import.meta.url,
+);
 
 const request = (identity?: string) =>
   new Request("https://api.example.test/mcp", {
@@ -35,19 +36,12 @@ describe("local client support", () => {
     }
   });
 
-  test("every shipped local client sends its identity", async () => {
-    for (const kind of LOCAL_CLIENT_KINDS) {
-      const path = CLIENT_IDENTITY_OWNERS[kind];
-      const source = await Bun.file(new URL(path, REPOSITORY_ROOT)).text();
-      const marker =
-        kind === "desktop"
-          ? "LOCAL_CLIENT_IDENTITY_HEADER"
-          : ["`", kind, "/${"].join("");
-      expect(
-        source,
-        `${path}:1 must send the ${kind} local client identity`,
-      ).toContain(marker);
-    }
+  test("the desktop client sends its identity", async () => {
+    const source = await Bun.file(DESKTOP_IDENTITY_OWNER).text();
+    expect(
+      source,
+      "apps/desktop/src-tauri/src/http_client.rs:1 must send the desktop local client identity",
+    ).toContain("LOCAL_CLIENT_IDENTITY_HEADER");
   });
 
   for (const kind of LOCAL_CLIENT_KINDS) {
