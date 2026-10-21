@@ -1,5 +1,13 @@
 # @stll/agent-input
 
+## 0.1.7
+
+### Patch Changes
+
+- [#6093](https://github.com/stella/stella/pull/6093) [`0e4c5d2`](https://github.com/stella/stella/commit/0e4c5d2457e5f027e1e986d8c5c96c7ae474c9f5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Closed enum near-miss suggestions count Unicode scalar values, including astral characters.
+
+- [#6284](https://github.com/stella/stella/pull/6284) [`438816f`](https://github.com/stella/stella/commit/438816fdbd3c3e0b1ac8d8211a45feb2ad6109b0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Depends on the published @stll/time release.
+
 ## 0.1.6
 
 ### Patch Changes
