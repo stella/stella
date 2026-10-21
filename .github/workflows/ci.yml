@@ -67,7 +67,7 @@ on:
 # runs remain isolated. Main calls coalesce under a child group distinct from
 # the caller's group.
 concurrency:
-  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.workflow || inputs.heavy_only == true && format('main-heavy-suites-{0}', inputs.sha) || github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-' || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref || github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && format('pr-{0}-{1}-meta', github.event.pull_request.number, github.event.pull_request.head.sha) || github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.workflow || inputs.heavy_only == true && format('main-heavy-suites-{0}', inputs.sha) || github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-' || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref || github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && format('pr-{0}-{1}-meta', github.event.pull_request.number, github.event.pull_request.head.sha) || github.event_name == 'pull_request' && format('pr-{0}{1}', github.event.pull_request.number || github.ref, github.event.pull_request.draft && '-draft' || '') || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
   cancel-in-progress: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && ((github.event_name == 'pull_request' && (contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) || github.event.label.name == 'prove-fix')) || github.event_name == 'workflow_dispatch')) }}
 
 permissions: {}
@@ -6730,9 +6730,11 @@ jobs:
 
           # The plan skips a draft pull request, and every job with it. The
           # event's draft flag can be stale: a push to a draft followed by
-          # marking it ready queues the draft run after the ready one, which
-          # it then cancels. So the skip passes only while the pull request is
-          # still a draft; a ready one has to run its checks.
+          # marking it ready leaves a draft run beside the ready one (draft
+          # runs have their own concurrency group, so they never cancel it).
+          # So the skip passes only while the pull request is still a draft;
+          # a ready one has to run its checks, and re-running this run
+          # replays the draft event, so it can never run them.
           if [[ "$PLAN_RESULT" == "skipped" ]]; then
             draft=""
             if [[ "$EVENT" == "pull_request" ]]; then
@@ -6743,7 +6745,7 @@ jobs:
               pass_through_reason=draft
               exit 0
             fi
-            echo "::error::CI plan was skipped, but the pull request is not a draft; re-run CI Checks."
+            echo "::error::CI plan was skipped because this run started while the pull request was a draft. Re-running this run cannot start CI: the run started by marking it ready proves this head. If that run is missing or failed, push a commit, or mark the pull request as draft and ready again, to start a fresh run."
             exit 1
           fi
 

@@ -2034,29 +2034,23 @@ test("a skipped plan passes only while the pull request is still a draft", () =>
     }),
   ).toBe(0);
 
-  // A push to a draft, then marking it ready at once: the ready run starts
-  // first and is cancelled by the draft run queued after it, whose payload
-  // still says draft and whose plan skips. The cancelled run may pass, but
-  // the run that stands must not certify a ready pull request unchecked.
-  const cancelledReadyRun = Object.fromEntries(
-    resultJob.needs.map((job) => [job, "cancelled"]),
+  // A push to a draft, then marking it ready at once: the draft run's
+  // payload still says draft and its plan skips. It must not certify a ready
+  // pull request unchecked, and since re-running it replays the draft event,
+  // it points at a fresh run instead of a re-run.
+  const staleDraftOptions: EvaluateResultOptions = {
+    event,
+    results: skippedPlan,
+    suiteDepth: "",
+    liveDraft: false,
+  };
+  const staleDraft = onlyOutcome(
+    evaluateResults([staleDraftOptions], (item) => item),
   );
-  expect(
-    evaluateResult({
-      event,
-      results: cancelledReadyRun,
-      liveDraft: false,
-      cancellationEvidence: "superseded",
-    }),
-  ).toBe(0);
-  expect(
-    evaluateResult({
-      event,
-      results: skippedPlan,
-      suiteDepth: "",
-      liveDraft: false,
-    }),
-  ).toBe(1);
+  expect(staleDraft.exitCode).toBe(1);
+  expect(staleDraft.stdout).toContain("Re-running this run cannot start CI");
+  expect(staleDraft.stdout).toContain("push a commit");
+  expect(staleDraft.stdout).not.toContain("re-run CI Checks");
 
   // An unanswered lookup is not a draft either.
   expect(evaluateResult({ event, results: skippedPlan, suiteDepth: "" })).toBe(
@@ -2703,8 +2697,10 @@ test("a manual run supersedes only an older manual run on the same branch", () =
   expect(concurrency.group).toContain(
     "github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref)",
   );
+  // A draft run has its own group: queued after the ready run of the same
+  // head, it would otherwise cancel the only run that can prove it.
   expect(concurrency.group).toContain(
-    "format('pr-{0}', github.event.pull_request.number || github.ref)",
+    "format('pr-{0}{1}', github.event.pull_request.number || github.ref, github.event.pull_request.draft && '-draft' || '')",
   );
   expect(concurrency.group).toContain("format('run-{0}', github.run_id)");
 });
