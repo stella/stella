@@ -430,6 +430,12 @@ const installFixtureNetwork = () => {
           Awaited<ReturnType<typeof api.law.statutes.shelf.get>>["data"]
         >);
       }
+      // Member pages that host the docked chat read the thread's tool grants.
+      if (pathname === "/v1/chat/tool-grants") {
+        return Response.json({ grants: [] } satisfies NonNullable<
+          Awaited<ReturnType<(typeof api.chat)["tool-grants"]["get"]>>["data"]
+        >);
+      }
       if (pathname === "/v1/search-history") {
         return Response.json({
           items: [],
@@ -500,7 +506,7 @@ const loadFixtureRuntime = async (
     },
   }));
 
-  const { routeTree } = await import("@/routeTree.gen");
+  const { routeTree } = await import("@/router");
   const { createAppQueryClient } = await import("@/lib/react-query");
   const { createMemoryHistory, createRouter, RouterProvider, useMatches } =
     await import("@tanstack/react-router");

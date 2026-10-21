@@ -568,6 +568,9 @@ impl DesktopTelemetry {
     if !enabled && let Ok(mut reported) = self.reported.lock() {
       reported.clear();
     }
+    // Released only once the crash monitor and the reported set follow the
+    // new preference, so no request observes a half-applied change.
+    drop(gate);
     Ok(enabled)
   }
 

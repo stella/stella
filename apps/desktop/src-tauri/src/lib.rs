@@ -341,8 +341,7 @@ pub fn run() {
                 }
               }
               tray::MenuAction::OpenEditRoot => {
-                let mgr = manager.lock().await;
-                mgr.open_edit_root().await;
+                manager.lock().await.open_edit_root().await;
               }
               tray::MenuAction::CopyDiagnostics => {
                 let mgr = manager.lock().await;
@@ -369,6 +368,7 @@ pub fn run() {
                   mgr.persist_sessions_public().await;
                   mgr.retry_session(&id).await;
                 }
+                drop(mgr);
               }
               tray::MenuAction::RetrySession(id) => {
                 let mut mgr = manager.lock().await;
@@ -376,6 +376,7 @@ pub fn run() {
                   mgr.persist_sessions_public().await;
                   mgr.retry_session(&id).await;
                 }
+                drop(mgr);
               }
             }
           });

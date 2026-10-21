@@ -22,6 +22,7 @@ export type WebApiRoutes = WebRoutes["v1"];
 // generated API types.
 export type {
   AskManual,
+  CapabilityId,
   DeterministicCheck,
   FallbackEntry,
   GlobalSearchHit,

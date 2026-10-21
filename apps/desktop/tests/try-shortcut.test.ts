@@ -9,6 +9,7 @@ import type { ShortcutModifier } from "../src/shared/shortcut-keys";
 
 const SHORTCUT = { code: "KeyV", modifiers: ["shift", "super"] } as const;
 const shortcut = { code: SHORTCUT.code, modifiers: [...SHORTCUT.modifiers] };
+const shortcutModifiers = new Set<ShortcutModifier>(shortcut.modifiers);
 
 /** Every subset of the four modifiers. */
 const modifierSets = () => {
@@ -23,9 +24,7 @@ const MODIFIER_SETS = modifierSets();
 describe("try-it feedback", () => {
   test("a modifier outside the shortcut is named before anything else", () => {
     for (const held of MODIFIER_SETS) {
-      const extra = held.find(
-        (modifier) => !shortcut.modifiers.includes(modifier),
-      );
+      const extra = held.find((modifier) => !shortcutModifiers.has(modifier));
       for (const code of ["KeyV", "KeyC"]) {
         const feedback = feedbackForKey({ code, held, shortcut });
         if (extra) {
@@ -39,7 +38,7 @@ describe("try-it feedback", () => {
 
   test("the right key reports exactly the missing modifiers", () => {
     for (const held of MODIFIER_SETS) {
-      if (held.some((modifier) => !shortcut.modifiers.includes(modifier))) {
+      if (held.some((modifier) => !shortcutModifiers.has(modifier))) {
         continue;
       }
       const missing = shortcut.modifiers.filter(
