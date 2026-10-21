@@ -357,10 +357,40 @@ describe("registry narrowing is resolved only for discovery", () => {
       scopes: ["stella:read"],
     });
     expect(resolve).toHaveBeenCalledTimes(1);
+    const definition = definitions.find(
+      ({ name }) => name === "lookup_business_registry",
+    );
     expect(
-      definitions.find(({ name }) => name === "lookup_business_registry")
-        ?.inputSchema.properties?.["registry"],
+      structuredClone(definition?.inputSchema.properties?.["registry"]),
     ).toMatchObject({ enum: ["ares"] });
+  });
+
+  test("cached narrowed definitions are deeply frozen", async () => {
+    const context = {
+      ...principal({
+        id: "frozen-registry",
+        enrolment: "none",
+        grantedScopes: ["stella:read"],
+      }),
+      resolveEnabledRegistrySlugs: async () =>
+        await Promise.resolve(readPresent(["ares" as const])),
+    };
+    const listDefinitions = async () =>
+      await listGatewayMcpToolDefinitions({
+        context,
+        mode: "default",
+        scopes: ["stella:read"],
+      });
+
+    await listDefinitions();
+    const definition = (await listDefinitions()).find(
+      ({ name }) => name === "lookup_business_registry",
+    );
+
+    expect(Object.isFrozen(definition)).toBe(true);
+    expect(
+      Object.isFrozen(definition?.inputSchema.properties?.["registry"]),
+    ).toBe(true);
   });
 });
 

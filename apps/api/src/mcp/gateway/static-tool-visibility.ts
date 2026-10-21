@@ -7,6 +7,7 @@ import {
   LAW_READ_SCOPE,
 } from "@/api/handlers/legal-resolve/scope";
 import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatch";
+import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -117,7 +118,7 @@ const narrowRegistryDefinition = (
   if (cached !== undefined) {
     return cached;
   }
-  const narrowed = {
+  const narrowed = deepFreeze({
     ...definition,
     inputSchema: {
       ...definition.inputSchema,
@@ -126,7 +127,7 @@ const narrowRegistryDefinition = (
         registry: enumProp("Business register to query", enabledSlugs),
       },
     },
-  };
+  });
   variants.set(key, narrowed);
   return narrowed;
 };

@@ -26,6 +26,7 @@ import { MCP_DEFAULT_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
+import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import {
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
@@ -36,6 +37,7 @@ import {
 const DEFAULT_ITERATIONS = 500;
 const WARMUP_ITERATIONS = 50;
 const PROTOCOL_VERSION = "2026-07-28";
+const EXPECTED_DEFAULT_TOOL_NAME = DEFAULT_MCP_TOOL_DEFINITIONS[0].name;
 
 const iterations = Number(
   process.argv
@@ -124,7 +126,15 @@ const callOnce = async (id: number): Promise<number> => {
   const response = await handler(toolsListRequest(id));
   const body = await response.text();
   const elapsed = Bun.nanoseconds() - startedAt;
-  if (response.status !== 200 || !body.includes('"tools"')) {
+  const parsed = JSON.parse(body) as {
+    result?: { tools?: { name?: string }[] };
+  };
+  if (
+    response.status !== 200 ||
+    !parsed.result?.tools?.some(
+      ({ name }) => name === EXPECTED_DEFAULT_TOOL_NAME,
+    )
+  ) {
     panic(`tools/list answered ${response.status}: ${body.slice(0, 200)}`);
   }
   return elapsed / 1e6;
