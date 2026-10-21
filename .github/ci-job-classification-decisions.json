@@ -67,22 +67,22 @@
   "candidate:.github/workflows/autofix.yml/regenerate-requested-files": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "b998a27f8453a4c1cad11d9731f1d0b265e8ef40ca6dce2a8f22210ff75d6864"
+    "reviewedDigest": "564a9ab2c93d1c6557a4998c826410ef71e4d250b19633a34012b86ef5445617"
   },
   "candidate:.github/workflows/autofix.yml/dependabot-bun-autofix": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "98e6f14505d392ab4791bb945fc3317a5c8ba58699916c3ff7b6a2e5d9a6204f"
+    "reviewedDigest": "bc4efbe3f7a0605aa2b0d95a5fad658c13265e7ca00bee037a0a839793d35fb8"
   },
   "candidate:.github/workflows/autofix.yml/regenerate-scope": {
     "kind": "ordinary",
-    "qualifier": "Plans pull-request autofix scope using settled-run evidence; no release publication, tag creation, or deployment.",
-    "reviewedDigest": "d3dd0e203386248532558822f8292f726498d5cf09c3c9944defbc516f930edb"
+    "qualifier": "Verifies a CI-requested autofix against the open pull request head and plans its scope using settled-run evidence; no release publication, tag creation, or deployment.",
+    "reviewedDigest": "d80be9dbc115701c8ee00b137f591d4fa5c8033f5a6f54bcc5710cc9466292ff"
   },
   "candidate:.github/workflows/autofix.yml/regenerate-derived-files": {
     "kind": "ordinary",
     "qualifier": "Regenerates and pushes scoped pull-request autofix commits; no release publication, tag creation, or deployment.",
-    "reviewedDigest": "b6d6b0e02ba27f82460f03ebb604caafb00a2ad5285370da0db81d1ccc11383a"
+    "reviewedDigest": "c5a364cb6c4e1eda35c2d9d898cb67800a34710690e150d18445d9bb117dedd9"
   },
   "candidate:.github/workflows/bot-refresh-auto-merge.yml/arm": {
     "kind": "ordinary",
@@ -137,17 +137,17 @@
   "candidate:.github/workflows/ci.yml/ci-checks-generated": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "b6724b7e0880f3def28eb46a90f39400b5c9604d43a46cae2e63b94b99b7c039"
+    "reviewedDigest": "4a5bc6bf46fd7f425aa81ad75e3418300e327efea27fe99de04cc3e11984f343"
   },
   "candidate:.github/workflows/ci.yml/ci-checks-policy": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "4df32e8b2810e62658ca92da5291062cd82e00df79f092be13d6f584fa418237"
+    "reviewedDigest": "ce8702e22d9535feff0168529e63f56b8381d02240489adcf5a97b85353c10f7"
   },
   "candidate:.github/workflows/ci.yml/ci-checks-rest": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "3b885e216ec0668beea4699d56e6e866f1dca35ae042333fb9efeded024d29a4"
+    "reviewedDigest": "1e1be79a3933973e757fe09b2ab58203f693488ed161cfb3da5ebe63ca7df629"
   },
   "candidate:.github/workflows/ci.yml/ci-tests": {
     "kind": "support",
@@ -167,12 +167,12 @@
   "candidate:.github/workflows/ci.yml/code-quality-api": {
     "kind": "support",
     "qualifier": "Runs API code-quality checks required by the merge verdict.",
-    "reviewedDigest": "7f4582f6d3928bb8b1346c07100fa71e8348d10dad4c13b23f635ce874003bfc"
+    "reviewedDigest": "294a804d3ee8a2d830b3834f9b4d43a8b0f4456088a157f602937377b0190fe5"
   },
   "candidate:.github/workflows/ci.yml/code-quality-web-rest": {
     "kind": "support",
     "qualifier": "Runs web and remaining code-quality checks required by the merge verdict.",
-    "reviewedDigest": "6cf343a50f10f80e758fe1ec393a161f42c030cf712f79fb53492c3055c792d3"
+    "reviewedDigest": "988e1a49f7ae94513d3cc32046614362eb511f786a162e8dbb163597af2a4c69"
   },
   "candidate:.github/workflows/ci.yml/query-perf": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "3ae0fa39bd8a258b12300ef371808551c0ad4ef34713bff1b0cc99b12df8052b"
+    "reviewedDigest": "625cdcbe2f0c4034707326c465f0af9011bfab0878c220dac7e65240408145b0"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "33379232871129bd87f9ceea02fa1125008501702f7fd5c5efce17f336e4cf3f"
+    "reviewedDigest": "0890bd61bb864614e1950af16bc60776e2474403e7b0ba198150415238363b5a"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -908,6 +908,11 @@
     "kind": "ordinary",
     "qualifier": "Cancels same-repository pull-request runs after web or remaining code-quality failure; no publication or deployment.",
     "reviewedDigest": "d1dd586f30eb9679b0ebd635a79dfea3f3ccb5a1067ef89efc1ee32e37866c71"
+  },
+  "candidate:.github/workflows/ci.yml/autofix-dispatch": {
+    "kind": "ordinary",
+    "qualifier": "Dispatches the changed-file autofix workflow for a same-repository pull request head whose checks reported repairable drift; no publication, tag creation, or deployment.",
+    "reviewedDigest": "0e080699798cc1fb367a0b244fff980efac2373ddeb75e1980dafa9dbc460239"
   },
   "candidate:.github/workflows/flaky-test-quarantine.yml/expiry": {
     "kind": "ordinary",

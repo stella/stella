@@ -180,6 +180,7 @@ const ORCHESTRATION_JOBS = new Set([
   "marketing-screenshots-cancel",
   "code-quality-api-cancel",
   "code-quality-web-rest-cancel",
+  "autofix-dispatch",
 ]);
 
 type SkipViolationsOptions = {
