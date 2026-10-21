@@ -81,6 +81,27 @@ const paragraphBox = async (page: Page, index: number) => {
   return box;
 };
 
+// Paragraph boxes include the part the reader's scroll area clips, so a
+// later paragraph can sit far below the visible reader. A drag point aimed
+// at such a box lands outside the reader, and a pointer held there is a
+// different gesture from a drag across the paragraphs. Every drag point
+// stays this far inside the visible reader, clear of the edge band where
+// the browser starts to scroll the reader under the pointer.
+const READER_EDGE_INSET = 48;
+
+/** The lowest drag point that is still inside the visible reader. */
+const readerDragFloor = async (page: Page): Promise<number> => {
+  const viewport = await page
+    .locator('[data-slot="scroll-area-viewport"]', {
+      has: page.getByTestId("reader"),
+    })
+    .boundingBox();
+  if (viewport === null) {
+    throw new Error("The reader viewport has no box");
+  }
+  return viewport.y + viewport.height - READER_EDGE_INSET;
+};
+
 // The reader's bar is the one fixed reader-chrome element on the page.
 const selectionBar = (page: Page) => page.locator("div.fixed.reader-chrome");
 
@@ -89,7 +110,9 @@ test("a fast drag across paragraphs never selects past the reader", async ({
 }) => {
   await openReader(page);
   const first = await paragraphBox(page, 1);
-  const last = await paragraphBox(page, 8);
+  const floor = await readerDragFloor(page);
+  // The sweep crosses at least one gap between paragraphs.
+  expect((await paragraphBox(page, 2)).y).toBeLessThan(floor);
   const readerText =
     (await page.getByTestId("reader").textContent())?.length ?? 0;
   await recordSelectionFrames(page);
@@ -103,7 +126,7 @@ test("a fast drag across paragraphs never selects past the reader", async ({
       const fraction = down ? step / 12 : 1 - step / 12;
       await page.mouse.move(
         first.x + 40 + fraction * 300,
-        first.y + 30 + fraction * (last.y + last.height - first.y - 30),
+        first.y + 30 + fraction * (floor - first.y - 30),
       );
     }
   }
@@ -127,12 +150,13 @@ test("the selection bar keeps its place once the drag ends", async ({
   await openReader(page);
   const first = await paragraphBox(page, 2);
   const last = await paragraphBox(page, 4);
+  const end = Math.min(last.y + 10, await readerDragFloor(page));
   await page.mouse.move(first.x + 4, first.y + 6);
   await page.mouse.down();
   for (let step = 1; step <= 10; step += 1) {
     await page.mouse.move(
       first.x + 4 + (step / 10) * 260,
-      first.y + 6 + (step / 10) * (last.y + 10 - first.y - 6),
+      first.y + 6 + (step / 10) * (end - first.y - 6),
     );
   }
   const duringDrag = await selectionBar(page).count();

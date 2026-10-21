@@ -257,8 +257,7 @@ checks:
         echo "VERSION unchanged; release queue history not required."
         exit 0
       fi
-      previous_tag="v$(git show "$BASE_SHA:VERSION" | tr -d '[:space:]')"
-      bun scripts/check-release-queue-history.ts --from "$previous_tag" --base "$BASE_SHA"
+      bun scripts/check-release-queue-history.ts --base "$BASE_SHA"
 
   # Same verdict the tag workflow gives after merge, delivered while the
   # release pull request can still wait for the Version Packages one.
