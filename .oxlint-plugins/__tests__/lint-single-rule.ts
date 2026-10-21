@@ -405,13 +405,17 @@ const lintShared = (
           }
         }
       }
-    }).catch((error) => {
+    }).catch((error: unknown) => {
+      const reason =
+        error instanceof Error
+          ? error
+          : new Error("Shared oxlint run failed", { cause: error });
       if (claimedRequests.length === 0) {
-        reject(error);
+        reject(reason);
         return;
       }
       for (const claimedRequest of claimedRequests) {
-        claimedRequest.reject(error);
+        claimedRequest.reject(reason);
       }
     });
   });
