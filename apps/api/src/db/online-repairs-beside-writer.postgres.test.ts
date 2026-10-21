@@ -33,10 +33,17 @@ setDefaultTimeout(120_000);
 type RepairName = (typeof ONLINE_MIGRATION_REPAIRS)[number]["name"];
 type RowSeed = {
   kind: "row-work";
+  assertRepaired: (client: SQL) => Promise<void>;
   seed: (client: SQL) => Promise<void>;
+  writerRow: string;
   writerUpdate: string;
 };
-type Seed = RowSeed | { kind: "no-row-work" };
+type NoRowSeed = {
+  kind: "no-row-work";
+  seed: (client: SQL) => Promise<void>;
+  tables: readonly string[];
+};
+type Seed = RowSeed | NoRowSeed;
 
 const exec = async (client: SQL, statements: readonly string[]) => {
   for (const statement of statements) {
@@ -66,9 +73,31 @@ const invalidateConstraint = async (
   );
 };
 
+const noRowSeed = (
+  table: string,
+  constraint: string,
+  insert: string,
+): NoRowSeed => ({
+  kind: "no-row-work",
+  tables: [table],
+  seed: async (client) => {
+    await invalidateConstraint(client, table, constraint, async () => {
+      await client.unsafe("SET session_replication_role = replica");
+      await client.unsafe(insert);
+      await client.unsafe("SET session_replication_role = origin");
+    });
+  },
+});
+
 const SEEDS = {
   "chat-content-v3": {
     kind: "row-work",
+    assertRepaired: async (client) => {
+      const rows = await client<{ version: number }[]>`
+        SELECT (content->>'version')::integer AS version
+        FROM chat_messages WHERE id = ${ID_2}`;
+      expect(rows.at(0)?.version, "chat-content-v3").toBe(3);
+    },
     seed: async (client) => {
       await invalidateConstraint(
         client,
@@ -85,10 +114,17 @@ const SEEDS = {
         },
       );
     },
-    writerUpdate: `WITH changed AS (UPDATE chat_messages SET content = '{"version":3,"data":[{"type":"text","text":"writer"}]}'::jsonb, created_at = clock_timestamp() WHERE id = '${ID_2}' RETURNING 1) SELECT 1 / CASE count(*) WHEN 1 THEN 1 ELSE 0 END FROM changed`,
+    writerRow: ID_2,
+    writerUpdate: `WITH held AS MATERIALIZED (SELECT 1 FROM chat_messages WHERE id = '${ID_2}' FOR UPDATE), changed AS (UPDATE repair_writer_heartbeat SET touched_at = clock_timestamp() WHERE id = 1 AND EXISTS (SELECT FROM held) RETURNING 1) SELECT 1 / CASE count(*) WHEN 1 THEN 1 ELSE 0 END FROM changed`,
   },
   "decision-date-ceiling": {
     kind: "row-work",
+    assertRepaired: async (client) => {
+      const rows = await client<{ repaired: boolean }[]>`
+        SELECT decision_date IS NULL AS repaired
+        FROM case_law_decisions WHERE id = ${ID_2}`;
+      expect(rows.at(0)?.repaired, "decision-date-ceiling").toBeTrue();
+    },
     seed: async (client) => {
       await invalidateConstraint(
         client,
@@ -103,10 +139,20 @@ const SEEDS = {
         },
       );
     },
-    writerUpdate: `WITH changed AS (UPDATE case_law_decisions SET decision_date = NULL, updated_at = clock_timestamp() WHERE id = '${ID_2}' RETURNING 1) SELECT 1 / CASE count(*) WHEN 1 THEN 1 ELSE 0 END FROM changed`,
+    writerRow: ID_2,
+    writerUpdate: `WITH held AS MATERIALIZED (SELECT 1 FROM case_law_decisions WHERE id = '${ID_2}' FOR UPDATE), changed AS (UPDATE repair_writer_heartbeat SET touched_at = clock_timestamp() WHERE id = 1 AND EXISTS (SELECT FROM held) RETURNING 1) SELECT 1 / CASE count(*) WHEN 1 THEN 1 ELSE 0 END FROM changed`,
   },
   "corpus-projection-delete-receipt": {
     kind: "row-work",
+    assertRepaired: async (client) => {
+      const rows = await client<{ repaired: boolean }[]>`
+        SELECT delete_task_created_at = updated_at AS repaired
+        FROM corpus_index_projection_intents WHERE id = ${ID}`;
+      expect(
+        rows.at(0)?.repaired,
+        "corpus-projection-delete-receipt",
+      ).toBeTrue();
+    },
     seed: async (client) => {
       await invalidateConstraint(
         client,
@@ -127,10 +173,16 @@ const SEEDS = {
         },
       );
     },
-    writerUpdate: `WITH changed AS (UPDATE corpus_index_projection_intents SET delete_task_created_at = updated_at WHERE id = '${ID}' RETURNING 1) SELECT 1 / CASE count(*) WHEN 1 THEN 1 ELSE 0 END FROM changed`,
+    writerRow: ID,
+    writerUpdate: `WITH held AS MATERIALIZED (SELECT 1 FROM corpus_index_projection_intents WHERE id = '${ID}' FOR UPDATE), changed AS (UPDATE repair_writer_heartbeat SET touched_at = clock_timestamp() WHERE id = 1 AND EXISTS (SELECT FROM held) RETURNING 1) SELECT 1 / CASE count(*) WHEN 1 THEN 1 ELSE 0 END FROM changed`,
   },
   "entity-feature-row-gates": {
     kind: "row-work",
+    assertRepaired: async (client) => {
+      const rows = await client<{ gate: string }[]>`
+        SELECT entity_feature_gate AS gate FROM entities WHERE id = ${ID}`;
+      expect(rows.at(0)?.gate, "entity-feature-row-gates").toBe("open");
+    },
     seed: async (client) => {
       await invalidateConstraint(
         client,
@@ -146,10 +198,17 @@ const SEEDS = {
       );
       await client.unsafe('DROP POLICY "workspace_entity_feature" ON entities');
     },
-    writerUpdate: `WITH changed AS (UPDATE entities SET entity_feature_gate = 'ready', updated_at = clock_timestamp() WHERE id = '${ID}' RETURNING 1) SELECT 1 / CASE count(*) WHEN 1 THEN 1 ELSE 0 END FROM changed`,
+    writerRow: ID,
+    writerUpdate: `WITH held AS MATERIALIZED (SELECT 1 FROM entities WHERE id = '${ID}' FOR UPDATE), changed AS (UPDATE repair_writer_heartbeat SET touched_at = clock_timestamp() WHERE id = 1 AND EXISTS (SELECT FROM held) RETURNING 1) SELECT 1 / CASE count(*) WHEN 1 THEN 1 ELSE 0 END FROM changed`,
   },
   "better-auth-oauth-resources": {
     kind: "row-work",
+    assertRepaired: async (client) => {
+      const rows = await client<{ repaired: boolean }[]>`
+        SELECT cardinality(allowed_scopes) > 0 AS repaired
+        FROM oauth_resource WHERE id = ${ID}`;
+      expect(rows.at(0)?.repaired, "better-auth-oauth-resources").toBeTrue();
+    },
     seed: async (client) => {
       const resource = buildBetterAuthOAuthResources("https://test.invalid").at(
         0,
@@ -162,21 +221,71 @@ const SEEDS = {
         [ID, resource.identifier, resource.name],
       );
     },
+    writerRow: ID,
     writerUpdate: `WITH changed AS (UPDATE oauth_resource SET updated_at = clock_timestamp() WHERE id = '${ID}' RETURNING 1) SELECT 1 / CASE count(*) WHEN 1 THEN 1 ELSE 0 END FROM changed`,
   },
-  sanctions_contact_marks_attempt_count_check: { kind: "no-row-work" },
-  contacts_sanctions_monitoring_mode_check: { kind: "no-row-work" },
-  organization_settings_sanctions_monitoring_mode_check: {
+  sanctions_contact_marks_attempt_count_check: noRowSeed(
+    "sanctions_contact_marks",
+    "sanctions_contact_marks_attempt_count_check",
+    `INSERT INTO sanctions_contact_marks (organization_id, contact_id) VALUES ('org', '${ID}')`,
+  ),
+  contacts_sanctions_monitoring_mode_check: noRowSeed(
+    "contacts",
+    "contacts_sanctions_monitoring_mode_check",
+    `INSERT INTO contacts (id, organization_id, type, display_name) VALUES ('${ID}', 'org', 'person', 'Contact')`,
+  ),
+  organization_settings_sanctions_monitoring_mode_check: noRowSeed(
+    "organization_settings",
+    "organization_settings_sanctions_monitoring_mode_check",
+    `INSERT INTO organization_settings (id, organization_id) VALUES ('${ID}', 'org')`,
+  ),
+  sanctions_contact_matches_disposition_check: noRowSeed(
+    "sanctions_contact_matches",
+    "sanctions_contact_matches_disposition_check",
+    `INSERT INTO sanctions_contact_matches (organization_id, contact_id, source_id, source_entry_id, edition_id, state, disposition, contact_fingerprint, entry_hash, match, updated_at) VALUES ('org', '${ID}', 'source', 'entry', '${ID_2}', 'active', 'needs-review', 'contact', 'entry', '{}', now())`,
+  ),
+  sanctions_screening_events_type_check: noRowSeed(
+    "sanctions_screening_events",
+    "sanctions_screening_events_type_check",
+    `INSERT INTO sanctions_screening_events (id, organization_id, contact_id, source_id, source_entry_id, type, new_edition_id, reason, created_at) VALUES ('${ID}', 'org', '${ID_2}', 'source', 'entry', 'new', '${ID_3}', 'fixture', now())`,
+  ),
+  sanctions_contact_screenings_status_check: noRowSeed(
+    "sanctions_contact_screenings",
+    "sanctions_contact_screenings_status_check",
+    `INSERT INTO sanctions_contact_screenings (organization_id, contact_id, source_id, edition_id, status, contact_fingerprint, checked_at) VALUES ('org', '${ID}', 'source', '${ID_2}', 'clear', 'contact', now())`,
+  ),
+  sanctions_contact_screenings_incomplete_edition_check: noRowSeed(
+    "sanctions_contact_screenings",
+    "sanctions_contact_screenings_incomplete_edition_check",
+    `INSERT INTO sanctions_contact_screenings (organization_id, contact_id, source_id, edition_id, status, contact_fingerprint, checked_at) VALUES ('org', '${ID}', 'source', '${ID_2}', 'incomplete', 'contact', now())`,
+  ),
+  legal_list_verification_runs_error_code_check: noRowSeed(
+    "legal_list_verification_runs",
+    "legal_list_verification_runs_error_code_check",
+    `INSERT INTO legal_list_verification_runs (id, organization_id, workspace_id, entity_id, file_field_id, entity_version_id, content_sha256, evidence, entity_feature_gate) VALUES ('${ID}', 'org', '${ID_2}', '${ID_3}', '00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000005', repeat('a', 64), '{"facts":[],"listId":"fixture"}', 'open')`,
+  ),
+  "corpus-projection-cleanup-stall": {
     kind: "no-row-work",
+    tables: ["corpus_index_projection_intents"],
+    seed: async (client) => {
+      for (const constraint of [
+        "corpus_index_projection_intents_status_values",
+        "corpus_index_projection_intents_status_shape",
+        "corpus_index_projection_intents_delete_reissues_nonnegative",
+      ]) {
+        await invalidateConstraint(
+          client,
+          "corpus_index_projection_intents",
+          constraint,
+        );
+      }
+      await client.unsafe("SET session_replication_role = replica");
+      await client.unsafe(
+        `INSERT INTO corpus_index_projection_intents (id, family, generation, entity_id, epoch, fingerprint, index_id, status, append_started_at, append_publish_barrier_at, cleanup_not_before, cleanup_started_at, delete_opstamp, delete_task_created_at, updated_at) VALUES ('${ID}', 'case_law', 'case_law_v1', '${ID_2}', 1, repeat('a', 64), 'i', 'cleanup_committed', now(), now(), now(), now(), 1, now(), now())`,
+      );
+      await client.unsafe("SET session_replication_role = origin");
+    },
   },
-  sanctions_contact_matches_disposition_check: { kind: "no-row-work" },
-  sanctions_screening_events_type_check: { kind: "no-row-work" },
-  sanctions_contact_screenings_status_check: { kind: "no-row-work" },
-  sanctions_contact_screenings_incomplete_edition_check: {
-    kind: "no-row-work",
-  },
-  legal_list_verification_runs_error_code_check: { kind: "no-row-work" },
-  "corpus-projection-cleanup-stall": { kind: "no-row-work" },
 } as const satisfies Record<RepairName, Seed>;
 
 const adapter = (connection: ReservedSQL): OnlineMigrationConnection => ({
@@ -261,12 +370,51 @@ const assertRegistryAndSeedsMatch = () => {
   );
 };
 
+const snapshotRows = async (client: SQL, tables: readonly string[]) => {
+  const snapshot: Record<string, string[]> = {};
+  for (const table of tables) {
+    const rows = await client.unsafe<{ xmin: string }[]>(
+      `SELECT xmin::text AS xmin FROM public."${table}" ORDER BY ctid`,
+    );
+    snapshot[table] = rows.map(({ xmin }) => xmin);
+  }
+  return snapshot;
+};
+
 const exercise = async (repair: (typeof ONLINE_MIGRATION_REPAIRS)[number]) => {
   const seed = SEEDS[repair.name];
   if (seed === undefined) {
     panic(`Online repair ${repair.name} has no writer seed`);
   }
   if (seed.kind === "no-row-work") {
+    await withScratch(repair.name, async (openClient) => {
+      const owner = openClient();
+      await seed.seed(owner);
+      const before = await snapshotRows(owner, seed.tables);
+      for (const table of seed.tables) {
+        expect(before[table]?.length, `${repair.name}: ${table} seed`).toBe(1);
+      }
+      const repairClient = openClient();
+      const repairSession = await repairClient.reserve();
+      const connection = adapter(repairSession);
+      expect(
+        (await repair.readCompletion(connection)).type,
+        repair.name,
+      ).not.toBe("complete");
+      const outcome = await withTimeout(
+        async () =>
+          await repair.repair(
+            connection,
+            createUngatedTableGateForTests(connection),
+          ),
+        { timeoutMs: DEADLINE_MS, label: `Online repair ${repair.name}` },
+      );
+      expect(outcome.type, repair.name).toBe("complete");
+      expect(await snapshotRows(owner, seed.tables), repair.name).toEqual(
+        before,
+      );
+      repairSession.release();
+    });
     console.log(
       JSON.stringify({
         repair: repair.name,
@@ -280,6 +428,13 @@ const exercise = async (repair: (typeof ONLINE_MIGRATION_REPAIRS)[number]) => {
   await withScratch(repair.name, async (openClient) => {
     const owner = openClient();
     await seed.seed(owner);
+    await owner.unsafe(
+      "CREATE TABLE repair_writer_heartbeat (id integer PRIMARY KEY, touched_at timestamptz)",
+    );
+    await owner.unsafe("INSERT INTO repair_writer_heartbeat (id) VALUES (1)");
+    expect(seed.writerUpdate, repair.name).toContain(
+      `id = '${seed.writerRow}'`,
+    );
     const repairClient = openClient();
     const repairSession = await repairClient.reserve();
     const writerClient = openClient();
@@ -345,6 +500,7 @@ const exercise = async (repair: (typeof ONLINE_MIGRATION_REPAIRS)[number]) => {
     expect((await repair.readCompletion(connection)).type, repair.name).toBe(
       "complete",
     );
+    await seed.assertRepaired(owner);
     repairSession.release();
   });
 };
