@@ -1,0 +1,120 @@
+name: Release Mobile iOS
+run-name: Release Mobile iOS ${{ inputs.variant }}
+
+defaults:
+  run:
+    shell: bash
+
+# Builds the iOS app on a hosted macOS runner and uploads it to TestFlight.
+# Manual only, from main: a person picks the build, `preview` for internal
+# testers or `production` for the store track (apps/mobile/app.config.ts).
+#
+# Signing is Xcode's automatic signing, authenticated by the team's App
+# Store Connect API key, so no certificate or provisioning profile is kept
+# anywhere. The build number is this run's number, which only grows.
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Which build to upload"
+        required: true
+        type: choice
+        options:
+          - preview
+          - production
+        default: preview
+
+# Default-deny at the workflow level; the one job reads the repository only.
+permissions: {}
+
+concurrency:
+  group: release-mobile-ios-${{ inputs.variant }}
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    name: TestFlight ${{ inputs.variant }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      APP_VARIANT: ${{ inputs.variant }}
+      MOBILE_BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      # Signing secrets reach only the steps below that sign or upload, never
+      # the install, so no dependency lifecycle script can read them.
+      - name: Install mobile dependencies
+        uses: ./.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+
+      - name: Generate the native iOS project
+        working-directory: apps/mobile
+        run: bunx expo prebuild --platform ios --clean
+
+      - name: Archive and upload to TestFlight
+        working-directory: apps/mobile/ios
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/app-store-connect.p8"
+          trap 'rm -f "$key_path"' EXIT
+          printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$key_path"
+          chmod 600 "$key_path"
+
+          workspaces=(*.xcworkspace)
+          if [ "${#workspaces[@]}" -ne 1 ]; then
+            echo "expected one Xcode workspace, found ${#workspaces[@]}" >&2
+            exit 1
+          fi
+          workspace="${workspaces[0]}"
+          scheme="${workspace%.xcworkspace}"
+          archive="$RUNNER_TEMP/stella.xcarchive"
+          auth=(
+            -allowProvisioningUpdates
+            -authenticationKeyPath "$key_path"
+            -authenticationKeyID "$APPLE_API_KEY_ID"
+            -authenticationKeyIssuerID "$APPLE_API_ISSUER"
+          )
+
+          xcodebuild archive \
+            -workspace "$workspace" \
+            -scheme "$scheme" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$archive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            "${auth[@]}"
+
+          export_options="$RUNNER_TEMP/export-options.plist"
+          plutil -create xml1 "$export_options"
+          plutil -insert method -string app-store-connect "$export_options"
+          plutil -insert destination -string upload "$export_options"
+          plutil -insert signingStyle -string automatic "$export_options"
+          plutil -insert teamID -string "$APPLE_TEAM_ID" "$export_options"
+          plutil -insert manageAppVersionAndBuildNumber -bool NO "$export_options"
+
+          xcodebuild -exportArchive \
+            -archivePath "$archive" \
+            -exportOptionsPlist "$export_options" \
+            -exportPath "$RUNNER_TEMP/export" \
+            "${auth[@]}"
