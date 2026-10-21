@@ -413,6 +413,8 @@ export const writeApiTestPartition = (root: string) => {
     const relative = (file: string) =>
       repoRelativePath(path.dirname(source), path.resolve(api, file));
     writeApiTypecheckArtifact(source, {
+      files: [],
+      include: ["src", "drizzle.config.ts", "../../types"].map(relative),
       exclude: [
         "src/handlers/visual-sandbox/browser",
         ...partition.independent,

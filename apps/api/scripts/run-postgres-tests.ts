@@ -12,6 +12,7 @@ import {
   planPostgresTestShards,
   selectPostgresTestShard,
 } from "./postgres-test-shards";
+import { preparePostgresTests } from "./prepare-postgres-tests";
 import { runGatedTests } from "./run-gated-tests";
 import { parseApiTestShard } from "./test-file-shards";
 import { durationSeconds } from "./test-timings";
@@ -39,6 +40,7 @@ process.exitCode = await runGatedTests({
   selection: process.env["CI_POSTGRES_TEST_SELECTION"],
   exclusiveTestPaths: EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   spawnTestProcess: spawnPostgresTestProcess,
+  prepare: preparePostgresTests,
   validateTestPlan: async (apiRoot, files) => {
     await assertSharedTableDdlIsolated(apiRoot, files);
     const shard = parseApiTestShard(shardValue);
