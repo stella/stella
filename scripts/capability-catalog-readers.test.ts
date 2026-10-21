@@ -12,6 +12,8 @@ const historicalCatalogConsumers = new Set([
   ".agents/plans/049-capability-catalog-full-surface-cli.md",
 ]);
 const runtimeAggregateOwners = new Set([
+  // Checks that turbo declares the generated aggregate as an output.
+  "apps/api/scripts/lib/web-api-turbo-inputs.test.ts",
   // The bundled API imports generated aggregates produced from the shards.
   "apps/api/src/mcp/capability-tools.ts",
   // Checks the cursor bounds of the bundled runtime output contracts.
