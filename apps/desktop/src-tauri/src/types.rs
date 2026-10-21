@@ -386,6 +386,10 @@ pub struct ErrorResponse {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
 
@@ -669,10 +673,8 @@ mod rpc_codegen_tests {
   use super::*;
   use std::any::TypeId;
   use std::collections::HashSet;
-  use std::path::Path;
   use ts_rs::{Config, TS, TypeVisitor};
 
-  const GENERATED_PATH: &str = "../../../packages/api-contract/src/desktop-rpc.gen.ts";
   const COMMITTED_BINDINGS: &str =
     include_str!("../../../../packages/api-contract/src/desktop-rpc.gen.ts");
   const GENERATED_HEADER: &str = "// Generated from apps/desktop/src-tauri/src/types.rs.\n// Regenerate from the repository root with `bun --filter @stll/desktop rpc:generate`.\n// Do not edit by hand.\n\n";
@@ -787,7 +789,7 @@ mod rpc_codegen_tests {
   #[test]
   #[ignore = "writes the committed TypeScript bindings"]
   fn generate_desktop_rpc_bindings() {
-    std::fs::write(Path::new(GENERATED_PATH), render_desktop_rpc_bindings())
+    crate::local_store::write_generated_rpc_bindings(&render_desktop_rpc_bindings())
       .expect("generated desktop RPC bindings are writable");
   }
 }
