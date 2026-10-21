@@ -22,7 +22,7 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
-const { ChatEditorProvider, ChatSubmitPreservedError, useChatEditor } =
+const { CHAT_SEND_KEPT, CHAT_SEND_SENT, ChatEditorProvider, useChatEditor } =
   await import("./chat-editor-provider");
 const { PromptEditorContent } = await import("./prompt-editor");
 const { ChatDraftAttachmentChips } =
@@ -234,6 +234,7 @@ test("a failed send restores typed text and file attachments once, for an identi
   await act(async () =>
     controller().submit((draft) => {
       sent.push(draft);
+      return CHAT_SEND_SENT;
     }),
   );
   expect(sent).toHaveLength(2);
@@ -241,21 +242,54 @@ test("a failed send restores typed text and file attachments once, for an identi
   expect(useChatDraftStore.getState().getDraft(firstKey)).toBeNull();
 });
 
-test("a send preserved for a materialized thread restores the draft under that thread only", async () => {
+// A send that declines (no AI key, a model choice that did not save, a busy
+// thread) reports `kept` instead of throwing: the draft comes back without an
+// error toast, exactly as typed.
+test("a send that keeps the draft restores it in place", async () => {
+  const { ui, controller } = await mount(firstThread);
+  dropFile(
+    ui.getByRole("textbox"),
+    new File(["memo"], "memo.txt", { type: "text/plain" }),
+  );
+  await waitFor(() => expect(controller().attachments).toHaveLength(1));
+  type(controller(), "Check the notice period");
+  const originalAttachments = controller().attachments;
+  const originalDoc = controller().editor?.getJSON();
+
+  await act(async () =>
+    controller().submit(() => {
+      expect(controller().editor?.isEmpty).toBe(true);
+      return CHAT_SEND_KEPT;
+    }),
+  );
+
+  expect(controller().editor?.getJSON()).toEqual(originalDoc);
+  expect(controller().attachments).toEqual(originalAttachments);
+  expect(useChatDraftStore.getState().getDraft(firstKey)).toMatchObject({
+    attachments: originalAttachments,
+    doc: originalDoc,
+  });
+  expect(controller().canSubmit).toBe(true);
+});
+
+test("a send that went out leaves the composer and the stored draft empty", async () => {
+  const { controller } = await mount(firstThread);
+  type(controller(), "Send this one");
+
+  await act(async () => controller().submit(() => CHAT_SEND_SENT));
+
+  expect(controller().editor?.isEmpty).toBe(true);
+  expect(useChatDraftStore.getState().getDraft(firstKey)).toBeNull();
+  expect(controller().canSubmit).toBe(false);
+});
+
+test("a draft kept for a materialized thread is restored under that thread only", async () => {
   const { controller } = await mount(firstThread);
   type(controller(), "Start the review");
 
-  await act(async () => {
-    const failure = await rejectionOf(
-      controller().submit(() => {
-        throw new ChatSubmitPreservedError({
-          message: "Thread materialized",
-          restoreThreadKey: secondKey,
-        });
-      }),
-    );
-    expect(ChatSubmitPreservedError.is(failure)).toBe(true);
-  });
+  await act(async () =>
+    controller().submit(() => ({ kind: "kept", restoreThreadKey: secondKey })),
+  );
 
   expect(Object.keys(useChatDraftStore.getState().draftsByThreadKey)).toEqual([
     secondKey,

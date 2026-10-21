@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
 
+import type { ChatSend } from "@/components/chat-editor-provider";
+
 const SOURCE_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sourceIndex = sourceFileIndex(SOURCE_ROOT);
 const sourceModules = sourceIndex
@@ -41,6 +43,41 @@ const composerShells = [
   },
 ] as const;
 
+// Every place that hands a composer draft to a send, by how it does so. Each
+// send is typed `ChatSend` (directly, or through `PromptBar`'s `onSubmit`), so
+// the compiler makes it say whether the composer keeps the draft. A new entry
+// point is added here, typed the same way, with a test for its declines.
+const sendEntryPatterns = {
+  chatInputSurface: /<ChatInputSurface(?=[\s/>])/gu,
+  composerWiring: /\buseChatComposerWiring\(/gu,
+  controllerSubmit: /\b\w*[Cc]ontroller(?:\(\))?\.submit\(/gu,
+  promptBar: /<PromptBar(?=[\s/>])/gu,
+};
+const sendEntryPoints = {
+  "components/ai-suggestions/file-chat-overlay.tsx": {
+    controllerSubmit: 2,
+    promptBar: 1,
+  },
+  "components/ai-suggestions/host.tsx": { composerWiring: 1 },
+  "components/chat-input-surface.tsx": { composerWiring: 1 },
+  "components/inspector/chat-tab-panel.tsx": {
+    controllerSubmit: 1,
+    promptBar: 1,
+  },
+  "routes/_protected.chat/-components/chat-thread-page.tsx": {
+    chatInputSurface: 1,
+    controllerSubmit: 1,
+  },
+  "routes/_protected.chat/index.tsx": { chatInputSurface: 1 },
+  "routes/dev/-components/chat-long-paste-playground.tsx": {
+    chatInputSurface: 1,
+  },
+  "routes/knowledge/-components/template-studio-chat.tsx": { promptBar: 1 },
+} satisfies Record<
+  string,
+  Partial<Record<keyof typeof sendEntryPatterns, number>>
+>;
+
 const followupSurfaces = `components/ai-suggestions/file-chat-overlay.tsx
 components/inspector/chat-tab-panel.tsx
 routes/_protected.chat/-components/chat-thread-page.tsx`;
@@ -64,6 +101,37 @@ describe("chat composer census", () => {
         new RegExp(`export const ${component}\\b`, "u"),
       );
     }
+  });
+
+  test("a composer send cannot finish without saying whether the draft is kept", () => {
+    // @ts-expect-error a send that returns nothing would let the composer drop the draft
+    const quiet: ChatSend = async () => {};
+    // @ts-expect-error an early bare return is a declined send that forgot the draft
+    const earlyReturn: ChatSend = async (draft) => {
+      if (draft.html === "") {
+        return;
+      }
+      return { kind: "sent" };
+    };
+    const declining: ChatSend = async (draft) =>
+      draft.html === "" ? { kind: "kept" } : { kind: "sent" };
+
+    expect([quiet, earlyReturn, declining]).toHaveLength(3);
+  });
+
+  test("pins every composer send entry point", () => {
+    const discovered: Record<string, Record<string, number>> = {};
+    for (const file of sourceModules) {
+      const source = sourceOf(file);
+      for (const [kind, pattern] of Object.entries(sendEntryPatterns)) {
+        const count = source.match(pattern)?.length ?? 0;
+        if (count > 0) {
+          discovered[file] = { ...discovered[file], [kind]: count };
+        }
+      }
+    }
+
+    expect(discovered).toEqual(sendEntryPoints);
   });
 
   test("every follow-up chip surface gives its editor the same follow-up", () => {
