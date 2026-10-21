@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: "Commit SHA (blank selects the newest staging/verified success on main)"
+        description: "Version commit SHA (blank selects the commit that set VERSION on main)"
         required: false
         type: string
       proof_sha:

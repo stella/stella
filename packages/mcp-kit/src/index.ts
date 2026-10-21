@@ -17,6 +17,7 @@ export {
   validationError,
 } from "./envelope";
 export { readToolInput, type ReadInput } from "./input";
+export { localMcpClientHeaders } from "./local-client-identity";
 export {
   advertisedBytes,
   compactSchema,

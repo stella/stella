@@ -1084,6 +1084,10 @@ test("the result gate evaluates every job in the workflow", () => {
 
 test("each job's plan scope is the ci-plan output its `if:` selects it by", () => {
   const declaredAdditionalScopes = {
+    "ci-tests": [
+      "package_checks_required",
+      "The planned shard matrix only narrows ci-tests; package checks still decide whether it may run.",
+    ],
     "service-suites": [
       "corpus_suites_required",
       "Corpus changes start the shared service job without opting PRs into Postgres or Valkey steps.",
@@ -1992,29 +1996,23 @@ test("a skipped plan passes only while the pull request is still a draft", () =>
     }),
   ).toBe(0);
 
-  // A push to a draft, then marking it ready at once: the ready run starts
-  // first and is cancelled by the draft run queued after it, whose payload
-  // still says draft and whose plan skips. The cancelled run may pass, but
-  // the run that stands must not certify a ready pull request unchecked.
-  const cancelledReadyRun = Object.fromEntries(
-    resultJob.needs.map((job) => [job, "cancelled"]),
+  // A push to a draft, then marking it ready at once: the draft run's
+  // payload still says draft and its plan skips. It must not certify a ready
+  // pull request unchecked, and since re-running it replays the draft event,
+  // it points at a fresh run instead of a re-run.
+  const staleDraftOptions: EvaluateResultOptions = {
+    event,
+    results: skippedPlan,
+    suiteDepth: "",
+    liveDraft: false,
+  };
+  const staleDraft = onlyOutcome(
+    evaluateResults([staleDraftOptions], (item) => item),
   );
-  expect(
-    evaluateResult({
-      event,
-      results: cancelledReadyRun,
-      liveDraft: false,
-      cancellationEvidence: "superseded",
-    }),
-  ).toBe(0);
-  expect(
-    evaluateResult({
-      event,
-      results: skippedPlan,
-      suiteDepth: "",
-      liveDraft: false,
-    }),
-  ).toBe(1);
+  expect(staleDraft.exitCode).toBe(1);
+  expect(staleDraft.stdout).toContain("Re-running this run cannot start CI");
+  expect(staleDraft.stdout).toContain("push a commit");
+  expect(staleDraft.stdout).not.toContain("re-run CI Checks");
 
   // An unanswered lookup is not a draft either.
   expect(evaluateResult({ event, results: skippedPlan, suiteDepth: "" })).toBe(
@@ -2661,8 +2659,10 @@ test("a manual run supersedes only an older manual run on the same branch", () =
   expect(concurrency.group).toContain(
     "github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref)",
   );
+  // A draft run has its own group: queued after the ready run of the same
+  // head, it would otherwise cancel the only run that can prove it.
   expect(concurrency.group).toContain(
-    "format('pr-{0}', github.event.pull_request.number || github.ref)",
+    "format('pr-{0}{1}', github.event.pull_request.number || github.ref, github.event.pull_request.draft && '-draft' || '')",
   );
   expect(concurrency.group).toContain("format('run-{0}', github.run_id)");
 });
@@ -2879,7 +2879,7 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
   for (const [name, scope] of [
     ["Web API types determinism guard", "web_api_types_required"],
     ["Route tree drift guard", "route_tree_required"],
-    ["Published export map guard", "published_exports_required"],
+    ["Workspace package export map guard", "published_exports_required"],
   ] as const) {
     const condition = steps.find((step) => step.name === name)?.if ?? "";
     expect(condition, name).toContain(
@@ -4425,7 +4425,7 @@ test("only the dedicated malware gate activates Safe Chain and keeps Bun package
   ).toBe(true);
 });
 
-test("every browser suite belongs to exactly one required matrix leg", () => {
+test("every browser suite runs on its required matrix legs, the playground on every shard leg", () => {
   const browser = v.parse(
     v.object({
       strategy: v.object({
@@ -4448,8 +4448,14 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
       values: { "github.event_name": "merge_group" },
     }),
   );
-  expect(new Set(matrixSuites)).toEqual(new Set(["desktop", "ui"]));
-  expect(matrixSuites).toHaveLength(2);
+  const playgroundLegs = matrixSuites.filter((leg) =>
+    leg.startsWith("playground-"),
+  );
+  expect(new Set(matrixSuites)).toEqual(
+    new Set(["desktop", "ui", ...playgroundLegs]),
+  );
+  expect(matrixSuites).toHaveLength(2 + playgroundLegs.length);
+  expect(playgroundLegs.length).toBeGreaterThan(1);
   expect(
     evaluate(browser.strategy.matrix.suite, {
       values: { "github.event_name": "pull_request" },
@@ -4470,7 +4476,17 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
     const legs = matrixSuites.filter((leg) =>
       suite.if?.includes(`matrix.suite == '${leg}'`),
     );
-    expect(legs, suite.name).toHaveLength(1);
+    // The playground suite is the only sharded one: it runs on every
+    // playground leg, each taking one Playwright shard of as many as there
+    // are legs, so a leg can neither be dropped nor duplicate another's tests.
+    if (suite.name === "Test UI playground visuals") {
+      expect(legs, suite.name).toEqual(playgroundLegs);
+      expect(suite.run, suite.name).toContain(
+        `--shard="\${SUITE#playground-}/${String(playgroundLegs.length)}"`,
+      );
+    } else {
+      expect(legs, suite.name).toHaveLength(1);
+    }
     expect(suite.if, suite.name).toContain("outputs.required == 'true'");
   }
   expect(resultJob.needs).toContain("ci-browser");
@@ -4539,6 +4555,37 @@ test("route-relevant changes plan the required merge-group smoke", () => {
     }),
   ).toBe(0);
 }, 30_000);
+
+test("a merge group relies on route-smoke after the duplicate matrix leg is removed", () => {
+  const event = EVENT.mergeGroup;
+  expect(
+    evaluateResult({
+      event,
+      results: {
+        "e2e-production-shard": "success",
+        "route-smoke": "success",
+      },
+    }),
+  ).toBe(0);
+  expect(
+    evaluateResult({
+      event,
+      results: {
+        "e2e-production-shard": "success",
+        "route-smoke": "failure",
+      },
+    }),
+  ).toBe(1);
+  expect(
+    evaluateResult({
+      event,
+      results: {
+        "e2e-production-shard": "success",
+        "route-smoke": "skipped",
+      },
+    }),
+  ).toBe(1);
+});
 
 test("a merge group plans both browser suites for app changes and neither for docs", () => {
   const scopes = ["route_smoke_required", "e2e_production_required"] as const;
@@ -4882,13 +4929,13 @@ test("each split service step follows its own dependency scope and execution dep
     "valkey_suites_required",
     "collaboration_suite_required",
   ] as const;
-  const timePlan = runSelector(
-    ["packages/time/src/index.ts"],
+  const packagePlan = runSelector(
+    ["packages/api-contract/src/matter-reference.ts"],
     [...scopes, "collab_redis_required", "service_suites_pr_required"],
   );
-  expect(timePlan.at(3)).toBe("true");
-  expect(timePlan.at(4)).toBe("false");
-  expect(timePlan.at(5)).toBe("true");
+  expect(packagePlan.at(3)).toBe("true");
+  expect(packagePlan.at(4)).toBe("false");
+  expect(packagePlan.at(5)).toBe("true");
   const collaboration = jobSteps(ciJobs["service-suites"]).find(
     ({ name }) => name === "Run cross-replica collaboration suite",
   );
@@ -4896,7 +4943,7 @@ test("each split service step follows its own dependency scope and execution dep
     `\${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}`,
   );
   const planned = Object.fromEntries(
-    scopes.map((scope, index) => [scope, timePlan.at(index)]),
+    scopes.map((scope, index) => [scope, packagePlan.at(index)]),
   );
   const evaluateStep = (
     predicate: string,
@@ -5936,23 +5983,28 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
     testJobs: ["rest-web"],
     select: () => selectApiTestImpact({ changed: ["apps/web/src/page.tsx"] }),
   });
-  expect(web.matrix.shard).toEqual(["rest-web"]);
+  expect(web.type).toBe("run");
+  expect(web.type === "run" ? web.matrix.shard : []).toEqual(["rest-web"]);
   const queue = planCiApiTests({
     event: "merge_group",
     scopeUnknown: false,
     testJobs: ["rest-web"],
     select: () => ({ mode: "none", files: [], shards: 0 }),
   });
-  expect(queue.matrix.shard).toEqual(["rest-web"]);
+  expect(queue.type).toBe("run");
+  expect(queue.type === "run" ? queue.matrix.shard : []).toEqual(["rest-web"]);
   expect(
-    planCiApiTests({
-      event: "merge_group",
-      scopeUnknown: false,
-      testJobs: FULL_TEST_JOB_SHARDS,
-      select: () => {
-        throw new Error("Merge API files must not be narrowed");
-      },
-    }).matrix.shard,
+    (() => {
+      const plan = planCiApiTests({
+        event: "merge_group",
+        scopeUnknown: false,
+        testJobs: FULL_TEST_JOB_SHARDS,
+        select: () => {
+          throw new Error("Merge API files must not be narrowed");
+        },
+      });
+      return plan.type === "run" ? plan.matrix.shard : [];
+    })(),
   ).toEqual(["api-1", "api-2", "api-3", "rest-web"]);
   expect(workflow).toContain(
     `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
@@ -6086,6 +6138,7 @@ test.each([
           env: {
             PATH: Bun.env["PATH"] ?? "",
             E2E_PRODUCTION_REQUIRED: "true",
+            ROUTE_SMOKE_REQUIRED: "false",
             EVENT_NAME: event,
             GITHUB_OUTPUT: output,
             SELECTED_MATRIX: matrix,
@@ -6109,6 +6162,103 @@ test.each([
           "",
         ].join("\n"),
       );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+// The dedup drops a merge group's network-baseline leg only because route-smoke
+// produces the same "network manifest matches the committed baseline" verdict;
+// pin every link of that chain so neither side can drift alone.
+test("a merge group that drops the network leg still runs the network manifest verdict", () => {
+  const routeSmoke = v.parse(
+    v.looseObject({
+      if: v.string(),
+      steps: v.array(
+        v.looseObject({
+          id: v.optional(v.string()),
+          run: v.optional(v.string()),
+          env: v.optional(v.record(v.string(), v.unknown())),
+        }),
+      ),
+    }),
+    ciJobs["route-smoke"],
+  );
+  expect(routeSmoke.if).toContain("github.event_name == 'merge_group'");
+  expect(routeSmoke.if).toContain(
+    "needs.ci-plan.outputs.route_smoke_required == 'true'",
+  );
+  const proof = routeSmoke.steps.find(({ id }) => id === "network-baseline");
+  expect(proof?.run).toContain("route-smoke.spec.ts --project=route-smoke");
+  expect(proof?.env?.["E2E_EXECUTION_PROFILE"]).toBe("network-baseline");
+  // Comparison mode: a baseline write would skip the committed comparison.
+  expect(proof?.env?.["E2E_NETWORK_BASELINE"]).toBeUndefined();
+  // The planner keys the dedup on the same signal the route-smoke job runs on.
+  const planOutputs = v.parse(
+    v.looseObject({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  ).outputs;
+  expect(planOutputs["route_smoke_required"]).toBe(
+    `\${{ steps.changed-files.outputs.route_smoke_required }}`,
+  );
+  expect(workflow).toContain(
+    `ROUTE_SMOKE_REQUIRED: \${{ steps.changed-files.outputs.route_smoke_required }}`,
+  );
+  const spec = readFileSync(
+    new URL("../apps/web/e2e/specs/route-smoke.spec.ts", import.meta.url),
+    "utf-8",
+  );
+  expect(spec).toContain(
+    'test("network manifest matches the committed baseline"',
+  );
+});
+
+test.each([
+  {
+    event: EVENT.mergeGroup,
+    routeSmokeRequired: "true",
+    expected: '{"shard":[1,2]}',
+  },
+  {
+    event: EVENT.pullRequest,
+    routeSmokeRequired: "true",
+    expected: '{"shard":[1,2,"network-baseline"]}',
+  },
+])(
+  "the e2e planner deduplicates the merge-group network proof: %j",
+  ({ event, routeSmokeRequired, expected }) => {
+    const planner = jobSteps(ciJobs["ci-plan"]).find(
+      (step) => step.name === "Plan changed PR e2e shards",
+    );
+    const directory = mkdtempSync(nodePath.join(tmpdir(), "e2e-proof-plan-"));
+    const output = nodePath.join(directory, "output");
+    try {
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-c",
+          `bun() { printf '%s' '{"shard":[1,2,"network-baseline"]}'; }\n${planner?.run ?? panic("Missing e2e shard planner")}`,
+        ],
+        {
+          env: {
+            PATH: Bun.env["PATH"] ?? "",
+            E2E_PRODUCTION_REQUIRED: "true",
+            ROUTE_SMOKE_REQUIRED: routeSmokeRequired,
+            EVENT_NAME: event,
+            GITHUB_OUTPUT: output,
+            SELECTED_MATRIX: "",
+            SELECTED_MODE: "",
+            SELECTED_SPECS: "",
+            SELECTOR_OUTCOME: "skipped",
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(readFileSync(output, "utf-8")).toContain(`matrix=${expected}\n`);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -7061,11 +7211,12 @@ test("a merge group certifies every queue entry it merges against the target bra
         1,
       ),
     ).toBe("");
-    // A pull request keeps its own base.
+    // A pull request checkout that is not its merge commit keeps its own base.
     expect(
       resolveTargetBase(group, {
         EVENT_NAME: "pull_request",
         PR_BASE_SHA: main,
+        PR_HEAD_SHA: entry2,
       }),
     ).toBe(main);
   } finally {
@@ -7073,8 +7224,107 @@ test("a merge group certifies every queue entry it merges against the target bra
   }
 });
 
-test("only the resolver chooses a merge group's comparison base", () => {
+test("a pull request merge commit compares against the tip it was merged onto, not the event's older base", () => {
+  const root = realpathSync(
+    mkdtempSync(nodePath.join(tmpdir(), "pr-comparison-base-")),
+  );
+  const git = (cwd: string, ...args: string[]) => {
+    const result = Bun.spawnSync(["git", "-C", cwd, ...args], {
+      env: {
+        PATH: Bun.env["PATH"] ?? "",
+        GIT_AUTHOR_NAME: "Fixture",
+        GIT_AUTHOR_EMAIL: "fixture@localhost",
+        GIT_COMMITTER_NAME: "Fixture",
+        GIT_COMMITTER_EMAIL: "fixture@localhost",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    return result.stdout.toString().trim();
+  };
+  const commit = (cwd: string, file: string, message: string) => {
+    mkdirSync(nodePath.dirname(nodePath.join(cwd, file)), { recursive: true });
+    writeFileSync(nodePath.join(cwd, file), `${message}\n`);
+    git(cwd, "add", file);
+    git(cwd, "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", message);
+    return git(cwd, "rev-parse", "HEAD");
+  };
+  const pullRequest = (cwd: string, prBase: string, prHead: string) =>
+    resolveTargetBase(cwd, {
+      EVENT_NAME: "pull_request",
+      PR_BASE_SHA: prBase,
+      PR_HEAD_SHA: prHead,
+    });
+  try {
+    const repo = nodePath.join(root, "repo");
+    mkdirSync(repo);
+    git(repo, "init", "--quiet", "--initial-branch=main");
+    // The event's base: main when the pull request last synchronized.
+    const eventBase = commit(repo, "README.md", "main");
+    git(repo, "checkout", "--quiet", "-b", "feature");
+    const head = commit(repo, "docs/feature.md", "pull request");
+    // main moves on with a production web spec before the run checks out
+    // GitHub's merge commit, which is built on the newer tip.
+    git(repo, "checkout", "--quiet", "main");
+    const tip = commit(repo, "apps/web/e2e/specs/main.spec.ts", "main moves");
+    git(
+      repo,
+      "-c",
+      "commit.gpgsign=false",
+      "merge",
+      "--quiet",
+      "--no-ff",
+      "-m",
+      "merge",
+      head,
+    );
+    const changed = (from: string) =>
+      git(repo, "diff", "--name-only", `${from}...HEAD`).split("\n");
+
+    const base = pullRequest(repo, eventBase, head);
+    expect(base).toBe(tip);
+    expect(changed(base)).toEqual(["docs/feature.md"]);
+    expect(
+      runSelector(
+        changed(base),
+        ["e2e_production_required"],
+        "full",
+        "false",
+        "pull_request",
+      ),
+    ).toEqual(["false"]);
+    // The event's base would count main's spec as the pull request's change.
+    expect(changed(eventBase).toSorted()).toEqual([
+      "apps/web/e2e/specs/main.spec.ts",
+      "docs/feature.md",
+    ]);
+    expect(
+      runSelector(
+        changed(eventBase),
+        ["e2e_production_required"],
+        "full",
+        "false",
+        "pull_request",
+      ),
+    ).toEqual(["true"]);
+
+    // A merge whose second parent is not the pull request head keeps the
+    // event's base.
+    expect(pullRequest(repo, eventBase, eventBase)).toBe(eventBase);
+    // A shallow checkout lists no parents and keeps the event's base too.
+    git(root, "clone", "--quiet", "--depth=1", `file://${repo}`, "shallow");
+    expect(pullRequest(nodePath.join(root, "shallow"), eventBase, head)).toBe(
+      eventBase,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("only the resolver chooses a run's comparison base", () => {
   const offenders: string[] = [];
+  const pullRequestOffenders: string[] = [];
   for (const pattern of [
     ".github/workflows/*.yml",
     ".github/actions/*/action.yml",
@@ -7089,6 +7339,22 @@ test("only the resolver chooses a merge group's comparison base", () => {
         "utf-8",
       );
       for (const [index, line] of source.split("\n").entries()) {
+        // A pull request run of ci.yml checks out GitHub's merge commit,
+        // which the event's base can lag. Only the resolver (and the patch
+        // id, which diffs the pull request head itself) reads that base.
+        if (
+          (file === ".github/workflows/ci.yml" ||
+            !file.startsWith(".github/workflows/")) &&
+          /pull_request\??\.base\.sha/u.test(line) &&
+          !line.trim().startsWith("PR_BASE_SHA:") &&
+          !(
+            file === ".github/workflows/ci.yml" &&
+            line.trim().startsWith("BASE_SHA:") &&
+            line.includes("|| needs.ci-plan.outputs.target_base_sha")
+          )
+        ) {
+          pullRequestOffenders.push(`${file}:${String(index + 1)}`);
+        }
         if (!/merge_group\??\.base_sha/u.test(line)) {
           continue;
         }
@@ -7105,6 +7371,7 @@ test("only the resolver chooses a merge group's comparison base", () => {
     }
   }
   expect(offenders).toEqual([]);
+  expect(pullRequestOffenders).toEqual([]);
   const patchId = jobSteps(ciJobs["ci-plan"]).find(
     ({ name }) => name === "Compute stable patch id",
   );
