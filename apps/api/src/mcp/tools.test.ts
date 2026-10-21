@@ -88,6 +88,10 @@ import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
 import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-projections";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
+import {
+  currentReadWork,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
@@ -131,6 +135,10 @@ import {
   isDocumentsMcpCapabilityAllowed,
   listMcpTools,
 } from "@/api/mcp/tools";
+import {
+  docxWindowTextCache,
+  extractedWindowTextCache,
+} from "@/api/mcp/window-read-cache";
 import {
   DOCX_MIME_TYPE,
   PDF_MIME_TYPE,
@@ -234,7 +242,7 @@ const handleMcpToolCallWithCapturedObserver = async (
  * paragraph, for exercising `docxToMarkdown`'s real (unmocked) conversion in
  * `read_content_across_matters`'s markdown branch.
  */
-const makeDocxBytes = async () => {
+const makeDocxBytes = async (bodyText = "Signed below.") => {
   const zip = new JSZip();
   writeZipEntry(
     zip,
@@ -253,7 +261,7 @@ const makeDocxBytes = async () => {
       <w:tc><w:p><w:r><w:t>Seller</w:t></w:r></w:p></w:tc>
     </w:tr>
   </w:tbl>
-  <w:p><w:r><w:t>Signed below.</w:t></w:r></w:p>
+  <w:p><w:r><w:t>${bodyText}</w:t></w:r></w:p>
 </w:body></w:document>`,
   );
   writeZipEntry(
@@ -1255,6 +1263,8 @@ describe("OpenAI-compatible MCP tools", () => {
   let analytics: RecordingAnalytics;
 
   beforeEach(() => {
+    docxWindowTextCache.clear();
+    extractedWindowTextCache.clear();
     analytics = installRecordingAnalytics();
     anonymizeTextFieldsMock.mockReset();
     loadGazetteerByWorkspaceMock.mockReset();
@@ -8109,6 +8119,98 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: null,
       workspaceId: WORKSPACE_ID,
     });
+  });
+
+  test("MCP extracted continuation windows reuse decrypted text for 1x and 10x documents", async () => {
+    for (const scale of [1, 10]) {
+      extractedWindowTextCache.clear();
+      const text = "Synthetic body. ".repeat(1100 * scale);
+      const encrypted = await encryptContent(ORGANIZATION_ID, text);
+      const context = createContext({
+        accessibleWorkspaceIds: [WORKSPACE_ID],
+        scopedDb: createScopedDb([], createExtractedContentRow({ encrypted })),
+      });
+      const read = async (cursor?: string) =>
+        await runWithQueryCounter(async () => {
+          const result = await handleMcpToolCall({
+            args: {
+              entity_id: "00000000-0000-4000-8000-0000000e0001",
+              ...(cursor === undefined ? {} : { cursor }),
+            },
+            context,
+            toolName: "read_content_across_matters",
+          });
+          return { payload: parseToolPayload(result), work: currentReadWork() };
+        });
+      const first = await read();
+      expect(first.work?.decryptedBytes).toBe(text.length);
+      if (
+        !isRecord(first.payload) ||
+        typeof first.payload["nextCursor"] !== "string"
+      ) {
+        throw new Error("Expected continuation cursor for synthetic document");
+      }
+      const page = await read(first.payload["nextCursor"]);
+      expect(page.work).toMatchObject({
+        storageReadBytes: 0,
+        decryptedBytes: 0,
+        documentConversions: 0,
+        cacheHits: 1,
+      });
+      expect(page.payload).toMatchObject({
+        text: text.slice(8000, 16_000),
+        truncated: true,
+      });
+    }
+  });
+
+  test("MCP DOCX continuation windows reuse converted text for 1x and 10x documents", async () => {
+    for (const scale of [1, 10]) {
+      const fileId = `window_file_${scale}`;
+      const bytes = new Uint8Array(
+        await makeDocxBytes("Synthetic body. ".repeat(1100 * scale)),
+      );
+      fake.put(envBase.S3_BUCKET, docxKey(fileId), bytes, DOCX_MIME_TYPE);
+      const context = createContext({
+        accessibleWorkspaceIds: [WORKSPACE_ID],
+        scopedDb: createScopedDb([], createExtractedContentRow(), [
+          {
+            type: "file",
+            id: fileId,
+            fileName: "window.docx",
+            mimeType: DOCX_MIME_TYPE,
+          },
+        ]),
+      });
+      const read = async (cursor?: string) =>
+        await runWithQueryCounter(async () => {
+          const result = await handleMcpToolCall({
+            args: {
+              entity_id: "00000000-0000-4000-8000-0000000e0001",
+              ...(cursor === undefined ? {} : { cursor }),
+            },
+            context,
+            toolName: "read_content_across_matters",
+          });
+          return { payload: parseToolPayload(result), work: currentReadWork() };
+        });
+      const first = await read();
+      expect(first.work?.storageReadBytes).toBe(bytes.byteLength);
+      expect(first.work?.documentConversions).toBe(1);
+      if (
+        !isRecord(first.payload) ||
+        typeof first.payload["nextCursor"] !== "string"
+      ) {
+        throw new Error("Expected continuation cursor for synthetic document");
+      }
+      const page = await read(first.payload["nextCursor"]);
+      expect(page.work).toMatchObject({
+        storageReadBytes: 0,
+        documentConversions: 0,
+        cacheHits: 1,
+      });
+      expect(page.payload).toMatchObject({ truncated: true });
+    }
   });
 
   test("read_content_across_matters returns folio Markdown when the current version holds a DOCX file", async () => {

@@ -2,7 +2,7 @@ import { panic, TaggedError } from "better-result";
 
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionPieces } from "@stll/legal-ast/projection-digest";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
@@ -22,6 +22,7 @@ import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { defineWindowedRead } from "@/api/lib/windowed-read-surface";
 
 import { listOutgoingDecisionCitationRoutes } from "./citations";
 import { readDecisionHandler } from "./get";
@@ -175,138 +176,144 @@ const locateProvisionAnchors = async ({
 };
 
 /** Each anchor stream is a bounded batch, not one query per block or link. */
-export const readDecisionReaderSource = async ({
-  decisionId,
-  phase,
-  referenceCursor,
-  audience,
-  surface,
-  appReaderTextOf = appReaderTextForSource,
-  caseLawDb = caseLawPublicReadDb,
-  legislationDb = legislationPublicReadDb,
-}: ReaderSourceOptions) => {
-  const read = await withRedistributableSubject(
-    caseLawDb,
+export const readDecisionReaderSource = defineWindowedRead(
+  "case-law-reader",
+  async ({
+    decisionId,
+    phase,
+    referenceCursor,
+    audience,
     surface,
-    { kind: "id", id: decisionId },
-    async (subject) => {
-      const decision = await readDecisionHandler({
-        subject,
-        citationsCursor: null,
-      });
-      if (!("caseNumber" in decision)) {
-        return null;
+    appReaderTextOf = appReaderTextForSource,
+    caseLawDb = caseLawPublicReadDb,
+    legislationDb = legislationPublicReadDb,
+  }: ReaderSourceOptions) => {
+    const read = await withRedistributableSubject(
+      caseLawDb,
+      surface,
+      { kind: "id", id: decisionId },
+      async (subject) => {
+        const decision = await readDecisionHandler({
+          subject,
+          citationsCursor: null,
+          astProjection: "internal",
+        });
+        if (!("caseNumber" in decision)) {
+          return null;
+        }
+        const ast = hasUsableAst(decision.documentAst)
+          ? decision.documentAst
+          : null;
+        const textAccess = readerTextAccess({
+          allowsDerivedAi: decision.source.allowsDerivedAi,
+          adapterKey: decision.source.adapterKey,
+          audience,
+          appReaderTextOf,
+        });
+        const canRead = textAccess === "readable";
+        const citations =
+          canRead && ast !== null && phase === "citations"
+            ? await listOutgoingDecisionCitationRoutes({
+                tx: subject.tx,
+                decisionId: subject.id,
+                cursor: referenceCursor,
+                countries: subject.countries,
+              })
+            : null;
+        const provisions =
+          canRead && ast !== null && phase === "provisions"
+            ? await listDecisionProvisionsHandler({
+                subject,
+                query: {
+                  limit: 20,
+                  ...(referenceCursor === undefined
+                    ? {}
+                    : { cursor: referenceCursor }),
+                },
+              })
+            : null;
+        return { decision, ast, textAccess, citations, provisions };
+      },
+    );
+    if (read === null) {
+      return null;
+    }
+    const { decision, ast, textAccess, citations, provisions } = read;
+    const citationAnchors: {
+      pieceId: string;
+      start: number;
+      end: number;
+      citationId: string;
+      decisionId: string;
+      url: string | null;
+    }[] = [];
+    if (citations !== null) {
+      if (!("items" in citations)) {
+        return { status: "conflict" as const };
       }
-      const ast = parseDocumentAst(decision.documentAst);
-      const textAccess = readerTextAccess({
-        allowsDerivedAi: decision.source.allowsDerivedAi,
-        adapterKey: decision.source.adapterKey,
-        audience,
-        appReaderTextOf,
-      });
-      const canRead = textAccess === "readable";
-      const citations =
-        canRead && ast !== null && phase === "citations"
-          ? await listOutgoingDecisionCitationRoutes({
-              tx: subject.tx,
-              decisionId: subject.id,
-              cursor: referenceCursor,
-              countries: subject.countries,
-            })
-          : null;
-      const provisions =
-        canRead && ast !== null && phase === "provisions"
-          ? await listDecisionProvisionsHandler({
-              subject,
-              query: {
-                limit: 20,
-                ...(referenceCursor === undefined
-                  ? {}
-                  : { cursor: referenceCursor }),
-              },
-            })
-          : null;
-      return { decision, ast, textAccess, citations, provisions };
-    },
-  );
-  if (read === null) {
-    return null;
-  }
-  const { decision, ast, textAccess, citations, provisions } = read;
-  const citationAnchors: {
-    pieceId: string;
-    start: number;
-    end: number;
-    citationId: string;
-    decisionId: string;
-    url: string | null;
-  }[] = [];
-  if (citations !== null) {
-    if (!("items" in citations)) {
+      const linked = citations.items.flatMap((row) =>
+        row.citedDecisionId === null
+          ? []
+          : [{ ...row, citedDecisionId: row.citedDecisionId }],
+      );
+      for (const [pieceId, spans] of Object.entries(
+        locateCitationSpans({
+          blocks: ast === null ? [] : ast.blocks,
+          citations: linked,
+        }),
+      )) {
+        for (const span of spans) {
+          citationAnchors.push({
+            pieceId,
+            start: span.start,
+            end: span.end,
+            citationId: span.source.id,
+            decisionId: span.source.citedDecisionId,
+            url: span.source.url,
+          });
+        }
+      }
+    }
+    if (provisions !== null && !("items" in provisions)) {
       return { status: "conflict" as const };
     }
-    const linked = citations.items.flatMap((row) =>
-      row.citedDecisionId === null
-        ? []
-        : [{ ...row, citedDecisionId: row.citedDecisionId }],
-    );
-    for (const [pieceId, spans] of Object.entries(
-      locateCitationSpans({
-        blocks: ast === null ? [] : ast.blocks,
-        citations: linked,
-      }),
-    )) {
-      for (const span of spans) {
-        citationAnchors.push({
-          pieceId,
-          start: span.start,
-          end: span.end,
-          citationId: span.source.id,
-          decisionId: span.source.citedDecisionId,
-          url: span.source.url,
-        });
-      }
-    }
-  }
-  if (provisions !== null && !("items" in provisions)) {
-    return { status: "conflict" as const };
-  }
-  // The published span addresses precisely this projection. Never relocate a stale span by guessing.
-  const provisionAnchors =
-    provisions !== null &&
-    ast !== null &&
-    provisions.publishedProjectionDigest === decision.projectionDigest
-      ? await locateProvisionAnchors({
-          ast,
-          page: provisions,
-          decisionDate: decision.decisionDate,
-          legislationDb,
-          surface,
-        })
-      : [];
-  return {
-    status: "read" as const,
-    decision: {
-      id: decision.id,
-      caseNumber: decision.caseNumber,
-      caseNumberType: decision.caseNumberType,
-      courtAbbreviation: decision.courtAbbreviation,
-      courtTier: decision.courtTier,
-      court: decision.court,
-      country: decision.country,
-      decisionDate: decision.decisionDate,
-      ecli: decision.ecli,
-      language: decision.language,
-      languageAlternates: decision.languageAlternates,
-      slug: decision.slug,
-    },
-    textAccess,
-    // Withheld text never leaves the read, whichever tool asked for it.
-    ast: textAccess === "readable" ? ast : null,
-    citationAnchors,
-    provisionAnchors,
-    provisionStatus: provisions?.status ?? null,
-    referenceNextCursor:
-      citations?.nextCursor ?? provisions?.nextCursor ?? null,
-  };
-};
+    // The published span addresses precisely this projection. Never relocate a stale span by guessing.
+    const provisionAnchors =
+      provisions !== null &&
+      ast !== null &&
+      provisions.publishedProjectionDigest === decision.projectionDigest
+        ? await locateProvisionAnchors({
+            ast,
+            page: provisions,
+            decisionDate: decision.decisionDate,
+            legislationDb,
+            surface,
+          })
+        : [];
+    return {
+      status: "read" as const,
+      decision: {
+        id: decision.id,
+        caseNumber: decision.caseNumber,
+        caseNumberType: decision.caseNumberType,
+        courtAbbreviation: decision.courtAbbreviation,
+        courtTier: decision.courtTier,
+        court: decision.court,
+        country: decision.country,
+        decisionDate: decision.decisionDate,
+        ecli: decision.ecli,
+        language: decision.language,
+        languageAlternates: decision.languageAlternates,
+        slug: decision.slug,
+      },
+      textAccess,
+      // Withheld text never leaves the read, whichever tool asked for it.
+      ast: textAccess === "readable" ? ast : null,
+      citationAnchors,
+      provisionAnchors,
+      provisionStatus: provisions?.status ?? null,
+      referenceNextCursor:
+        citations?.nextCursor ?? provisions?.nextCursor ?? null,
+    };
+  },
+);

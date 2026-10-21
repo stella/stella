@@ -78,7 +78,7 @@ const decisionWithText = (text: string) => {
     fulltext: text,
     projectionDigest: text,
     documentAstSource: "row",
-    sections: [{ index: 0, type: "header", title: text, text }],
+    sections: [{ index: 0, type: "header", title: text, blockIndices: [0] }],
     sourceUrl: text,
     sourceAttributionUrl: text,
     documentUrl: text,
@@ -176,8 +176,8 @@ test("decision readers bound every non-document Unicode field and retain officia
         expect(documentAst).toBe(original.documentAst);
         expect(fulltext).toBe(text);
         const coordinates = (
-          list: readonly { index: number; text: string }[] | null,
-        ) => list?.map((section) => [section.index, section.text]);
+          list: readonly { index: number; blockIndices: number[] }[] | null,
+        ) => list?.map((section) => [section.index, section.blockIndices]);
         expect(coordinates(sections)).toEqual(coordinates(original.sections));
         expect(
           Buffer.byteLength(JSON.stringify(nonDocument)),
@@ -188,12 +188,12 @@ test("decision readers bound every non-document Unicode field and retain officia
   );
 });
 
-test("decision readers keep every section whole so citation section indices resolve", () => {
+test("decision readers preserve section block references so citation section indices resolve", () => {
   const sections = Array.from({ length: 300 }, (_, index) => ({
     index,
     type: "argumentation" as const,
     title: null,
-    text: `${index}:${"ř".repeat(70_000)}`,
+    blockIndices: [index],
   }));
   const response = projectDecisionReader({
     ...decisionWithText("text"),

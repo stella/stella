@@ -1,3 +1,10 @@
+import {
+  CopyObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client as AwsS3Client,
+} from "@aws-sdk/client-s3";
 /**
  * AWS SDK v3 wrapper for presigned PUT uploads and the matching
  * post-upload verification calls.
@@ -20,14 +27,6 @@
  * presigned URLs can then be issued through an STS session policy
  * scoped to one organization/workspace key prefix.
  */
-
-import {
-  CopyObjectCommand,
-  GetObjectCommand,
-  HeadObjectCommand,
-  PutObjectCommand,
-  S3Client as AwsS3Client,
-} from "@aws-sdk/client-s3";
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Result, TaggedError } from "better-result";
@@ -39,6 +38,7 @@ import { Temporal } from "@stll/time";
 import { envBase } from "@/api/env-base";
 import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
+import { recordReadWork } from "@/api/lib/db-query-counter";
 import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
 import { resolveS3Credentials, TEMP_UPLOAD_TAGGING } from "@/api/lib/s3";
 import { createS3CredentialGuard } from "@/api/lib/s3/credential-guard";
@@ -703,6 +703,7 @@ export const readTenantS3ArrayBuffer = async ({
       ),
     scope,
   });
+  recordReadWork("storageReadBytes", bytes.byteLength);
   if (bytes.buffer instanceof ArrayBuffer) {
     return bytes.buffer.slice(
       bytes.byteOffset,

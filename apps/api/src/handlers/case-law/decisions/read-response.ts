@@ -179,24 +179,21 @@ export const readDecisionSuccessResponseSchema = t.Object({
   ),
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
-  // Whole official decision text is intentional. These and `sections[].text`
-  // are the only fields exempted by the public-response ledger; a windowed
-  // reader is separate.
+  // Whole official decision text is intentional; a windowed reader is separate.
   documentAst: t.Unknown(),
   fulltext: t.Nullable(t.String()),
   projectionDigest: nullableBoundedString(
     DECISION_READER_TEXT_BYTES.projectionDigest,
   ),
   documentAstSource: t.Union([t.Literal("store"), t.Literal("row"), t.Null()]),
-  // Sections split the whole official text and citations address them by
-  // index, so neither the list nor a section's text is cut.
+  // Citations address sections by index; blocks carry their text once.
   sections: t.Nullable(
     t.Array(
       t.Object({
         index: t.Number(),
         type: t.UnionEnum([...DECISION_SECTION_TYPES]),
         title: nullableBoundedString(LABEL_BYTES),
-        text: t.String(),
+        blockIndices: t.Array(t.Integer({ minimum: 0 })),
       }),
     ),
   ),
@@ -404,7 +401,7 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
         index: section.index,
         type: section.type,
         title: nullableText(section.title, LABEL_BYTES),
-        text: section.text,
+        blockIndices: section.blockIndices,
       })) ?? null,
     sourceUrl: nullableText(decision.sourceUrl, text.sourceUrl),
     sourceAttributionUrl: nullableText(
