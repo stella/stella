@@ -117,6 +117,27 @@ describe("GitHub expression evaluation", () => {
     expect(evaluate("needs.b.outputs.anything == ''", context)).toBe(UNKNOWN);
   });
 
+  test("values of different types compare as GitHub coerces them", () => {
+    // An unset job output renders as null; GitHub reads `null == ''` as true,
+    // so a selection gate such as `outputs.x == '' || contains(...)` keeps
+    // the step when the planner wrote no selection.
+    const unset = {
+      values: {},
+      fallback: (path: string) =>
+        path.startsWith("needs.plan.outputs.") ? null : undefined,
+    };
+    expect(evaluate("needs.plan.outputs.selection == ''", unset)).toBe(true);
+    expect(evaluate("needs.plan.outputs.selection != ''", unset)).toBe(false);
+    expect(evaluate("null == 0 && false == 0 && true == 1", none)).toBe(true);
+    expect(evaluate("'1.5' == 1.5 && ' 2 ' == 2 && '' == false", none)).toBe(
+      true,
+    );
+    expect(evaluate("'true' == true", none)).toBe(false);
+    expect(evaluate("'abc' == 0 || 'abc' == null", none)).toBe(false);
+    expect(evaluate("fromJSON('[]') == 0", none)).toBe(false);
+    expect(evaluate("fromJSON('[]') == fromJSON('[]')", none)).toBe(false);
+  });
+
   test("unsupported syntax throws instead of guessing", () => {
     expect(() => evaluate("github.event['x'] == 'y'", none)).toThrow(
       "unexpected '['",
