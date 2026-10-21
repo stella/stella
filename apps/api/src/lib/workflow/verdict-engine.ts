@@ -403,6 +403,7 @@ export const gradeTierMatch = async ({
   return await Result.tryPromise({
     try: async (): Promise<TierMatchVerdict> => {
       const result = await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "pdf",
         orgAIConfig,
@@ -539,6 +540,7 @@ export const gradeTierMatches = async ({
   return await Result.tryPromise({
     try: async (): Promise<ReadonlyMap<string, TierMatchVerdict>> => {
       const result = await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "pdf",
         orgAIConfig,

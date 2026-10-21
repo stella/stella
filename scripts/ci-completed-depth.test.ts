@@ -577,7 +577,10 @@ const recordEvidence = (
         JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
         FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
         FAST_REQUIRED: resultEnv["FAST_REQUIRED"] ?? "",
-        PLAN: JSON.stringify({ package_checks_required: "true" }),
+        PLAN: JSON.stringify({
+          ci_tests_required: "true",
+          package_checks_required: "true",
+        }),
         NEEDS: JSON.stringify(
           Object.fromEntries(
             Object.entries(results).map(([job, outcome]) => [
@@ -1149,6 +1152,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
           "needs.ci-plan.outputs.queue_depth": "thin",
           "needs.ci-plan.result": "success",
           "needs.pr-heavy-gate.result": "skipped",
+          "needs.generated-sources.result": "success",
           "needs.web-build.result": "success",
           "needs.heavy-web-build.result": "skipped",
           "inputs.pr_depth_only": false,

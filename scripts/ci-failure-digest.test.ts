@@ -9,9 +9,14 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { FAILED_CHECK_RECORD, failedCheckRecord } from "./ci-check-pool";
+import {
+  exitCodeDetail,
+  FAILED_CHECK_RECORD,
+  failedCheckRecord,
+} from "./ci-check-pool";
 import {
   annotations,
+  BARE_EXIT_CAUSE,
   buildDigest,
   classify,
   dedupe,
@@ -968,6 +973,47 @@ test("pooled check records become named digest failures in runner-rendered logs"
     ["Bun tests", "(fail) parser > rejects -- error: expected value"],
     ["Policy -- guard%2D\nnext", "error: policy failed%"],
   ]);
+});
+
+test("a pooled check that only exited non-zero is digested from its own output", () => {
+  expect(BARE_EXIT_CAUSE.test(exitCodeDetail(1))).toBe(true);
+  const log = runStep(4, "bun scripts/ci-check-pool.ts run ci-checks-policy", [
+    "##[group]Ratchet guard: FAILED in 243.8 s",
+    "(pass) allowance without an increase fails [2373.06ms]",
+    "ratchet --check: invalid increase allowances:",
+    "  direct-third-party-declarations: actual increase 1, funded 0 (unfunded increase).",
+    "  direct-third-party-declarations: 677 -> 678 (+1)",
+    "      packages/ui/package.json: 30 -> 31",
+    "Increases relative to the measured base tree require exact, justified allowances added in this PR.",
+    "##[endgroup]",
+    `##[error]${exitCodeDetail(1)}`,
+    failedCheckRecord("Ratchet guard", exitCodeDetail(1)),
+    "1 check(s) failed: Ratchet guard",
+    "##[error]Process completed with exit code 1.",
+  ]).join("\n");
+  const job = {
+    id: 15,
+    name: "ci-checks-policy",
+    conclusion: "failure",
+    html_url: "https://github.com/o/r/actions/runs/1/job/15",
+    steps: [
+      {
+        name: "Run policy checks",
+        number: 4,
+        conclusion: "failure",
+        started_at: "2026-10-12T10:00:04Z",
+        completed_at: "2026-10-12T10:00:05Z",
+      },
+    ],
+  };
+  const [ratchet] = buildDigest({ jobs: [job], logFor: () => log });
+  const messages = ratchet?.lines.map(({ message }) => message) ?? [];
+  expect(ratchet?.step).toBe("Ratchet guard");
+  expect(ratchet?.kind).toBe("ratchet");
+  expect(messages).toContain(
+    "direct-third-party-declarations: 677 -> 678 (+1)",
+  );
+  expect(messages).not.toContain(exitCodeDetail(1));
 });
 
 test("the digest command writes JSON, a summary and annotations", () => {

@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Všetky tvrdenia vyžadujúce úsudok boli vybavené.</strong> {count, plural, one {Zostávajúce # bežné posúdenie nevyžaduje samostatnú kontrolu.} few {Zostávajúce # bežné posúdenia nevyžadujú samostatnú kontrolu.} many {Zostávajúcich # bežných posúdení nevyžaduje samostatnú kontrolu.} other {Zostávajúceho # bežného posúdenia nevyžaduje samostatnú kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrdenie vyžaduje} few {# tvrdenia vyžadujú} many {# tvrdení vyžaduje} other {# tvrdenia vyžaduje}} váš úsudok</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zostávajúce # je bežné a nevyžaduje samostatné schválenie.} few {Zostávajúce # sú bežné a nevyžadujú samostatné schválenie.} many {Zostávajúcich # je bežných a nevyžaduje samostatné schválenie.} other {Zostávajúceho # bežného posúdenia netreba samostatne schvaľovať.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, skontrolované} disputed {, spochybnené} other {}})",
+      "documentView": {
+        "label": "Zobrazenie dokumentu",
+        "original": "Originál",
+        "reading": "Text na čítanie"
+      },
+      "notLocated": "{count, plural, one {# tvrdenie sa v origináli nepodarilo nájsť} few {# tvrdenia sa v origináli nepodarilo nájsť} many {# tvrdenia sa v origináli nepodarilo nájsť} other {# tvrdení sa v origináli nepodarilo nájsť}}",
       "selectClaim": "Vyberte tvrdenie a pozrite si súvisiace záznamy.",
       "showQueue": "Zobraziť poradie",
       "stats": {
@@ -849,7 +855,6 @@
         "unavailable": "AI analýza nie je pre toto rozhodnutie k dispozícii."
       },
       "generate": "Zostaviť právne vety pomocou AI",
-      "holdingAnchor": "Prejsť na odsek",
       "invitation": "S bezplatným účtom vám AI k rozhodnutiu pripraví pracovné poznámky.",
       "topics": "Témy",
       "treatment": "Neskoršia judikatúra"
@@ -1009,6 +1014,9 @@
       "saved": "Do spisu {matter} {count, plural, one {bolo uložené # rozhodnutie} few {boli uložené # rozhodnutia} other {bolo uložených # rozhodnutí}}"
     },
     "newestDecisions": "Najnovšie rozhodnutia",
+    "noResults": {
+      "hint": "Skúste iné slová, vylepšite dopyt pomocou AI alebo sa opýtajte v chate."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Ľudské"
@@ -1082,6 +1090,10 @@
         "short": "Krátky"
       }
     },
+    "rewritten": {
+      "line": "Pre <bdi>{original}</bdi> nič presne nezodpovedá; zobrazujeme výsledky pre <bdi>{query}</bdi>",
+      "searchOriginal": "Hľadať moje pôvodné slová"
+    },
     "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie}} túto spisovú značku. Vyberte súd.",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
@@ -1098,6 +1110,8 @@
         "hint": "Zrušte alebo rozšírte filter a hľadajte znova.",
         "message": "Zvoleným filtrom nič nezodpovedá."
       },
+      "partialMatch": "Čiastočná zhoda",
+      "partialMatches": "Čiastočné zhody pre: <bdi>{query}</bdi>",
       "resultsFor": "Výsledky pre: <bdi>{query}</bdi>",
       "searchEveryWord": "Hľadať všetky slová"
     },
@@ -1135,6 +1149,7 @@
       "judges": "Sudcovia",
       "legalArea": "Oblasť práva",
       "legalSentence": "Právna veta",
+      "paragraphReference": "Odsek {number}",
       "popularName": "Populárny názov",
       "portraitCredit": "Zdroj portrétov: {source}",
       "provisionMentions": "{count, number}×",
@@ -1602,6 +1617,9 @@
         "private": "Vaše AI zručnosti",
         "team": "Tímové AI zručnosti"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Tiež konzultované ({count, number})"
     },
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",
@@ -2691,6 +2709,7 @@
       "aiConfigModelInvalid": "Konfigurácia modelu AI je neplatná. Skontrolujte vybrané modely.",
       "aiConfigProviderInvalid": "Konfigurácia poskytovateľa AI je neplatná. Skontrolujte nastavenia poskytovateľa.",
       "aiConfigProviderValidationFailed": "Poskytovateľ AI konfiguráciu odmietol. Skontrolujte kľúč API a model.",
+      "aiDeadlineExceeded": "AI neodpovedala včas. Skúste to o chvíľu znova.",
       "aiOutputInvalid": "Odpoveď AI mala neočakávaný formát. Skúste to znova.",
       "aiOutputModerated": "Poskytovateľ AI výstup zablokoval. Preformulujte požiadavku alebo vyberte iný model.",
       "aiProviderTaskUnsupported": "Nastavený poskytovateľ AI túto úlohu nedokáže vykonať. Vyberte poskytovateľa, ktorý ju dokáže vykonať.",

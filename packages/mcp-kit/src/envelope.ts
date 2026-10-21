@@ -26,6 +26,9 @@ export const KIT_ERROR_CODES = {
 /** Stable caller-facing message; hosts can observe the original failure separately. */
 export const KIT_INTERNAL_MESSAGE = "The tool could not complete the request.";
 
+/** Maximum number of characters read when suggesting a tool name. */
+export const MAX_TOOL_NAME_CHARS = 128;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -211,11 +214,39 @@ const editDistance = (left: string, right: string): number => {
   return previous[b.length] ?? 0;
 };
 
+const sortedNameWords = (name: string): string =>
+  name.split(/[._-]/u).toSorted().join(" ");
+
+/** A comparison key that ignores case, separators and a leading `external`. */
+export const toolNameKey = (name: string): string =>
+  name
+    .toLowerCase()
+    .replaceAll(/[-_.]/gu, "")
+    .replace(/^external/u, "");
+
+/** The closest plain, word-order-insensitive or comparison-key distance. */
+export const toolNameDistance = (target: string, name: string): number => {
+  if (
+    target.length > MAX_TOOL_NAME_CHARS ||
+    name.length > MAX_TOOL_NAME_CHARS
+  ) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Math.min(
+    editDistance(target, name),
+    editDistance(sortedNameWords(target), sortedNameWords(name)),
+    editDistance(toolNameKey(target), toolNameKey(name)),
+  );
+};
+
 /** Up to three known names close to `name`, closest first. */
 export const closestNames = (
   name: string,
   known: readonly string[],
 ): string[] => {
+  if (name.length > MAX_TOOL_NAME_CHARS) {
+    return [];
+  }
   const lowered = name.toLowerCase();
   return known
     .map((candidate) => {
@@ -223,7 +254,7 @@ export const closestNames = (
       const contains = lower.includes(lowered) || lowered.includes(lower);
       return {
         candidate,
-        distance: contains ? 0 : editDistance(lowered, lower),
+        distance: contains ? 0 : toolNameDistance(lowered, lower),
       };
     })
     .filter(
