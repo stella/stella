@@ -1630,6 +1630,8 @@ export const createApprovalHarness = ({
 
   return {
     approveContext,
+    /** Resolves once no turn on the thread is still accepted or running. */
+    awaitSettledTurns,
     checkWebClient,
     /**
      * Makes `threadId`'s next web request die mid-run: the process serving
@@ -1727,6 +1729,14 @@ export const createApprovalHarness = ({
     },
     send,
     sendContext,
+    /**
+     * The send route's answer to `ctx`, with nothing read around it: no
+     * oracle, no barrier. What a measurement of the route's own work drives;
+     * the caller reads the response and waits for its turn to settle.
+     */
+    sendUnchecked: handle,
+    /** The Stop route, as a web client's Stop button reaches it. */
+    stopTurn: postCancelTurn,
   };
 };
 

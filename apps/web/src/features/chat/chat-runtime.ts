@@ -651,7 +651,12 @@ export const createChatRuntime = ({
         keepPostedMessagesInSnapshots(
           messages,
           upstreamConnection.connect(
-            messages,
+            // The envelope names only the message this request posts: the
+            // server reads the thread's history from its own store and checks
+            // just that the envelope carries the posted message, so a long
+            // thread is never uploaded again with every send
+            // (`chat-runtime-send-budget.test.ts`).
+            messages.slice(-1),
             requestBody,
             abortSignal,
             runContext,
