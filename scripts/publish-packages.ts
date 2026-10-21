@@ -32,6 +32,8 @@ export const ALL_PACKAGE_ORDER = [...LIBRARY_PACKAGE_ORDER, "cli"] as const;
 // accepts npm's latest for one of these only with npm-verified provenance
 // from exactly this repository; any other repository declaration falls back
 // to the exact version comparison.
+// None at present: @stll/time left the package order when its releases moved
+// to stella/tooling.
 export const MOVED_PACKAGE_REPOSITORIES: Partial<
   Record<(typeof ALL_PACKAGE_ORDER)[number], string>
-> = { time: "github.com/stella/tooling" };
+> = {};
