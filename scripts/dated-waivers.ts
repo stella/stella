@@ -4,7 +4,7 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -18,6 +18,12 @@ import {
   RELEASE_AGE_EXCEPTION_SOURCES,
 } from "./check-stll-quarantine-excludes";
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
+import {
+  parseRegistry,
+  REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
+  splitTestId,
+  type QuarantineEntry,
+} from "./flaky-test-quarantine";
 import { parseLedger } from "./suppression-waivers";
 
 export const DAY_MS = 86_400_000;
@@ -46,6 +52,8 @@ export const RECHECK_INSTRUCTIONS = {
   "dependency-audit":
     "Re-run the dependency audit, check patched releases and dependency reachability; remove the acceptance.",
   "quarantined-test": "Run the quarantined test without its skip.",
+  "flaky-test-quarantine":
+    "Run the test without its quarantine entry, fix its flake, and remove the entry.",
   "suppression-waiver":
     "Recheck the suppression invariant and evidence; remove the suppression.",
 } as const;
@@ -90,6 +98,7 @@ type CollectWaiversOptions = {
   bunfigs: readonly string[];
   releaseAgeSources: Readonly<Record<string, string>>;
   quarantineSources?: Readonly<Record<string, string>>;
+  flakyTestQuarantines?: readonly QuarantineEntry[];
 };
 
 export const collectWaivers = ({
@@ -99,6 +108,7 @@ export const collectWaivers = ({
   bunfigs,
   releaseAgeSources,
   quarantineSources = {},
+  flakyTestQuarantines = [],
 }: CollectWaiversOptions): DatedWaiver[] => {
   const entries: DatedWaiver[] = docs.map((entry) => ({
     source: DOC_SOURCE_FILE,
@@ -216,6 +226,27 @@ export const collectWaivers = ({
     });
   }
   entries.push(...readTestQuarantines(quarantineSources));
+  for (const entry of flakyTestQuarantines) {
+    const identity =
+      splitTestId(entry.id) ??
+      panic(`Invalid flaky-test quarantine id: ${entry.id}`);
+    entries.push({
+      source: FLAKY_TEST_QUARANTINE_FILE,
+      line: sourceLine(read(FLAKY_TEST_QUARANTINE_FILE), entry.id),
+      id: entry.id,
+      kind: "flaky-test-quarantine",
+      expiresAt: entry.expires,
+      probe: {
+        // Filtered by the test's own title (the last describe segment); the
+        // probe receipt then requires its full name to pass.
+        command: testProbeCommand({
+          file: identity.file,
+          title: identity.name.split(" > ").at(-1) ?? identity.name,
+        }),
+        attempts: TEST_ATTEMPTS,
+      },
+    });
+  }
   const identities = new Set<string>();
   for (const entry of entries) {
     expiryInstant(entry.expiresAt);
@@ -254,11 +285,23 @@ export const waiverWarnings = (
       `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expires at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
   );
 
-// An elapsed release-age exclusion is the owner's cleanup (dated-waiver-healing
-// opens it), not a defect of whichever change is under review, so the
-// per-change gate annotates it instead of failing every pull request and merge
-// group. Every other elapsed waiver, including a dated test quarantine that
-// still skips its test, keeps failing the gate.
+// How the per-change gate treats an elapsed waiver. An elapsed release-age
+// exclusion is the owner's cleanup (dated-waiver-healing opens it), and an
+// elapsed flaky-test quarantine is enforced on main by the scheduled
+// flaky-test-quarantine workflow, which fails naming its owner: neither is a defect
+// of whichever change is under review, so pull requests and merge groups only
+// annotate them. Every other elapsed waiver, including a dated test quarantine
+// that still skips its test, keeps failing the gate.
+export const EXPIRY_AT_CHANGE_GATE = {
+  "no-llms-txt": "fail",
+  "release-age-exclusion": "annotate",
+  "release-age-exception": "fail",
+  "dependency-audit": "fail",
+  "quarantined-test": "fail",
+  "flaky-test-quarantine": "annotate",
+  "suppression-waiver": "fail",
+} as const satisfies Record<ProbeKind, "annotate" | "fail">;
+
 const isExpired = (entry: DatedWaiver, now: Date): boolean =>
   Date.parse(expiryInstant(entry.expiresAt)) <= now.getTime();
 
@@ -269,7 +312,8 @@ export const expiredWaiverAnnotations = (
   entries
     .filter(
       (entry) =>
-        entry.kind === "release-age-exclusion" && isExpired(entry, now),
+        EXPIRY_AT_CHANGE_GATE[entry.kind] === "annotate" &&
+        isExpired(entry, now),
     )
     .map(
       (entry) =>
@@ -291,7 +335,7 @@ export const expiredWaiverFailures = (
   entries
     .filter(
       (entry) =>
-        entry.kind !== "release-age-exclusion" &&
+        EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
         isExpired(entry, now) &&
         (changedFiles === undefined || changedFiles.has(entry.source)),
     )
@@ -299,6 +343,20 @@ export const expiredWaiverFailures = (
       (entry) =>
         `${entry.source}:${entry.line} dated waiver expired: ${entry.id}`,
     );
+
+// Runs one test through its owning package script, filtered by its title.
+type TestProbeOptions = { file: string; title: string };
+const testProbeCommand = ({
+  file,
+  title,
+}: TestProbeOptions): readonly string[] => {
+  const owner = /^(?:apps|packages)\/[^/]+/u.exec(file)?.at(0);
+  const pattern = title.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const relative = owner ? file.slice(owner.length + 1) : file;
+  return owner
+    ? ["bun", `--cwd=${owner}`, "run", "test", "--", relative, "-t", pattern]
+    : ["bun", "test", file, "-t", pattern];
+};
 
 // A dated test quarantine is an adjacent comment on a literal test.skip/it.skip
 // call. The inventory guard blocks at expiry even while the source still skips.
@@ -380,9 +438,6 @@ export const readTestQuarantines = (
           const [offset, expiresAt] = marker;
           expiryInstant(expiresAt);
           consumed.add(offset);
-          const owner = /^(?:apps|packages)\/[^/]+/u.exec(source)?.at(0);
-          const pattern = title.text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-          const relative = owner ? source.slice(owner.length + 1) : source;
           entries.push({
             source,
             line:
@@ -391,18 +446,7 @@ export const readTestQuarantines = (
             kind: "quarantined-test",
             expiresAt,
             probe: {
-              command: owner
-                ? [
-                    "bun",
-                    `--cwd=${owner}`,
-                    "run",
-                    "test",
-                    "--",
-                    relative,
-                    "-t",
-                    pattern,
-                  ]
-                : ["bun", "test", source, "-t", pattern],
+              command: testProbeCommand({ file: source, title: title.text }),
               attempts: TEST_ATTEMPTS,
             },
           });
@@ -453,6 +497,13 @@ export const readTrackedPolicyFiles = (file: string): string[] => {
   return files;
 };
 
+const flakyTestQuarantines = (content: string): readonly QuarantineEntry[] => {
+  const parsed = parseRegistry(JSON.parse(content));
+  return parsed.status === "valid"
+    ? parsed.registry.entries
+    : panic(parsed.errors.join("\n"));
+};
+
 export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
   const root = path.resolve(import.meta.dir, "..");
   const read = (file: string): string =>
@@ -472,6 +523,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
     Object.fromEntries(policyFiles.map((file) => [file, read(file)])),
     new Set([
       DOC_SOURCE_FILE,
+      FLAKY_TEST_QUARANTINE_FILE,
       "scripts/suppression-waivers.ts",
       "scripts/suppression-waivers.json",
       "scripts/dependency-audit-baseline.json",
@@ -509,6 +561,9 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
     audit,
     bunfigs: files,
     releaseAgeSources: configSources,
+    flakyTestQuarantines: flakyTestQuarantines(
+      read(FLAKY_TEST_QUARANTINE_FILE),
+    ),
     quarantineSources: Object.fromEntries(
       tracked
         .filter((file) => /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file))

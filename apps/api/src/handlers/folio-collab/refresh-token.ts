@@ -27,6 +27,7 @@ const refreshFolioCollabToken = createSafeTokenHandler(
     const refreshed = await value.scopedDb(async (tx) => {
       const tokenRefresh = await refreshStoredFolioCollabToken({
         tokenId: value.tokenId,
+        sourceSessionExpiresAt: value.sourceSessionExpiresAt,
         tx,
       });
       if (!tokenRefresh) {

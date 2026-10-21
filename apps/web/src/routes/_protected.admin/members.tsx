@@ -49,6 +49,7 @@ import { formatMemberDate } from "@/lib/organization/utils";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { OrganizationListToolbar } from "@/routes/_protected.admin/-components/organization/list-toolbar";
 import { RoleCell } from "@/routes/_protected.admin/-components/organization/member-role-cell";
+import { filterOrganizationLists } from "@/routes/_protected.admin/-components/organization/members-search.logic";
 
 type SortKey = "name" | "role" | "joined";
 type SortDir = "asc" | "desc";
@@ -148,17 +149,16 @@ function Members() {
     );
   };
 
+  const { invitations: filteredInvitations, members } = filterOrganizationLists(
+    {
+      invitations: data.invitations,
+      members: data.members,
+      query: q,
+    },
+  );
   const filteredMembers = (() => {
-    const filtered = q
-      ? data.members.filter(
-          (m) =>
-            m.user.name.toLowerCase().includes(q.toLowerCase()) ||
-            m.user.email.toLowerCase().includes(q.toLowerCase()),
-        )
-      : data.members;
-
     const compareName = compareByLocale(locale);
-    const sorted = filtered.toSorted((a, b) => {
+    const sorted = members.toSorted((a, b) => {
       let cmp: number;
       if (sort.key === "name") {
         cmp = compareName(a.user.name, b.user.name);
@@ -173,16 +173,6 @@ function Members() {
     });
 
     return sorted;
-  })();
-
-  const filteredInvitations = (() => {
-    if (!q) {
-      return data.invitations;
-    }
-    const query = q.toLowerCase();
-    return data.invitations.filter((inv) =>
-      inv.email.toLowerCase().includes(query),
-    );
   })();
 
   const removeMember = useRemoveMember();

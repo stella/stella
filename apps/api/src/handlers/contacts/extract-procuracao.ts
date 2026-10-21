@@ -296,6 +296,7 @@ const extractProcuracao = createSafeRootHandler(
       const generated = await Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForTask({
+            userId: user.id,
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
             task: "short-text",
@@ -312,7 +313,7 @@ const extractProcuracao = createSafeRootHandler(
             system: SYSTEM_PROMPT,
             prompt: buildPrompt(normalizedText.slice(0, MAX_SOURCE_CHARS)),
             outputSchema: extractProcuracaoOutputSchema,
-            abortSignal: AbortSignal.timeout(EXTRACT_TIMEOUT_MS),
+            deadlineMs: EXTRACT_TIMEOUT_MS,
             serviceTier: "standard",
           }),
         catch: (cause) => {

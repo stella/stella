@@ -27,6 +27,7 @@ import {
   ResponsiveActionToolbar,
   ResponsiveActionToolbarItem,
 } from "@/components/responsive-action-toolbar";
+import { filterToolsCatalogueEntries } from "@/features/knowledge/views/tools/tools-catalogue-search.logic";
 import type {
   KnowledgeTool,
   ToolsSource,
@@ -112,41 +113,18 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
 
   const entries = source.entries;
 
-  const filtered = (() => {
-    const normalised = query.trim().toLowerCase();
-    const localizedName = (entry: TTool) => {
-      const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
-      return key ? t(key) : entry.displayName;
-    };
-    const subset = entries.filter((entry) => {
-      if (filter !== "all" && entry.kind !== filter) {
-        return false;
-      }
-      if (
-        jurisdictionFilter.size > 0 &&
-        entry.jurisdictions.length > 0 &&
-        !entry.jurisdictions.some((code) => jurisdictionFilter.has(code))
-      ) {
-        return false;
-      }
-      if (normalised === "") {
-        return true;
-      }
-      return (
-        entry.displayName.toLowerCase().includes(normalised) ||
-        localizedName(entry).toLowerCase().includes(normalised) ||
-        entry.description.toLowerCase().includes(normalised) ||
-        entry.tags.some((tag) => tag.toLowerCase().includes(normalised))
-      );
-    });
-    const compareName = compareByLocale(locale);
-    return [...subset].toSorted((left, right) => {
-      if (left.isRecommendedForOrg !== right.isRecommendedForOrg) {
-        return left.isRecommendedForOrg ? -1 : 1;
-      }
-      return compareName(localizedName(left), localizedName(right));
-    });
-  })();
+  const localizedName = (entry: TTool) => {
+    const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
+    return key ? t(key) : entry.displayName;
+  };
+  const filtered = filterToolsCatalogueEntries({
+    compareName: compareByLocale(locale),
+    entries,
+    filter,
+    jurisdictionFilter,
+    localizedName,
+    query,
+  });
 
   const allJurisdictionCodes = (() => {
     const set = new Set<string>();

@@ -1514,6 +1514,38 @@ describe("dev env factories", () => {
     expect(watching(true)).toEqual([false]);
   });
 
+  test("only a seeded stack preloads the seeded organization's feature grants", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    const apiPreloads = (seeded: boolean) => {
+      const api = buildPersistentSteps({
+        infraOffset: 0,
+        infraPorts: infraPortsForOffset(0),
+        mode: "dev:api",
+        ports: portsForOffset(0),
+        rootDir,
+        seeded,
+      }).primary.find((step) => step.label === "API server");
+      return (api?.cmd ?? []).flatMap((arg, index, cmd) =>
+        cmd[index - 1] === "--preload" ? [arg] : [],
+      );
+    };
+
+    expect(apiPreloads(false)).toEqual(["./src/dev/register-mock-ai.ts"]);
+    const seededPreloads = apiPreloads(true);
+    expect(seededPreloads).toEqual([
+      "./src/dev/register-mock-ai.ts",
+      "./scripts/grant-seeded-organization-features.ts",
+    ]);
+    for (const preload of seededPreloads) {
+      expect(
+        existsSync(
+          path.resolve(import.meta.dirname, "../../../apps/api", preload),
+        ),
+      ).toBe(true);
+    }
+  });
+
   test("prepares API databases by applying migrations", () => {
     const rootDir = createTempDir();
     mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });

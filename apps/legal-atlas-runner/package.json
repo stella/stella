@@ -35,13 +35,12 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
-    "@stll/aho-corasick": "catalog:",
     "@stll/api": "workspace:*",
     "@stll/concurrency": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/legal-atlas": "workspace:*",
     "@stll/scripts": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/time": "0.4.1",
     "better-result": "catalog:",
     "drizzle-orm": "catalog:"
   },

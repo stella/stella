@@ -1796,6 +1796,32 @@ export const putCorpusS3ObjectWithSignal = async ({
   );
 };
 
+/**
+ * Stream one object into the legal-corpus bucket. The client buffers writes
+ * into multipart parts of its own size; `close` uploads the remainder.
+ */
+export const openCorpusS3Writer = async ({
+  key,
+  mimeType,
+}: {
+  key: string;
+  mimeType: string;
+}): Promise<{
+  write: (bytes: Uint8Array) => Promise<void>;
+  close: () => Promise<void>;
+}> => {
+  await refreshStaleCorpusS3();
+  const writer = getCorpusS3().file(key).writer({ type: mimeType });
+  return {
+    write: async (bytes) => {
+      await writer.write(bytes);
+    },
+    close: async () => {
+      await writer.end();
+    },
+  };
+};
+
 /** Delete from the legal-corpus bucket with an abortable AWS SDK request. */
 export const deleteCorpusS3ObjectWithSignal = async (
   key: string,

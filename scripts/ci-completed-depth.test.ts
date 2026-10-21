@@ -101,6 +101,7 @@ const evidenceFor = (depth: string, profile = "normal-v1") => ({
   version: 6,
   marker: marker(depth, profile),
   event: "pull_request",
+  plan_config: scope,
   run_id: 99,
   run_attempt: 1,
   pr_number: 123,
@@ -428,7 +429,11 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
     outputs: planner.outputs,
   });
   for (const [name, job] of Object.entries(jobs)) {
-    if (name === "ci-plan" || name === "ci-result") {
+    if (
+      name === "ci-plan" ||
+      name === "ci-result" ||
+      name.endsWith("-cancel")
+    ) {
       continue;
     }
     expect(evaluate(job.if ?? "true", reused), name).toBe(
@@ -561,6 +566,7 @@ const recordEvidence = (
         EVENT: "pull_request",
         RUN_REQUIRED: runRequired,
         COMPLETION_MARKER: marker(depth),
+        PLAN_CONFIG: scope,
         PR_NUMBER: "123",
         HEAD_REPO_ID: "456",
         HEAD_SHA: head,
@@ -573,7 +579,10 @@ const recordEvidence = (
         JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
         FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
         FAST_REQUIRED: resultEnv["FAST_REQUIRED"] ?? "",
-        PLAN: JSON.stringify({ package_checks_required: "true" }),
+        PLAN: JSON.stringify({
+          ci_tests_required: "true",
+          package_checks_required: "true",
+        }),
         NEEDS: JSON.stringify(
           Object.fromEntries(
             Object.entries(results).map(([job, outcome]) => [
@@ -743,6 +752,8 @@ test("a marker whose contents do not prove a complete run is ignored", async () 
     ["bad attempt", { ...valid, run_attempt: 0 }],
     ["other patch", { ...valid, patch_id: "e".repeat(40) }],
     ["other workflow", { ...valid, workflow_version: "e".repeat(40) }],
+    ["other plan config", { ...valid, plan_config: "e".repeat(64) }],
+    ["no plan config", { ...valid, plan_config: undefined }],
     [
       "failed PR-depth job",
       {
@@ -998,7 +1009,7 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
   // Even the wall-clock quick checks skip: the merge group runs them on the
   // queued tree, so an enqueued head starts no job besides the plan and result.
   for (const [name, job] of Object.entries(jobs)) {
-    if (["ci-plan", "ci-result"].includes(name)) {
+    if (["ci-plan", "ci-result"].includes(name) || name.endsWith("-cancel")) {
       continue;
     }
     expect(evaluate(job.if ?? "true", enqueued), name).toBe(false);
