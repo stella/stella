@@ -1,10 +1,7 @@
 import { afterEach, expect, mock, test } from "bun:test";
 
-import {
-  apiFetch,
-  CLI_LOCAL_CLIENT_IDENTITY,
-  LOCAL_CLIENT_IDENTITY_HEADER,
-} from "./api-fetch";
+import { apiFetch, localCliClientHeaders } from "./api-fetch";
+import { CLI_VERSION } from "./generated/cli-version";
 
 const originalFetch = globalThis.fetch;
 
@@ -26,8 +23,7 @@ test("every CLI API request carries the shared client identity", async () => {
     headers: { Authorization: "Bearer test" },
   });
 
-  expect(observed?.get(LOCAL_CLIENT_IDENTITY_HEADER)).toBe(
-    CLI_LOCAL_CLIENT_IDENTITY,
-  );
-  expect(observed?.get("authorization")).toBe("Bearer test");
+  const expected = localCliClientHeaders(CLI_VERSION);
+  expected.set("authorization", "Bearer test");
+  expect(observed).toEqual(expected);
 });
