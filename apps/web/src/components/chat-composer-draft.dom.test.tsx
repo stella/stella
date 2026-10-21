@@ -154,12 +154,13 @@ test("switching threads mid-typing keeps both drafts with their own attachments"
   await waitFor(() =>
     expect(controller().editor?.getText()).toBe("Alpha question"),
   );
-  expect(controller().attachments.map((item) => item.id)).toEqual(
+  // The restored attachments are the ones the store saved for this thread.
+  expect(
     useChatDraftStore
       .getState()
       .getDraft(firstKey)
       ?.attachments.map((item) => item.id),
-  );
+  ).toEqual(controller().attachments.map((item) => item.id));
   expect(controller().attachments).toMatchObject([
     { type: "file", filename: "brief.txt" },
   ]);
