@@ -46,7 +46,10 @@ import { createBrowserClientTool } from "@/features/chat/browser-control/browser
 import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
 import { keepShownRejoinMessages } from "@/features/chat/chat-rejoin-messages";
+import { createChatSendTiming } from "@/features/chat/chat-send-timing";
 import { keepPostedMessagesInSnapshots } from "@/features/chat/chat-snapshot-history";
+import { getAnalytics } from "@/lib/analytics/provider";
+import type { ChatTimingSurface } from "@/lib/analytics/types";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import {
@@ -101,6 +104,8 @@ export type ChatContinuationRequestBody = {
 };
 export type ChatSendMessageOptions = {
   body?: ChatContinuationRequestBody | undefined;
+  /** Where the message was sent from; a send without it is not timed. */
+  timingSurface?: ChatTimingSurface | undefined;
 };
 export type ChatRouteHandoffStart = {
   messageId: SafeId<"chatMessage">;
@@ -338,6 +343,7 @@ export const createChatRuntime = ({
 }: CreateChatRuntimeProps): ChatRuntime => {
   const observeTurnTimings = createChatTurnTimingObserver();
   observeTurnTimings(initialMessages, performance.now());
+  const sendTiming = createChatSendTiming(getAnalytics);
   const listeners = new Set<() => void>();
   let subscriberCount = 0;
   let replayFloor = activeTurnId === null ? undefined : initialMessages;
@@ -775,11 +781,15 @@ export const createChatRuntime = ({
             : keepShownRejoinMessages(replayFloor, persisted),
       };
       observeTurnTimings(snapshot.messages, performance.now());
+      sendTiming.messagesChanged(snapshot.messages);
       emitMessagesChange();
     },
     onSessionGeneratingChange: (sessionGenerating) =>
       setSnapshot({ sessionGenerating }),
-    onStatusChange: (status) => setSnapshot({ status }),
+    onStatusChange: (status) => {
+      sendTiming.statusChanged(status);
+      setSnapshot({ status });
+    },
     tools: [browserTool.tool],
   });
 
@@ -956,6 +966,7 @@ export const createChatRuntime = ({
       };
     }
     startTurn();
+    sendTiming.started(options?.timingSurface, message.id);
     return { messageId: message.id, status: "started", stream };
   };
 
@@ -1234,6 +1245,7 @@ export const createChatRuntime = ({
       // Stopping the request does not stop the extension: a browser command
       // already approved would otherwise keep acting on the page.
       browserTool.cancel();
+      sendTiming.abandoned();
       const stoppedTurn = turnId;
       if (stoppedTurn === null && isTurnActive()) {
         // Delivery cancellation no longer ends the accepted server turn.
@@ -1260,7 +1272,10 @@ export const createChatRuntime = ({
       setSnapshot({ stop: { status: "pending", turnId: stoppedTurn } });
       detached(settleStop(stoppedTurn), "chat-runtime.stop");
     },
-    leave: closeRequest,
+    leave: () => {
+      sendTiming.abandoned();
+      closeRequest();
+    },
     subscribe: (listener) => {
       listeners.add(listener);
       subscriberCount += 1;

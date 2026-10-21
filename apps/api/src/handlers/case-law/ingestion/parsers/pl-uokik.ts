@@ -10,6 +10,7 @@
  * and this is not a second one.
  */
 
+// parser-output-unchanged: [pl-uokik] @stll/time now resolves to the published 0.4.1 release with the same exports as the removed workspace copy.
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";

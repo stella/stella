@@ -131,6 +131,7 @@ export const createConditionPreviewHandler = ({
                     abortSignal: AbortSignal.any([abortSignal, signal]),
                     generation: {
                       dataClass: "customer",
+                      userId: user.id,
                       orgAIConfig,
                       managedAIResidency,
                       organizationId: session.activeOrganizationId,
