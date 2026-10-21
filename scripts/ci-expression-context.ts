@@ -36,10 +36,15 @@ export type ModelledRunContext = {
     ref: string;
     sha: string;
     workflow_sha: string;
+    repository: string;
     event: {
       action: string;
       head_commit: { message: string };
-      pull_request: { draft: boolean; labels: { name: string }[] };
+      pull_request: {
+        draft: boolean;
+        labels: { name: string }[];
+        head: { repo: { full_name: string } };
+      };
     };
   };
   inputs: Record<string, string | boolean> & {
@@ -63,6 +68,7 @@ export type ModelledRunContext = {
   format: (template: string, value: string) => string;
 };
 
+const REPOSITORY = "stella/stella";
 const REF_BY_EVENT: Record<Event, string> = {
   merge_group: "refs/heads/gh-readonly-queue/main/pr-1-0000000",
   pull_request: "refs/pull/1/merge",
@@ -75,6 +81,7 @@ const PLAN_BOOLEAN_OUTPUTS = [
   "api_image_smoke_required",
   "browser_spec_selection_required",
   "ci_browser_required",
+  "ci_tests_required",
   "corpus_suites_required",
   "dependency_malware_required",
   "desktop_rust_checks_required",
@@ -125,6 +132,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
     api_test_files: "[]",
     api_test_shards: "4",
     ci_tests_matrix: "[]",
+    ci_tests_required: "true",
     test_scope: "",
   },
   "changed-files": {
@@ -209,10 +217,10 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
     postgres_selection_reason: "",
     postgres_test_selection: "[]",
   },
-  "pr-depth-plan": { pr_depth_jobs: "[]" },
-  "pr-heavy-plan": { pr_heavy_jobs: "[]" },
+  "pr-jobs-plan": { pr_depth_jobs: "[]", pr_heavy_jobs: "[]" },
   "query-perf-scope": { query_perf_required: "false" },
   "root-checks": { root_checks: "[]" },
+  "target-base": { base_sha: "" },
 };
 
 const NEEDS = [
@@ -288,8 +296,14 @@ export const ciExpressionContext = ({
       event: {
         action,
         head_commit: { message: "ordinary" },
-        pull_request: { draft: false, labels: [] },
+        // A same-repository pull request: fork-only paths stay unmodelled.
+        pull_request: {
+          draft: false,
+          labels: [],
+          head: { repo: { full_name: REPOSITORY } },
+        },
       },
+      repository: REPOSITORY,
     },
     inputs: {
       heavy_only: heavyOnly,

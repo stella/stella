@@ -1,5 +1,11 @@
 # @stll/mcp-kit
 
+## 0.2.2
+
+### Patch Changes
+
+- [#6184](https://github.com/stella/stella/pull/6184) [`b15dc7b`](https://github.com/stella/stella/commit/b15dc7bda66913f908106d46562a6270aa3bd322) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Name suggestions compute their distances without a native dependency.
+
 ## 0.2.1
 
 ### Patch Changes

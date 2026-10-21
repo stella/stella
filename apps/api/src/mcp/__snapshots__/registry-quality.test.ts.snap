@@ -34,7 +34,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 9784,
+          "maxLength": 12282,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -190,7 +190,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -276,13 +276,14 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, POL. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
               "admitted": [
-                "CZE"
+                "CZE",
+                "POL"
               ],
               "tool": "search_case_law"
             }
@@ -1200,7 +1201,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read statute is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one statute by ELI as it stood on a date: \`as_of\` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, \`versions\` (the newest page of the work's consolidations), \`outline\` (its heading anchors, the input read_statute_provisions takes) on page 1, plus its plain text. Later pages omit outline and versions; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and \`textWithheldReason\` in place of the text. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
+    "description": "Read one statute by ELI as it stood on a date: \`as_of\` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, \`pendingChanges\` (publisher-stated future or undated effects), \`versions\` (the newest page of the work's consolidations, with \`amendedBy\` effects), \`outline\` (its heading anchors, the input read_statute_provisions takes) on page 1, plus its plain text. Later pages omit outline and versions; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and \`textWithheldReason\` in place of the text. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
     "annotations": {
       "title": "Read statute",
       "destructiveHint": false,
@@ -1407,7 +1408,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable: unrecognized or unsupported country; use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -6633,7 +6634,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 9784,
+          "maxLength": 12282,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -6789,7 +6790,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -6875,13 +6876,14 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, POL. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
               "admitted": [
-                "CZE"
+                "CZE",
+                "POL"
               ],
               "tool": "search_case_law"
             }
@@ -7799,7 +7801,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read statute is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one statute by ELI as it stood on a date: \`as_of\` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, \`versions\` (the newest page of the work's consolidations), \`outline\` (its heading anchors, the input read_statute_provisions takes) on page 1, plus its plain text. Later pages omit outline and versions; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and \`textWithheldReason\` in place of the text. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
+    "description": "Read one statute by ELI as it stood on a date: \`as_of\` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, \`pendingChanges\` (publisher-stated future or undated effects), \`versions\` (the newest page of the work's consolidations, with \`amendedBy\` effects), \`outline\` (its heading anchors, the input read_statute_provisions takes) on page 1, plus its plain text. Later pages omit outline and versions; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and \`textWithheldReason\` in place of the text. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
     "annotations": {
       "title": "Read statute",
       "destructiveHint": false,
@@ -8006,7 +8008,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable: unrecognized or unsupported country; use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -14014,7 +14016,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 9784,
+          "maxLength": 12282,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -14170,7 +14172,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -14256,13 +14258,14 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, POL. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
               "admitted": [
-                "CZE"
+                "CZE",
+                "POL"
               ],
               "tool": "search_case_law"
             }
@@ -14870,7 +14873,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read statute is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one statute by ELI as it stood on a date: \`as_of\` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, \`versions\` (the newest page of the work's consolidations), \`outline\` (its heading anchors, the input read_statute_provisions takes) on page 1, plus its plain text. Later pages omit outline and versions; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and \`textWithheldReason\` in place of the text. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
+    "description": "Read one statute by ELI as it stood on a date: \`as_of\` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, \`pendingChanges\` (publisher-stated future or undated effects), \`versions\` (the newest page of the work's consolidations, with \`amendedBy\` effects), \`outline\` (its heading anchors, the input read_statute_provisions takes) on page 1, plus its plain text. Later pages omit outline and versions; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and \`textWithheldReason\` in place of the text. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
     "annotations": {
       "title": "Read statute",
       "destructiveHint": false,
@@ -15077,7 +15080,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable: unrecognized or unsupported country; use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -16128,7 +16131,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 9675,
+          "maxLength": 12172,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -16184,7 +16187,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -16270,13 +16273,14 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, POL. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
               "admitted": [
-                "CZE"
+                "CZE",
+                "POL"
               ],
               "tool": "search_case_law"
             }
@@ -16816,7 +16820,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read statute is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one statute by ELI as it stood on a date: \`as_of\` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, \`versions\` (the newest page of the work's consolidations), \`outline\` (its heading anchors, the input read_statute_provisions takes) on page 1, plus its plain text. Later pages omit outline and versions; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and \`textWithheldReason\` in place of the text. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
+    "description": "Read one statute by ELI as it stood on a date: \`as_of\` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, \`pendingChanges\` (publisher-stated future or undated effects), \`versions\` (the newest page of the work's consolidations, with \`amendedBy\` effects), \`outline\` (its heading anchors, the input read_statute_provisions takes) on page 1, plus its plain text. Later pages omit outline and versions; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and \`textWithheldReason\` in place of the text. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
     "annotations": {
       "title": "Read statute",
       "destructiveHint": false,
@@ -17023,7 +17027,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable: unrecognized or unsupported country; use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,

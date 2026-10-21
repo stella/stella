@@ -30,10 +30,10 @@
     "@stll/sha256": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/time": "0.4.1",
     "better-result": "catalog:",
     "oxfmt": "catalog:",
-    "typescript": "catalog:"
+    "typescript6": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
