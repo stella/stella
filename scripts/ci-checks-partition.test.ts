@@ -565,6 +565,26 @@ const withTaskResultCacheSetup = (step: Step): Step => {
     },
   };
 };
+// PR-depth runs check out the dispatched commit in every leg; a merge base
+// whose legs predate that checked out the workflow ref, which is the same
+// commit on pull requests and merge groups.
+const PR_DEPTH_CHECKOUT_REF = [
+  "$",
+  "{{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}",
+].join("");
+const withPrDepthCheckoutRef = (step: Step): Step => {
+  if (usesOf(step) !== "actions/checkout@<pinned>") {
+    return step;
+  }
+  const inputs = v.parse(
+    v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
+    step,
+  ).with;
+  if (inputs?.["ref"] !== undefined) {
+    return step;
+  }
+  return { ...step, with: { ...inputs, ref: PR_DEPTH_CHECKOUT_REF } };
+};
 const ownedInstallFlags = '["--frozen-lockfile","--ignore-scripts"]';
 const scopedInstallActions = new Set([
   "./.github/actions/ci-install",
@@ -788,10 +808,15 @@ const withoutLocalVerification = (step: Step): Step => {
   return original;
 };
 
-// Steps that chose their base from the merge-group event now read the
-// planner's comparison base (the target branch for a merge group). Mapping the
-// merge-base form keeps every other field of those checks compared exactly.
+// Steps that chose their base from the pull request or merge-group event now
+// read the planner's comparison base (the tip the pull request merged onto, or
+// the target branch for a merge group). Mapping the merge-base form keeps every
+// other field of those checks compared exactly.
 const TARGET_BASE_REWRITES = new Map([
+  [
+    `\${{ github.event.pull_request.base.sha }}`,
+    `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+  ],
   [
     `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}`,
     `\${{ needs.ci-plan.outputs.target_base_sha }}`,
@@ -1301,6 +1326,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
     const originalSetup = setupSteps(originalSteps)
       .map(withTaskResultCacheSetup)
+      .map(withPrDepthCheckoutRef)
       .map((step) => withInstallCache(step, base))
       .map((step) => {
         if (

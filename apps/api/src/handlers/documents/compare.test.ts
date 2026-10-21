@@ -227,7 +227,7 @@ const createHarness = ({
         throw new TimeoutError({
           message: "timed out",
           label: options.label,
-          timeoutMs: 1,
+          timeoutMs: 1, // timeout under test
         });
       }
       return await operation(new AbortController().signal);
@@ -239,7 +239,7 @@ const createHarness = ({
         throw new TimeoutError({
           message: "delivery failed",
           label: "download",
-          timeoutMs: 1,
+          timeoutMs: 1, // timeout under test
         });
       }
       return {
