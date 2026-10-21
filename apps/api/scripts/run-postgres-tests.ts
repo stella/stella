@@ -23,6 +23,7 @@ import {
   parsePostgresWorkerCount,
   runPostgresWorkers,
 } from "./postgres-test-workers";
+import { preparePostgresTests } from "./prepare-postgres-tests";
 import { runGatedTests } from "./run-gated-tests";
 import { parseApiTestShard } from "./test-file-shards";
 import { durationSeconds } from "./test-timings";
@@ -51,6 +52,8 @@ process.exitCode = await runGatedTests({
   selection: process.env["CI_POSTGRES_TEST_SELECTION"],
   exclusiveTestPaths: EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   runnerArguments: parsedWorkers.arguments,
+  spawnTestProcess: spawnPostgresTestProcess,
+  prepare: preparePostgresTests,
   validateTestPlan: async (apiRoot, files) => {
     await assertSharedTableDdlIsolated(apiRoot, files);
     const shard = parseApiTestShard(shardValue);
@@ -90,7 +93,9 @@ process.exitCode = await runGatedTests({
         admin: {
           query: async (query, parameters = []) =>
             sql.unsafe(query, [...parameters]),
-          close: async () => {},
+          close: async () => {
+            await sql.close();
+          },
         },
         runWorker: ({ files: workerFiles, databaseUrl: workerUrl }) => {
           const reporterArguments =
