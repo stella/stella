@@ -46,6 +46,8 @@ jobs:
   publish:
     name: Publish ${{ inputs.variant }} ${{ inputs.platform }}
     if: github.ref == 'refs/heads/main'
+    # The update role trusts only this environment, which admits only main.
+    environment: mobile-updates
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -115,10 +117,14 @@ jobs:
             echo "- **$platform**: update \`$update_id\` for runtime \`$(cat "$RUNNER_TEMP/runtime-$platform")\`" >> "$GITHUB_STEP_SUMMARY"
           done
 
+      # A role of its own (stella-infra, environments/production/
+      # mobile-updates.tf): trusted only for the `mobile-updates` environment,
+      # it can write and delete under the bucket's `mobile/` prefix and
+      # invalidate the downloads distribution, and nothing the deploy role can.
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_MOBILE_UPDATES }}
           aws-region: ${{ vars.AWS_REGION }}
 
       # Repository variables are not masked the way secrets are.
