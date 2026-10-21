@@ -625,8 +625,44 @@ export const checkParserVersions = ({
     if (changed.length === 0 || current.version > previous.version) {
       continue;
     }
+    // A marked parser that still imports a workspace package removed from the
+    // repository now gets it from the registry; only that package's deleted
+    // files are covered by the marker.
+    const externalizedRoots = [...current.parsers].flatMap((file) => {
+      const baseLines = new Set((base.get(file) ?? "").split("\n"));
+      const marked = (head.get(file) ?? "").split("\n").some((line) => {
+        if (baseLines.has(line)) {
+          return false;
+        }
+        const marker = OUTPUT_UNCHANGED.exec(line);
+        const owner = marker?.at(1);
+        return marker !== null && (owner === undefined || owner === key);
+      });
+      if (!marked) {
+        return [];
+      }
+      return (file.endsWith("x") ? jsxTranspiler : transpiler)
+        .scanImports(head.get(file) ?? "")
+        .flatMap(({ path: specifier }) => {
+          const name = specifier.startsWith("@stll/")
+            ? specifier.slice("@stll/".length).split("/").at(0)
+            : undefined;
+          const root = `packages/${name ?? ""}/`;
+          return name !== undefined &&
+            baseTree.resolve(file, specifier) !== undefined &&
+            !head.has(`${root}package.json`)
+            ? [root]
+            : [];
+        });
+    });
     const unexempted = changed.filter((file) => {
       if (movedSources.has(file) || deletedReexports.has(file)) {
+        return false;
+      }
+      if (
+        !head.has(file) &&
+        externalizedRoots.some((root) => file.startsWith(root))
+      ) {
         return false;
       }
       const baseLines = new Set((base.get(file) ?? "").split("\n"));

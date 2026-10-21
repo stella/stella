@@ -2917,7 +2917,7 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
   for (const [name, scope] of [
     ["Web API types determinism guard", "web_api_types_required"],
     ["Route tree drift guard", "route_tree_required"],
-    ["Published export map guard", "published_exports_required"],
+    ["Workspace package export map guard", "published_exports_required"],
   ] as const) {
     const condition = steps.find((step) => step.name === name)?.if ?? "";
     expect(condition, name).toContain(
@@ -4920,13 +4920,13 @@ test("each split service step follows its own dependency scope and execution dep
     "valkey_suites_required",
     "collaboration_suite_required",
   ] as const;
-  const timePlan = runSelector(
-    ["packages/time/src/index.ts"],
+  const packagePlan = runSelector(
+    ["packages/api-contract/src/matter-reference.ts"],
     [...scopes, "collab_redis_required", "service_suites_pr_required"],
   );
-  expect(timePlan.at(3)).toBe("true");
-  expect(timePlan.at(4)).toBe("false");
-  expect(timePlan.at(5)).toBe("true");
+  expect(packagePlan.at(3)).toBe("true");
+  expect(packagePlan.at(4)).toBe("false");
+  expect(packagePlan.at(5)).toBe("true");
   const collaboration = jobSteps(ciJobs["service-suites"]).find(
     ({ name }) => name === "Run cross-replica collaboration suite",
   );
@@ -4934,7 +4934,7 @@ test("each split service step follows its own dependency scope and execution dep
     `\${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}`,
   );
   const planned = Object.fromEntries(
-    scopes.map((scope, index) => [scope, timePlan.at(index)]),
+    scopes.map((scope, index) => [scope, packagePlan.at(index)]),
   );
   const evaluateStep = (
     predicate: string,
