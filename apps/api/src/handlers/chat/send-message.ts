@@ -3309,6 +3309,11 @@ export const createSendMessage = (
                   systemSafe,
                   systemUntrusted,
                   userId: user.id,
+                  viewer: {
+                    kind: "session",
+                    sessionId: session.id,
+                    userId: user.id,
+                  },
                   workspaceId,
                 });
 

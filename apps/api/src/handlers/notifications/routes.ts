@@ -41,7 +41,7 @@ export const notificationsRoute = new Elysia({
       user,
     }: {
       request: Request;
-      session: { activeOrganizationId: SafeId<"organization"> };
+      session: { activeOrganizationId: SafeId<"organization">; id: string };
       user: { id: SafeId<"user"> };
     }) => {
       if (new URL(request.url).searchParams.has("token")) {
@@ -56,7 +56,11 @@ export const notificationsRoute = new Elysia({
         userId: user.id,
       });
 
-      return sseResponse(stream);
+      return sseResponse(stream, {
+        kind: "session",
+        sessionId: session.id,
+        userId: user.id,
+      });
     },
   )
   .get("/", listNotifications.handler, {

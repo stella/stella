@@ -62,6 +62,7 @@ import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -598,6 +599,7 @@ describe("chat run log database contract", () => {
             });
           },
         }),
+        HELD_TEST_STREAM_BINDING,
       );
       const capture = createStreamMessageCapture({
         initialMessages: [],
