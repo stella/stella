@@ -4,6 +4,7 @@ import {
   distance,
   EntityIndexBuilder,
   type EntityIndex,
+  type EntityQuery,
   type EntitySearchResult,
 } from "@stll/fuzzy-search";
 
@@ -32,6 +33,10 @@ export const spendScreeningWork = (
   return true;
 };
 const METRIC = "damerau-levenshtein";
+const SEARCH_CACHE_MAX_ENTRIES = 16_384;
+const SEARCH_CACHE_MAX_VALUES = 256;
+const MAX_REDUNDANT_JOIN_FREQUENCY = 256;
+const MAX_COMPLETE_WEAK_CANDIDATES = 64;
 
 // Weights are inverse document frequencies over entries, so a shared
 // "Mohammed" counts for less than a shared rare surname.
@@ -220,11 +225,14 @@ export type NameIndex = {
   raw: Vocabulary;
   weights: NumberColumn;
   maxWeight: number;
+  sharedVocabulary: boolean;
   wordIds: NumberColumn;
+  joinCounts: NumberColumn;
   entities: Pick<
     EntityIndex,
     "search" | "toBytes" | "nativeBytes" | "postingCount"
   >;
+  searches: Map<string, EntitySearchResult>;
 };
 const intern = (vocabulary: BuildingVocabulary, text: string): number => {
   const known = vocabulary.ids.get(text);
@@ -278,13 +286,16 @@ function* entityIndexSteps({
   raw,
   weights,
 }: EntityIndexBuildOptions): IndexBuildSteps<EntityIndex> {
+  const formCount = raw === folded ? 1 : 2;
   const builder = new EntityIndexBuilder({
-    forms: 2,
+    forms: formCount,
     budget: { byLength: [0, 0, 0, 0, 1, 1, 2], basis: "shorter" },
     initialWeight: INITIAL_WEIGHT,
     initialSimilarity: INITIAL_SIMILARITY,
   });
-  for (const [form, vocabulary] of [folded, raw].entries()) {
+  for (const [form, vocabulary] of [folded, raw]
+    .slice(0, formCount)
+    .entries()) {
     for (let id = 0; id < vocabulary.strings.length; id += 1) {
       const text = vocabulary.strings.get(id);
       if (builder.intern(form, text) !== id) {
@@ -312,7 +323,7 @@ function* entityIndexSteps({
       entityGroup: alias.entityType === "person" ? 0 : 1,
       // Quality stays in final scoring; lowering this bound could lose candidates.
       quality: 1,
-      forms: [alias.folded, alias.raw].map((ids, form) => ({
+      forms: [alias.folded, alias.raw].slice(0, formCount).map((ids, form) => ({
         form,
         tokens: ids.map((token, position) => ({
           id: token,
@@ -340,7 +351,7 @@ function* entityIndexSteps({
   let entities: EntityIndex | undefined;
   yield {
     builder,
-    weights: [foldedWeights, rawWeights],
+    weights: [foldedWeights, rawWeights].slice(0, formCount),
     complete: (index) => {
       entities = index;
     },
@@ -377,9 +388,11 @@ export function* nameIndexSteps(
     : { strings: new ObjectColumn<string>(), ids: new StringMap<number>() };
   const aliases = new AliasColumn({ folded: folded.strings, raw: raw.strings });
   const counts = new Map<number, number>();
+  const joinedCounts = new Map<number, number>();
   for (const [entryIndex, entry] of entries.entries()) {
     const byKey = new Map<string, { alias: IndexedAlias; id: number }>();
     const entryTokens = new Set<number>();
+    const entryJoins = new Set<number>();
     for (const { name, quality } of entry.names) {
       const { tokens, adjacent } = nameReading(name, entry.entityType);
       const key = `${tokens.map((token) => token.raw).join(" ")}|${adjacent.join(";")}`;
@@ -424,19 +437,27 @@ export function* nameIndexSteps(
       for (const id of alias.folded) {
         entryTokens.add(id);
       }
+      for (const { folded: id } of alias.joins) {
+        entryJoins.add(id);
+      }
       aliases.push(alias);
     }
     for (const id of entryTokens) {
       counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    for (const id of entryJoins) {
+      joinedCounts.set(id, (joinedCounts.get(id) ?? 0) + 1);
     }
     yield;
   }
   const maxWeight = Math.log(Math.max(entries.length, 1)) + 1;
   const weights = new NumberColumn("float");
   const wordIds = new NumberColumn("byte");
+  const joinCounts = new NumberColumn();
   for (let id = 0; id < folded.strings.length; id += 1) {
     const count = counts.get(id) ?? 0;
     wordIds.push(count > 0 ? 1 : 0);
+    joinCounts.push(joinedCounts.get(id) ?? 0);
     weights.push(
       count === 0 ? maxWeight : Math.log(entries.length / count) + 1,
     );
@@ -464,8 +485,11 @@ export function* nameIndexSteps(
     raw: compactRaw,
     weights,
     maxWeight,
+    sharedVocabulary: raw === folded,
     wordIds,
+    joinCounts,
     entities,
+    searches: new Map(),
   };
 }
 export const runSteps = <T>(steps: IndexBuildSteps<T>): T => {
@@ -708,6 +732,45 @@ type MatchNamesOptions = {
   cutoff: number;
   work: ScreeningWorkBudget;
 };
+type SearchEntitiesOptions = {
+  index: NameIndex;
+  query: EntityQuery;
+  tau: number;
+  work: ScreeningWorkBudget;
+};
+const searchEntities = ({
+  index,
+  query,
+  tau,
+  work,
+}: SearchEntitiesOptions): EntitySearchResult => {
+  const key = JSON.stringify([tau, query]);
+  const cached = index.searches.get(key);
+  if (cached !== undefined) {
+    index.searches.delete(key);
+    index.searches.set(key, cached);
+    return cached;
+  }
+  const searched = index.entities.search(query, {
+    tau,
+    quality: 1,
+    maxCost: Math.floor(work.remaining / (index.sharedVocabulary ? 8 : 1)),
+  });
+  if (
+    !searched.exhausted &&
+    searched.survivors.length <= SEARCH_CACHE_MAX_VALUES &&
+    searched.similarities.length <= SEARCH_CACHE_MAX_VALUES
+  ) {
+    if (index.searches.size === SEARCH_CACHE_MAX_ENTRIES) {
+      const oldest = index.searches.keys().next().value;
+      if (oldest !== undefined) {
+        index.searches.delete(oldest);
+      }
+    }
+    index.searches.set(key, searched);
+  }
+  return searched;
+};
 type QuerySource = {
   type: "token" | "join";
   positions: readonly number[];
@@ -734,9 +797,9 @@ const populateQueryUnits = ({
     const unitId = result.matchKeys[hit * 3] ?? panic("Missing match unit");
     const form = result.matchKeys[hit * 3 + 1] ?? panic("Missing match form");
     const id = result.matchKeys[hit * 3 + 2] ?? panic("Missing match token");
-    const unit = units[Math.floor(unitId / 2)] ?? panic("Invalid match unit");
-    const source =
-      sources[Math.floor(unitId / 2)] ?? panic("Missing query source");
+    const sourceId = index.sharedVocabulary ? unitId : Math.floor(unitId / 2);
+    const unit = units[sourceId] ?? panic("Invalid match unit");
+    const source = sources[sourceId] ?? panic("Missing query source");
     const vocabulary = form === 0 ? index.folded : index.raw;
     const text = form === 0 ? source.token.folded : source.token.raw;
     const listed = vocabulary.strings.get(id);
@@ -785,13 +848,16 @@ export const matchNames = ({
   const initials = reading.tokens.map(
     (token) => Array.from(token.raw).length === 1,
   );
-  const sources = [
-    ...reading.tokens.flatMap((token, position) =>
-      initials[position]
-        ? []
-        : [{ type: "token" as const, positions: [position], token }],
-    ),
-    ...reading.adjacent
+  const tokenSources = reading.tokens.flatMap((token, position) =>
+    initials[position]
+      ? []
+      : [{ type: "token" as const, positions: [position], token }],
+  );
+  const joinedSources =
+    // A joined query unit only explains a listed single word. Query joins that
+    // exist solely as listed joins add no alignment and fan out over every
+    // alias sharing the adjacent words.
+    reading.adjacent
       .filter((positions) => !positions.some((position) => initials[position]))
       .map((positions) => ({
         type: "join" as const,
@@ -804,8 +870,30 @@ export const matchNames = ({
             .map((position) => reading.tokens[position]?.folded ?? "")
             .join(""),
         },
-      })),
-  ];
+      }))
+      .filter(({ token, positions }) => {
+        const id = index.folded.ids.get(token.folded);
+        const isListedWord = id !== undefined && index.wordIds.get(id) === 1;
+        const everyPartIsListed = positions.every((position) => {
+          const part = reading.tokens[position];
+          if (part === undefined) {
+            return false;
+          }
+          const partId = index.folded.ids.get(part.folded);
+          return partId !== undefined && index.wordIds.get(partId) === 1;
+        });
+        const hasNumericPart = positions.some((position) =>
+          /^\p{N}+$/u.test(reading.tokens[position]?.folded ?? ""),
+        );
+        return (
+          isListedWord ||
+          !everyPartIsListed ||
+          id === undefined ||
+          (!hasNumericPart &&
+            index.joinCounts.get(id) <= MAX_REDUNDANT_JOIN_FREQUENCY)
+        );
+      });
+  const sources = [...tokenSources, ...joinedSources];
   // ceiling(s) = a + (1-a)*sqrt(s); EntityIndex bounds the name score.
   const a = ceiling(0);
   const threshold = a === 1 ? 0 : Math.max(0, (cutoff - a) / (1 - a));
@@ -820,14 +908,21 @@ export const matchNames = ({
   });
   const lookupQuery = {
     tokens: reading.tokens.map((token, position) => ({
-      form: initials[position] ? 1 : 0,
+      form: initials[position] && !index.sharedVocabulary ? 1 : 0,
       text: initials[position] ? token.raw : token.folded,
       weight: queryWeights[position] ?? panic("Missing query weight"),
     })),
-    units: sources.flatMap(({ positions, token }) => [
-      { form: 0, text: token.folded, positions: [...new Set(positions)] },
-      { form: 1, text: token.raw, positions: [...new Set(positions)] },
-    ]),
+    units: sources.flatMap(({ positions, token }) => {
+      const uniquePositions = [...new Set(positions)];
+      const folded = {
+        form: 0,
+        text: token.folded,
+        positions: uniquePositions,
+      };
+      return index.sharedVocabulary
+        ? [folded]
+        : [folded, { form: 1, text: token.raw, positions: uniquePositions }];
+    }),
   };
   const needsWeights = reading.tokens.some((token, position) => {
     if (initials[position]) {
@@ -836,18 +931,31 @@ export const matchNames = ({
     const id = index.folded.ids.get(token.folded);
     return id === undefined || index.wordIds.get(id) === 0;
   });
+  const search = (tau: number) => {
+    const query = {
+      ...lookupQuery,
+      tokens: lookupQuery.tokens.map((token, position) => ({
+        ...token,
+        weight: queryWeights[position] ?? panic("Missing selected weight"),
+      })),
+    };
+    return searchEntities({ index, query, tau, work });
+  };
   // Unknown words select IDF from all equally close folded word spellings,
   // in caller intern order. A tau=0 lookup cannot prune that weight source.
-  let result = index.entities.search(lookupQuery, {
-    tau: needsWeights ? 0 : Math.max(0, threshold - Number.EPSILON * 8),
-    quality: 1,
-    maxCost: work.remaining,
-  });
+  let result = search(
+    needsWeights ? 0 : Math.max(0, threshold - Number.EPSILON * 8),
+  );
   const chargeSearch = () => {
-    const cost = Object.values(result.cost).reduce(
+    const nativeCost = Object.values(result.cost).reduce(
       (total, value) => total + value,
       0,
     );
+    // A shared vocabulary is searched once, but its folded/raw evidence and
+    // their candidate pairs retain the deterministic allowance of two forms.
+    const cost = index.sharedVocabulary
+      ? nativeCost * 2 + result.survivors.length * result.similarities.length
+      : nativeCost;
     if (!spendScreeningWork(work, cost) || result.exhausted) {
       work.exhausted = true;
       return false;
@@ -882,20 +990,7 @@ export const matchNames = ({
         }
       }
     }
-    result = index.entities.search(
-      {
-        ...lookupQuery,
-        tokens: lookupQuery.tokens.map((token, position) => ({
-          ...token,
-          weight: queryWeights[position] ?? panic("Missing selected weight"),
-        })),
-      },
-      {
-        tau: Math.max(0, threshold - Number.EPSILON * 8),
-        quality: 1,
-        maxCost: work.remaining,
-      },
-    );
+    result = search(Math.max(0, threshold - Number.EPSILON * 8));
     if (!chargeSearch()) {
       return undefined;
     }
@@ -937,5 +1032,10 @@ export const matchNames = ({
       best.set(alias.entry, { score, name: alias.name });
     }
   }
-  return { matches: best, truncated: false };
+  const denseWeakCandidates =
+    result.survivors.length > MAX_COMPLETE_WEAK_CANDIDATES &&
+    result.survivors.every(
+      (id) => index.aliases.metadata(id).quality === "weak",
+    );
+  return { matches: best, truncated: denseWeakCandidates };
 };
