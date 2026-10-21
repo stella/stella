@@ -855,7 +855,6 @@
         "unavailable": "L’analyse par IA n’est pas disponible pour cette décision."
       },
       "generate": "Générer les sommaires par IA",
-      "holdingAnchor": "Aller au paragraphe",
       "invitation": "Avec un compte gratuit, l’IA prépare des notes de travail sur cette décision.",
       "topics": "Thèmes",
       "treatment": "Traitement ultérieur"
@@ -1148,6 +1147,7 @@
       "judges": "Juges",
       "legalArea": "Domaine juridique",
       "legalSentence": "Attendu",
+      "paragraphReference": "Paragraphe {number}",
       "popularName": "Nom courant",
       "portraitCredit": "Source des portraits : {source}",
       "provisionMentions": "{count, number}×",

@@ -855,7 +855,6 @@
         "unavailable": "Šim nolēmumam AI analīze nav pieejama."
       },
       "generate": "Sagatavot AI kopsavilkumus",
-      "holdingAnchor": "Pāriet uz rindkopu",
       "invitation": "Ar bezmaksas kontu AI sagatavo darba piezīmes par šo nolēmumu.",
       "topics": "Tēmas",
       "treatment": "Vēlākā judikatūra"
@@ -1148,6 +1147,7 @@
       "judges": "Tiesneši",
       "legalArea": "Tiesību joma",
       "legalSentence": "Tiesību tēze",
+      "paragraphReference": "{number}. rindkopa",
       "popularName": "Populārais nosaukums",
       "portraitCredit": "Portretu avots: {source}",
       "provisionMentions": "{count, number}×",

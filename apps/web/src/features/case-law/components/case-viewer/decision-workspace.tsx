@@ -13,7 +13,10 @@ import {
   visibleDecisionBlocks,
 } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  type DocumentAst,
+  parseDocumentAst,
+} from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
@@ -75,6 +78,7 @@ import {
   resolveVisitorOffer,
 } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
+import { paragraphRangeIndices } from "@/features/case-law/components/case-viewer/paragraph-reference";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
@@ -170,6 +174,9 @@ export type DecisionWorkspaceProps =
   | GatedDecisionWorkspaceProps;
 
 /** What the margin's source filter means for the reader's own marks. */
+/** A decision without a parsed body has no blocks to range over. */
+const NO_BLOCKS: DocumentAst["blocks"] = [];
+
 const MARKS_FOR_NOTES_FILTER = {
   ai: "none",
   all: "all",
@@ -560,7 +567,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     sessionId: landingSessionId,
   });
 
-  const jumpToAnchor = (anchorId: string) => {
+  const jumpToAnchor = (anchorId: string, endAnchorId = anchorId) => {
     setLandingAnchorId(undefined);
     const container = mainRef.current;
     const el = container?.querySelector<HTMLElement>(
@@ -576,9 +583,28 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         container.scrollTop,
       behavior: "instant",
     });
-    delete el.dataset["highlight"];
+    const blocks = ast?.blocks ?? NO_BLOCKS;
+    const range = paragraphRangeIndices(blocks, {
+      startAnchorId: anchorId,
+      endAnchorId,
+    });
+    const highlighted =
+      range === null ? [] : blocks.slice(range.startIndex, range.endIndex + 1);
+    const highlightedElements = highlighted
+      .map((block) =>
+        container.querySelector<HTMLElement>(`#${CSS.escape(block.anchorId)}`),
+      )
+      .filter((blockElement) => blockElement !== null);
+    if (highlightedElements.length === 0) {
+      highlightedElements.push(el);
+    }
+    for (const blockElement of highlightedElements) {
+      delete blockElement.dataset["highlight"];
+    }
     forceReflow(el);
-    el.dataset["highlight"] = "";
+    for (const blockElement of highlightedElements) {
+      blockElement.dataset["highlight"] = "";
+    }
   };
 
   // The model's headnote and abstract open the decision, under the court's
@@ -589,7 +615,11 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     completeAnalysis !== null &&
     showAiNotes &&
     hasAiHeadnotes(completeAnalysis) ? (
-      <AiHeadnotes analysis={completeAnalysis} onAnchorClick={jumpToAnchor} />
+      <AiHeadnotes
+        analysis={completeAnalysis}
+        blocks={ast?.blocks ?? NO_BLOCKS}
+        onAnchorClick={jumpToAnchor}
+      />
     ) : null;
 
   const sectionMap = (() => {

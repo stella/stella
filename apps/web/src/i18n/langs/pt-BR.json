@@ -855,7 +855,6 @@
         "unavailable": "A análise por IA não está disponível para esta decisão."
       },
       "generate": "Gerar ementas com IA",
-      "holdingAnchor": "Ir para o parágrafo",
       "invitation": "Com uma conta gratuita, a IA prepara notas de trabalho sobre esta decisão.",
       "topics": "Temas",
       "treatment": "Tratamento posterior"
@@ -1148,6 +1147,7 @@
       "judges": "Juízes",
       "legalArea": "Área jurídica",
       "legalSentence": "Tese jurídica",
+      "paragraphReference": "Parágrafo {number}",
       "popularName": "Nome popular",
       "portraitCredit": "Fonte dos retratos: {source}",
       "provisionMentions": "{count, number}×",

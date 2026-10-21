@@ -855,7 +855,6 @@
         "unavailable": "تحليل الذكاء الاصطناعي غير متاح لهذا الحكم."
       },
       "generate": "توليد خلاصات الحكم بالذكاء الاصطناعي",
-      "holdingAnchor": "الانتقال إلى الفقرة",
       "invitation": "مع حساب مجاني، يُعِدّ الذكاء الاصطناعي ملاحظات عمل حول هذا الحكم.",
       "topics": "الموضوعات",
       "treatment": "المعالجة اللاحقة"
@@ -1148,6 +1147,7 @@
       "judges": "القضاة",
       "legalArea": "المجال القانوني",
       "legalSentence": "الجملة القانونية",
+      "paragraphReference": "الفقرة {number}",
       "popularName": "الاسم الشائع",
       "portraitCredit": "مصدر الصور: {source}",
       "provisionMentions": "{count, number}×",
