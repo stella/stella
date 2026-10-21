@@ -57,7 +57,7 @@ jobs:
           {
             echo '### Queue admission tree'
             echo
-            printf -- '- Pull request: `%s`\n- Base: `%s`\n- Head: `%s`\n- Merge: `%s`\n' "$PR" "$base" "$head" "$merge"
+            printf -- '- Pull request: %s\n- Base: %s\n- Head: %s\n- Merge: %s\n' "$PR" "$base" "$head" "$merge"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Setup Bun
@@ -137,9 +137,9 @@ jobs:
           {
             echo '### Machine-readable result'
             echo
-            echo '```json'
+            echo '~~~json'
             cat admission.json
-            echo '```'
+            echo '~~~'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload admission result
