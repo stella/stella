@@ -87,6 +87,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["local:module-loader"],
   },
   {
+    path: "apps/api/scripts/run-postgres-tests.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Creates and drops per-worker test databases on the Postgres server DATABASE_URL names.",
+    transports: ["global:Bun.SQL"],
+  },
+  {
     path: "apps/api/scripts/ai-provider-cassette-probe.ts",
     class: "vendor-sdk",
     reason:
