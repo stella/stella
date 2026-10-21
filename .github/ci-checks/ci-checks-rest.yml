@@ -1209,6 +1209,14 @@ checks:
     if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test reusable workflow permission contracts')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_121 != 'true') }}
     run: bun test scripts/workflow-call-permissions.test.ts
 
+  - name: Test merge-group ancestor check
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_122
+    if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test merge-group ancestor check')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_122 != 'true') }}
+    run: bash scripts/check-merge-group-ancestors.test.sh
+
   - name: Test main network recording selection
     env:
       CI_CHECK_KIND: STATIC
