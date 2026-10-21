@@ -189,7 +189,7 @@ test("runs certify only with exactly today's shard topology", () => {
       conclusion: shard === failed ? "failure" : "success",
       steps,
     }));
-  const shards = [...POSTGRES_TEST_SHARD_IDS];
+  const shards: readonly number[] = POSTGRES_TEST_SHARD_IDS;
   expect(shards).toEqual(
     Array.from({ length: shards.length }, (_, index) => index + 1),
   );
