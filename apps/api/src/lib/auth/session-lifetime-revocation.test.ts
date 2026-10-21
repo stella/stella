@@ -179,6 +179,7 @@ const createFixture = async (cacheEnabled: boolean) => {
     );
   return {
     auth,
+    cookieCacheVersion: lifetime.cookieCacheVersion,
     observationCount: () => observationCount,
     context,
     database,
@@ -373,4 +374,26 @@ test("ordinary cookie snapshots keep their stored-session read budget", async ()
   });
   expect(resolved?.session.id).toBe(fixture.caller.id);
   expect(fixture.observationCount()).toBe(before);
+});
+
+describe("session cookie cache version", () => {
+  test("ordinary sessions keep one cached version across reads", async () => {
+    const fixture = await createFixture(true);
+    const first = fixture.cookieCacheVersion({ id: fixture.caller.id });
+    const second = fixture.cookieCacheVersion({ id: fixture.caller.id });
+
+    expect(typeof first).toBe("string");
+    expect(second).toBe(first);
+  });
+
+  test("handoff sessions get a fresh version on every read", async () => {
+    const fixture = await createFixture(true);
+    const handoff = { id: fixture.caller.id, originConsentId: "consent_1" };
+    const first = fixture.cookieCacheVersion(handoff);
+    const second = fixture.cookieCacheVersion(handoff);
+
+    expect(first).toStartWith("handoff:");
+    expect(second).toStartWith("handoff:");
+    expect(second).not.toBe(first);
+  });
 });
