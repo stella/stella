@@ -190,6 +190,20 @@ const REPLACES_MESSAGES = {
   TOOL_CALL_START: false,
 } as const satisfies Record<StreamChunk["type"], boolean>;
 
+const isTabledEventType = (
+  type: string,
+): type is keyof typeof REPLACES_MESSAGES =>
+  Object.hasOwn(REPLACES_MESSAGES, type);
+
+/**
+ * Whether an event of `type` replaces the page's messages. The type is read
+ * off the wire, so a newer server can send one this table does not name,
+ * including a name every object inherits (`toString`): only the table's own
+ * entries count, and an unknown type passes through unchanged.
+ */
+const replacesMessages = (type: string): boolean =>
+  isTabledEventType(type) && REPLACES_MESSAGES[type];
+
 /**
  * `source` with every snapshot keeping the messages the page posted and the
  * step of every reasoning it carries.
@@ -202,7 +216,7 @@ export const keepPostedMessagesInSnapshots = async function* (
   source: AsyncIterable<StreamChunk>,
 ): AsyncIterable<StreamChunk> {
   for await (const chunk of source) {
-    if (!REPLACES_MESSAGES[chunk.type]) {
+    if (!replacesMessages(chunk.type)) {
       yield chunk;
       continue;
     }
