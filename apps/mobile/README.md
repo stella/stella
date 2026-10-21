@@ -58,6 +58,12 @@ stay uncommitted until a capability requires maintained native source.
 ## TestFlight
 
 The `Release Mobile iOS` workflow builds `preview` or `production` on a hosted
-macOS runner from `main` and uploads it to TestFlight. It signs with Xcode's
-automatic signing, authenticated by the team's App Store Connect API key, and
-numbers each build with its run number.
+macOS runner from `main` and uploads it to TestFlight, numbering each build
+with its run number. Signing is explicit and CI never changes it: the Apple
+Distribution certificate (`MOBILE_DISTRIBUTION_CERT_P12`, with its password)
+and each variant's App Store profile (`MOBILE_PROFILE_PRODUCTION`,
+`MOBILE_PROFILE_PREVIEW`) are created once by hand, and `app.config.ts` signs
+the app target with the profile when `APPLE_TEAM_ID` and
+`MOBILE_PROFILE_UUID` are set. The upload authenticates with an App Store
+Connect API key of its own, with the App Manager role
+(`MOBILE_ASC_API_KEY_ID`, `MOBILE_ASC_API_ISSUER_ID`, `MOBILE_ASC_API_KEY_P8`).

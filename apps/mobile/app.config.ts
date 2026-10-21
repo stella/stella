@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 import type { ExpoConfig } from "expo/config";
+import { IOSConfig, withXcodeProject } from "expo/config-plugins";
+import type { ConfigPlugin } from "expo/config-plugins";
 
 // Evaluated by Node through Expo's config loader, which cannot follow a
 // workspace package's extensionless TypeScript imports; so this file imports
@@ -37,7 +39,43 @@ const VARIANT_CONFIG = {
   { name: string; identifier: string; scheme: string }
 >;
 
-export const appConfigFor = ({
+/**
+ * A release build's signing, set by the release workflow: the team and the
+ * App Store profile it installed for this variant. Unset locally, where Xcode
+ * signs development builds automatically.
+ */
+type ReleaseSigning = { profileUuid: string; teamId: string };
+
+/**
+ * Signs the app target, and only it, with the release profile. Passed to
+ * `xcodebuild`, the same settings would reach every CocoaPods target too, and
+ * a resource bundle refuses a provisioning profile.
+ */
+const withReleaseSigning: ConfigPlugin<ReleaseSigning> = (
+  config,
+  { profileUuid, teamId },
+) =>
+  withXcodeProject(config, (mod) => {
+    const project = mod.modResults;
+    const [, target] = IOSConfig.Target.findFirstNativeTarget(project);
+    for (const [
+      ,
+      configuration,
+    ] of IOSConfig.XcodeUtils.getBuildConfigurationsForListId(
+      project,
+      target.buildConfigurationList,
+    )) {
+      Object.assign(configuration.buildSettings, {
+        CODE_SIGN_IDENTITY: '"Apple Distribution"',
+        CODE_SIGN_STYLE: "Manual",
+        DEVELOPMENT_TEAM: teamId,
+        PROVISIONING_PROFILE_SPECIFIER: `"${profileUuid}"`,
+      });
+    }
+    return mod;
+  });
+
+const appConfigBase = ({
   buildNumber,
   variant,
 }: {
@@ -77,6 +115,19 @@ export const appConfigFor = ({
   extra: { variant },
 });
 
+export const appConfigFor = ({
+  buildNumber,
+  signing,
+  variant,
+}: {
+  buildNumber: number;
+  signing?: ReleaseSigning | undefined;
+  variant: Variant;
+}): ExpoConfig => {
+  const config = appConfigBase({ buildNumber, variant });
+  return signing === undefined ? config : withReleaseSigning(config, signing);
+};
+
 /** `APP_VARIANT`: `development` (default), `preview` or `production`. */
 const readVariant = (value: string | undefined): Variant =>
   value === undefined
@@ -95,9 +146,26 @@ const readBuildNumber = (value: string | undefined): number => {
     : panic("MOBILE_BUILD_NUMBER must be a positive integer");
 };
 
+/** `APPLE_TEAM_ID` and `MOBILE_PROFILE_UUID`: both or neither. */
+const readSigning = (
+  teamId: string | undefined,
+  profileUuid: string | undefined,
+): ReleaseSigning | undefined => {
+  if (teamId === undefined && profileUuid === undefined) {
+    return undefined;
+  }
+  return teamId !== undefined && profileUuid !== undefined
+    ? { profileUuid, teamId }
+    : panic("APPLE_TEAM_ID and MOBILE_PROFILE_UUID sign a release together");
+};
+
 const appConfig = (): ExpoConfig =>
   appConfigFor({
     buildNumber: readBuildNumber(process.env["MOBILE_BUILD_NUMBER"]),
+    signing: readSigning(
+      process.env["APPLE_TEAM_ID"],
+      process.env["MOBILE_PROFILE_UUID"],
+    ),
     variant: readVariant(process.env["APP_VARIANT"]),
   });
 
