@@ -381,6 +381,7 @@ export const runGeneration = async ({
         modelTier: admission.modelTier,
       });
     const generationOptions = {
+      userId: admission.userId,
       dataClass: "public_corpus",
       task: "short-text",
       serviceTier: "standard",

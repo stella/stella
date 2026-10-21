@@ -176,7 +176,11 @@ describe("readTurnStream", () => {
         },
       }),
     );
-    expect(await readTurnStream(response, { timeoutMs: 5 })).toEqual({
+    expect(
+      await readTurnStream(response, {
+        timeoutMs: 5, // timeout under test
+      }),
+    ).toEqual({
       error: "Chat stream did not finish before timeout",
     });
   });

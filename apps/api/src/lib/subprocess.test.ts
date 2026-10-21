@@ -69,7 +69,7 @@ describe("spawnWorker", () => {
     const result = await spawnWorker({
       workerPath: SLEEP_WORKER,
       stdin: new Blob([""]),
-      timeoutMs: 500,
+      timeoutMs: 500, // timeout under test
     });
 
     expect(Result.isError(result)).toBe(true);
@@ -173,7 +173,7 @@ describe("spawnBinaryWorker", () => {
     const result = await spawnBinaryWorker({
       workerPath: SLEEP_WORKER,
       stdin: new Blob([""]),
-      timeoutMs: 500,
+      timeoutMs: 500, // timeout under test
       maxOutputBytes: 1024,
     });
 

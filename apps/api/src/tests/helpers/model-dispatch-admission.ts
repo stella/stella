@@ -22,7 +22,12 @@ export const testModelAdmission = (
   actionKind: ActionKind = "chat.send",
   modelTier: ManagedModelTier = MANAGED_MODEL_TIER.standard,
 ): ModelDispatchAdmission =>
-  admitFixtureModelDispatch({ organizationId, actionKind, modelTier });
+  admitFixtureModelDispatch({
+    organizationId,
+    userId: null,
+    actionKind,
+    modelTier,
+  });
 
 /**
  * The organization scope an admission wrapper reads the managed model tier

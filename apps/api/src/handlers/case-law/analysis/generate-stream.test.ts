@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import type { AnalysisHeadingInput } from "@stll/legal-ast/analysis";
-
 import { toSafeId } from "@/api/lib/branded-types";
 import { analysisFailureRecord } from "@/api/lib/case-law/analysis-failure";
 import type { AnalysisStore } from "@/api/lib/case-law/analysis-store";
@@ -12,6 +10,8 @@ import type { TanStackStructuredOutputEvent } from "@/api/lib/tanstack-ai-genera
 
 import type { AnalysisOutput } from "./analysis-output";
 import { runGeneration } from "./generate";
+
+type AnalysisHeadingInput = AnalysisOutput["headings"][number];
 
 const decisionId = toSafeId<"caseLawDecision">(
   "00000000-0000-0000-0000-0000000000a1",
@@ -79,8 +79,9 @@ const run = async (
 ) =>
   await runGeneration({
     admission: admitFixtureModelDispatch({
+      userId: null,
       organizationId,
-      actionKind: "case_law_analysis",
+      actionKind: "case-law.analysis",
       modelTier: "standard",
     }),
     anchorIds: ["b1", "b2", "b3"],
@@ -302,7 +303,7 @@ describe("streamed case-law analysis generation", () => {
       async *streamAnalysis() {
         now = 3250;
         throw new ModelOutputInvalidError({
-          model: { provider: "openai", keySource: "platform" },
+          model: { provider: "openai", keySource: "instance" },
         });
       },
       generateAnalysisObject: async ({ deadlineMs }) => {
