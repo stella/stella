@@ -2034,11 +2034,14 @@ test("a skipped plan passes only while the pull request is still a draft", () =>
   // payload still says draft and its plan skips. It must not certify a ready
   // pull request unchecked, and since re-running it replays the draft event,
   // it points at a fresh run instead of a re-run.
+  const staleDraftOptions: EvaluateResultOptions = {
+    event,
+    results: skippedPlan,
+    suiteDepth: "",
+    liveDraft: false,
+  };
   const staleDraft = onlyOutcome(
-    evaluateResults(
-      [{ event, results: skippedPlan, suiteDepth: "", liveDraft: false }],
-      (item) => item,
-    ),
+    evaluateResults([staleDraftOptions], (item) => item),
   );
   expect(staleDraft.exitCode).toBe(1);
   expect(staleDraft.stdout).toContain("Re-running this run cannot start CI");
