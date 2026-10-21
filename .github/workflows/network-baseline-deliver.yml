@@ -16,7 +16,7 @@ jobs:
       github.ref == 'refs/heads/main'
       && github.workflow_ref == format('{0}/.github/workflows/network-baseline-record.yml@refs/heads/main', github.repository)
       && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: read

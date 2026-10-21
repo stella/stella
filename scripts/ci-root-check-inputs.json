@@ -118,7 +118,6 @@
     "Release changelog guard": ["**"],
     "Release queue history guard": ["**"],
     "Release CLI coupling guard": ["**"],
-    "Release CLI changeset hold": ["**"],
     "CLI contract changeset guard": ["**"],
     "SQL performance suppression summary": ["**"],
     "Release marketing provenance warning": ["**"],
@@ -321,7 +320,7 @@
     "Model catalog generation guard": [
       "@stll/ai-catalog",
       "@stll/fetch",
-      "@stll/time",
+      "@stll/stable-stringify",
       "packages/scripts/fixtures/**",
       "scripts/**"
     ],
@@ -610,6 +609,7 @@
     "Record static check receipts": ["**"],
     "Prepare environment": ["**"],
     "Restore generated sources": ["**"],
+    "Check workflow job classifications": ["**"],
     "Compute affected flag": ["**"],
     "Format": ["**"],
     "Test unsignalled skip detection": ["**"],

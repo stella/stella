@@ -73,6 +73,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "legislation_documents",
   "legislation_search_documents",
   "legislation_index_jobs",
+  "legislation_amendment_snapshots",
+  "legislation_amendments",
   // Crawl bookkeeping: the app role reads coverage for reporting, only
   // ingestion writes it.
   "case_law_coverage_slices",
@@ -187,6 +189,7 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  "synthetic_session_control",
   // Guidance ingestion is owner-only until a read capability is introduced.
   "soft_law_sources",
   "soft_law_ingestion_attempts",

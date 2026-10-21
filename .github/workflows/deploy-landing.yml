@@ -26,7 +26,7 @@ jobs:
     # main, but a manual dispatch via API can pass a feature ref.
     # The private workflow refuses non-main refs as well.
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -75,7 +75,7 @@ jobs:
     needs: scope
     if: needs.scope.outputs.affected == 'true'
     name: Build landing
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -127,7 +127,7 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read

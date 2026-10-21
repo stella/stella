@@ -51,7 +51,7 @@ jobs:
   # workflow code, so drift would not show up in review; fail when it
   # is loosened.
   audit-fork-approval:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
     steps:
