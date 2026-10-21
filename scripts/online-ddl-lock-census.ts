@@ -11,10 +11,11 @@ const SQL_START =
 const IDENTIFIER_PLACEHOLDER = '"__online_ddl_identifier__"';
 
 type SqlVariant = { text: string; node: ts.Node };
+type ExpandedSqlVariant = { text: string; resolved: boolean };
 
 const isSql = (text: string): boolean => SQL_START.test(text);
 
-const expand = (node: ts.Expression): string[] => {
+const expand = (node: ts.Expression): ExpandedSqlVariant[] => {
   if (ts.isParenthesizedExpression(node)) {
     return expand(node.expression);
   }
@@ -22,17 +23,26 @@ const expand = (node: ts.Expression): string[] => {
     ts.isStringLiteralLike(node) ||
     ts.isNoSubstitutionTemplateLiteral(node)
   ) {
-    return [node.text];
+    return [{ text: node.text, resolved: true }];
   }
   if (ts.isConditionalExpression(node)) {
     return [...expand(node.whenTrue), ...expand(node.whenFalse)];
   }
   if (ts.isTemplateExpression(node)) {
-    let variants = [node.head.text];
+    let variants = [{ text: node.head.text, resolved: true }];
     for (const span of node.templateSpans) {
-      const values = expand(span.expression);
+      // Template substitutions in this owner are identifier/value slots whose
+      // surrounding literal fixes the SQL grammar. Keep representing those
+      // slots opaquely while requiring the command text itself to be literal.
+      const values = expand(span.expression).map((variant) => ({
+        text: variant.text,
+        resolved: true,
+      }));
       variants = variants.flatMap((prefix) =>
-        values.map((value) => `${prefix}${value}${span.literal.text}`),
+        values.map(({ text, resolved }) => ({
+          text: `${prefix.text}${text}${span.literal.text}`,
+          resolved: prefix.resolved && resolved,
+        })),
       );
     }
     return variants;
@@ -42,13 +52,13 @@ const expand = (node: ts.Expression): string[] => {
     node.operatorToken.kind === ts.SyntaxKind.PlusToken
   ) {
     return expand(node.left).flatMap((left) =>
-      expand(node.right).map((right) => `${left}${right}`),
+      expand(node.right).map((right) => ({
+        text: `${left.text}${right.text}`,
+        resolved: left.resolved && right.resolved,
+      })),
     );
   }
-  if (ts.isIdentifier(node)) {
-    return [IDENTIFIER_PLACEHOLDER];
-  }
-  return [IDENTIFIER_PLACEHOLDER];
+  return [{ text: IDENTIFIER_PLACEHOLDER, resolved: false }];
 };
 
 const isWithinLockTaking = (node: ts.Node): boolean => {
@@ -303,7 +313,7 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
       ts.isTemplateExpression(node)
     ) {
       const variants = ts.isTemplateExpression(node)
-        ? expand(node)
+        ? expand(node).map(({ text }) => text)
         : [node.text];
       if (variants.some(isSql)) {
         sqlNodes.push({ text: variants.join("\n-- variant --\n"), node });
@@ -364,14 +374,23 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
     const line =
       source.getLineAndCharacterOfPosition(call.getStart(source)).line + 1;
     const variants = expand(sqlArg);
-    if (!variants.some(isSql)) {
+    for (const variant of variants) {
+      if (!variant.resolved) {
+        errors.push(
+          `lockTaking SQL argument at line ${line} has an unresolved SQL variant`,
+        );
+      }
+    }
+    if (!variants.some(({ text }) => isSql(text))) {
       errors.push(
         `lockTaking SQL argument at line ${line} has no recognizable DDL form`,
       );
       continue;
     }
-    for (const sql of variants) {
-      checkSql(sql, sqlArg, "lockTaking SQL");
+    for (const variant of variants) {
+      if (variant.resolved) {
+        checkSql(variant.text, sqlArg, "lockTaking SQL");
+      }
     }
   }
 

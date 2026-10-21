@@ -2,7 +2,6 @@ import { panic } from "better-result";
 
 import {
   matchingMigrationGuardedRules,
-  type MigrationGuardedRuleId,
   migrationStatementTokens,
   parseMigrationStatements,
   readMigrationRelation,
@@ -327,46 +326,10 @@ type CensusForm = {
   line: number;
   statementIndex: number;
   sql: string;
-  // Only explicitly self-contained work on a new table can avoid review.
-  newRelationExempt: boolean;
+  // Undefined represents a relation reached through an unbounded dependency.
+  lockTargets: readonly (string | undefined)[];
+  locksExistingRelation: boolean;
 };
-
-// Every guarded rule explicitly decides which classified operations it reviews.
-const REVIEWED_FORMS = {
-  "drop-object": [
-    "drop-cascade",
-    "drop-index",
-    "drop-index-concurrently",
-    "drop-trigger",
-    "drop-table",
-    "drop-policy",
-    "drop-function",
-    "drop-type",
-  ],
-  "drop-column": ["drop-column"],
-  "drop-column-identity": [],
-  "drop-constraint": ["drop-constraint"],
-  "rename-table-or-column": ["rename-table-or-column"],
-  "rename-enum-value": [],
-  "alter-column-type": ["alter-column"],
-  "truncate-table": ["truncate"],
-  "delete-data": [],
-  "set-unlogged": [],
-  "disable-trigger": ["toggle-trigger"],
-  "unbounded-update": [],
-  "insert-select": [],
-  merge: [],
-  "create-table-as": [],
-  "materialized-view-populate": [],
-  "recursive-cte": [],
-  "disable-row-level-security": ["row-level-security"],
-  "grant-privileges": [],
-  "alter-policy": ["alter-policy"],
-  "permissive-policy": ["create-policy"],
-  "security-definer": ["create-function", "alter-function"],
-  "change-owner": ["change-owner"],
-  "set-schema": [],
-} as const satisfies Record<MigrationGuardedRuleId, readonly DdlForm[]>;
 const isDdlForm = (value: string): value is DdlForm =>
   Object.hasOwn(DDL_FORMS, value);
 const FORM_ENTRIES = Object.entries(DDL_FORMS).flatMap(([form, definition]) =>
@@ -417,6 +380,48 @@ const onRelationKey = (tokens: StatementTokens): string | undefined => {
   return readMigrationRelation(tokens, start)?.relation.key;
 };
 
+const statementRelationKey = (tokens: StatementTokens): string | undefined => {
+  const onTarget = onRelationKey(tokens);
+  if (onTarget !== undefined) {
+    return onTarget;
+  }
+  const words = tokens.map(({ value }) => value);
+  let cursor: number | undefined;
+  if (
+    words.at(0) === "create" &&
+    words.at(1) === "or" &&
+    words.at(2) === "replace" &&
+    words.at(3) === "view"
+  ) {
+    cursor = 4;
+  } else if (
+    words.at(0) === "drop" &&
+    /^(?:table|index)$/u.test(words.at(1) ?? "")
+  ) {
+    cursor = words.at(2) === "concurrently" ? 3 : 2;
+  } else if (words.at(0) === "truncate") {
+    cursor = words.at(1) === "table" ? 2 : 1;
+  } else if (words.at(0) === "lock") {
+    cursor = words.at(1) === "table" ? 2 : 1;
+  } else if (words.at(0) === "alter" && words.at(1) === "index") {
+    cursor = 2;
+  } else if (
+    words.at(0) === "reindex" &&
+    /^(?:index|table)$/u.test(words.at(1) ?? "")
+  ) {
+    cursor = words.at(2) === "concurrently" ? 3 : 2;
+  } else if (
+    /^(?:alter|drop)$/u.test(words.at(0) ?? "") &&
+    /^(?:policy|trigger)$/u.test(words.at(1) ?? "")
+  ) {
+    const on = words.indexOf("on");
+    cursor = on === -1 ? undefined : on + 1;
+  }
+  return cursor === undefined
+    ? undefined
+    : readMigrationRelation(tokens, cursor)?.relation.key;
+};
+
 const isSelfContainedNewRelationOperation = (form: DdlForm, sql: string) => {
   if (form === "create-index" || form === "create-index-concurrently") {
     return true;
@@ -441,6 +446,25 @@ const isSelfContainedNewRelationOperation = (form: DdlForm, sql: string) => {
   return form === "comment" || form === "change-owner";
 };
 
+const relationReferences = (tokens: StatementTokens) => {
+  const relations: string[] = [];
+  for (const [index, token] of tokens.entries()) {
+    if (token.kind !== "word" || token.value !== "references") {
+      continue;
+    }
+    const relation = readMigrationRelation(tokens, index + 1);
+    if (relation) {
+      relations.push(relation.relation.key);
+    }
+  }
+  return relations;
+};
+
+const requiresRelationReview = (lockMode: LockMode) =>
+  lockMode === "SHARE ROW EXCLUSIVE" ||
+  lockMode === "EXCLUSIVE" ||
+  lockMode === "ACCESS EXCLUSIVE";
+
 const changesRelationIdentity = (tokens: StatementTokens) => {
   if (tokens.some(({ kind, value }) => kind === "word" && value === "rename")) {
     return true;
@@ -456,6 +480,16 @@ const changesRelationIdentity = (tokens: StatementTokens) => {
   );
 };
 
+type ClassifyOptions = {
+  sql: string;
+  line: number;
+  alter: boolean;
+  statementIndex: number;
+  target: string | undefined;
+  additionalTargets: readonly string[];
+  createdNow: string | undefined;
+};
+
 const censusSqlSource = (source: string, topLevel: boolean) => {
   const forms: CensusForm[] = [];
   const errors: string[] = [];
@@ -464,19 +498,14 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
   const migrationChangesIdentity = statements.some((statement) =>
     changesRelationIdentity(migrationStatementTokens(statement)),
   );
-  type ClassifyOptions = {
-    sql: string;
-    line: number;
-    alter: boolean;
-    statementIndex: number;
-    target: string | undefined;
-  };
   const classify = ({
     sql,
     line,
     alter,
     statementIndex,
     target,
+    additionalTargets,
+    createdNow,
   }: ClassifyOptions) => {
     const normalized = sql.replace(/\s+/gu, " ").trim().replace(/;$/u, "");
     const match = FORM_ENTRIES.find(
@@ -490,17 +519,38 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
       return;
     }
     const [form, { lockMode }] = match;
+    const lockTargets: (string | undefined)[] = [
+      ...(target === undefined ? [] : [target]),
+      ...additionalTargets,
+    ];
+    if (requiresRelationReview(lockMode) && lockTargets.length === 0) {
+      lockTargets.push(undefined);
+    }
+    if (/\bCASCADE$/u.test(normalized)) {
+      lockTargets.push(undefined);
+    }
+    if (
+      target !== undefined &&
+      createdRelations.has(target) &&
+      !isSelfContainedNewRelationOperation(form, normalized) &&
+      form !== "add-foreign-key"
+    ) {
+      lockTargets.push(undefined);
+    }
     forms.push({
       form,
       lockMode,
       line,
       statementIndex,
       sql: alter ? `ALTER TABLE census_target ${normalized}` : normalized,
-      newRelationExempt:
-        !migrationChangesIdentity &&
-        target !== undefined &&
-        createdRelations.has(target) &&
-        isSelfContainedNewRelationOperation(form, normalized),
+      lockTargets,
+      locksExistingRelation:
+        migrationChangesIdentity ||
+        lockTargets.some(
+          (relation) =>
+            relation === undefined ||
+            (relation !== createdNow && !createdRelations.has(relation)),
+        ),
     });
   };
   for (const [statementIndex, statement] of statements.entries()) {
@@ -552,18 +602,22 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
               alter: true,
               statementIndex,
               target: relation.relation.key,
+              additionalTargets: relationReferences(action),
+              createdNow: undefined,
             });
           }
         }
       } else {
+        const created = createdRelationKey(sqlTokens);
         classify({
           sql: render(sqlTokens),
           line: statement.line,
           alter: false,
           statementIndex,
-          target: onRelationKey(sqlTokens),
+          target: created ?? statementRelationKey(sqlTokens),
+          additionalTargets: relationReferences(sqlTokens),
+          createdNow: created,
         });
-        const created = createdRelationKey(sqlTokens);
         if (
           topLevel &&
           statement.enclosingLine === undefined &&
@@ -626,7 +680,8 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
         line: statement.line,
         statementIndex,
         sql: "EXECUTE unresolved_dynamic_sql",
-        newRelationExempt: false,
+        lockTargets: [undefined],
+        locksExistingRelation: true,
       });
     }
   }
@@ -715,7 +770,7 @@ export const checkMigrationLocks = ({
       line,
       statementIndex,
       sql,
-      newRelationExempt,
+      locksExistingRelation,
     } of census.forms) {
       counts.set(lockMode, (counts.get(lockMode) ?? 0) + 1);
       const key = `${migration}/${form}`;
@@ -724,16 +779,12 @@ export const checkMigrationLocks = ({
         remaining.set(key, historical - 1);
         continue;
       }
-      const requiresReview =
-        lockMode === "ACCESS EXCLUSIVE" || form === "add-foreign-key";
-      if (!requiresReview || newRelationExempt) {
+      if (!requiresRelationReview(lockMode) || !locksExistingRelation) {
         continue;
       }
       if (
-        matchingMigrationGuardedRules(sql).some(
-          (rule) =>
-            reviewed.get(statementIndex)?.has(rule) &&
-            REVIEWED_FORMS[rule].some((covered) => covered === form),
+        matchingMigrationGuardedRules(sql).some((rule) =>
+          reviewed.get(statementIndex)?.has(rule),
         )
       ) {
         continue;

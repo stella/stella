@@ -275,6 +275,45 @@ ALTER TABLE scratch ADD CONSTRAINT scratch_existing_fk FOREIGN KEY (existing_id)
     expect(errors).toContain("SHARE ROW EXCLUSIVE add-foreign-key needs");
   });
 
+  test("an inline foreign key to an existing relation requires review", () => {
+    const errors = checkMigrationLocks({
+      sources: source(
+        "CREATE TABLE scratch(existing_id uuid REFERENCES existing(id));",
+      ),
+      baseline: [],
+    }).errors.join("\n");
+    expect(errors).toContain(
+      "SHARE ROW EXCLUSIVE create-table-references needs",
+    );
+  });
+
+  test("an inline foreign key to a relation created earlier stays exempt", () => {
+    expect(
+      checkMigrationLocks({
+        sources: source(`CREATE TABLE existing(id uuid);
+CREATE TABLE scratch(existing_id uuid REFERENCES existing(id));`),
+        baseline: [],
+      }).errors,
+    ).toEqual([]);
+  });
+
+  test("foreign-key review follows relation lock targets rather than forms", () => {
+    const result =
+      censusSql(`CREATE TABLE scratch(existing_id uuid REFERENCES existing(id));
+ALTER TABLE scratch ADD CONSTRAINT scratch_existing_fk FOREIGN KEY (existing_id) REFERENCES existing(id);`);
+    const foreignKeys = result.forms.filter(
+      ({ form }) =>
+        form === "create-table-references" || form === "add-foreign-key",
+    );
+    expect(result.errors).toEqual([]);
+    expect(
+      foreignKeys.map(({ locksExistingRelation }) => locksExistingRelation),
+    ).toEqual([true, true]);
+    expect(
+      foreignKeys.reduce((sum, { lockTargets }) => sum + lockTargets.length, 0),
+    ).toBe(4);
+  });
+
   test("conditional table creation does not make a later lock uncontended", () => {
     const sql = `DO $$ BEGIN IF false THEN CREATE TABLE probe(id int); END IF; END $$;
 ALTER TABLE probe ADD COLUMN title text;`;

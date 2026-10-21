@@ -35,6 +35,18 @@ describe("online DDL lock census", () => {
     );
   });
 
+  test("every lock-taking conditional branch must resolve to literal SQL", () => {
+    const source = `${ownerSource}\nconst fixture = lockTaking("probe", condition ? "ALTER TABLE probe ADD COLUMN added text" : suppliedSql);`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /lockTaking SQL argument .* unresolved SQL variant/iu,
+    );
+  });
+
+  test("a fully literal lock-taking conditional classifies every branch", () => {
+    const source = `${ownerSource}\nconst fixture = lockTaking("probe", condition ? "ALTER TABLE probe ADD COLUMN first text" : "ALTER TABLE probe ADD COLUMN second text");`;
+    expect(censusOnlineDdlSource(source)).toEqual([]);
+  });
+
   test("the private statement brand cannot be manufactured with a cast", () => {
     const source = `${ownerSource}\nconst counterfeit = {} as LockTakingStatement;`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
