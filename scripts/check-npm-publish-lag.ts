@@ -53,11 +53,40 @@ const SEMVER = /^\d+\.\d+\.\d+(?:-[\da-zA-Z.-]+)?(?:\+[\da-zA-Z.-]+)?$/u;
 
 export type RegistryResult =
   | { status: "passed"; reason: "ok" }
+  | { status: "passed"; reason: "published_from_declared_repository" }
   | { status: "skipped"; reason: "publish_pending" }
   | {
       status: "failed";
-      reason: "http_status" | "timeout" | "contract_error" | "version_mismatch";
+      reason:
+        | "http_status"
+        | "timeout"
+        | "contract_error"
+        | "version_mismatch"
+        | "unattested_publish";
     };
+
+type RepositoryField = string | { url: string };
+
+export const normalizeGitHubRepository = (
+  repository: RepositoryField | undefined,
+): string | undefined => {
+  const value = typeof repository === "string" ? repository : repository?.url;
+  if (value === undefined) {
+    return undefined;
+  }
+  try {
+    const url = new URL(value.replace(/^git\+/u, ""));
+    const repositoryPath = url.pathname
+      .replace(/\/+$/u, "")
+      .replace(/\.git$/u, "");
+    const segments = repositoryPath.split("/").filter(Boolean);
+    return url.hostname.toLowerCase() === "github.com" && segments.length === 2
+      ? `github.com/${segments.join("/")}`.toLowerCase()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 export const versionBumpTime = (history: string): number | undefined => {
   for (const commit of history.split("journey-commit ").slice(1)) {
@@ -119,9 +148,95 @@ const comparePublishedVersion = ({
   }
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const repositoryField = (value: unknown): RepositoryField | undefined => {
+  if (typeof value === "string") {
+    return value;
+  }
+  return isRecord(value) && typeof value["url"] === "string"
+    ? { url: value["url"] }
+    : undefined;
+};
+
+type VerifyProvenanceOptions = {
+  attestationUrl: string;
+  expectedRepository: string;
+  expectedSubject: string;
+  registry: string;
+  timeoutMs: number;
+};
+
+const verifyProvenance = async ({
+  attestationUrl,
+  expectedRepository,
+  expectedSubject,
+  registry,
+  timeoutMs,
+}: VerifyProvenanceOptions): Promise<boolean> => {
+  try {
+    const url = new URL(attestationUrl);
+    if (url.origin !== new URL(registry).origin) {
+      return false;
+    }
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) {
+      return false;
+    }
+    const document: unknown = await response.json();
+    const attestations =
+      isRecord(document) && Array.isArray(document["attestations"])
+        ? document["attestations"]
+        : [];
+    const provenance = attestations.find(
+      (attestation) =>
+        isRecord(attestation) &&
+        attestation["predicateType"] === "https://slsa.dev/provenance/v1",
+    );
+    if (!isRecord(provenance) || !isRecord(provenance["bundle"])) {
+      return false;
+    }
+    const envelope = provenance["bundle"]["dsseEnvelope"];
+    if (!isRecord(envelope) || typeof envelope["payload"] !== "string") {
+      return false;
+    }
+    const statement: unknown = JSON.parse(
+      Buffer.from(envelope["payload"], "base64").toString("utf-8"),
+    );
+    const subjects =
+      isRecord(statement) && Array.isArray(statement["subject"])
+        ? statement["subject"]
+        : [];
+    const predicate = isRecord(statement) ? statement["predicate"] : null;
+    const buildDefinition = isRecord(predicate)
+      ? predicate["buildDefinition"]
+      : null;
+    const externalParameters = isRecord(buildDefinition)
+      ? buildDefinition["externalParameters"]
+      : null;
+    const workflow = isRecord(externalParameters)
+      ? externalParameters["workflow"]
+      : null;
+    const attestedRepository = isRecord(workflow)
+      ? normalizeGitHubRepository(repositoryField(workflow["repository"]))
+      : undefined;
+    return (
+      subjects.some(
+        (subject) => isRecord(subject) && subject["name"] === expectedSubject,
+      ) && attestedRepository === expectedRepository
+    );
+  } catch {
+    return false;
+  }
+};
+
 type CheckRegistryOptions = {
   name: string;
   version: string;
+  repository: string | undefined;
   bumpedAt: number | undefined;
   now: number;
   registry: string;
@@ -136,6 +251,7 @@ export const checkRegistry = async ({
   now,
   registry,
   timeoutMs,
+  repository,
 }: CheckRegistryOptions): Promise<RegistryResult> => {
   try {
     const response = await fetch(
@@ -147,16 +263,40 @@ export const checkRegistry = async ({
     }
     const payload: unknown = await response.json();
     if (
-      typeof payload !== "object" ||
-      payload === null ||
-      !("version" in payload) ||
-      typeof payload.version !== "string" ||
-      !SEMVER.test(payload.version)
+      !isRecord(payload) ||
+      typeof payload["version"] !== "string" ||
+      !SEMVER.test(payload["version"])
     ) {
       return { status: "failed", reason: "contract_error" };
     }
+    const npmRepository = normalizeGitHubRepository(
+      repositoryField(payload["repository"]),
+    );
+    if (npmRepository !== undefined && npmRepository !== repository) {
+      const attestationUrl =
+        isRecord(payload["dist"]) &&
+        isRecord(payload["dist"]["attestations"]) &&
+        typeof payload["dist"]["attestations"]["url"] === "string"
+          ? payload["dist"]["attestations"]["url"]
+          : undefined;
+      const verified =
+        attestationUrl !== undefined &&
+        (await verifyProvenance({
+          attestationUrl,
+          expectedRepository: npmRepository,
+          expectedSubject: `pkg:npm/${name
+            .split("/")
+            .map(encodeURIComponent)
+            .join("/")}@${payload["version"]}`,
+          registry,
+          timeoutMs,
+        }));
+      return verified
+        ? { status: "passed", reason: "published_from_declared_repository" }
+        : { status: "failed", reason: "unattested_publish" };
+    }
     const assessment = comparePublishedVersion({
-      latest: payload.version,
+      latest: payload["version"],
       target: version,
       policy: PUBLISHED_VERSION_POLICY.journey,
       bumpedAt,
@@ -202,6 +342,7 @@ type PublishablePackage = {
   readonly directory: string;
   readonly name: string;
   readonly version: string;
+  readonly repository?: string | undefined;
 };
 
 type PackageLagStatus =
@@ -284,9 +425,6 @@ export const renderLagTable = (rows: readonly PackageLag[]): string => {
     .join("\n");
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 type ReadPackageManifestOptions = {
   directory: string;
   text: string | undefined;
@@ -324,7 +462,15 @@ export const readPackageManifest = ({
       `packages/${directory}/package.json has an invalid name or version`,
     );
   }
-  return { directory, name: manifest["name"], version: manifest["version"] };
+  const repository = normalizeGitHubRepository(
+    repositoryField(manifest["repository"]),
+  );
+  return {
+    directory,
+    name: manifest["name"],
+    version: manifest["version"],
+    ...(repository === undefined ? {} : { repository }),
+  };
 };
 
 /**

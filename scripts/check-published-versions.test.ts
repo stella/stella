@@ -43,6 +43,7 @@ const run = async ({
     const result = await checkRegistry({
       name: "@stll/fixture",
       version: "1.2.3",
+      repository: "github.com/stella/stella",
       bumpedAt,
       now: NOW,
       registry: server.url.toString(),
@@ -255,6 +256,206 @@ describe("published registry versions", () => {
   );
 });
 
+const provenanceStatement = ({
+  version = "1.2.4",
+  repository = "https://github.com/stella/moved.git",
+}: {
+  version?: string;
+  repository?: string;
+} = {}) => ({
+  subject: [{ name: `pkg:npm/%40stll/fixture@${version}` }],
+  predicate: {
+    buildDefinition: { externalParameters: { workflow: { repository } } },
+  },
+});
+
+const runRepositoryCheck = async ({
+  latest,
+  attestations,
+}: {
+  latest: Record<string, unknown>;
+  attestations?: unknown;
+}) => {
+  const server = Bun.serve({
+    port: 0,
+    fetch(request) {
+      const url = new URL(request.url);
+      if (url.pathname === "/attestations") {
+        return Response.json(attestations);
+      }
+      return Response.json({
+        ...latest,
+        ...(latest["dist"] === "fixture"
+          ? { dist: { attestations: { url: `${url.origin}/attestations` } } }
+          : {}),
+      });
+    },
+  });
+  try {
+    return await checkRegistry({
+      name: "@stll/fixture",
+      version: "1.2.3",
+      repository: "github.com/stella/stella",
+      bumpedAt: NOW - 60,
+      now: NOW,
+      registry: server.url.toString(),
+      timeoutMs: 5000,
+    });
+  } finally {
+    await server.stop(true);
+  }
+};
+
+const attestationDocument = (
+  statement: unknown,
+  predicateType = "https://slsa.dev/provenance/v1",
+) => ({
+  attestations: [
+    {
+      predicateType,
+      bundle: {
+        dsseEnvelope: {
+          payload: Buffer.from(JSON.stringify(statement)).toString("base64"),
+        },
+      },
+    },
+  ],
+});
+
+describe("published repository provenance", () => {
+  test.each([
+    ["exact", "1.2.3", undefined, { status: "passed", reason: "ok" }],
+    [
+      "pending",
+      "1.2.2",
+      NOW - 60,
+      { status: "skipped", reason: "publish_pending" },
+    ],
+    [
+      "mismatch",
+      "1.2.4",
+      undefined,
+      { status: "failed", reason: "version_mismatch" },
+    ],
+  ] as const)(
+    "keeps %s behavior for the same repository",
+    async (_, version, bumpedAt, expected) => {
+      const server = Bun.serve({
+        port: 0,
+        fetch: () =>
+          Response.json({
+            version,
+            repository: { url: "git+https://github.com/STELLA/stella.git/" },
+          }),
+      });
+      try {
+        expect(
+          await checkRegistry({
+            name: "@stll/fixture",
+            version: "1.2.3",
+            repository: "github.com/stella/stella",
+            bumpedAt,
+            now: NOW,
+            registry: server.url.toString(),
+            timeoutMs: 5000,
+          }),
+        ).toEqual(expected);
+      } finally {
+        await server.stop(true);
+      }
+    },
+  );
+
+  test("accepts a moved package only with matching provenance", async () => {
+    expect(
+      await runRepositoryCheck({
+        latest: {
+          version: "1.2.4",
+          repository: "https://github.com/stella/moved",
+          dist: "fixture",
+        },
+        attestations: attestationDocument(provenanceStatement()),
+      }),
+    ).toEqual({
+      status: "passed",
+      reason: "published_from_declared_repository",
+    });
+  });
+
+  test.each([
+    [
+      "no attestations",
+      { version: "1.2.4", repository: "https://github.com/stella/moved" },
+      undefined,
+    ],
+    [
+      "another origin",
+      {
+        version: "1.2.4",
+        repository: "https://github.com/stella/moved",
+        dist: { attestations: { url: "https://example.com/attestations" } },
+      },
+      undefined,
+    ],
+    [
+      "non-provenance predicate",
+      {
+        version: "1.2.4",
+        repository: "https://github.com/stella/moved",
+        dist: "fixture",
+      },
+      attestationDocument(
+        provenanceStatement(),
+        "https://example.com/predicate",
+      ),
+    ],
+    [
+      "another version",
+      {
+        version: "1.2.4",
+        repository: "https://github.com/stella/moved",
+        dist: "fixture",
+      },
+      attestationDocument(provenanceStatement({ version: "1.2.3" })),
+    ],
+    [
+      "another repository",
+      {
+        version: "1.2.4",
+        repository: "https://github.com/stella/moved",
+        dist: "fixture",
+      },
+      attestationDocument(
+        provenanceStatement({ repository: "https://github.com/stella/other" }),
+      ),
+    ],
+    [
+      "malformed payload",
+      {
+        version: "1.2.4",
+        repository: "https://github.com/stella/moved",
+        dist: "fixture",
+      },
+      {
+        attestations: [
+          {
+            predicateType: "https://slsa.dev/provenance/v1",
+            bundle: { dsseEnvelope: { payload: "not JSON" } },
+          },
+        ],
+      },
+    ],
+  ] as const)(
+    "rejects a moved package with %s",
+    async (_, latest, attestations) => {
+      expect(await runRepositoryCheck({ latest, attestations })).toEqual({
+        status: "failed",
+        reason: "unattested_publish",
+      });
+    },
+  );
+});
+
 const POLICY_RESULTS = {
   passed: { status: "passed", reason: "ok" },
   skipped: { status: "skipped", reason: "publish_pending" },
@@ -293,6 +494,7 @@ describe("published version policy matrix", () => {
           const result = await checkRegistry({
             name: pkg.name,
             version: pkg.version,
+            repository: undefined,
             bumpedAt: NOW - (window === "recent" ? 86_399 : 86_400),
             now: NOW,
             registry: server.url.toString(),

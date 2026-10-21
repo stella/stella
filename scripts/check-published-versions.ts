@@ -58,6 +58,7 @@ if (import.meta.main) {
             result = await checkRegistry({
               name: manifest.name,
               version: manifest.version,
+              repository: manifest.repository,
               bumpedAt: versionBumpTime(history),
               now,
               registry,
