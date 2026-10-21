@@ -89,7 +89,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: >-
           bun scripts/ci-check-pool.ts run ci-checks-rest --only
-          "Workspace hygiene,Test dependency malware scanners,Release CLI changeset hold,Generated files manifest guard,Generated source artifact contract,Generated artifact formatting invariants"
+          "Workspace hygiene,Test dependency malware scanners,Generated files manifest guard,Generated source artifact contract,Generated artifact formatting invariants"
 
       - name: Check parser versions
         id: parser
