@@ -5,6 +5,7 @@
 // separates each case description from its case, because a `real-time:`
 // comment directly above a wait counts as its reason.
 
+import { setDefaultTimeout, test } from "bun:test";
 import { setTimeout as wait } from "node:timers/promises";
 
 import { sleep } from "@stll/concurrency/sleep";
@@ -73,3 +74,23 @@ while (true) {
 for (let pass = 0; pass < 3; pass += 1) {
   await Promise.resolve();
 }
+
+// --- no-unreasoned-timeout ---
+
+// a per-test timeout above Bun's default
+
+// oxlint-disable-next-line test-timing/no-unreasoned-timeout
+test("slow case", () => undefined, 30_000);
+
+// a raised suite default
+
+// oxlint-disable-next-line test-timing/no-unreasoned-timeout
+setDefaultTimeout(60_000);
+
+// a default-sized budget
+// expect-clean: test-timing/no-unreasoned-timeout
+test("bounded case", () => undefined, 2000);
+
+// timeout: the case starts a real database cluster
+// expect-clean: test-timing/no-unreasoned-timeout
+test("reasoned case", () => undefined, 30_000);

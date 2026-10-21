@@ -204,6 +204,84 @@ describe("no-polling-loop", () => {
   });
 });
 
+const lintTimeouts = lintWith("no-unreasoned-timeout");
+
+describe("no-unreasoned-timeout", () => {
+  test("reports bun:test timeouts above the default or unreadable", async () => {
+    expect(
+      await lintTimeouts(
+        [
+          'import { beforeAll, it, setDefaultTimeout, test as check, jest } from "bun:test";',
+          'import * as bt from "bun:test";',
+          "const BUDGET = 6 * 1000;",
+          'check("a", async () => {}, 30_000);',
+          'it("b", async () => {}, BUDGET);',
+          "beforeAll(async () => {}, budget());",
+          'bt.test.each([1])("c %d", async () => {}, { timeout: 60_000 });',
+          'check("d", async () => {}, { retry: 2 });',
+          "setDefaultTimeout(20_000);",
+          "jest.setTimeout(10_000);",
+        ].join("\n"),
+      ),
+    ).toEqual([4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  test("reports Playwright timeout and retry changes", async () => {
+    expect(
+      await lintTimeouts(
+        [
+          'import { test } from "@playwright/test";',
+          "test.setTimeout(120_000);",
+          "test.slow();",
+          'test.describe.configure({ mode: "serial", retries: 2 });',
+          'test("e", async ({ page }, testInfo) => {',
+          "  testInfo.setTimeout(90_000);",
+          "});",
+        ].join("\n"),
+      ),
+    ).toEqual([2, 3, 4, 6]);
+  });
+
+  test("accepts default-sized budgets, owned helpers and other APIs", async () => {
+    expect(
+      await lintTimeouts(
+        [
+          'import { describe, test } from "bun:test";',
+          'import { propertyTestTimeout } from "@stll/property-testing";',
+          'test("a", async () => {}, 5000);',
+          'test("b", async () => {}, { timeout: 1000, retry: 0 });',
+          'test("c", async () => {}, propertyTestTimeout(30_000));',
+          'describe("d", () => {});',
+          "socket.setTimeout(30_000);",
+          'test.describe.configure({ mode: "serial" });',
+          'other("e", async () => {}, 30_000);',
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
+  test("accepts a timeout or quarantine reason at the call or its argument", async () => {
+    expect(
+      await lintTimeouts(
+        [
+          'import { test } from "bun:test";',
+          "// timeout: spawns a real Postgres cluster",
+          'test("a", async () => {}, 30_000);',
+          'test("b", async () => {',
+          "  await work();",
+          "}, 30_000); // timeout: measured 12 s on the slowest runner",
+          "// quarantine: #1234",
+          'test("c", async () => {}, 30_000);',
+          "// Takes a while.",
+          'test("d", async () => {}, 30_000);',
+          "// quarantine: soon",
+          'test("e", async () => {}, 30_000);',
+        ].join("\n"),
+      ),
+    ).toEqual([10, 12]);
+  });
+});
+
 describe("tagged reasons", () => {
   test("a tagged reason needs the tag and a word", () => {
     const reason = taggedComment(["real-time"]);

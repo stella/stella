@@ -42,6 +42,25 @@
 //     and a loop with a `// real-time: <reason>` comment. The fix is to
 //     await the signal that makes the predicate true.
 //
+// no-unreasoned-timeout
+//   A raised timeout or a retry hides a wait that should be event-driven: the
+//   test passes on a fast machine and grows slower or flakier with load.
+//   Flagged without a `// timeout: <reason>` or `// quarantine: #<issue>`
+//   comment:
+//     a `bun:test` test or hook (named, aliased or namespace import, through
+//       `.each`, `.if`, `.serial` and the other modifiers) whose timeout
+//       argument (`test(title, fn, 30_000)`, `beforeAll(fn, 30_000)`, or a
+//       `{ timeout }` option) is above Bun's 5000 ms default or cannot be
+//       read statically, and a `{ retry }` option above zero
+//     `setDefaultTimeout(n)` and `jest.setTimeout(n)` from `bun:test` above
+//       the default or unreadable
+//     Playwright `test.setTimeout(n)`, `testInfo.setTimeout(n)`,
+//       `test.info().setTimeout(n)`, `test.slow()`, and
+//       `test.describe.configure({ timeout, retries })`
+//   Allowed: a timeout at or below the default, and
+//     `propertyTestTimeout(...)` / `propertyTestDefaultTimeout()`, whose
+//     budget the property-testing convention owns.
+//
 // Existing sites are budgeted per file, enclosing function and spelling in
 // scripts/test-timing-ledger.json (no line numbers, a reason per row). A hit
 // beyond its budget is reported, and so is a budget the code no longer
@@ -68,6 +87,7 @@ import {
 
 const REAL_TIME_WAIT_RULE = "no-real-time-wait";
 const POLLING_LOOP_RULE = "no-polling-loop";
+const TIMEOUT_RULE = "no-unreasoned-timeout";
 const LEDGER_PATH = "scripts/test-timing-ledger.json";
 
 const { tracker: budgetTracker, staleMessage: STALE_MESSAGE } =
@@ -547,6 +567,259 @@ const stopsOnPredicate = (loop: AstNode): boolean =>
 const POLL_HINT =
   /sleep|setTimeout|setInterval|setImmediate|waitForTimeout|queueMicrotask|requestAnimationFrame|Promise\.resolve/u;
 
+// --- Raised timeouts ---------------------------------------------------------
+
+const BUN_TEST_MODULE = "bun:test";
+const BUN_DEFAULT_TIMEOUT_MS = 5000;
+
+const TIMEOUT_REASON = new RegExp(
+  `${taggedComment(["timeout"]).source}|^\\s*quarantine:\\s*#\\d+`,
+  "u",
+);
+
+// Where a `bun:test` export takes its timeout: the argument index of the
+// number or `{ timeout }` option.
+const BUN_TIMEOUT_ARGUMENT: ReadonlyMap<string, number> = new Map([
+  ["afterAll", 1],
+  ["afterEach", 1],
+  ["beforeAll", 1],
+  ["beforeEach", 1],
+  ["it", 2],
+  ["test", 2],
+]);
+
+// Budgets the property-testing convention computes and owns.
+const OWNED_TIMEOUT_HELPERS: ReadonlySet<string> = new Set([
+  "propertyTestDefaultTimeout",
+  "propertyTestTimeout",
+]);
+
+// The `bun:test` export a call's callee chain reaches through member and call
+// modifiers (`test.each(table)`, `test.if(condition)`, `bt.test.serial`).
+const bunTestExport = (
+  context: ScopeContext,
+  callee: unknown,
+): string | null => {
+  let current = unwrapExpression(callee);
+  while (isAstNode(current)) {
+    const binding = resolveImportedExpressionForEnforcement(context, current);
+    if (binding !== null) {
+      return binding.source === BUN_TEST_MODULE ? binding.imported : null;
+    }
+    if (current.type === "MemberExpression") {
+      current = unwrapExpression(current.object);
+    } else if (current.type === "CallExpression") {
+      current = unwrapExpression(current.callee);
+    } else {
+      return null;
+    }
+  }
+  return null;
+};
+
+const ARITHMETIC: Readonly<Record<string, (a: number, b: number) => number>> = {
+  "*": (a, b) => a * b,
+  "+": (a, b) => a + b,
+  "-": (a, b) => a - b,
+  "/": (a, b) => a / b,
+};
+
+// The number an expression always evaluates to, or null when it cannot be
+// read statically: literals, `const` bindings, and arithmetic over them.
+const staticNumber = (
+  context: ScopeContext,
+  node: unknown,
+  seen = new Set<unknown>(),
+): number | null => {
+  const expression = unwrapExpression(node);
+  if (!isAstNode(expression) || seen.has(expression)) {
+    return null;
+  }
+  seen.add(expression);
+  if (expression.type === "Literal") {
+    return typeof expression.value === "number" ? expression.value : null;
+  }
+  if (isIdentifierReference(expression)) {
+    const variable = resolveVariable(context, expression);
+    return variable === null
+      ? null
+      : staticNumber(context, stableInitializer(variable), seen);
+  }
+  if (
+    expression.type === "BinaryExpression" &&
+    typeof expression.operator === "string"
+  ) {
+    const apply = Object.hasOwn(ARITHMETIC, expression.operator)
+      ? ARITHMETIC[expression.operator]
+      : undefined;
+    const left = staticNumber(context, expression.left, seen);
+    const right = staticNumber(context, expression.right, seen);
+    return apply === undefined || left === null || right === null
+      ? null
+      : apply(left, right);
+  }
+  return null;
+};
+
+const isOwnedTimeoutHelper = (node: unknown): boolean => {
+  const expression = unwrapExpression(node);
+  if (!isAstNode(expression) || expression.type !== "CallExpression") {
+    return false;
+  }
+  const callee = unwrapExpression(expression.callee);
+  return isIdentifier(callee) && OWNED_TIMEOUT_HELPERS.has(callee.name);
+};
+
+// Whether a timeout value raises the budget above Bun's default, or cannot be
+// read and so may.
+const raisesTimeout = (context: ScopeContext, node: unknown): boolean => {
+  if (isOwnedTimeoutHelper(node)) {
+    return false;
+  }
+  const value = staticNumber(context, node);
+  return value === null || value > BUN_DEFAULT_TIMEOUT_MS;
+};
+
+const optionValue = (options: AstNode, key: string): unknown => {
+  if (!Array.isArray(options.properties)) {
+    return undefined;
+  }
+  for (const property of options.properties) {
+    if (
+      isAstNode(property) &&
+      property.type === "Property" &&
+      property.computed !== true &&
+      (isIdentifier(property.key, key) ||
+        (isAstNode(property.key) && property.key.value === key))
+    ) {
+      return property.value;
+    }
+  }
+  return undefined;
+};
+
+type RaisedTimeout = { node: unknown; pattern: string };
+
+// The raised timeout or retry a `bun:test` timeout argument carries.
+const raisedBunTimeout = (
+  context: ScopeContext,
+  argument: unknown,
+  name: string,
+): RaisedTimeout | null => {
+  const value = unwrapExpression(argument);
+  if (!isAstNode(value)) {
+    return null;
+  }
+  if (value.type !== "ObjectExpression") {
+    return raisesTimeout(context, value)
+      ? { node: value, pattern: `${name} timeout` }
+      : null;
+  }
+  const timeout = optionValue(value, "timeout");
+  if (timeout !== undefined && raisesTimeout(context, timeout)) {
+    return { node: timeout, pattern: `${name} timeout` };
+  }
+  const retry = optionValue(value, "retry");
+  const retries = retry === undefined ? 0 : staticNumber(context, retry);
+  return retries === 0
+    ? null
+    : { node: retry ?? value, pattern: `${name} retry` };
+};
+
+const PLAYWRIGHT_TEST_ROOTS: ReadonlySet<string> = new Set([
+  "test",
+  "testInfo",
+]);
+
+// The identifier a member/call chain starts from: `test` in
+// `test.info().setTimeout`, `testInfo` in `testInfo.setTimeout`.
+const chainRoot = (node: unknown): string | null => {
+  let current = unwrapExpression(node);
+  while (isAstNode(current)) {
+    if (isIdentifier(current)) {
+      return current.name;
+    }
+    if (current.type === "MemberExpression") {
+      current = unwrapExpression(current.object);
+    } else if (current.type === "CallExpression") {
+      current = unwrapExpression(current.callee);
+    } else {
+      return null;
+    }
+  }
+  return null;
+};
+
+// A Playwright test-level timeout or retry change.
+const raisedPlaywrightTimeout = (call: AstNode): RaisedTimeout | null => {
+  const callee = unwrapExpression(call.callee);
+  if (!isAstNode(callee) || callee.type !== "MemberExpression") {
+    return null;
+  }
+  const root = chainRoot(callee.object);
+  if (root === null || !PLAYWRIGHT_TEST_ROOTS.has(root)) {
+    return null;
+  }
+  const method = memberPropertyName(callee);
+  if (method === "setTimeout") {
+    return { node: call, pattern: `${root}.setTimeout` };
+  }
+  if (method === "slow" && root === "test") {
+    return { node: call, pattern: "test.slow" };
+  }
+  const options = Array.isArray(call.arguments)
+    ? unwrapExpression(call.arguments.at(0))
+    : null;
+  if (
+    method === "configure" &&
+    isAstNode(options) &&
+    options.type === "ObjectExpression" &&
+    (optionValue(options, "timeout") !== undefined ||
+      optionValue(options, "retries") !== undefined)
+  ) {
+    return { node: call, pattern: "test.describe.configure" };
+  }
+  return null;
+};
+
+// The raised timeout a call sets, if any.
+const raisedTimeout = (
+  context: ScopeContext,
+  call: AstNode,
+): RaisedTimeout | null => {
+  const args = Array.isArray(call.arguments) ? call.arguments : [];
+  const name = bunTestExport(context, call.callee);
+  if (name === "setDefaultTimeout") {
+    return raisesTimeout(context, args.at(0))
+      ? { node: call, pattern: "setDefaultTimeout" }
+      : null;
+  }
+  if (name === "jest") {
+    const callee = unwrapExpression(call.callee);
+    return isAstNode(callee) &&
+      callee.type === "MemberExpression" &&
+      memberPropertyName(callee) === "setTimeout" &&
+      raisesTimeout(context, args.at(0))
+      ? { node: call, pattern: "jest.setTimeout" }
+      : null;
+  }
+  const index = name === null ? undefined : BUN_TIMEOUT_ARGUMENT.get(name);
+  if (name !== null && index !== undefined) {
+    const optionsFirst = unwrapExpression(args.at(1));
+    return (
+      raisedBunTimeout(context, args.at(index), name) ??
+      (index === 2 &&
+      isAstNode(optionsFirst) &&
+      optionsFirst.type === "ObjectExpression"
+        ? raisedBunTimeout(context, optionsFirst, name)
+        : null)
+    );
+  }
+  return name === null ? raisedPlaywrightTimeout(call) : null;
+};
+
+const TIMEOUT_HINT = /[Tt]imeout|retry|retries|\.slow\(/u;
+
 type WaitSite = { node: ESTree.Node; wait: Wait };
 
 export default eslintCompatPlugin({
@@ -693,6 +966,71 @@ export default eslintCompatPlugin({
           DoWhileStatement: check,
           ForStatement: check,
           WhileStatement: check,
+          "Program:exit"(node) {
+            for (const report of tracker.stale()) {
+              context.report({ node, ...report });
+            }
+          },
+        };
+      },
+    },
+    [TIMEOUT_RULE]: {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          timeout:
+            "`{{pattern}}` raises this test's budget above the default, which " +
+            "hides a wait that should end on the work's own signal. Remove " +
+            "it and await the milestone, or say why the test needs it with " +
+            "`// timeout: <reason>` (or `// quarantine: #<issue>`). Ledger key: {{key}}",
+          stale: STALE_MESSAGE,
+        },
+      },
+      createOnce(context) {
+        const tracker = budgetTracker(TIMEOUT_RULE);
+        let hinted = false;
+        let comments: readonly SourceComment[] | null = null;
+
+        return {
+          before() {
+            tracker.reset(filenameForContext(context));
+            hinted = TIMEOUT_HINT.test(context.sourceCode.text);
+            comments = null;
+          },
+          CallExpression(call) {
+            const node: unknown = call;
+            if (!hinted || !isAstNode(node)) {
+              return;
+            }
+            const raised = raisedTimeout(context, node);
+            if (raised === null) {
+              return;
+            }
+            comments ??= context.sourceCode
+              .getAllComments()
+              .filter(isSourceComment);
+            if (
+              hasTaggedComment({
+                comments,
+                node: raised.node,
+                pattern: TIMEOUT_REASON,
+                text: context.sourceCode.text,
+              }) ||
+              hasTaggedComment({
+                comments,
+                node,
+                pattern: TIMEOUT_REASON,
+                text: context.sourceCode.text,
+              })
+            ) {
+              return;
+            }
+            const report = tracker.record(call, raised.pattern, "timeout");
+            if (report !== null) {
+              context.report({ node: call, ...report });
+            }
+          },
           "Program:exit"(node) {
             for (const report of tracker.stale()) {
               context.report({ node, ...report });

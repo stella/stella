@@ -475,6 +475,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("test-timing.fixture.ts", [
     "test-timing/no-real-time-wait",
     "test-timing/no-polling-loop",
+    "test-timing/no-unreasoned-timeout",
   ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
     "no-untyped-updates/no-untyped-updates",
@@ -1943,6 +1944,15 @@ const config = defineConfig({
       rules: {
         "test-timing/no-real-time-wait": "error",
         "test-timing/no-polling-loop": "error",
+      },
+    },
+    {
+      // A raised timeout or retry needs its reason. The custom lint rule
+      // tests take theirs from scripts/check-oxlint-test-timeouts.ts.
+      files: ["**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}"],
+      excludeFiles: [".oxlint-plugins/__tests__/**"],
+      rules: {
+        "test-timing/no-unreasoned-timeout": "error",
       },
     },
     {
