@@ -368,6 +368,7 @@ const generatedOutputGuardPlan = (
 test("the generated-output guards run when their inputs change", () => {
   for (const file of [
     "packages/sha256/src/index.ts",
+    "packages/api-contract/src/index.ts",
     "patches/some-package@1.0.0.patch",
     "bun.lock",
     "bunfig.toml",

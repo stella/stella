@@ -1458,6 +1458,10 @@ const cacheContext = () =>
       bun: Bun.version,
       typescript: ts.version,
       generator: scriptSourceHash(import.meta.path),
+      // The Turbo coverage check reads these declarations, so a restored
+      // printout must not outlive a change to them.
+      turboInputs: webApiTurboInputs(REPO_ROOT),
+      dependencyOutputs: webApiDependencyOutputs(REPO_ROOT),
     }),
   );
 

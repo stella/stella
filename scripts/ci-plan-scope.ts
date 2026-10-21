@@ -939,6 +939,7 @@ export const OUTPUT_RULES = {
             "apps/web/package.json",
             "apps/web/src/generated/api-routes.gen.ts",
             "packages/ai-catalog/*",
+            "packages/api-contract/*",
             "packages/boe/*",
             "packages/cli/*",
             "packages/business-registries/*",
