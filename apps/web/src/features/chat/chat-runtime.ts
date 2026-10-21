@@ -1301,7 +1301,13 @@ export const createChatRuntime = ({
       return () => {
         listeners.delete(listener);
         subscriberCount -= 1;
-        if (subscriberCount === 0) {
+        // TanStack's detach aborts an open request, and a run this client
+        // sent itself leaves no resume pointer for the next attach to
+        // rejoin: the runtime would keep generating with only what it had
+        // shown. So the last view going (a route handoff's destination
+        // remounting, a move between surfaces) leaves an open request to
+        // end with its turn; `leave` is what drops delivery on purpose.
+        if (subscriberCount === 0 && !client.getIsLoading()) {
           client.detach();
         }
       };
