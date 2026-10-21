@@ -7517,7 +7517,7 @@ test("an armed delta skips every normal job but still runs the queue-only suites
     v.object({ run: v.string() }),
     flattenWorkflowSteps(plan.steps).find((step) => step["id"] === "suites"),
   ).run;
-  const resolve = (
+  const resolveSuites = (
     normalReused: string,
     runRequired: string,
     routeSmoke = "false",
@@ -7543,15 +7543,21 @@ test("an armed delta skips every normal job but still runs the queue-only suites
       rmSync(directory, { recursive: true, force: true });
     }
   };
-  expect(resolve("true", "true")).toBe("run_required=false\narmed_delta=true");
+  expect(resolveSuites("true", "true")).toBe(
+    "run_required=false\narmed_delta=true",
+  );
   // Route smoke needs this run's web build, so it keeps the full run.
-  expect(resolve("true", "true", "true")).toBe(
+  expect(resolveSuites("true", "true", "true")).toBe(
     "run_required=true\narmed_delta=false",
   );
-  expect(resolve("", "true")).toBe("run_required=true\narmed_delta=false");
-  expect(resolve("", "false")).toBe("run_required=false\narmed_delta=false");
+  expect(resolveSuites("", "true")).toBe(
+    "run_required=true\narmed_delta=false",
+  );
+  expect(resolveSuites("", "false")).toBe(
+    "run_required=false\narmed_delta=false",
+  );
   // ci-result accepts an armed delta only at fast depth, so full depth runs all.
-  expect(resolve("true", "true", "false", "full")).toBe(
+  expect(resolveSuites("true", "true", "false", "full")).toBe(
     "run_required=true\narmed_delta=false",
   );
   expect(plan.outputs["armed_delta"]).toBe(
