@@ -26,6 +26,7 @@ import {
   count,
   eq,
   exists,
+  gt,
   inArray,
   isNotNull,
   or,
@@ -50,7 +51,11 @@ import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { isUuid } from "@stll/uuid-codec";
 
-import { member, user as authUser } from "@/api/db/auth-schema";
+import {
+  member,
+  session as authSession,
+  user as authUser,
+} from "@/api/db/auth-schema";
 import {
   authorizeOwnerSyntheticSession,
   bindOwnerSyntheticSessionAuthorityReader,
@@ -223,7 +228,6 @@ import {
 import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
-  LIMITS,
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
@@ -2911,14 +2915,41 @@ export const isActiveOrganizationMember = async ({
 export const resolveUserRealtimeAuthorization = async (
   {
     organizationId,
+    sessionIds,
     userId,
-  }: { organizationId: SafeId<"organization">; userId: SafeId<"user"> },
+  }: {
+    organizationId: SafeId<"organization">;
+    sessionIds: readonly string[];
+    userId: SafeId<"user">;
+  },
   db: MemberAuthorizationDb,
-): Promise<boolean> =>
-  (await resolveMemberAuthorization({ organizationId, userId }, db)) !== null;
+): Promise<ReadonlySet<string>> => {
+  const uniqueSessionIds = [...new Set(sessionIds)];
+  if (uniqueSessionIds.length === 0) {
+    return new Set();
+  }
+
+  const rows = await db
+    .select({ sessionId: authSession.id })
+    .from(member)
+    .innerJoin(
+      authSession,
+      and(
+        eq(authSession.userId, member.userId),
+        inArray(authSession.id, uniqueSessionIds),
+        gt(authSession.expiresAt, new Date()),
+      ),
+    )
+    .where(
+      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
+    )
+    .limit(uniqueSessionIds.length);
+
+  return new Set(rows.map((row) => row.sessionId));
+};
 
 type WorkspaceRealtimeAudienceLookup = {
-  userIds: readonly SafeId<"user">[];
+  sessionIds: readonly string[];
   workspaceId: SafeId<"workspace">;
 };
 
@@ -2930,17 +2961,25 @@ type WorkspaceRealtimeAudienceLookup = {
  * RLS-scoped request of their own.
  */
 export const resolveWorkspaceRealtimeAudience = async (
-  { userIds, workspaceId }: WorkspaceRealtimeAudienceLookup,
+  { sessionIds, workspaceId }: WorkspaceRealtimeAudienceLookup,
   db: MemberAuthorizationDb,
 ) => {
-  const uniqueUserIds = [...new Set(userIds)];
-  if (uniqueUserIds.length === 0) {
-    return new Set<SafeId<"user">>();
+  const uniqueSessionIds = [...new Set(sessionIds)];
+  if (uniqueSessionIds.length === 0) {
+    return new Set<string>();
   }
 
   const rows = await db
-    .select({ userId: member.userId })
+    .select({ sessionId: authSession.id })
     .from(member)
+    .innerJoin(
+      authSession,
+      and(
+        eq(authSession.userId, member.userId),
+        inArray(authSession.id, uniqueSessionIds),
+        gt(authSession.expiresAt, new Date()),
+      ),
+    )
     .innerJoin(
       workspaces,
       and(
@@ -2950,10 +2989,9 @@ export const resolveWorkspaceRealtimeAudience = async (
         memberWorkspaceAccess(db),
       ),
     )
-    .where(inArray(member.userId, uniqueUserIds))
-    .limit(LIMITS.organizationMembersCount);
+    .limit(uniqueSessionIds.length);
 
-  return new Set(rows.map((row) => brandPersistedUserId(row.userId)));
+  return new Set(rows.map((row) => row.sessionId));
 };
 
 /**
