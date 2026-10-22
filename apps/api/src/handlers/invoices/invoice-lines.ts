@@ -71,6 +71,7 @@ export const tVatRateBps = t.Integer({
 export const tVatTreatment = t.Union([
   t.Literal("domestic_vat"),
   t.Literal("not_vat_payer"),
+  t.Literal("outside_scope"),
   t.Literal("reverse_charge"),
   t.Literal("exempt"),
 ]);
@@ -209,6 +210,44 @@ export const expenseLineDraft = (
     expenseId: expense.id,
   };
 };
+
+// Plain dates (YYYY-MM-DD) and lowercase UUIDs both sort by code unit, the
+// order the `(date, id)` ORDER BY clauses elsewhere in this module produce.
+const compareCodeUnits = (left: string, right: string) =>
+  Number(left > right) - Number(left < right);
+
+export type AttachedEntryLineDraftsOptions = {
+  timeEntryRows: readonly (TimeEntryForLine & { dateWorked: string })[];
+  expenseRows: readonly (ExpenseForLine & { dateIncurred: string })[];
+  vat: LineVat;
+};
+
+/**
+ * Lines for entries just attached to an invoice: time entries by date worked,
+ * then expenses by date incurred, each tie broken by id. Line positions follow
+ * this order, so the invoice document lists work chronologically whatever
+ * order the claiming `UPDATE ... RETURNING` produced.
+ */
+export const attachedEntryLineDrafts = ({
+  timeEntryRows,
+  expenseRows,
+  vat,
+}: AttachedEntryLineDraftsOptions) => [
+  ...timeEntryRows
+    .toSorted(
+      (left, right) =>
+        compareCodeUnits(left.dateWorked, right.dateWorked) ||
+        compareCodeUnits(left.id, right.id),
+    )
+    .map((entry) => timeEntryLineDraft(entry, vat)),
+  ...expenseRows
+    .toSorted(
+      (left, right) =>
+        compareCodeUnits(left.dateIncurred, right.dateIncurred) ||
+        compareCodeUnits(left.id, right.id),
+    )
+    .map((expense) => expenseLineDraft(expense, vat)),
+];
 
 export const manualLineDraft = (
   input: LineVat & {

@@ -71,3 +71,15 @@ export const publicUrl = () =>
     v.string(),
     v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "publicUrl" } }),
   );
+
+/**
+ * Free-form text read from a document or record (extracted document text,
+ * notes). Its content is not a handle, so a UUID-shaped substring inside it
+ * is masked in place rather than dropping the whole field: the model keeps
+ * the text, never the raw id.
+ */
+export const contentText = () =>
+  v.pipe(
+    v.string(),
+    v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "contentText" } }),
+  );

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 // The API process boundary needs the raw executable. This list only shrinks.
 export const GITHUB_COMMAND_OWNERS = {

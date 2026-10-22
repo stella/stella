@@ -6,6 +6,7 @@ export type VatTreatment =
   | "domestic_vat"
   | "not_vat_payer"
   | "reverse_charge"
+  | "outside_scope"
   | "exempt";
 
 export type InvoiceParty = {

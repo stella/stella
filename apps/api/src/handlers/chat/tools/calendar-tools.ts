@@ -21,11 +21,12 @@ import {
 import { ensureMicrosoft365AccessToken } from "@/api/handlers/microsoft365/graph-client";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
+import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
+import { fenceExternalMcpToolResult } from "./external-mcp-tool-result-fence";
 import { toTanStackToolSchema } from "./tanstack-tool-schema";
+import { raiseChatToolError } from "./tool-failure";
 
 type CalendarContext = {
   safeDb: SafeDb;
@@ -68,14 +69,6 @@ const loadCalendarConnection = async (
   });
 };
 
-const CALENDAR_PROMPT_MAX_LENGTH = 120_000;
-const fenceCalendar = (value: unknown) => ({
-  provenance: "Outlook calendar",
-  content: sanitizeForPrompt(untrustedText(JSON.stringify(value)), {
-    maxLength: CALENDAR_PROMPT_MAX_LENGTH,
-  }),
-});
-
 const accessFailureKind = (error: unknown) => {
   if (!HandlerError.is(error)) {
     return "upstream";
@@ -89,9 +82,21 @@ const accessFailureKind = (error: unknown) => {
   return "upstream";
 };
 
-export const createCalendarTools = (context: CalendarContext) => {
+const CALENDAR_DEPENDENCIES = {
+  listCalendarEvents,
+  calendarFreeBusy,
+  deploymentEnabled: isDeploymentFeatureEnabled,
+};
+
+export const createCalendarTools = (
+  context: CalendarContext,
+  dependencies = CALENDAR_DEPENDENCIES,
+) => {
   const accessToken = async () => {
-    const loaded = await loadCalendarConnection(context);
+    const loaded = await loadCalendarConnection(
+      context,
+      dependencies.deploymentEnabled,
+    );
     if (Result.isError(loaded)) {
       return loaded;
     }
@@ -112,29 +117,50 @@ export const createCalendarTools = (context: CalendarContext) => {
     }).server(async (input) => {
       const token = await accessToken();
       if (Result.isError(token)) {
-        return {
-          error:
-            "Calendar access failed; check organization policy and reconnect Microsoft 365 if required",
-          kind: accessFailureKind(token.error),
-        };
+        return raiseChatToolError(
+          new ChatToolError({
+            kind:
+              accessFailureKind(token.error) === "upstream"
+                ? "transient"
+                : "unavailable",
+            message:
+              "Calendar access failed; check organization policy and reconnect Microsoft 365 if required",
+            cause: token.error,
+          }),
+        );
       }
       if (!token.value) {
-        return {
-          error:
-            "Calendar capability unavailable; check organization policy and reconnect Microsoft 365",
-        };
+        return raiseChatToolError(
+          new ChatToolError({
+            kind: "unavailable",
+            message:
+              "Calendar capability unavailable; check organization policy and reconnect Microsoft 365",
+          }),
+        );
       }
-      const result = await listCalendarEvents(input, {
+      const result = await dependencies.listCalendarEvents(input, {
         accessToken: token.value,
       });
       if (Result.isError(result)) {
-        return {
-          error: result.error.message,
-          kind: result.error.kind,
-          retryAfter: result.error.retryAfter,
-        };
+        return raiseChatToolError(
+          new ChatToolError({
+            kind:
+              result.error.kind === "capability_missing" ||
+              result.error.kind === "needs_reconnect"
+                ? "unavailable"
+                : "transient",
+            message:
+              result.error.retryAfter === null
+                ? result.error.message
+                : `${result.error.message}; retry after ${result.error.retryAfter} seconds`,
+            cause: result.error,
+          }),
+        );
       }
-      return fenceCalendar(result.value);
+      return fenceExternalMcpToolResult(
+        { connectorSlug: "Outlook calendar", toolName: "calendar_list_events" },
+        result.value,
+      );
     }),
     calendar_free_busy: toolDefinition({
       name: "calendar_free_busy",
@@ -143,29 +169,50 @@ export const createCalendarTools = (context: CalendarContext) => {
     }).server(async (input) => {
       const token = await accessToken();
       if (Result.isError(token)) {
-        return {
-          error:
-            "Calendar access failed; check organization policy and reconnect Microsoft 365 if required",
-          kind: accessFailureKind(token.error),
-        };
+        return raiseChatToolError(
+          new ChatToolError({
+            kind:
+              accessFailureKind(token.error) === "upstream"
+                ? "transient"
+                : "unavailable",
+            message:
+              "Calendar access failed; check organization policy and reconnect Microsoft 365 if required",
+            cause: token.error,
+          }),
+        );
       }
       if (!token.value) {
-        return {
-          error:
-            "Calendar capability unavailable; check organization policy and reconnect Microsoft 365",
-        };
+        return raiseChatToolError(
+          new ChatToolError({
+            kind: "unavailable",
+            message:
+              "Calendar capability unavailable; check organization policy and reconnect Microsoft 365",
+          }),
+        );
       }
-      const result = await calendarFreeBusy(input, {
+      const result = await dependencies.calendarFreeBusy(input, {
         accessToken: token.value,
       });
       if (Result.isError(result)) {
-        return {
-          error: result.error.message,
-          kind: result.error.kind,
-          retryAfter: result.error.retryAfter,
-        };
+        return raiseChatToolError(
+          new ChatToolError({
+            kind:
+              result.error.kind === "capability_missing" ||
+              result.error.kind === "needs_reconnect"
+                ? "unavailable"
+                : "transient",
+            message:
+              result.error.retryAfter === null
+                ? result.error.message
+                : `${result.error.message}; retry after ${result.error.retryAfter} seconds`,
+            cause: result.error,
+          }),
+        );
       }
-      return fenceCalendar(result.value);
+      return fenceExternalMcpToolResult(
+        { connectorSlug: "Outlook calendar", toolName: "calendar_free_busy" },
+        result.value,
+      );
     }),
   };
 };

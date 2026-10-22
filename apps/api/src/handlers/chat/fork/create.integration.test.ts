@@ -322,14 +322,7 @@ const messageTexts = (
 ): string[] =>
   rows.flatMap((row) =>
     row.content.data.flatMap((part) =>
-      typeof part === "object" &&
-      part !== null &&
-      "type" in part &&
-      part.type === "text" &&
-      "content" in part &&
-      typeof part.content === "string"
-        ? [part.content]
-        : [],
+      part.type === "text" ? [part.content] : [],
     ),
   );
 

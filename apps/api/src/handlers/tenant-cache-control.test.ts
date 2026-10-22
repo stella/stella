@@ -12,14 +12,18 @@ import api from "@/api/server";
 
 // TTL changes and new shared-cache routes require an explicit review decision.
 const PUBLIC_CACHE_HEADERS = {
-  "GET /.well-known/oauth-authorization-server": "public, max-age=300",
-  "GET /.well-known/oauth-authorization-server/api/auth": "public, max-age=300",
-  "GET /.well-known/openid-configuration": "public, max-age=300",
-  "GET /.well-known/oauth-protected-resource": "public, max-age=300",
+  "GET /.well-known/oauth-authorization-server":
+    "public, max-age=300, stale-while-revalidate=3600",
+  "GET /.well-known/oauth-authorization-server/api/auth":
+    "public, max-age=300, stale-while-revalidate=3600",
+  "GET /.well-known/openid-configuration":
+    "public, max-age=300, stale-while-revalidate=3600",
+  "GET /.well-known/oauth-protected-resource":
+    "public, max-age=300, stale-while-revalidate=3600",
   ...Object.fromEntries(
     MCP_MODES.map((mode) => [
       `GET ${MCP_RESOURCE_MODE_CONFIG[mode].discoveryPath}`,
-      "public, max-age=300",
+      "public, max-age=300, stale-while-revalidate=3600",
     ]),
   ),
   "GET /auth.md": "public, max-age=300",

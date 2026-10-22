@@ -73,6 +73,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "legislation_documents",
   "legislation_search_documents",
   "legislation_index_jobs",
+  "legislation_amendment_snapshots",
+  "legislation_amendments",
   // Crawl bookkeeping: the app role reads coverage for reporting, only
   // ingestion writes it.
   "case_law_coverage_slices",
@@ -129,6 +131,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // A group's contract binding and readiness: ingestion binds and attests,
   // request code only asks whether a group may be read.
   "corpus_index_group_enrollments",
+  // Per-jurisdiction serving pointers: request code resolves which generation
+  // serves a jurisdiction; only the gated flip and promotion write them.
+  "corpus_index_jurisdiction_serving",
   // Withdrawal history is read by requests and appended only by ingestion.
   "corpus_index_group_withdrawals",
   // Mutation revisions are appended and pruned only by ingestion triggers;
@@ -164,6 +169,9 @@ const POST_BOOTSTRAP_INSERT_ONLY_TABLES = new Set(["system_audit_runs"]);
 const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
   "time_entry_timer_states",
   "time_daily_targets",
+  // Account export ledger: request transactions create and transition rows;
+  // only the table owner deletes them, during account erasure.
+  "account_exports",
 ]);
 const MUTABLE_PROJECTION_PRIVILEGES = new Set(["select", "insert", "update"]);
 
@@ -181,6 +189,7 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  "synthetic_session_control",
   // Guidance ingestion is owner-only until a read capability is introduced.
   "soft_law_sources",
   "soft_law_ingestion_attempts",
@@ -200,6 +209,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "eu_completion_controls",
   "action_cost_records",
   "action_cost_calls",
+  // Chat content repair receipts: forced owner-only RLS; the owner-run
+  // backfill and deploy repair write them, request roles never see them.
+  "chat_content_v3_backfill_receipts",
   // Search backfill retries are ingestion control state, not request data.
   "case_law_search_backfill_failures",
   // Professional-use acceptances are written once at account or

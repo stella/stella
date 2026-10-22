@@ -125,11 +125,8 @@ export const createMicrosoft365OAuthCallback = (
           Temporal.Now.instant().epochMilliseconds - STATE_TTL_MS,
         );
 
-        // A DB failure here is a Result.err, not a thrown exception: `yield*` on
-        // an Err closes this generator via `.return()`, which skips `catch`
-        // below (only `finally` would run). Await and branch explicitly instead
-        // of `yield*` so every failure — DB or thrown — still redirects rather
-        // than leaking a raw error body.
+        // Every failure redirects to the settings surface, including a database
+        // Result.err and a rejection from an external crypto or provider call.
         const redirectForFailure = (error: unknown) =>
           redirect({
             status: "error",
@@ -140,143 +137,130 @@ export const createMicrosoft365OAuthCallback = (
             }),
           });
 
-        try {
-          const stateRowsResult = await safeDb((tx) =>
-            tx
-              .select({
-                organizationId: microsoft365OAuthState.organizationId,
-                userId: microsoft365OAuthState.userId,
-                codeVerifier: microsoft365OAuthState.codeVerifier,
-                redirectUri: microsoft365OAuthState.redirectUri,
-                createdAt: microsoft365OAuthState.createdAt,
-              })
-              .from(microsoft365OAuthState)
-              .where(eq(microsoft365OAuthState.state, state))
-              .limit(1),
-          );
-          if (Result.isError(stateRowsResult)) {
-            return Result.ok(redirectForFailure(stateRowsResult.error));
-          }
-          const row = stateRowsResult.value.at(0);
-
-          if (!row || row.createdAt < cutoff) {
-            return Result.ok(
-              redirect({ status: "error", reason: "expired-state" }),
+        const settled = await Result.tryPromise({
+          try: async () => {
+            const stateRowsResult = await safeDb((tx) =>
+              tx
+                .select({
+                  organizationId: microsoft365OAuthState.organizationId,
+                  userId: microsoft365OAuthState.userId,
+                  codeVerifier: microsoft365OAuthState.codeVerifier,
+                  redirectUri: microsoft365OAuthState.redirectUri,
+                  createdAt: microsoft365OAuthState.createdAt,
+                })
+                .from(microsoft365OAuthState)
+                .where(eq(microsoft365OAuthState.state, state))
+                .limit(1),
             );
-          }
-          if (
-            row.organizationId !== session.activeOrganizationId ||
-            row.userId !== user.id
-          ) {
-            return Result.ok(
-              redirect({ status: "error", reason: "user-mismatch" }),
-            );
-          }
+            if (Result.isError(stateRowsResult)) {
+              return Result.ok(redirectForFailure(stateRowsResult.error));
+            }
+            const row = stateRowsResult.value.at(0);
 
-          const oauthConfig = resolved.getMicrosoft365OAuthConfig();
-          if (Result.isError(oauthConfig)) {
-            return Result.ok(
-              redirect({ status: "error", reason: "not-configured" }),
-            );
-          }
-
-          const token = await resolved.exchangeAuthorizationCode({
-            clientId: oauthConfig.value.clientId,
-            clientSecret: oauthConfig.value.clientSecret,
-            tenantId: oauthConfig.value.tenantId,
-            code,
-            codeVerifier: row.codeVerifier,
-            redirectUri: row.redirectUri,
-          });
-          if (Result.isError(token)) {
-            return Result.ok(
-              redirect({ status: "error", reason: "token-exchange" }),
-            );
-          }
-
-          const rowUserId = brandPersistedUserId(row.userId);
-          const account = await resolved.fetchAccountLabel(
-            token.value.access_token,
-          );
-
-          if (Result.isError(account)) {
-            return Result.ok(redirectForFailure(account.error));
-          }
-          const accountLabel = account.value;
-          const encryptedAccess = await encryptMicrosoft365Secret({
-            purpose: "microsoft365_access_token",
-            secret: token.value.access_token,
-            organizationId: row.organizationId,
-            userId: rowUserId,
-          });
-          const encryptedRefresh = token.value.refresh_token
-            ? await encryptMicrosoft365Secret({
-                purpose: "microsoft365_refresh_token",
-                secret: token.value.refresh_token,
-                organizationId: row.organizationId,
-                userId: rowUserId,
-              })
-            : null;
-
-          const connectResult = await safeDb(async (innerTx) => {
-            await withAggregateLock({
-              tx: innerTx,
-              aggregate: "organization",
-              id: row.organizationId,
-              mode: "update",
-            });
-            // Re-check enablement under the organization lock: the Graph round trips
-            // above can take long enough for an admin to turn the connection
-            // off mid-flow, and the check at the top of this handler ran
-            // before any of that work started.
-            const settingsRows = await innerTx
-              .select({
-                microsoft365ConnectionEnabled:
-                  organizationSettings.microsoft365ConnectionEnabled,
-              })
-              .from(organizationSettings)
-              .where(
-                eq(organizationSettings.organizationId, row.organizationId),
+            if (!row || row.createdAt < cutoff) {
+              return Result.ok(
+                redirect({ status: "error", reason: "expired-state" }),
               );
-            if (!settingsRows.at(0)?.microsoft365ConnectionEnabled) {
-              return { status: "not-enabled" as const };
+            }
+            if (
+              row.organizationId !== session.activeOrganizationId ||
+              row.userId !== user.id
+            ) {
+              return Result.ok(
+                redirect({ status: "error", reason: "user-mismatch" }),
+              );
             }
 
-            // Authoritative on the state token: a concurrent callback for the
-            // same state (replay, or a double-fired redirect) deletes zero
-            // rows here and must not also persist a connection.
-            const deletedState = await innerTx
-              .delete(microsoft365OAuthState)
-              .where(eq(microsoft365OAuthState.state, state))
-              .returning({ state: microsoft365OAuthState.state });
-            await innerTx
-              .delete(microsoft365OAuthState)
-              .where(lt(microsoft365OAuthState.createdAt, cutoff));
-            if (deletedState.length === 0) {
-              return { status: "state-consumed" as const };
+            const oauthConfig = resolved.getMicrosoft365OAuthConfig();
+            if (Result.isError(oauthConfig)) {
+              return Result.ok(
+                redirect({ status: "error", reason: "not-configured" }),
+              );
             }
 
-            await innerTx
-              .insert(microsoft365Connections)
-              .values({
-                organizationId: row.organizationId,
-                userId: rowUserId,
-                accessTokenEncrypted: encryptedAccess.ciphertext,
-                accessTokenIv: encryptedAccess.iv,
-                refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
-                refreshTokenIv: encryptedRefresh?.iv ?? null,
-                tokenType: token.value.token_type ?? "Bearer",
-                scope: token.value.scope ?? null,
-                accountLabel,
-                expiresAt: tokenExpiresAt(token.value),
-                status: "connected",
-              })
-              .onConflictDoUpdate({
-                target: [
-                  microsoft365Connections.organizationId,
-                  microsoft365Connections.userId,
-                ],
-                set: {
+            const token = await resolved.exchangeAuthorizationCode({
+              clientId: oauthConfig.value.clientId,
+              clientSecret: oauthConfig.value.clientSecret,
+              tenantId: oauthConfig.value.tenantId,
+              code,
+              codeVerifier: row.codeVerifier,
+              redirectUri: row.redirectUri,
+            });
+            if (Result.isError(token)) {
+              return Result.ok(
+                redirect({ status: "error", reason: "token-exchange" }),
+              );
+            }
+
+            const rowUserId = brandPersistedUserId(row.userId);
+            const account = await resolved.fetchAccountLabel(
+              token.value.access_token,
+            );
+
+            if (Result.isError(account)) {
+              return Result.ok(redirectForFailure(account.error));
+            }
+            const accountLabel = account.value;
+            const encryptedAccess = await encryptMicrosoft365Secret({
+              purpose: "microsoft365_access_token",
+              secret: token.value.access_token,
+              organizationId: row.organizationId,
+              userId: rowUserId,
+            });
+            const encryptedRefresh = token.value.refresh_token
+              ? await encryptMicrosoft365Secret({
+                  purpose: "microsoft365_refresh_token",
+                  secret: token.value.refresh_token,
+                  organizationId: row.organizationId,
+                  userId: rowUserId,
+                })
+              : null;
+
+            const connectResult = await safeDb(async (innerTx) => {
+              await withAggregateLock({
+                tx: innerTx,
+                aggregate: "orgFeatureAdmission",
+                id: {
+                  organizationId: row.organizationId,
+                  featureId: "microsoft365",
+                },
+              });
+              // Re-check enablement under the connection policy lock: the Graph round trips
+              // above can take long enough for an admin to turn the connection
+              // off mid-flow, and the check at the top of this handler ran
+              // before any of that work started.
+              const settingsRows = await innerTx
+                .select({
+                  microsoft365ConnectionEnabled:
+                    organizationSettings.microsoft365ConnectionEnabled,
+                })
+                .from(organizationSettings)
+                .where(
+                  eq(organizationSettings.organizationId, row.organizationId),
+                );
+              if (!settingsRows.at(0)?.microsoft365ConnectionEnabled) {
+                return { status: "not-enabled" as const };
+              }
+
+              // Authoritative on the state token: a concurrent callback for the
+              // same state (replay, or a double-fired redirect) deletes zero
+              // rows here and must not also persist a connection.
+              const deletedState = await innerTx
+                .delete(microsoft365OAuthState)
+                .where(eq(microsoft365OAuthState.state, state))
+                .returning({ state: microsoft365OAuthState.state });
+              await innerTx
+                .delete(microsoft365OAuthState)
+                .where(lt(microsoft365OAuthState.createdAt, cutoff));
+              if (deletedState.length === 0) {
+                return { status: "state-consumed" as const };
+              }
+
+              await innerTx
+                .insert(microsoft365Connections)
+                .values({
+                  organizationId: row.organizationId,
+                  userId: rowUserId,
                   accessTokenEncrypted: encryptedAccess.ciphertext,
                   accessTokenIv: encryptedAccess.iv,
                   refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
@@ -286,52 +270,69 @@ export const createMicrosoft365OAuthCallback = (
                   accountLabel,
                   expiresAt: tokenExpiresAt(token.value),
                   status: "connected",
-                  updatedAt: new Date(),
+                })
+                .onConflictDoUpdate({
+                  target: [
+                    microsoft365Connections.organizationId,
+                    microsoft365Connections.userId,
+                  ],
+                  set: {
+                    accessTokenEncrypted: encryptedAccess.ciphertext,
+                    accessTokenIv: encryptedAccess.iv,
+                    refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
+                    refreshTokenIv: encryptedRefresh?.iv ?? null,
+                    tokenType: token.value.token_type ?? "Bearer",
+                    scope: token.value.scope ?? null,
+                    accountLabel,
+                    expiresAt: tokenExpiresAt(token.value),
+                    status: "connected",
+                    updatedAt: new Date(),
+                  },
+                });
+              await recordAuditEvent(innerTx, {
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+                resourceId: row.organizationId,
+                workspaceId: null,
+                metadata: {
+                  connectionUserId: rowUserId,
+                  operation: "microsoft365_oauth_connect",
                 },
               });
-            await recordAuditEvent(innerTx, {
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-              resourceId: row.organizationId,
-              workspaceId: null,
-              metadata: {
-                connectionUserId: rowUserId,
-                operation: "microsoft365_oauth_connect",
-              },
+              return { status: "connected" as const };
             });
-            return { status: "connected" as const };
-          });
-          if (Result.isError(connectResult)) {
-            return Result.ok(redirectForFailure(connectResult.error));
-          }
+            if (Result.isError(connectResult)) {
+              return Result.ok(redirectForFailure(connectResult.error));
+            }
 
-          switch (connectResult.value.status) {
-            case "not-enabled": {
-              return Result.ok(
-                redirect({ status: "error", reason: "not-enabled" }),
-              );
+            switch (connectResult.value.status) {
+              case "not-enabled": {
+                return Result.ok(
+                  redirect({ status: "error", reason: "not-enabled" }),
+                );
+              }
+              case "state-consumed": {
+                return Result.ok(
+                  redirect({ status: "error", reason: "expired-state" }),
+                );
+              }
+              case "connected": {
+                return Result.ok(redirect({ status: "connected" }));
+              }
+              default: {
+                connectResult.value satisfies never;
+                return panic(`Unhandled value: ${String(connectResult.value)}`);
+              }
             }
-            case "state-consumed": {
-              return Result.ok(
-                redirect({ status: "error", reason: "expired-state" }),
-              );
-            }
-            case "connected": {
-              return Result.ok(redirect({ status: "connected" }));
-            }
-            default: {
-              connectResult.value satisfies never;
-              return panic(`Unhandled value: ${String(connectResult.value)}`);
-            }
-          }
-        } catch (error) {
-          return Result.ok(redirectForFailure(error));
-        }
+          },
+          catch: (error: unknown) => error,
+        });
+        return Result.isError(settled)
+          ? Result.ok(redirectForFailure(settled.error))
+          : settled.value;
       };
 
-      // `run` always resolves `Result.ok(...)` (every failure branch above
-      // redirects instead of erroring), so this is a real `yield*` outside any
-      // try — it exists to unwrap `run`'s result, not to propagate a DB Err.
+      // Failure branches resolve as redirects, preserving the callback response contract.
       return Result.ok(yield* Result.await(run()));
     },
   );

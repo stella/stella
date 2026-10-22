@@ -10,6 +10,7 @@ import { SearchField } from "@stll/ui/search-field";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { AssistantSetup } from "@/components/assistant-setup";
+import { SettingsPageHeader } from "@/components/settings-page-header";
 import { externalApiOrigin } from "@/lib/api-origins";
 import {
   mcpConnectorsOptions,
@@ -26,7 +27,6 @@ import {
   IntegrationsGroup,
   useIntegrations,
 } from "@/routes/_protected.settings/-components/account/connections/integrations-group";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 
 import { Microsoft365Group } from "./-components/account/connections/microsoft365-group";

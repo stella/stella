@@ -16,7 +16,10 @@ import { cn } from "@stll/ui/utils";
 
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { createCountryOptions } from "@/lib/jurisdictions";
-import { normalizeBirthDateDigits } from "@/routes/_protected.contacts/-components/person-details-fields.logic";
+import {
+  filterNationalityOptions,
+  normalizeBirthDateDigits,
+} from "@/routes/_protected.contacts/-components/person-details-fields.logic";
 import type { BirthDateDraft } from "@/routes/_protected.contacts/-components/person-details-fields.logic";
 
 type PersonDetailsFieldsProps = {
@@ -37,20 +40,16 @@ export const PersonDetailsFields = ({
   const locale = useLocale();
   const [query, setQuery] = useState("");
   const selected = new Set(nationalityCodes);
-  const normalizedQuery = query.trim().toLocaleLowerCase(locale);
-  const countries = createCountryOptions(locale, format.displayName)
-    .filter(
-      ({ name, code }) =>
-        !normalizedQuery ||
-        name.toLocaleLowerCase(locale).includes(normalizedQuery) ||
-        code.toLocaleLowerCase(locale).includes(normalizedQuery),
-    )
-    .toSorted((a, b) => {
-      if (selected.has(a.code) !== selected.has(b.code)) {
-        return selected.has(a.code) ? -1 : 1;
-      }
-      return compareByLocale(locale)(a.name, b.name);
-    });
+  const countries = filterNationalityOptions({
+    countries: createCountryOptions(locale, format.displayName),
+    query,
+    locale,
+  }).toSorted((a, b) => {
+    if (selected.has(a.code) !== selected.has(b.code)) {
+      return selected.has(a.code) ? -1 : 1;
+    }
+    return compareByLocale(locale)(a.name, b.name);
+  });
 
   return (
     <div className="flex flex-col gap-4">

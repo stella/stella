@@ -1,6 +1,6 @@
 {
   "apps/desktop/src-tauri/src/account.rs": {
-    "count": 6,
+    "count": 4,
     "owner": "apps/desktop/src-tauri",
     "reason": "pre-kit census; inject clocks and isolate test state"
   },

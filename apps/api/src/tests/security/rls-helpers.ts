@@ -58,9 +58,11 @@ import {
   workspaceSearchDocuments,
 } from "@/api/db/schema";
 import type { PendingUploadPurposeData } from "@/api/db/schema";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
+import { encryptContent } from "@/api/lib/content-encryption";
 import { cents } from "@/api/lib/money";
 import {
   mintAuthProviderId,
@@ -183,6 +185,7 @@ export const createTestIds = () => ({
   // boundary alone, independent of matter access.
   aiMemoryFirmA: id<"aiMemory">(),
   aiMemoryFirmB: id<"aiMemory">(),
+  aiMemoryDeleteB: id<"aiMemory">(),
   // Additional properties for dependencies
   propertyA1dep: id<"property">(),
   propertyB1dep: id<"property">(),
@@ -1214,6 +1217,18 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       status: "active" as const,
       createdBy: ids.userB1,
     },
+    {
+      id: ids.aiMemoryDeleteB,
+      organizationId: ids.orgB,
+      scope: "user" as const,
+      userId: ids.userB1,
+      kind: "preference" as const,
+      content: "Firm B cites Bluebook",
+      dedupKey: hashSha256Hex(ids.aiMemoryDeleteB),
+      source: "user" as const,
+      status: "active" as const,
+      createdBy: ids.userB1,
+    },
   ]);
 
   await db.insert(fileChatThreads).values({
@@ -1234,10 +1249,8 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
     chatThreadId: ids.chatThreadGlobalA1,
   });
 
-  const chatContent = (text: string) => ({
-    version: 1 as const,
-    data: [{ type: "text" as const, text }],
-  });
+  const chatContent = (content: string) =>
+    toPersistedChatMessageContentV3({ data: [{ type: "text", content }] });
 
   await db.insert(chatMessages).values([
     {
@@ -1331,6 +1344,8 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
   // but a wrong-width IV would be a fixture the production reader could never
   // have written. `sourceSha256Hex` satisfies the 64-hex-character CHECK and
   // matches the digest already seeded on the corresponding file field.
+  const encryptedA = await encryptContent(ids.orgA, "extracted text a1");
+  const encryptedB = await encryptContent(ids.orgB, "extracted text b1");
   await db.insert(extractedContent).values([
     {
       entityId: ids.entityA1,
@@ -1340,8 +1355,8 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       sourceFieldId: ids.fileFieldA1,
       sourceFileId: ids.fileObjectA1,
       sourceSha256Hex: "a".repeat(64),
-      ciphertext: Buffer.from("extracted text a1"),
-      iv: Buffer.alloc(12, 0xa1),
+      ciphertext: encryptedA.ciphertext,
+      iv: encryptedA.iv,
       charCount: 17,
       language: "en",
     },
@@ -1353,8 +1368,8 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       sourceFieldId: ids.fileFieldB1,
       sourceFileId: ids.fileObjectB1,
       sourceSha256Hex: "b".repeat(64),
-      ciphertext: Buffer.from("extracted text b1"),
-      iv: Buffer.alloc(12, 0xb1),
+      ciphertext: encryptedB.ciphertext,
+      iv: encryptedB.iv,
       charCount: 17,
       language: "en",
     },

@@ -1,4 +1,4 @@
-import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { ChatLink } from "@stll/chat/link";
 
 import { MarkdownReferenceChip } from "@/components/references/reference-chip";
 import { isReferenceHref } from "@/components/references/reference.logic";
@@ -9,7 +9,7 @@ export const EntityLink = ({
   href,
   children,
   workspaceId,
-  ...props
+  ...anchorProps
 }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
   workspaceId?: string | undefined;
 }) => {
@@ -22,13 +22,8 @@ export const EntityLink = ({
   }
 
   return (
-    <a
-      href={sanitizeHref(href)}
-      rel="noopener noreferrer"
-      target="_blank"
-      {...props}
-    >
+    <ChatLink {...anchorProps} href={href ?? ""}>
       {children}
-    </a>
+    </ChatLink>
   );
 };

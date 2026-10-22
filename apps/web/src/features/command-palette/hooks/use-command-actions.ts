@@ -9,6 +9,7 @@ import { useTranslations } from "use-intl";
 import { ENTITIES_PER_WORKSPACE_MAX } from "@stll/api-contract";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -112,11 +113,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
         openCreateMatterDialog();
       },
       openNewChat: () => {
-        openChat(
-          workspaceId === undefined
-            ? {}
-            : { workspaceId, contextMatterIds: [workspaceId] },
-        );
+        openChat(newChatMatterScope(workspaceId));
       },
     }),
     [

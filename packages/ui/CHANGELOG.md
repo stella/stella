@@ -1,5 +1,55 @@
 # @stll/ui
 
+## 0.49.1
+
+### Patch Changes
+
+- [#6437](https://github.com/stella/stella/pull/6437) [`bbede41`](https://github.com/stella/stella/commit/bbede4118c2a62a39bb4a709ef51f4545de7055e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Prose` accepts `tone` and `size` variants for muted and small narrative copy.
+
+## 0.49.0
+
+### Minor Changes
+
+- [#6310](https://github.com/stella/stella/pull/6310) [`f68baf7`](https://github.com/stella/stella/commit/f68baf7f2240db328e62201120dde71f3baf2b7b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Prose` sets an 80-character measure for narrative text.
+
+### Patch Changes
+
+- [#6206](https://github.com/stella/stella/pull/6206) [`6787bf4`](https://github.com/stella/stella/commit/6787bf4a6e33a5fa97538d91428d928ffffaabc8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The floating outline opens from its tick strip (hover, focus or tap) and no longer draws a toggle button; Escape closes it and returns focus to the tick.
+
+## 0.48.0
+
+### Minor Changes
+
+- [#5823](https://github.com/stella/stella/pull/5823) [`ed25af1`](https://github.com/stella/stella/commit/ed25af1211e6e5f091842ddf553f2795f5c16622) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `textMarkHighlightRule` takes a `variant` and every state, so a line mark (underline, dotted, wavy, strike) can be drawn through the CSS Custom Highlight API as well as a fill.
+
+## 0.47.1
+
+### Patch Changes
+
+- [#5740](https://github.com/stella/stella/pull/5740) [`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A destructive confirm dialog stays open when its confirm settles to `"keep-open"`, and a host-responsive workspace frame may omit its end dock.
+
+## 0.47.0
+
+### Minor Changes
+
+- [#5914](https://github.com/stella/stella/pull/5914) [`55d62c9`](https://github.com/stella/stella/commit/55d62c989b81bf063cc4cef899aae4a3efe00077) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `StatusMark`, `SwapText` and `AnimatedCount`. `ListGroupCount` now takes its count through a `count` prop.
+
+## 0.46.0
+
+### Minor Changes
+
+- [#5768](https://github.com/stella/stella/pull/5768) [`4a9c808`](https://github.com/stella/stella/commit/4a9c808a3c3d68cfcc53496913c3a531c8bcfe94) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared chat link detection, inline link chips and composer/markdown adapters, with bundled site icons and a local proxy-image seam. Export the X brand icon.
+
+- [#5486](https://github.com/stella/stella/pull/5486) [`1b7773e`](https://github.com/stella/stella/commit/1b7773effd472e11422bc82d0d417fdf22ce9ff1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export shared matter icons and colour utilities.
+
+- [#5623](https://github.com/stella/stella/pull/5623) [`ad3cd0a`](https://github.com/stella/stella/commit/ad3cd0a68ebcb2bee63dc8a8d12a0fb3c9783975) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a deterministic SVG table chart with bar, line, pie, and scatter presentations, accessible summaries, theme tokens, and locale-aware numbers.
+
+### Patch Changes
+
+- [#5680](https://github.com/stella/stella/pull/5680) [`eac3ba7`](https://github.com/stella/stella/commit/eac3ba744bf28f96adcec06a6ebc9edf6b60d1c1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `AiLabel`, an inline mark for generated content that opens a short disclosure in a popover. Case-law analysis reads now return `aiDisclosure` with the analysis, the sentence to show beside it.
+
+- [#5646](https://github.com/stella/stella/pull/5646) [`4479e67`](https://github.com/stella/stella/commit/4479e67c3290234e3a73fc307b213eb061f74870) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Pad edge-attached surfaces (workspace shell, rails, sheets, bottom-stuck dialogs, toasts) with the device safe-area insets, contain overscroll in shared scrollers, keep long-press from selecting control labels, use a strong ease-out for entering and exiting motion, and give `Button` a short press scale while it is enabled.
+
 ## 0.45.0
 
 ### Minor Changes

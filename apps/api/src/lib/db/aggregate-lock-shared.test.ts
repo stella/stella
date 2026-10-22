@@ -6,6 +6,10 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
+import {
+  aggregateExecutionRows,
+  aggregateFences,
+} from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -15,10 +19,6 @@ import {
   withAggregateLock,
   withAggregateSavepoint,
 } from "./aggregate-lock";
-import {
-  aggregateExecutionRows,
-  aggregateFences,
-} from "./aggregate-lock-order.fixture";
 
 const recorder = () => {
   const statements: string[] = [];

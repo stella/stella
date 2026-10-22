@@ -1,5 +1,6 @@
 export { InvoicingInputError } from "./errors";
 export { normalizeIban, parseIban } from "./iban";
+export { parseNip } from "./nip";
 export {
   calculateDocumentTotals,
   createInvoiceDocument,
@@ -8,10 +9,16 @@ export {
 } from "./invoice-document";
 export { calculateLineNetAmount, VAT_TREATMENTS } from "./line-amount";
 export {
+  buildPolishQrPaymentPayload,
+  type PolishQrPaymentInput,
+  type PolishQrPaymentResult,
+} from "./polish-qr-payment";
+export {
   buildCzechQrPaymentPayload,
   type CzechQrPaymentInput,
   type CzechQrPaymentResult,
 } from "./qr-payment";
+export { standardVatRateOn, type VatRatePeriod } from "./vat-rate-period";
 export type {
   BankPaymentDetails,
   InvoiceDocument,

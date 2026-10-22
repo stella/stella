@@ -8,6 +8,8 @@ import {
   SELLER_PROFILE_EDITABLE_FIELDS,
   sellerProfileParams,
   updateSellerProfileBody,
+  VAT_PAYER_REQUIRES_VAT_ID,
+  vatPayerWithoutVatId,
 } from "@/api/handlers/seller-profiles/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -19,7 +21,8 @@ const config = {
   contract: "patch",
   description:
     "Update an active issuer profile in the active organization. Omitted " +
-    "fields stay unchanged; null clears an optional field.",
+    "fields stay unchanged; null clears an optional field. A VAT payer " +
+    "(vatPayer: true) must keep a VAT ID.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   featureAccess: { featureId: "time-billing", type: "required" },
@@ -48,7 +51,11 @@ export default createSafeRootHandler(
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const rows = await tx
-          .select({ id: sellerProfiles.id })
+          .select({
+            id: sellerProfiles.id,
+            vatId: sellerProfiles.vatId,
+            vatPayer: sellerProfiles.vatPayer,
+          })
           .from(sellerProfiles)
           .where(
             and(
@@ -63,9 +70,17 @@ export default createSafeRootHandler(
         if (!existing) {
           return null;
         }
+        if (
+          vatPayerWithoutVatId(
+            updates.vatPayer ?? existing.vatPayer,
+            updates.vatId === undefined ? existing.vatId : updates.vatId,
+          )
+        ) {
+          return "vat-payer-without-vat-id" as const;
+        }
         const changedFields = Object.keys(updates);
         if (changedFields.length === 0) {
-          return existing;
+          return { id: existing.id };
         }
         const updatedRows = await tx
           .update(sellerProfiles)
@@ -91,6 +106,9 @@ export default createSafeRootHandler(
         return updated ?? null;
       }),
     );
+    if (result === "vat-payer-without-vat-id") {
+      return Result.err(new HandlerError(VAT_PAYER_REQUIRES_VAT_ID));
+    }
     if (!result) {
       return Result.err(
         new HandlerError({ status: 404, message: "Seller profile not found" }),

@@ -55,9 +55,8 @@ export const purgeMicrosoft365ForOrg = async (
 ): Promise<Microsoft365DisablePurgeResult> => {
   await withAggregateLock({
     tx,
-    aggregate: "organization",
-    id: organizationId,
-    mode: "update",
+    aggregate: "orgFeatureAdmission",
+    id: { organizationId, featureId: "microsoft365" },
   });
   const previous = await tx.query.organizationSettings.findFirst({
     where: { organizationId: { eq: organizationId } },

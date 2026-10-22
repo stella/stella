@@ -12,6 +12,31 @@
       "unknownDevice": "جهاز غير معروف"
     }
   },
+  "admin": {
+    "ai": "الذكاء الاصطناعي",
+    "backToApp": "العودة إلى التطبيق",
+    "billingAndUsage": "الفوترة والاستخدام",
+    "billingProfiles": "ملفات الفوترة",
+    "deleteDescription": "حذف هذه المؤسسة وبياناتها نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
+    "deleteOrganization": "حذف المؤسسة",
+    "deleteRefusedSubscription": "لدى هذه المؤسسة اشتراك يتجدد. ألغِه أولًا من صفحة الخطة والاستخدام، ثم احذف المؤسسة.",
+    "deleteTypeToConfirm": "اكتب {name} للتأكيد.",
+    "firmSetup": "إعداد المكتب",
+    "general": "عام",
+    "leaveDescription": "ستفقد الوصول إلى الملفات القانونية والبيانات الخاصة بهذه المؤسسة.",
+    "leaveOrganization": "مغادرة المؤسسة",
+    "leaveRefusedOnlyOwner": "أنت المالك الوحيد. اجعل عضوًا آخر مالكًا قبل المغادرة.",
+    "modelsAndProviders": "النماذج ومقدمو الخدمات",
+    "noPlan": "لا توجد خطة نشطة",
+    "organizationDeleted": "تم حذف المؤسسة.",
+    "organizationId": "معرّف المؤسسة",
+    "organizationLeft": "لقد غادرت المؤسسة.",
+    "overviewDescription": "إدارة مؤسستك والأشخاص والأدوات.",
+    "people": "الأشخاص",
+    "planAndUsage": "الخطة والاستخدام",
+    "title": "إدارة المؤسسة",
+    "toolsDescription": "تفعيل الأدوات المدمجة أو تعطيلها لجميع الأشخاص في هذه المؤسسة."
+  },
   "agentClaim": {
     "access": "الصلاحيات التي سيحصل عليها",
     "accessReadSearch": "صلاحية القراءة والبحث",
@@ -64,6 +89,9 @@
     "runRemainingPage": "تشغيل المتبقي (هذه الصفحة)",
     "runSelectedRows": "تشغيل لـ {count, plural, zero {# صف محدد} one {# صف محدد} two {# صفين محددين} few {# صفوف محددة} many {# صفًا محددًا} other {# صف محدد}}",
     "selectedRun": "تشغيل أعمدة الذكاء الاصطناعي لـ {count, plural, zero {# صف} one {# صف} two {# صفين} few {# صفوف} many {# صفًا} other {# صف}}"
+  },
+  "aiDisclosure": {
+    "caseLaw": "تُنشئ stella الملخصات والملاحظات والتحليلات المولَّدة بالذكاء الاصطناعي للأحكام القضائية، وهي غير معتمدة من المحاكم ولا تمثّل تعليل المحاكم ذاتها؛ فهي أدوات مساعدة للمهنيين القانونيين، ويظل نص الحكم هو المرجع الأصيل."
   },
   "appearance": {
     "calendar": "تقويم",
@@ -352,6 +380,12 @@
       "attentionComplete": "<strong>تم التعامل مع كل ادعاء يحتاج إلى قرار.</strong> {count, plural, zero {لا توجد نتائج روتينية تتطلب مراجعة فردية.} one {النتيجة الروتينية الواحدة لا تتطلب مراجعة فردية.} two {النتيجتان الروتينيتان لا تتطلبان مراجعة فردية.} few {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.} many {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.} other {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.}}",
       "attentionOpen": "<strong>{count, plural, zero {لا توجد ادعاءات تحتاج إلى} one {ادعاء واحد يحتاج إلى} two {ادعاءان يحتاجان إلى} few {# ادعاءات تحتاج إلى} many {# ادعاءً يحتاج إلى} other {# ادعاء يحتاج إلى}} قرارك</strong>؛ تعارضات وتفسيرات محل نزاع. {routineCount, plural, zero {لا توجد ادعاءات روتينية أخرى تحتاج إلى اعتماد فردي.} one {الادعاء الآخر روتيني ولا يحتاج إلى اعتماد فردي.} two {الادعاءان الآخران روتينيان ولا يحتاجان إلى اعتماد فردي.} few {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.} many {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.} other {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.}}",
       "claimAnnouncement": " ({state}{contested, select, true {، محل نزاع} other {}}{reviewStatus, select, reviewed {، روجع} disputed {، متنازع عليه} other {}})",
+      "documentView": {
+        "label": "عرض المستند",
+        "original": "الأصل",
+        "reading": "عرض القراءة"
+      },
+      "notLocated": "{count, plural, zero {لم يُعثر على # ادعاء في الأصل} one {لم يُعثر على ادعاء واحد في الأصل} two {لم يُعثر على ادعاءين في الأصل} few {لم يُعثر على # ادعاءات في الأصل} many {لم يُعثر على # ادعاءً في الأصل} other {لم يُعثر على # ادعاء في الأصل}}",
       "selectClaim": "اختر ادعاءً لفحص السجل الذي يستند إليه.",
       "showQueue": "عرض قائمة الانتظار",
       "stats": {
@@ -529,6 +563,70 @@
     },
     "hourlyRateMustBeNonNegative": "لا يمكن أن يكون السعر بالساعة سالبًا",
     "hours": "الساعات",
+    "invoiceComposer": {
+      "addSellerProfile": "أضف ملف بائع في إعدادات الفوترة",
+      "billedHours": "الساعات المفوترة",
+      "buyer": "العميل (المشتري)",
+      "continueToDetails": "المتابعة إلى التفاصيل",
+      "continueToIssue": "المتابعة إلى الإصدار",
+      "datesAndPayment": "التواريخ والسداد",
+      "days": "{days, plural, zero {# يوم} one {يوم واحد} two {يومان} few {# أيام} many {# يومًا} other {# يوم}}",
+      "draftSavedTitle": "حُفظت مسودة الفاتورة",
+      "dueIn": "الاستحقاق خلال",
+      "dueOn": "تستحق في {date}",
+      "flatFee": "لهذا الملف القانوني أتعاب ثابتة: تحتسب الفاتورة المبلغ المتفق عليه {amount}، والوقت أدناه مشمول به.",
+      "flatFeeLine": "الأتعاب الثابتة المتفق عليها",
+      "include": "تضمين في هذه الفاتورة",
+      "issueFailed": "حُفظت المسودة، لكن تعذّر إصدار الفاتورة.",
+      "issueInvoice": "إصدار الفاتورة",
+      "issuedTitle": "صدرت الفاتورة {number}",
+      "lines": "بنود الفاتورة",
+      "loggedHours": "مسجل {hours} ساعة",
+      "noCharge": "دون مقابل",
+      "noClient": "لا عميل لهذا الملف القانوني، لذا لا يوجد مشترٍ في الفاتورة بعد.",
+      "noExpenses": "لا توجد مصروفات معتمدة غير مفوترة في هذا الملف القانوني.",
+      "noTime": "لا يوجد وقت معتمد غير مفوتر في هذا الملف القانوني.",
+      "noVat": "دون ضريبة القيمة المضافة",
+      "nothingToBill": "لا يوجد ما يُفوتر بعد. اعتمد قيود الوقت أو المصروفات في هذا الملف القانوني لفوترتها.",
+      "openInvoice": "فتح الفاتورة",
+      "otherCurrency": "{count, plural, zero {لا توجد بنود مسجلة} one {بند واحد مسجل} two {بندان مسجلان} few {# بنود مسجلة} many {# بندًا مسجلًا} other {# بند مسجل}} بعملة غير {currency}، وتبقى لفاتورة منفصلة.",
+      "outsideScope": "خارج نطاق ضريبة القيمة المضافة، 0 %",
+      "rate": "السعر",
+      "readyDescription": "عند الإصدار تحصل الفاتورة على الرقم التالي من سلسلة الترقيم لديك وتُقفل. يمكن مواصلة تعديل المسودة.",
+      "readyTitle": "جاهزة للإصدار",
+      "reverseCharge": "الاحتساب العكسي، 0 %",
+      "saveDraft": "حفظ كمسودة",
+      "seller": "البائع",
+      "sources": {
+        "client": "منسوخ من عميل الملف القانوني",
+        "clientTerm": "مهلة السداد الخاصة بالعميل",
+        "defaultSeller": "ملف البائع الافتراضي لديك",
+        "defaultTerm": "مهلة السداد المعتادة",
+        "lastWorkDay": "آخر يوم من العمل المضمَّن"
+      },
+      "steps": {
+        "issue": "المراجعة والإصدار",
+        "items": "الوقت والمصروفات"
+      },
+      "tax": "الضريبة والعملة",
+      "taxableSupplyDate": "تاريخ التوريد",
+      "timeEntries": "قيود الوقت",
+      "timeSummary": "{count, plural, zero {لا قيود} one {قيد واحد} two {قيدان} few {# قيود} many {# قيدًا} other {# قيد}} · {hours} ساعة",
+      "title": "فاتورة جديدة",
+      "totalsSummary": "دون الضريبة {net} · الضريبة {vat} · الإجمالي {total}",
+      "vat": "معاملة ضريبة القيمة المضافة",
+      "vatRate": "ضريبة القيمة المضافة {rate} %",
+      "vatReasons": {
+        "clientCountryUnconfirmed": "تعذّر تأكيد بلد العميل: رقم ضريبة القيمة المضافة والعنوان لا يشيران إلى البلد نفسه، لذا يُطبَّق المعدل القياسي",
+        "clientVatIdInvalid": "رقم ضريبة القيمة المضافة للعميل لا يطابق تنسيق بلده، لذا يُطبَّق السعر القياسي",
+        "domesticRate": "أعلى معدل لضريبة القيمة المضافة لديك ساري المفعول في تاريخ التوريد",
+        "noSellerProfile": "لا يوجد ملف بائع، لذا لا تُحتسب ضريبة القيمة المضافة حتى تحددها في الفاتورة",
+        "noVatRate": "لم يُعدّ أي معدل لضريبة القيمة المضافة في إعدادات الفوترة",
+        "outsideScope": "رقم ضريبة القيمة المضافة للعميل مسجل خارج الاتحاد الأوروبي، لذا فإن مكان التوريد في الخارج",
+        "reverseCharge": "رقم ضريبة القيمة المضافة للعميل مسجل في بلد آخر",
+        "sellerNotVatPayer": "البائع غير مكلف بضريبة القيمة المضافة"
+      }
+    },
     "invoiceNarrative": "بيان الفاتورة",
     "invoiceNarrativePlaceholder": "وصف موجّه للعميل (اختياري)",
     "invoices": {
@@ -671,7 +769,10 @@
       "registrationId": "رقم التسجيل",
       "setDefault": "تعيين كافتراضي",
       "title": "ملفات البائع",
-      "vatId": "رقم ضريبة القيمة المضافة"
+      "vatId": "رقم ضريبة القيمة المضافة",
+      "vatPayer": "مكلف بضريبة القيمة المضافة",
+      "vatPayerHelp": "تفرض فواتير هذا البائع ضريبة القيمة المضافة. أوقفه لشخص مسجل لديه رقم ضريبة القيمة المضافة لكنه غير مكلف بها.",
+      "vatPayerRequiresVatId": "أدخل رقم ضريبة القيمة المضافة لإصدار الفواتير بصفتك مكلفًا بها."
     },
     "settingsTitle": "الفوترة",
     "split": {
@@ -749,11 +850,11 @@
         "answerIncomplete": "{source, select, organization {أعاد مفتاح {provider} الخاص بمؤسستك إجابة غير مكتملة.} other {أعاد نموذج الذكاء الاصطناعي إجابة غير مكتملة.}}",
         "providerRefused": "{source, select, organization {رفض {provider} الطلب المُرسل بمفتاح مؤسستك. تحقّق من المفتاح وحصّته والفوترة في إعدادات المؤسسة.} other {رفض مزوّد الذكاء الاصطناعي الطلب.}}",
         "providerUnavailable": "{source, select, organization {{provider} غير متاح حالياً لمفتاح مؤسستك.} other {مزوّد الذكاء الاصطناعي غير متاح حالياً.}}",
+        "retryAfter": "يمكنك المحاولة مرة أخرى بعد {time}.",
         "timedOut": "{source, select, organization {لم يُجب {provider} في الوقت المحدد باستخدام مفتاح مؤسستك.} other {لم يُجب نموذج الذكاء الاصطناعي في الوقت المحدد.}}",
         "unavailable": "تحليل الذكاء الاصطناعي غير متاح لهذا الحكم."
       },
       "generate": "توليد خلاصات الحكم بالذكاء الاصطناعي",
-      "holdingAnchor": "الانتقال إلى الفقرة",
       "invitation": "مع حساب مجاني، يُعِدّ الذكاء الاصطناعي ملاحظات عمل حول هذا الحكم.",
       "topics": "الموضوعات",
       "treatment": "المعالجة اللاحقة"
@@ -913,6 +1014,9 @@
       "saved": "{count, plural, zero {لم يُحفظ أي حكم} one {تم حفظ حكم واحد} two {تم حفظ حكمين} few {تم حفظ # أحكام} many {تم حفظ # حكمًا} other {تم حفظ # حكم}} في {matter}"
     },
     "newestDecisions": "أحدث الأحكام",
+    "noResults": {
+      "hint": "جرّب كلمات أخرى، أو حسّن الاستعلام بالذكاء الاصطناعي، أو اطرح السؤال في الدردشة."
+    },
     "notesFilter": {
       "ai": "ذكاء اصطناعي",
       "human": "بشرية"
@@ -986,8 +1090,11 @@
         "short": "قصير"
       }
     },
+    "rewritten": {
+      "line": "لا توجد نتائج مطابقة تمامًا لـ <bdi>{original}</bdi>؛ تُعرض نتائج <bdi>{query}</bdi>",
+      "searchOriginal": "البحث بكلماتي الأصلية"
+    },
     "sameCaseNumber": "{count, plural, zero {لا يوجد حكم يحمل} one {حكم واحد يحمل} two {حكمان يحملان} few {# أحكام تحمل} many {# حكمًا تحمل} other {# حكم تحمل}} رقم القضية هذا. اختر المحكمة.",
-    "searchAskPrompt": "{query} (السوابق القضائية في {country})",
     "searchLabel": "البحث في السوابق القضائية",
     "searchPlaceholder": "رقم القضية أو ECLI أو كلمات، مثل 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1003,6 +1110,8 @@
         "hint": "أزل أحد عوامل التصفية أو وسّعه ثم ابحث مرة أخرى.",
         "message": "لا شيء يطابق عوامل التصفية المحددة."
       },
+      "partialMatch": "تطابق جزئي",
+      "partialMatches": "نتائج تطابق جزئي للبحث: <bdi>{query}</bdi>",
       "resultsFor": "نتائج البحث عن: <bdi>{query}</bdi>",
       "searchEveryWord": "البحث عن كل الكلمات"
     },
@@ -1040,11 +1149,19 @@
       "judges": "القضاة",
       "legalArea": "المجال القانوني",
       "legalSentence": "الجملة القانونية",
+      "paragraphReference": "الفقرة {number}",
       "popularName": "الاسم الشائع",
       "portraitCredit": "مصدر الصور: {source}",
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, zero {لا إشارات} one {إشارة واحدة} two {إشارتان} few {# إشارات} many {# إشارة} other {# إشارة}}",
       "provisionsCited": "الأحكام المستشهد بها",
+      "provisionsFailed": "فشلت معالجة الاستشهادات",
+      "provisionsNoneFound": "لم يُعثر على أحكام مستشهد بها",
+      "provisionsProcessing": "جارٍ معالجة الاستشهادات",
+      "provisionsUnavailable": "الاستشهادات غير متاحة",
+      "provisionsUnplaceable": "لا يمكن تحديد مواضع الاستشهادات في نص القرار",
+      "provisionsUnsupported": "معالجة الاستشهادات غير مدعومة لهذا القرار",
+      "provisionsWithheld": "الاستشهادات محجوبة",
       "sourceFields": {
         "decisionCategory": "فئة القرار",
         "publishedOnWeb": "منشور على الويب"
@@ -1128,15 +1245,37 @@
     },
     "answerEdit": {
       "acceptFailed": "تعذّر حفظ التعديل. حاول مرة أخرى.",
+      "aiKind": "تعديل مطلوب",
       "ask": "طلب تعديلات",
+      "authorUnknown": "مؤلف غير معروف",
+      "autolinkLabel": "يصبح هذا النص رابطًا تلقائيًا. غيّر التسمية قبل إزالة الرابط.",
+      "change": "التغيير {revision}",
+      "editedLabel": "إجابة معدّلة",
       "failed": "تعذّر إعداد التعديل. حاول مرة أخرى.",
+      "formatKind": "تنسيق",
+      "heading": "عنوان {level}",
+      "history": "سجل الإجابة",
+      "historyEmpty": "لا توجد نسخ سابقة.",
       "instruction": "صِف التعديل",
       "instructionRequired": "صِف كيفية تعديل النص المحدد.",
       "invalidSelection": "لا يمكن تعديل هذا التحديد. حدد مقطعًا متصلًا من النص.",
+      "invalidUrl": "أدخل عنوان HTTP أو HTTPS صالحًا.",
+      "linkAddress": "عنوان الرابط",
+      "orderedList": "قائمة مرقمة",
       "proposal": "التعديل المقترح",
       "requesting": "جارٍ إعداد التعديلات…",
+      "restoreRefreshFailed": "تمت استعادة الإجابة، لكن تعذّر تحديثها. حدّثها لتحميل الإجابة المستعادة.",
+      "revertKind": "نسخة مستعادة",
       "stale": "تغيّرت هذه الإجابة. حدد النص مرة أخرى.",
-      "submit": "طلب تعديل"
+      "submit": "طلب تعديل",
+      "textStyle": "نمط النص",
+      "unorderedList": "قائمة نقطية",
+      "wholeBlockRequired": "حدد فقرة أو قائمة بالكامل لتغيير نمطها."
+    },
+    "answerQuote": {
+      "showInDecision": "عرض في القرار",
+      "verified": "اقتباس موثَّق",
+      "verifiedHint": "حرفيًا في {source}"
     },
     "applyMode": {
       "description": "يُخزّن Word مَن أجرى كل تغيير. وسنتذكّر اختيارك.",
@@ -1257,6 +1396,7 @@
     "credentialSendDescription": "أرسلها فقط إذا كنت تريد مشاركة هذه القيمة في المحادثة.",
     "credentialSendTitle": "قد تحتوي هذه الرسالة على بيانات اعتماد",
     "deleteThread": "حذف المحادثة",
+    "diagramUnavailable": "تعذّر عرض هذا المخطط. تظهر شيفرته المصدرية أدناه.",
     "editMode": {
       "autoDirect": "تلقائي · إعادة كتابة",
       "autoDirectDescription": "تُطبَّق تعديلات الذكاء الاصطناعي فورًا بإعادة كتابة المستند مباشرةً (من دون تعقّب التغييرات).",
@@ -1295,6 +1435,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, zero {ولا شيء آخر} one {وعنصر واحد آخر} two {وعنصران آخران} few {و# عناصر أخرى} many {و# عنصرًا آخر} other {و# عنصر آخر}}"
     },
+    "historyTrimmed": "تعذّر تلخيص الرسائل السابقة، لذا تراعي هذه الإجابة الجزء الأحدث من المحادثة فقط.",
     "improvePrompt": "تحسين الطلب",
     "improvePromptDraftChanged": "تغيّرت المسودة، لذلك لم يُطبّق التحسين.",
     "improvePromptPlainTextOnly": "تحسين الطلب متاح للنص العادي فقط.",
@@ -1321,7 +1462,12 @@
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mention": {
       "category": {
-        "entities": "في هذا الملف القانوني"
+        "entities": "في هذا الملف القانوني",
+        "sources": "المصادر"
+      },
+      "corpus": {
+        "caseLaw": "السوابق القضائية · {country}",
+        "legislation": "التشريعات · {country}"
       },
       "loadError": "تعذّر تحميل العناصر"
     },
@@ -1375,6 +1521,12 @@
       "title": "نص ملصق"
     },
     "placeholder": "اكتب سؤالك هنا، / للمهارات، @ لإضافة سياق",
+    "processSummary": {
+      "analyses": "{count, plural, zero {# تحليلات} one {تحليل واحد} two {تحليلان} few {# تحليلات} many {# تحليلًا} other {# تحليل}}",
+      "changesSaved": "{count, plural, zero {# تغييرات محفوظة} one {تغيير واحد محفوظ} two {تغييران محفوظان} few {# تغييرات محفوظة} many {# تغييرًا محفوظًا} other {# تغيير محفوظ}}",
+      "documentEdits": "{count, plural, zero {# تعديلات على المستند} one {تعديل واحد على المستند} two {تعديلان على المستند} few {# تعديلات على المستند} many {# تعديلًا على المستند} other {# تعديل على المستند}}",
+      "sourcesChecked": "{count, plural, zero {# مصادر تمت مراجعتها} one {مصدر واحد تمت مراجعته} two {مصدران تمت مراجعتهما} few {# مصادر تمت مراجعتها} many {# مصدرًا تمت مراجعته} other {# مصدر تمت مراجعته}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "يحوّل العمل المعقد إلى مهام فرعية مرتبة.",
@@ -1466,6 +1618,9 @@
         "team": "مهارات الفريق"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "تمت مراجعتها أيضًا ({count, number})"
+    },
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",
     "sources": "المصادر:",
@@ -1486,6 +1641,18 @@
       "rejected": "مرفوض"
     },
     "tabToAsk": "→ للسؤال: «{prompt}»",
+    "tableChart": {
+      "bar": "أعمدة",
+      "kind": "نوع الرسم البياني",
+      "line": "خطي",
+      "loading": "جارٍ اختيار رسم بياني…",
+      "pie": "دائري",
+      "scatter": "مبعثر",
+      "showChart": "عرض كرسم بياني",
+      "summary": "عدد القيم المعروضة: {n, number}.",
+      "unavailable": "تعذّر اختيار رسم بياني. يتم عرض الجدول.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "العمل مع السياق",
     "threadFiles": {
       "title": "الملفات في هذه الدردشة"
@@ -1504,6 +1671,8 @@
       "boe_search_legislation": "البحث في تشريعات BOE",
       "borme_get_summary": "ملخّص BORME اليومي",
       "business_registry_lookup": "البحث في السجل التجاري",
+      "calendar_free_busy": "التحقق من التوفر في التقويم",
+      "calendar_list_events": "قراءة أحداث التقويم",
       "compare_versions": "مقارنة الإصدارات",
       "configure_template_fields": "ضبط حقول القالب",
       "counterparty_check": "التحقق من الطرف المقابل",
@@ -1608,6 +1777,7 @@
       "interrupted": "توقّف قبل الاكتمال",
       "output": "المخرجات",
       "sourceCode": "الشيفرة المصدرية",
+      "statusWaiting": "في الانتظار",
       "toggleDetails": "إظهار/إخفاء التفاصيل",
       "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}"
     },
@@ -1633,7 +1803,8 @@
       "toggleLabel": "البحث على الويب",
       "toggleOff": "إيقاف البحث على الويب",
       "toggleOn": "تشغيل البحث على الويب"
-    }
+    },
+    "workedFor": "مدة العمل: {duration}"
   },
   "clauses": {
     "addVariant": "إضافة صيغة",
@@ -2511,11 +2682,16 @@
     "actionFailed": "فشل الإجراء",
     "api": {
       "badRequest": "تعذر إكمال الطلب.",
+      "caseLawCountryUnavailable": "الأحكام القضائية لهذا البلد غير متاحة. اختر بلدًا آخر.",
+      "caseLawIdentityOnly": "لا يتوفر لهذا البلد سوى البحث عن الأحكام القضائية بمعرّفها الدقيق وقراءتها.",
+      "caseLawSearchUnavailable": "البحث في الأحكام القضائية لهذا البلد غير متاح. لا يزال بإمكانك قراءة أحكامه القضائية العامة.",
       "conflict": "يتعارض الطلب مع الحالة الحالية.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
+      "legislationCountryUnavailable": "التشريعات لهذا البلد غير متاحة. اختر بلدًا آخر.",
+      "legislationIdentityOnly": "لا يتوفر لهذا البلد سوى البحث عن التشريعات بمعرّفها الدقيق وقراءتها.",
+      "legislationSearchUnavailable": "البحث في التشريعات لهذا البلد غير متاح. لا يزال بإمكانك قراءة تشريعاته العامة.",
       "notFound": "تعذر العثور على ما طلبته.",
       "payloadTooLarge": "الطلب كبير جدًا.",
-      "publicCountryUnavailable": "التشريعات والأحكام القضائية لهذا البلد غير متاحة. اختر بلدًا آخر.",
       "rateLimited": "طلبات كثيرة جدًا. يرجى المحاولة لاحقًا.",
       "server": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "serviceUnavailable": "الخدمة غير متاحة مؤقتًا. يرجى المحاولة مرة أخرى.",
@@ -2535,6 +2711,11 @@
       "aiConfigModelInvalid": "إعداد نموذج الذكاء الاصطناعي غير صالح. تحقق من النماذج المحددة.",
       "aiConfigProviderInvalid": "إعداد مزود الذكاء الاصطناعي غير صالح. تحقق من إعدادات المزود.",
       "aiConfigProviderValidationFailed": "رفض مزود الذكاء الاصطناعي الإعداد. تحقق من مفتاح API والنموذج.",
+      "aiDeadlineExceeded": "لم يُجب الذكاء الاصطناعي في الوقت المحدّد. يُرجى المحاولة مرة أخرى بعد لحظات.",
+      "aiOutputInvalid": "كانت إجابة الذكاء الاصطناعي بتنسيق غير متوقع. حاول مرة أخرى.",
+      "aiOutputModerated": "قام مزود الذكاء الاصطناعي بحجب المخرجات. أعد صياغة الطلب أو اختر نموذجًا آخر.",
+      "aiProviderTaskUnsupported": "لا يستطيع مزود الذكاء الاصطناعي المُعدّ تنفيذ هذه المهمة. اختر مزودًا يمكنه ذلك.",
+      "aiUnknown": "فشل طلب الذكاء الاصطناعي. حاول مرة أخرى.",
       "clauseDirectivesInvalid": "يحتوي بند مرتبط على توجيهات غير صالحة. صحّح البند قبل تعبئة القالب.",
       "clauseDirectivesInvalidDetails": "يحتوي البند {clauseName} في الحقل {slotName} على توجيهات غير صالحة. افتح محرر البنود، وصحح الفقرات المحددة، ثم املأ القالب مرة أخرى.",
       "clauseDirectivesOverrideInvalidDetails": "يحتوي النص البديل للبند {clauseName} في الحقل {slotName} على توجيهات غير صالحة. صحّح النص البديل لهذا التعبئة قبل المحاولة مرة أخرى.",
@@ -4081,6 +4262,10 @@
     "archivedEmpty": "لا توجد ذاكرة مؤرشفة.",
     "archivedToast": "تمت أرشفة الذاكرة",
     "createdToast": "تم الحفظ في الذاكرة",
+    "deleteConfirmation": "اكتب {confirmation} للتأكيد",
+    "deleteDescription": "سيؤدي هذا إلى حذف هذه الذاكرة نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
+    "deleteTitle": "حذف الذاكرة؟",
+    "deletedToast": "تم حذف الذاكرة",
     "empty": "لا توجد ذاكرة بعد.",
     "kinds": {
       "decision": "قرار",
@@ -4668,9 +4853,19 @@
       "deleteAccountWarningExplanation": "سنرسل رمز تحقق إلى عنوان بريدك الإلكتروني لتأكيد هذا الطلب. سيبقى سجل مساحات العمل المكتمل منسوبًا إلى حسابك المحذوف.",
       "desktop": "سطح المكتب",
       "desktopAppDescription": "استرجع أي نص تنسخه، وافتح مستندات stella في تطبيقات سطح المكتب التي تستخدمها بالفعل.",
+      "desktopCardApproveDetail": "وافق لربط هذا الكمبيوتر بـ <bdi>{identity}</bdi> على {host}.",
+      "desktopCardApproveTitle": "يطلب stella desktop الاتصال",
+      "desktopCardConnectedDetail": "مرتبط بـ <bdi>{identity}</bdi> على {host} · الإصدار {version}",
+      "desktopCardConnectedDetailNoVersion": "مرتبط بـ <bdi>{identity}</bdi> على {host}",
+      "desktopCardConnectedTitle": "تم ربط stella desktop",
+      "desktopCardMissingDetail": "ثبّته، أو اربطه إذا كان مثبتًا بالفعل على هذا الكمبيوتر.",
+      "desktopCardMissingTitle": "لم يُربط stella desktop بعد",
+      "desktopCardOutdatedDetail": "الإصدار {version} مرتبط بـ <bdi>{identity}</bdi>. ثبّت أحدث إصدار لتستمر المستندات والنشاط في العمل.",
+      "desktopCardOutdatedTitle": "يحتاج stella desktop إلى تحديث",
       "desktopClipboardDescription": "افتح النص المنسوخ من أي تطبيق وابحث فيه ونظّمه وأعد استخدامه.",
       "desktopClipboardTitle": "سجل حافظة قابل للبحث",
       "desktopConnectFailed": "تعذّر الاتصال بتطبيق stella desktop.",
+      "desktopConnectInstalled": "مثبّت بالفعل، اتصال",
       "desktopConnectedAs": "متصل باسم <bdi>{email}</bdi>",
       "desktopDescription": "سجل الحافظة وأدوات المستندات على جهازك",
       "desktopDocumentsDescription": "افتح ملفات stella في تطبيقات سطح المكتب؛ وستعود المراجعات إلى الملف القانوني الصحيح.",
@@ -5003,6 +5198,8 @@
     "outline": "المحتويات",
     "outlineJumpLabel": "الانتقال إلى حكم",
     "outlineJumpPlaceholder": "§ 10 أو عنوان",
+    "pendingChanges": "التعديلات المرتقبة",
+    "pendingChangesIncomplete": "قد لا تتضمن بيانات الجهة الناشرة جميع التعديلات المرتقبة.",
     "provisionAskContextPrompt": "\n\nمقاطع تطبّق هذا الحكم في أكثر القرارات حجية:\n{passages}\n\nاستخدم أدوات السوابق القضائية لقراءة أي من هذه القرارات كاملاً أو للعثور على قرارات أخرى تستشهد بهذا الحكم.",
     "provisionAskPlaceholder": "اسأل عن هذه المادة",
     "provisionAskQuestionPrompt": "بخصوص {subject}: {question}",
@@ -5020,7 +5217,6 @@
     "provisionTextUnavailable": "النص غير متاح لهذه النسخة",
     "publisherWindowInconsistent": "لا يمكن تحديد النص النافذ في هذا التاريخ: بيانات الناشر متعارضة.",
     "resolvedAlias": "تم التعرف عليه باسم {label}",
-    "searchAskPrompt": "{query} (تشريعات {country})",
     "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "الرقم أو الاسم أو العنوان، مثل 89/2012 Sb.",
     "showCitedPartOnly": "عرض الجزء المستشهد به فقط",
@@ -6149,7 +6345,6 @@
         }
       },
       "atAGlance": "لمحة سريعة",
-      "edited": "تم التعديل",
       "getStarted": "ابدأ برفع المستندات أو إنشاء أول مجلد لك.",
       "matterDetails": "تفاصيل الملف القانوني",
       "membersCount": "{count, plural, zero {لا أعضاء} one {عضو واحد} two {عضوان} few {# أعضاء} many {# عضوًا} other {# عضو}}",

@@ -9,6 +9,7 @@
  * only place a raw string is minted into a `Secret<...>` brand.
  */
 
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -35,8 +36,14 @@ type DecryptedFor<P extends Microsoft365SecretPurpose> = Secret<
 const toDecryptedSecret = <K extends SecretKind>(value: string): Secret<K> =>
   v.parse(secretSchema, value);
 
+// Persisted purpose values remain stable across the connection API rename.
+const STORED_SECRET_PURPOSE = {
+  microsoft365_access_token: "sharepoint_access_token",
+  microsoft365_refresh_token: "sharepoint_refresh_token",
+} as const satisfies Record<Microsoft365SecretPurpose, string>;
+
 type SecretEnvelope = {
-  purpose: Microsoft365SecretPurpose;
+  purpose: (typeof STORED_SECRET_PURPOSE)[Microsoft365SecretPurpose];
   secret: string;
   userId: SafeId<"user">;
 };
@@ -59,8 +66,12 @@ export const encryptMicrosoft365Secret = async ({
 }): Promise<EncryptedSecret> =>
   await encryptContent(
     organizationId,
-    // oxlint-disable-next-line no-secret-in-log-sink/no-secret-in-log-sink -- serializes the envelope for encryptContent; only the ciphertext is stored
-    JSON.stringify({ purpose, secret, userId } satisfies SecretEnvelope),
+    JSON.stringify({
+      purpose: STORED_SECRET_PURPOSE[purpose],
+      // oxlint-disable-next-line no-secret-in-log-sink/no-secret-in-log-sink -- envelope passed directly to encryptContent; only ciphertext is stored
+      secret,
+      userId,
+    } satisfies SecretEnvelope),
   );
 
 export const decryptMicrosoft365Secret = async <
@@ -77,25 +88,38 @@ export const decryptMicrosoft365Secret = async <
   organizationId: SafeId<"organization">;
   purpose: P;
   userId: SafeId<"user">;
-}): Promise<DecryptedFor<P>> => {
-  const json = await decryptContent(organizationId, ciphertext, iv);
-  const parsed: unknown = JSON.parse(json);
+}): Promise<Result<DecryptedFor<P>, HandlerError<500>>> =>
+  await Result.gen(async function* () {
+    const parsed = yield* Result.await(
+      Result.tryPromise({
+        try: async (): Promise<unknown> =>
+          JSON.parse(await decryptContent(organizationId, ciphertext, iv)),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Stored Microsoft 365 secret envelope is invalid",
+            cause,
+          }),
+      }),
+    );
 
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !("purpose" in parsed) ||
-    !("secret" in parsed) ||
-    !("userId" in parsed) ||
-    parsed.purpose !== purpose ||
-    parsed.userId !== userId ||
-    typeof parsed.secret !== "string"
-  ) {
-    throw new HandlerError({
-      status: 500,
-      message: "Stored Microsoft 365 secret envelope is invalid",
-    });
-  }
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("purpose" in parsed) ||
+      !("secret" in parsed) ||
+      !("userId" in parsed) ||
+      parsed.purpose !== STORED_SECRET_PURPOSE[purpose] ||
+      parsed.userId !== userId ||
+      typeof parsed.secret !== "string"
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Stored Microsoft 365 secret envelope is invalid",
+        }),
+      );
+    }
 
-  return toDecryptedSecret<DecryptedKind<P>>(parsed.secret);
-};
+    return Result.ok(toDecryptedSecret<DecryptedKind<P>>(parsed.secret));
+  });

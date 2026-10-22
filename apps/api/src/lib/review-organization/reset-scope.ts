@@ -57,11 +57,13 @@ export const REVIEW_RESET_KEPT_TABLES = {
   mcp_connectors: "Integration credentials: never touched by the reset.",
   mcp_connector_authorization_reviews:
     "Integration authorization history: never touched by the reset.",
-  microsoft365_connections: "OAuth data: never touched by the reset.",
-  microsoft365_oauth_state: "OAuth data: never touched by the reset.",
+  sharepoint_connections: "OAuth data: never touched by the reset.",
+  sharepoint_oauth_state: "OAuth data: never touched by the reset.",
   business_registry_credentials:
     "Integration credentials: never touched by the reset.",
   feedback_reports: "Product feedback the operators read.",
+  chat_content_v3_backfill_receipts:
+    "Repair receipts the operators read; identifiers only, never chat content.",
   sanctions_organization_marks:
     "Scheduler-maintained screening state; holds no reviewer content.",
   sanctions_monitoring_backfills:
@@ -93,6 +95,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "chat_run_logs",
   "chat_secrets",
   "chat_threads",
+  "chat_tool_grants",
   "chat_turns",
   "clause_categories",
   "clause_variants",

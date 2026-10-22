@@ -1,13 +1,18 @@
 import { panic } from "better-result";
-import { and, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { type Static, t } from "elysia";
 
 import { SECTION_UNITS } from "@stll/legal-atlas/provision-citation-profile";
 
-import { caseLawProvisionCitations } from "@/api/db/schema";
+import {
+  caseLawProvisionCitations,
+  publishedCaseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
 
 /**
@@ -21,7 +26,9 @@ import { LIMITS } from "@/api/lib/limits";
  * `par_31` reach `par_316`.
  */
 export const caseLawProvisionFilterSchema = t.Object({
-  /** The work's display identity as links record it: `262/2006 Sb.`. */
+  /** EU targets are independent of the citing decision country. */
+  jurisdiction: t.Optional(t.Literal("EU")),
+  /** The work's display identity or EU CELEX as links record it. */
   work: t.String({ minLength: 1, maxLength: 64 }),
   unit: t.UnionEnum(SECTION_UNITS),
   section: t.Integer({ minimum: 1, maximum: 99_999 }),
@@ -36,7 +43,7 @@ export type CaseLawProvisionFilter = Static<
 >;
 
 type ProvisionScopeOptions = {
-  /** The citing decisions' jurisdiction, which is the links' own. */
+  /** The citing decisions' country; EU targets override the link jurisdiction. */
   jurisdiction: string;
   provision: CaseLawProvisionFilter;
 };
@@ -60,7 +67,7 @@ const provisionLinkConditions = ({
 }: ProvisionScopeOptions): SQL[] => {
   const link = caseLawProvisionCitations;
   const levels: SQL[] = [
-    sql`${link.jurisdiction} = ${jurisdiction}`,
+    sql`${link.jurisdiction} = ${provision.jurisdiction ?? jurisdiction}`,
     sql`${link.workIdentifier} = ${provision.work}`,
     sql`${link.unit} = ${provision.unit}`,
     sql`${link.section} = ${provision.section}`,
@@ -68,6 +75,17 @@ const provisionLinkConditions = ({
       ? sql`${link.sectionSuffix} IS NULL`
       : sql`${link.sectionSuffix} = ${canonicalPathValue(provision.sectionSuffix)}`,
   ];
+  if (provision.jurisdiction === "EU") {
+    // EU target identity does not name the citing country. Keep an id set and
+    // its broad-set warning within the requested country's published corpus.
+    levels.push(sql`EXISTS (
+      SELECT 1 FROM ${publishedCaseLawDecisions}
+      INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${publishedCaseLawDecisions.sourceId}
+      WHERE ${publishedCaseLawDecisions.id} = ${link.decisionId}
+        AND ${publishedCaseLawDecisions.country} = ${jurisdiction}
+        AND ${redistributableCaseLawSource}
+    )`);
+  }
   if (provision.subsection !== undefined) {
     levels.push(
       sql`${link.subsection} = ${canonicalPathValue(provision.subsection)}`,
@@ -121,12 +139,23 @@ export const readCaseLawProvisionScope = async (
   }: ProvisionScopeOptions & { idSetMax?: number },
 ): Promise<CaseLawProvisionScope> => {
   const link = caseLawProvisionCitations;
-  const conditions = and(...provisionLinkConditions(scope));
+  const conditions = and(
+    redistributableCaseLawSource,
+    ...provisionLinkConditions(scope),
+  );
   // Grouped rather than DISTINCT: the public read transaction exposes only
   // `select`, and a decision citing the provision at several levels is one.
   const rows = await tx
     .select({ decisionId: link.decisionId })
     .from(link)
+    .innerJoin(
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, link.decisionId),
+    )
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(conditions)
     .groupBy(link.decisionId)
     .limit(idSetMax + 1);
@@ -141,6 +170,14 @@ export const readCaseLawProvisionScope = async (
       citingDecisions: sql<number>`count(DISTINCT ${link.decisionId})::int`,
     })
     .from(link)
+    .innerJoin(
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, link.decisionId),
+    )
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(conditions);
   return {
     type: "broad",

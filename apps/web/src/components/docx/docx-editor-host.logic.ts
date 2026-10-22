@@ -191,16 +191,54 @@ type ClaimOptions = {
   claim: DocxEditorClaim;
 };
 
+const sameDocxEditorDocument = (
+  left: DocxEditorDocument,
+  right: DocxEditorDocument,
+): boolean =>
+  left.workspaceId === right.workspaceId &&
+  left.entityId === right.entityId &&
+  left.fileFieldId === right.fileFieldId &&
+  left.propertyId === right.propertyId;
+
+/** Whether two claims ask the hosted editor for the same thing. Bindings are
+ *  compared by reference: they are stable for a tab's lifetime. */
+const sameDocxEditorClaim = (
+  left: DocxEditorClaim,
+  right: DocxEditorClaim,
+): boolean =>
+  left.slot === right.slot &&
+  left.surface === right.surface &&
+  left.sequence === right.sequence &&
+  left.canUnlock === right.canUnlock &&
+  left.isEditing === right.isEditing &&
+  left.scaleOffset === right.scaleOffset &&
+  left.bindings === right.bindings &&
+  sameDocxEditorDocument(left.document, right.document) &&
+  (left.slot === DOCX_EDITOR_SLOT.inspector &&
+  right.slot === DOCX_EDITOR_SLOT.inspector
+    ? left.initialScrollTop === right.initialScrollTop
+    : true);
+
 /**
  * Register or refresh a slot's claim. A claim inside the grace window revives
  * the entry rather than starting a new one — that is the swap, and the whole
- * point of the window.
+ * point of the window. Re-claiming what the entry already holds returns the
+ * same registry, so a re-render that changes nothing re-renders nothing.
  */
 export const claimDocxEditorSlot = (
   registry: DocxEditorHostRegistry,
   { hostKey, claim }: ClaimOptions,
 ): DocxEditorHostRegistry => {
   const entry = registry[hostKey];
+  const current = entry?.claims.find((each) => each.slot === claim.slot);
+  if (
+    entry?.releasedAt === null &&
+    current !== undefined &&
+    sameDocxEditorClaim(current, claim) &&
+    sameDocxEditorClaim(entry.lastClaim, claim)
+  ) {
+    return registry;
+  }
   const claims =
     entry === undefined
       ? [claim]

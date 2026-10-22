@@ -62,9 +62,11 @@ const connectMicrosoft365 = createSafeRootHandler(
       safeDb(async (tx) => {
         await withAggregateLock({
           tx,
-          aggregate: "organization",
-          id: session.activeOrganizationId,
-          mode: "update",
+          aggregate: "orgFeatureAdmission",
+          id: {
+            organizationId: session.activeOrganizationId,
+            featureId: "microsoft365",
+          },
         });
         const policy = await tx.query.organizationSettings.findFirst({
           where: { organizationId: { eq: session.activeOrganizationId } },

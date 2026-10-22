@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -53,11 +53,11 @@ test("calendar schemas bound ranges, event limits, and attendee counts", () => {
 test("event reads select metadata, omit bodies and stop at the total paging cap", async () => {
   const requests: URL[] = [];
   const fetcher: typeof fetchWithTimeout = async (input, init) => {
-    const url = new URL(String(input));
+    const url = new URL(input instanceof Request ? input.url : input);
     requests.push(url);
-    expect(init?.redirect).toBe("error");
+    expect(init.redirect).toBe("error");
     expect(url.searchParams.get("$select")).not.toContain("body");
-    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    expect(init.signal).toBeInstanceOf(AbortSignal);
     return Response.json({
       value: Array.from({ length: 50 }, () => event),
       "@odata.nextLink": `https://graph.microsoft.com/v1.0/me/calendarView?$skiptoken=page${requests.length}`,
@@ -109,10 +109,13 @@ test("free/busy sends bounded attendee schedules and strips subject fields", asy
     {
       accessToken,
       fetcher: async (url, init) => {
-        expect(String(url)).toEndWith("/me/calendar/getSchedule");
-        expect(JSON.parse(String(init?.body)).schedules).toEqual([
-          "a@example.test",
-        ]);
+        expect(new URL(url instanceof Request ? url.url : url).pathname).toBe(
+          "/v1.0/me/calendar/getSchedule",
+        );
+        if (typeof init.body !== "string") {
+          return panic("Expected serialized schedule body");
+        }
+        expect(JSON.parse(init.body).schedules).toEqual(["a@example.test"]);
         return Response.json({
           value: [
             {

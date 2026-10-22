@@ -6,6 +6,7 @@ import {
   buildScreeningIndex,
   DEFAULT_CUTOFF,
   MAX_QUERY_TOKENS,
+  MAX_QUERY_CHARACTERS,
   SANCTIONS_SOURCES,
   screen,
 } from "@stll/sanctions";
@@ -32,6 +33,7 @@ import type {
   SanctionsActiveEdition,
   SanctionsIndexCache,
 } from "@/api/lib/lists/sanctions/screening-index";
+import { aggregateSanctionsScreeningStatus } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import type {
   SanctionsClassification,
   SanctionsPendingUpdateCode,
@@ -40,6 +42,7 @@ import type {
   SanctionsUnavailableReason,
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
+import { emitSanctionsScreeningCompletionMetric } from "@/api/lib/observability/request-metrics";
 
 import {
   reportSanctionsScreeningFailure,
@@ -144,6 +147,15 @@ export type SanctionsListOutcome =
       })
   | (ListOutcomeBase &
       ScreenedEdition & {
+        /** A bounded scan found no match in the part it screened. */
+        status: "incomplete";
+        reason: null;
+        totalMatches: 0;
+        truncated: true;
+        possibleMatches: [];
+      })
+  | (ListOutcomeBase &
+      ScreenedEdition & {
         status: "possible-match";
         reason: null;
         totalMatches: number;
@@ -165,7 +177,8 @@ export type SanctionsListOutcome =
 export type SanctionsScreening = {
   /**
    * `possible-match` when any list has one; otherwise `unavailable` when any
-   * list could not answer; `clear` only when every list answered clear.
+   * list could not answer; otherwise `incomplete` when any list was only
+   * partly screened; `clear` only when every list was fully screened clear.
    */
   status: SanctionsScreeningStatus;
   checkedAt: string;
@@ -210,6 +223,7 @@ const SanctionsSubjectErrorBase: TaggedErrorClass<"SanctionsSubjectError"> =
   TaggedError("SanctionsSubjectError");
 
 export const SANCTIONS_SUBJECT_ERROR_MESSAGES = {
+  "excess-query-characters": `The name to screen must contain at most ${MAX_QUERY_CHARACTERS} characters`,
   "empty-query": "The name to screen has no letters",
   "invalid-birth-date": "The date of birth is not a valid calendar date",
   "excess-query-tokens": `The name to screen must contain at most ${MAX_QUERY_TOKENS} normalized tokens`,
@@ -254,18 +268,8 @@ const toScreeningQuery = (
 
 const aggregateSanctionsStatus = (
   lists: readonly SanctionsListOutcome[],
-): SanctionsScreeningStatus => {
-  if (lists.some((list) => list.status === "possible-match")) {
-    return "possible-match";
-  }
-  if (
-    lists.length === 0 ||
-    lists.some((list) => list.status === "unavailable")
-  ) {
-    return "unavailable";
-  }
-  return "clear";
-};
+): SanctionsScreeningStatus =>
+  aggregateSanctionsScreeningStatus(lists.map((list) => list.status));
 
 const toPendingUpdate = (
   heldUpdate: SanctionsSourceFreshness["heldUpdate"],
@@ -313,6 +317,20 @@ const unavailableList = (
   possibleMatches: [],
 });
 
+/** A bounded scan of a fresh edition that found nothing in what it read. */
+const incompleteList = (
+  base: ListOutcomeBase,
+  edition: ScreenedEdition,
+): SanctionsListOutcome => ({
+  ...base,
+  ...edition,
+  status: "incomplete",
+  reason: null,
+  totalMatches: 0,
+  truncated: true,
+  possibleMatches: [],
+});
+
 const toPossibleMatch = (
   match: PossibleMatch,
   editionId: string,
@@ -338,6 +356,8 @@ const toPossibleMatch = (
 });
 
 type SanctionsListMatchFailure =
+  // The matcher stopped at its work bound before exhausting its candidates.
+  | { code: "work-limit" }
   | {
       code: "load-failed";
       stage: "public-matcher" | "list-screening";
@@ -349,6 +369,14 @@ type SanctionsListMatchFailure =
   | {
       code: "warming" | "load-failed";
       stage: "public-warmup";
+      reason: null;
+    }
+  // The index cache reports its own load failure once, with its cause, and
+  // remembers it: every screening that waits on that load or meets it in the
+  // memo window answers without a report of its own.
+  | {
+      code: "load-failed";
+      stage: "index-cache";
       reason: null;
     };
 
@@ -419,8 +447,8 @@ const screenList = async ({
     if (index.isErr()) {
       return Result.err({
         code: index.error.code,
-        reason: "index-load" as const,
-        stage: "list-screening" as const,
+        stage: "index-cache" as const,
+        reason: null,
       });
     }
     const screened = screen(index.value, query, {
@@ -430,11 +458,7 @@ const screenList = async ({
     });
     if (screened.isErr()) {
       if (screened.error.code === "work-limit") {
-        return Result.err({
-          code: "load-failed" as const,
-          reason: "work-limit" as const,
-          stage: "list-screening" as const,
-        });
+        return Result.err({ code: "work-limit" as const });
       }
       return panic("A validated sanctions query was rejected");
     }
@@ -449,8 +473,21 @@ const screenList = async ({
     });
     return unavailableList(base, "load-failed", freshness);
   }
+  const screenedEdition: ScreenedEdition = {
+    editionId: edition.id,
+    publishedAt: edition.publishedAt,
+    verifiedAt: lastSuccessfulVerifiedAt.toISOString(),
+  };
   if (matched.value.isErr()) {
     const failure = matched.value.error;
+    if (failure.code === "work-limit") {
+      reportFailure({
+        stage: "list-screening",
+        reason: "work-limit",
+        source: freshness.source,
+      });
+      return incompleteList(base, screenedEdition);
+    }
     if (failure.reason !== null) {
       reportFailure({
         stage: failure.stage,
@@ -462,22 +499,12 @@ const screenList = async ({
     return unavailableList(base, failure.code, freshness);
   }
   const screened = matched.value.value;
-  const screenedEdition: ScreenedEdition = {
-    editionId: edition.id,
-    publishedAt: edition.publishedAt,
-    verifiedAt: lastSuccessfulVerifiedAt.toISOString(),
-  };
   const [first, ...rest] = screened.possibleMatches.map((match) =>
     toPossibleMatch(match, edition.id),
   );
   if (first === undefined) {
     if (screened.truncated) {
-      reportFailure({
-        stage: "list-screening",
-        reason: "truncated-empty",
-        source: freshness.source,
-      });
-      return unavailableList(base, "load-failed", freshness);
+      return incompleteList(base, screenedEdition);
     }
     return {
       ...base,
@@ -622,23 +649,28 @@ export const screenSanctionsSubjects = async ({
       await new Promise<void>((resolve) => {
         setImmediate(resolve);
       });
-      lists.push(
-        // db-await-in-loop: bounded sources and subjects; sequential macrotask yields keep warm matching responsive
-        await screenList({
-          db,
-          freshness: sourceFreshness,
-          query: query.query,
-          base: listBase({
-            source: sourceFreshness.source,
-            practiceJurisdictions,
-            heldUpdate: sourceFreshness.heldUpdate,
-          }),
-          indexCache,
-          matcher,
-          resultMode,
-          reportFailure,
+      // db-await-in-loop: bounded sources and subjects; sequential macrotask yields keep warm matching responsive
+      const list = await screenList({
+        db,
+        freshness: sourceFreshness,
+        query: query.query,
+        base: listBase({
+          source: sourceFreshness.source,
+          practiceJurisdictions,
+          heldUpdate: sourceFreshness.heldUpdate,
         }),
-      );
+        indexCache,
+        matcher,
+        resultMode,
+        reportFailure,
+      });
+      if (list.status !== "unavailable") {
+        emitSanctionsScreeningCompletionMetric({
+          source: list.source,
+          outcome: list.status === "incomplete" ? "incomplete" : "complete",
+        });
+      }
+      lists.push(list);
     }
     results.push(
       Result.ok({

@@ -309,8 +309,9 @@ test("the real generation runtime receives sanitized state and the canonical dec
     question: signedQuestion,
     client: null,
     generation: {
-      role: "fast",
+      task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -369,8 +370,9 @@ test("a generative runtime deadline stays a typed undecided result without cance
     client: null,
     abortSignal: controller.signal,
     generation: {
-      role: "fast",
+      task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -509,8 +511,9 @@ test("choice generation sends a closed probability schema through the real runti
     question: kindQuestion,
     client: null,
     generation: {
-      role: "fast",
+      task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -543,8 +546,9 @@ test("the generation deadline bounds a stalled resolver without aborting the cal
     client: null,
     abortSignal: controller.signal,
     generation: {
-      role: "fast",
+      task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -635,8 +639,9 @@ test.each(["success", "failed-middle", "stalled-middle"])(
       questions,
       client: null,
       generation: {
-        role: "fast",
+        task: "classify",
         dataClass: "customer",
+        userId: null,
         orgAIConfig: null,
         managedAIResidency: "eu",
         organizationId,
@@ -1078,7 +1083,7 @@ describe("a failed call", () => {
       orgAIConfig: null,
       state,
       questions: { signed: signedQuestion },
-      timeoutMs: 1,
+      timeoutMs: 1, // timeout under test
       client: decisionModel(fetcher),
     });
 
@@ -1205,8 +1210,9 @@ test("a question that cannot fit the provider budget fails without dispatching",
     }),
     client: null,
     generation: {
-      role: "fast",
+      task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,

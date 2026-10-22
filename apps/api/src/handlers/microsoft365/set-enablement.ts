@@ -73,9 +73,8 @@ const setMicrosoft365Enablement = createSafeRootHandler(
       safeDb(async (tx) => {
         await withAggregateLock({
           tx,
-          aggregate: "organization",
-          id: organizationId,
-          mode: "update",
+          aggregate: "orgFeatureAdmission",
+          id: { organizationId, featureId: "microsoft365" },
         });
         const existing = await tx.query.organizationSettings.findFirst({
           where: { organizationId: { eq: organizationId } },

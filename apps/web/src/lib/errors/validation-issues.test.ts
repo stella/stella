@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { toAPIError } from "@/lib/errors/api";
+import { apiFieldIssueMessage, toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 const rejected = (issues: unknown) =>
@@ -51,5 +51,31 @@ describe("a rejected request's field issues", () => {
         "Action failed",
       ),
     ).not.toBe(generic);
+  });
+});
+
+describe("a field's own validation issue", () => {
+  test("names the limit for the field the server rejected", () => {
+    const error = rejected([
+      { field: "layout", constraint: "invalid" },
+      { field: "name", constraint: "maxLength", limit: 256 },
+    ]);
+
+    expect(apiFieldIssueMessage(error, "name")).toContain("256");
+    expect(apiFieldIssueMessage(error, "title")).toBeUndefined();
+  });
+
+  test("is absent for errors that are not validation answers", () => {
+    const conflict = toAPIError({
+      status: 409,
+      value: {
+        message: "Conflict",
+        code: "version_conflict",
+        issues: [{ field: "name", constraint: "maxLength", limit: 256 }],
+      },
+    });
+
+    expect(apiFieldIssueMessage(conflict, "name")).toBeUndefined();
+    expect(apiFieldIssueMessage(new Error("boom"), "name")).toBeUndefined();
   });
 });

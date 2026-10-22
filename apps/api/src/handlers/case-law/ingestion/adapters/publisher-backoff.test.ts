@@ -12,6 +12,7 @@ import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   createPublisherGateSlot,
@@ -360,7 +361,7 @@ test("read-through requests observe competing requests during preparation", asyn
     await fetchPublisher("https://obcan.justice.sk/document.pdf", {
       adapterKey,
       fetchStage: "document",
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
   try {
     const result = await withImmediatePublisherSlot({

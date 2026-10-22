@@ -79,6 +79,11 @@ const DATABASE_PROCESS_ASSUMPTIONS = {
     pools: DATABASE_POOL_DEFAULTS,
     publicPool: "shared",
   },
+  chatContentBackfill: {
+    maxReplicas: 1,
+    pools: DATABASE_POOL_DEFAULTS,
+    publicPool: "shared",
+  },
   signInReplay: {
     maxReplicas: 1,
     pools: DATABASE_POOL_DEFAULTS,
@@ -95,6 +100,11 @@ const DATABASE_PROCESS_ASSUMPTIONS = {
     publicPool: "shared",
   },
   seedReset: {
+    maxReplicas: 1,
+    pools: DATABASE_POOL_DEFAULTS,
+    publicPool: "shared",
+  },
+  postgresTestRunner: {
     maxReplicas: 1,
     pools: DATABASE_POOL_DEFAULTS,
     publicPool: "shared",
@@ -174,6 +184,14 @@ const DATABASE_POOLS = [
     admission: "pooled",
   },
   {
+    // openOnlineRepairConnection: the operator-run chat content v3 backfill.
+    file: "src/db/online-index-observer.ts",
+    constructor: 2,
+    maximum: { type: "fixed", value: 1 },
+    processes: ["chatContentBackfill"],
+    admission: "pooled",
+  },
+  {
     file: "src/scripts/decision-analysis.db.ts",
     constructor: 1,
     maximum: { type: "fixed", value: 4 },
@@ -220,6 +238,13 @@ const DATABASE_POOLS = [
     constructor: 1,
     maximum: { type: "fixed", value: 1 },
     processes: ["rehearsal"],
+    admission: "pooled",
+  },
+  {
+    file: "scripts/run-postgres-tests.ts",
+    constructor: 1,
+    maximum: { type: "fixed", value: 1 },
+    processes: ["postgresTestRunner"],
     admission: "pooled",
   },
   {

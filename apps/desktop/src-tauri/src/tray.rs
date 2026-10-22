@@ -15,6 +15,7 @@ struct TrayMainThread;
 
 const QUIT_ACTION: &str = "quit";
 const OPEN_PREFERENCES_ACTION: &str = "open-preferences";
+const RECONNECT_ACCOUNT_ACTION: &str = "reconnect-account";
 const OPEN_CLIPBOARD_ACTION: &str = "open-clipboard";
 const OPEN_ACTIVITY_ACTION: &str = "open-activity";
 const PAUSE_ACTIVITY_ACTION: &str = "activity-pause";
@@ -105,8 +106,24 @@ fn recording_icon(recording: bool) -> image::ImageResult<tauri::image::Image<'st
     height,
   ))
 }
+
+#[allow(
+  clippy::disallowed_methods,
+  clippy::disallowed_types,
+  reason = "the tray owner updates native handles only from its main-thread refresh"
+)]
+fn set_tray_icon(
+  tray: &tauri::tray::TrayIcon,
+  icon: tauri::image::Image<'_>,
+) -> tauri::Result<()> {
+  // Replacing the image clears macOS template tinting.
+  tray.set_icon(Some(icon))?;
+  tray.set_icon_as_template(true)
+}
+
 const OPEN_ABOUT_ACTION: &str = "open-about";
 const CHECK_FOR_UPDATES_ACTION: &str = "check-for-updates";
+const UPDATES_MANAGED_ITEM: &str = "updates-managed";
 const OPEN_EDIT_ROOT_ACTION: &str = "open-edit-root";
 const COPY_DIAGNOSTICS_ACTION: &str = "copy-diagnostics";
 const EMAIL_SUPPORT_ACTION: &str = "email-support";
@@ -240,7 +257,7 @@ fn refresh_on_main_thread(
       .as_ref()
       .is_some_and(|activity| activity.status == ActivityRecordingStatus::Recording);
   if let Ok(icon) = recording_icon(recording) {
-    let _ = tray.set_icon(Some(icon));
+    let _ = set_tray_icon(&tray, icon);
   }
 }
 
@@ -265,6 +282,14 @@ fn build_tray_menu_with_activity(
       .build(app)?,
   );
   builder = builder.separator();
+
+  if crate::account::reconnect_needed() {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(RECONNECT_ACCOUNT_ACTION, t("tray.reconnectAccount"))
+        .build(app)?,
+    );
+    builder = builder.separator();
+  }
 
   builder = builder.item(
     &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard")).build(app)?,
@@ -303,17 +328,25 @@ fn build_tray_menu_with_activity(
       .build(app)?,
   );
 
-  // Check for updates
-  builder = builder.item(
-    &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ACTION, t("tray.checkForUpdates"))
-      .enabled(!matches!(
-        snapshot.update.status,
-        crate::types::DesktopUpdateStatus::Checking
-          | crate::types::DesktopUpdateStatus::Downloading
-          | crate::types::DesktopUpdateStatus::Applying
-      ))
-      .build(app)?,
-  );
+  // Check for updates, unless the organization deploys them itself
+  if crate::managed_policy::current().updates_disabled {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(UPDATES_MANAGED_ITEM, t("tray.updatesManaged"))
+        .enabled(false)
+        .build(app)?,
+    );
+  } else {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ACTION, t("tray.checkForUpdates"))
+        .enabled(!matches!(
+          snapshot.update.status,
+          crate::types::DesktopUpdateStatus::Checking
+            | crate::types::DesktopUpdateStatus::Downloading
+            | crate::types::DesktopUpdateStatus::Applying
+        ))
+        .build(app)?,
+    );
+  }
 
   // Support submenu
   let support_menu = SubmenuBuilder::new(app, t("tray.support"))
@@ -419,7 +452,7 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == QUIT_ACTION {
     return MenuAction::Quit;
   }
-  if action == OPEN_PREFERENCES_ACTION {
+  if action == OPEN_PREFERENCES_ACTION || action == RECONNECT_ACCOUNT_ACTION {
     return MenuAction::OpenPreferences("general");
   }
   if action == OPEN_CLIPBOARD_ACTION {
@@ -516,6 +549,14 @@ mod tests {
   }
 
   #[test]
+  fn reconnect_opens_the_account_settings() {
+    assert!(matches!(
+      handle_menu_action(RECONNECT_ACCOUNT_ACTION),
+      MenuAction::OpenPreferences("general")
+    ));
+  }
+
+  #[test]
   fn activity_menu_actions_pause_and_resume_without_starting_an_off_recorder() {
     assert!(matches!(
       handle_menu_action(PAUSE_ACTIVITY_ACTION),
@@ -546,6 +587,22 @@ mod tests {
     );
     assert_ne!(recording.rgba(), base.rgba());
     assert_eq!(recording_icon(false).unwrap().rgba(), base.rgba());
+  }
+
+  #[test]
+  fn recording_icons_are_monochrome_with_alpha() {
+    for recording in [false, true] {
+      let icon = recording_icon(recording).unwrap();
+      let (pixels, _) = icon.rgba().as_chunks::<4>();
+      assert!(pixels.iter().any(|pixel| pixel[3] == 0));
+      assert!(pixels.iter().any(|pixel| pixel[3] == 255));
+      assert!(
+        pixels
+          .iter()
+          .all(|pixel| pixel[3] == 0 || pixel[..3] == [0, 0, 0]),
+        "visible template pixels must be monochrome black"
+      );
+    }
   }
 
   #[test]

@@ -1,9 +1,4 @@
-import type {
-  FocusEventHandler,
-  MouseEventHandler,
-  ReactElement,
-  ReactNode,
-} from "react";
+import type { MouseEventHandler, ReactElement, ReactNode } from "react";
 
 import { Result, panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -12,10 +7,12 @@ import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/cas
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
-import { ExternalLinkIcon, ScrollTextIcon } from "@stll/ui/icons";
+import { ScrollTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { classifyChatHttpLink } from "@/components/chat/chat-app-link.logic";
+import { chatAppOrigins } from "@/components/chat/chat-app-origins";
 import {
   ChatDecisionCitation,
   ChatRouteDecisionCitation,
@@ -24,58 +21,36 @@ import type { ExternalSourceReference } from "@/components/chat/external-source-
 import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
-import { env } from "@/env";
+import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
+import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import { detached } from "@/lib/detached";
 
 type LegalCitationLinks = ReturnType<typeof resolveLegalCitationLinks>;
-type DisplayedLegalCitationLinks = Exclude<
-  LegalCitationLinks,
-  { type: "decision" }
->;
 type StatuteCitationLinks = Extract<LegalCitationLinks, { type: "statute" }>;
 
 type LegalCitationLinkProps = {
   source: ExternalSourceReference;
+  externalHref?: string;
   children: ReactNode;
   interactive: boolean;
   appearance: "inline" | "tray";
   workspaceId?: string | null | undefined;
-  externalIcon?: ReactElement;
   anchorId?: string | undefined;
   fallback?: ReactElement;
-  onFocus?: FocusEventHandler<HTMLAnchorElement>;
-  onMouseEnter?: MouseEventHandler<HTMLAnchorElement>;
-};
-
-const legalCitationIcon = (
-  citation: DisplayedLegalCitationLinks,
-  externalIcon: ReactElement | undefined,
-) => {
-  switch (citation.type) {
-    case "statute":
-      return <ScrollTextIcon className="size-3 shrink-0" />;
-    case "external":
-      return externalIcon ?? <ExternalLinkIcon className="size-3 shrink-0" />;
-    default:
-      citation satisfies never;
-      return panic(`Unhandled legal citation: ${String(citation)}`);
-  }
+  fullTrayLabel?: boolean | undefined;
 };
 
 type LegalCitationLabelProps = Pick<
   LegalCitationLinkProps,
   "appearance" | "children"
 > & {
-  citation: DisplayedLegalCitationLinks;
   icon: ReactNode;
 };
 
 const LegalCitationLabel = ({
   appearance,
   children,
-  citation,
   icon,
 }: LegalCitationLabelProps) => {
   if (appearance === "tray") {
@@ -86,14 +61,6 @@ const LegalCitationLabel = ({
           {children}
         </BidiText>
       </>
-    );
-  }
-  if (citation.type === "external") {
-    return (
-      <span className="inline-flex items-center gap-1">
-        {children}
-        {icon}
-      </span>
     );
   }
   return (
@@ -107,55 +74,38 @@ const LegalCitationView = ({
   appearance,
   children,
   citation,
-  externalIcon,
   onClick,
-  onFocus,
-  onMouseEnter,
 }: LegalCitationLinkProps & {
-  citation: DisplayedLegalCitationLinks;
+  citation: StatuteCitationLinks;
   onClick?: MouseEventHandler<HTMLAnchorElement> | undefined;
 }) => {
   const t = useTranslations();
-  const icon = legalCitationIcon(citation, externalIcon);
+  const icon = <ScrollTextIcon className="size-3 shrink-0" />;
   const label = (
-    <LegalCitationLabel appearance={appearance} citation={citation} icon={icon}>
+    <LegalCitationLabel appearance={appearance} icon={icon}>
       {children}
     </LegalCitationLabel>
   );
-  if (citation.url === null) {
-    return <span>{label}</span>;
-  }
   return (
     <span className="inline-flex max-w-full shrink-0 items-center gap-1 align-middle">
       <a
         className={cn(
           "cursor-pointer",
-          appearance === "inline" &&
-            citation.type === "external" &&
-            "text-foreground decoration-border hover:decoration-foreground underline underline-offset-2",
           appearance === "tray" &&
             "bg-muted/50 hover:bg-muted inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs",
         )}
         href={sanitizeHref(citation.url)}
         onClick={onClick}
-        onFocus={onFocus}
-        onMouseEnter={onMouseEnter}
-        {...(citation.type === "external"
-          ? { target: "_blank", rel: "noopener noreferrer" }
-          : {})}
       >
         {label}
       </a>
-      {citation.type !== "external" && citation.source_url !== undefined && (
-        <a
-          className="text-muted-foreground hover:text-foreground inline-flex shrink-0 items-center gap-0.5 text-xs underline underline-offset-2"
-          href={sanitizeHref(citation.source_url)}
-          rel="noopener noreferrer"
-          target="_blank"
+      {citation.source_url !== undefined && (
+        <ProxyChatLink
+          href={citation.source_url}
+          newTabLabel={t("common.openInNewTab")}
         >
-          <ExternalLinkIcon aria-hidden="true" className="size-3" />
           {t("common.source")}
-        </a>
+        </ProxyChatLink>
       )}
     </span>
   );
@@ -195,7 +145,76 @@ const InteractiveLegalCitation = ({
   return <LegalCitationView {...props} citation={citation} onClick={onClick} />;
 };
 
-// A publisher alias can carry its paragraph anchor only in the stored app URL.
+/** A source-tray row for a decision with a known id: it keeps its full label,
+ *  and a plain click opens the decision as an inline citation does, while
+ *  other clicks follow the link. */
+const DecisionTrayLink = ({
+  decisionId,
+  href,
+  children,
+}: {
+  decisionId: string;
+  href: string;
+  children: ReactNode;
+}) => {
+  const t = useTranslations();
+  const { open } = useOpenDecisionTab();
+  const onClick: MouseEventHandler<HTMLAnchorElement> = (event) => {
+    if (!isPlainPrimaryClick(event) || event.defaultPrevented) {
+      return;
+    }
+    event.preventDefault();
+    detached(
+      openCaseLawDecision({ type: "ref", ref: decisionId }, open),
+      "legal-citation.open-tray-decision",
+    );
+  };
+  return (
+    <ProxyChatLink
+      appearance="tray"
+      href={href}
+      newTabLabel={t("common.openInNewTab")}
+      onClick={onClick}
+    >
+      {children}
+    </ProxyChatLink>
+  );
+};
+
+/** A tray row that shows its own full label: a decision with a known id opens
+ *  in the reader, anything else is a link. */
+const FullLabelTrayLink = ({
+  citation,
+  ...props
+}: LegalCitationLinkProps & {
+  citation: ReturnType<typeof resolveLegalCitationLinks>;
+}) => {
+  const t = useTranslations();
+  const href = citation.type === "external" ? props.source.url : citation.url;
+  const decisionId =
+    props.source.caseLawDecision?.decisionId ??
+    (citation.type === "decision"
+      ? extractCaseLawDecisionIdFromIdRouteParam(citation.params.slug)
+      : null);
+  if (props.interactive && decisionId !== null) {
+    return (
+      <DecisionTrayLink decisionId={decisionId} href={href}>
+        {props.children}
+      </DecisionTrayLink>
+    );
+  }
+  return (
+    <ProxyChatLink
+      appearance="tray"
+      href={href}
+      newTabLabel={t("common.openInNewTab")}
+    >
+      {props.children}
+    </ProxyChatLink>
+  );
+};
+
+// A publisher alias can carry its paragraph anchor only in the stored reader URL.
 const readUrlAnchor = (href: string): string | undefined => {
   const { hash } = new URL(href);
   if (hash === "") {
@@ -214,15 +233,16 @@ const uncountedParagraph = (anchorId: string): CitedDecisionParagraph => ({
 });
 
 export const LegalCitationLink = (props: LegalCitationLinkProps) => {
-  const appOrigins = new Set([
-    new URL(env.VITE_PUBLIC_APP_URL).origin,
-    ...(typeof window === "undefined" ? [] : [window.location.origin]),
-  ]);
+  const t = useTranslations();
+  const appOrigins = chatAppOrigins();
   const citation = resolveLegalCitationLinks({
-    appUrl: props.source.appUrl ?? props.source.url,
+    url: props.source.url,
     sourceUrl: props.source.sourceUrl ?? props.source.url,
     appOrigins,
   });
+  if (props.appearance === "tray" && props.fullTrayLabel === true) {
+    return <FullLabelTrayLink {...props} citation={citation} />;
+  }
   const passage =
     props.appearance === "inline"
       ? props.children
@@ -279,30 +299,31 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
       <ChatDecisionCitation {...decisionProps} decisionId={decisionId} />
     );
   }
-  if (citation.type !== "external" && props.interactive) {
-    return (
-      <InteractiveLegalCitation
-        {...props}
-        citation={citation}
-        appOrigins={appOrigins}
-      />
-    );
-  }
-  const externalUrl = citation.url;
-  const onClick: MouseEventHandler<HTMLAnchorElement> | undefined =
-    props.interactive && citation.type === "external" && externalUrl !== null
-      ? (event) => {
-          if (!isPlainPrimaryClick(event) || event.defaultPrevented) {
-            return;
+  switch (citation.type) {
+    case "external":
+      return (
+        <ProxyChatLink
+          appearance={props.appearance}
+          href={
+            citation.url === null ? "" : (props.externalHref ?? citation.url)
           }
-          event.preventDefault();
-          useInspectorTabsStore.getState().openExternal({
-            ...props.source,
-            url: externalUrl,
-            label: props.source.title,
-            workspaceId: props.workspaceId ?? null,
-          });
-        }
-      : undefined;
-  return <LegalCitationView {...props} citation={citation} onClick={onClick} />;
+          newTabLabel={t("common.openInNewTab")}
+        >
+          {props.children}
+        </ProxyChatLink>
+      );
+    case "statute":
+      return props.interactive ? (
+        <InteractiveLegalCitation
+          {...props}
+          citation={citation}
+          appOrigins={appOrigins}
+        />
+      ) : (
+        <LegalCitationView {...props} citation={citation} />
+      );
+    default:
+      citation satisfies never;
+      return panic("Unhandled legal citation type");
+  }
 };

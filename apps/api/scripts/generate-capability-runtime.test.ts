@@ -7,7 +7,10 @@ import { Script } from "node:vm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { generateCapabilityRuntime } from "./generate-capability-runtime";
+import {
+  generateCapabilityRuntime,
+  generateCapabilityCatalogRuntime,
+} from "./generate-capability-runtime";
 import { serializeDispatchModule } from "./lib/capability-catalog";
 
 const catalogSourceUrl = new URL(
@@ -20,7 +23,7 @@ const catalogMainPrefix = async () => {
   const startMarker =
     'export const exportCapabilityCatalog = async (\n  mode: "write" | "check",\n): Promise<number> => {';
   const start = source.indexOf(startMarker);
-  const end = source.indexOf("  const { entries, dispatchRecords", start);
+  const end = source.indexOf("  const { entries, errors", start);
   if (start === -1 || end === -1) {
     throw new TypeError("Catalog main bootstrap boundaries were not found");
   }
@@ -48,7 +51,7 @@ const executeBootstrap = ({
     URL,
     mode: "check",
     hasPreparedGeneratedSources: () => prepared,
-    generateCapabilityRuntime: generate,
+    generateCapabilityCatalogRuntime: generate,
     buildCatalog,
   });
 
@@ -113,7 +116,7 @@ test.each(["fixture-feature", undefined])(
       );
       const bootstrap = await catalogMainPrefix();
       const missingBootstrap = bootstrap.replace(
-        "await generateCapabilityRuntime();",
+        "await generateCapabilityCatalogRuntime();",
         "",
       );
       expect(missingBootstrap).not.toBe(bootstrap);
@@ -128,7 +131,7 @@ test.each(["fixture-feature", undefined])(
           executeBootstrap({
             source: missingBootstrap,
             prepared: false,
-            generate: async () => generateCapabilityRuntime(root),
+            generate: async () => generateCapabilityCatalogRuntime(root),
             buildCatalog,
           }),
         ),
@@ -136,13 +139,14 @@ test.each(["fixture-feature", undefined])(
       await executeBootstrap({
         source: bootstrap,
         prepared: false,
-        generate: async () => generateCapabilityRuntime(root),
+        generate: async () => generateCapabilityCatalogRuntime(root),
         buildCatalog,
       });
       const first = await readFile(
         new URL(`${generated}/capability-catalog.ts`, root),
         "utf-8",
       );
+      await generateCapabilityRuntime(root);
       const firstDispatch = await readFile(
         new URL(`${generated}/capability-dispatch.ts`, root),
         "utf-8",

@@ -23,6 +23,7 @@ const MEMBER_REFERENCE_NAME =
 
 /** JSON columns whose documents can hold user or member ids. */
 const JSON_MEMBER_REFERENCE_COLUMNS = [
+  "account_exports.attempt_object_keys",
   "audit_logs.metadata",
   "audit_logs.changes",
   "cell_metadata.metadata",
@@ -120,6 +121,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "flow_runs.definition_snapshot",
   "folio_collab_room_tokens.permissions",
   "folio_collab_rooms.docx_checkpoint_scan_warnings",
+  "folio_collab_rooms.saved_snapshot_cut",
   "usage_provider_webhook_events.replay_audit",
   "justifications.content",
   "justifications.bounding_boxes",
@@ -130,17 +132,20 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_list_generation_candidate_sources.locator",
   "legal_list_item_sources.locator",
   "legal_list_verification_runs.evidence",
+  "legal_lists.sample_case",
   "legal_reader_answer_messages.citations",
   "legal_reader_answer_messages.usage",
   "legislation_documents.sections",
   "legislation_documents.document_ast",
   "legislation_documents.metadata",
+  "legislation_amendment_snapshots.coverage",
   "legislation_sources.config",
   "legislation_sources.descriptor",
   "mcp_connector_authorization_reviews.observed_endpoint_origins",
   "mcp_connector_authorization_reviews.approved_endpoint_origins",
   "mcp_connectors.oauth_confirmed_endpoint_origins",
   "mcp_oauth_clients.registration_response",
+  "mcp_oauth_state.authorization_response_binding",
   "mcp_user_connections.cached_tools",
   "notifications.metadata",
   "organization_settings.practice_jurisdictions",
@@ -174,6 +179,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "soft_law_document_versions.metadata",
   "soft_law_document_versions.source_dates",
   "soft_law_ingestion_attempts.entry",
+  "soft_law_ingestion_attempts.raw_objects",
   "system_audit_runs.counts",
   "template_fills.structure_errors",
   "template_persistence_requests.result",
@@ -199,6 +205,10 @@ const RETAINED_MEMBER_COLUMNS = {
     "Terminal billing replay receipt; current membership gates access and the row cascades with account or organization deletion.",
   "account_audit_logs.user_id":
     "User-owned account audit history; matter and organization removal do not erase the user account or grant membership.",
+  "account_exports.attempt_object_keys":
+    "Storage keys of the account's own archives, named by account id; reclamation and account deletion own them, not membership removal.",
+  "account_exports.user_id":
+    "Account-owned export ledger; matter and organization removal do not erase the user account, and each archive rechecks current membership when built.",
   "entity_versions.collaboration_contributor_user_ids":
     "Contribution history, not membership or write authority.",
   "legal_list_generation_candidates.suggested_assignee_user_ids":
@@ -492,10 +502,12 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped connection; the person stays an organization member.",
   "mcp_oauth_state.user_id":
     "Organization-scoped connection; the person stays an organization member.",
-  "microsoft365_connections.user_id":
+  "sharepoint_connections.user_id":
     "Organization-scoped connection; the person stays an organization member.",
-  "microsoft365_oauth_state.user_id":
+  "sharepoint_oauth_state.user_id":
     "Organization-scoped connection; the person stays an organization member.",
+  "chat_tool_grants.user_id":
+    "The person's own organization-scoped tool approvals; every tool call still checks matter access.",
   "invitation.inviter_id":
     "Organization invitation; the person stays an organization member.",
   "session.user_id":
@@ -658,6 +670,27 @@ const census = {
 };
 
 describe("member removal schema coverage", () => {
+  test("chat repair receipts retain only organization-owned metadata on member removal", () => {
+    // Repair history belongs to the organization, contains no member data,
+    // and is erased by its organization FK rather than member offboarding.
+    const receipt = schemaCensus().find(
+      (table) => table.name === "chat_content_v3_backfill_receipts",
+    );
+    expect(receipt).toBeDefined();
+    expect(receipt?.memberForeignKeyColumns).toEqual([]);
+    expect(receipt?.columns.map((column) => column.name).toSorted()).toEqual([
+      "from_version",
+      "message_id",
+      "organization_id",
+      "outcome",
+      "reason",
+      "recorded_at",
+      "row_id",
+      "source",
+    ]);
+    expect(receipt?.columns.some((column) => column.json)).toBe(false);
+  });
+
   test("every column naming a member has a disposition on both removal paths", () => {
     expect(memberReferenceGaps({ ...census, tables: schemaCensus() })).toEqual(
       [],

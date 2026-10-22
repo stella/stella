@@ -305,7 +305,7 @@ export const organizationSettings = p.pgTable(
      * can connect a Microsoft account.
      */
     microsoft365ConnectionEnabled: p
-      .boolean("microsoft365_connection_enabled")
+      .boolean("sharepoint_connection_enabled")
       .notNull()
       .default(false),
     /** Whether delegated file reads are permitted by organization policy. */

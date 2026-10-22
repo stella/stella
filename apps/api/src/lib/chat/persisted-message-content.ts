@@ -13,8 +13,18 @@ export type PersistedJsonValue =
   | PersistedJsonValue[]
   | string;
 
-type PersistedJsonObject = {
+export type PersistedJsonObject = {
   readonly [key: string]: PersistedJsonValue;
+};
+
+/**
+ * Provider artefacts a writer stored beside a tool call (for example
+ * reasoning details or a thought signature), kept exactly as stored. Whether
+ * any of them is replayed on a continued turn is the runtime's decision.
+ */
+export type PersistedToolProviderMetadata = {
+  call?: PersistedJsonObject | undefined;
+  result?: PersistedJsonObject | undefined;
 };
 
 type PersistedToolCallMetadata = PersistedJsonObject & {
@@ -43,6 +53,8 @@ export const provePersistedToolCallMetadata = (
 declare const parsedToolInputProof: unique symbol;
 export type ParsedToolInput = {
   readonly [parsedToolInputProof]: true;
+  /** The call's argument text, kept only when it does not parse to `value`. */
+  rawArguments?: string;
   status: "parsed";
   value: PersistedJsonValue;
 };
@@ -68,6 +80,7 @@ export type PersistedToolCallPart = {
   metadata: PersistedToolCallMetadata;
   name: string;
   output?: ParsedToolOutput | undefined;
+  providerMetadata?: PersistedToolProviderMetadata | undefined;
   state: ToolCallState;
   type: "tool-call";
 };
@@ -85,19 +98,6 @@ export type PersistedToolResultPart = {
   toolCallId: string;
   type: "tool-result";
 };
-
-type PersistedChatMessageContentCandidate<TPart, TMetadata> = {
-  data: TPart[];
-  metadata?: TMetadata | undefined;
-  version: 2;
-};
-
-export declare const persistedChatMessageContentProof: unique symbol;
-type PersistedChatMessageContentProof = {
-  readonly [persistedChatMessageContentProof]: true;
-};
-type ProvenPersistedChatMessageContent<TContent> = TContent &
-  PersistedChatMessageContentProof;
 
 export declare const persistedChatMessageContentV3Proof: unique symbol;
 type PersistedChatMessageContentV3Proof = {
@@ -159,13 +159,36 @@ export const isPersistedJsonValue = (
   value: unknown,
 ): value is PersistedJsonValue => isPersistedJsonValueAt(value, new WeakSet());
 
+export const isPersistedJsonObject = (
+  value: unknown,
+): value is PersistedJsonObject =>
+  isPersistedJsonValue(value) &&
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value);
+
+export const isPersistedToolProviderMetadata = (
+  value: unknown,
+): value is PersistedToolProviderMetadata =>
+  isPersistedJsonObject(value) &&
+  Object.keys(value).every((key) => key === "call" || key === "result") &&
+  (value["call"] === undefined || isPersistedJsonObject(value["call"])) &&
+  (value["result"] === undefined || isPersistedJsonObject(value["result"]));
+
 const isParsedToolInput = (input: {
+  rawArguments?: string;
   status: "parsed";
   value: unknown;
 }): input is ParsedToolInput => isPersistedJsonValue(input.value);
 
-export const proveParsedToolInput = (value: unknown): ParsedToolInput => {
-  const input = { status: "parsed" as const, value };
+export const proveParsedToolInput = (
+  value: unknown,
+  rawArguments?: string,
+): ParsedToolInput => {
+  const input =
+    rawArguments === undefined
+      ? { status: "parsed" as const, value }
+      : { rawArguments, status: "parsed" as const, value };
   if (!isParsedToolInput(input)) {
     panic("Cannot mark an invalid tool input as parsed");
   }
@@ -209,25 +232,6 @@ const hasOnlyV3ProvenParts = <TPart, TMetadata>(
 ): content is PersistedChatMessageContentV3<TPart, TMetadata> =>
   content.data.every(isPersistablePart);
 
-const hasOnlyProvenParts = <TPart, TMetadata>(
-  content: PersistedChatMessageContentCandidate<TPart, TMetadata>,
-  isPersistablePart: (part: TPart) => boolean,
-): content is ProvenPersistedChatMessageContent<
-  PersistedChatMessageContentCandidate<TPart, TMetadata>
-> => content.data.every(isPersistablePart);
-
-const provePersistedChatMessageContent = <TPart, TMetadata>(
-  content: PersistedChatMessageContentCandidate<TPart, TMetadata>,
-  isPersistablePart: (part: TPart) => boolean,
-): ProvenPersistedChatMessageContent<
-  PersistedChatMessageContentCandidate<TPart, TMetadata>
-> => {
-  if (!hasOnlyProvenParts(content, isPersistablePart)) {
-    panic("Cannot persist chat message content with unsupported parts");
-  }
-  return content;
-};
-
 type PersistedTextChatPart = { content: string; type: "text" };
 
 const isPersistedTextChatPart = (
@@ -240,11 +244,10 @@ const isPersistedTextChatPart = (
   "content" in part &&
   typeof part.content === "string";
 
-export const proveTextOnlyPersistedChatMessageContent = <TMetadata>(
-  content: PersistedChatMessageContentCandidate<
+export const proveTextOnlyPersistedChatMessageContent = <TMetadata = undefined>(
+  content: PersistedChatMessageContentV3Candidate<
     PersistedTextChatPart,
     TMetadata
   >,
-): ProvenPersistedChatMessageContent<
-  PersistedChatMessageContentCandidate<PersistedTextChatPart, TMetadata>
-> => provePersistedChatMessageContent(content, isPersistedTextChatPart);
+): PersistedChatMessageContentV3<PersistedTextChatPart, TMetadata> =>
+  provePersistedChatMessageContentV3(content, isPersistedTextChatPart);

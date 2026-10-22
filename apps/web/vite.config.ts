@@ -15,7 +15,9 @@ import {
   type PluginOption,
 } from "vite";
 
+import stllAhoCorasickWasm from "@stll/aho-corasick-wasm/vite";
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
+import stllRegexSetWasm from "@stll/regex-set-wasm/vite";
 import {
   REACT_COMPILER_OPTIONS,
   REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE,
@@ -315,6 +317,8 @@ export default defineConfig(({ mode, command }) => {
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
   const devApiProxyTarget = process.env["DEV_API_PROXY_TARGET"];
   const plugins: PluginOption[] = [
+    stllAhoCorasickWasm(),
+    stllRegexSetWasm(),
     logCapPlugin(),
     ensurePluginOption(
       devtools({ consolePiping: { enabled: false } }),
@@ -465,12 +469,10 @@ export default defineConfig(({ mode, command }) => {
             if (id.includes("node_modules/@stll/anonymize-data/")) {
               return "vendor-anonymize-data";
             }
-            if (id.includes("node_modules/@stll/") && id.includes("-wasm")) {
-              return "wasm-vendor";
-            }
-            if (id.includes("node_modules/@napi-rs/wasm-runtime")) {
-              return "wasm-vendor";
-            }
+            // The browser uses some WASM packages directly (for example the
+            // outline and key-term matchers). Let those stay with their lazy
+            // callers: `wasm-vendor` is reserved for the anonymization worker
+            // and must never become a main-thread shared chunk.
             if (id.includes("node_modules/cytoscape")) {
               return "vendor-graphs";
             }
@@ -607,13 +609,13 @@ export default defineConfig(({ mode, command }) => {
         "@stll/folio-core/utils/findReplace",
         "@streamdown/cjk",
         "@streamdown/math",
-        "@streamdown/mermaid",
         "@tanstack/react-table",
         "@tanstack/react-table/static-functions",
         "@tiptap/extension-heading",
         "@tiptap/extension-italic",
         "@tiptap/extension-list",
         "diff",
+        "pele/lazy",
         "y-prosemirror",
         "yjs",
       ],
@@ -636,10 +638,25 @@ export default defineConfig(({ mode, command }) => {
         "@stll/aho-corasick-wasm",
         "@stll/fuzzy-search-wasm",
         "@stll/regex-set-wasm",
+        // Pre-bundling would inline its `temporal-polyfill/full` import
+        // without running temporalRuntimePlugin, so the browser would load the
+        // polyfill implementation even when native Temporal exists.
+        "@stll/time",
       ],
     },
     resolve: {
       tsconfigPaths: true,
+      alias: [
+        {
+          // tldts' module build exports its public-suffix label table as a
+          // 67 KB string constant from a separate module. Rolldown inlines
+          // imported constants into conditions, so the table was copied into
+          // the chunk once per lookup site. The prebuilt single-module build
+          // keeps the table a local binding that is emitted once.
+          find: /^tldts$/u,
+          replacement: "tldts/dist/index.esm.min.js",
+        },
+      ],
       dedupe: [
         "react",
         "react-dom",

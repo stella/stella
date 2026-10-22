@@ -1,5 +1,44 @@
 # @stll/workspace-ui
 
+## 0.12.6
+
+### Patch Changes
+
+- Updated dependencies [[`6787bf4`](https://github.com/stella/stella/commit/6787bf4a6e33a5fa97538d91428d928ffffaabc8), [`f68baf7`](https://github.com/stella/stella/commit/f68baf7f2240db328e62201120dde71f3baf2b7b)]:
+  - @stll/ui@0.49.0
+
+## 0.12.5
+
+### Patch Changes
+
+- Updated dependencies [[`ed25af1`](https://github.com/stella/stella/commit/ed25af1211e6e5f091842ddf553f2795f5c16622)]:
+  - @stll/ui@0.48.0
+
+## 0.12.4
+
+### Patch Changes
+
+- [#5740](https://github.com/stella/stella/pull/5740) [`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A destructive confirm dialog stays open when its confirm settles to `"keep-open"`, and a host-responsive workspace frame may omit its end dock.
+- Updated dependencies [[`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d)]:
+  - @stll/ui@0.47.1
+
+## 0.12.3
+
+### Patch Changes
+
+- Updated dependencies [[`55d62c9`](https://github.com/stella/stella/commit/55d62c989b81bf063cc4cef899aae4a3efe00077)]:
+  - @stll/ui@0.47.0
+
+## 0.12.2
+
+### Patch Changes
+
+- [#5858](https://github.com/stella/stella/pull/5858) [`a67d306`](https://github.com/stella/stella/commit/a67d306deebd7e5d6bdec53e907996990dcee819) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update runtime dependencies.
+
+- [#5646](https://github.com/stella/stella/pull/5646) [`4479e67`](https://github.com/stella/stella/commit/4479e67c3290234e3a73fc307b213eb061f74870) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Pad edge-attached surfaces (workspace shell, rails, sheets, bottom-stuck dialogs, toasts) with the device safe-area insets, contain overscroll in shared scrollers, keep long-press from selecting control labels, use a strong ease-out for entering and exiting motion, and give `Button` a short press scale while it is enabled.
+- Updated dependencies [[`eac3ba7`](https://github.com/stella/stella/commit/eac3ba744bf28f96adcec06a6ebc9edf6b60d1c1), [`4a9c808`](https://github.com/stella/stella/commit/4a9c808a3c3d68cfcc53496913c3a531c8bcfe94), [`4479e67`](https://github.com/stella/stella/commit/4479e67c3290234e3a73fc307b213eb061f74870), [`1b7773e`](https://github.com/stella/stella/commit/1b7773effd472e11422bc82d0d417fdf22ce9ff1), [`ad3cd0a`](https://github.com/stella/stella/commit/ad3cd0a68ebcb2bee63dc8a8d12a0fb3c9783975)]:
+  - @stll/ui@0.46.0
+
 ## 0.12.1
 
 ### Patch Changes

@@ -8,12 +8,14 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./test-fixtures/monitoring-corpus": "./src/test-fixtures/monitoring-corpus.ts"
+    "./test-fixtures/monitoring-corpus": "./src/test-fixtures/monitoring-corpus.ts",
+    "./test-fixtures/large-ofac-list": "./src/test-fixtures/large-ofac-list.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
     "evaluate": "bun scripts/evaluate.ts",
+    "prove:real-editions": "bun scripts/prove-real-editions.ts",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/sanctions",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/sanctions",
@@ -25,7 +27,7 @@
     "@stll/fuzzy-search": "catalog:",
     "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/time": "0.4.1",
     "better-result": "catalog:",
     "saxes": "catalog:"
   },

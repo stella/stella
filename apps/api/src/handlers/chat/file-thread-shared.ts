@@ -10,6 +10,7 @@ import {
   chatThreads,
   fileChatThreads,
 } from "@/api/db/schema";
+import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
   estimateChatContextPromptTokens,
   estimateChatRevisionNoteTokens,
@@ -246,7 +247,7 @@ export const loadResolvedThreadMessagePage = async ({
         messages: windowedMessages.map((message) => ({
           id: message.id,
           role: message.role,
-          parts: message.content.data,
+          parts: chatMessageFromPersisted(message).parts,
         })),
         conversationContextTokens:
           estimateChatRevisionNoteTokens(revisionChanges),

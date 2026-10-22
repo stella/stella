@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
+    "from": "bc5f8fa1897a00f1017110d8c6cb360d1c50751f96cde2bd6a42319762c0a62a",
+    "to": "ba2c8c81fb5f3b119bd4571a013cab18647f8785e8f936611fcf2ff2921805cf",
+    "reason": "Existing sitemap shard refresh transaction; its loop now walks the pages-public country list instead of the search list, which changes its source fingerprint without changing the acquisition, its order or the count."
+  }
+]

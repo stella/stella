@@ -103,6 +103,7 @@ const readableDecision: typeof readDecisionReaderSource = async () => ({
   ast: decisionAst(),
   citationAnchors: [],
   provisionAnchors: [],
+  provisionStatus: null,
   referenceNextCursor: null,
 });
 
@@ -113,6 +114,7 @@ const readableDecisionWith =
       decisionId: row().id,
       phase: "blocks",
       audience: "model",
+      surface: "search",
     });
     if (base?.status !== "read") {
       return panic("Fixture decision is not readable");
@@ -148,6 +150,7 @@ const licensedDecision: typeof readDecisionReaderSource = async () => {
     decisionId: row().id,
     phase: "blocks",
     audience: "model",
+    surface: "search",
   });
   if (readable?.status !== "read") {
     return panic("Fixture decision is not readable");
@@ -460,6 +463,7 @@ describe("decision legal resolution", () => {
         decisionId: row().id,
         phase: "blocks",
         audience: "model",
+        surface: "search",
       });
       if (readable?.status !== "read") {
         return panic("Fixture decision is not readable");
@@ -491,5 +495,42 @@ describe("decision legal resolution", () => {
         }),
       ).toEqual({ status: "not_found", reason: "no_exact_identity" });
     }
+  });
+
+  test("resolves an EU judgment by ECLI with its language alternates", async () => {
+    const judgment = {
+      ...row("C-40/17"),
+      country: "EU",
+      language: "en",
+      ecli: "ECLI:EU:C:2019:801",
+      languageAlternates: [
+        { ...row("C-40/17"), id: "judgment-en", language: "en" },
+        { ...row("C-40/17"), id: "judgment-fr", language: "fr" },
+        { ...row("C-40/17"), id: "judgment-de", language: "de" },
+      ],
+    } satisfies DecisionIdentityRow;
+    const result = await resolveDecision({
+      admission,
+      country: "EU",
+      identifier: "ECLI:EU:C:2019:801",
+      dependencies: {
+        lookup: async () => [judgment],
+        read: readableDecision,
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: {
+        kind: "decision",
+        country: "EU",
+        language: "en",
+        languageAlternates: [
+          { decisionId: "judgment-en", language: "en" },
+          { decisionId: "judgment-fr", language: "fr" },
+          { decisionId: "judgment-de", language: "de" },
+        ],
+      },
+    });
   });
 });

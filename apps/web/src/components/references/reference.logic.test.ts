@@ -397,3 +397,117 @@ describe("labels and decisions", () => {
     });
   });
 });
+
+describe("a corpus scope chip", () => {
+  const CORPUS_ATTRS = {
+    id: "case_law:CZE",
+    label: "Case law · Czechia",
+    category: "corpus",
+    kind: "corpus",
+  };
+
+  test("the composer chip, the sent tag and the persisted href are one reference", () => {
+    const expected: ChatReference = {
+      type: "corpus",
+      scope: { corpus: "case_law", country: "CZE" },
+      label: "Case law · Czechia",
+    };
+    expect(referenceFromMentionAttrs(CORPUS_ATTRS)).toEqual(expected);
+    const href = mentionAttrsToHref(CORPUS_ATTRS);
+    expect(href).toBe("#stella-corpus=case_law:CZE");
+    expect(
+      referenceOf(referenceFromHref(href ?? "", "Case law · Czechia")),
+    ).toEqual(expected);
+  });
+
+  test("draws its corpus glyph and no matter colour", () => {
+    const reference = referenceOf(
+      referenceFromHref(
+        "#stella-corpus=legislation:SVK",
+        "Legislation · Slovakia",
+      ),
+    );
+    expect(resolveReferenceVisual(reference, PENDING_FACTS)).toEqual({
+      type: "chip",
+      glyph: { type: "corpus", corpus: "legislation" },
+      matter: { type: "none" },
+      label: "Legislation · Slovakia",
+    });
+  });
+
+  test("a scope that names no public corpus does not look real", () => {
+    expect(referenceFromHref("#stella-corpus=registry:CZE", "x")).toEqual({
+      type: "unresolved",
+    });
+    expect(
+      referenceFromMentionAttrs({ ...CORPUS_ATTRS, id: "case_law:XXX" }),
+    ).toBeNull();
+    expect(mentionAttrsToHref({ ...CORPUS_ATTRS, id: "case_law" })).toBeNull();
+  });
+});
+
+describe("registry and connector scope chips", () => {
+  test.each([
+    {
+      attrs: {
+        id: "ares",
+        label: "ARES",
+        category: "registry",
+        kind: "registry",
+      },
+      href: "#stella-registry=ares",
+      expected: { type: "registry", registry: "ares", label: "ARES" },
+      glyph: { type: "registry" },
+    },
+    {
+      attrs: {
+        id: "legal-search",
+        label: "Legal Search",
+        category: "connector",
+        kind: "connector",
+      },
+      href: "#stella-connector=legal-search",
+      expected: {
+        type: "connector",
+        connector: "legal-search",
+        label: "Legal Search",
+      },
+      glyph: { type: "connector" },
+    },
+  ] as const)(
+    "the $attrs.category chip, the sent tag and the persisted href are one reference",
+    ({ attrs, href, expected, glyph }) => {
+      const reference: ChatReference = expected;
+      expect(referenceFromMentionAttrs(attrs)).toEqual(reference);
+      expect(mentionAttrsToHref(attrs)).toBe(href);
+      expect(referenceOf(referenceFromHref(href, attrs.label))).toEqual(
+        reference,
+      );
+      expect(resolveReferenceVisual(reference, PENDING_FACTS)).toEqual({
+        type: "chip",
+        glyph,
+        matter: { type: "none" },
+        label: attrs.label,
+      });
+    },
+  );
+
+  test("a slug that names no registry or connector does not look real", () => {
+    expect(referenceFromHref("#stella-registry=nope", "x")).toEqual({
+      type: "unresolved",
+    });
+    expect(referenceFromHref("#stella-connector=Bad Slug", "x")).toEqual({
+      type: "unresolved",
+    });
+    expect(
+      referenceFromMentionAttrs({
+        id: "nope",
+        label: "x",
+        category: "registry",
+      }),
+    ).toBeNull();
+    expect(
+      mentionAttrsToHref({ id: "-x", label: "x", category: "connector" }),
+    ).toBeNull();
+  });
+});

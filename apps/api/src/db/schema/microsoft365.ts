@@ -29,8 +29,9 @@ export type Microsoft365ConnectionStatus =
 // the same per-org AES-256-GCM envelope the MCP connection tokens use. There
 // is no service account: every stored token is the user's own delegated
 // grant, so Microsoft enforces the ACLs on every downstream read.
+// Keep persisted SQL identities stable while the API adds read capabilities.
 export const microsoft365Connections = p.pgTable(
-  "microsoft365_connections",
+  "sharepoint_connections",
   {
     id: pUuid<"microsoft365Connection">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
@@ -63,10 +64,10 @@ export const microsoft365Connections = p.pgTable(
   },
   (table) => [
     p
-      .uniqueIndex("microsoft365_connections_org_user_uidx")
+      .uniqueIndex("sharepoint_connections_org_user_uidx")
       .on(table.organizationId, table.userId),
     p
-      .index("microsoft365_connections_org_user_status_idx")
+      .index("sharepoint_connections_org_user_status_idx")
       .on(table.organizationId, table.userId, table.status),
     ...microsoft365ConnectionPolicies(),
   ],
@@ -76,7 +77,7 @@ export const microsoft365Connections = p.pgTable(
 // and the exact redirect URI are pinned here so the callback re-derives them
 // from server state, never from the request.
 export const microsoft365OAuthState = p.pgTable(
-  "microsoft365_oauth_state",
+  "sharepoint_oauth_state",
   {
     state: p.varchar({ length: 128 }).primaryKey(),
     organizationId: safeOrganizationId("organization_id")
@@ -91,9 +92,9 @@ export const microsoft365OAuthState = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
-    p.index("microsoft365_oauth_state_created_idx").on(table.createdAt),
+    p.index("sharepoint_oauth_state_created_idx").on(table.createdAt),
     p
-      .index("microsoft365_oauth_state_org_user_idx")
+      .index("sharepoint_oauth_state_org_user_idx")
       .on(table.organizationId, table.userId),
     ...microsoft365OAuthStatePolicies(),
   ],

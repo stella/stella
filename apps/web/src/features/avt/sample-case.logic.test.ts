@@ -1,73 +1,76 @@
 import { describe, expect, test } from "bun:test";
 
-import { SAMPLE_FACTS } from "@/features/avt/sample-case.data";
-import {
-  isSampleCaseComplete,
-  sampleFactWrites,
-} from "@/features/avt/sample-case.logic";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
-const DETAILS = { confidence: "high" };
+import { loadSampleCaseAndOpen } from "@/features/avt/sample-case.logic";
+import type { SampleCaseLoad } from "@/features/avt/types";
+import { toSafeId } from "@/lib/safe-id";
 
-describe("sample case", () => {
-  test("an empty list needs every sample fact", () => {
-    expect(sampleFactWrites(SAMPLE_FACTS, [])).toEqual({
-      create: [...SAMPLE_FACTS],
-      completeDetails: [],
+const sample = {
+  listId: toSafeId<"legalList">("00000000-0000-4000-8000-000000000001"),
+  documentEntityId: toSafeId<"entity">("00000000-0000-4000-8000-000000000002"),
+  fileFieldId: toSafeId<"field">("00000000-0000-4000-8000-000000000003"),
+} satisfies SampleCaseLoad;
+
+describe("opening the server-loaded sample", () => {
+  test("loads once and opens only the committed list", async () => {
+    const events: string[] = [];
+    const result = await loadSampleCaseAndOpen({
+      load: async () => {
+        events.push("load");
+        return sample;
+      },
+      openList: async (listId) => {
+        events.push(listId);
+      },
     });
+    expect(result).toEqual(sample);
+    expect(events).toEqual(["load", sample.listId]);
   });
 
-  test("a repeat run creates only facts an earlier run left out", () => {
-    const [first, second, ...rest] = SAMPLE_FACTS;
+  test("a refused load leaves the view alone and propagates its error", async () => {
+    const opened: string[] = [];
     expect(
-      sampleFactWrites(SAMPLE_FACTS, [
-        { id: "a", name: first?.statement ?? "", factDetails: DETAILS },
-        { id: "b", name: second?.statement ?? "", factDetails: DETAILS },
-        { id: "c", name: "An unrelated fact", factDetails: null },
-      ]),
-    ).toEqual({ create: rest, completeDetails: [] });
+      await rejectionOf(
+        loadSampleCaseAndOpen({
+          load: async () => {
+            throw new TypeError("Sample access refused");
+          },
+          openList: async (listId) => {
+            opened.push(listId);
+          },
+        }),
+      ),
+    ).toMatchObject({ message: "Sample access refused" });
+    expect(opened).toEqual([]);
   });
 
-  test("a fact created without its detail gets the detail, not a duplicate", () => {
-    const createdOnly = SAMPLE_FACTS.slice(0, 1);
-    const writes = sampleFactWrites(
-      SAMPLE_FACTS,
-      createdOnly.map((fact) => ({
-        id: "created-only",
-        name: fact.statement,
-        factDetails: null,
-      })),
-    );
-    expect(writes.create).toEqual(SAMPLE_FACTS.slice(1));
-    expect(writes.completeDetails).toEqual(
-      createdOnly.map((fact) => ({ fact, itemEntityId: "created-only" })),
-    );
-  });
-
-  test("only a load with nothing left out opens the sample list", () => {
+  test("a failed view switch is surfaced and a repeat opens the same sample", async () => {
+    let calls = 0;
+    const load = async () => {
+      calls++;
+      return sample;
+    };
     expect(
-      isSampleCaseComplete({ factsIncomplete: false, documentMissing: false }),
-    ).toBe(true);
+      await rejectionOf(
+        loadSampleCaseAndOpen({
+          load,
+          openList: async () => {
+            throw new TypeError("View save failed");
+          },
+        }),
+      ),
+    ).toMatchObject({ message: "View save failed" });
+    const opened: string[] = [];
     expect(
-      isSampleCaseComplete({ factsIncomplete: true, documentMissing: false }),
-    ).toBe(false);
-    expect(
-      isSampleCaseComplete({ factsIncomplete: false, documentMissing: true }),
-    ).toBe(false);
-  });
-
-  test("statements carry no metadata prefix and stay unique", () => {
-    const statements = SAMPLE_FACTS.map((fact) => fact.statement);
-    expect(new Set(statements).size).toBe(statements.length);
-    for (const statement of statements) {
-      expect(statement).not.toMatch(/^[A-Z]+-\d+/u);
-    }
-  });
-
-  test("low-confidence facts are held out and every other fact is scored", () => {
-    for (const { details } of SAMPLE_FACTS) {
-      expect(details.scoring).toBe(
-        details.confidence === "low" ? "held" : "included",
-      );
-    }
+      await loadSampleCaseAndOpen({
+        load,
+        openList: async (listId) => {
+          opened.push(listId);
+        },
+      }),
+    ).toEqual(sample);
+    expect(calls).toBe(2);
+    expect(opened).toEqual([sample.listId]);
   });
 });

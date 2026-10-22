@@ -722,21 +722,13 @@ for (const {
     }) => {
       await openClipboard(page, language);
       const rail = page.getByRole("list");
-      const visibleCards = async () =>
-        rail.evaluate((node) => {
-          const bounds = node.getBoundingClientRect();
-          return Array.from(
-            node.querySelectorAll("[data-clipboard-id]"),
-          ).filter((card) => {
-            const { left, right } = card.getBoundingClientRect();
-            return right > bounds.left && left < bounds.right;
-          }).length;
-        });
       // Swallow the rail's scroll events, then scroll it: the card window is
       // now computed for the old offset, which is the blank rail a scroll the
       // listeners missed (one applied while the window was parked) leaves
-      // behind.
-      await rail.evaluate(
+      // behind. The rail is measured in the same task as the scroll, because
+      // any later commit, such as one still settling the page after load,
+      // already reconciles it.
+      const visibleCards = await rail.evaluate(
         (node, toward) => {
           node.addEventListener(
             "scroll",
@@ -744,11 +736,17 @@ for (const {
             { capture: true },
           );
           node.scrollTo({ behavior: "instant", left: toward * 2400 });
+          const bounds = node.getBoundingClientRect();
+          return Array.from(
+            node.querySelectorAll("[data-clipboard-id]"),
+          ).filter((card) => {
+            const { left, right } = card.getBoundingClientRect();
+            return right > bounds.left && left < bounds.right;
+          }).length;
         },
         language === "ar" ? -1 : 1,
       );
-      await page.waitForTimeout(100);
-      expect(await visibleCards()).toBe(0);
+      expect(visibleCards).toBe(0);
       // Any commit re-reads the rail; typing a query every clip matches is one
       // that neither scrolls nor changes the list.
       await page.getByRole("searchbox").fill("Clipboard item");
@@ -1178,7 +1176,17 @@ test("Escape closes a footer overlay whose trigger still holds focus", async ({
     await trigger.click();
     await expect(popup).toBeVisible();
     // Popups take focus a beat after they open, so Escape often arrives while
-    // the trigger still holds it. The overlay owns Escape either way.
+    // the trigger still holds it. The overlay owns Escape either way. Wait for
+    // the popup to take focus before handing it back, or the late move races
+    // the trigger focus below.
+    await expect
+      .poll(
+        async () =>
+          await popup.evaluate((element) =>
+            element.contains(document.activeElement),
+          ),
+      )
+      .toBe(true);
     await trigger.focus();
     await expect(trigger).toBeFocused();
     await expect(popup).toBeVisible();

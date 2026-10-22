@@ -5,6 +5,10 @@ import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
 const name = t.String({ minLength: 1, maxLength: 512 });
 const registrationId = t.String({ maxLength: 64 });
 const vatId = t.String({ maxLength: 64 });
+const vatPayer = t.Boolean({
+  description:
+    "Whether the issuer charges VAT. Requires a VAT ID; a registered person who is not a VAT payer has a VAT ID but sets this to false.",
+});
 const addressLine = t.String({ maxLength: 512 });
 const city = t.String({ maxLength: 256 });
 const postalCode = t.String({ maxLength: 32 });
@@ -25,6 +29,7 @@ export const createSellerProfileBody = t.Object({
   legalName: name,
   registrationId: t.Optional(registrationId),
   vatId: t.Optional(vatId),
+  vatPayer: t.Optional(vatPayer),
   addressLine1: t.Optional(addressLine),
   addressLine2: t.Optional(addressLine),
   city: t.Optional(city),
@@ -41,6 +46,7 @@ export const updateSellerProfileBody = t.Object({
   legalName: t.Optional(name),
   registrationId: t.Optional(t.Nullable(registrationId)),
   vatId: t.Optional(t.Nullable(vatId)),
+  vatPayer: t.Optional(vatPayer),
   addressLine1: t.Optional(t.Nullable(addressLine)),
   addressLine2: t.Optional(t.Nullable(addressLine)),
   city: t.Optional(t.Nullable(city)),
@@ -57,6 +63,7 @@ export const SELLER_PROFILE_EDITABLE_FIELDS = [
   "legalName",
   "registrationId",
   "vatId",
+  "vatPayer",
   "addressLine1",
   "addressLine2",
   "city",
@@ -68,3 +75,16 @@ export const SELLER_PROFILE_EDITABLE_FIELDS = [
   "defaultCurrency",
   "footerNotes",
 ] as const;
+
+/** A VAT payer must carry the VAT ID it charges VAT under. */
+export const vatPayerWithoutVatId = (
+  payer: boolean,
+  id: string | null | undefined,
+) => payer && (id ?? "").trim() === "";
+
+export const VAT_PAYER_REQUIRES_VAT_ID = {
+  status: 400,
+  code: "vat_payer_requires_vat_id",
+  message: "A VAT payer needs a VAT ID",
+  hint: "Set vatId together with vatPayer: true, or set vatPayer: false for an issuer who does not charge VAT.",
+} as const;

@@ -141,13 +141,15 @@ export const ensureMicrosoft365AccessToken = async (
         TOKEN_EXPIRY_BUFFER_MS;
 
     if (stillValid) {
-      const accessToken = await decryptMicrosoft365Secret({
-        purpose: "microsoft365_access_token",
-        ciphertext: connection.accessTokenEncrypted,
-        iv: connection.accessTokenIv,
-        organizationId: connection.organizationId,
-        userId: connection.userId,
-      });
+      const accessToken = yield* Result.await(
+        decryptMicrosoft365Secret({
+          purpose: "microsoft365_access_token",
+          ciphertext: connection.accessTokenEncrypted,
+          iv: connection.accessTokenIv,
+          organizationId: connection.organizationId,
+          userId: connection.userId,
+        }),
+      );
       return Result.ok(accessToken);
     }
 
@@ -161,13 +163,15 @@ export const ensureMicrosoft365AccessToken = async (
       return Result.err(config.error);
     }
 
-    const refreshToken = await decryptMicrosoft365Secret({
-      purpose: "microsoft365_refresh_token",
-      ciphertext: connection.refreshTokenEncrypted,
-      iv: connection.refreshTokenIv,
-      organizationId: connection.organizationId,
-      userId: connection.userId,
-    });
+    const refreshToken = yield* Result.await(
+      decryptMicrosoft365Secret({
+        purpose: "microsoft365_refresh_token",
+        ciphertext: connection.refreshTokenEncrypted,
+        iv: connection.refreshTokenIv,
+        organizationId: connection.organizationId,
+        userId: connection.userId,
+      }),
+    );
 
     const refreshed = await dependencies.refreshAccessToken({
       clientId: config.value.clientId,
@@ -254,13 +258,15 @@ export const ensureMicrosoft365AccessToken = async (
     }
     // Re-decrypt what we just stored so the returned value is minted through
     // the single brand boundary, rather than casting the raw string here.
-    const accessToken = await decryptMicrosoft365Secret({
-      purpose: "microsoft365_access_token",
-      ciphertext: encryptedAccess.ciphertext,
-      iv: encryptedAccess.iv,
-      organizationId: connection.organizationId,
-      userId: connection.userId,
-    });
+    const accessToken = yield* Result.await(
+      decryptMicrosoft365Secret({
+        purpose: "microsoft365_access_token",
+        ciphertext: encryptedAccess.ciphertext,
+        iv: encryptedAccess.iv,
+        organizationId: connection.organizationId,
+        userId: connection.userId,
+      }),
+    );
     return Result.ok(accessToken);
   });
 
@@ -315,11 +321,9 @@ const parseSkipToken = (nextLink: string | undefined): string | null => {
   if (!nextLink) {
     return null;
   }
-  try {
-    return new URL(nextLink).searchParams.get("$skiptoken");
-  } catch {
-    return null;
-  }
+  return Result.try(() => new URL(nextLink))
+    .map((url) => url.searchParams.get("$skiptoken"))
+    .unwrapOr(null);
 };
 
 /** Pure mapping from a Graph children response to our `Page<T>` envelope. */
@@ -342,49 +346,78 @@ const meResponseSchema = v.looseObject({
 export const fetchAccountLabel = async (
   accessToken: string,
 ): Promise<Result<string | null, HandlerError<502>>> =>
-  await Result.tryPromise({
-    try: async () => {
-      const url = new URL(`${GRAPH_API_BASE_URL}/me`);
-      url.searchParams.set("$select", "userPrincipalName,displayName,mail");
-      const response = await fetchWithTimeout(url, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/json",
-        },
-        timeout: { type: "idle", ms: GRAPH_FETCH_TIMEOUT_MS },
-        signal: AbortSignal.timeout(GRAPH_FETCH_TIMEOUT_MS),
-        redirect: "error",
-      });
-      if (!response.ok || !response.body) {
-        throw new HandlerError({
+  await Result.gen(async function* () {
+    const url = new URL(`${GRAPH_API_BASE_URL}/me`);
+    url.searchParams.set("$select", "userPrincipalName,displayName,mail");
+    const response = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await fetchWithTimeout(url, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: "application/json",
+            },
+            timeout: { type: "idle", ms: GRAPH_FETCH_TIMEOUT_MS },
+            signal: AbortSignal.timeout(GRAPH_FETCH_TIMEOUT_MS),
+            redirect: "error",
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 502,
+            message: "Microsoft account lookup failed",
+            cause,
+          }),
+      }),
+    );
+    if (!response.ok || !response.body) {
+      return Result.err(
+        new HandlerError({
           status: 502,
           message: "Microsoft account lookup failed",
-        });
-      }
-      const bytes = await readCappedBytes(
-        response.body,
-        GRAPH_ACCOUNT_RESPONSE_MAX_BYTES,
+        }),
       );
-      if (!bytes) {
-        throw new HandlerError({
+    }
+    const body = response.body;
+    const bytes = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await readCappedBytes(body, GRAPH_ACCOUNT_RESPONSE_MAX_BYTES),
+        catch: (cause) =>
+          new HandlerError({
+            status: 502,
+            message: "Microsoft account lookup failed",
+            cause,
+          }),
+      }),
+    );
+    if (!bytes) {
+      return Result.err(
+        new HandlerError({
           status: 502,
           message: "Microsoft account response exceeds byte limit",
-        });
-      }
-      const parsed = v.parse(
-        meResponseSchema,
-        JSON.parse(new TextDecoder().decode(bytes)),
+        }),
       );
-      return (
-        parsed.userPrincipalName ?? parsed.mail ?? parsed.displayName ?? null
-      );
-    },
-    catch: (cause) =>
-      new HandlerError({
-        status: 502,
-        message: "Microsoft account lookup failed",
-        cause,
-      }),
+    }
+    const parsed = yield* Result.await(
+      Promise.resolve(
+        Result.try(() =>
+          v.parse(
+            meResponseSchema,
+            JSON.parse(new TextDecoder().decode(bytes)),
+          ),
+        ).mapError(
+          (cause) =>
+            new HandlerError({
+              status: 502,
+              message: "Microsoft account lookup failed",
+              cause,
+            }),
+        ),
+      ),
+    );
+    return Result.ok(
+      parsed.userPrincipalName ?? parsed.mail ?? parsed.displayName ?? null,
+    );
   });
 
 export const listDriveRootChildren = async ({
@@ -396,61 +429,88 @@ export const listDriveRootChildren = async ({
   cursor: string | null;
   limit: number;
 }): Promise<Result<Page<Microsoft365DriveItem>, HandlerError<502>>> =>
-  await Result.tryPromise({
-    try: async () => {
-      const url = new URL(`${GRAPH_API_BASE_URL}/me/drive/root/children`);
-      url.searchParams.set("$top", String(limit));
-      if (cursor) {
-        url.searchParams.set("$skiptoken", cursor);
-      }
+  await Result.gen(async function* () {
+    const url = new URL(`${GRAPH_API_BASE_URL}/me/drive/root/children`);
+    url.searchParams.set("$top", String(limit));
+    if (cursor) {
+      url.searchParams.set("$skiptoken", cursor);
+    }
 
-      const response = await fetchWithTimeout(url, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/json",
-        },
-        timeout: { type: "idle", ms: GRAPH_FETCH_TIMEOUT_MS },
-        signal: AbortSignal.timeout(GRAPH_FETCH_TIMEOUT_MS),
-        redirect: "error",
-      });
+    const response = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await fetchWithTimeout(url, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: "application/json",
+            },
+            timeout: { type: "idle", ms: GRAPH_FETCH_TIMEOUT_MS },
+            signal: AbortSignal.timeout(GRAPH_FETCH_TIMEOUT_MS),
+            redirect: "error",
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 502,
+            message: "Failed to reach Microsoft Graph",
+            cause,
+          }),
+      }),
+    );
 
-      if (!response.ok) {
-        throw new HandlerError({
+    if (!response.ok) {
+      return Result.err(
+        new HandlerError({
           status: 502,
           message: `Microsoft Graph returned HTTP ${response.status}`,
-        });
-      }
+        }),
+      );
+    }
 
-      if (!response.body) {
-        throw new HandlerError({
+    if (!response.body) {
+      return Result.err(
+        new HandlerError({
           status: 502,
           message: "Missing Microsoft drive response",
-        });
-      }
-      const bytes = await readCappedBytes(
-        response.body,
-        GRAPH_DRIVE_RESPONSE_MAX_BYTES,
+        }),
       );
-      if (!bytes) {
-        throw new HandlerError({
+    }
+    const body = response.body;
+    const bytes = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await readCappedBytes(body, GRAPH_DRIVE_RESPONSE_MAX_BYTES),
+        catch: (cause) =>
+          new HandlerError({
+            status: 502,
+            message: "Failed to reach Microsoft Graph",
+            cause,
+          }),
+      }),
+    );
+    if (!bytes) {
+      return Result.err(
+        new HandlerError({
           status: 502,
           message: "Microsoft drive response exceeds byte limit",
-        });
-      }
-      const parsed = v.parse(
-        driveChildrenResponseSchema,
-        JSON.parse(new TextDecoder().decode(bytes)),
+        }),
       );
-      return mapDriveChildrenToPage(parsed, limit);
-    },
-    // Always surface a 502 so the Result error channel unifies to
-    // HandlerError<502>; preserve the message from our own thrown 502.
-    catch: (cause): HandlerError<502> =>
-      new HandlerError({
-        status: 502,
-        message: HandlerError.is(cause)
-          ? cause.message
-          : "Failed to reach Microsoft Graph",
-        cause,
-      }),
+    }
+    const parsed = yield* Result.await(
+      Promise.resolve(
+        Result.try(() =>
+          v.parse(
+            driveChildrenResponseSchema,
+            JSON.parse(new TextDecoder().decode(bytes)),
+          ),
+        ).mapError(
+          (cause) =>
+            new HandlerError({
+              status: 502,
+              message: "Failed to reach Microsoft Graph",
+              cause,
+            }),
+        ),
+      ),
+    );
+    return Result.ok(mapDriveChildrenToPage(parsed, limit));
   });

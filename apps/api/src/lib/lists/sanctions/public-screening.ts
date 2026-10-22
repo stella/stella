@@ -466,11 +466,7 @@ export const createPublicSanctionsScreening = ({
                 onWork(reply.work);
                 return Result.ok(reply.result);
               case "work-limit":
-                return Result.err({
-                  code: "load-failed",
-                  stage: "public-matcher",
-                  reason: "work-limit",
-                } as const);
+                return Result.err({ code: "work-limit" } as const);
               case "unavailable":
               case "entries-loaded":
               case "indexed":

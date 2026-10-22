@@ -440,9 +440,58 @@ const countryCoverage = {
     { maxItems: CASE_LAW_SOURCE_ROWS_BOUND },
   ),
 };
+const provisionProcessingState = t.Union([
+  t.Object(
+    {
+      type: t.Literal("available"),
+      pendingCount: boundedString(128),
+      oldestPendingAt: nullableBoundedString(128),
+      sampledAt: boundedString(128),
+      revision: t.Number(),
+      scopeGeneration: t.Number(),
+    },
+    { additionalProperties: false },
+  ),
+  t.Object(
+    {
+      type: t.Literal("notSupportedYet"),
+      reason: t.Union([
+        t.Literal("no_profile"),
+        t.Literal("no_multilingual_profile"),
+        t.Literal("language_not_supported"),
+        t.Literal("unknown_jurisdiction"),
+      ]),
+    },
+    { additionalProperties: false },
+  ),
+  t.Object(
+    {
+      type: t.Literal("unavailable"),
+      reason: t.Union([
+        t.Literal("state_not_seeded"),
+        t.Literal("scope_inactive"),
+        t.Literal("revision_unavailable"),
+        t.Literal("read_failed"),
+      ]),
+      lastSampledAt: nullableBoundedString(128),
+    },
+    { additionalProperties: false },
+  ),
+]);
+
 export const coverageResponseSchema = t.Object(
   {
     generatedAt: boundedString(128),
+    provisionProcessing: t.Array(
+      t.Object(
+        {
+          country: countryCoverage.country,
+          state: provisionProcessingState,
+        },
+        { additionalProperties: false },
+      ),
+      { maxItems: CASE_LAW_JURISDICTIONS.length },
+    ),
     totals: t.Object(
       { searchable: t.Number(), stored },
       { additionalProperties: false },

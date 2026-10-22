@@ -7,11 +7,14 @@ import {
   FOLIO_COLLAB_CHECKPOINT_MAX_BYTES,
   FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT,
   FOLIO_COLLAB_ROOM_SEED_STATES,
+  FOLIO_COLLAB_ROOM_SNAPSHOT_STATES,
   FOLIO_COLLAB_ROOM_UNSEEDED_STATES,
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
 } from "@/api/lib/folio-collab-room-contract";
+import type { FolioCollabSavedSnapshotCut } from "@/api/lib/folio-collab-room-contract";
 import type { SkippedSkillFile } from "@/api/lib/skills/skill-package";
 
+import { session as authSession } from "../auth-schema";
 import {
   entityFeatureGateChecks,
   entityFeatureGateColumns,
@@ -766,6 +769,10 @@ const FOLIO_COLLAB_ROOM_UNSEEDED_STATE_SQL_VALUES = sql.raw(
   FOLIO_COLLAB_ROOM_UNSEEDED_STATES.map((state) => `'${state}'`).join(", "),
 );
 
+const FOLIO_COLLAB_ROOM_SNAPSHOT_STATE_SQL_VALUES = sql.raw(
+  FOLIO_COLLAB_ROOM_SNAPSHOT_STATES.map((state) => `'${state}'`).join(", "),
+);
+
 export const folioCollabRooms = p.pgTable(
   "folio_collab_rooms",
   {
@@ -785,6 +792,9 @@ export const folioCollabRooms = p.pgTable(
       .bigint("yjs_snapshot_revision", { mode: "number" })
       .notNull()
       .default(0),
+    /** Immutable snapshot hash bound to its saved DOCX version; null for unknown historical cuts. */
+    savedSnapshotCut:
+      jsonb("saved_snapshot_cut").$type<FolioCollabSavedSnapshotCut>(),
     yjsSnapshotSizeBytes: p.integer("yjs_snapshot_size_bytes"),
     yjsSnapshotUpdatedAt: timestamptz("yjs_snapshot_updated_at"),
     docxCheckpointFileId: safeUuid<"userFile">(
@@ -793,6 +803,11 @@ export const folioCollabRooms = p.pgTable(
     docxCheckpointSha256Hex: p.varchar("docx_checkpoint_sha256_hex", {
       length: 64,
     }),
+    /** Persisted snapshot hash captured with this checkpoint, before any normalization. */
+    docxCheckpointSnapshotSha256Hex: p.varchar(
+      "docx_checkpoint_snapshot_sha256_hex",
+      { length: 64 },
+    ),
     docxCheckpointSizeBytes: p.integer("docx_checkpoint_size_bytes"),
     docxCheckpointScanWarnings: jsonb("docx_checkpoint_scan_warnings").$type<
       string[] | null
@@ -807,8 +822,8 @@ export const folioCollabRooms = p.pgTable(
     }),
     seedClaimedAt: timestamptz("seed_claimed_at"),
     seededAt: timestamptz("seeded_at"),
-    // Set when a refused snapshot was discarded; cleared once the room is
-    // seeded again, so the seeding client can tell the user.
+    // Set when recovery discarded known or possible unsaved changes; cleared
+    // after reseeding, so the seeding client can report the recovery.
     snapshotRecoveredAt: timestamptz("snapshot_recovered_at"),
     lastActivityAt: timestamptz("last_activity_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -849,7 +864,7 @@ export const folioCollabRooms = p.pgTable(
       "folio_collab_rooms_snapshot_revision_seed_check",
       sql`(
         (${table.seedState} IN (${FOLIO_COLLAB_ROOM_UNSEEDED_STATE_SQL_VALUES}) AND ${table.yjsSnapshotRevision} = 0)
-        OR (${table.seedState} = 'seeded' AND ${table.yjsSnapshotRevision} > 0)
+        OR (${table.seedState} IN (${FOLIO_COLLAB_ROOM_SNAPSHOT_STATE_SQL_VALUES}) AND ${table.yjsSnapshotRevision} > 0)
       )`,
     ),
     p.check(
@@ -860,7 +875,7 @@ export const folioCollabRooms = p.pgTable(
       "folio_collab_rooms_seed_fields_check",
       sql`(
         (${table.seedState} = 'empty' AND ${table.seedClaimedBy} IS NULL AND ${table.seedClaimedAt} IS NULL AND ${table.seededAt} IS NULL AND ${table.yjsSnapshotSizeBytes} IS NULL AND ${table.yjsSnapshotUpdatedAt} IS NULL)
-        OR (${table.seedState} = 'claimed' AND ${table.seedClaimedBy} IS NOT NULL AND ${table.seedClaimedAt} IS NOT NULL AND ${table.seededAt} IS NULL AND ${table.yjsSnapshotSizeBytes} IS NULL AND ${table.yjsSnapshotUpdatedAt} IS NULL)
+        OR (${table.seedState} = 'claimed' AND ${table.seedClaimedBy} IS NOT NULL AND ${table.seedClaimedAt} IS NOT NULL AND ${table.seededAt} IS NULL AND ((${table.yjsSnapshotRevision} = 0 AND ${table.yjsSnapshotSizeBytes} IS NULL AND ${table.yjsSnapshotUpdatedAt} IS NULL) OR (${table.yjsSnapshotRevision} > 0 AND ${table.yjsSnapshotSizeBytes} IS NOT NULL AND ${table.yjsSnapshotUpdatedAt} IS NOT NULL)))
         OR (${table.seedState} = 'seeded' AND ${table.seedClaimedAt} IS NOT NULL AND ${table.seededAt} IS NOT NULL AND ${table.yjsSnapshotSizeBytes} IS NOT NULL AND ${table.yjsSnapshotUpdatedAt} IS NOT NULL)
       )`,
     ),
@@ -937,6 +952,9 @@ export const folioCollabRoomTokens = p.pgTable(
       .text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    sourceSessionId: p
+      .text("source_session_id")
+      .references(() => authSession.id, { onDelete: "cascade" }),
     tokenHash: p.varchar("token_hash", { length: 64 }).notNull(),
     generation: p.bigint("generation", { mode: "number" }).notNull(),
     permissions: jsonb("permissions")
@@ -952,6 +970,10 @@ export const folioCollabRoomTokens = p.pgTable(
       .on(table.workspaceId, table.expiresAt),
     p.index("folio_collab_room_tokens_room_id_idx").on(table.roomId),
     p.index("folio_collab_room_tokens_user_id_idx").on(table.userId),
+    p
+      .index("folio_collab_room_tokens_source_session_idx")
+      .on(table.sourceSessionId)
+      .where(sql`${table.sourceSessionId} IS NOT NULL`),
     p
       .uniqueIndex("folio_collab_room_tokens_token_hash_uidx")
       .on(table.tokenHash),
@@ -1058,6 +1080,8 @@ export const folioCollabPublications = p.pgTable(
     checkpointSha256Hex: p
       .varchar("checkpoint_sha256_hex", { length: 64 })
       .notNull(),
+    /** Immutable persisted snapshot bytes represented by this publication's DOCX. */
+    snapshotSha256Hex: p.varchar("snapshot_sha256_hex", { length: 64 }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [

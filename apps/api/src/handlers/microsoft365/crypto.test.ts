@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -5,16 +6,8 @@ import {
   encryptMicrosoft365Secret,
 } from "@/api/handlers/microsoft365/crypto";
 import { toSafeId } from "@/api/lib/branded-types";
+import { encryptContent } from "@/api/lib/content-encryption";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> => {
-  try {
-    await promise;
-    return null;
-  } catch (error) {
-    return error;
-  }
-};
 
 const organizationId = toSafeId<"organization">(
   "0191d14d-9a63-7d2e-a021-06053e542c85",
@@ -39,7 +32,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
       userId,
     });
 
-    expect(String(decrypted)).toBe(secret);
+    expect(String(decrypted.unwrap())).toBe(secret);
   });
 
   test("roundtrips arbitrary payloads (invariant over the value space)", async () => {
@@ -64,7 +57,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
         purpose: "microsoft365_refresh_token",
         userId,
       });
-      expect(String(decrypted)).toBe(payload);
+      expect(String(decrypted.unwrap())).toBe(payload);
     }
   });
 
@@ -76,7 +69,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
       userId,
     });
 
-    const decrypt = decryptMicrosoft365Secret({
+    const decrypt = await decryptMicrosoft365Secret({
       ciphertext,
       iv,
       organizationId,
@@ -84,7 +77,10 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
       userId,
     });
 
-    expect(await rejectionOf(decrypt)).toBeInstanceOf(HandlerError);
+    expect(Result.isError(decrypt)).toBe(true);
+    if (Result.isError(decrypt)) {
+      expect(decrypt.error).toBeInstanceOf(HandlerError);
+    }
   });
 
   test("rejects a userId mismatch", async () => {
@@ -95,7 +91,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
       userId,
     });
 
-    const decrypt = decryptMicrosoft365Secret({
+    const decrypt = await decryptMicrosoft365Secret({
       ciphertext,
       iv,
       organizationId,
@@ -103,7 +99,10 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
       userId: toSafeId<"user">("0191d14d-9a63-7d2e-a021-06053e542c99"),
     });
 
-    expect(await rejectionOf(decrypt)).toBeInstanceOf(HandlerError);
+    expect(Result.isError(decrypt)).toBe(true);
+    if (Result.isError(decrypt)) {
+      expect(decrypt.error).toBeInstanceOf(HandlerError);
+    }
   });
 
   test("stores ciphertext rather than the plaintext envelope", async () => {
@@ -130,7 +129,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
       userId,
     });
 
-    const decrypt = decryptMicrosoft365Secret({
+    const decrypt = await decryptMicrosoft365Secret({
       ciphertext,
       iv,
       organizationId: toSafeId<"organization">(
@@ -140,6 +139,28 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
       userId,
     });
 
-    expect(await rejectionOf(decrypt)).not.toBeNull();
+    expect(Result.isError(decrypt)).toBe(true);
+    if (Result.isError(decrypt)) {
+      expect(decrypt.error).toBeInstanceOf(HandlerError);
+    }
   });
+});
+
+test("existing delegated token envelopes remain readable with their original purposes", async () => {
+  for (const [storedPurpose, purpose] of [
+    ["sharepoint_access_token", "microsoft365_access_token"],
+    ["sharepoint_refresh_token", "microsoft365_refresh_token"],
+  ] as const) {
+    const encrypted = await encryptContent(
+      organizationId,
+      JSON.stringify({ purpose: storedPurpose, secret, userId }),
+    );
+    const decrypted = await decryptMicrosoft365Secret({
+      ...encrypted,
+      organizationId,
+      purpose,
+      userId,
+    });
+    expect(String(decrypted.unwrap())).toBe(secret);
+  }
 });

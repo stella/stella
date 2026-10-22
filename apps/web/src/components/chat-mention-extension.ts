@@ -1,7 +1,12 @@
 import MentionExtension from "@tiptap/extension-mention";
 import { mergeAttributes, ReactNodeViewRenderer } from "@tiptap/react";
 
-import type { EntityKind, ResourceRef } from "@stll/api-contract";
+import type {
+  BusinessRegistrySlug,
+  ChatCorpusScope,
+  EntityKind,
+  ResourceRef,
+} from "@stll/api-contract";
 
 import { ChatMentionNode } from "@/components/chat-mention-node";
 
@@ -36,6 +41,24 @@ export type ChatMentionOption =
       category: "decision";
       kind: "decision";
       resource: ResourceRef<"case_law_decision">;
+    })
+  | (ChatMentionOptionBase & {
+      /** A public corpus the turn is scoped to: no row behind it. */
+      category: "corpus";
+      kind: "corpus";
+      scope: ChatCorpusScope;
+    })
+  | (ChatMentionOptionBase & {
+      /** A business registry the turn is scoped to. */
+      category: "registry";
+      kind: "registry";
+      registry: BusinessRegistrySlug;
+    })
+  | (ChatMentionOptionBase & {
+      /** One of the user's MCP connectors the turn is scoped to. */
+      category: "connector";
+      kind: "connector";
+      connector: string;
     });
 
 export type ChatReferenceCategory = ChatMentionOption["category"];

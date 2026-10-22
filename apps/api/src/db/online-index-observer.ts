@@ -3,6 +3,7 @@ import { SQL } from "bun";
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+import { terminateReserved } from "./sql-close";
 
 type BoundedDatabaseObserverOptions = {
   url: string;
@@ -71,4 +72,44 @@ export const openOnlineIndexObserver = async (
     statementTimeoutMs: config.health.readTimeoutMs,
     lockTimeoutMs: config.health.readTimeoutMs,
   });
+};
+
+/**
+ * One dedicated session for an operator-run online repair, outside the
+ * migrator. It carries no session budgets: each repair batch installs its own
+ * LOCAL budgets, and the online-migration lock must wait for a deploy's repair
+ * rather than time out.
+ */
+export const openOnlineRepairConnection = async (
+  url: string,
+): Promise<OnlineMigrationConnection> => {
+  const client = new SQL({ url, max: 1 });
+  const reservation = await Result.tryPromise(
+    async () => await client.reserve(),
+  );
+  if (reservation.isErr()) {
+    await client.close();
+    throw reservation.error;
+  }
+  const reserved = reservation.value;
+  let session: "open" | "terminated" = "open";
+  return {
+    execute: async (query, params = []) => {
+      await reserved.unsafe(query, [...params]);
+    },
+    query: async (query, params = []) =>
+      await reserved.unsafe<unknown[]>(query, [...params]),
+    release: async () => {
+      if (session === "open") {
+        reserved.release();
+      }
+      await client.close();
+    },
+    // The table gate closes a session whose stalled statement it could not
+    // cancel; the repair then fails rather than hold the table.
+    terminate: async () => {
+      session = "terminated";
+      await terminateReserved(reserved);
+    },
+  };
 };

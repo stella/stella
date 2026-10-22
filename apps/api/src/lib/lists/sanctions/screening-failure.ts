@@ -39,10 +39,8 @@ export type SanctionsScreeningFailureCause =
   | "entries-read"
   | "read-stalled"
   | "short-read"
-  | "index-load"
   | "work-limit"
-  | "matcher-unavailable"
-  | "truncated-empty";
+  | "matcher-unavailable";
 
 type SanctionsScreeningFailureStage =
   | "matcher-pool"
@@ -65,11 +63,9 @@ const SCREENING_FAILURE_REASON = {
   "short-read": "sanctions_screening_failed",
   "read-stalled": "sanctions_screening_failed",
   "matcher-unavailable": "sanctions_screening_failed",
-  "truncated-empty": "sanctions_screening_failed",
   // Read/operation boundaries retain the shared infrastructure classification.
   "freshness-read": "unclassified",
   "entries-read": "unclassified",
-  "index-load": "unclassified",
   operation: "unclassified",
 } as const satisfies Record<SanctionsScreeningFailureCause, FailureReason>;
 

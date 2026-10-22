@@ -1,10 +1,16 @@
+import { panic } from "better-result";
 import { and, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+
 import { legislationDocuments } from "@/api/db/schema";
-import { projectStatuteVersion } from "@/api/handlers/legislation/reader-response";
+import {
+  projectStatuteAmendments,
+  projectStatuteVersion,
+} from "@/api/handlers/legislation/reader-response";
 import {
   selectDefaultVersionId,
   selectWorkKey,
@@ -16,8 +22,14 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import {
+  LEGISLATION_AMENDMENT_PAGE_MAX,
+  readLegislationAmendments,
+  readLegislationAmendmentSnapshot,
+} from "@/api/lib/legal-search/legislation-amendments";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
+  effectOpensVersion,
   UNVERSIONED_SORT_DATE,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
@@ -48,6 +60,8 @@ type ListStatuteVersionsOptions = {
   documentId: SafeId<"legislationDocument">;
   query: ListStatuteVersionsQuery;
   legislationDb: LegislationReadDb;
+  /** The surface this read answers for; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 type VersionCursor = {
@@ -55,7 +69,7 @@ type VersionCursor = {
   id: SafeId<"legislationDocument">;
 };
 
-const decodeVersionCursor = (cursor: string): VersionCursor | null => {
+export const decodeVersionCursor = (cursor: string): VersionCursor | null => {
   const parts = decodePaginationCursor(cursor);
 
   if (parts?.length !== 2) {
@@ -74,6 +88,9 @@ const decodeVersionCursor = (cursor: string): VersionCursor | null => {
   return { validFrom, id: brandPersistedLegislationDocumentId(id) };
 };
 
+export const encodeVersionCursor = (cursor: VersionCursor): string =>
+  encodePaginationCursor([cursor.validFrom, cursor.id]);
+
 /**
  * Every consolidated version of the work the given document belongs to,
  * newest validity window first. The work key is the source, ELI and
@@ -88,6 +105,7 @@ export const listStatuteVersionsHandler = async ({
   documentId,
   query,
   legislationDb,
+  surface,
 }: ListStatuteVersionsOptions) => {
   const limit = normalizeTenantPageLimit(
     query.limit ?? LIMITS.legislationVersionsPageSizeDefault,
@@ -103,13 +121,13 @@ export const listStatuteVersionsHandler = async ({
   }
 
   const rows = await legislationDb(async (tx) => {
-    const work = await selectWorkKey(tx, documentId);
+    const work = await selectWorkKey(tx, documentId, surface);
 
     if (work === null) {
-      return null;
+      return { type: "missing" } as const;
     }
 
-    const conditions: SQL[] = workKeyConditions(work);
+    const conditions: SQL[] = workKeyConditions(work, surface);
 
     if (cursor !== null) {
       conditions.push(
@@ -117,7 +135,7 @@ export const listStatuteVersionsHandler = async ({
       );
     }
 
-    const defaultId = await selectDefaultVersionId(tx, work);
+    const defaultId = await selectDefaultVersionId(tx, work, surface);
     const page = await tx
       .select({
         id: legislationDocuments.id,
@@ -143,17 +161,77 @@ export const listStatuteVersionsHandler = async ({
       )
       .limit(limit + 1);
 
-    return page.map((row) =>
-      projectStatuteVersion({ ...row, isDefault: row.id === defaultId }),
-    );
+    const amendmentOwnerByOpeningDate = new Map<
+      string,
+      (typeof page)[number]
+    >();
+    // The look-ahead row is dropped by the cursor page, so it never owns relations.
+    for (const row of page.slice(0, limit)) {
+      const openingDate = row.versionValidFrom;
+      if (openingDate !== null && effectOpensVersion(openingDate, row)) {
+        const currentOwner = amendmentOwnerByOpeningDate.get(openingDate);
+        // A relation belongs to one response version: prefer the default when it
+        // opens that day, otherwise retain the first eligible row in page order.
+        if (currentOwner === undefined || row.id === defaultId) {
+          amendmentOwnerByOpeningDate.set(openingDate, row);
+        }
+      }
+    }
+    // Query only dates some returned version owns, so relations nobody can
+    // receive never spend the shared page budget.
+    const snapshot = await readLegislationAmendmentSnapshot(tx, work);
+    const amendments =
+      snapshot === null || amendmentOwnerByOpeningDate.size === 0
+        ? { items: [], limit: LEGISLATION_AMENDMENT_PAGE_MAX, nextCursor: null }
+        : await readLegislationAmendments(tx, {
+            work,
+            direction: "incoming",
+            limit: LEGISLATION_AMENDMENT_PAGE_MAX,
+            effectiveDates: [...amendmentOwnerByOpeningDate.keys()],
+          });
+    // Total over the returned versions: every owner is one of them, so a
+    // missing entry is a bug, not an empty list.
+    const amendmentsByOwner = new Map<
+      SafeId<"legislationDocument">,
+      (typeof amendments.items)[number][]
+    >(page.map((row) => [row.id, []]));
+    const amendmentsFor = (id: SafeId<"legislationDocument">) =>
+      amendmentsByOwner.get(id) ??
+      panic("Statute version has no amendment slot");
+    for (const relation of amendments.items) {
+      if (relation.effectiveDate !== null) {
+        const owner = amendmentOwnerByOpeningDate.get(relation.effectiveDate);
+        if (owner !== undefined) {
+          amendmentsFor(owner.id).push(relation);
+        }
+      }
+    }
+    return {
+      type: "found",
+      rows: page.map((row) =>
+        projectStatuteVersion({
+          ...row,
+          isDefault: row.id === defaultId,
+          // The actor comes from an explicit publisher relation; multiple acts
+          // starting on one day remain separate effects in that day's wording.
+          amendedBy: projectStatuteAmendments({
+            snapshot,
+            page: {
+              ...amendments,
+              items: amendmentsFor(row.id),
+            },
+          }),
+        }),
+      ),
+    } as const;
   });
 
-  if (rows === null) {
+  if (rows.type === "missing") {
     return status(404, { message: "Legislation document not found" });
   }
 
   return createCursorPage({
-    rows,
+    rows: rows.rows,
     limit,
     cursorForItem: (item) =>
       encodePaginationCursor([

@@ -135,59 +135,86 @@ const requestToken = async ({
   body: URLSearchParams;
   tenantId: string;
 }): Promise<Result<GraphTokenResponse, HandlerError<502>>> =>
-  await Result.tryPromise({
-    try: async () => {
-      const response = await fetchWithTimeout(tokenEndpoint(tenantId), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json",
-        },
-        body,
-        timeout: { type: "idle", ms: GRAPH_OAUTH_TIMEOUT_MS },
-        signal: AbortSignal.timeout(GRAPH_OAUTH_TIMEOUT_MS),
-        redirect: "error",
-      });
+  await Result.gen(async function* () {
+    const response = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await fetchWithTimeout(tokenEndpoint(tenantId), {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              Accept: "application/json",
+            },
+            body,
+            timeout: { type: "idle", ms: GRAPH_OAUTH_TIMEOUT_MS },
+            signal: AbortSignal.timeout(GRAPH_OAUTH_TIMEOUT_MS),
+            redirect: "error",
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 502,
+            message: "Failed to reach the Microsoft token endpoint",
+            cause,
+          }),
+      }),
+    );
 
-      if (!response.ok) {
-        throw new HandlerError({
+    if (!response.ok) {
+      return Result.err(
+        new HandlerError({
           status: 502,
           message: `Microsoft token endpoint returned HTTP ${response.status}`,
-        });
-      }
+        }),
+      );
+    }
 
-      if (!response.body) {
-        throw new HandlerError({
+    if (!response.body) {
+      return Result.err(
+        new HandlerError({
           status: 502,
           message: "Missing Microsoft token response",
-        });
-      }
-      const bytes = await readCappedBytes(
-        response.body,
-        GRAPH_TOKEN_RESPONSE_MAX_BYTES,
+        }),
       );
-      if (!bytes) {
-        throw new HandlerError({
+    }
+    const responseBody = response.body;
+    const bytes = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await readCappedBytes(responseBody, GRAPH_TOKEN_RESPONSE_MAX_BYTES),
+        catch: (cause) =>
+          new HandlerError({
+            status: 502,
+            message: "Failed to reach the Microsoft token endpoint",
+            cause,
+          }),
+      }),
+    );
+    if (!bytes) {
+      return Result.err(
+        new HandlerError({
           status: 502,
           message: "Microsoft token response exceeds byte limit",
-        });
-      }
-      return v.parse(
-        graphTokenResponseSchema,
-        JSON.parse(new TextDecoder().decode(bytes)),
+        }),
       );
-    },
-    // Always surface a 502 so the Result error channel unifies to
-    // HandlerError<502>; preserve the message when the failure is our own
-    // thrown 502 (a non-ok token response).
-    catch: (cause): HandlerError<502> =>
-      new HandlerError({
-        status: 502,
-        message: HandlerError.is(cause)
-          ? cause.message
-          : "Failed to reach the Microsoft token endpoint",
-        cause,
-      }),
+    }
+    const parsed = yield* Result.await(
+      Promise.resolve(
+        Result.try(() =>
+          v.parse(
+            graphTokenResponseSchema,
+            JSON.parse(new TextDecoder().decode(bytes)),
+          ),
+        ).mapError(
+          (cause) =>
+            new HandlerError({
+              status: 502,
+              message: "Failed to reach the Microsoft token endpoint",
+              cause,
+            }),
+        ),
+      ),
+    );
+    return Result.ok(parsed);
   });
 
 export const exchangeAuthorizationCode = async ({

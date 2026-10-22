@@ -1,9 +1,15 @@
-import { describe, expect, test } from "bun:test";
+import { Result } from "better-result";
+import { describe, expect, spyOn, test } from "bun:test";
+import * as v from "valibot";
 
 import {
+  fetchAccountLabel,
+  listDriveRootChildren,
   mapDriveChildrenToPage,
   type DriveChildrenResponse,
 } from "@/api/handlers/microsoft365/graph-client";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { secretSchema } from "@/api/lib/secret-brands";
 
 const folder = {
   id: "01FOLDER",
@@ -60,4 +66,54 @@ describe("mapDriveChildrenToPage", () => {
     };
     expect(mapDriveChildrenToPage(response, 25).nextCursor).toBeNull();
   });
+});
+
+test("Graph account and drive reads parse successful responses and report HTTP failures", async () => {
+  const fetch = spyOn(globalThis, "fetch");
+  fetch
+    .mockResolvedValueOnce(
+      Response.json({
+        userPrincipalName: "person@example.test",
+        displayName: "Person",
+      }),
+    )
+    .mockResolvedValueOnce(
+      Response.json({
+        value: [{ id: "item-1", name: "Folder", folder: { childCount: 2 } }],
+        "@odata.nextLink":
+          "https://graph.microsoft.com/v1.0/me/drive/root/children?$skiptoken=next-1",
+      }),
+    )
+    .mockResolvedValueOnce(new Response("", { status: 503 }));
+
+  try {
+    const account = await fetchAccountLabel("access-token");
+    expect(Result.isOk(account) && account.value).toBe("person@example.test");
+
+    const page = await listDriveRootChildren({
+      accessToken: v.parse(secretSchema, "access-token"),
+      cursor: null,
+      limit: 25,
+    });
+    expect(Result.isOk(page) && page.value).toMatchObject({
+      limit: 25,
+      nextCursor: "next-1",
+      items: [{ id: "item-1", kind: "folder" }],
+    });
+
+    const unavailable = await listDriveRootChildren({
+      accessToken: v.parse(secretSchema, "access-token"),
+      cursor: null,
+      limit: 25,
+    });
+    expect(Result.isError(unavailable)).toBe(true);
+    if (Result.isError(unavailable)) {
+      expect(HandlerError.is(unavailable.error)).toBe(true);
+      expect(unavailable.error.message).toBe(
+        "Microsoft Graph returned HTTP 503",
+      );
+    }
+  } finally {
+    fetch.mockRestore();
+  }
 });

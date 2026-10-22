@@ -593,7 +593,7 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
       : {
           data: data.map((item) => {
             const { url } = legalCitationLinkFields({
-              appUrl: null,
+              url: null,
               sourceUrl: item.url_html_consolidada ?? item.url_eli ?? null,
             });
             return { ...item, url };

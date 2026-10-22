@@ -21,6 +21,7 @@ import { ensureMicrosoft365AccessToken } from "@/api/handlers/microsoft365/graph
 import { createMicrosoft365OAuthCallback } from "@/api/handlers/microsoft365/oauth-callback";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -279,6 +280,7 @@ test("callback persists the scope returned by consent and consumes the bound sta
       safeDb,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
+      memberRole: sessionMemberRole("owner"),
       recordAuditEvent: async () => {},
     }),
   );

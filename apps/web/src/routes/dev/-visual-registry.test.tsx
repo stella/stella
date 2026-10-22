@@ -6,15 +6,39 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 
+import { FormattingProvider } from "@/i18n/formatting-context";
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
+import hu from "@/i18n/langs/hu.json";
 
 import { CHAT_HISTORY_DECISION_FIXTURES } from "./-components/chat-history-decision-fixtures";
 import { ChatHistoryDecisionPlayground } from "./-components/chat-history-decision-playground";
+import { HungarianDecisionPlayground } from "./-components/hungarian-decision-playground";
 import { playbookEditorStates, visualRegistry } from "./-visual-metadata";
 import { FixtureSection, visualSearchSchema } from "./-visual-registry";
 
 describe("registered visual fixtures", () => {
+  for (const [locale, messages] of Object.entries({ hu, ar })) {
+    test(`Hungarian decision renders original typography in ${locale}`, () => {
+      expect(visualRegistry["hungarian-decision"].layout).toBe("plain");
+      const html = renderToStaticMarkup(
+        <IntlProvider locale={locale} messages={messages} timeZone="UTC">
+          <FormattingProvider
+            locale={locale === "ar" ? "ar" : "hu"}
+            timeZone="UTC"
+          >
+            <HungarianDecisionPlayground />
+          </FormattingProvider>
+        </IntlProvider>,
+      );
+      expect(html).toContain('data-playground-section="hungarian-decision"');
+      expect(html).toContain('lang="hu" dir="ltr"');
+      expect(html).toContain("Kúria, Pfv.21.123/2019/5., 2019. március 21.");
+      expect(html).toContain("„teljesítés”");
+      expect(html).toContain('data-anchor="p-3"');
+    });
+  }
+
   test("chat history covers every court tier with unique capture anchors", () => {
     expect(visualRegistry["chat-history-decision"].layout).toBe("plain");
     const fixtures = CHAT_HISTORY_DECISION_FIXTURES;

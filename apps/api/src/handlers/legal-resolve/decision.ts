@@ -9,6 +9,7 @@ import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import {
   isPublicCountry,
   PUBLIC_COUNTRY_CAPABILITIES,
+  PUBLIC_COUNTRY_SURFACE_OPEN,
 } from "@stll/api-contract/public-country-capability";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
@@ -22,6 +23,7 @@ import {
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
@@ -147,6 +149,7 @@ const resolvedDecision = async (
     decisionId: row.id,
     phase: "blocks",
     audience: "model",
+    surface: "identity",
   });
   const readerUrl = buildCaseLawDecisionUrl({
     caseNumber: row.caseNumber,
@@ -167,6 +170,11 @@ const resolvedDecision = async (
       caseNumber: row.caseNumber,
       court: row.court,
       decisionDate: row.decisionDate,
+      language: row.language,
+      languageAlternates: row.languageAlternates.map(({ id, language }) => ({
+        decisionId: id,
+        language,
+      })),
       ecli: row.ecli,
       readerUrl,
       text: decisionText(content),
@@ -201,7 +209,11 @@ export const resolveDecision = async ({
   if (!isPublicCountry(country)) {
     return { status: "country_unavailable" };
   }
-  if (PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted") {
+  if (
+    !PUBLIC_COUNTRY_SURFACE_OPEN.identity[
+      PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw
+    ]
+  ) {
     return { status: "country_unavailable" };
   }
   const grammar = decisionDocketGrammarForCountry(country);
@@ -213,6 +225,7 @@ export const resolveDecision = async ({
   const rows = await lookup({
     caseLawDb: caseLawPublicReadDb,
     country,
+    countries: CASE_LAW_SURFACE_COUNTRIES.identity,
     locator: decisionIdentityLocatorOf(intent),
   });
   const resolution = resolveDecisionIdentity(intent, rows, { reporters });

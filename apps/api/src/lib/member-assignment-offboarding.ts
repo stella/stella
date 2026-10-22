@@ -34,6 +34,7 @@ import {
   mcpUserConnections,
   microsoft365Connections,
   microsoft365OAuthState,
+  chatToolGrants,
   mcpOAuthState,
   contacts,
   searchHistoryEntries,
@@ -1572,6 +1573,14 @@ export const removeOrganizationMemberInTransaction = async (
       ),
     );
   await tx
+    .delete(chatToolGrants)
+    .where(
+      and(
+        eq(chatToolGrants.organizationId, organizationId),
+        eq(chatToolGrants.userId, userId),
+      ),
+    );
+  await tx
     .delete(mcpOAuthState)
     .where(
       and(
@@ -1663,6 +1672,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [mcpOAuthState.userId, "cleared"],
   [microsoft365Connections.userId, "cleared"],
   [microsoft365OAuthState.userId, "cleared"],
+  [chatToolGrants.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],
   // Revoked by `removeOrganizationMemberWithAuthArtifacts`.

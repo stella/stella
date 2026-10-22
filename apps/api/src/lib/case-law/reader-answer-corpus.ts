@@ -46,8 +46,9 @@ const readRelatedDecisionCandidates = async (
 ) =>
   await withRedistributableSubject(
     caseLawDb,
+    "search",
     { kind: "id", id: decisionId },
-    async ({ tx, id }) => {
+    async ({ tx, id, countries }) => {
       const [outgoing, incoming] = await Promise.all([
         direction === "citing"
           ? null
@@ -55,6 +56,7 @@ const readRelatedDecisionCandidates = async (
               tx,
               decisionId: id,
               cursor: undefined,
+              countries,
             }),
         direction === "cited"
           ? null
@@ -62,6 +64,7 @@ const readRelatedDecisionCandidates = async (
               tx,
               decisionId: id,
               cursor: undefined,
+              countries,
             }),
       ]);
       if (outgoing !== null && !("items" in outgoing)) {
@@ -147,6 +150,7 @@ export const readReaderAnswerDecision = async (
         decisionId,
         phase: "blocks",
         audience: "model",
+        surface: "search",
         ...(caseLawDb === undefined ? {} : { caseLawDb }),
       });
       if (read?.status !== "read" || read.ast === null) {

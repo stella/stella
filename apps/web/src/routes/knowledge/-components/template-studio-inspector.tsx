@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import type {
   DirectiveRange,
   TemplatePreviewSpan,
@@ -259,6 +260,7 @@ function TemplateStudioInspectorView({
         rename={{
           active: rename.active,
           value: rename.value,
+          maxLength: DEFAULT_VARCHAR_MAX_LENGTH,
           onChange: (value) => setRename({ active: true, value }),
           onCommit: () =>
             detached(commitRename(), "template-studio-inspector.commit-rename"),

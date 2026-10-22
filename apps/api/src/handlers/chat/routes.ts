@@ -8,6 +8,7 @@ import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
+import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
 import acceptMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
@@ -24,10 +25,15 @@ import sendMessage from "@/api/handlers/chat/send-message";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
+import tableChart from "@/api/handlers/chat/table-chart";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
 import renameThread from "@/api/handlers/chat/threads/rename";
 import updateThread from "@/api/handlers/chat/threads/update";
+import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
+import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
+import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
+import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
@@ -46,6 +52,10 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   // (lib/auth.ts) neutralizes the extra resolve this guard stacks on top
   // of `permissions`. See tests/security/route-auth-invariants.test.ts.
   .guard({ validateAuth: true })
+  .get("/link-icons/:hostname", getLinkIcon.handler, {
+    params: getLinkIcon.config.params,
+    permissions: getLinkIcon.config.permissions,
+  })
   .post("/", sendMessage.handler, {
     body: sendMessage.config.body,
     permissions: sendMessage.config.permissions,
@@ -59,6 +69,22 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: savedSecret.config.params,
     query: savedSecret.config.query,
     permissions: savedSecret.config.permissions,
+  })
+  .get("/tool-grants", listChatToolGrants.handler, {
+    query: listChatToolGrants.config.query,
+    permissions: listChatToolGrants.config.permissions,
+  })
+  .get("/tool-grants/coverage", readChatToolGrantCoverage.handler, {
+    query: readChatToolGrantCoverage.config.query,
+    permissions: readChatToolGrantCoverage.config.permissions,
+  })
+  .post("/tool-grants", createChatToolGrant.handler, {
+    body: createChatToolGrant.config.body,
+    permissions: createChatToolGrant.config.permissions,
+  })
+  .delete("/tool-grants/:grantId", deleteChatToolGrant.handler, {
+    params: deleteChatToolGrant.config.params,
+    permissions: deleteChatToolGrant.config.permissions,
   })
   .post("/workspaces/:workspaceId/file-thread", resolveFileThread.handler, {
     body: resolveFileThread.config.body,
@@ -92,6 +118,10 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .get("/skill-availability", listUnavailableChatSkills.handler, {
     permissions: listUnavailableChatSkills.config.permissions,
     query: listUnavailableChatSkills.config.query,
+  })
+  .post("/table-chart", tableChart.handler, {
+    body: tableChart.config.body,
+    permissions: tableChart.config.permissions,
   })
   .post("/improve-prompt", improvePrompt.handler, {
     body: improvePrompt.config.body,

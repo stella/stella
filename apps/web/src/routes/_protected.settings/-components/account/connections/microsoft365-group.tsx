@@ -24,7 +24,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { APIError, unwrapEden } from "@/lib/errors/api";
-import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
+import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 import { microsoft365Options } from "@/routes/_protected.settings/-queries/connections";
 
 export const Microsoft365Group = () => {

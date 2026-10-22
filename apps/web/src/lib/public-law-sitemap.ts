@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/public-crawl-rules";
 
 import { env } from "@/env";
-import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
+import { publicCaseLawPageCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import {
   createStatuteSitemapShardPath,
   type StatuteSitemapShard,
@@ -39,7 +39,7 @@ import {
   isPublicToolsCrawlAllowed,
   isPublicToolsSitemapEnabled,
 } from "@/lib/public-tools-launch";
-import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
+import { isPublicStatutePageCountry } from "@/lib/statutes/statute-route";
 import {
   createPublicCrawlRules,
   isPublicLawPathIndexable,
@@ -199,7 +199,7 @@ export const fetchPublicSitemapShards = async ({
   }
 
   return parseResult.output.items.filter(
-    ({ country }) => publicCaseLawCountryFromParam(country) !== null,
+    ({ country }) => publicCaseLawPageCountryFromParam(country) !== null,
   );
 };
 
@@ -215,7 +215,7 @@ export const fetchPublicSitemapDecisions = async ({
   url.searchParams.set("bucket", shard.bucket);
 
   const response =
-    publicCaseLawCountryFromParam(shard.country) === null
+    publicCaseLawPageCountryFromParam(shard.country) === null
       ? null
       : await fetchImpl(url, { signal });
   if (response === null || !response.ok) {
@@ -257,10 +257,10 @@ export const createPublicLawSitemapIndexXml = (
   } = resolvedOptions;
 
   const publicShards = shards.filter(
-    ({ country }) => publicCaseLawCountryFromParam(country) !== null,
+    ({ country }) => publicCaseLawPageCountryFromParam(country) !== null,
   );
   const publicStatuteShards = statuteShards.filter(({ country }) =>
-    isPublicStatuteCountry(country),
+    isPublicStatutePageCountry(country),
   );
   const lawEntries = publicLawIndexingEnabled
     ? [

@@ -98,13 +98,17 @@ const bilingualCzechDecision = {
 const statute = {
   ...currentStatuteViewerFixture,
   id: toSafeId<"legislationDocument">("019a0000-0000-7000-8000-000000000105"),
+  pendingChanges: null,
 };
 const olderStatute = {
   ...historicalStatuteViewerFixture,
   id: toSafeId<"legislationDocument">("019a0000-0000-7000-8000-000000000107"),
+  pendingChanges: null,
 };
 
 const noProvisions = {
+  capability: { type: "supported" as const, languages: ["cs"] },
+  pendingSince: null,
   status: { type: "current" as const },
   generation: "synthetic-dock",
   publishedProjectionDigest: null,
@@ -147,9 +151,10 @@ const {
 } = statute;
 const versions = {
   items: [
-    { ...version, isDefault: true },
+    { ...version, amendedBy: null, isDefault: true },
     {
       ...version,
+      amendedBy: null,
       id: olderStatute.id,
       status: olderStatute.status,
       effectiveDate: olderStatute.effectiveDate,

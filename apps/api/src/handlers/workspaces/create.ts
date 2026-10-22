@@ -1,10 +1,9 @@
 import { Result, panic } from "better-result";
-import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
+import { and, count, eq, ilike, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { member } from "@/api/db/auth-schema";
-import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import type { SafeDb } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
 import {
@@ -41,6 +40,7 @@ import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
+import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { nextAvailableMatterName } from "@/api/lib/workspaces/matter-name";
 
 // A request without `clientId` creates a personal matter (initially
@@ -222,37 +222,29 @@ export const createWorkspaceHandler = async function* ({
       }
       const reference = referenceResult.value;
 
-      await tx.insert(workspaces).values({
+      // The database creates the matter in this transaction's organization
+      // and, when the creator would not reach it otherwise, assigns them, so
+      // the inserts below pass the row policies through the access rule.
+      await createWorkspaceInTransaction(tx, {
         id: body.id,
-        organizationId,
         clientId: body.clientId ?? null,
         name: newName,
         reference,
       });
 
-      // Append the new workspace ID to the RLS session variable
-      // so child inserts (workspaceMembers, properties) pass the
-      // workspace_insert policy within this transaction.
-      // The session var is a Postgres array literal: {id1,id2}.
-      await tx.execute(
-        sql`SELECT set_config(
-          ${SETTING_WORKSPACE_IDS},
-          array_append(
-            current_setting(${SETTING_WORKSPACE_IDS}, true)::text[],
-            ${body.id}
-          )::text,
-          true
-        )`,
-      );
-
       const workspaceId = body.id;
 
-      await tx.insert(workspaceMembers).values(
-        workspaceMemberUserIds.map((memberUserId: SafeId<"user">) => ({
-          workspaceId,
-          userId: memberUserId,
-        })),
-      );
+      await tx
+        .insert(workspaceMembers)
+        .values(
+          workspaceMemberUserIds.map((memberUserId: SafeId<"user">) => ({
+            workspaceId,
+            userId: memberUserId,
+          })),
+        )
+        .onConflictDoNothing({
+          target: [workspaceMembers.workspaceId, workspaceMembers.userId],
+        });
 
       const fileProperty = await tx
         .insert(properties)
