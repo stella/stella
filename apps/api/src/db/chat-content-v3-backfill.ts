@@ -307,90 +307,94 @@ type RepairOptions = {
   sleep?: (milliseconds: number) => Promise<void>;
   log?: (record: unknown) => void;
 };
-export const createChatContentV3Repair = (
-  options: RepairOptions = {},
-): OnlineRepair => ({
-  name: "chat-content-v3",
-  readCompletion: readChatContentV3Completion,
-  repair: async (connection, tables) => {
-    for (const key of Object.keys(CHAT_CONTENT_V3_SOURCES)) {
-      const source = chatContentV3Source(key);
-      // Fresh installations have no data work or metric source to wait for.
-      if (
-        (
-          await connection.query(
-            `SELECT id FROM ${CHAT_CONTENT_V3_SOURCES[source].table} LIMIT 1`,
-          )
-        ).length === 0
-      ) {
-        continue;
-      }
-      const runtime = createBackfillRuntime({
-        connection,
-        name: backfillName(source),
-        tableName: CHAT_CONTENT_V3_SOURCES[source].table,
-        initialSize: CHAT_CONTENT_V3_BATCH_SIZE,
-        config: {
-          ...defaultConfig,
-          minSize: 1,
-          maxSize: CHAT_CONTENT_V3_BATCH_SIZE,
-        },
-        readVerdict: options.readVerdict,
-        log: options.log,
-      });
-      try {
-        const pass = await runBackfillPass({
-          holdPolicy: "propagate",
-          sleep: options.sleep ?? Bun.sleep,
-          step: async () =>
-            await runtime.step(
-              async ({ tx, size, cursor }) =>
-                await backfillChatContentV3Batch({ tx, size, cursor, source }),
-            ),
+export const createChatContentV3Repair = (options: RepairOptions = {}) =>
+  ({
+    name: "chat-content-v3",
+    readCompletion: readChatContentV3Completion,
+    repair: async (connection, tables) => {
+      for (const key of Object.keys(CHAT_CONTENT_V3_SOURCES)) {
+        const source = chatContentV3Source(key);
+        // Fresh installations have no data work or metric source to wait for.
+        if (
+          (
+            await connection.query(
+              `SELECT id FROM ${CHAT_CONTENT_V3_SOURCES[source].table} LIMIT 1`,
+            )
+          ).length === 0
+        ) {
+          continue;
+        }
+        const runtime = createBackfillRuntime({
+          connection,
+          name: backfillName(source),
+          tableName: CHAT_CONTENT_V3_SOURCES[source].table,
+          initialSize: CHAT_CONTENT_V3_BATCH_SIZE,
+          config: {
+            ...defaultConfig,
+            minSize: 1,
+            maxSize: CHAT_CONTENT_V3_BATCH_SIZE,
+          },
+          readVerdict: options.readVerdict,
+          log: options.log,
         });
-        if (pass.isErr()) {
-          // v3-only readers cannot start with a pending legacy checkpoint.
+        try {
+          const pass = await runBackfillPass({
+            holdPolicy: "propagate",
+            sleep: options.sleep ?? Bun.sleep,
+            step: async () =>
+              await runtime.step(
+                async ({ tx, size, cursor }) =>
+                  await backfillChatContentV3Batch({
+                    tx,
+                    size,
+                    cursor,
+                    source,
+                  }),
+              ),
+          });
+          if (pass.isErr()) {
+            // v3-only readers cannot start with a pending legacy checkpoint.
+            throw new ChatContentV3UpgradeError({
+              message:
+                "Chat content v3 upgrade deferred; rerun db:migrate to resume",
+              cause: pass.error,
+            });
+          }
+        } finally {
+          await runtime.close();
+        }
+      }
+      for (const { table } of Object.values(CHAT_CONTENT_V3_SOURCES)) {
+        const rows = await connection.query(
+          `SELECT id FROM ${table} WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb LIMIT 1`,
+        );
+        if (rows.length > 0) {
           throw new ChatContentV3UpgradeError({
             message:
-              "Chat content v3 upgrade deferred; rerun db:migrate to resume",
-            cause: pass.error,
+              "Non-v3 chat content remains; inspect chat_content_v3_backfill_receipts, repair failed rows and retry",
           });
         }
-      } finally {
-        await runtime.close();
       }
-    }
-    for (const { table } of Object.values(CHAT_CONTENT_V3_SOURCES)) {
-      const rows = await connection.query(
-        `SELECT id FROM ${table} WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb LIMIT 1`,
+      // Validation proves existing rows; NOT VALID already fenced new writes.
+      // The gated scan runs with no statement budget: its SHARE UPDATE
+      // EXCLUSIVE lock blocks neither reads nor writes.
+      const validated = await Result.tryPromise(
+        async () =>
+          await validateOnlineConstraints({
+            connection,
+            tables,
+            constraints: CHAT_CONTENT_V3_CONSTRAINTS,
+          }),
       );
-      if (rows.length > 0) {
+      if (validated.isErr()) {
         throw new ChatContentV3UpgradeError({
-          message:
-            "Non-v3 chat content remains; inspect chat_content_v3_backfill_receipts, repair failed rows and retry",
+          message: "Chat v3 constraint validation failed; rerun db:migrate",
+          cause: validated.error,
         });
       }
-    }
-    // Validation proves existing rows; NOT VALID already fenced new writes.
-    // The gated scan runs with no statement budget: its SHARE UPDATE
-    // EXCLUSIVE lock blocks neither reads nor writes.
-    const validated = await Result.tryPromise(
-      async () =>
-        await validateOnlineConstraints({
-          connection,
-          tables,
-          constraints: CHAT_CONTENT_V3_CONSTRAINTS,
-        }),
-    );
-    if (validated.isErr()) {
-      throw new ChatContentV3UpgradeError({
-        message: "Chat v3 constraint validation failed; rerun db:migrate",
-        cause: validated.error,
-      });
-    }
-    return validated.value;
-  },
-});
+      return validated.value;
+    },
+  }) as const satisfies OnlineRepair;
 export const CHAT_CONTENT_V3_REPAIR = createChatContentV3Repair();
 
 export const countChatContentVersions = async (

@@ -67,6 +67,10 @@ import type {
   OnlineRepairCompletion,
 } from "./online-migration-connection";
 import {
+  ONLINE_WORK_LIFECYCLE,
+  type OnlineWorkLifecycle,
+} from "./online-work-lifecycle";
+import {
   SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   SANCTIONS_MONITORING_CONSTRAINTS,
 } from "./sanctions-monitoring-constraint-validation";
@@ -174,16 +178,21 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE =
   publishedCaseLawDecisionIndexPredicateSql();
 const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
-
-export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
-  ...MONITORING_SESSION_INDEXES,
-  ...Object.values(CHAT_CONTENT_V3_SOURCES).map(({ table: tableName }) => ({
+type ChatContentV3IndexSource =
+  (typeof CHAT_CONTENT_V3_SOURCES)[keyof typeof CHAT_CONTENT_V3_SOURCES];
+const chatContentV3Index = ({ table: tableName }: ChatContentV3IndexSource) =>
+  ({
     createSql: `CREATE INDEX CONCURRENTLY "${tableName}_content_v3_pending_idx" ON public."${tableName}" (id) WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb`,
     definitionBody: `ON public.${tableName} USING btree (id) WHERE ((content -> 'version'::text) IS DISTINCT FROM '3'::jsonb)`,
     isUnique: false,
-    name: `${tableName}_content_v3_pending_idx`,
+    name: `${tableName}_content_v3_pending_idx` as const,
     tableName,
-  })),
+  }) satisfies OnlineIndex;
+
+export const ONLINE_MIGRATION_INDEXES = [
+  ...MONITORING_SESSION_INDEXES,
+  chatContentV3Index(CHAT_CONTENT_V3_SOURCES.message),
+  chatContentV3Index(CHAT_CONTENT_V3_SOURCES.revision),
   CASE_LAW_COVERAGE_INDEX,
   // Reviewed doctrine per cited decision: few rows carry a finding.
   {
@@ -585,14 +594,14 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "sanctions_contact_marks",
   },
   ...REWRITTEN_MIGRATION_INDEXES,
-];
+] as const satisfies readonly OnlineIndex[];
 
 type OnlineIndexCutover = {
   final: RequiredMigrationIndex;
   staged: OnlineIndex;
 };
 
-export const ONLINE_MIGRATION_INDEX_CUTOVERS: readonly OnlineIndexCutover[] = [
+export const ONLINE_MIGRATION_INDEX_CUTOVERS = [
   {
     final: {
       definitionBody:
@@ -611,14 +620,14 @@ export const ONLINE_MIGRATION_INDEX_CUTOVERS: readonly OnlineIndexCutover[] = [
       tableName: "case_law_decisions",
     },
   },
-];
+] as const satisfies readonly OnlineIndexCutover[];
 
 type OnlineIndexReplacement = {
   legacyName: string;
   replacementNames: readonly string[];
 };
 
-export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
+export const ONLINE_INDEX_REPLACEMENTS = [
   {
     legacyName: "case_law_decisions_country_date_idx",
     replacementNames: ["case_law_decisions_country_date_published_idx"],
@@ -658,7 +667,7 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
     legacyName: "account_issuer_account_id_uidx",
     replacementNames: ["account_provider_account_id_uidx"],
   },
-];
+] as const satisfies readonly OnlineIndexReplacement[];
 
 /**
  * Index names a concurrent `IF NOT EXISTS` build may rely on, because this
@@ -685,7 +694,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * self-checkpointing (see `OnlineRepair`); the phase only sequences them,
  * skips the ones already complete, and validates their completion.
  */
-export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+export const ONLINE_MIGRATION_REPAIRS = [
   CHAT_CONTENT_V3_REPAIR,
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
@@ -699,7 +708,13 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   // widens the audience set is the one that reconciles them, without an
   // operator step.
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
-];
+] as const satisfies readonly OnlineRepair[];
+
+export type OnlineWorkName =
+  | (typeof ONLINE_MIGRATION_INDEXES)[number]["name"]
+  | (typeof ONLINE_MIGRATION_INDEX_CUTOVERS)[number]["final"]["name"]
+  | (typeof ONLINE_INDEX_REPLACEMENTS)[number]["legacyName"]
+  | (typeof ONLINE_MIGRATION_REPAIRS)[number]["name"];
 
 /**
  * Every constraint a registered repair validates through the table gate. The
@@ -739,6 +754,7 @@ type OnlineMigrationMode =
 
 type OnlineMigrationOptions = {
   repairs?: readonly OnlineRepair[];
+  lifecycle?: Readonly<Record<string, OnlineWorkLifecycle>>;
   log?: (record: {
     event: "online_repair_pending";
     repair: string;
@@ -868,11 +884,16 @@ const walkOnlineMigrations = async ({
   mode,
   options,
 }: WalkOnlineMigrationsOptions): Promise<OnlineMigrationOutcome> => {
-  const indexes = await processOnlineIndexAt({ connection, mode });
+  const lifecycle = options.lifecycle ?? ONLINE_WORK_LIFECYCLE;
+  const indexes = await processOnlineIndexAt({ connection, lifecycle, mode });
   if (indexes.type === "deferred") {
     return indexes;
   }
-  const cutovers = await processOnlineIndexCutoverAt({ connection, mode });
+  const cutovers = await processOnlineIndexCutoverAt({
+    connection,
+    lifecycle,
+    mode,
+  });
   if (cutovers.type === "deferred") {
     return cutovers;
   }
@@ -884,6 +905,7 @@ const walkOnlineMigrations = async ({
   }
   return await processOnlineRepairAt({
     connection,
+    lifecycle,
     mode,
     repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
     log:
@@ -894,12 +916,14 @@ const walkOnlineMigrations = async ({
 
 type OnlineIndexWalkOptions = {
   connection: OnlineMigrationConnection;
+  lifecycle: Readonly<Record<string, OnlineWorkLifecycle>>;
   mode: OnlineMigrationMode;
   offset?: number;
 };
 
 const processOnlineIndexAt = async ({
   connection,
+  lifecycle,
   mode,
   offset = 0,
 }: OnlineIndexWalkOptions): Promise<OnlineMigrationOutcome> => {
@@ -908,7 +932,27 @@ const processOnlineIndexAt = async ({
     return COMPLETE;
   }
 
-  if (mode.operation === "repair") {
+  if (mode.operation === "validate") {
+    const state = lifecycle[index.name];
+    if (state === undefined) {
+      return panic(`Online work ${index.name} has no lifecycle`);
+    }
+    switch (state.state) {
+      case "pending":
+        return await processOnlineIndexAt({
+          connection,
+          lifecycle,
+          mode,
+          offset: offset + 1,
+        });
+      case "finalized":
+        await assertIndexReady(connection, index);
+        break;
+      default:
+        state satisfies never;
+        return panic(`Online work ${index.name} has an invalid lifecycle`);
+    }
+  } else {
     const step = {
       event: "migrate.online_step_duration",
       kind: "index",
@@ -929,11 +973,10 @@ const processOnlineIndexAt = async ({
     if (outcome.type === "deferred") {
       return outcome;
     }
-  } else {
-    await assertIndexReady(connection, index);
   }
   return await processOnlineIndexAt({
     connection,
+    lifecycle,
     mode,
     offset: offset + 1,
   });
@@ -941,6 +984,7 @@ const processOnlineIndexAt = async ({
 
 const processOnlineIndexCutoverAt = async ({
   connection,
+  lifecycle,
   mode,
   offset = 0,
 }: OnlineIndexWalkOptions): Promise<OnlineMigrationOutcome> => {
@@ -949,7 +993,29 @@ const processOnlineIndexCutoverAt = async ({
     return COMPLETE;
   }
 
-  if (mode.operation === "repair") {
+  if (mode.operation === "validate") {
+    const state = lifecycle[cutover.final.name];
+    if (state === undefined) {
+      return panic(`Online work ${cutover.final.name} has no lifecycle`);
+    }
+    switch (state.state) {
+      case "pending":
+        return await processOnlineIndexCutoverAt({
+          connection,
+          lifecycle,
+          mode,
+          offset: offset + 1,
+        });
+      case "finalized":
+        await assertIndexReady(connection, cutover.final);
+        break;
+      default:
+        state satisfies never;
+        return panic(
+          `Online work ${cutover.final.name} has an invalid lifecycle`,
+        );
+    }
+  } else {
     const step = {
       event: "migrate.online_step_duration",
       kind: "cutover",
@@ -970,11 +1036,10 @@ const processOnlineIndexCutoverAt = async ({
     if (outcome.type === "deferred") {
       return outcome;
     }
-  } else {
-    await assertIndexReady(connection, cutover.final);
   }
   return await processOnlineIndexCutoverAt({
     connection,
+    lifecycle,
     mode,
     offset: offset + 1,
   });
@@ -982,6 +1047,7 @@ const processOnlineIndexCutoverAt = async ({
 
 type OnlineRepairWalkOptions = {
   connection: OnlineMigrationConnection;
+  lifecycle: Readonly<Record<string, OnlineWorkLifecycle>>;
   mode: OnlineMigrationMode;
   repairs: readonly OnlineRepair[];
   log: NonNullable<OnlineMigrationOptions["log"]>;
@@ -990,6 +1056,7 @@ type OnlineRepairWalkOptions = {
 
 const processOnlineRepairAt = async ({
   connection,
+  lifecycle,
   mode,
   repairs,
   log,
@@ -998,6 +1065,29 @@ const processOnlineRepairAt = async ({
   const repair = repairs.at(offset);
   if (!repair) {
     return COMPLETE;
+  }
+
+  if (mode.operation === "validate") {
+    const state = lifecycle[repair.name];
+    if (state === undefined) {
+      return panic(`Online work ${repair.name} has no lifecycle`);
+    }
+    switch (state.state) {
+      case "pending":
+        return await processOnlineRepairAt({
+          connection,
+          lifecycle,
+          mode,
+          repairs,
+          log,
+          offset: offset + 1,
+        });
+      case "finalized":
+        break;
+      default:
+        state satisfies never;
+        return panic(`Online work ${repair.name} has an invalid lifecycle`);
+    }
   }
 
   const completion = await repair.readCompletion(connection);
@@ -1072,6 +1162,7 @@ const processOnlineRepairAt = async ({
   }
   return await processOnlineRepairAt({
     connection,
+    lifecycle,
     mode,
     repairs,
     log,

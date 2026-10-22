@@ -3374,6 +3374,11 @@ jobs:
           bun run check:aggregate-mutations
           bun run check:write-contracts
 
+      - name: Online work lifecycle
+        run: |
+          bun test scripts/check-online-work-lifecycle.test.ts
+          bun run check:online-work-lifecycle
+
       - name: Split-button census
         run: |
           bun run --cwd packages/scripts test ../../scripts/check-split-buttons.test.ts

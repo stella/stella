@@ -7,10 +7,12 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
 
 import { readOnlineIndexConfig } from "../env-online-index";
+import type { RequiredMigrationIndex } from "../lib/db/migration-history";
 import { BackfillHeldError } from "./backfill-runtime";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
 import type { MigrationTimingRecord } from "./migration-timing";
 import { declaresOnlineBuild } from "./online-ddl";
+import type { OnlineIndexDeclaration } from "./online-ddl";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import type {
@@ -27,6 +29,7 @@ import {
   runOnlineMigrations as runOnlineMigrationsWithGate,
   type OnlineRepairOptions,
 } from "./online-migrations";
+import { ONLINE_WORK_LIFECYCLE } from "./online-work-lifecycle";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
@@ -131,7 +134,7 @@ describe("online migrations", () => {
    * provision state backfill is a scheduler job instead.
    */
   test("keeps the provision state backfill out of the online phase", () => {
-    const repairNames = new Set(
+    const repairNames = new Set<string>(
       ONLINE_MIGRATION_REPAIRS.map(({ name }) => name),
     );
     expect(PROVISION_STATE_BACKFILL_STEPS.length).toBeGreaterThan(0);
@@ -237,6 +240,62 @@ describe("online migrations", () => {
     );
     expect(indexOfStatement(harness.statements, REINDEX_FRAGMENT)).toBe(-1);
     expect(harness.released()).toBe(true);
+  });
+
+  test("startup skips a pending index that is not built yet", async () => {
+    const index = ONLINE_MIGRATION_INDEXES.at(0);
+    if (!index) {
+      throw new TypeError("Expected an online index");
+    }
+    const harness = createHarness({ missingIndexes: [index.name] });
+
+    await assertOnlineMigrationsApplied(harness.pool, {
+      lifecycle: {
+        ...ONLINE_WORK_LIFECYCLE,
+        [index.name]: { state: "pending" },
+      },
+    });
+
+    expect(harness.released()).toBe(true);
+  });
+
+  test("startup rejects a finalized index that is not built yet", async () => {
+    const index = ONLINE_MIGRATION_INDEXES.at(0);
+    if (!index) {
+      throw new TypeError("Expected an online index");
+    }
+    const harness = createHarness({ missingIndexes: [index.name] });
+
+    const rejection = await rejectionOf(
+      assertOnlineMigrationsApplied(harness.pool, {
+        lifecycle: {
+          ...ONLINE_WORK_LIFECYCLE,
+          [index.name]: { state: "finalized" },
+        },
+      }),
+    );
+    expect(rejection).toHaveProperty(
+      "message",
+      `Required migration index ${index.name} is missing`,
+    );
+  });
+
+  test("repair mode builds a pending index", async () => {
+    const indexes: readonly OnlineIndexDeclaration[] = ONLINE_MIGRATION_INDEXES;
+    const index = indexes.find(declaresOnlineBuild);
+    if (!index) {
+      throw new TypeError("Expected a buildable online index");
+    }
+    const harness = createHarness({ missingIndexes: [index.name] });
+
+    await runOnlineMigrations(harness.pool, {
+      lifecycle: {
+        ...ONLINE_WORK_LIFECYCLE,
+        [index.name]: { state: "pending" },
+      },
+    });
+
+    expect(harness.statements).toContain(index.createSql);
   });
 
   test("every online step reports its duration, in the order the phase runs them", async () => {
@@ -1427,7 +1486,7 @@ const createHarness = ({
   onlineLockHeld = false,
 }: HarnessOptions = {}) => {
   const statements: string[] = [];
-  const legacyIndexes = new Set(
+  const legacyIndexes = new Set<string>(
     ONLINE_INDEX_REPLACEMENTS.map(({ legacyName }) => legacyName),
   );
   const droppedLegacyIndexes = new Set(retiredIndexes);
@@ -1442,11 +1501,11 @@ const createHarness = ({
     Object.entries(artifacts).map(([name, values]) => [name, [...values]]),
   );
   let released = false;
-  const onlineIndexes = [
+  const onlineIndexes: readonly OnlineIndexDeclaration[] = [
     ...ONLINE_MIGRATION_INDEXES,
     ...ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ staged }) => staged),
   ];
-  const managedIndexes = [
+  const managedIndexes: readonly RequiredMigrationIndex[] = [
     ...onlineIndexes,
     ...ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ final }) => final),
   ];
@@ -1669,7 +1728,7 @@ const createHarness = ({
 };
 
 const indexRow = (
-  index: (typeof ONLINE_MIGRATION_INDEXES)[number],
+  index: RequiredMigrationIndex,
   isValid: boolean,
   name = index.name,
   body = index.definitionBody,
