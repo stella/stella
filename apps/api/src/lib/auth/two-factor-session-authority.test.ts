@@ -26,15 +26,16 @@ const registeredTwoFactorPlugin = (): BetterAuthPlugin =>
   getAuth().options.plugins.find((plugin) => plugin.id === "two-factor") ??
   panic("The two-factor plugin is not registered");
 
-/** HTTP paths of every endpoint the registered two-factor plugin serves. */
+/**
+ * Paths of every endpoint the registered two-factor plugin declares. A
+ * server-only endpoint is over-approximated as served: classifying it too is
+ * harmless, and missing a served one is not.
+ */
 const registeredTwoFactorHttpPaths = () =>
   Object.values(registeredTwoFactorPlugin().endpoints ?? {})
-    .filter(
-      (endpoint) =>
-        typeof endpoint.path === "string" &&
-        endpoint.options.metadata?.SERVER_ONLY !== true,
+    .flatMap((endpoint) =>
+      typeof endpoint.path === "string" ? [endpoint.path] : [],
     )
-    .map((endpoint) => endpoint.path ?? panic("Endpoint path missing"))
     .toSorted();
 
 const responseCookies = (response: Response) =>
