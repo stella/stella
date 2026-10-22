@@ -176,11 +176,13 @@ const probeCountry = async (
   if (typeof seeded === "string") {
     return { status: "failed", detail: `court facets: ${seeded}` };
   }
+  const courtFacets = seeded.facets?.court;
+  if (courtFacets === undefined) {
+    return { status: "failed", detail: "search returned no facets" };
+  }
   const courts = [
     ...new Set(
-      (seeded.facets?.court ?? []).flatMap(({ courts: tier }) =>
-        tier.map(({ value }) => value),
-      ),
+      courtFacets.flatMap(({ courts: tier }) => tier.map(({ value }) => value)),
     ),
   ];
   if (courts.length === 0) {
