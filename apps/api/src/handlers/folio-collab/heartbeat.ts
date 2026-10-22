@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import type { FolioCollabHeartbeatResponse } from "@stll/api-contract/folio-collab";
+
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -45,7 +47,10 @@ const heartbeatFolioCollabRoom = createSafeTokenHandler(
       );
     }
 
-    return Result.ok({ activeAt: heartbeat.activeAt.toISOString() });
+    return Result.ok({
+      activeAt: heartbeat.activeAt.toISOString(),
+      canEdit: room.canEdit,
+    } satisfies FolioCollabHeartbeatResponse);
   },
 );
 

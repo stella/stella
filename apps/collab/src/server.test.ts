@@ -8,7 +8,10 @@ import {
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
 } from "@stll/api-contract/folio-collab";
-import type { FolioCollabSnapshotLoadResponse } from "@stll/api-contract/folio-collab";
+import type {
+  FolioCollabHeartbeatResponse,
+  FolioCollabSnapshotLoadResponse,
+} from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -18,6 +21,7 @@ type FakeStellaApiOptions = {
   additionalRoomIds?: string[];
   canEdit?: boolean;
   generation?: number;
+  heartbeatCanEdit?: boolean;
   holdFirstStore?: boolean;
   initialSnapshotBase64?: string | null;
   loadFailureStatus?: number;
@@ -41,6 +45,7 @@ type FakeStellaApi = {
   releaseFirstStore: () => void;
   setGeneration: (generation: number) => void;
   setAuthorizedGeneration: (generation: number) => void;
+  setCanEdit: (canEdit: boolean) => void;
   setLoadResponse: (response: FolioCollabSnapshotLoadResponse) => void;
   setStoreFailureStatus: (status: number | null) => void;
   snapshotAuthorizationHeaders: () => (string | null)[];
@@ -119,8 +124,9 @@ const DOCKER_CLEANUP_TIMEOUT_MS = 250;
 
 const createFakeStellaApi = ({
   additionalRoomIds = [],
-  canEdit = true,
+  canEdit: initialCanEdit = true,
   generation = 0,
+  heartbeatCanEdit,
   holdFirstStore = false,
   initialSnapshotBase64 = null,
   loadFailureStatus,
@@ -151,6 +157,7 @@ const createFakeStellaApi = ({
   let storeFailureStatus: number | null = null;
   let currentToken = token;
   let tokenGeneration = generation;
+  let canEdit = initialCanEdit;
   const firstStoreGate = Promise.withResolvers<undefined>();
   let firstStoreHeld = holdFirstStore;
 
@@ -228,7 +235,10 @@ const createFakeStellaApi = ({
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
-        return Response.json({ activeAt: new Date().toISOString() });
+        return Response.json({
+          activeAt: new Date().toISOString(),
+          canEdit: heartbeatCanEdit ?? canEdit,
+        } satisfies FolioCollabHeartbeatResponse);
       }
 
       if (url.pathname === "/v1/folio-collab-rooms/snapshot/load") {
@@ -333,6 +343,9 @@ const createFakeStellaApi = ({
     setAuthorizedGeneration: (nextGeneration) => {
       roomGenerations.set(roomId, nextGeneration);
       tokenGeneration = nextGeneration;
+    },
+    setCanEdit: (nextCanEdit) => {
+      canEdit = nextCanEdit;
     },
     setGeneration: (nextGeneration) => {
       roomGenerations.set(roomId, nextGeneration);
@@ -441,7 +454,10 @@ const createParticipantStellaApi = ({
         if (refusedHeartbeatTokens.has(token)) {
           return Response.json({ message: "Unavailable" }, { status: 503 });
         }
-        return Response.json({ activeAt: new Date().toISOString() });
+        return Response.json({
+          activeAt: new Date().toISOString(),
+          canEdit: true,
+        } satisfies FolioCollabHeartbeatResponse);
       }
 
       if (url.pathname === "/v1/folio-collab-rooms/snapshot/load") {
@@ -2004,6 +2020,110 @@ describe("collaboration server", () => {
       await Bun.sleep(150);
 
       expect(fakeApi.storeRequests()).toBe(0);
+    } finally {
+      provider.destroy();
+      ydoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("a heartbeat that withdraws edit rights closes the session before its next edit", async () => {
+    const fakeApi = createFakeStellaApi();
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+      roomHeartbeatIntervalMs: 20,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const ydoc = new Doc();
+    const rejoinedDoc = new Doc();
+    let closed = false;
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      onClose: () => {
+        closed = true;
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc,
+    });
+    let rejoined: HocuspocusProvider | undefined;
+
+    try {
+      await waitFor(
+        () =>
+          provider.isAuthenticated && provider.authorizedScope === "read-write",
+        "Provider did not join with edit rights.",
+      );
+      expect(closed).toBe(false);
+
+      fakeApi.setCanEdit(false);
+
+      await waitFor(
+        () => closed,
+        "The session kept edit rights after a heartbeat withdrew them.",
+      );
+      // The far-future token never refreshes, so the heartbeat applied it.
+      expect(fakeApi.refreshRequests()).toBe(0);
+      expect(collabServer.hocuspocus.getConnectionsCount()).toBe(0);
+
+      ydoc.getText("body").insert(0, "edit without edit rights");
+      rejoined = createProvider({
+        name: TEST_ROOM_NAME,
+        token: "collab_token_test",
+        url: collabServer.websocketUrl,
+        ydoc: rejoinedDoc,
+      });
+      await waitFor(
+        () => rejoined?.authorizedScope === "readonly",
+        "The rejoined session was not read-only.",
+      );
+      rejoinedDoc.getText("body").insert(0, "rejoined edit");
+      await Bun.sleep(150);
+
+      expect(fakeApi.storeRequests()).toBe(0);
+      const serverDocument =
+        collabServer.hocuspocus.documents.get(TEST_ROOM_NAME);
+      expect(serverDocument).toBeDefined();
+      expect(serverDocument?.getText("body").toJSON()).toBe("");
+    } finally {
+      provider.destroy();
+      rejoined?.destroy();
+      ydoc.destroy();
+      rejoinedDoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("a join whose first heartbeat withdraws edit rights joins read-only", async () => {
+    const fakeApi = createFakeStellaApi({ heartbeatCanEdit: false });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const ydoc = new Doc();
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc,
+    });
+
+    try {
+      await waitFor(
+        () => provider.isAuthenticated,
+        "Provider did not authenticate.",
+      );
+      // Authorization granted edit rights; the heartbeat withdrew them.
+      expect(fakeApi.authorizeRequestBodies()).toHaveLength(1);
+      expect(provider.authorizedScope).toBe("readonly");
     } finally {
       provider.destroy();
       ydoc.destroy();

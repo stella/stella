@@ -13,6 +13,7 @@ import * as v from "valibot";
 import { applyUpdate, encodeStateAsUpdate } from "yjs";
 
 import {
+  folioCollabHeartbeatResponseSchema,
   folioCollabSnapshotLoadResponseSchema,
   FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME,
   FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
@@ -142,10 +143,6 @@ const storeSnapshotResponseSchema = v.strictObject({
   generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
   snapshotRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
   storedAt: v.string(),
-});
-
-const heartbeatResponseSchema = v.strictObject({
-  activeAt: v.string(),
 });
 
 const flushRequestSchema = v.pipe(
@@ -814,12 +811,21 @@ export const createCollabServer = async (
 
   const heartbeatRoom = async (state: CollabRoomTokenState) => {
     const token = await getFreshRoomToken(state);
-    await postJson({
+    const heartbeat = await postJson({
       apiUrl,
       body: { roomId: state.roomId, token },
       path: "/folio-collab-rooms/heartbeat",
-      schema: heartbeatResponseSchema,
+      schema: folioCollabHeartbeatResponseSchema,
     });
+    // The heartbeat re-authorizes the token, so a changed edit right applies
+    // now: the room's connections rejoin with the scope it grants.
+    if (
+      heartbeat.canEdit !== state.canEdit &&
+      tokenStates.get(state.token) === state
+    ) {
+      state.canEdit = heartbeat.canEdit;
+      hocuspocus.closeConnections(state.roomName);
+    }
   };
 
   const scheduleRoomHeartbeat = (tokenState: CollabRoomTokenState) => {
@@ -1182,7 +1188,8 @@ export const createCollabServer = async (
         releaseRoomTokenClaim(tokenState);
         panic("Collaboration socket ownership is missing.");
       }
-      connectionConfig.readOnly = !authorized.canEdit;
+      // The join's first heartbeat may have narrowed the authorized scope.
+      connectionConfig.readOnly = !(authorized.canEdit && tokenState.canEdit);
       managedConnection.roomConnectionCounts.set(
         documentName,
         (managedConnection.roomConnectionCounts.get(documentName) ?? 0) + 1,

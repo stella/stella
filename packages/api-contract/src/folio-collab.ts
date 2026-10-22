@@ -38,6 +38,19 @@ export type FolioCollabSnapshotLoadResponse = v.InferOutput<
   typeof folioCollabSnapshotLoadResponseSchema
 >;
 
+/**
+ * Every heartbeat re-authorizes its room token, so its answer carries the
+ * edit right that authorization grants now.
+ */
+export const folioCollabHeartbeatResponseSchema = v.strictObject({
+  activeAt: v.string(),
+  canEdit: v.boolean(),
+});
+
+export type FolioCollabHeartbeatResponse = v.InferOutput<
+  typeof folioCollabHeartbeatResponseSchema
+>;
+
 export type FolioCollabFlushRequest = {
   requestId: string;
   type: typeof FOLIO_COLLAB_FLUSH_REQUEST_TYPE;
