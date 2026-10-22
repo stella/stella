@@ -1,0 +1,180 @@
+import { expect, test } from "bun:test";
+
+import { lintSingleRule } from "./lint-single-rule.ts";
+
+const RULE = "require-frame-loop-cleanup";
+
+test("reports intervals without an owner-side clear", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "export const discarded = () => { setInterval(tick, 10); };",
+        "export const kept = () => { const id = setInterval(tick, 10); };",
+        "export const selfStopOnly = () => { const id = setInterval(() => { if (done()) clearInterval(id); }, 10); };",
+        "export const otherHandle = () => { const id = window.setInterval(tick, 10); return () => clearInterval(other); };",
+      ].join("\n"),
+    ),
+  ).toEqual([1, 2, 3, 4]);
+});
+
+test("accepts intervals cleared by their owner or handed to the caller", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "export const cleanup = () => { const id = setInterval(tick, 10); return () => clearInterval(id); };",
+        "export const factory = () => { const id = globalThis.setInterval(tick, 10); return { stop: () => clearInterval(id) }; };",
+        "export const returned = () => setInterval(tick, 10);",
+        "export const member = (ref: { current: number }) => { ref.current = setInterval(tick, 10); };",
+        "export const memberStop = (ref: { current: number }) => { clearInterval(ref.current); };",
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+});
+
+test("requires the effect cleanup to clear an interval the effect starts", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "useMountEffect(() => {",
+        "  const id = setInterval(() => { if (ready()) clearInterval(id); }, 80);",
+        "  const fallback = setTimeout(() => clearInterval(id), 3000);",
+        "  return () => clearTimeout(fallback);",
+        "});",
+        "useExternalSyncEffect(() => {",
+        "  const id = setInterval(tick, 80);",
+        "  return () => { clearInterval(id); };",
+        "}, [value]);",
+      ].join("\n"),
+    ),
+  ).toEqual([2]);
+});
+
+test("reports frame loops that reschedule on every frame", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "useMountEffect(() => {",
+        "  let raf = 0;",
+        "  const tick = () => {",
+        "    draw();",
+        "    raf = requestAnimationFrame(tick);",
+        "  };",
+        "  raf = requestAnimationFrame(tick);",
+        "  return () => cancelAnimationFrame(raf);",
+        "});",
+      ].join("\n"),
+    ),
+  ).toEqual([5]);
+});
+
+test("reports unbounded frame loops without an owner cancel", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "export const poll = () => {",
+        "  const run = () => {",
+        "    if (!ready()) {",
+        "      requestAnimationFrame(run);",
+        "    }",
+        "  };",
+        "  requestAnimationFrame(run);",
+        "};",
+        "export function inline() {",
+        "  if (pending()) requestAnimationFrame(() => inline());",
+        "}",
+      ].join("\n"),
+    ),
+  ).toEqual([4, 7, 10]);
+});
+
+test("requires an effect-started frame loop to cancel in the cleanup", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "useExternalSyncEffect(() => {",
+        "  let frame = 0;",
+        "  let cleanup = () => {};",
+        "  const sync = () => {",
+        "    if (editor === null) {",
+        "      frame = requestAnimationFrame(sync);",
+        "      return;",
+        "    }",
+        "    apply(editor);",
+        "  };",
+        "  sync();",
+        "  cleanup = () => cancelAnimationFrame(frame);",
+        "  return cleanup;",
+        "}, [editor]);",
+        "useMountEffect(() => {",
+        "  let frame = 0;",
+        "  const sync = () => {",
+        "    if (!ready()) {",
+        "      frame = requestAnimationFrame(sync);",
+        "    }",
+        "  };",
+        "  sync();",
+        "  const stop = () => cancelAnimationFrame(frame);",
+        "  onDone(stop);",
+        "});",
+      ].join("\n"),
+    ),
+  ).toEqual([19]);
+});
+
+test("accepts bounded retries, one-shot frames and transferred handles", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "export const retry = () => {",
+        "  let attempts = 0;",
+        "  const run = () => {",
+        "    if (found()) return;",
+        "    attempts += 1;",
+        "    if (attempts < 30) {",
+        "      requestAnimationFrame(run);",
+        "    }",
+        "  };",
+        "  requestAnimationFrame(run);",
+        "};",
+        "export const earlyExit = () => new Promise<void>((resolve) => {",
+        "  let frames = 0;",
+        "  const poll = () => {",
+        "    if (ready() || frames >= 12) { resolve(); return; }",
+        "    frames += 1;",
+        "    requestAnimationFrame(poll);",
+        "  };",
+        "  requestAnimationFrame(poll);",
+        "});",
+        "export const oneShot = () => { requestAnimationFrame(() => focus()); };",
+        "export const schedule = (onFrame: (frame: number) => void) => {",
+        "  if (done()) return;",
+        "  const frame = requestAnimationFrame(() => schedule(onFrame));",
+        "  onFrame(frame);",
+        "};",
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+});
+
+test("ignores local functions that shadow the browser timers", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "export const local = (setInterval: (fn: () => void) => number, window: { setInterval: (fn: () => void) => number }) => {",
+        "  setInterval(tick);",
+        "  window.setInterval(tick);",
+        "};",
+        "export function requestAnimationFrame(callback: () => void) { callback(); }",
+        "export const loop = () => { requestAnimationFrame(loop); };",
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+});
