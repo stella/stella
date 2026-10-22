@@ -2770,7 +2770,7 @@ test("metadata runs report the required result while scope-changing labels still
     completedDepth,
   ).with.script;
   expect(script).toContain('context.payload.label?.name === "prove-fix"');
-  expect(script).toContain("if (metadataAction && !proofScopeChanged)");
+  expect(script).toContain("if (mirrorsCodeRun && !proofScopeChanged)");
   // ready_for_review starts the first code run of a draft and prove-fix
   // changes scope: neither is metadata, so both report ci-result.
   expect(script).not.toMatch(/"enqueued", "ready_for_review"\]\.includes/u);
