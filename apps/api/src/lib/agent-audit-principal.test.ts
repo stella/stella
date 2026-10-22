@@ -4,7 +4,10 @@ import type { rootDb } from "@/api/db/root";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-let registrationRows: { id: string }[] = [];
+let registrationRows: {
+  registrationId: string | null;
+  revocationStatus: "active" | "revoked";
+}[] = [];
 let selectCalls = 0;
 const selectMock = () => {
   selectCalls += 1;
@@ -12,6 +15,7 @@ const selectMock = () => {
 };
 const queryBuilder = {
   from: () => queryBuilder,
+  leftJoin: () => queryBuilder,
   limit: async () => registrationRows,
   where: () => queryBuilder,
 };
@@ -34,7 +38,11 @@ describe("resolveAgentAuditExecution", () => {
 
   test("attributes an unregistered OAuth client to its user through MCP", async () => {
     const execution = await resolveAgentAuditExecution({
-      credential: { clientId: "first-party-cli", type: "oauth_client" },
+      credential: {
+        clientId: "first-party-cli",
+        issuedAt: 1_700_000_000,
+        type: "oauth_client",
+      },
       organizationId,
       userId,
       db: database,
@@ -86,10 +94,16 @@ describe("resolveAgentAuditExecution", () => {
   });
 
   test("promotes a claimed agent registration to agent activity", async () => {
-    registrationRows = [{ id: "agent-registration-1" }];
+    registrationRows = [
+      { registrationId: "agent-registration-1", revocationStatus: "active" },
+    ];
 
     const execution = await resolveAgentAuditExecution({
-      credential: { clientId: "registered-agent", type: "oauth_client" },
+      credential: {
+        clientId: "registered-agent",
+        issuedAt: 1_700_000_000,
+        type: "oauth_client",
+      },
       organizationId,
       userId,
       db: database,

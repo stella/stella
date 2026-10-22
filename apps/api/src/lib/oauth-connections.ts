@@ -1,12 +1,20 @@
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { oauthClient, oauthConsent, organization } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import { oauthGrantRevocations } from "@/api/db/schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import { revokeOAuthClientAuthArtifacts } from "@/api/lib/auth-artifacts";
+import { ACCESS_TOKEN_EXPIRES_IN_SECONDS } from "@/api/lib/auth/access-token-lifetime";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * Per /conventions-security ("Handlers must not import the root db
@@ -89,10 +97,19 @@ export type DisconnectedOAuthConnection = {
  * handler turns that into a 404 without revealing whether the id belongs
  * to someone else).
  */
-export const disconnectOAuthConnectionForUser = async (
-  userId: SafeId<"user">,
-  consentId: string,
-): Promise<Result<DisconnectedOAuthConnection | null, HandlerError>> =>
+type DisconnectOAuthConnectionOptions = {
+  consentId: string;
+  request: Request;
+  userId: SafeId<"user">;
+};
+
+export const disconnectOAuthConnectionForUser = async ({
+  consentId,
+  request,
+  userId,
+}: DisconnectOAuthConnectionOptions): Promise<
+  Result<DisconnectedOAuthConnection | null, HandlerError>
+> =>
   await Result.tryPromise({
     try: async () =>
       await rootDb.transaction(async (tx) => {
@@ -120,6 +137,47 @@ export const disconnectOAuthConnectionForUser = async (
           clientId: consent.clientId,
           referenceId: consent.referenceId,
         });
+
+        const revokedAt = new Date();
+        await tx
+          .delete(oauthGrantRevocations)
+          .where(
+            and(
+              eq(oauthGrantRevocations.userId, userId),
+              sql`${oauthGrantRevocations.revokedAt} < CURRENT_TIMESTAMP - ${ACCESS_TOKEN_EXPIRES_IN_SECONDS} * INTERVAL '1 second'`,
+            ),
+          );
+
+        if (consent.referenceId) {
+          await tx
+            .insert(oauthGrantRevocations)
+            .values({
+              organizationId: consent.referenceId,
+              userId,
+              oauthClientId: consent.clientId,
+              revokedAt,
+            })
+            .onConflictDoUpdate({
+              target: [
+                oauthGrantRevocations.organizationId,
+                oauthGrantRevocations.userId,
+                oauthGrantRevocations.oauthClientId,
+              ],
+              set: { revokedAt },
+            });
+          const recordAuditEvent = createAuditRecorder({
+            organizationId: brandPersistedOrganizationId(consent.referenceId),
+            request,
+            server: null,
+            userId,
+            workspaceId: null,
+          });
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.MCP_CONNECTION,
+            resourceId: consent.clientId,
+          });
+        }
 
         return { id: consent.id };
       }),

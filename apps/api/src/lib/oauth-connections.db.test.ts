@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -5,6 +6,7 @@ import {
   describe,
   expect,
   setDefaultTimeout,
+  spyOn,
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
@@ -16,9 +18,19 @@ import {
   oauthRefreshToken,
   session,
 } from "@/api/db/auth-schema";
+import { oauthGrantRevocations } from "@/api/db/schema";
 import { meRoute } from "@/api/handlers/me/routes";
 import { getAuth } from "@/api/lib/auth";
+import {
+  getAuthEndpointUrl,
+  getAuthIssuerUrl,
+} from "@/api/lib/auth/auth-paths";
+import { toSafeId } from "@/api/lib/branded-types";
 import { resetLogSinkForTesting } from "@/api/lib/observability/logger";
+import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
+import { authenticateMcpRequest } from "@/api/mcp/auth";
+import { getMcpResourceUrl } from "@/api/mcp/constants";
+import { resolveMcpSessionContext } from "@/api/mcp/context";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
@@ -47,12 +59,31 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
+const passThroughFetch = globalThis.fetch;
+const fetchSpy = spyOn(globalThis, "fetch");
 
 beforeAll(async () => {
   testDb = await initAgentAuthTestDb();
+  const jwksUrl = getAuthEndpointUrl("jwks");
+  fetchSpy.mockImplementation(
+    Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const request =
+          input instanceof Request
+            ? new Request(input, init)
+            : new Request(String(input), init);
+        if (request.url === jwksUrl) {
+          return await getAuth().handler(request);
+        }
+        return await passThroughFetch(input, init);
+      },
+      { preconnect: passThroughFetch.preconnect },
+    ),
+  );
 });
 
 afterAll(async () => {
+  fetchSpy.mockRestore();
   await releaseAgentAuthTestDb();
 });
 afterEach(resetLogSinkForTesting);
@@ -86,6 +117,42 @@ const disconnect = async (browser: HumanBrowser, consentId: string) =>
       headers: { cookie: browser.cookieHeader() },
     }),
   );
+
+const opensMcpContext = async (accessToken: string): Promise<boolean> => {
+  const authenticated = await authenticateMcpRequest(accessToken);
+  if (authenticated.isErr()) {
+    return false;
+  }
+  const resolved = await Result.tryPromise(
+    async () =>
+      await resolveMcpSessionContext(authenticated.value, {
+        request: new Request(`${BASE}/mcp`, { method: "POST" }),
+      }),
+  );
+  return resolved.isOk();
+};
+
+const signDelegatedUserToken = async (
+  userId: string,
+  organizationId: string,
+): Promise<string> => {
+  const issuedAt = Math.floor(Date.now() / 1000);
+  return (
+    await getAuth().api.signJWT({
+      body: {
+        payload: {
+          sub: userId,
+          org_id: organizationId,
+          scope: "stella:read",
+          aud: getMcpResourceUrl(),
+          iss: getAuthIssuerUrl(),
+          iat: issuedAt,
+          exp: issuedAt + 600,
+        },
+      },
+    })
+  ).token;
+};
 
 type GrantState = {
   refreshTokenActive: boolean;
@@ -221,6 +288,83 @@ describe("resource-bound OAuth refresh", () => {
 });
 
 describe("disconnecting a connected app", () => {
+  test("refuses only the disconnected app's already-issued MCP token", async () => {
+    const auth = getAuth();
+    const owner = await signInHuman(
+      `revocation-owner-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const organization = await auth.api.createOrganization({
+      body: {
+        name: "Revocation",
+        slug: `revocation-${Bun.randomUUIDv7()}`,
+      },
+      headers: owner.headers(),
+    });
+    await owner.setActiveOrganization(organization.id);
+
+    const other = await signInHuman(
+      `revocation-member-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const invitation = await auth.api.createInvitation({
+      body: {
+        email: other.email,
+        organizationId: organization.id,
+        role: "admin",
+      },
+      headers: owner.headers(),
+    });
+    await auth.api.acceptInvitation({
+      body: { invitationId: invitation.id },
+      headers: other.headers(),
+    });
+    await other.setActiveOrganization(organization.id);
+
+    const disconnectedClient = await registerOAuthClient();
+    const keptClient = await registerOAuthClient();
+    const disconnectedGrant = await grantOAuthClient(owner, disconnectedClient);
+    const keptGrant = await grantOAuthClient(owner, keptClient);
+    const otherUserGrant = await grantOAuthClient(other, disconnectedClient);
+    const delegatedToken = await signDelegatedUserToken(
+      owner.userId,
+      organization.id,
+    );
+    const agentRunToken = await mintAgentRunToken({
+      userId: toSafeId<"user">(owner.userId),
+      organizationId: toSafeId<"organization">(organization.id),
+      runId: Bun.randomUUIDv7(),
+      workspaceIds: [],
+    });
+
+    expect(
+      await testDb.$count(
+        oauthGrantRevocations,
+        and(
+          eq(oauthGrantRevocations.organizationId, organization.id),
+          eq(oauthGrantRevocations.userId, owner.userId),
+          eq(oauthGrantRevocations.oauthClientId, disconnectedClient.clientId),
+        ),
+      ),
+    ).toBe(0);
+    expect(await opensMcpContext(disconnectedGrant.accessToken)).toBe(true);
+    const connection = (await listConnections(owner)).find(
+      ({ clientId }) => clientId === disconnectedClient.clientId,
+    );
+    if (!connection) {
+      throw new Error("The granted connection is not listed");
+    }
+    expect((await disconnect(owner, connection.id)).status).toBe(200);
+
+    expect(await opensMcpContext(disconnectedGrant.accessToken)).toBe(false);
+    expect(await opensMcpContext(keptGrant.accessToken)).toBe(true);
+    expect(await opensMcpContext(otherUserGrant.accessToken)).toBe(true);
+    expect(await opensMcpContext(delegatedToken)).toBe(true);
+    expect(await opensMcpContext(agentRunToken.token)).toBe(true);
+
+    await Bun.sleep(1100);
+    const reconnectedGrant = await grantOAuthClient(owner, disconnectedClient);
+    expect(await opensMcpContext(reconnectedGrant.accessToken)).toBe(true);
+  });
+
   test("ends that grant's tokens and consent and leaves the user's other connected apps working", async () => {
     const browser = await signInHuman(
       `connections-${Bun.randomUUIDv7()}@stella.dev`,

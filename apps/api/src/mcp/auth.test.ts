@@ -92,12 +92,17 @@ describe("extractMcpSession", () => {
     expect(
       sessionFrom({
         azp: "agent-client-123",
+        iat: 1_700_000_000,
         org_id: "org_123",
         scope: "stella:read",
         sub: "user_123",
       }),
     ).toEqual({
-      credential: { clientId: "agent-client-123", type: "oauth_client" },
+      credential: {
+        clientId: "agent-client-123",
+        issuedAt: 1_700_000_000,
+        type: "oauth_client",
+      },
       organizationId: "org_123",
       scopes: ["stella:read"],
       userId: "user_123",
@@ -201,7 +206,7 @@ describe("isMcpSession", () => {
   test("accepts every credential branch and optional workspace attenuation", () => {
     const credentials = [
       { type: "agent_run", runId: "run_1" },
-      { type: "oauth_client", clientId: "client_1" },
+      { type: "oauth_client", clientId: "client_1", issuedAt: 1_700_000_000 },
       {
         type: "machine_api_key",
         id: "key_1",
