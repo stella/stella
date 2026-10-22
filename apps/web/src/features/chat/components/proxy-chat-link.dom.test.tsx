@@ -93,44 +93,59 @@ afterAll(async () => {
 
 test("a model-text link never shows an icon another link cached for its site", async () => {
   const originalFetch = globalThis.fetch;
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
   const requests: string[] = [];
   globalThis.IntersectionObserver = VisibleIntersectionObserver;
+  URL.createObjectURL = () => "blob:cached-site-icon";
+  URL.revokeObjectURL = () => undefined;
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
       requests.push(new Request(input).url);
-      return Response.json({ type: "no-icon" });
+      return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+        headers: { "content-type": "image/png" },
+      });
     },
     { preconnect: originalFetch.preconnect },
   );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
-  client.setQueryData(linkIconOptions("cached.example").queryKey, {
-    type: "icon",
-    blob: new Blob(["icon"], { type: "image/png" }),
-  });
   const view = render(
     <QueryClientProvider client={client}>
       <ProxyChatLink
-        href="https://sub.cached.example/path"
+        href="https://a.cached.example/source"
+        iconSource={{ kind: "tool-source" }}
+      >
+        {LINK_LABELS.source}
+      </ProxyChatLink>
+      <ProxyChatLink
+        href="https://b.cached.example/prose"
         iconSource={{ kind: "model-text" }}
       >
         {LINK_LABELS.absent}
       </ProxyChatLink>
     </QueryClientProvider>,
   );
+  const iconIn = (label: string) =>
+    view.getByText(label).closest("a")?.querySelector("img") ?? null;
   try {
     await act(async () => {
       for (const observer of [...observers]) {
         observer.intersectObserved();
       }
     });
-    expect(view.container.querySelector("img")).toBeNull();
-    expect(requests).toEqual([]);
+    // The tool-source link fetched and shows the site icon; the model-text
+    // link for the same site shares that cache entry but must not show it.
+    await waitFor(() => expect(iconIn(LINK_LABELS.source)).not.toBeNull());
+    expect(iconIn(LINK_LABELS.absent)).toBeNull();
+    expect(requests).toEqual([apiUrl("/chat/link-icons/cached.example")]);
   } finally {
     view.unmount();
     client.clear();
     globalThis.fetch = originalFetch;
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
   }
 });
 
