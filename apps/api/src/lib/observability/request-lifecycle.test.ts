@@ -36,6 +36,12 @@ import {
   markAuthRequestRoute,
 } from "@/api/lib/auth/auth-request-observability";
 import {
+  DB_QUERY_COUNT_HEADER,
+  DB_TRANSACTION_COUNT_HEADER,
+  queryCountLogger,
+  recordDbTransaction,
+} from "@/api/lib/db-query-counter";
+import {
   DatabaseError,
   DatabaseRlsError,
   HandlerError,
@@ -51,6 +57,7 @@ import {
   completeRequest,
   flushAnalytics,
   withFinalResponseCompletion,
+  withDbCountHeaders,
 } from "@/api/lib/observability/request-lifecycle";
 import {
   resetMetricLineSinkForTesting,
@@ -699,5 +706,66 @@ describe("the request lifecycle", () => {
     expect(
       logs.records.map(({ message, severityText }) => [message, severityText]),
     ).toEqual([["analytics.flush.failed", "ERROR"]]);
+  });
+});
+
+describe("request database measurement headers", () => {
+  test("mounted handlers expose counts on the final response without completion hooks", async () => {
+    const app = new Elysia()
+      .wrap(
+        (handle) => async (request) =>
+          runWithRequestScope(async () => {
+            const response: unknown = await handle(request);
+            if (!(response instanceof Response)) {
+              throw new HandlerError({
+                status: 500,
+                message: "Invalid response",
+              });
+            }
+            return withDbCountHeaders(response);
+          }),
+      )
+      .mount("/api/auth", async () => {
+        recordDbTransaction();
+        queryCountLogger.logQuery("SELECT 1", []);
+        return new Response("session", {
+          status: 202,
+          headers: { "x-mounted": "yes" },
+        });
+      });
+    const response = await app.handle(
+      new Request("http://localhost/api/auth/get-session"),
+    );
+    expect(response.headers.get(DB_QUERY_COUNT_HEADER)).toBe("1");
+    expect(response.headers.get(DB_TRANSACTION_COUNT_HEADER)).toBe("1");
+    expect(response.headers.get("x-mounted")).toBe("yes");
+    expect(response.status).toBe(202);
+    expect(await response.text()).toBe("session");
+  });
+
+  test("completion and error responses expose their own query and transaction counts", async () => {
+    const app = new Elysia()
+      .wrap((handle) => (request) => runWithRequestScope(() => handle(request)))
+      .onError((context) => answerRequestError(context))
+      .onAfterHandle(async (context) => await completeRequest(context))
+      .get("/health", async () => {
+        recordDbTransaction();
+        queryCountLogger.logQuery("SELECT 1", []);
+        await Promise.resolve();
+        recordDbTransaction();
+        return "ok";
+      })
+      .get("/live", () => {
+        recordDbTransaction();
+        throw new HandlerError({ status: 400, message: "Invalid request" });
+      });
+    const [success, failure] = await Promise.all([
+      app.handle(new Request("http://localhost/health")),
+      app.handle(new Request("http://localhost/live")),
+    ]);
+    expect(success.headers.get(DB_QUERY_COUNT_HEADER)).toBe("1");
+    expect(success.headers.get(DB_TRANSACTION_COUNT_HEADER)).toBe("2");
+    expect(failure.headers.get(DB_QUERY_COUNT_HEADER)).toBe("0");
+    expect(failure.headers.get(DB_TRANSACTION_COUNT_HEADER)).toBe("1");
   });
 });

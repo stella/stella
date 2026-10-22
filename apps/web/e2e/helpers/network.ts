@@ -27,6 +27,7 @@ const TRACKED_RESOURCE_TYPES = new Set(["fetch", "xhr", "eventsource"]);
 // (apps/api/src/lib/db-query-counter.ts). Folding it into the baseline makes
 // an N+1 regression fail per route+endpoint, not just per HTTP fan-out.
 const DB_QUERIES_HEADER = "x-db-queries";
+const DB_TRANSACTIONS_HEADER = "x-db-transactions";
 
 // The API sends real-time channels (chat streaming, workspace events, the
 // autocomplete stream) as `text/event-stream` connections that stay open for
@@ -55,6 +56,8 @@ export type NetworkCapture = {
     pathname: string;
     dbQueries: number | null;
     dbQueryHeaderMissing: boolean;
+    transactions: number | null;
+    transactionHeaderMissing: boolean;
     // Response body size in bytes; null for a streamed response (excluded by
     // content-type, see STREAMED_RESPONSE_CONTENT_TYPE) or one whose body
     // Playwright never resolved (see responseBytesUnavailable).
@@ -135,6 +138,8 @@ type NetworkRecord = {
   // True only when Playwright saw a response and that response did not expose
   // the dev/test query-count header.
   dbQueryHeaderMissing: boolean;
+  transactions: number | null;
+  transactionHeaderMissing: boolean;
   // Response body length in bytes; null until the async body read resolves,
   // and permanently null for a streamed (SSE) response.
   responseBytes: number | null;
@@ -262,6 +267,8 @@ export const createNetworkCollector = (
           pathname: new URL(request.url()).pathname,
           dbQueries: null,
           dbQueryHeaderMissing: false,
+          transactions: null,
+          transactionHeaderMissing: false,
           responseBytes: null,
           responseBytesUnavailable: false,
         };
@@ -292,6 +299,11 @@ export const createNetworkCollector = (
         } else {
           record.dbQueryHeaderMissing = true;
         }
+
+        const transactionHeader = response.headers()[DB_TRANSACTIONS_HEADER];
+        record.transactions =
+          transactionHeader === undefined ? null : Number(transactionHeader);
+        record.transactionHeaderMissing = transactionHeader === undefined;
 
         if (isStreamedResponse(response)) {
           // Streams never finish; headers establish that the channel opened.
@@ -334,6 +346,8 @@ export const createNetworkCollector = (
             pathname,
             dbQueries,
             dbQueryHeaderMissing,
+            transactions,
+            transactionHeaderMissing,
             responseBytes,
             responseBytesUnavailable,
           }) => ({
@@ -341,6 +355,9 @@ export const createNetworkCollector = (
             pathname,
             dbQueries,
             dbQueryHeaderMissing,
+            transactions,
+            transactionHeaderMissing:
+              transactionHeaderMissing || transactions === null,
             responseBytes,
             responseBytesUnavailable,
           }),
@@ -372,6 +389,14 @@ export const requestKey = ({
 // --- baseline machinery ----------------------------------------------------
 
 export type RouteNetworkMetrics = {
+  requestCosts: Record<
+    string,
+    {
+      dbQueries: number | null;
+      transactions: number | null;
+      responseBytes: number | null;
+    }[]
+  >;
   // Observed request keys, unique + sorted.
   requests: string[];
   // Per request key, how many times it was observed.
@@ -387,6 +412,8 @@ export type RouteNetworkMetrics = {
   dbQueries: Record<string, number>;
   // Per request key, how many completed responses omitted `x-db-queries`.
   missingDbQueryCounts: Record<string, number>;
+  transactions: Record<string, number>;
+  missingTransactionCounts: Record<string, number>;
   // Per request key, the max response body size (bytes) observed this run.
   // Streamed (SSE) responses and keys whose body never resolved are absent.
   responseSizes: Record<string, number>;
@@ -416,19 +443,39 @@ export const summarizeCapture = (
   capture: NetworkCapture,
 ): RouteNetworkMetrics => {
   const dbQueries: Record<string, number> = {};
+  const transactions: Record<string, number> = {};
+  const missingTransactionCounts: Record<string, number> = {};
   const missingDbQueryCounts: Record<string, number> = {};
   const responseSizes: Record<string, number> = {};
   const missingResponseSizeCounts: Record<string, number> = {};
   const requestCounts: Record<string, number> = {};
+  const requestCosts: RouteNetworkMetrics["requestCosts"] = {};
   const depthChain = capture.depthChain;
   for (const request of capture.requests) {
     const key = requestKey(request);
     requestCounts[key] = (requestCounts[key] ?? 0) + 1;
+    (requestCosts[key] ??= []).push({
+      dbQueries: request.dbQueries,
+      transactions: request.transactions,
+      responseBytes: request.responseBytes,
+    });
     if (request.dbQueryHeaderMissing) {
       missingDbQueryCounts[key] = (missingDbQueryCounts[key] ?? 0) + 1;
     }
     if (request.dbQueries !== null && !Number.isNaN(request.dbQueries)) {
       dbQueries[key] = Math.max(dbQueries[key] ?? 0, request.dbQueries);
+    }
+    if (request.transactionHeaderMissing) {
+      missingTransactionCounts[key] = (missingTransactionCounts[key] ?? 0) + 1;
+    }
+    if (
+      request.transactions !== null &&
+      Number.isFinite(request.transactions)
+    ) {
+      transactions[key] = Math.max(
+        transactions[key] ?? 0,
+        request.transactions,
+      );
     }
     if (request.responseBytesUnavailable) {
       missingResponseSizeCounts[key] =
@@ -445,6 +492,7 @@ export const summarizeCapture = (
     }
   }
   return {
+    requestCosts,
     requests: Object.keys(requestCounts).toSorted(),
     requestCounts: Object.fromEntries(
       Object.entries(requestCounts).toSorted(([a], [b]) => a.localeCompare(b)),
@@ -452,6 +500,8 @@ export const summarizeCapture = (
     depth: depthChain.length,
     depthChain,
     dbQueries,
+    transactions,
+    missingTransactionCounts,
     missingDbQueryCounts: Object.fromEntries(
       Object.entries(missingDbQueryCounts).toSorted(([a], [b]) =>
         a.localeCompare(b),

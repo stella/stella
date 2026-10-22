@@ -1,14 +1,20 @@
 import { panic } from "better-result";
+import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
+import { drizzle } from "drizzle-orm/bun-sql";
 import { Elysia } from "elysia";
 
 import {
   currentQueryCount,
+  currentTransactionCount,
   DB_QUERY_COUNT_HEADER,
   queryCountLogger,
+  recordDbTransaction,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 // Yield to the microtask queue so two counter contexts interleave their
 // increments; this is what would break a shared (non-ALS) counter.
@@ -22,6 +28,8 @@ const logQueriesInterleaved = async (queries: number): Promise<void> => {
 describe("db query counter logger", () => {
   test("does nothing and reports no count without an active store", () => {
     expect(currentQueryCount()).toBeUndefined();
+    expect(currentTransactionCount()).toBeUndefined();
+    recordDbTransaction();
     // Must not throw when no request/task store is active (background jobs).
     queryCountLogger.logQuery("SELECT 1", []);
     expect(currentQueryCount()).toBeUndefined();
@@ -55,6 +63,67 @@ describe("db query counter logger", () => {
 
     expect(first).toBe(3);
     expect(second).toBe(5);
+  });
+});
+
+// A lazy Bun client with a fake transport exercises the installed Drizzle driver
+// without a database: begin/savepoint callbacks still cross the real wrappers.
+const createCountingClient = (client: SQL) => {
+  Object.defineProperties(client, {
+    begin: {
+      configurable: true,
+      value: async (
+        optionsOrCallback: string | ((transaction: SQL) => Promise<unknown>),
+        callback?: (transaction: SQL) => Promise<unknown>,
+      ) => {
+        await Promise.resolve();
+        const work =
+          typeof optionsOrCallback === "string"
+            ? (callback ?? panic("test transaction callback missing"))
+            : optionsOrCallback;
+        return await work(client);
+      },
+    },
+    savepoint: {
+      configurable: true,
+      value: async (callback: (transaction: SQL) => Promise<unknown>) =>
+        await callback(client),
+    },
+  });
+  return runTransactionsInCallerContext(client);
+};
+
+describe("request transaction counts", () => {
+  test("the installed Drizzle driver counts starts independently of statements and savepoints", async () => {
+    await withGatedTestClients(
+      "postgres://localhost/transaction-counter-unit",
+      async ({ openClient }) => {
+        const client = createCountingClient(openClient().sql);
+        const db = drizzle({ client, logger: queryCountLogger });
+        const measure = async (transactions: number) =>
+          await runWithQueryCounter(async (counter) => {
+            for (let index = 0; index < transactions; index += 1) {
+              await db.transaction(async (tx) => {
+                await tx.transaction(async () => {
+                  expect(currentTransactionCount()).toBe(index + 1);
+                });
+              });
+            }
+            await client.begin("read only", async () => undefined);
+            return {
+              queries: counter.count,
+              transactions: counter.transactions,
+            };
+          });
+
+        const counts = await Promise.all([measure(2), measure(5)]);
+        expect(counts).toEqual([
+          { queries: 0, transactions: 3 },
+          { queries: 0, transactions: 6 },
+        ]);
+        expect(currentTransactionCount()).toBeUndefined();
+      },
+    );
   });
 });
 

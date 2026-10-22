@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import type { SQL } from "bun";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { recordDbTransaction } from "@/api/lib/db-query-counter";
+
 /**
  * Runs every transaction callback on `client` in the async context of the
  * code that opened the transaction, and returns the same client.
@@ -26,7 +28,10 @@ export const runTransactionsInCallerContext = (client: SQL): SQL => {
     if (typeof optionsOrCallback !== "string") {
       return await begin(
         async (transaction) =>
-          await runInCaller(optionsOrCallback, transaction),
+          await runInCaller(() => {
+            recordDbTransaction();
+            return optionsOrCallback(transaction);
+          }),
       );
     }
     if (callback === undefined) {
@@ -34,7 +39,11 @@ export const runTransactionsInCallerContext = (client: SQL): SQL => {
     }
     return await begin(
       optionsOrCallback,
-      async (transaction) => await runInCaller(callback, transaction),
+      async (transaction) =>
+        await runInCaller(() => {
+          recordDbTransaction();
+          return callback(transaction);
+        }),
     );
   };
   Object.defineProperty(client, "begin", {
