@@ -68,6 +68,8 @@ pub enum DesktopTelemetryOperation {
   ActivityRead,
   ActivitySubscribe,
   ActivityUpdate,
+  ShortcutUpdate,
+  PermissionsUpdate,
 }
 
 impl DesktopTelemetryOperation {
@@ -94,6 +96,8 @@ impl DesktopTelemetryOperation {
       Self::ActivityRead => "activityRead",
       Self::ActivitySubscribe => "activitySubscribe",
       Self::ActivityUpdate => "activityUpdate",
+      Self::ShortcutUpdate => "shortcutUpdate",
+      Self::PermissionsUpdate => "permissionsUpdate",
     }
   }
 }
