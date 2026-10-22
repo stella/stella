@@ -9,7 +9,6 @@ import { createProbeCache } from "@/api/lib/health/probe-cache";
 import type { ProbeOutcome } from "@/api/lib/health/probe-cache";
 import {
   probeApiReadiness,
-  probeApiStartupReadiness,
   type ReadinessOutcome,
 } from "@/api/lib/health/readiness";
 import {
@@ -67,11 +66,6 @@ export const createHealthRoute = ({
     { ttlMs: PROBE_CACHE_TTL_MS },
   );
   const startupGate = createStartupGate();
-  const probeStartupReadiness = async () =>
-    await probeApiStartupReadiness({
-      probeReadiness,
-      probeSanctions: probeSanctionsStartup,
-    });
   const readinessResponse = async () => await probeCache.run();
   const livenessHandler = () => ({
     status: "ok" as const,
@@ -94,8 +88,8 @@ export const createHealthRoute = ({
     if (startupGate.startup() === STARTUP_STATE.started) {
       return { status: STARTUP_STATE.started, ...BUILD_METADATA };
     }
-    const outcome = await readinessOutcome(probeStartupReadiness);
-    if (!outcome.ok) {
+    const outcome = await readinessResponse();
+    if (!outcome.ok || probeSanctionsStartup() !== "terminal") {
       set.status = 503;
       return { status: STARTUP_STATE.starting, ...BUILD_METADATA };
     }

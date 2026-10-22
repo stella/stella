@@ -137,4 +137,19 @@ describe("startup probe", () => {
     await route.handle(startedRequest());
     expect(readinessCalls).toBe(1);
   });
+
+  test("caches dependency probes while sanctions are still warming", async () => {
+    let readinessCalls = 0;
+    const route = createHealthRoute({
+      probeReadiness: async () => {
+        readinessCalls++;
+        return { status: "ready" };
+      },
+      probeSanctionsStartup: () => "warming",
+    });
+
+    expect((await route.handle(startedRequest())).status).toBe(503);
+    expect((await route.handle(startedRequest())).status).toBe(503);
+    expect(readinessCalls).toBe(1);
+  });
 });

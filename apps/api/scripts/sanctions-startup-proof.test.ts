@@ -37,8 +37,57 @@ test("polls started before searching and rejects a warming list", async () => {
   expect(requests).toEqual([
     "https://api.example.test/started",
     "https://api.example.test/started",
-    "https://api.example.test/sanctions/search",
+    "https://api.example.test/v1/sanctions/search",
   ]);
+});
+
+test("bounds a stalled request by the remaining proof deadline", async () => {
+  const startedAt = Date.now();
+  const failure = await proveSanctionsStartup({
+    baseUrl: "https://api.example.test",
+    fetch: async (_request, init) =>
+      await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new Error("request aborted by proof deadline"));
+        });
+      }),
+    pollIntervalMs: 1,
+    pollTimeoutMs: 10,
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(Date.now() - startedAt).toBeLessThan(1000);
+  expect(failure).toMatchObject({
+    message: "The API did not report started before the proof timeout",
+  });
+});
+
+test("retries refused connections until the deadline", async () => {
+  let instant = 0;
+  let calls = 0;
+  const failure = await proveSanctionsStartup({
+    baseUrl: "https://api.example.test",
+    fetch: async () => {
+      calls++;
+      throw new Error("connection refused");
+    },
+    now: () => instant,
+    sleep: async (durationMs) => {
+      instant += durationMs;
+    },
+    pollIntervalMs: 2,
+    pollTimeoutMs: 5,
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(calls).toBe(4);
+  expect(failure).toMatchObject({
+    message: "The API did not report started before the proof timeout",
+  });
 });
 
 test("passes when every list is warm or terminally failed", async () => {

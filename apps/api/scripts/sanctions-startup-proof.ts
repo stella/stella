@@ -1,4 +1,6 @@
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
+
+import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 type Fetch = (
   input: string | URL | Request,
@@ -17,39 +19,64 @@ export const proveSanctionsStartup = async ({
   fetch: request = fetch,
   sleep = Bun.sleep,
   now = Date.now,
+  pollIntervalMs = POLL_INTERVAL_MS,
+  pollTimeoutMs = POLL_TIMEOUT_MS,
 }: {
   baseUrl: string;
   fetch?: Fetch;
   sleep?: (durationMs: number) => Promise<unknown>;
   now?: () => number;
+  pollIntervalMs?: number;
+  pollTimeoutMs?: number;
 }): Promise<void> => {
   const startedAt = now();
+  const remaining = () => pollTimeoutMs - (now() - startedAt);
+  const requestBeforeDeadline = async (
+    url: URL,
+    init?: RequestInit,
+  ): Promise<Result<Response, unknown>> =>
+    await Result.tryPromise({
+      try: async () =>
+        await request(url, {
+          ...init,
+          signal: AbortSignal.timeout(Math.max(1, remaining())),
+        }),
+      catch: (cause) => cause,
+    });
   for (;;) {
-    const response = await request(new URL("/started", baseUrl));
-    if (response.ok) {
+    const response = await requestBeforeDeadline(new URL("/started", baseUrl));
+    if (Result.isOk(response) && response.value.ok) {
       break;
     }
-    if (now() - startedAt >= POLL_TIMEOUT_MS) {
+    if (remaining() <= 0) {
       throw new SanctionsStartupProofError({
         message: "The API did not report started before the proof timeout",
       });
     }
-    await sleep(POLL_INTERVAL_MS);
+    await sleep(Math.min(pollIntervalMs, remaining()));
   }
 
-  const response = await request(new URL("/sanctions/search", baseUrl), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      subject: { type: "organization", name: "Startup proof" },
-    }),
-  });
-  if (!response.ok) {
+  const response = await requestBeforeDeadline(
+    new URL(`${STELLA_API_VERSION_PREFIX}/sanctions/search`, baseUrl),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        subject: { type: "organization", name: "Startup proof" },
+      }),
+    },
+  );
+  if (Result.isError(response)) {
     throw new SanctionsStartupProofError({
-      message: `Sanctions search failed with HTTP ${response.status}`,
+      message: "Sanctions search request failed",
     });
   }
-  const body: unknown = await response.json();
+  if (!response.value.ok) {
+    throw new SanctionsStartupProofError({
+      message: `Sanctions search failed with HTTP ${response.value.status}`,
+    });
+  }
+  const body: unknown = await response.value.json();
   if (
     typeof body !== "object" ||
     body === null ||

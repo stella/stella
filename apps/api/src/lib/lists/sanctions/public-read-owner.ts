@@ -16,6 +16,13 @@ export const sanctionsStartupWarmup = createSanctionsStartupWarmup({
       },
       practiceJurisdictions: [],
     });
-    return result.unwrap().lists;
+    return result.unwrap().lists.map((list) => ({
+      ...list,
+      loaderState:
+        list.reason === null
+          ? null
+          : screenPublicSanctionsSubject.warmupStartupState(list.source),
+    }));
   },
+  terminalize: screenPublicSanctionsSubject.warmupTerminalize,
 });
