@@ -19,7 +19,7 @@
 //   bun scripts/dependency-audit.ts                 report current high/critical advisories
 //   bun scripts/dependency-audit.ts --check         full-tree gate: exit 1 on a new high/critical advisory
 //   bun scripts/dependency-audit.ts --check-diff REF PR gate: audit only resolutions changed since REF
-//   bun scripts/dependency-audit.ts --release       release gate: exit 1 on any high/critical advisory
+//   bun scripts/dependency-audit.ts --release       release gate: apply baseline with stricter acceptance metadata
 //   bun scripts/dependency-audit.ts --write-baseline regenerate the baseline from the current audit
 //   bun scripts/dependency-audit.ts --self-test     prove the comparison logic fires
 //
@@ -492,10 +492,16 @@ type CheckOptions = {
   warningFormat?: WarningFormat;
 };
 
-export const check = async (
+type CheckResult = {
+  lapsed: LapsedAcceptance[];
+  newlyIntroduced: Advisory[];
+  status: number;
+};
+
+const checkResult = async (
   advisories: Advisory[],
   options: CheckOptions = {},
-): Promise<number> => {
+): Promise<CheckResult> => {
   const completeBaseline = options.baseline ?? (await readBaseline());
   const baseline =
     options.packages === undefined
@@ -560,7 +566,11 @@ export const check = async (
     if (lapsed.length > 0) {
       markAdvisoryFailure();
     }
-    return lapsed.length > 0 ? 1 : 0;
+    return {
+      lapsed,
+      newlyIntroduced,
+      status: lapsed.length > 0 ? 1 : 0,
+    };
   }
 
   console.error(
@@ -573,8 +583,13 @@ export const check = async (
     "\nFix the dependency (bun update / override), or, if it is genuinely not reachable, add it to scripts/dependency-audit-baseline.json with a reason.",
   );
   markAdvisoryFailure();
-  return 1;
+  return { lapsed, newlyIntroduced, status: 1 };
 };
+
+export const check = async (
+  advisories: Advisory[],
+  options: CheckOptions = {},
+): Promise<number> => (await checkResult(advisories, options)).status;
 
 // Prove the gate fires without waiting for a real new advisory: inject a
 // synthetic advisory that is absent from the baseline and assert it is caught,
@@ -658,18 +673,45 @@ const checkDiff = async (baseRevision: string): Promise<number> => {
   return check(advisories, { packages });
 };
 
-const checkRelease = async (): Promise<number> => {
-  const advisories = await collectGatedAdvisories();
-  if (advisories.length === 0) {
-    console.info("Release dependency audit found no high/critical advisories.");
-    return 0;
+export const checkRelease = async (
+  advisories: Advisory[],
+  options: CheckOptions = {},
+): Promise<number> => {
+  const baseline = options.baseline ?? (await readBaseline());
+  const result = await checkResult(advisories, { ...options, baseline });
+  const currentIds = new Set(advisories.map(({ id }) => id));
+  const invalidAcceptanceIds = new Set<string>();
+
+  for (const acceptance of baseline.accepted) {
+    if (!currentIds.has(acceptance.id)) {
+      continue;
+    }
+    console.warn(
+      `::warning title=Release dependency audit accepted advisory::${githubCommandValue(`${acceptance.id} for ${acceptance.package} is accepted by ${acceptance.owner} until ${acceptance.expiresOn ?? "missing"}.`)}`,
+    );
+    if (acceptance.expiresOn === undefined) {
+      invalidAcceptanceIds.add(acceptance.id);
+      console.error(
+        `Release dependency audit acceptance ${acceptance.id} must have expiresOn; untilPatched alone is not sufficient.`,
+      );
+    }
+    const owner = acceptance.owner.trim();
+    if (owner === "" || owner.toUpperCase().startsWith("TODO")) {
+      invalidAcceptanceIds.add(acceptance.id);
+      console.error(
+        `Release dependency audit acceptance ${acceptance.id} must have a non-placeholder owner.`,
+      );
+    }
   }
-  console.error("Release dependency audit found high/critical advisories:");
-  for (const advisory of advisories) {
-    console.error(formatAdvisory(advisory));
+
+  if (invalidAcceptanceIds.size > 0 || result.lapsed.length > 0) {
+    return 2;
   }
-  return 1;
+  return result.status;
 };
+
+const runReleaseCheck = async (): Promise<number> =>
+  checkRelease(await collectGatedAdvisories());
 
 const main = async (): Promise<void> => {
   const arg = process.argv[2];
@@ -685,7 +727,7 @@ const main = async (): Promise<void> => {
   }
 
   if (arg === "--release") {
-    process.exit(await checkRelease());
+    process.exit(await runReleaseCheck());
   }
 
   if (arg === "--self-test") {

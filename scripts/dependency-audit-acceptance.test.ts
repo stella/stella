@@ -8,6 +8,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import {
   AuditCommandError,
   check,
+  checkRelease,
   collectGatedAdvisories,
   readBaseline,
   type Advisory,
@@ -69,6 +70,98 @@ const runCheck = async (
     error.mockRestore();
   }
 };
+
+const runReleaseCheck = async (
+  advisories: Advisory[],
+  baseline: Baseline,
+  today = "2026-10-02",
+) => {
+  const output: { error: string[]; warn: string[] } = { error: [], warn: [] };
+  const info = spyOn(console, "info").mockImplementation(() => undefined);
+  const warn = spyOn(console, "warn").mockImplementation((message) => {
+    output.warn.push(String(message));
+  });
+  const error = spyOn(console, "error").mockImplementation((message) => {
+    output.error.push(String(message));
+  });
+  try {
+    const status = await checkRelease(advisories, {
+      baseline,
+      latestVersion: async () => "1.4.0",
+      now: () => new Date(`${today}T00:00:00Z`),
+      warningFormat: "plain",
+    });
+    return { ...output, status };
+  } finally {
+    info.mockRestore();
+    warn.mockRestore();
+    error.mockRestore();
+  }
+};
+
+describe("release audit acceptance", () => {
+  test("unexpired baselined advisories pass with one release warning each", async () => {
+    const second = {
+      ...currentAdvisory,
+      id: "GHSA-dddd-eeee-ffff",
+      package: "second-pkg",
+    };
+    const baseline = auditBaseline("2026-11-01");
+    baseline.accepted.push({
+      ...baseline.accepted[0]!,
+      id: second.id,
+      package: second.package,
+    });
+    const result = await runReleaseCheck([currentAdvisory, second], baseline);
+
+    expect(result.status).toBe(0);
+    expect(
+      result.warn.filter((line) =>
+        line.startsWith(
+          "::warning title=Release dependency audit accepted advisory::",
+        ),
+      ),
+    ).toHaveLength(2);
+    expect(result.warn.join("\n")).toContain(
+      "GHSA-aaaa-bbbb-cccc for pkg is accepted by test owner until 2026-11-01",
+    );
+  });
+
+  test("a new advisory fails", async () => {
+    const result = await runReleaseCheck([currentAdvisory], {
+      ...auditBaseline("2026-11-01"),
+      accepted: [],
+    });
+    expect(result.status).toBe(1);
+  });
+
+  test("an expired acceptance fails", async () => {
+    const result = await runReleaseCheck(
+      [currentAdvisory],
+      auditBaseline("2026-10-01"),
+    );
+    expect(result.status).toBe(2);
+    expect(result.error.join("\n")).toContain(advisory.id);
+  });
+
+  test("an untilPatched-only acceptance fails naming the advisory", async () => {
+    const baseline = auditBaseline();
+    baseline.accepted[0]!.untilPatched = true;
+    const result = await runReleaseCheck([currentAdvisory], baseline);
+    expect(result.status).toBe(2);
+    expect(result.error.join("\n")).toContain(advisory.id);
+    expect(result.error.join("\n")).toContain("must have expiresOn");
+  });
+
+  test("a placeholder owner fails naming the advisory", async () => {
+    const baseline = auditBaseline("2026-11-01");
+    baseline.accepted[0]!.owner = "TODO: owner";
+    const result = await runReleaseCheck([currentAdvisory], baseline);
+    expect(result.status).toBe(2);
+    expect(result.error.join("\n")).toContain(advisory.id);
+    expect(result.error.join("\n")).toContain("non-placeholder owner");
+  });
+});
 
 describe("audit acceptance expiry", () => {
   test("an accepted advisory is reported without failing", async () => {
