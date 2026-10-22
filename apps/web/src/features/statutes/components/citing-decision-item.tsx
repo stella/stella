@@ -133,7 +133,7 @@ export const CitingDecisionItem = ({
               <TooltipTrigger
                 render={
                   <button
-                    className="text-foreground-strong-muted decoration-foreground-placeholder hover:decoration-foreground-muted focus-visible:ring-ring relative cursor-default rounded-xs underline decoration-dotted underline-offset-2 transition-[text-decoration-color] duration-150 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
+                    className="text-foreground-strong-muted decoration-foreground-placeholder hover:decoration-foreground-muted focus-visible:ring-ring relative cursor-default rounded-xs underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
                     type="button"
                   />
                 }

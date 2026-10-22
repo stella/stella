@@ -73,7 +73,7 @@ export const ProvisionVersionContext = ({
         // An underlined text action, like the way into the full text below
         // it, so the status line stays one line of text rather than a toolbar.
         <button
-          className="text-foreground hover:decoration-foreground focus-visible:ring-ring decoration-foreground-placeholder relative shrink-0 cursor-pointer rounded-xs underline underline-offset-2 transition-[text-decoration-color] duration-150 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
+          className="text-foreground hover:decoration-foreground focus-visible:ring-ring decoration-foreground-placeholder relative shrink-0 cursor-pointer rounded-xs underline underline-offset-2 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
           onClick={() => onVersionChange(currentVersionId)}
           type="button"
         >
