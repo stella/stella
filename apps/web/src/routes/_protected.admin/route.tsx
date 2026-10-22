@@ -87,7 +87,7 @@ export const Route = createFileRoute("/_protected/admin")({
 
 function AdminLayout() {
   return (
-    <SettingsShell width="wide">
+    <SettingsShell>
       <Outlet />
     </SettingsShell>
   );

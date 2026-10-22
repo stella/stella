@@ -1,9 +1,9 @@
 import {
   BanknoteIcon,
-  BotIcon,
   BrainIcon,
   BuildingIcon,
   ClockIcon,
+  CpuIcon,
   EyeOffIcon,
   FileTextIcon,
   FlaskConicalIcon,
@@ -94,7 +94,7 @@ const ORGANIZATION_SECTIONS = [
     id: "ai",
     labelKey: "admin.ai",
     items: [
-      { to: "/admin/ai", labelKey: "admin.modelsAndProviders", icon: BotIcon },
+      { to: "/admin/ai", labelKey: "admin.modelsAndProviders", icon: CpuIcon },
       {
         to: "/admin/anonymization",
         labelKey: "settings.organization.anonymization.title",

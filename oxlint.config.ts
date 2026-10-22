@@ -383,8 +383,8 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-decorated-search-input.fixture.tsx", [
     "no-decorated-search-input/no-decorated-search-input",
   ]),
-  fixtureRuleOverride("no-legal-cliche-glyph.fixture.tsx", [
-    "no-legal-cliche-glyph/no-legal-cliche-glyph",
+  fixtureRuleOverride("no-banned-glyph.fixture.tsx", [
+    "no-banned-glyph/no-banned-glyph",
   ]),
   fixtureRuleOverride("no-custom-account-modal.fixture.tsx", [
     "no-custom-account-modal/no-custom-account-modal",
@@ -1525,7 +1525,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-test-support-import.ts",
-    "./.oxlint-plugins/no-legal-cliche-glyph.ts",
+    "./.oxlint-plugins/no-banned-glyph.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
@@ -3248,21 +3248,21 @@ const config = defineConfig({
       },
     },
     {
-      // Scales of justice and gavels are the stock iconography of legal
-      // software: decorative, interchangeable, and drawn by every product in
-      // the category. This design system names the concept instead — a court
-      // is a Landmark, a decision a FileText. Scoped to the surfaces a reader
-      // sees, so a script or a fixture elsewhere is unaffected.
+      // Glyphs this design system never draws: scales of justice and gavels
+      // (legal cliché; a court is a Landmark, a decision a FileText) and
+      // robots (the AI is not a character; its actions use AiActionIcon).
+      // Scoped to the surfaces a reader sees, so a script or a fixture
+      // elsewhere is unaffected.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
         "packages/ui/src/**/*.{ts,tsx}",
         "packages/workspace-ui/src/**/*.{ts,tsx}",
         "apps/landing/src/**/*.{ts,tsx}",
         "apps/desktop/src/**/*.{ts,tsx}",
-        ".oxlint-plugins/__fixtures__/no-legal-cliche-glyph.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/no-banned-glyph.fixture.tsx",
       ],
       rules: {
-        "no-legal-cliche-glyph/no-legal-cliche-glyph": "error",
+        "no-banned-glyph/no-banned-glyph": "error",
       },
     },
     {

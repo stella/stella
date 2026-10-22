@@ -33,15 +33,7 @@ const NAV_ITEM_CLASS = cn(
   "focus-visible:ring-ring focus-visible:ring-2",
 );
 
-const CONTENT_WIDTH_CLASS = {
-  // Account forms.
-  narrow: "max-w-3xl",
-  // Organization pages carry member and activity tables.
-  wide: "max-w-5xl",
-} as const;
-
 type SettingsShellProps = {
-  width: keyof typeof CONTENT_WIDTH_CLASS;
   children: ReactNode;
 };
 
@@ -49,7 +41,7 @@ type SettingsShellProps = {
  * The settings area inside the app frame: account and organization pages
  * share this navigation, so moving between them never changes the frame.
  */
-export const SettingsShell = ({ width, children }: SettingsShellProps) => {
+export const SettingsShell = ({ children }: SettingsShellProps) => {
   const t = useTranslations();
   const memoryEnabled = useCallerFeatureEnabled(CALLER_FEATURE.aiMemory);
   const timeBilling = useTimeBillingPreviewEnabled();
@@ -174,12 +166,9 @@ export const SettingsShell = ({ width, children }: SettingsShellProps) => {
       </div>
       <ScrollArea className="min-h-0 min-w-0 flex-1">
         <main className="flex min-w-0 flex-col">
-          <div
-            className={cn(
-              "mx-auto flex w-full flex-col gap-4 p-6",
-              CONTENT_WIDTH_CLASS[width],
-            )}
-          >
+          {/* One width for every page: organization tables need it, and
+              moving between sections never shifts the content. */}
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-6">
             <QueryViewFeedback view={roleView} />
             {children}
           </div>

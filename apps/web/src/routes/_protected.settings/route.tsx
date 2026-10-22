@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_protected/settings")({
 
 function SettingsLayout() {
   return (
-    <SettingsShell width="narrow">
+    <SettingsShell>
       <Outlet />
     </SettingsShell>
   );

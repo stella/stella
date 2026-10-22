@@ -6,7 +6,12 @@ import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/admin/general" });
-Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
+// Beta availability otherwise reads the request host through the server
+// runtime; the deployment switch decides it here.
+Object.assign(import.meta.env, {
+  VITE_API_URL: "http://localhost:3001",
+  VITE_BETA_FEATURES_ENABLED: "true",
+});
 const originalFetch = globalThis.fetch;
 
 const { QueryClient, QueryClientProvider } =
@@ -18,7 +23,6 @@ const en = (await import("@/i18n/langs/en.json")).default;
 const ar = (await import("@/i18n/langs/ar.json")).default;
 const { roleOptions } = await import("@/lib/auth-queries");
 const { supportedLanguages } = await import("@/i18n/i18n-store");
-const { betaFeaturesAvailable } = await import("@/lib/beta-features");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { SettingsShell } = await import("./settings-shell");
@@ -84,7 +88,7 @@ const renderShell = async (locale: "en" | "ar", role: Role) => {
   const messages = locale === "en" ? en : ar;
   const rootRoute = router.createRootRoute({
     component: () => (
-      <SettingsShell width="wide">
+      <SettingsShell>
         <p data-testid="settings-content" />
       </SettingsShell>
     ),
@@ -128,7 +132,7 @@ test.each(
       "/settings/account/profile",
       "/settings/account/desktop",
       "/settings/account/connections",
-      ...(betaFeaturesAvailable() ? ["/settings/account/beta"] : []),
+      "/settings/account/beta",
       "/admin/general",
       "/admin/members",
       "/admin/usage",
