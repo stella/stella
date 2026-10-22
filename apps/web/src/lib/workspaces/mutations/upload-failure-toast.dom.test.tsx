@@ -115,3 +115,33 @@ test("a batch refused only by action admission keeps the refusal notice", async 
   expect(view.queryByText("first.pdf")).toBeNull();
   expect(view.queryByText(/Internal details/u)).toBeNull();
 });
+
+test("same-named files from different folders each keep their own row", async () => {
+  const view = render(<ToastProvider />);
+  const failures = [415, 413].map((status) => ({
+    file: new File(["x"], "contract.pdf"),
+    error: toAPIError({ status, value: { message: "Private detail" } }),
+    disposition: "permanent" as const,
+  }));
+
+  await act(async () => {
+    showUploadFailureToast({
+      toastId: stellaToast.loading("Uploading"),
+      title: "Upload failed",
+      type: "error",
+      failures,
+      labels: {
+        reasonFallback: "Upload failed",
+        additionalFailures: (count) => `and ${String(count)} more`,
+        retryFailed: (count) => `Retry ${String(count)} files`,
+      },
+      onRetry: () => undefined,
+    });
+    await sleep(20);
+  });
+
+  const rows = view.getAllByText("contract.pdf");
+  expect(rows).toHaveLength(2);
+  expect(rows[0]?.parentElement?.textContent).toContain("request failed");
+  expect(rows[1]?.parentElement?.textContent).toContain("too large");
+});

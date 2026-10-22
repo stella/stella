@@ -10,7 +10,7 @@ import type { FailedUpload } from "@/lib/upload-queue";
 
 const MAX_DISPLAYED_FAILURES = 3;
 
-export type UploadFailureToastLabels = {
+type UploadFailureToastLabels = {
   reasonFallback: string;
   additionalFailures: (count: number) => string;
   retryFailed: (count: number) => string;
@@ -96,6 +96,21 @@ const UploadFailureDescription = ({
   );
 };
 
+// Files from different dropped folders can share a name; the File object is
+// the row's identity.
+const failureRowKeys = new WeakMap<File, string>();
+let nextFailureRowKey = 0;
+const failureRowKey = (file: File): string => {
+  const known = failureRowKeys.get(file);
+  if (known !== undefined) {
+    return known;
+  }
+  nextFailureRowKey += 1;
+  const key = `upload-failure-${String(nextFailureRowKey)}`;
+  failureRowKeys.set(file, key);
+  return key;
+};
+
 const FailureList = ({
   failures,
   fallback,
@@ -105,7 +120,7 @@ const FailureList = ({
 }) => (
   <span className="block">
     {failures.map(({ file, error }) => (
-      <span className="block" key={file.name}>
+      <span className="block" key={failureRowKey(file)}>
         <bdi>{file.name}</bdi>: {failureReason(error, fallback)}
       </span>
     ))}
