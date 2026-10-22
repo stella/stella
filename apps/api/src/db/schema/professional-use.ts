@@ -53,6 +53,12 @@ export const userProfessionalUseAcceptances = p.pgTable(
       .default(PROFESSIONAL_USE_ACCEPTANCE_SOURCE.recordedBeforeProvenance),
   },
   () => [
+    p.check(
+      "user_professional_use_acceptances_source_values",
+      sql.raw(
+        `source IN (${PROFESSIONAL_USE_ACCEPTANCE_SOURCES.map((source) => `'${source}'`).join(", ")})`,
+      ),
+    ),
     p.pgPolicy("user_professional_use_acceptances_owner_access", {
       for: "all",
       to: "public",
