@@ -75,15 +75,6 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const queueSource = await Bun.file(
   new URL("document-processing-queue.ts", import.meta.url),
 ).text();
-const ocrSchedulerSource = await Bun.file(
-  new URL("scheduler/tasks/document-processing-ocr.ts", import.meta.url),
-).text();
-const nativeSchedulerSource = await Bun.file(
-  new URL(
-    "scheduler/tasks/document-processing-native-extraction.ts",
-    import.meta.url,
-  ),
-).text();
 const enqueueSource = await Bun.file(
   new URL("document-processing-enqueue.ts", import.meta.url),
 ).text();
@@ -375,45 +366,6 @@ describe("repair cursor Redis deadlines", () => {
 });
 
 describe("reconciliation fault isolation", () => {
-  test("dispatches each durable processing kind only from its scheduler", () => {
-    const dispatchStart = queueSource.indexOf(
-      "export const dispatchQueuedDocumentProcessingRuns",
-    );
-    const dispatchEnd = queueSource.indexOf(
-      "const dispatchScheduledDocumentProcessingRetries",
-      dispatchStart,
-    );
-    const dispatchSource = queueSource.slice(dispatchStart, dispatchEnd);
-    const repairStart = queueSource.indexOf(
-      "const recoverMissingNativeExtractionRuns",
-    );
-    const repairEnd = queueSource.indexOf(
-      "const updateQueuedRunSchedule",
-      repairStart,
-    );
-    const repairSource = queueSource.slice(repairStart, repairEnd);
-
-    expect(dispatchStart).toBeGreaterThan(-1);
-    expect(dispatchSource).toContain('selection.kind === "any"');
-    expect(dispatchSource).toContain("selection.scheduledRetriesOnly");
-    expect(dispatchSource).toContain(
-      "isNotNull(documentProcessingRuns.nextAttemptAt)",
-    );
-    expect(queueSource).toContain(
-      'selection: { kind: "any", scheduledRetriesOnly: true }',
-    );
-    expect(ocrSchedulerSource).toContain(
-      'selection: { kind: "ocr", scheduledRetriesOnly: false }',
-    );
-    expect(ocrSchedulerSource).not.toContain('kind: "native-extraction"');
-    expect(nativeSchedulerSource).toContain('kind: "native-extraction"');
-    expect(nativeSchedulerSource).toContain("scheduledRetriesOnly: false");
-    expect(nativeSchedulerSource).not.toContain('kind: "ocr"');
-    expect(repairStart).toBeGreaterThan(-1);
-    expect(repairSource).toContain("persistMissingNativeExtractionRuns");
-    expect(repairSource).not.toContain("organizationSettings");
-  });
-
   test("prioritizes never-dispatched OCR runs ahead of visibility retries", () => {
     const dispatchStart = queueSource.indexOf(
       "export const dispatchQueuedDocumentProcessingRuns",

@@ -16,6 +16,7 @@ import {
   fields,
   fileChatThreads,
   pendingUploads,
+  searchProjectionRepairQueue,
   workspaces,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
@@ -320,11 +321,26 @@ const buildTx = ({
       if ("max" in selectedFields) {
         return maxVersionNumberSelect;
       }
+      if ("sourceId" in selectedFields && "organizationId" in selectedFields) {
+        return {
+          from: () => ({
+            innerJoin: () => ({ where: async () => [{ sourceId: entityId }] }),
+          }),
+        };
+      }
       return editSessionSelect;
     },
     execute: async (query: SQL) =>
       new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
     insert: (table: unknown) => ({
+      select: (query: Promise<unknown>) => ({
+        onConflictDoUpdate: async () => {
+          if (table !== searchProjectionRepairQueue) {
+            throw new TypeError("Unexpected insert-select target");
+          }
+          await query;
+        },
+      }),
       values: (values: unknown) => {
         insertedTables.push({ table, values });
         if (table === pendingUploads) {

@@ -9,6 +9,7 @@ import {
   entityVersions,
   fields,
   pendingUploads,
+  searchProjectionRepairQueue,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import {
@@ -100,8 +101,25 @@ describe("createCreateWorkspaceDocumentTools", () => {
       },
       execute: async () => [{ id: workspaceId }],
       $count: async () => 0,
-      select: () => createSelectQueryMock([{ status: "active" }]),
+      select: (selection: Record<string, unknown>) =>
+        "sourceId" in selection
+          ? {
+              from: () => ({
+                innerJoin: () => ({
+                  where: async () => [{ organizationId, sourceId: "entity" }],
+                }),
+              }),
+            }
+          : createSelectQueryMock([{ status: "active" }]),
       insert: (table: unknown) => ({
+        select: (query: Promise<unknown>) => ({
+          onConflictDoUpdate: async () => {
+            if (table !== searchProjectionRepairQueue) {
+              throw new TypeError("Unexpected insert-select target");
+            }
+            await query;
+          },
+        }),
         values: (values: { id?: string; name?: string }) => {
           if (table === documentCounters) {
             return {

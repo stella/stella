@@ -2207,7 +2207,10 @@ export const buildPersistentSteps = ({
   // readiness-checked steps: checks pair with steps by position. Seeded stacks
   // keep the scheduler disabled in the API process, but run the
   // queue worker separately so uploaded document text is indexed locally.
-  if (modeIncludesApi(mode)) {
+  if (
+    modeIncludesApi(mode) &&
+    (seeded || apiEnv["SCHEDULED_JOBS_MODE"] !== "disabled")
+  ) {
     primary.push({
       cmd: [
         resolveCommandPath("bun"),
