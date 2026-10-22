@@ -104,6 +104,186 @@ test("every adapter has an authority rank", () => {
   }
 });
 
+test(
+  "bounded apply pages progress past pairs linked by earlier runs",
+  async () => {
+    const isolatedClient = await createTestPglite();
+    const isolatedDb = drizzle({ client: isolatedClient });
+    const officialSource = createSafeId<"caseLawSource">();
+    const publisherSource = createSafeId<"caseLawSource">();
+    await isolatedDb.insert(caseLawSources).values([
+      { id: officialSource, adapterKey: ADAPTER_KEYS.PL_TK, name: "Official" },
+      {
+        id: publisherSource,
+        adapterKey: ADAPTER_KEYS.PL_COURTS,
+        name: "Publisher",
+      },
+    ]);
+    const pairs = ["page-one", "page-two"].map((docket, index) => ({
+      canonicalId: createSafeId<"caseLawDecision">(),
+      docket,
+      duplicateId: createSafeId<"caseLawDecision">(),
+      index,
+    }));
+    await isolatedDb.insert(caseLawDecisions).values(
+      pairs.flatMap(({ canonicalId: id, docket, duplicateId, index }) => {
+        const common = {
+          country: "POL",
+          court: `Pagination court ${String(index)}`,
+          language: "pl",
+          caseNumber: `P ${String(index)}/26`,
+          docketFamilyKey: docket,
+          decisionDate: "2026-07-01",
+          decisionType: "wyrok",
+        };
+        return [
+          {
+            ...common,
+            id,
+            sourceId: officialSource,
+            sourceDocumentId: `${docket}-official`,
+          },
+          {
+            ...common,
+            id: duplicateId,
+            sourceId: publisherSource,
+            sourceDocumentId: `${docket}-publisher`,
+          },
+        ];
+      }),
+    );
+    await isolatedDb.insert(caseLawDecisionSourceIdentities).values(
+      pairs.map(({ docket, duplicateId }) => ({
+        sourceId: publisherSource,
+        sourceDocumentId: `${docket}-publisher`,
+        decisionId: duplicateId,
+      })),
+    );
+
+    const applied: SafeId<"caseLawDecision">[] = [];
+    for (let page = 0; page < 2; page += 1) {
+      const candidates = await selectRepublishedDecisionCandidates(
+        isolatedDb,
+        1,
+      );
+      expect(candidates).toHaveLength(1);
+      const candidate =
+        candidates.at(0) ??
+        panic("Pagination fixture must select one candidate");
+      await isolatedDb.transaction(async (tx) => {
+        const outcomes = await applyRepublishedDecisionBatch(
+          tx,
+          candidates,
+          async () => undefined,
+        );
+        expect(outcomes).toEqual([
+          { type: "linked", retiredId: candidate.duplicate.id },
+        ]);
+        applied.push(candidate.duplicate.id);
+      });
+    }
+    expect(new Set(applied)).toEqual(
+      new Set(pairs.map(({ duplicateId }) => duplicateId)),
+    );
+    expect(await selectRepublishedDecisionCandidates(isolatedDb, 1)).toEqual(
+      [],
+    );
+    expect(
+      (await selectRepublishedDecisionReport(isolatedDb)).outcomes
+        .separateAlreadyRetired,
+    ).toBe(2);
+    await isolatedClient.close();
+  },
+  { timeout: 120_000 },
+);
+
+test(
+  "a survivor-refused pair never occupies an actionable page",
+  async () => {
+    const isolatedClient = await createTestPglite();
+    const isolatedDb = drizzle({ client: isolatedClient });
+    const officialSource = createSafeId<"caseLawSource">();
+    const publisherSource = createSafeId<"caseLawSource">();
+    const firstPublisherSource = createSafeId<"caseLawSource">();
+    await isolatedDb.insert(caseLawSources).values([
+      { id: officialSource, adapterKey: ADAPTER_KEYS.PL_TK, name: "Official" },
+      {
+        id: publisherSource,
+        adapterKey: ADAPTER_KEYS.PL_COURTS,
+        name: "Publisher",
+      },
+      {
+        id: firstPublisherSource,
+        adapterKey: ADAPTER_KEYS.AT_COURTS,
+        name: "First publisher",
+      },
+    ]);
+    const refusedRetiredId = createSafeId<"caseLawDecision">();
+    const survivorId = createSafeId<"caseLawDecision">();
+    const refusedCanonicalId = createSafeId<"caseLawDecision">();
+    const eligibleCanonicalId = createSafeId<"caseLawDecision">();
+    const eligibleDuplicateId = createSafeId<"caseLawDecision">();
+    const common = (court: string, docketFamilyKey: string) => ({
+      country: "POL",
+      court,
+      language: "pl",
+      caseNumber: docketFamilyKey,
+      docketFamilyKey,
+      decisionDate: "2026-07-02",
+      decisionType: "wyrok",
+    });
+    await isolatedDb.insert(caseLawDecisions).values([
+      {
+        ...common("Refused court", "retired-docket"),
+        id: refusedRetiredId,
+        sourceId: firstPublisherSource,
+        sourceDocumentId: "retired",
+      },
+      {
+        ...common("Refused court", "refused-docket"),
+        id: survivorId,
+        sourceId: publisherSource,
+        sourceDocumentId: "survivor",
+      },
+      {
+        ...common("Refused court", "refused-docket"),
+        id: refusedCanonicalId,
+        sourceId: officialSource,
+        sourceDocumentId: "refused-canonical",
+      },
+      {
+        ...common("Eligible court", "eligible-docket"),
+        id: eligibleCanonicalId,
+        sourceId: officialSource,
+        sourceDocumentId: "eligible-canonical",
+      },
+      {
+        ...common("Eligible court", "eligible-docket"),
+        id: eligibleDuplicateId,
+        sourceId: publisherSource,
+        sourceDocumentId: "eligible-duplicate",
+      },
+    ]);
+    await isolatedDb.insert(caseLawDecisionSourceIdentities).values({
+      sourceId: firstPublisherSource,
+      sourceDocumentId: "retired",
+      decisionId: survivorId,
+    });
+    await isolatedDb.insert(caseLawDecisionAliases).values({
+      retiredDecisionId: refusedRetiredId,
+      canonicalDecisionId: survivorId,
+    });
+
+    const candidates = await selectRepublishedDecisionCandidates(isolatedDb, 1);
+    expect(candidates).toHaveLength(1);
+    expect(candidates.at(0)?.duplicate.id).toBe(eligibleDuplicateId);
+    const report = await selectRepublishedDecisionReport(isolatedDb);
+    expect(report.outcomes.separateAliasGroupSurvivor).toBe(1);
+    await isolatedClient.close();
+  },
+  { timeout: 120_000 },
+);
+
 test("dry run is read-only and court authority wins over storage age", async () => {
   const candidates = await db.transaction(
     async (tx) => await selectRepublishedDecisionCandidates(tx, 10),
@@ -397,22 +577,11 @@ test("a survivor cannot be retired into a later publication", async () => {
   const refused = (await selectRepublishedDecisionCandidates(db, 100)).find(
     ({ duplicate }) => duplicate.id === survivorId,
   );
-  expect(refused).toMatchObject({
-    canonical: { id: laterId },
-    disposition: "separate_alias_group_survivor",
-    duplicate: { id: survivorId },
-  });
-  if (!refused) {
-    panic("Successive chain fixture must be reported");
-  }
+  expect(refused).toBeUndefined();
   expect(
-    await db.transaction(
-      async (tx) =>
-        await applyRepublishedDecisionBatch(tx, [refused], async () =>
-          panic("A refused chain must not be reconciled"),
-        ),
-    ),
-  ).toEqual([{ type: "separate_alias_group_survivor", retiredId: survivorId }]);
+    (await selectRepublishedDecisionReport(db)).outcomes
+      .separateAliasGroupSurvivor,
+  ).toBeGreaterThanOrEqual(1);
   expect(
     await db
       .select({ id: canonicalDecisionIdSql(caseLawDecisions.id) })
@@ -435,7 +604,7 @@ test("a survivor cannot be retired into a later publication", async () => {
   await db.delete(caseLawSources).where(eq(caseLawSources.id, firstSource));
 });
 
-test("selection refuses a decision that is already retired", async () => {
+test("selection excludes a decision that is already retired", async () => {
   const ids = [
     createSafeId<"caseLawDecision">(),
     createSafeId<"caseLawDecision">(),
@@ -485,7 +654,10 @@ test("selection refuses a decision that is already retired", async () => {
   const candidate = (await selectRepublishedDecisionCandidates(db, 100)).find(
     ({ duplicate }) => duplicate.id === retired,
   );
-  expect(candidate?.disposition).toBe("separate_already_retired");
+  expect(candidate).toBeUndefined();
+  expect(
+    (await selectRepublishedDecisionReport(db)).outcomes.separateAlreadyRetired,
+  ).toBeGreaterThanOrEqual(1);
   await db
     .delete(caseLawDecisionAliases)
     .where(eq(caseLawDecisionAliases.retiredDecisionId, retired));

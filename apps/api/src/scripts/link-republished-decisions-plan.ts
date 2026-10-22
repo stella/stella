@@ -10,6 +10,7 @@ import {
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -148,32 +149,70 @@ const side = (
   };
 };
 
-const canonicalFirst = (left: CandidateSide, right: CandidateSide): boolean => {
-  const authority =
-    SOURCE_AUTHORITY[left.adapterKey] - SOURCE_AUTHORITY[right.adapterKey];
-  if (authority !== 0) {
-    return authority < 0;
-  }
-  const stored = left.createdAt.getTime() - right.createdAt.getTime();
-  return stored === 0 ? left.id < right.id : stored < 0;
+const pairStateSql = (duplicateId: SQL, canonicalId: SQL) => {
+  const survivor = sql`EXISTS (SELECT 1 FROM case_law_decision_aliases alias
+                                WHERE alias.canonical_decision_id = ${duplicateId})`;
+  const alreadyRetired = sql`EXISTS (SELECT 1 FROM case_law_decision_aliases alias
+                                     WHERE alias.retired_decision_id IN (${duplicateId}, ${canonicalId}))`;
+  return {
+    actionable: sql`NOT (${survivor}) AND NOT (${alreadyRetired})`,
+    alreadyRetired,
+    survivor,
+  };
 };
 
-const candidateDisposition = ({
-  canonicalRetired,
-  duplicateRetired,
-  duplicateSurvivor,
-}: {
-  canonicalRetired: boolean;
-  duplicateRetired: boolean;
-  duplicateSurvivor: boolean;
-}): CandidateDisposition => {
-  if (duplicateSurvivor) {
-    return "separate_alias_group_survivor";
-  }
-  if (duplicateRetired || canonicalRetired) {
-    return "separate_already_retired";
-  }
-  return "link";
+const sourceAuthoritySql = (sourceAdapterKey: SQL): SQL =>
+  sqlCaseFragment({
+    branches: Object.entries(SOURCE_AUTHORITY).map(
+      ([key, authority]) => sql`WHEN ${key} THEN ${authority}`,
+    ),
+    fallback: sql`2147483647`,
+    operand: sourceAdapterKey,
+  });
+
+const candidatePairsSql = (until: Date): SQL => {
+  const sameCourt = republishedRulingCourtPredicate(
+    { court: sql`a.court`, courtId: sql`a.court_id` },
+    { court: sql`b.court`, courtId: sql`b.court_id` },
+  );
+  const leftFirst = sql`(
+    ${sourceAuthoritySql(sql`a_source.adapter_key`)} < ${sourceAuthoritySql(sql`b_source.adapter_key`)}
+    OR (${sourceAuthoritySql(sql`a_source.adapter_key`)} = ${sourceAuthoritySql(sql`b_source.adapter_key`)}
+        AND (a.created_at < b.created_at OR (a.created_at = b.created_at AND a.id < b.id)))
+  )`;
+  return sql`
+    pairs AS MATERIALIZED (
+      SELECT a.id AS left_id, b.id AS right_id
+        FROM case_law_decisions a
+        JOIN case_law_decisions b
+          ON a.id < b.id
+         AND a.source_id <> b.source_id
+         AND a.country = b.country
+         AND ${sameCourt}
+         AND a.docket_family_key = b.docket_family_key
+         AND a.decision_date = b.decision_date
+         AND lower(a.decision_type) = lower(b.decision_type)
+       WHERE a.docket_family_key IS NOT NULL
+         AND a.redacted_at IS NULL
+         AND b.redacted_at IS NULL
+         AND a.created_at <= ${until}::timestamptz
+         AND b.created_at <= ${until}::timestamptz
+         AND a.decision_date IS NOT NULL
+         AND a.decision_type IS NOT NULL
+    ), singles AS MATERIALIZED (
+      SELECT p.*
+        FROM pairs p
+       WHERE (SELECT count(*) FROM pairs q WHERE q.left_id = p.left_id OR q.right_id = p.left_id) = 1
+         AND (SELECT count(*) FROM pairs q WHERE q.left_id = p.right_id OR q.right_id = p.right_id) = 1
+    ), classified AS MATERIALIZED (
+      SELECT CASE WHEN ${leftFirst} THEN a.id ELSE b.id END AS canonical_id,
+             CASE WHEN ${leftFirst} THEN b.id ELSE a.id END AS duplicate_id
+        FROM singles p
+        JOIN case_law_decisions a ON a.id = p.left_id
+        JOIN case_law_sources a_source ON a_source.id = a.source_id
+        JOIN case_law_decisions b ON b.id = p.right_id
+        JOIN case_law_sources b_source ON b_source.id = b.source_id
+    )`;
 };
 
 /** One bounded, stable page. A complete identity requires date, type and docket. */
@@ -181,47 +220,21 @@ export const selectRepublishedDecisionCandidatesStatement = (
   limit: number,
   until: Date = new Date("9999-12-31T23:59:59.999Z"),
 ) => {
-  const sameCourt = republishedRulingCourtPredicate(
-    { court: sql`a.court`, courtId: sql`a.court_id` },
-    { court: sql`b.court`, courtId: sql`b.court_id` },
-  );
+  const pairState = pairStateSql(sql`p.duplicate_id`, sql`p.canonical_id`);
   return sql`
-  WITH pairs AS MATERIALIZED (
-    SELECT a.id AS left_id, b.id AS right_id
-      FROM case_law_decisions a
-      JOIN case_law_decisions b
-        ON a.id < b.id
-       AND a.source_id <> b.source_id
-       AND a.country = b.country
-       AND ${sameCourt}
-       AND a.docket_family_key = b.docket_family_key
-       AND a.decision_date = b.decision_date
-       AND lower(a.decision_type) = lower(b.decision_type)
-     WHERE a.docket_family_key IS NOT NULL
-       AND a.redacted_at IS NULL
-       AND b.redacted_at IS NULL
-       AND a.created_at <= ${until}::timestamptz
-       AND b.created_at <= ${until}::timestamptz
-       AND a.decision_date IS NOT NULL
-       AND a.decision_type IS NOT NULL
-  ), singles AS (
+  WITH ${candidatePairsSql(until)}, actionable AS (
     SELECT p.*
-      FROM pairs p
-     WHERE (SELECT count(*) FROM pairs q WHERE q.left_id = p.left_id OR q.right_id = p.left_id) = 1
-       AND (SELECT count(*) FROM pairs q WHERE q.left_id = p.right_id OR q.right_id = p.right_id) = 1
-     ORDER BY p.left_id, p.right_id
+      FROM classified p
+     WHERE ${pairState.actionable}
+     ORDER BY p.canonical_id, p.duplicate_id
      LIMIT ${limit}
   )
   SELECT l.id AS "leftId", ls.adapter_key AS "leftAdapterKey", l.created_at AS "leftCreatedAt",
-         EXISTS (SELECT 1 FROM case_law_decision_aliases a WHERE a.canonical_decision_id = l.id) AS "leftSurvivor",
-         EXISTS (SELECT 1 FROM case_law_decision_aliases a WHERE a.retired_decision_id = l.id) AS "leftRetired",
-         r.id AS "rightId", rs.adapter_key AS "rightAdapterKey", r.created_at AS "rightCreatedAt",
-         EXISTS (SELECT 1 FROM case_law_decision_aliases a WHERE a.canonical_decision_id = r.id) AS "rightSurvivor",
-         EXISTS (SELECT 1 FROM case_law_decision_aliases a WHERE a.retired_decision_id = r.id) AS "rightRetired"
-    FROM singles p
-    JOIN case_law_decisions l ON l.id = p.left_id
+         r.id AS "rightId", rs.adapter_key AS "rightAdapterKey", r.created_at AS "rightCreatedAt"
+    FROM actionable p
+    JOIN case_law_decisions l ON l.id = p.canonical_id
     JOIN case_law_sources ls ON ls.id = l.source_id
-    JOIN case_law_decisions r ON r.id = p.right_id
+    JOIN case_law_decisions r ON r.id = p.duplicate_id
     JOIN case_law_sources rs ON rs.id = r.source_id
    ORDER BY l.id, r.id
 `;
@@ -240,26 +253,11 @@ export const selectRepublishedDecisionCandidates = async (
     if (!isRecord(value)) {
       return panic("Republished-decision selection returned a non-row");
     }
-    const left = side(value, "left");
-    const right = side(value, "right");
-    const leftSurvivor = value["leftSurvivor"] === true;
-    const rightSurvivor = value["rightSurvivor"] === true;
-    const keepLeft = canonicalFirst(left, right);
-    const canonical = keepLeft ? left : right;
-    const duplicate = keepLeft ? right : left;
-    const duplicateSurvivor = keepLeft ? rightSurvivor : leftSurvivor;
-    const duplicateRetired = keepLeft
-      ? value["rightRetired"] === true
-      : value["leftRetired"] === true;
-    const canonicalRetired = keepLeft
-      ? value["leftRetired"] === true
-      : value["rightRetired"] === true;
-    const disposition = candidateDisposition({
-      canonicalRetired,
-      duplicateRetired,
-      duplicateSurvivor,
-    });
-    return { canonical, disposition, duplicate };
+    return {
+      canonical: side(value, "left"),
+      disposition: "link",
+      duplicate: side(value, "right"),
+    } satisfies RepublishedDecisionCandidate;
   });
 
 const reportCount = (row: Record<string, unknown>, key: string): number => {
@@ -278,6 +276,19 @@ export const selectRepublishedDecisionReport = async (
     tx,
     2_147_483_647,
   );
+  const pairState = pairStateSql(sql`p.duplicate_id`, sql`p.canonical_id`);
+  const refusalRows = executedRows(
+    await tx.execute(sql`
+      WITH ${candidatePairsSql(new Date("9999-12-31T23:59:59.999Z"))}
+      SELECT count(*) FILTER (WHERE ${pairState.survivor}) AS "survivor",
+             count(*) FILTER (WHERE NOT (${pairState.survivor}) AND ${pairState.alreadyRetired}) AS "alreadyRetired"
+        FROM classified p
+    `),
+  );
+  const refusalRow = refusalRows.at(0);
+  if (!isRecord(refusalRow)) {
+    return panic("Republished-decision refusal report returned an invalid row");
+  }
   const bySource = new Map<string, number>();
   for (const { disposition, duplicate } of candidates) {
     if (disposition !== "link") {
@@ -334,12 +345,8 @@ export const selectRepublishedDecisionReport = async (
     outcomes: {
       linked: candidates.filter(({ disposition }) => disposition === "link")
         .length,
-      separateAliasGroupSurvivor: candidates.filter(
-        ({ disposition }) => disposition === "separate_alias_group_survivor",
-      ).length,
-      separateAlreadyRetired: candidates.filter(
-        ({ disposition }) => disposition === "separate_already_retired",
-      ).length,
+      separateAliasGroupSurvivor: reportCount(refusalRow, "survivor"),
+      separateAlreadyRetired: reportCount(refusalRow, "alreadyRetired"),
       separateAmbiguous: reportCount(row, "separateAmbiguous"),
       separatePartial: {
         dateAbsent: reportCount(row, "dateAbsent"),
@@ -377,7 +384,10 @@ export const applyRepublishedDecisionBatch = async (
     return [];
   }
   await lockCaseLawRepublication({ tx, mode: "exclusive" });
-  // sql-perf-allow: bounded by the caller's repair page and indexed alias IDs
+  const pairState = pairStateSql(
+    sql`requested.retired_id`,
+    sql`requested.canonical_id`,
+  );
   const rows = executedRows(
     await tx.execute(sql`
       WITH requested AS MATERIALIZED (
@@ -389,11 +399,9 @@ export const applyRepublishedDecisionBatch = async (
       ), pairs AS MATERIALIZED (
         SELECT requested.retired_id, requested.canonical_id,
                retired.redacted_at IS NOT NULL OR canonical.redacted_at IS NOT NULL AS erased,
-               EXISTS (SELECT 1 FROM case_law_decision_aliases alias
-                        WHERE alias.canonical_decision_id = requested.retired_id) AS survivor,
-               EXISTS (SELECT 1 FROM case_law_decision_aliases alias
-                        WHERE alias.retired_decision_id IN
-                          (requested.retired_id, requested.canonical_id)) AS already_retired
+               ${pairState.survivor} AS survivor,
+               ${pairState.alreadyRetired} AS already_retired,
+               ${pairState.actionable} AS actionable
           FROM requested
           JOIN case_law_decisions retired ON retired.id = requested.retired_id
           JOIN case_law_decisions canonical ON canonical.id = requested.canonical_id
@@ -402,8 +410,7 @@ export const applyRepublishedDecisionBatch = async (
            SET decision_id = pair.canonical_id
           FROM pairs pair
          WHERE NOT pair.erased
-           AND NOT pair.survivor
-           AND NOT pair.already_retired
+           AND pair.actionable
            AND identity.decision_id = pair.retired_id
         RETURNING pair.retired_id, pair.canonical_id,
                   identity.source_id, identity.source_document_id
