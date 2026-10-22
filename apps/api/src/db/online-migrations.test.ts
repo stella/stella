@@ -115,6 +115,9 @@ const VALIDATE_CONSTRAINT_FRAGMENT = `VALIDATE CONSTRAINT "${DECISION_DATE_CONST
 const DELETE_RECEIPT_CONSTRAINT =
   "corpus_index_projection_intents_delete_receipt_paired";
 const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_CONSTRAINT}"`;
+/** A pooled session's own timeout, not the role default. */
+const SESSION_STATEMENT_TIMEOUT = "30s";
+const RESTORED_SESSION_TIMEOUT = `SELECT set_config('statement_timeout', $1, false)\n-- params ${JSON.stringify([SESSION_STATEMENT_TIMEOUT])}`;
 const CLEANUP_STALL_CONSTRAINTS = [
   "corpus_index_projection_intents_status_values",
   "corpus_index_projection_intents_status_shape",
@@ -147,8 +150,8 @@ describe("online migrations", () => {
     expect(await assertOnlineMigrationsApplied(harness.pool)).toEqual({
       type: "validated",
     });
-    expect(harness.statements.at(0)).toBe("SET statement_timeout = '5s'");
-    expect(harness.statements.at(-1)).toBe("RESET statement_timeout");
+    expect(harness.statements.at(1)).toBe("SET statement_timeout = '5s'");
+    expect(harness.statements.at(-1)).toBe(RESTORED_SESSION_TIMEOUT);
     expect(
       harness.statements.filter((statement) =>
         statement.includes("SELECT pg_advisory_lock("),
@@ -172,7 +175,7 @@ describe("online migrations", () => {
           statement.includes("pg_advisory_unlock"),
       ),
     ).toEqual([]);
-    expect(harness.statements.at(-1)).toBe("RESET statement_timeout");
+    expect(harness.statements.at(-1)).toBe(RESTORED_SESSION_TIMEOUT);
     expect(harness.released()).toBe(true);
   });
 
@@ -1491,6 +1494,9 @@ const createHarness = ({
           }
           if (query.includes("pg_try_advisory_lock(hashtext('stella-online")) {
             return [{ acquired: !onlineLockHeld }];
+          }
+          if (query.includes("current_setting('statement_timeout')")) {
+            return [{ timeout: SESSION_STATEMENT_TIMEOUT }];
           }
           if (
             query.includes(" AS acquired") ||

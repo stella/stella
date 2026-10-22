@@ -28,7 +28,8 @@ describe.skipIf(!enabled)("startup validation during a migrate run", () => {
       const booting = await openClient().sql.reserve();
       await migrator.unsafe(`SELECT pg_advisory_lock(${ONLINE_LOCK_KEY})`);
       try {
-        const [before] = await booting.unsafe("SHOW statement_timeout");
+        // A session's own timeout, which RESET would replace with the default.
+        await booting.unsafe("SET statement_timeout = '42s'");
         const started = performance.now();
         const outcome = await assertOnlineMigrationsApplied({
           reserve: async () => ({
@@ -43,7 +44,7 @@ describe.skipIf(!enabled)("startup validation during a migrate run", () => {
         expect(outcome).toEqual({ type: "migrator_active" });
         expect(performance.now() - started).toBeLessThan(RETURN_WITHIN_MS);
         expect(await booting.unsafe("SHOW statement_timeout")).toEqual([
-          before,
+          { statement_timeout: "42s" },
         ]);
         const held = await booting.unsafe(
           `SELECT count(*)::int AS held FROM pg_locks

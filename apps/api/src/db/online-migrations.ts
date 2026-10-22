@@ -85,7 +85,22 @@ const ONLINE_MIGRATIONS_LOCK_RETRY_MS = 1000;
 // Startup reads the catalog and checkpoint rows only, so a slower statement is
 // waiting on a lock or a load spike; boot fails fast instead of queueing.
 const STARTUP_VALIDATION_TIMEOUT_SQL = "SET statement_timeout = '5s'";
-const STARTUP_VALIDATION_TIMEOUT_RESET_SQL = "RESET statement_timeout";
+// The session is pooled: it goes back with the timeout it came with, which
+// need not be the role default a RESET would give it.
+const READ_STATEMENT_TIMEOUT_SQL =
+  "SELECT current_setting('statement_timeout') AS timeout";
+const RESTORE_STATEMENT_TIMEOUT_SQL =
+  "SELECT set_config('statement_timeout', $1, false)";
+
+const readStatementTimeout = async (
+  connection: OnlineMigrationConnection,
+): Promise<string> => {
+  const row = (await connection.query(READ_STATEMENT_TIMEOUT_SQL)).at(0);
+  if (!isRecord(row) || typeof row["timeout"] !== "string") {
+    return panic("Session statement timeout is unreadable");
+  }
+  return row["timeout"];
+};
 
 const tryAcquireOnlineMigrationLock = async (
   connection: OnlineMigrationConnection,
@@ -771,6 +786,7 @@ export const assertOnlineMigrationsApplied = async (
 ): Promise<OnlineValidationOutcome> => {
   const connection = await pool.reserve();
   try {
+    const sessionTimeout = await readStatementTimeout(connection);
     await connection.execute(STARTUP_VALIDATION_TIMEOUT_SQL);
     try {
       if (!(await tryAcquireOnlineMigrationLock(connection))) {
@@ -790,7 +806,7 @@ export const assertOnlineMigrationsApplied = async (
         await releaseOnlineMigrationLock(connection);
       }
     } finally {
-      await connection.execute(STARTUP_VALIDATION_TIMEOUT_RESET_SQL);
+      await connection.query(RESTORE_STATEMENT_TIMEOUT_SQL, [sessionTimeout]);
     }
   } finally {
     await connection.release();
