@@ -507,6 +507,7 @@
     "windowsKeyReserved": "Windows se réserve les raccourcis avec la touche Windows. Utilisez Ctrl ou Alt.",
     "taken": "Une autre app utilise déjà {shortcut}. Choisissez-en un autre.",
     "unavailable": "Une autre app utilise {shortcut} : il n'ouvre donc pas le presse-papiers. Choisissez un autre raccourci.",
+    "managed": "Votre organisation a désactivé l’historique du presse-papiers.",
     "action": {
       "copy": "Copier",
       "paste": "Coller",
