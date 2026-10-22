@@ -20,6 +20,7 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
 };
 
 const streamdownPlugins = { cjk, math, renderers: [mermaidDiagramRenderer] };
+const EMPTY_REHYPE_PLUGINS = Object.freeze([]);
 
 // `<stll-anon>` is injected into the parsed HAST by the
 // `rehype-anon-spans` plugin after markdown parsing. Streamdown's
@@ -45,7 +46,7 @@ export const MessageResponseImpl = memo(
         // Ids and names from raw HTML then move into the answer namespace.
         ...Object.values(defaultRehypePlugins),
         rehypeScopeAnswerIds,
-        ...(rehypePlugins ?? []),
+        ...(rehypePlugins ?? EMPTY_REHYPE_PLUGINS),
         ...(sourceOffsets ? [rehypeMarkdownSourceOffsets] : []),
         rehypeChatLinks,
       ],
