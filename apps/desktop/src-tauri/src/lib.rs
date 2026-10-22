@@ -561,3 +561,8 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
     }
   }
 }
+
+#[cfg(feature = "allocation-tests")]
+pub use clipboard::allocation_harness as clipboard_allocation_harness;
+#[cfg(feature = "allocation-tests")]
+pub use session_manager::allocation_harness as session_allocation_harness;
