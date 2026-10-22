@@ -2512,15 +2512,20 @@ test("call recording is on by default and changes only on explicit choice", asyn
   );
   await calls.uncheck();
   await expect(calls).not.toBeChecked();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_set_detect_calls",
+    args: { enabled: false },
+  });
+  expect(await invocations(page)).not.toContainEqual({
+    command: "activity_set_detect_calls",
+    args: { enabled: true },
+  });
   await calls.check();
   await expect(calls).toBeChecked();
-  const choices = (await invocations(page)).filter(
-    ({ command }) => command === "activity_set_detect_calls",
-  );
-  expect(choices).toEqual([
-    { command: "activity_set_detect_calls", args: { enabled: false } },
-    { command: "activity_set_detect_calls", args: { enabled: true } },
-  ]);
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_set_detect_calls",
+    args: { enabled: true },
+  });
   expect(await invocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_capture_details" }),
   );
