@@ -41,7 +41,7 @@ describe("self-host Compose contract", () => {
       "\n  scheduler:\n    image: stella:scheduler\n\n  gotenberg:\n    image:",
     );
     expect(selfhostComposeViolations(compose)).toContain(
-      "Compose services must be exactly: api, document-processing-worker, gotenberg.",
+      "Compose services must be exactly: api, document-processing-worker, file-derivative-worker, gotenberg.",
     );
   });
 

@@ -117,6 +117,10 @@ const TRUSTED_PROVIDER_RESTRICTIONS: ReadonlyMap<
   ReadonlySet<string>
 > = new Map([
   [
+    "apps/api/src/lib/files/converter-settings",
+    new Set(["gotenbergConvertTarget"]),
+  ],
+  [
     "apps/api/src/lib/legal-search/cz-regional-finaldoc-url",
     new Set(["restrictCzRegionalFinaldocUrl"]),
   ],

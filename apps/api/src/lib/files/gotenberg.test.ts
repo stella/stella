@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 
+import { env } from "@/api/env";
 import {
   DERIVATIVE_REFUSAL,
   DerivativeAdmissionError,
 } from "@/api/lib/files/derivative-admission";
 import {
-  convertToPdf,
+  convertToPdf as convertToPdfWithSettings,
   ImageTranscodeError,
   isConvertibleMimeType,
   isNativelyRenderableMimeType,
@@ -29,6 +30,14 @@ import {
 } from "@/api/tests/helpers/image-fixtures";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const convertToPdf = async (
+  file: Parameters<typeof convertToPdfWithSettings>[0],
+  options: Omit<
+    Parameters<typeof convertToPdfWithSettings>[1],
+    "converter"
+  > = {},
+) => await convertToPdfWithSettings(file, { ...options, converter: env });
 
 describe("PDF derivative policy", () => {
   test("does not generate derivatives for natively renderable OOXML files", () => {

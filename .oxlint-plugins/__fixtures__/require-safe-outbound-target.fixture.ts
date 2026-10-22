@@ -21,6 +21,7 @@ import {
   fetchPublisher,
   fetchWithRetry,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { gotenbergConvertTarget } from "@/api/lib/files/converter-settings";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { getCorpusS3, getS3 } from "@/api/lib/s3";
@@ -96,6 +97,12 @@ export const mustFlagUnprovenConfiguredTargets = async (store: {
 export const mustAllowConfiguredTargets = async () => {
   // expect-clean: require-safe-outbound-target/require-safe-outbound-target
   await fetchWithTimeout(`${env.GOTENBERG_URL}/health`, { timeoutMs: 1000 });
+
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  await fetchWithTimeout(gotenbergConvertTarget(env), {
+    redirect: "error",
+    timeoutMs: 1000,
+  });
 
   const choice = useFreeTier ? "https://free.example" : "https://pro.example";
   // expect-clean: require-safe-outbound-target/require-safe-outbound-target

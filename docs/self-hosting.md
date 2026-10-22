@@ -30,6 +30,7 @@ The production Compose contract contains exactly these services:
 
 - `api`: HTTP API and the authoritative scheduled-job loop; readiness `/ready`.
 - `document-processing-worker`: Durable document-processing queue consumer; readiness `api-ready`.
+- `file-derivative-worker`: Durable file-derivative queue consumer; readiness `api-ready`.
 - `gotenberg`: Private authenticated document-conversion sidecar; readiness `/health`.
 
 Its generated environment template is `deploy/selfhost/.env.example`.

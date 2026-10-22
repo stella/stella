@@ -317,7 +317,7 @@ const convertReportDocxToPdf: ConvertReportToPdf = async (docx) => {
   if (Result.isError(scanned)) {
     return Result.err(scanned.error);
   }
-  const result = await convertToPdf(scanned.value);
+  const result = await convertToPdf(scanned.value, { converter: env });
   if (Result.isError(result)) {
     return Result.err(result.error);
   }

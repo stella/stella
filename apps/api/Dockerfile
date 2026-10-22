@@ -289,6 +289,12 @@ RUN bun build \
     --sourcemap=inline \
     --outfile /app/document-processing-worker.js \
     apps/api/src/scripts/document-processing-worker.ts
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --sourcemap=inline \
+    --outfile /app/file-derivative-worker.js \
+    apps/api/src/scripts/file-derivative-worker.ts
 # Bundle the migration entrypoint so its full transitive @/api import graph is
 # resolved at build time. Keep the output at the same directory depth as the
 # source so its `import.meta.dir`-relative migrationsFolder lookup resolves to
@@ -430,6 +436,7 @@ COPY --chown=stella:stella --from=builder /app/corpus-snippet-compare.js /app/co
 # The snippet report reads its query set from a file passed with `--queries`.
 COPY --chown=stella:stella --from=builder /app/apps/api/src/scripts/corpus-snippet-compare.sample.json /app/corpus-snippet-compare.sample.json
 COPY --chown=stella:stella --from=builder /app/document-processing-worker.js /app/document-processing-worker.js
+COPY --chown=stella:stella --from=builder /app/file-derivative-worker.js /app/file-derivative-worker.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js /app/eu-ecj-refetch.js
 # Bundled migration task entrypoint:

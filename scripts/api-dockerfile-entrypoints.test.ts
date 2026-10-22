@@ -101,7 +101,11 @@ test("every bundled /app entrypoint reaches the runner stage", () => {
 });
 
 test("long-running API builds map frames to source", () => {
-  for (const output of ["/app/server", "/app/document-processing-worker.js"]) {
+  for (const output of [
+    "/app/server",
+    "/app/document-processing-worker.js",
+    "/app/file-derivative-worker.js",
+  ]) {
     expect(buildForOutput(output), output).toContain("--sourcemap=inline");
   }
 });

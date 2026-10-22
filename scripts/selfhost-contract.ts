@@ -19,6 +19,7 @@ export const SELFHOST_GOTENBERG_IMAGE =
 export const SELFHOST_SERVICE = {
   api: "api",
   documentProcessingWorker: "document-processing-worker",
+  fileDerivativeWorker: "file-derivative-worker",
   gotenberg: "gotenberg",
 } as const;
 
@@ -34,7 +35,7 @@ type SelfhostServiceContract =
     }
   | {
       type: "queue-worker";
-      command: readonly ["bun", "/app/document-processing-worker.js"];
+      command: readonly ["bun", string];
       description: string;
       image: "application";
       readiness: "api-ready";
@@ -57,6 +58,13 @@ export const SELFHOST_SERVICE_CONTRACT = {
     type: "queue-worker",
     command: ["bun", "/app/document-processing-worker.js"],
     description: "Durable document-processing queue consumer",
+    image: "application",
+    readiness: "api-ready",
+  },
+  [SELFHOST_SERVICE.fileDerivativeWorker]: {
+    type: "queue-worker",
+    command: ["bun", "/app/file-derivative-worker.js"],
+    description: "Durable file-derivative queue consumer",
     image: "application",
     readiness: "api-ready",
   },
@@ -141,6 +149,27 @@ export const renderSelfhostCompose = () => `${generatedHeader(
     mem_limit: \${STELLA_DOCUMENT_PROCESSING_WORKER_MEM_LIMIT:-1g}
     cpus: \${STELLA_DOCUMENT_PROCESSING_WORKER_CPUS:-1.0}
 
+  ${SELFHOST_SERVICE.fileDerivativeWorker}:
+    image: ${SELFHOST_APPLICATION_IMAGE_EXPRESSION}
+    env_file:
+      - \${${SELFHOST_COMPOSE_ENV.apiEnvFile}:-${SELFHOST_ENV_PATH}}
+    environment:
+      NODE_ENV: production
+    command:
+      - bun
+      - /app/file-derivative-worker.js
+    depends_on:
+      ${SELFHOST_SERVICE.gotenberg}:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: \${STELLA_FILE_DERIVATIVE_WORKER_PIDS_LIMIT:-256}
+    mem_limit: \${STELLA_FILE_DERIVATIVE_WORKER_MEM_LIMIT:-1g}
+    cpus: \${STELLA_FILE_DERIVATIVE_WORKER_CPUS:-1.0}
+
   ${SELFHOST_SERVICE.gotenberg}:
     image: ${SELFHOST_GOTENBERG_IMAGE}
     environment:
@@ -209,6 +238,7 @@ export const selfhostComposeViolations = (text: string): string[] => {
   for (const service of [
     SELFHOST_SERVICE.api,
     SELFHOST_SERVICE.documentProcessingWorker,
+    SELFHOST_SERVICE.fileDerivativeWorker,
   ] as const) {
     if (services[service]?.image !== SELFHOST_APPLICATION_IMAGE_EXPRESSION) {
       violations.push(`${service} must use the required application image.`);
@@ -229,6 +259,15 @@ export const selfhostComposeViolations = (text: string): string[] => {
     )
   ) {
     violations.push("document-processing-worker has the wrong command.");
+  }
+  const derivativeWorker = services[SELFHOST_SERVICE.fileDerivativeWorker];
+  if (
+    !sameCommand(
+      derivativeWorker?.command,
+      SELFHOST_SERVICE_CONTRACT[SELFHOST_SERVICE.fileDerivativeWorker].command,
+    )
+  ) {
+    violations.push("file-derivative-worker has the wrong command.");
   }
   if (
     !sameCommand(healthcheckCommand(services, SELFHOST_SERVICE.api), [

@@ -2,9 +2,12 @@ import { Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 
-import { env } from "@/api/env";
 import { basicAuthorizationHeader } from "@/api/lib/auth/http-basic-auth";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import {
+  type ConverterSettings,
+  gotenbergConvertTarget,
+} from "@/api/lib/files/converter-settings";
 import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
 import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
 import type { ImageHeader } from "@/api/lib/files/image-header";
@@ -138,8 +141,11 @@ const withConverterExtension = (fileName: string, mimeType: string): string => {
   return `${stem}.${canonical}`;
 };
 
-const gotenbergAuth = (): string =>
-  basicAuthorizationHeader(env.GOTENBERG_USERNAME, env.GOTENBERG_PASSWORD);
+const gotenbergAuth = (settings: ConverterSettings): string =>
+  basicAuthorizationHeader(
+    settings.GOTENBERG_USERNAME,
+    settings.GOTENBERG_PASSWORD,
+  );
 
 const GOTENBERG_RETRY = {
   times: 2,
@@ -150,6 +156,7 @@ const GOTENBERG_RETRY = {
 } as const;
 
 type ConvertToPdfOptions = {
+  converter: ConverterSettings;
   /**
    * Who retries a failed converter call. `in-call` retries transient
    * converter failures inside this call, for request paths where nothing
@@ -246,7 +253,7 @@ const transcodeImageToPdf = async (
  */
 export const convertToPdf = async (
   file: ScannedFile,
-  { retry = "in-call" }: ConvertToPdfOptions = {},
+  { converter, retry = "in-call" }: ConvertToPdfOptions,
 ): Promise<Result<ConvertToPdfResult, ConvertToPdfError>> => {
   const { fileName, mimeType } = file;
   const bytes = new Uint8Array(file.bytes);
@@ -305,19 +312,18 @@ export const convertToPdf = async (
           },
           fields: { exportNotes: "true", exportNotesInMargin: "true" },
         });
-        const response = await fetchWithTimeout(
-          `${env.GOTENBERG_URL}/forms/libreoffice/convert`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: gotenbergAuth(),
-              "Content-Type": form.contentType,
-              "Content-Length": String(form.contentLength),
-            },
-            body: form.body,
-            timeoutMs: 30_000,
+        const target = gotenbergConvertTarget(converter);
+        const response = await fetchWithTimeout(target, {
+          method: "POST",
+          redirect: "error",
+          headers: {
+            Authorization: gotenbergAuth(converter),
+            "Content-Type": form.contentType,
+            "Content-Length": String(form.contentLength),
           },
-        );
+          body: form.body,
+          timeoutMs: 30_000,
+        });
 
         if (!response.ok) {
           throw new GotenbergError({
