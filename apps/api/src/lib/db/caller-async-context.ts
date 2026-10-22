@@ -2,6 +2,12 @@ import { panic } from "better-result";
 import type { SQL } from "bun";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { NODE_ENV, readRuntimeMode } from "@stll/runtime-mode";
+
+import { queryCountLogger } from "@/api/lib/db-query-counter";
+
+const wrappedBegin = new WeakMap<SQL, unknown>();
+
 /**
  * Runs every transaction callback on `client` in the async context of the
  * code that opened the transaction, and returns the same client.
@@ -17,29 +23,50 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * issued it. Savepoints run inside the callback, so they follow.
  */
 export const runTransactionsInCallerContext = (client: SQL): SQL => {
+  if (wrappedBegin.get(client) === client.begin) {
+    return client;
+  }
   const begin = client.begin.bind(client);
   const beginInCallerContext = async <const T>(
     optionsOrCallback: string | SQL.TransactionContextCallback<T>,
     callback?: SQL.TransactionContextCallback<T>,
   ): Promise<SQL.ContextCallbackResult<T>> => {
     const runInCaller = AsyncLocalStorage.snapshot();
-    if (typeof optionsOrCallback !== "string") {
-      return await begin(
-        async (transaction) =>
-          await runInCaller(optionsOrCallback, transaction),
-      );
-    }
-    if (callback === undefined) {
+    const transactionCallback =
+      typeof optionsOrCallback === "string" ? callback : optionsOrCallback;
+    if (transactionCallback === undefined) {
       panic("begin(options) needs a transaction callback");
     }
-    return await begin(
-      optionsOrCallback,
-      async (transaction) => await runInCaller(callback, transaction),
-    );
+    // Bun owns these statements internally, so Drizzle never logs them.
+    const countNativeTransaction = readRuntimeMode().nodeEnv === NODE_ENV.test;
+    if (countNativeTransaction) {
+      queryCountLogger.logQuery("BEGIN", []);
+    }
+    let committed = false;
+    try {
+      const result =
+        typeof optionsOrCallback === "string"
+          ? await begin(
+              optionsOrCallback,
+              async (transaction) =>
+                await runInCaller(transactionCallback, transaction),
+            )
+          : await begin(
+              async (transaction) =>
+                await runInCaller(transactionCallback, transaction),
+            );
+      committed = true;
+      return result;
+    } finally {
+      if (countNativeTransaction) {
+        queryCountLogger.logQuery(committed ? "COMMIT" : "ROLLBACK", []);
+      }
+    }
   };
   Object.defineProperty(client, "begin", {
     configurable: true,
     value: beginInCallerContext,
   });
+  wrappedBegin.set(client, beginInCallerContext);
   return client;
 };

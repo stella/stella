@@ -7,7 +7,7 @@ import type { Logger } from "drizzle-orm";
 // response header this feeds).
 //
 // The module is deliberately side-effect free and framework-agnostic: it only
-// creates an ALS instance and pure helpers. Nothing here reads env or touches
+// creates an ALS instance and pure helpers. Module initialization neither reads env nor touches
 // the database, so it is safe to import from shared modules (see the
 // "Module Side Effects" rules in AGENTS.md). Callers decide when to activate a
 // store; the Drizzle logger is a no-op whenever no store is active (background
@@ -15,11 +15,18 @@ import type { Logger } from "drizzle-orm";
 // on those paths. Deployed environments wire no logger at all.
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { NODE_ENV, readRuntimeMode } from "@stll/runtime-mode";
+
 /** Response header carrying the per-request query count outside production. */
 export const DB_QUERY_COUNT_HEADER = "x-db-queries";
 
-type QueryCounter = {
+export type QueryCounter = {
   count: number;
+  diagnostics: boolean;
+  transactions: number;
+  statements: Map<string, { count: number; callSite: string }>;
+  parent: QueryCounter | undefined;
+  onQuery?: () => void;
 };
 
 const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
@@ -27,8 +34,8 @@ const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
 /**
  * Run `fn` inside a fresh counter store. Every query logged through
  * {@link queryCountLogger} while `fn` (and its awaited continuations) run
- * increments this store and no other, so interleaved async contexts count
- * independently.
+ * increments this store and its enclosing counters. Sibling async contexts
+ * remain independent; an MCP call also belongs to its enclosing HTTP request.
  *
  * This is the only supported way to open a store. `AsyncLocalStorage.enterWith`
  * would be the convenient alternative for a lifecycle split across separate
@@ -43,11 +50,19 @@ const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
  * from a hook.
  */
 export const runWithQueryCounter = <TResult>(
-  fn: (counter: Readonly<QueryCounter>) => TResult,
+  fn: (counter: QueryCounter) => TResult,
 ): TResult => {
-  const counter: QueryCounter = { count: 0 };
+  const counter: QueryCounter = {
+    count: 0,
+    diagnostics: readRuntimeMode().nodeEnv === NODE_ENV.test,
+    transactions: 0,
+    statements: new Map(),
+    parent: queryCounterStore.getStore(),
+  };
   return queryCounterStore.run(counter, () => fn(counter));
 };
+
+export const currentQueryCounter = () => queryCounterStore.getStore();
 
 /** Current active store's query count, or `undefined` when no store is active. */
 export const currentQueryCount = (): number | undefined =>
@@ -60,11 +75,49 @@ export const currentQueryCount = (): number | undefined =>
  * production only.
  */
 export const queryCountLogger: Logger = {
-  logQuery: (): void => {
-    const counter = queryCounterStore.getStore();
+  logQuery: (query): void => {
+    let counter = queryCounterStore.getStore();
     if (!counter) {
       return;
     }
-    counter.count += 1;
+    if (
+      /^\s*(?:savepoint|release\s+(?:savepoint\s+)?|rollback\s+to)\b/iu.test(
+        query,
+      )
+    ) {
+      return;
+    }
+    const fingerprint = query
+      .replaceAll(/'(?:''|[^'])*'/gu, "?")
+      .replaceAll(/\$\d+|\b\d+(?:\.\d+)?\b/gu, "?")
+      .replaceAll(/\s+/gu, " ")
+      .trim();
+    // Bind values are never retained. Stacks are test diagnostics only.
+    const callSite = counter.diagnostics
+      ? (new Error("SQL call site").stack ?? "SQL call site unavailable")
+          .split("\n")
+          .filter((line) => !line.includes("db-query-counter.ts"))
+          .slice(1, 9)
+          .join("\n")
+      : "";
+    const updated: QueryCounter[] = [];
+    while (counter) {
+      counter.count += 1;
+      if (/^\s*(?:begin|start\s+transaction)\b/iu.test(query)) {
+        counter.transactions += 1;
+      }
+      if (counter.diagnostics) {
+        const previous = counter.statements.get(fingerprint);
+        counter.statements.set(fingerprint, {
+          count: (previous?.count ?? 0) + 1,
+          callSite: previous?.callSite ?? callSite,
+        });
+      }
+      updated.push(counter);
+      counter = counter.parent;
+    }
+    for (const store of updated) {
+      store.onQuery?.();
+    }
   },
 };

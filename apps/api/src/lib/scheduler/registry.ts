@@ -1,3 +1,4 @@
+import { runWithStatementCeiling } from "@/api/lib/db-statement-ceiling";
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
   SWEEP_ACTION_COSTS_TASK,
@@ -210,6 +211,7 @@ import {
 } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
 import type {
   SchedulerTask,
+  SchedulerTaskContext,
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
 
@@ -310,7 +312,15 @@ export const createSchedulerTaskRegistry = (
     Object.entries(schedulerTasks(reapOwnerlessChatTurns)).map(
       ([name, entry]) => [
         name,
-        typeof entry === "function" ? entry : entry.task,
+        (context: SchedulerTaskContext) =>
+          runWithStatementCeiling({
+            kind: "scheduler",
+            key: name,
+            run: () =>
+              typeof entry === "function"
+                ? entry(context)
+                : entry.task(context),
+          }),
       ],
     ),
   );
