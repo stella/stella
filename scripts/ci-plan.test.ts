@@ -47,6 +47,11 @@ import {
   type ScopeOutput,
 } from "./ci-plan-scope";
 import { prHeavyJobs } from "./ci-pr-jobs";
+import {
+  NEEDS_EXPRESSION,
+  PLAN_EXPRESSION,
+  renderResultInputs,
+} from "./ci-result-inputs";
 import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { GENERATORS } from "./generated-files";
@@ -916,7 +921,15 @@ const resultGateCase = ({
   const codeRun = metadataCodeRunFixtures(metadataCodeRun);
   return {
     flags: ["-eu"],
-    script: outcomeScript,
+    script: renderResultInputs(outcomeScript, {
+      needs: JSON.stringify(needs),
+      plan: JSON.stringify({
+        ...plan,
+        ...plannedOutputs,
+        suite_depth: suiteDepth,
+        trusted,
+      }),
+    }),
     args: [],
     env: {
       GH_RETRY_SCRIPT: nodePath.resolve(import.meta.dir, "gh-retry.sh"),
@@ -952,7 +965,6 @@ const resultGateCase = ({
       FAKE_CODE_JOBS_RUNNING: JSON.stringify(codeRun.jobs("in_progress")),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       FOLDED_SUITES: resultStep.env["FOLDED_SUITES"] ?? "",
-      NEEDS: JSON.stringify(needs),
       FAST_REQUIRED: resultStep.env["FAST_REQUIRED"] ?? "",
       FAST_JOB_SCOPES: resultStep.env["FAST_JOB_SCOPES"] ?? "",
       PATH: `${fakeGhDirectory}:${process.env["PATH"] ?? ""}`,
@@ -961,12 +973,6 @@ const resultGateCase = ({
       HEAD_SHA: "a".repeat(40),
       METADATA_ONLY: codeRun.enabled,
       RUN_REQUIRED: codeRun.runRequired,
-      PLAN: JSON.stringify({
-        ...plan,
-        ...plannedOutputs,
-        suite_depth: suiteDepth,
-        trusted,
-      }),
       PLAN_RESULT: needs["ci-plan"]?.result ?? "",
       SUITE_DEPTH: suiteDepth,
       TRUSTED: trusted,
@@ -1069,7 +1075,7 @@ test("the result gate evaluates every job in the workflow", () => {
   }
   expect(resultJob.needs).not.toContain("migration-exact-base-upgrade");
   expect(jobScopes).not.toHaveProperty("migration-exact-base-upgrade");
-  expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
+  expect(resultStep.run).toContain(NEEDS_EXPRESSION);
   for (const {
     item: { label },
     exitCode,
@@ -2709,6 +2715,52 @@ test("a manual run supersedes only an older manual run on the same branch", () =
     "format('pr-{0}{1}', github.event.pull_request.number || github.ref, github.event.pull_request.draft && '-draft' || '')",
   );
   expect(concurrency.group).toContain("format('run-{0}', github.run_id)");
+});
+
+test("jobs that need ci-plan never hand its outputs over in the environment", () => {
+  // One environment or input value above Linux's 128 KiB limit stops a step
+  // before it starts, and ci-plan's change lists and test plans exceed it.
+  // Such jobs read `needs` from their script text instead.
+  const stepSchema = v.looseObject({
+    name: v.optional(v.string()),
+    env: v.optional(v.record(v.string(), v.unknown())),
+    with: v.optional(v.record(v.string(), v.unknown())),
+  });
+  const unbounded = /toJSON\(\s*needs\s*(?:\.\s*ci-plan\s*\.\s*outputs\s*)?\)/u;
+  const offenders = Object.entries(ciJobs).flatMap(([name, job]) => {
+    const parsed = v.parse(
+      v.looseObject({
+        needs: v.optional(v.union([v.string(), v.array(v.string())])),
+        env: v.optional(v.record(v.string(), v.unknown())),
+        steps: v.optional(v.array(v.unknown())),
+      }),
+      job,
+    );
+    if (![parsed.needs ?? []].flat().includes("ci-plan")) {
+      return [];
+    }
+    const steps = flattenWorkflowSteps(parsed.steps ?? []).map((step) =>
+      v.parse(stepSchema, step),
+    );
+    return [
+      ...Object.entries(parsed.env ?? {}).map(([key, value]) => ({
+        where: `${name}/env`,
+        key,
+        value,
+      })),
+      ...steps.flatMap((step) =>
+        Object.entries({ ...step.env, ...step.with }).map(([key, value]) => ({
+          where: `${name}/${step.name ?? "unnamed step"}`,
+          key,
+          value,
+        })),
+      ),
+    ]
+      .filter(({ value }) => typeof value === "string" && unbounded.test(value))
+      .map(({ where, key }) => `${where}: ${key}`);
+  });
+  expect(offenders).toEqual([]);
+  expect(resultStep.run).toContain(PLAN_EXPRESSION);
 });
 
 test("metadata runs report the required result while scope-changing labels still run", () => {

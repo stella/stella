@@ -1663,7 +1663,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_GENERATED_SOURCES_MANIFEST",
   // Check pool: the job context its step hands over and an optional
   // concurrency override; the pool strips the context before running checks.
-  "CI_CHECK_POOL_NEEDS",
+  "CI_CHECK_POOL_NEEDS_FILE",
   "CI_CHECK_POOL_STEPS",
   "CI_CHECK_POOL_INPUTS",
   "CI_CHECK_POOL_TOKEN",

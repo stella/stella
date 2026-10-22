@@ -17,7 +17,18 @@ export const CHECK_POOL_STEP_NAMES = {
   "ci-checks-policy": "Run policy checks",
   "ci-checks-rest": "Run repository checks",
 } as const satisfies Record<CheckPoolJob, string>;
-const POOL_COMMAND = /^bun scripts\/ci-check-pool\.ts run ([\w-]+)$/u;
+// The pool step writes the job's `needs` to a file and runs the pool on it:
+// ci-plan's outputs can exceed the 128 KiB limit of one environment value.
+const POOL_COMMAND = new RegExp(
+  [
+    String.raw`^needs_file=\$\(mktemp\)`,
+    String.raw`cat > "\$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'`,
+    String.raw`\$\{\{ toJSON\(needs\) \}\}`,
+    "CI_CHECK_POOL_NEEDS_JSON",
+    String.raw`CI_CHECK_POOL_NEEDS_FILE="\$needs_file" bun scripts/ci-check-pool\.ts run ([\w-]+)$`,
+  ].join("\n"),
+  "u",
+);
 
 /** One check: the fields of the workflow step it replaced, verbatim. */
 export type PoolCheck = {

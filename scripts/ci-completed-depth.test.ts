@@ -18,6 +18,7 @@ import { assertProperty } from "@stll/property-testing";
 import { createSha256 } from "@stll/sha256/node";
 
 import { PILOT_ALWAYS } from "./ci-pr-pilot-plan";
+import { renderResultInputs } from "./ci-result-inputs";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
 import { prDepthJobs, queueAdmittedJobs, thinJobs } from "./main-heavy-plan";
 
@@ -555,6 +556,15 @@ const recordEvidence = (
 ) => {
   const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-evidence-"));
   const output = nodePath.join(directory, "output");
+  // The gate's prelude writes the plan outputs to PLAN_FILE; this block runs on its own.
+  const planFile = nodePath.join(directory, "plan.json");
+  writeFileSync(
+    planFile,
+    JSON.stringify({
+      ci_tests_required: "true",
+      package_checks_required: "true",
+    }),
+  );
   try {
     const child = Bun.spawnSync(["bash", "-eu", "-c", script], {
       env: {
@@ -577,10 +587,7 @@ const recordEvidence = (
         JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
         FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
         FAST_REQUIRED: resultEnv["FAST_REQUIRED"] ?? "",
-        PLAN: JSON.stringify({
-          ci_tests_required: "true",
-          package_checks_required: "true",
-        }),
+        PLAN_FILE: planFile,
         NEEDS: JSON.stringify(
           Object.fromEntries(
             Object.entries(results).map(([job, outcome]) => [
@@ -1202,31 +1209,40 @@ test("thin groups require queued code checks regardless of normal PR completion"
     );
     dependencies["ci-plan"] = { result: "success" };
     const runAggregation = (needs: typeof dependencies, plan = allScopes) =>
-      Bun.spawnSync(["bash", "-e", "-c", aggregation.run ?? ""], {
-        env: {
-          ...process.env,
-          ...env,
-          EVENT: "merge_group",
-          QUEUE_DEPTH: "thin",
-          SUITE_DEPTH: "full",
-          HEAVY_ONLY: "false",
-          COVERAGE_PROFILE: "normal-v1",
-          PATCH_ID: patchId,
-          WORKFLOW_VERSION: pr.head.sha,
-          PR_DEPTH_JOBS: JSON.stringify(prDepth),
-          GITHUB_STEP_SUMMARY: "/dev/null",
-          PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
-          PR_DEPTH_SOURCE_RUN_ID:
-            evidence.outputs.get("pr_depth_source_run_id") ?? "",
-          QUEUE_VALIDATION: "false",
-          PLAN_RESULT: "success",
-          TRUSTED: "true",
-          THIN_JOBS: JSON.stringify(thin),
-          QUEUE_REQUIRED_JOBS: JSON.stringify(queueJobs),
-          PLAN: JSON.stringify(plan),
-          NEEDS: JSON.stringify(needs),
+      Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-c",
+          renderResultInputs(aggregation.run ?? "", {
+            needs: JSON.stringify(needs),
+            plan: JSON.stringify(plan),
+          }),
+        ],
+        {
+          env: {
+            ...process.env,
+            ...env,
+            EVENT: "merge_group",
+            QUEUE_DEPTH: "thin",
+            SUITE_DEPTH: "full",
+            HEAVY_ONLY: "false",
+            COVERAGE_PROFILE: "normal-v1",
+            PATCH_ID: patchId,
+            WORKFLOW_VERSION: pr.head.sha,
+            PR_DEPTH_JOBS: JSON.stringify(prDepth),
+            GITHUB_STEP_SUMMARY: "/dev/null",
+            PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
+            PR_DEPTH_SOURCE_RUN_ID:
+              evidence.outputs.get("pr_depth_source_run_id") ?? "",
+            QUEUE_VALIDATION: "false",
+            PLAN_RESULT: "success",
+            TRUSTED: "true",
+            THIN_JOBS: JSON.stringify(thin),
+            QUEUE_REQUIRED_JOBS: JSON.stringify(queueJobs),
+          },
         },
-      });
+      );
     const successfulAggregation = runAggregation(dependencies);
     expect(
       successfulAggregation.exitCode,

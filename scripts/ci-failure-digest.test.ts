@@ -664,6 +664,43 @@ const GATED_JOBS = [
   },
 ];
 
+test("the running gate names its own failed step when no job failed", () => {
+  // ci-result digests while it still runs: an outcome step that could not
+  // start (for example over the environment size limit) is its only failure.
+  const jobs = parseJobs([
+    {
+      jobs: [
+        { id: 1, name: "ci-plan", conclusion: "success", steps: [] },
+        {
+          id: 2,
+          name: "ci-result",
+          conclusion: null,
+          steps: [
+            {
+              name: "Fetch GitHub API tooling",
+              number: 2,
+              conclusion: "success",
+            },
+            { name: "Evaluate CI outcome", number: 3, conclusion: "failure" },
+            { name: "Digest failed steps", number: 4, conclusion: null },
+          ],
+        },
+        {
+          id: 3,
+          name: "still running cleanly",
+          conclusion: null,
+          steps: [{ name: "Check", number: 1, conclusion: "success" }],
+        },
+      ],
+    },
+  ]);
+  expect(jobs.filter(isFailedJob).map(({ id }) => id)).toEqual([2]);
+  const records = buildDigest({ jobs, logFor: () => undefined });
+  expect(records.map(({ job, step }) => [job, step])).toEqual([
+    ["ci-result", "Evaluate CI outcome"],
+  ]);
+});
+
 test("timed-out jobs and cancelled jobs with a failed step are digested", () => {
   const jobs = parseJobs(GATED_JOBS);
   expect(jobs.filter(isFailedJob).map(({ id }) => id)).toEqual([1, 2]);
