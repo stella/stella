@@ -5839,4 +5839,55 @@ mod tests {
       Some("Novák v. ABC | Microsoft Teams")
     );
   }
+
+  #[test]
+  fn files_written_before_calls_read_as_no_call_and_detection_on() {
+    let segment: ActivitySegment = serde_json::from_value(serde_json::json!({
+      "appIdentifier": "word",
+      "appName": "Word",
+      "start": "2026-03-10T12:00:00Z",
+      "end": "2026-03-10T12:30:00Z",
+    }))
+    .unwrap();
+    assert!(!segment.call);
+    // Only call segments carry the field, so other segments stay unchanged.
+    assert!(
+      serde_json::to_value(&segment)
+        .unwrap()
+        .get("call")
+        .is_none()
+    );
+    let call = ActivitySegment {
+      call: true,
+      ..segment
+    };
+    let written = serde_json::to_value(&call).unwrap();
+    assert_eq!(written["call"], true);
+    assert!(
+      serde_json::from_value::<ActivitySegment>(written)
+        .unwrap()
+        .call
+    );
+
+    let settings: ActivitySettings = serde_json::from_value(serde_json::json!({
+      "recordingStatus": "recording",
+      "retention": "month",
+    }))
+    .unwrap();
+    assert!(!settings.ignore_calls);
+  }
+
+  #[test]
+  fn turning_call_detection_off_ends_an_ongoing_call_and_persists() {
+    let mut manager = recording_manager();
+    observe_span(&mut manager, 0, 60, |_| call("teams", None));
+    manager.set_detect_calls(false, at(65)).unwrap();
+    assert!(manager.settings.ignore_calls);
+    assert_eq!(segments(&manager), [("teams".to_string(), 0, 60)]);
+    // Repeating the choice changes nothing; turning it back on restores it.
+    manager.set_detect_calls(false, at(70)).unwrap();
+    assert!(manager.settings.ignore_calls);
+    manager.set_detect_calls(true, at(75)).unwrap();
+    assert!(!manager.settings.ignore_calls);
+  }
 }

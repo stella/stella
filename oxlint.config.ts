@@ -1687,6 +1687,7 @@ const config = defineConfig({
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
+    "./.oxlint-plugins/require-polite-publisher-fetch.ts",
     "./.oxlint-plugins/no-object-url-leak.ts",
     "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
@@ -4877,6 +4878,19 @@ const config = defineConfig({
         "no-raw-error-logging/no-raw-error-logging": "error",
         "no-secret-in-log-sink/no-secret-in-log-sink": "error",
         "require-safe-outbound-target/require-safe-outbound-target": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/require-polite-publisher-fetch.fixture.ts",
+        "apps/api/src/handlers/case-law/ingestion/**/*.{ts,tsx}",
+        "apps/api/src/handlers/soft-law/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: {
+        "require-polite-publisher-fetch/require-polite-publisher-fetch":
+          "error",
       },
     },
     {
