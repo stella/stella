@@ -113,21 +113,9 @@
       "family": "clause_categories",
       "reason": "id-only; bind organization_id; clause_categories needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
     },
-    "contact_relationships(person_id) -> contacts(id)": {
-      "family": "contacts",
-      "reason": "id-only; bind organization_id; contacts already has a unique (organization_id, id) key."
-    },
-    "contact_relationships(related_contact_id) -> contacts(id)": {
-      "family": "contacts",
-      "reason": "id-only; bind organization_id; contacts already has a unique (organization_id, id) key."
-    },
     "contact_search_document_preview_passages(contact_id) -> contact_search_documents(contact_id)": {
       "family": "contact_search_documents",
       "reason": "id-only; bind organization_id; contact_search_documents needs a unique (organization_id, id) key first."
-    },
-    "contact_search_documents(contact_id) -> contacts(id)": {
-      "family": "contacts",
-      "reason": "id-only; bind organization_id; contacts already has a unique (organization_id, id) key."
     },
     "desktop_edit_handoffs(desktop_session_id) -> desktop_edit_sessions(id)": {
       "family": "desktop_edit_sessions",
@@ -364,14 +352,6 @@
     "usage_events(workspace_id) -> workspaces(id)": {
       "family": "workspaces",
       "reason": "id-only; bind organization_id; workspaces already has a unique (organization_id, id) key; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
-    },
-    "workspace_contacts(contact_id) -> contacts(id)": {
-      "family": "contacts",
-      "reason": "id-only; bind organization_id; contacts already has a unique (organization_id, id) key."
-    },
-    "workspaces(client_id) -> contacts(id)": {
-      "family": "contacts",
-      "reason": "id-only; bind organization_id; contacts already has a unique (organization_id, id) key."
     }
   }
 }

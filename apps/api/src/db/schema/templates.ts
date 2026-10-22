@@ -631,9 +631,7 @@ export const searchDocumentPreviewPassages = p.pgTable(
 export const contactSearchDocuments = p.pgTable(
   "contact_search_documents",
   {
-    contactId: safeUuid<"contact">("contact_id")
-      .primaryKey()
-      .references(() => contacts.id, { onDelete: "cascade" }),
+    contactId: safeUuid<"contact">("contact_id").primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -649,6 +647,13 @@ export const contactSearchDocuments = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p
+      .foreignKey({
+        name: "contact_search_documents_contact_fk",
+        columns: [table.organizationId, table.contactId],
+        foreignColumns: [contacts.organizationId, contacts.id],
+      })
+      .onDelete("cascade"),
     p.index("contact_search_docs_org_idx").on(table.organizationId),
     p
       .index("contact_search_docs_org_type_idx")

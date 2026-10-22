@@ -269,12 +269,8 @@ export const contactRelationships = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    personId: safeUuid<"contact">("person_id")
-      .notNull()
-      .references(() => contacts.id, { onDelete: "cascade" }),
-    relatedContactId: safeUuid<"contact">("related_contact_id")
-      .notNull()
-      .references(() => contacts.id, { onDelete: "cascade" }),
+    personId: safeUuid<"contact">("person_id").notNull(),
+    relatedContactId: safeUuid<"contact">("related_contact_id").notNull(),
     relationshipType: p
       .text("relationship_type", {
         enum: ["employee", "partner", "director", "counsel", "other"],
@@ -287,6 +283,21 @@ export const contactRelationships = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    // Both contacts belong to the relationship's organization.
+    p
+      .foreignKey({
+        name: "contact_relationships_person_fk",
+        columns: [table.organizationId, table.personId],
+        foreignColumns: [contacts.organizationId, contacts.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "contact_relationships_related_contact_fk",
+        columns: [table.organizationId, table.relatedContactId],
+        foreignColumns: [contacts.organizationId, contacts.id],
+      })
+      .onDelete("cascade"),
     p.index("contact_relationships_person_id_idx").on(table.personId),
     p
       .index("contact_relationships_related_contact_id_idx")
@@ -315,9 +326,9 @@ export const workspaces = p.pgTable(
     // only to the creator via workspace_members). A non-null client_id
     // is a normal client matter. Setting clientId on update turns a
     // personal matter into a client matter; members are added apart.
-    clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
-      onDelete: "restrict",
-    }),
+    // The client is a contact of the same organization
+    // (workspaces_client_fk).
+    clientId: safeUuid<"contact">("client_id"),
     // Optional per-matter lead. Decouples the lead from the client's
     // responsible attorney so co-counsels can split matters under a
     // shared client. ON DELETE SET NULL: removing the user must not
@@ -345,6 +356,13 @@ export const workspaces = p.pgTable(
     // organization IDs. This makes a cross-tenant pair impossible even on
     // root/background write paths that bypass RLS.
     p.unique("workspaces_id_org_unq").on(table.id, table.organizationId),
+    p
+      .foreignKey({
+        name: "workspaces_client_fk",
+        columns: [table.organizationId, table.clientId],
+        foreignColumns: [contacts.organizationId, contacts.id],
+      })
+      .onDelete("restrict"),
     p
       .index("workspaces_org_client_id_idx")
       .on(table.organizationId, table.clientId)
@@ -408,9 +426,7 @@ export const workspaceContacts = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    contactId: safeUuid<"contact">("contact_id")
-      .notNull()
-      .references(() => contacts.id, { onDelete: "cascade" }),
+    contactId: safeUuid<"contact">("contact_id").notNull(),
     role: p
       .text({
         enum: WORKSPACE_CONTACT_ROLES,
@@ -426,6 +442,13 @@ export const workspaceContacts = p.pgTable(
         columns: [table.workspaceId, table.organizationId],
         foreignColumns: [workspaces.id, workspaces.organizationId],
         name: "workspace_contacts_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.organizationId, table.contactId],
+        foreignColumns: [contacts.organizationId, contacts.id],
+        name: "workspace_contacts_contact_fk",
       })
       .onDelete("cascade"),
     p.index("workspace_contacts_workspace_id_idx").on(table.workspaceId),
