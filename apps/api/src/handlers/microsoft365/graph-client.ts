@@ -42,7 +42,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { Page } from "@/api/lib/pagination";
 import type { AccessToken } from "@/api/lib/secret-brands";
 
-import { grantedCapabilities, scopeSet } from "./capabilities";
+import {
+  boundGrantedScope,
+  grantedCapabilities,
+  scopeSet,
+} from "./capabilities";
 
 const GRAPH_FETCH_TIMEOUT_MS = 10_000;
 const GRAPH_ACCOUNT_RESPONSE_MAX_BYTES = 64 * 1024;
@@ -191,6 +195,10 @@ export const ensureMicrosoft365AccessToken = async (
     }
 
     const token = refreshed.value;
+    const scope = boundGrantedScope({
+      ceiling: connection.scope,
+      returned: token.scope ?? connection.scope,
+    });
     const encryptedAccess = await encryptMicrosoft365Secret({
       purpose: MICROSOFT365_TOKEN_PURPOSE.access,
       secret: token.access_token,
@@ -223,7 +231,7 @@ export const ensureMicrosoft365AccessToken = async (
                 }
               : {}),
             tokenType: token.token_type ?? "Bearer",
-            scope: token.scope ?? connection.scope,
+            scope,
             expiresAt: tokenExpiresAt(token),
             status: "connected",
             lastUsedAt: new Date(),
@@ -247,7 +255,7 @@ export const ensureMicrosoft365AccessToken = async (
         if (
           rows.length > 0 &&
           JSON.stringify(scopeSet(connection.scope)) !==
-            JSON.stringify(scopeSet(token.scope ?? connection.scope))
+            JSON.stringify(scopeSet(scope))
         ) {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.UPDATE,
@@ -258,10 +266,8 @@ export const ensureMicrosoft365AccessToken = async (
               operation: "microsoft365_refresh_scope_change",
               connectionUserId: connection.userId,
               oldScopes: scopeSet(connection.scope),
-              newScopes: scopeSet(token.scope ?? connection.scope),
-              grantedCapabilities: grantedCapabilities(
-                token.scope ?? connection.scope,
-              ),
+              newScopes: scopeSet(scope),
+              grantedCapabilities: grantedCapabilities(scope),
             },
           });
         }
@@ -272,9 +278,7 @@ export const ensureMicrosoft365AccessToken = async (
       return Result.err(reconnectRequiredError());
     }
 
-    if (
-      !grantedCapabilities(token.scope ?? connection.scope).includes(capability)
-    ) {
+    if (!grantedCapabilities(scope).includes(capability)) {
       return Result.err(
         new HandlerError({
           status: 403,

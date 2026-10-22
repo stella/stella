@@ -1,3 +1,5 @@
+import type { BoundGrantedScope } from "@/api/handlers/microsoft365/capabilities";
+
 import {
   bytea,
   organization,
@@ -46,8 +48,8 @@ export const microsoft365Connections = p.pgTable(
     refreshTokenEncrypted: bytea("refresh_token_encrypted"),
     refreshTokenIv: bytea("refresh_token_iv"),
     tokenType: p.varchar("token_type", { length: 40 }),
-    /** Space-delimited scopes Microsoft actually granted. */
-    scope: p.text("scope"),
+    /** Space-delimited granted scopes within the authorized connection ceiling. */
+    scope: p.text("scope").$type<BoundGrantedScope>(),
     /** Display-only Microsoft account identifier (userPrincipalName). */
     accountLabel: p.text("account_label"),
     expiresAt: timestamptz("expires_at"),

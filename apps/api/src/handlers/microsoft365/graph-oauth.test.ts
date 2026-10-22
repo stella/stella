@@ -15,7 +15,15 @@ describe("buildAuthorizeUrl", () => {
   test("carries the OAuth and PKCE parameters", () => {
     const url = new URL(
       buildAuthorizeUrl({
-        scope: delegatedScopes(["files.read"], null),
+        scope: delegatedScopes({
+          requested: ["files.read"],
+          grantedScope: null,
+          policy: {
+            microsoft365ConnectionEnabled: true,
+            microsoft365FilesReadEnabled: true,
+            microsoft365CalendarReadEnabled: false,
+          },
+        }),
         clientId: "client-123",
         tenantId: "tenant-abc",
         codeChallenge: "challenge",
@@ -30,6 +38,12 @@ describe("buildAuthorizeUrl", () => {
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(url.searchParams.get("client_id")).toBe("client-123");
     expect(url.searchParams.get("scope")).toContain("offline_access");
+    expect(url.searchParams.get("scope")).toContain(
+      "https://graph.microsoft.com/Files.Read.All",
+    );
+    expect(url.searchParams.get("scope")).toContain(
+      "https://graph.microsoft.com/Sites.Read.All",
+    );
   });
 });
 

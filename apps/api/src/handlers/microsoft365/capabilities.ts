@@ -84,6 +84,30 @@ export const scopeSet = (scope: string | null) =>
     ...new Set((scope ?? "").split(/\s+/u).filter(Boolean).map(normalizeScope)),
   ].toSorted();
 
+const boundGrantedScopeSchema = v.pipe(
+  v.string(),
+  v.brand("Microsoft365GrantedScope"),
+);
+export type BoundGrantedScope = v.InferOutput<typeof boundGrantedScopeSchema>;
+
+// Persisted grants are always bounded by the server-authorized scope ceiling.
+export const boundGrantedScope = ({
+  ceiling,
+  returned,
+}: {
+  ceiling: string | null;
+  returned: string | null;
+}) => {
+  const allowed = new Set(scopeSet(ceiling));
+  return v.parse(
+    boundGrantedScopeSchema,
+    (returned ?? "")
+      .split(/\s+/u)
+      .filter((scope) => allowed.has(normalizeScope(scope)))
+      .join(" "),
+  );
+};
+
 // A provider response cannot expand the stored authorization beyond the
 // server-bound request and the policy ceiling checked inside the callback lock.
 export const consentedScopes = ({
@@ -95,18 +119,16 @@ export const consentedScopes = ({
   requestedScope: string | null;
   policy: Microsoft365Policy | undefined;
 }) => {
-  const requested = new Set(scopeSet(requestedScope));
   const allowed = new Set(
-    scopeSet(delegatedScopes({ requested: [], grantedScope, policy })),
+    scopeSet(
+      delegatedScopes({ requested: [], grantedScope: requestedScope, policy }),
+    ),
   );
-  return (grantedScope ?? "")
+  const ceiling = (requestedScope ?? "")
     .split(/\s+/u)
-    .filter(
-      (scope) =>
-        requested.has(normalizeScope(scope)) &&
-        allowed.has(normalizeScope(scope)),
-    )
+    .filter((scope) => allowed.has(normalizeScope(scope)))
     .join(" ");
+  return boundGrantedScope({ ceiling, returned: grantedScope });
 };
 
 type Microsoft365Policy = {

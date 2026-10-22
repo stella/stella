@@ -15,7 +15,10 @@ import {
   microsoft365OAuthState,
   organizationSettings,
 } from "@/api/db/schema";
-import { grantedCapabilities } from "@/api/handlers/microsoft365/capabilities";
+import {
+  boundGrantedScope,
+  grantedCapabilities,
+} from "@/api/handlers/microsoft365/capabilities";
 import {
   MICROSOFT365_TOKEN_PURPOSE,
   decryptMicrosoft365Secret,
@@ -373,7 +376,10 @@ test("a token refresh preserves a newer consent grant", async () => {
       refreshTokenEncrypted: refresh.ciphertext,
       refreshTokenIv: refresh.iv,
       status: "connected",
-      scope: "Calendars.Read",
+      scope: boundGrantedScope({
+        ceiling: "Calendars.Read",
+        returned: "Calendars.Read",
+      }),
       expiresAt: new Date(0),
     })
     .where(eq(microsoft365Connections.id, connOrgAUserA1));
@@ -412,7 +418,7 @@ test("a token refresh preserves a newer consent grant", async () => {
           .update(microsoft365Connections)
           .set({
             accessTokenEncrypted: Buffer.from("newer-consent"),
-            scope: upgraded,
+            scope: boundGrantedScope({ ceiling: upgraded, returned: upgraded }),
           })
           .where(eq(microsoft365Connections.id, connOrgAUserA1));
         return Result.ok({
@@ -457,7 +463,7 @@ test("an existing delegated connection refreshes its original ciphertext and ret
       refreshTokenEncrypted: refresh.ciphertext,
       refreshTokenIv: refresh.iv,
       status: "connected",
-      scope,
+      scope: boundGrantedScope({ ceiling: scope, returned: scope }),
       expiresAt: new Date(0),
     })
     .where(eq(microsoft365Connections.id, connOrgAUserA1));
@@ -721,7 +727,10 @@ test("a refreshed scope set change is audited with the credential update", async
       await owner
         .update(microsoft365Connections)
         .set({
-          scope: "User.Read Files.Read.All Sites.Read.All",
+          scope: boundGrantedScope({
+            ceiling: "User.Read Files.Read.All Sites.Read.All",
+            returned: "User.Read Files.Read.All Sites.Read.All",
+          }),
           expiresAt: new Date(0),
         })
         .where(eq(microsoft365Connections.id, connOrgAUserA1)),
@@ -781,4 +790,83 @@ test("a refreshed scope set change is audited with the credential update", async
     where: { id: { eq: connOrgAUserA1 } },
   });
   expect(current?.scope).toBe("User.Read Files.Read.All");
+});
+
+test("a refreshed calendar connection retains its authorized scope ceiling", async () => {
+  const authorized = "User.Read Calendars.Read";
+  const access = await encryptMicrosoft365Secret({
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    purpose: MICROSOFT365_TOKEN_PURPOSE.access,
+    secret: "calendar-access",
+  });
+  const refresh = await encryptMicrosoft365Secret({
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    purpose: MICROSOFT365_TOKEN_PURPOSE.refresh,
+    secret: "calendar-refresh",
+  });
+  await withTokenOwner(
+    async (owner) =>
+      await owner
+        .update(microsoft365Connections)
+        .set({
+          scope: boundGrantedScope({
+            ceiling: authorized,
+            returned: authorized,
+          }),
+          accessTokenEncrypted: access.ciphertext,
+          accessTokenIv: access.iv,
+          refreshTokenEncrypted: refresh.ciphertext,
+          refreshTokenIv: refresh.iv,
+          status: "connected",
+          expiresAt: new Date(0),
+        })
+        .where(eq(microsoft365Connections.id, connOrgAUserA1)),
+  );
+  const connection = await testDb.query.microsoft365Connections.findFirst({
+    where: { id: { eq: connOrgAUserA1 } },
+  });
+  if (!connection) {
+    panic("Expected calendar connection fixture");
+  }
+  const safeDb: SafeDb = async (run) =>
+    Result.ok(
+      await scopedQuery(
+        noWorkspaces,
+        ids.orgA,
+        async (tx) => await run(asTestRaw(tx)),
+        ids.userA1,
+      ),
+    );
+  const result = await ensureMicrosoft365AccessToken(
+    {
+      connection: { ...connection, userId: ids.userA1 },
+      safeDb,
+      capability: "calendar.read",
+      recordAuditEvent: async () => {},
+    },
+    {
+      getMicrosoft365OAuthConfig: () =>
+        Result.ok({
+          clientId: "client",
+          clientSecret: "secret",
+          tenantId: "tenant",
+        }),
+      refreshAccessToken: async () =>
+        Result.ok({
+          access_token: "refreshed-calendar",
+          scope: "User.Read Calendars.Read Files.Read.All Sites.Read.All",
+          expires_in: 3600,
+        }),
+    },
+  );
+  expect(String(result.unwrap())).toBe("refreshed-calendar");
+  const current = await testDb.query.microsoft365Connections.findFirst({
+    where: { id: { eq: connOrgAUserA1 } },
+  });
+  expect(current?.scope).toBe(authorized);
+  expect(grantedCapabilities(current?.scope ?? null)).toEqual([
+    "calendar.read",
+  ]);
 });
