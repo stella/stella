@@ -173,7 +173,7 @@ elif '/runs/777' in endpoint:
  scenario=os.environ['SCENARIO']
  if scenario=='lookup-error': sys.exit(23)
  print(json.dumps({'status':'completed','conclusion':scenario if scenario in ['failure','cancelled'] else 'success'}))
-elif endpoint=='/installation/token': pass
+elif endpoint=='/installation/token': sys.exit(int(os.environ['REVOKE_EXIT_CODE']))
 else: raise RuntimeError('Unexpected endpoint '+endpoint)
 `;
 
@@ -183,6 +183,7 @@ type ScenarioOptions = {
   attempt?: string;
   leaseAttempt?: string;
   scenario?: string;
+  revokeExitCode?: number;
 };
 const dispatch = async ({
   action,
@@ -190,6 +191,7 @@ const dispatch = async ({
   attempt = "1",
   leaseAttempt = attempt,
   scenario = "success",
+  revokeExitCode = 0,
 }: ScenarioOptions) => {
   const directory = await mkdtemp(path.join(tmpdir(), "staging-power-"));
   try {
@@ -209,6 +211,7 @@ const dispatch = async ({
         GITHUB_ACTION_PATH: ACTION_PATH,
         FIXTURE_ROOT: directory,
         SCENARIO: scenario,
+        REVOKE_EXIT_CODE: String(revokeExitCode),
         INFRA_REPO: "example/infra",
         POWER_ACTION: action,
         APP_CLIENT_ID: "fixture-app",
@@ -300,5 +303,25 @@ test.each(["failure", "cancelled", "lookup-error", "ambiguous"])(
     const result = await dispatch({ action: "on", scenario });
     expect(result.exit).not.toBe(0);
     expect(result.calls).toContain('"/installation/token"');
+  },
+);
+
+test.each([
+  { scenario: "success", transitionStatus: 0 },
+  { scenario: "failure", transitionStatus: 1 },
+  { scenario: "lookup-error", transitionStatus: 23 },
+])(
+  "token cleanup preserves the $scenario transition status",
+  async ({ scenario, transitionStatus }) => {
+    for (const revokeExitCode of [0, 37]) {
+      const result = await dispatch({ action: "on", scenario, revokeExitCode });
+      expect(result.exit).toBe(transitionStatus);
+      expect(result.calls).toContain('"/installation/token"');
+      if (revokeExitCode !== 0) {
+        expect(result.stderr).toContain(
+          "::warning::GitHub App token revocation failed.",
+        );
+      }
+    }
   },
 );

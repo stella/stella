@@ -26,7 +26,13 @@ GH_TOKEN="$(mint_app_token)"
 [[ -n "$GH_TOKEN" ]] || { echo "::error::GitHub App token creation failed." >&2; exit 1; }
 echo "::add-mask::$GH_TOKEN"
 export GH_TOKEN
-trap 'bash "$GH_RETRY_SCRIPT" api --method DELETE /installation/token >/dev/null' EXIT
+trap '
+  TRANSITION_EXIT_STATUS=$?
+  if ! bash "$GH_RETRY_SCRIPT" api --method DELETE /installation/token >/dev/null; then
+    echo "::warning::GitHub App token revocation failed." >&2
+  fi
+  exit "$TRANSITION_EXIT_STATUS"
+' EXIT
 
 # The caller identity is stable across acquisition and cleanup, but distinct
 # for reruns. The receiver must release only this lease, even on duplicate off.
@@ -48,7 +54,7 @@ bash "$GH_RETRY_SCRIPT" api --method POST \
 run_id=""
 for ((attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1)); do
   if [[ -z "$run_id" ]]; then
-    # Only runs created since this dispatch, so each poll stays one page.
+    # Bound the history scanned while retaining pagination for recent runs.
     runs="$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp \
       "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&created=%3E%3D${dispatched_at}&per_page=100")"
     matches="$(jq -c --arg title "$expected_title" --arg since "$dispatched_at" \
