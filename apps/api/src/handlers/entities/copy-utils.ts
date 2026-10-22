@@ -1703,10 +1703,10 @@ export const copyEntities = async ({
 
   // Written here, inside the copy transaction: the mark commits or rolls back
   // with the copies themselves, so a lost post-commit flush costs nothing.
-  await dependencies.enqueueEntitySearchRepairs(
-    tx,
-    plan.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
-  );
+  await dependencies.enqueueEntitySearchRepairs(tx, [
+    ...plan.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
+    ...plan.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.durableExtraction],
+  ]);
   const nativeExtractionRunIds = await dependencies.requestNativeExtractionRuns(
     {
       requests: plan.nativeExtractionRequests,

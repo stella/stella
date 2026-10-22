@@ -75,6 +75,15 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const queueSource = await Bun.file(
   new URL("document-processing-queue.ts", import.meta.url),
 ).text();
+const ocrSchedulerSource = await Bun.file(
+  new URL("scheduler/tasks/document-processing-ocr.ts", import.meta.url),
+).text();
+const nativeSchedulerSource = await Bun.file(
+  new URL(
+    "scheduler/tasks/document-processing-native-extraction.ts",
+    import.meta.url,
+  ),
+).text();
 const enqueueSource = await Bun.file(
   new URL("document-processing-enqueue.ts", import.meta.url),
 ).text();
@@ -366,7 +375,7 @@ describe("repair cursor Redis deadlines", () => {
 });
 
 describe("reconciliation fault isolation", () => {
-  test("dispatches every durable processing kind and repairs native gaps", () => {
+  test("dispatches each durable processing kind only from its scheduler", () => {
     const dispatchStart = queueSource.indexOf(
       "export const dispatchQueuedDocumentProcessingRuns",
     );
@@ -385,9 +394,12 @@ describe("reconciliation fault isolation", () => {
     const repairSource = queueSource.slice(repairStart, repairEnd);
 
     expect(dispatchStart).toBeGreaterThan(-1);
-    expect(dispatchSource).not.toContain(
-      'eq(documentProcessingRuns.kind, "ocr")',
-    );
+    expect(dispatchSource).toContain('selection === "native-only"');
+    expect(dispatchSource).toContain('"native-extraction" : "ocr"');
+    expect(ocrSchedulerSource).toContain('selection: "ocr-only"');
+    expect(ocrSchedulerSource).not.toContain('selection: "native-only"');
+    expect(nativeSchedulerSource).toContain('selection: "native-only"');
+    expect(nativeSchedulerSource).not.toContain('selection: "ocr-only"');
     expect(repairStart).toBeGreaterThan(-1);
     expect(repairSource).toContain("persistMissingNativeExtractionRuns");
     expect(repairSource).not.toContain("organizationSettings");

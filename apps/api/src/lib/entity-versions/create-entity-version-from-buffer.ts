@@ -46,6 +46,8 @@ import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 class EntityVersionTargetError extends TaggedError("EntityVersionTargetError")<{
@@ -364,6 +366,7 @@ export const createEntityVersionFromBuffer = async ({
           filePropertyId: versionWriteResult.filePropertyId,
           tx,
         });
+        await enqueueEntitySearchRepairs(tx, [entityId]);
       }
       // Set last, after every fallible write in this transaction: the flag
       // means a committed row may reference the object, so cleanup must be
@@ -426,6 +429,7 @@ export const createEntityVersionFromBuffer = async ({
     .catch((error: unknown) => {
       captureError(error, { entityId });
     });
+  flushEntitySearchRepairs([entityId]).catch(captureError);
   dependencies
     .enqueuePdfDerivativeOrMarkFailed({
       encrypted: encryption.encrypted,

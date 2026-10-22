@@ -146,12 +146,9 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const WORKER_CONCURRENCY = 2;
 export const RECONCILE_BATCH_SIZE = 100;
-const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
+const OCR_ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
+export const NATIVE_CONTENT_SEARCH_BOUND_MS = 2 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
-const QUEUED_OCR_SELECTION = {
-  ALL_DUE: "all-due",
-  SCHEDULED_RETRIES: "scheduled-retries",
-} as const;
 const WORKER_LEASE_TIMEOUT_MS = 40 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_MS = 5 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_TIMEOUT_MS = 30_000;
@@ -2204,14 +2201,12 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   database,
   enqueue = enqueueDocumentProcessingRun,
   limit = RECONCILE_BATCH_SIZE,
-  selection = QUEUED_OCR_SELECTION.ALL_DUE,
+  selection,
 }: {
   database: typeof rootDb;
   enqueue?: typeof enqueueDocumentProcessingRun;
   limit?: number;
-  selection?:
-    | typeof QUEUED_OCR_SELECTION.ALL_DUE
-    | typeof QUEUED_OCR_SELECTION.SCHEDULED_RETRIES;
+  selection: "native-only" | "ocr-only";
 }): Promise<{
   attempted: number;
   hasMore: boolean;
@@ -2224,6 +2219,10 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
     .where(
       and(
         eq(documentProcessingRuns.status, "queued"),
+        eq(
+          documentProcessingRuns.kind,
+          selection === "native-only" ? "native-extraction" : "ocr",
+        ),
         lt(
           documentProcessingRuns.attemptCount,
           DOCUMENT_PROCESSING_MAX_ATTEMPTS,
@@ -2232,9 +2231,6 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
           isNull(documentProcessingRuns.nextDeliveryAt),
           lte(documentProcessingRuns.nextDeliveryAt, now),
         ),
-        selection === QUEUED_OCR_SELECTION.SCHEDULED_RETRIES
-          ? isNotNull(documentProcessingRuns.nextAttemptAt)
-          : undefined,
         or(
           isNull(documentProcessingRuns.nextAttemptAt),
           lte(documentProcessingRuns.nextAttemptAt, now),
@@ -2273,7 +2269,10 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   const updatedAt = new Date();
   await updateQueuedRunSchedule({
     database,
-    delayMs: ENQUEUE_VISIBILITY_TIMEOUT_MS,
+    delayMs:
+      selection === "native-only"
+        ? NATIVE_CONTENT_SEARCH_BOUND_MS
+        : OCR_ENQUEUE_VISIBILITY_TIMEOUT_MS,
     runIds: enqueuedIds,
     updatedAt,
   });
@@ -2318,7 +2317,7 @@ const dispatchScheduledDocumentProcessingRetries = async (
     await dispatchQueuedDocumentProcessingRuns({
       database: dependencies.database,
       enqueue: dependencies.enqueueDocumentProcessingRun,
-      selection: QUEUED_OCR_SELECTION.SCHEDULED_RETRIES,
+      selection: "ocr-only",
     });
   return resolveScheduledDeliveryBatch({
     attempted,
