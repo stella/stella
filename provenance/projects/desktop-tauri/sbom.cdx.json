@@ -34257,6 +34257,8 @@
     },
     {
       "dependsOn": [
+        "pkg:cargo/bitflags@2.13.1",
+        "pkg:cargo/block2@0.6.2",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2@0.6.5"
       ],
@@ -35224,6 +35226,7 @@
         "pkg:cargo/uuid@1.28.0",
         "pkg:cargo/windows-icons@0.4.0",
         "pkg:cargo/windows-native-keyring-store@1.1.0",
+        "pkg:cargo/windows-registry@0.6.1",
         "pkg:cargo/winsafe@0.0.29",
         "pkg:cargo/zbus-secret-service-keyring-store@1.0.1",
         "pkg:cargo/zeroize@1.9.1",
@@ -35233,9 +35236,12 @@
     },
     {
       "dependsOn": [
+        "pkg:cargo/block2@0.6.2",
         "pkg:cargo/core-foundation@0.10.1",
         "pkg:cargo/objc2-app-kit@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
+        "pkg:cargo/objc2-service-management@0.3.2",
+        "pkg:cargo/objc2-user-notifications@0.3.2",
         "pkg:cargo/objc2-web-kit@0.3.2",
         "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/tauri@2.12.3",
