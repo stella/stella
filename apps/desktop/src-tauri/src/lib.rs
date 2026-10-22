@@ -1,5 +1,6 @@
 mod account;
 mod activity;
+mod activity_calls;
 mod activity_commands;
 mod activity_details;
 mod activity_store;
@@ -40,7 +41,9 @@ mod keychain;
 mod local_store;
 mod local_window;
 mod logging;
+mod managed_policy;
 mod marker_file;
+mod onboarding;
 mod pdf_signing;
 mod permissions;
 mod presence;
@@ -143,7 +146,12 @@ pub fn run() {
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
-    .manage(feature_gate::FeatureGates::default())
+    .manage::<onboarding::OnboardingState>(std::sync::Mutex::new(
+      onboarding::Onboarding::load(),
+    ))
+    .manage(feature_gate::FeatureGates::blocking(
+      managed_policy::current().blocked_features(),
+    ))
     .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
     .manage(crash_monitor)
     .manage(desktop_telemetry.clone())
@@ -165,7 +173,8 @@ pub fn run() {
         );
       // Clipboard history initializes on a dedicated thread because the OS
       // keychain can block on authorization and the watcher runs continuously.
-      {
+      // Managed policy can turn it off: then nothing is read or recorded.
+      if !managed_policy::current().clipboard_disabled {
         let clipboard_manager = Arc::clone(&clipboard_manager);
         let clipboard_handle = handle.clone();
         let watcher_telemetry = desktop_telemetry.clone();
@@ -193,7 +202,7 @@ pub fn run() {
       // Registration is intentionally non-fatal: the shortcut may already be
       // taken, and the clipboard stays reachable from the tray.
       if clipboard_shortcut::register_at_launch(&handle)
-        != clipboard_shortcut::ShortcutRegistration::Active
+        == clipboard_shortcut::ShortcutRegistration::Unavailable
       {
         desktop_telemetry.capture(desktop_telemetry::DesktopErrorReport {
           window: desktop_telemetry::DesktopTelemetryWindow::Clipboard,
@@ -334,6 +343,9 @@ pub fn run() {
                   updater::CheckOutcome::Failed(msg) => {
                     tracing::warn!(error = %msg, "tray-triggered updater check failed");
                   }
+                  updater::CheckOutcome::Disabled => {
+                    tracing::debug!("tray updater check skipped: updates are managed");
+                  }
                 }
               }
               tray::MenuAction::OpenEditRoot => {
@@ -429,6 +441,13 @@ pub fn run() {
         app.set_activation_policy(tauri::ActivationPolicy::Accessory);
       }
 
+      onboarding::show_if_pending(
+        &handle,
+        launch_args
+          .iter()
+          .any(|arg| arg == app_lifecycle::BACKGROUND_LAUNCH_ARGUMENT),
+      );
+
       // Register deep link handler
       {
         let manager_for_deep_link = Arc::clone(&manager);
@@ -499,7 +518,7 @@ pub fn run() {
     });
 }
 
-fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
+pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
   // Accessory apps must explicitly activate to bring windows to front.
   #[cfg(target_os = "macos")]
   let _ = handle.show();

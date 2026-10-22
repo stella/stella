@@ -50,6 +50,16 @@ const WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/shared/ShortcutRecorder.tsx",
     "src/shared/use-clipboard-shortcut.ts",
   ],
+  "src-tauri/capabilities/onboarding.json": [
+    "src/onboarding/OnboardingApp.tsx",
+    "src/onboarding/ConnectStep.tsx",
+    "src/onboarding/HowItWorksStep.tsx",
+    "src/onboarding/PermissionsStep.tsx",
+    "src/onboarding/TryItStep.tsx",
+    "src/mainview/PermissionsSection.tsx",
+    "src/shared/ShortcutRecorder.tsx",
+    "src/shared/use-clipboard-shortcut.ts",
+  ],
 };
 
 /**

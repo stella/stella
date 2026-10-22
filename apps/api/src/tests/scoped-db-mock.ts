@@ -41,6 +41,7 @@ type FeatureAccessMockOptions = {
 };
 
 type ScopedDbMockOptions = {
+  authorizedWorkspaceIds?: readonly string[];
   siblingRows?: { name: string; parentId: string | null }[];
   featureAccess?: FeatureAccessMockOptions;
   visibleResources?: {
@@ -216,6 +217,14 @@ export const createScopedDbMock = (
       execute: async () => {
         await Promise.resolve();
       },
+      ...(options?.authorizedWorkspaceIds === undefined
+        ? {}
+        : {
+            selectDistinct: () =>
+              createSelectQueryMock(
+                options.authorizedWorkspaceIds?.map((id) => ({ id })) ?? [],
+              ),
+          }),
       ...(typeof tx === "object" && tx !== null ? tx : {}),
       query: {
         ...providedQuery,
