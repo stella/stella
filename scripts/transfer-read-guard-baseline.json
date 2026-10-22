@@ -770,27 +770,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/api/src/handlers/microsoft365/graph-client.ts",
-    "function": "module/fetchAccountLabel",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/microsoft365/graph-client.ts",
-    "function": "module/listDriveRootChildren",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/microsoft365/graph-oauth.ts",
-    "function": "module/requestToken",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/list.ts",
     "function": "module/listAllowedSenders/createSafeRootHandler[1]",
     "kind": "fixed-page-size",
