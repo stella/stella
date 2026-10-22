@@ -320,6 +320,9 @@ const responseFor = (
     .toSorted((left, right) => left - right);
   let offset = 0;
   let onAbort: (() => void) | undefined;
+  // A call, not a property read: the check after an await must not inherit
+  // the narrowing from the check before it.
+  const isAborted = (): boolean => signal?.aborted === true;
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       onAbort = () => {
@@ -334,7 +337,7 @@ const responseFor = (
     },
     async pull(controller) {
       await Promise.resolve();
-      if (signal?.aborted === true) {
+      if (isAborted()) {
         controller.error(abortError());
         return;
       }
@@ -342,7 +345,7 @@ const responseFor = (
       if (pauses !== undefined && due !== undefined && due.atByte <= offset) {
         pending.shift();
         await pauses.gate.pause(due.label, signal);
-        if (signal?.aborted === true) {
+        if (isAborted()) {
           controller.error(abortError());
         }
         return;
