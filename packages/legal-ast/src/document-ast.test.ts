@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  anchoredSelectionMatches,
+  anchoredTextsOf,
   APPARATUS_ROLES,
   getDocumentAstMetadata,
   hasUsableAst,
@@ -881,5 +883,87 @@ describe("persisted kinds outside the declared sets", () => {
       { kind: "inline-type", blockId: "p1", type: "ornament" },
       { kind: "inline-type", blockId: "t1", type: "ruby" },
     ]);
+  });
+});
+
+describe("anchoredTextsOf", () => {
+  const blocks: Block[] = [
+    {
+      type: "heading",
+      id: "h",
+      anchorId: "h-1",
+      level: 2,
+      inlines: [{ type: "text", text: "Odůvodnění" }],
+      plainText: "Odůvodnění",
+    },
+    {
+      type: "paragraph",
+      id: "p",
+      anchorId: "p-1",
+      inlines: [
+        { type: "text", text: "Viz " },
+        {
+          type: "citation",
+          cite: "23 Cdo 1192/2019",
+          children: [{ type: "text", text: "23 Cdo 1192/2019" }],
+        },
+        { type: "line-break" },
+        { type: "text", text: "dále" },
+      ],
+      plainText: "Viz 23 Cdo 1192/2019\ndále",
+    },
+    {
+      type: "table",
+      id: "t",
+      anchorId: "t-1",
+      rows: [
+        [
+          { inlines: [{ type: "text", text: "A" }], plainText: "A" },
+          { inlines: [{ type: "text", text: "B" }], plainText: "B" },
+        ],
+      ],
+      plainText: "A B",
+    },
+    {
+      type: "image",
+      id: "i",
+      anchorId: "i-1",
+      src: "https://example.test/i.png",
+      plainText: "",
+    },
+  ];
+
+  test("lists headings, paragraphs and each table cell on the offset axis", () => {
+    expect(anchoredTextsOf(blocks)).toEqual([
+      { anchorId: "h-1", text: "Odůvodnění" },
+      { anchorId: "p-1", text: "Viz 23 Cdo 1192/2019\ndále" },
+      { anchorId: "table:t:0:0", text: "A" },
+      { anchorId: "table:t:0:1", text: "B" },
+    ]);
+  });
+
+  test("accepts exactly the text at a selection's offsets in its unit", () => {
+    const texts = anchoredTextsOf(blocks);
+    const selection = (
+      anchorId: string,
+      startOffset: number,
+      endOffset: number,
+      quote: string,
+    ) =>
+      anchoredSelectionMatches(texts, {
+        anchorId,
+        startOffset,
+        endOffset,
+        quote,
+      });
+    expect(selection("h-1", 0, 10, "Odůvodnění")).toBe(true);
+    expect(selection("p-1", 4, 20, "23 Cdo 1192/2019")).toBe(true);
+    expect(selection("table:t:0:1", 0, 1, "B")).toBe(true);
+    expect(selection("t-1", 0, 1, "A")).toBe(false);
+    expect(selection("i-1", 0, 0, "")).toBe(false);
+    expect(selection("p-1", 4, 20, "23 Cdo 1192/2020")).toBe(false);
+    expect(selection("p-1", -1, 3, "Viz")).toBe(false);
+    expect(selection("p-1", 3, 3, "")).toBe(false);
+    expect(selection("h-1", 0, 99, "Odůvodnění")).toBe(false);
   });
 });

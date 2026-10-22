@@ -61,6 +61,7 @@ import type {
 } from "@stll/folio-react";
 import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
@@ -2042,8 +2043,8 @@ const FileChatOverlayInner = ({
   const hasThreadContent = hasMessages || error !== undefined;
   // A docked tab showing this very thread is the conversation view, so the
   // floating card (and the affordance that reopens it) would only repeat it
-  // beside itself. The composer is unaffected: a send from here lands in the
-  // same thread and the tab shows it.
+  // beside itself, and so would a second composer: both step aside while the
+  // tab is on screen.
   const threadCardAvailable =
     threadPresentation === OVERLAY_THREAD_PRESENTATION.card;
   // Auto-open the thread panel as soon as the first message lands so users see
@@ -2619,133 +2620,139 @@ const FileChatOverlayInner = ({
           </ChatThreadCard>
         )}
 
-        <ChatAnonymizationLayer
-          editor={editorController.editor}
-          enabled={anonymized}
-          focused={composerFocused}
-          ownerKey={getChatThreadKey(threadRef)}
-          workspaceId={workspaceId ?? threadRef.threadId}
-        />
-        <PromptBar
-          anonymized={anonymized}
-          attachmentsEnabled
-          attentionPulseSeq={attentionPulseSeq}
-          canSubmitNow={canSubmitComposerDraft}
-          context={{ activeOrganizationId, threadRef }}
-          editMode={composerEditModeMenuFor({
-            onChange: setEditModeOptionId,
-            optionId: editModeOptionId,
-            state: activeDocxEditModeState,
-          })}
-          editorController={editorController}
-          mcpOrganizationId={activeOrganizationId}
-          models={{
-            activeOrganizationId,
-            threadRef,
-            selectedModel: data.model,
-            selectedReasoningEffort: data.reasoningEffort,
-            selectModel: modelSelection.selectModel,
-          }}
-          onNewThread={newThreadAction}
-          reservedCommands={{ hasPersistedThread: hasMessages }}
-          skillChat={{
-            contextMatterIds: contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
-            ...fileOverlaySkillDocument({
-              activeFile,
-              editMode: activeDocxEditModeState,
-              hasActiveDraft: activeDraft !== undefined,
-            }),
-            ...(activeDocxEditModeState.type === "selectable"
-              ? {
-                  onReviewEdits: () => {
-                    setEditModeOptionId(CHAT_EDIT_MODE_OPTION_ID.manual);
-                  },
+        {/* A docked tab on this very thread is the one surface for it: the
+            composer steps aside with the card, so a passage sent to the
+            chat lands in one composer. It stays mounted, so its draft and
+            any reply in flight survive the tab closing. */}
+        <div className={cn(threadCardAvailable ? "contents" : "hidden")}>
+          <ChatAnonymizationLayer
+            editor={editorController.editor}
+            enabled={anonymized}
+            focused={composerFocused}
+            ownerKey={getChatThreadKey(threadRef)}
+            workspaceId={workspaceId ?? threadRef.threadId}
+          />
+          <PromptBar
+            anonymized={anonymized}
+            attachmentsEnabled
+            attentionPulseSeq={attentionPulseSeq}
+            canSubmitNow={canSubmitComposerDraft}
+            context={{ activeOrganizationId, threadRef }}
+            editMode={composerEditModeMenuFor({
+              onChange: setEditModeOptionId,
+              optionId: editModeOptionId,
+              state: activeDocxEditModeState,
+            })}
+            editorController={editorController}
+            mcpOrganizationId={activeOrganizationId}
+            models={{
+              activeOrganizationId,
+              threadRef,
+              selectedModel: data.model,
+              selectedReasoningEffort: data.reasoningEffort,
+              selectModel: modelSelection.selectModel,
+            }}
+            onNewThread={newThreadAction}
+            reservedCommands={{ hasPersistedThread: hasMessages }}
+            skillChat={{
+              contextMatterIds: contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
+              ...fileOverlaySkillDocument({
+                activeFile,
+                editMode: activeDocxEditModeState,
+                hasActiveDraft: activeDraft !== undefined,
+              }),
+              ...(activeDocxEditModeState.type === "selectable"
+                ? {
+                    onReviewEdits: () => {
+                      setEditModeOptionId(CHAT_EDIT_MODE_OPTION_ID.manual);
+                    },
+                  }
+                : {}),
+              threadRef,
+              webSearch: {
+                available: data.webSearchAvailable,
+                enabled: data.webSearchEnabled,
+              },
+            }}
+            skillsOrganizationId={activeOrganizationId}
+            emptyPlaceholder={
+              <FileChatEmptyPlaceholder
+                placeholderAction={filePlaceholderAction}
+                sourceLabel={filePlaceholderSourceLabel}
+              />
+            }
+            layout="floating"
+            onFocusChange={setComposerFocused}
+            onSubmitError={capturePromptSubmitError}
+            minimizedThreadAction={
+              threadCardAvailable && !panelOpen && hasThreadContent
+                ? {
+                    label: t("chat.aiThread"),
+                    onOpen: () => setPanelOpen(true),
+                  }
+                : undefined
+            }
+            onStop={() => {
+              stop();
+            }}
+            onSubmit={handleComposerSubmit}
+            pendingCount={0}
+            queueWhileGenerating
+            sendDisabledReason={sendDisabledReason}
+            status={isGenerating ? "generating" : "idle"}
+            dock={
+              <ChatComposerDock
+                data={data}
+                models={{
+                  activeOrganizationId,
+                  threadRef,
+                  selectedModel: data.model,
+                  selectedReasoningEffort: data.reasoningEffort,
+                  selectModel: modelSelection.selectModel,
+                }}
+                onNewThread={newThreadAction}
+                newThreadPrompt={
+                  newThreadPromptStatus !== null
+                    ? {
+                        content: (
+                          <PendingReviewNewThreadPrompt
+                            onDismiss={() => {
+                              detached(
+                                dismissPendingReview(),
+                                "file-chat-overlay.dismiss-pending-review",
+                              );
+                            }}
+                            onKeep={keepPendingReview}
+                            pendingCount={pendingReviewCount}
+                            status={newThreadPromptStatus}
+                          />
+                        ),
+                        onCancel: cancelNewThreadChoice,
+                      }
+                    : undefined
                 }
-              : {}),
-            threadRef,
-            webSearch: {
-              available: data.webSearchAvailable,
-              enabled: data.webSearchEnabled,
-            },
-          }}
-          skillsOrganizationId={activeOrganizationId}
-          emptyPlaceholder={
-            <FileChatEmptyPlaceholder
-              placeholderAction={filePlaceholderAction}
-              sourceLabel={filePlaceholderSourceLabel}
-            />
-          }
-          layout="floating"
-          onFocusChange={setComposerFocused}
-          onSubmitError={capturePromptSubmitError}
-          minimizedThreadAction={
-            threadCardAvailable && !panelOpen && hasThreadContent
-              ? {
-                  label: t("chat.aiThread"),
-                  onOpen: () => setPanelOpen(true),
+                leadingContext={
+                  // The matter control is a real picker on every surface, so
+                  // the user can widen or narrow the file chat's context just
+                  // like the main chat and inspector. Seeded (below) with the
+                  // file's own matter by default. The opaque composer pill keeps
+                  // the input legible without adding chrome behind this row.
+                  contextMatterIds !== null ? (
+                    <ChatMatterPicker
+                      matterIds={contextMatterIds}
+                      onChange={setContextMatterIds}
+                    />
+                  ) : undefined
                 }
-              : undefined
-          }
-          onStop={() => {
-            stop();
-          }}
-          onSubmit={handleComposerSubmit}
-          pendingCount={0}
-          queueWhileGenerating
-          sendDisabledReason={sendDisabledReason}
-          status={isGenerating ? "generating" : "idle"}
-          dock={
-            <ChatComposerDock
-              data={data}
-              models={{
-                activeOrganizationId,
-                threadRef,
-                selectedModel: data.model,
-                selectedReasoningEffort: data.reasoningEffort,
-                selectModel: modelSelection.selectModel,
-              }}
-              onNewThread={newThreadAction}
-              newThreadPrompt={
-                newThreadPromptStatus !== null
-                  ? {
-                      content: (
-                        <PendingReviewNewThreadPrompt
-                          onDismiss={() => {
-                            detached(
-                              dismissPendingReview(),
-                              "file-chat-overlay.dismiss-pending-review",
-                            );
-                          }}
-                          onKeep={keepPendingReview}
-                          pendingCount={pendingReviewCount}
-                          status={newThreadPromptStatus}
-                        />
-                      ),
-                      onCancel: cancelNewThreadChoice,
-                    }
-                  : undefined
-              }
-              leadingContext={
-                // The matter control is a real picker on every surface, so
-                // the user can widen or narrow the file chat's context just
-                // like the main chat and inspector. Seeded (below) with the
-                // file's own matter by default. The opaque composer pill keeps
-                // the input legible without adding chrome behind this row.
-                contextMatterIds !== null ? (
-                  <ChatMatterPicker
-                    matterIds={contextMatterIds}
-                    onChange={setContextMatterIds}
-                  />
-                ) : undefined
-              }
-              endExtras={
-                <DocxEditSafetyChip safety={docxEditSafety ?? "safe"} />
-              }
-              status="ready"
-              threadRef={threadRef}
-            />
-          }
-        />
+                endExtras={
+                  <DocxEditSafetyChip safety={docxEditSafety ?? "safe"} />
+                }
+                status="ready"
+                threadRef={threadRef}
+              />
+            }
+          />
+        </div>
       </ChatApprovalContext>
     </ChatMattersContext>
   );

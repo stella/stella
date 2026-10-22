@@ -187,25 +187,31 @@ export const CitedDecisionLink = ({
 
   return (
     <>
-      <span className={className}>{children}</span>{" "}
-      <DecisionCitationChip
-        decision={{
-          decisionId: decision.id,
-          court: decision.court,
-          courtShortCode: decisionCitationCourtLabel(decision),
-          caseNumber: decision.caseNumber,
-          decisionDate: decision.decisionDate,
-          readerUrl,
-          originalUrl: decision.sourceUrl ?? null,
-        }}
-        onOpen={openDecision}
-        passage={
-          passage !== undefined || treatment !== undefined ? (
-            <CitedDecisionPreview passage={passage} treatment={treatment} />
-          ) : undefined
-        }
-        presentation={presentation}
-      />
+      <span className={className}>{children}</span>
+      {/* The chip is not the decision's words: as reader chrome it stays off
+          the offsets a selection is stored in, so a quote around a citation
+          still matches the decision text. */}
+      <span data-reader-chrome="">
+        {" "}
+        <DecisionCitationChip
+          decision={{
+            decisionId: decision.id,
+            court: decision.court,
+            courtShortCode: decisionCitationCourtLabel(decision),
+            caseNumber: decision.caseNumber,
+            decisionDate: decision.decisionDate,
+            readerUrl,
+            originalUrl: decision.sourceUrl ?? null,
+          }}
+          onOpen={openDecision}
+          passage={
+            passage !== undefined || treatment !== undefined ? (
+              <CitedDecisionPreview passage={passage} treatment={treatment} />
+            ) : undefined
+          }
+          presentation={presentation}
+        />
+      </span>
     </>
   );
 };

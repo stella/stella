@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import { plainTextOf } from "@stll/legal-ast/document-ast";
+import { anchoredTextsOf } from "@stll/legal-ast/document-ast";
 
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -160,15 +160,10 @@ export const readReaderAnswerDecision = async (
         decisionId: read.decision.id,
         court: read.decision.court,
         decisionDate: read.decision.decisionDate,
-        paragraphs: read.ast.blocks.flatMap((block) =>
-          block.type === "paragraph"
-            ? [
-                {
-                  paragraphId: block.anchorId,
-                  text: plainTextOf(block.inlines),
-                },
-              ]
-            : [],
+        // Every unit the reader lets someone select, headings and table
+        // cells included, so an explained selection is always found here.
+        paragraphs: anchoredTextsOf(read.ast.blocks).map(
+          ({ anchorId, text }) => ({ paragraphId: anchorId, text }),
         ),
       };
     },

@@ -15,6 +15,8 @@ import {
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import {
   type DocumentAst,
+  anchoredSelectionMatches,
+  anchoredTextsOf,
   parseDocumentAst,
 } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -216,13 +218,19 @@ const ReaderStatusNotices = ({
   paragraphLanding: ParagraphLanding;
 }) => {
   const t = useTranslations();
+  const failure = readerAnswerFailureKind(answersError);
+  const answersErrorText =
+    failure === "budget" || failure === "selection"
+      ? {
+          budget: t("readerAnswers.budgetError"),
+          selection: t("readerAnswers.selectionError"),
+        }[failure]
+      : t("readerAnswers.networkError");
   return (
     <>
       {answersError !== null && (
         <p role="alert" className="text-destructive px-4 py-2 text-sm">
-          {readerAnswerFailureKind(answersError) === "budget"
-            ? t("readerAnswers.budgetError")
-            : t("readerAnswers.networkError")}
+          {answersErrorText}
         </p>
       )}
       {foreignDecisionFailed && (
@@ -442,13 +450,23 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         },
       ),
   }));
-  const explain = async (spans: SelectionAnchor[]) => {
+  // The server checks a selection against the same anchored texts, so Explain
+  // is offered exactly where the server accepts it.
+  const explainableSpan = (spans: SelectionAnchor[]) => {
     const span = spans.at(0);
-    if (
-      spans.length !== 1 ||
-      span === undefined ||
-      span.quote.length > READER_ANSWER_QUOTE_MAX_LENGTH
-    ) {
+    return spans.length === 1 &&
+      span !== undefined &&
+      span.quote.length <= READER_ANSWER_QUOTE_MAX_LENGTH &&
+      anchoredSelectionMatches(anchoredTextsOf(ast?.blocks ?? []), {
+        ...span,
+        anchorId: span.blockAnchorId,
+      })
+      ? span
+      : undefined;
+  };
+  const explain = async (spans: SelectionAnchor[]) => {
+    const span = explainableSpan(spans);
+    if (span === undefined) {
       notifyUserError(
         new ReaderAnswerFailure({
           kind: "request",
@@ -1052,6 +1070,11 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
           onExplain={
             props.aiMode === "enabled"
               ? (spans) => detached(explain(spans), "reader-answer.explain")
+              : undefined
+          }
+          explainRefusal={(spans) =>
+            explainableSpan(spans) === undefined
+              ? t("readerAnswers.selectionError")
               : undefined
           }
           scrollContainerRef={mainRef}

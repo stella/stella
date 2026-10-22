@@ -65,10 +65,10 @@ type OverlayThreadCardVisibilityArgs = {
 /**
  * Where the conversation is read while the composer floats over the text.
  *
- * A chat tab on screen showing this very thread IS the conversation view, so
- * the floating card would only repeat it beside itself. The composer stays
- * either way, and the card returns the moment that tab is closed, minimized,
- * or replaced by another tab.
+ * A chat tab on screen showing this very thread IS the conversation view and
+ * its composer, so the floating card and composer would only repeat them
+ * beside themselves. Both return the moment that tab is closed, minimized, or
+ * replaced by another tab.
  */
 export const overlayThreadCardVisibility = ({
   overlayThreadId,

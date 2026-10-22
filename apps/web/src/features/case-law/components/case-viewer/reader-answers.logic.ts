@@ -2,7 +2,10 @@ import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
-import { READER_ANSWER_ERROR_CODES } from "@stll/api-contract/reader-answers";
+import {
+  READER_ANSWER_ERROR_CODES,
+  READER_ANSWER_SELECTION_MISMATCH_CODE,
+} from "@stll/api-contract/reader-answers";
 import type {
   ReaderAnswerErrorCode,
   ReaderAnswer,
@@ -272,7 +275,8 @@ const READER_ANSWER_ERROR_KINDS = {
 } as const satisfies Record<ReaderAnswerErrorCode, string>;
 
 export type ReaderAnswerFailureKind =
-  (typeof READER_ANSWER_ERROR_KINDS)[ReaderAnswerErrorCode];
+  | (typeof READER_ANSWER_ERROR_KINDS)[ReaderAnswerErrorCode]
+  | "selection";
 
 export const readerAnswerErrorCodeKind = (
   code: ReaderAnswerErrorCode | null,
@@ -289,6 +293,12 @@ export const readerAnswerFailureKind = (
     error.code === ACTION_ADMISSION_CODES.periodExhausted
   ) {
     return "budget";
+  }
+  if (
+    APIError.is(error) &&
+    error.code === READER_ANSWER_SELECTION_MISMATCH_CODE
+  ) {
+    return "selection";
   }
   if (!ReaderAnswerFailure.is(error)) {
     return "network";

@@ -4,6 +4,7 @@ import { and, asc, eq, getColumns, isNull } from "drizzle-orm";
 import {
   READER_ANSWER_DEADLINE_MS,
   READER_ANSWER_MAX_MESSAGES,
+  READER_ANSWER_SELECTION_MISMATCH_CODE,
 } from "@stll/api-contract/reader-answers";
 import type {
   CreateReaderAnswer,
@@ -11,6 +12,7 @@ import type {
   ReaderAnswerFollowUp,
   ReaderAnswerRegenerate,
 } from "@stll/api-contract/reader-answers";
+import { anchoredSelectionMatches } from "@stll/legal-ast/document-ast";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx, abortTransaction } from "@/api/db/safe-db";
@@ -239,22 +241,22 @@ const readReaderAnswerContext = async ({
       command.type === "create"
         ? command.body.anchor
         : existing && anchorOf(existing);
-    const paragraph = decision.paragraphs.find(
-      ({ paragraphId }) => paragraphId === anchor?.paragraphId,
-    );
     if (
       anchor === undefined ||
-      paragraph === undefined ||
-      anchor.startOffset < 0 ||
-      anchor.endOffset > paragraph.text.length ||
-      anchor.endOffset <= anchor.startOffset ||
-      paragraph.text.slice(anchor.startOffset, anchor.endOffset) !==
-        anchor.quote
+      !anchoredSelectionMatches(
+        decision.paragraphs.map(({ paragraphId, text }) => ({
+          anchorId: paragraphId,
+          text,
+        })),
+        { ...anchor, anchorId: anchor.paragraphId },
+      )
     ) {
       return Result.err(
         new HandlerError({
           status: 400,
+          code: READER_ANSWER_SELECTION_MISMATCH_CODE,
           message: "Selection does not match the decision paragraph",
+          hint: "Select the text again from the decision as it is shown now.",
         }),
       );
     }

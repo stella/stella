@@ -22,6 +22,9 @@ export const READER_ANSWER_MESSAGE_STATUSES = [
 ] as const;
 export const READER_ANSWER_QUESTION_MAX_LENGTH = 10_000;
 export const READER_ANSWER_QUOTE_MAX_LENGTH = 2000;
+/** A create whose selection is not the decision's text at its anchor. */
+export const READER_ANSWER_SELECTION_MISMATCH_CODE =
+  "reader_answer_selection_mismatch";
 export const READER_ANSWER_MAX_MESSAGES = 40;
 
 /** Streaming message updatedAt is the non-renewing server claim timestamp. */

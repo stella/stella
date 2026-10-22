@@ -16,8 +16,11 @@ import {
   READER_ANSWER_DEADLINE_MS,
   READER_ANSWER_ERROR_CODES,
   READER_ANSWER_MAX_MESSAGES,
+  READER_ANSWER_SELECTION_MISMATCH_CODE,
 } from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
+import { anchoredTextsOf } from "@stll/legal-ast/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -32,6 +35,7 @@ import type { ReaderAnswerStreamOptions } from "@/api/handlers/legal-reader/answ
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -289,9 +293,97 @@ describe("reader answer turn lifecycle", () => {
       if (Result.isError(result)) {
         expect(result.error).toMatchObject({
           status: 400,
+          code: READER_ANSWER_SELECTION_MISMATCH_CODE,
           message: "Selection does not match the decision paragraph",
         });
       }
+    }
+  });
+
+  test("explains a selection in every block kind the reader anchors, from create through the stream", async () => {
+    const blocks: Block[] = [
+      {
+        type: "heading",
+        id: "heading",
+        anchorId: "h-1",
+        level: 2,
+        inlines: [{ type: "text", text: "Odůvodnění" }],
+        plainText: "Odůvodnění",
+      },
+      {
+        type: "paragraph",
+        id: "footnote",
+        anchorId: "fn-1",
+        note: { type: "footnote", label: "1" },
+        inlines: [{ type: "text", text: "Poznámka soudu." }],
+        plainText: "Poznámka soudu.",
+      },
+      {
+        type: "table",
+        id: "table",
+        anchorId: "t-1",
+        rows: [
+          [
+            {
+              inlines: [{ type: "text", text: "Spisová značka" }],
+              plainText: "Spisová značka",
+            },
+          ],
+        ],
+        plainText: "Spisová značka",
+      },
+    ];
+    // The decision as the reader source returns it, read through the real
+    // corpus mapping rather than a hand-written paragraph list.
+    const readDecision = async () =>
+      await readReaderAnswerDecision(decisionId, {
+        readDecision: async () =>
+          asTestRaw({
+            status: "read",
+            ast: { blocks, metadata: {} },
+            decision: {
+              id: decisionId,
+              court: "Test court",
+              decisionDate: "2026-01-01",
+            },
+          }),
+      });
+    for (const { anchorId, text } of anchoredTextsOf(blocks)) {
+      const quote = text.slice(1);
+      const prepared = await prepareReaderAnswer({
+        ...scope(),
+        command: {
+          type: "create",
+          body: {
+            kind: "explain",
+            decisionId,
+            anchor: {
+              paragraphId: anchorId,
+              quote,
+              startOffset: 1,
+              endOffset: text.length,
+            },
+            locale: "cs-CZ",
+          },
+        },
+        readDecision,
+      });
+      if (Result.isError(prepared)) {
+        throw prepared.error;
+      }
+      const { text: streamed } = await complete(prepared.value, {
+        runModel: async ({ onDelta }) => {
+          onDelta("The explanation");
+          return Result.ok({
+            content: `The explanation [[${decisionId}#${anchorId}]].`,
+            model: "fixture-model",
+            usage: null,
+          });
+        },
+      });
+      expect(terminalEvents(streamed)).toEqual([
+        expect.objectContaining({ type: "complete", invalidCitationCount: 0 }),
+      ]);
     }
   });
 
