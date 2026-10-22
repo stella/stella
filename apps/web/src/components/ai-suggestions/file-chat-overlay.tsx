@@ -1543,6 +1543,7 @@ const FileChatOverlayInner = ({
     isLoadingOlder,
     loadOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -2512,6 +2513,7 @@ const FileChatOverlayInner = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,

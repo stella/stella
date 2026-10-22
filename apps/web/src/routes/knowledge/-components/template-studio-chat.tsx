@@ -657,6 +657,7 @@ const TemplateStudioChatInner = ({
     error,
     messages,
     refreshAnswers,
+    approvalIdsAwaitedAtOpen,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -1333,6 +1334,7 @@ const TemplateStudioChatInner = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,

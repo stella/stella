@@ -783,6 +783,29 @@ export const getAwaitedAssistantMessageId = (
   findAwaitedAssistantMessageId(messages, isUserAnswerablePart);
 
 /**
+ * The approvals a thread already waits on when a page opens it. The page
+ * answers these only on the user's click: a grant or page policy that
+ * answered one on its own would resume tool work on a reopened thread with
+ * no one asking.
+ */
+export const getApprovalIdsAwaitedAtOpen = (
+  messages: readonly PersistedChatMessage[],
+): ReadonlySet<string> =>
+  new Set(
+    messages.flatMap((message) =>
+      message.role === "assistant"
+        ? message.parts.flatMap((part) =>
+            part.type === "tool-call" &&
+            part.state === "approval-requested" &&
+            part.approval !== undefined
+              ? [part.approval.id]
+              : [],
+          )
+        : [],
+    ),
+  );
+
+/**
  * An unresolved auto-run folio-agents tool-call part (a read tool or
  * `suggest_changes`), narrowed by {@link isUnresolvedFolioAgentDocToolCallPart}.
  */

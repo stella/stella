@@ -1362,6 +1362,51 @@ describe("a recorded conversation, rendered", () => {
     REPLAY_TIMEOUT_MS,
   );
 
+  test(
+    "a reopened thread whose waiting card a grant covers starts no tool call until the user answers",
+    async () => {
+      const recording = readRecording("conversation-grant");
+      const [sent, ...later] = recording.steps;
+      const waiting =
+        sent?.exchanges.at(-1)?.page ??
+        expect.unreachable("The recording must start with a send");
+      // The page opens the thread as the first turn left it: call-1 waits,
+      // and the conversation grant covers its tool.
+      const reopened = { ...recording, initialPage: waiting, steps: later };
+      const grants = grantConversationTools(recording);
+      // The fixture must reach the fault: a grant, and the page answered
+      // the same card on its own while it watched the turn ask.
+      expect(grants).not.toEqual([]);
+      expect(later.at(0)?.action).toEqual({
+        toolCallId: "call-1",
+        type: "auto-approve",
+      });
+      const server = createRecordedServer(reopened, grants);
+      routeRequest = server.fetch;
+      openGrants = server.grants;
+      const live = await openPage(reopened);
+      await flush();
+
+      expect(
+        server.posted,
+        finding(RENDER_ORACLE.requestsMatchRecorded, "reopen"),
+      ).toEqual([]);
+      expect(readScreen(live.view.container).actionable).toEqual(["call-1"]);
+
+      // The user's own click is what resumes the turn.
+      fireEvent.click(
+        within(approvalCard(live.view.container, "call-1")).getByRole(
+          "button",
+          { name: ALLOW_ONCE },
+        ),
+      );
+      await waitFor(() => {
+        expect(server.posted).toHaveLength(1);
+      });
+    },
+    REPLAY_TIMEOUT_MS,
+  );
+
   test("a recording performs every action the page offers, or says why not", () => {
     const performed = SCENARIOS.flatMap((scenario) =>
       readRecording(scenario).steps.map(({ action }) => action),

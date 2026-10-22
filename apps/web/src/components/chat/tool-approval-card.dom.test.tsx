@@ -33,6 +33,9 @@ const pendingWebSearch = {
 
 const renderPendingCard = (
   confirmStoredApprovalGrant: () => Promise<boolean>,
+  {
+    approvalIdsAwaitedAtOpen = new Set<string>(),
+  }: { approvalIdsAwaitedAtOpen?: ReadonlySet<string> } = {},
 ) => {
   const approved: string[] = [];
   const queryClient = new QueryClient();
@@ -42,6 +45,7 @@ const renderPendingCard = (
         <ChatApprovalContext
           value={{
             ...testChatApprovalContextValue,
+            approvalIdsAwaitedAtOpen,
             conversationApprovedTools: new Set(["web_search"]),
             confirmStoredApprovalGrant,
             handleApprove: (id: string) => {
@@ -84,6 +88,35 @@ test("a grant the API confirms answers the card", async () => {
       expect(approved).toEqual(["pending-approval"]);
     });
   });
+  queryClient.clear();
+});
+
+test("a card already waiting when the thread opened waits for the user, whatever grant covers it", async () => {
+  const confirmations: string[] = [];
+  const { approved, queryClient, view } = renderPendingCard(
+    async () => {
+      confirmations.push("asked");
+      return await Promise.resolve(true);
+    },
+    { approvalIdsAwaitedAtOpen: new Set(["pending-approval"]) },
+  );
+
+  // Let any automatic answer settle; the reopened card must still ask, so no
+  // tool runs without the user.
+  await act(async () => {
+    await sleep(20);
+  });
+  expect(approved).toEqual([]);
+  expect(confirmations).toEqual([]);
+
+  // The user's own click still answers it.
+  await act(async () => {
+    view
+      .getByRole("button", { name: messages.chat.approval.allowOnce })
+      .click();
+    await sleep(0);
+  });
+  expect(approved).toEqual(["pending-approval"]);
   queryClient.clear();
 });
 

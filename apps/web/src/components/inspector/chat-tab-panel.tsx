@@ -269,6 +269,7 @@ export const ChatTabPanel = ({
     olderCursor,
     isLoadingOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -614,6 +615,7 @@ export const ChatTabPanel = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,

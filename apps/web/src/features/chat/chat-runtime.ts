@@ -38,6 +38,7 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import {
+  getApprovalIdsAwaitedAtOpen,
   getAwaitedAssistantMessageId,
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
@@ -153,6 +154,11 @@ export type ChatActivitySession = {
 
 export type ChatRuntime = ChatActivitySession & {
   readonly [CHAT_RUNTIME_BRAND]: true;
+  /**
+   * The approvals the thread already waited on when this runtime was built
+   * from it (`getApprovalIdsAwaitedAtOpen`): only the user answers them.
+   */
+  readonly approvalIdsAwaitedAtOpen: ReadonlySet<string>;
   resolveToolApproval: (
     response: {
       approved: boolean;
@@ -1140,6 +1146,7 @@ export const createChatRuntime = ({
 
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
+    approvalIdsAwaitedAtOpen: getApprovalIdsAwaitedAtOpen(initialMessages),
     reportedUnknownActivityTypes: new Set<string>(),
     resolveToolApproval: async (response, options) => {
       if (isStoppedTurn()) {

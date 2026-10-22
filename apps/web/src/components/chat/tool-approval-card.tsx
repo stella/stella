@@ -496,6 +496,7 @@ export const ToolApprovalCard = ({
 }: ToolApprovalCardProps) => {
   const {
     activeOrganizationId,
+    approvalIdsAwaitedAtOpen,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -545,6 +546,11 @@ export const ToolApprovalCard = ({
     : undefined;
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
+  // A card the thread already waited on when the page opened is the user's
+  // to answer: answering it on its own would resume tool work on a reopened
+  // thread with no one asking.
+  const isAwaitedAtOpen =
+    approvalId !== null && approvalIdsAwaitedAtOpen.has(approvalId);
   const browserApprovalMode = useBrowserApprovalMode();
   const browserCommand =
     name === BROWSER_CONTROL_TOOL_NAME
@@ -598,14 +604,19 @@ export const ToolApprovalCard = ({
           },
           // A card the user already answered is not answered again.
           shouldRespond:
-            isAwaitingUser && !responded && (isBlocked || shouldAutoApprove),
+            isAwaitingUser &&
+            !responded &&
+            !isAwaitedAtOpen &&
+            (isBlocked || shouldAutoApprove),
         };
   // Answered cards stop asking, even while the answer waits for the rest of
   // a batch.
   const asksForDecision =
     isAwaitingUser && isApprovalRequested && !responded && !isProcessing;
   const isAwaitingDecision =
-    asksForDecision && !isBlocked && !isPublicOfficialApproval;
+    asksForDecision &&
+    !isBlocked &&
+    (isAwaitedAtOpen || !isPublicOfficialApproval);
   const beginManualResponse = (id: string): boolean => {
     if (submittedApprovalIdRef.current === id) {
       return false;

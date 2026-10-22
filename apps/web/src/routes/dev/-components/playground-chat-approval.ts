@@ -18,6 +18,7 @@ export const createPlaygroundChatApproval = (
   activeOrganizationId: string,
 ): PlaygroundChatApproval => ({
   activeOrganizationId,
+  approvalIdsAwaitedAtOpen: new Set(),
   alwaysApprovedTools: new Set(),
   conversationApprovedTools: new Set(),
   confirmStoredApprovalGrant: async () => await Promise.resolve(false),

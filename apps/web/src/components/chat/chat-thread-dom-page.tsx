@@ -134,6 +134,7 @@ const ChatThreadDomPage = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId: organizationId,
+          approvalIdsAwaitedAtOpen: session.approvalIdsAwaitedAtOpen,
           alwaysApprovedTools: session.alwaysApprovedTools,
           conversationApprovedTools: session.conversationApprovedTools,
           confirmStoredApprovalGrant: session.confirmStoredApprovalGrant,
