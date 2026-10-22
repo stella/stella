@@ -199,8 +199,9 @@ test.each([
 
 // The reader's AI action sends a passage to the decision's one conversation
 // and opens it in the docked chat. That tab is then the conversation's only
-// composer: the one floating over the reader steps aside rather than showing
-// the same draft a second time.
+// composer: the reader floats none over the text rather than showing the same
+// draft a second time, and its own returns, draft included, once the tab
+// leaves the screen.
 test(
   "asking about a passage leaves the docked chat as the only composer",
   async () => {
@@ -212,10 +213,7 @@ test(
       decisionId,
       caseNumber,
     });
-    const overlayComposer = await screen.findByRole("textbox", undefined, {
-      timeout: 15_000,
-    });
-    expect(overlayComposer.closest(".hidden")).toBeNull();
+    await screen.findByRole("textbox", undefined, { timeout: 15_000 });
     try {
       await act(async () => {
         askAboutReaderPassage({
@@ -236,19 +234,22 @@ test(
         });
       });
       await waitFor(() => {
-        expect(overlayComposer.closest(".hidden")).not.toBeNull();
+        expect(screen.queryAllByRole("textbox")).toEqual([]);
       });
-      expect(
-        screen
-          .queryAllByRole("textbox")
-          .filter((textbox) => textbox.closest(".hidden") === null),
-      ).toEqual([]);
+      expect(screen.getByText(READER_CONTENT)).toBeDefined();
       // Closing the docked chat hands the conversation back to the reader.
       await act(async () => {
         useInspectorTabsStore.setState({ minimized: true });
       });
+      const composer = await screen.findByRole("textbox", undefined, {
+        timeout: 15_000,
+      });
+      if (!("editor" in composer) || !(composer.editor instanceof Editor)) {
+        panic("Expected the reader overlay's mounted TipTap composer");
+      }
+      const editor = composer.editor;
       await waitFor(() => {
-        expect(overlayComposer.closest(".hidden")).toBeNull();
+        expect(JSON.stringify(editor.getJSON())).toContain("Reader passage");
       });
     } finally {
       useInspectorTabsStore.setState(inspector, true);

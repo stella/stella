@@ -11,7 +11,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import {
   activeChatTabThreadId,
   legalDocumentChatTabThreadId,
-  overlayThreadCardVisibility,
+  readerOverlayActivation,
 } from "@/components/legal-reader/legal-reader-ai-chat.logic";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 import {
@@ -126,8 +126,7 @@ const BoundLegalReaderAIChat = ({
       onChatThreadIdChange={(threadId) => {
         adoptLegalDocumentChatThread({ documentKey, threadId });
       }}
-      overlayActivation={FILE_CHAT_OVERLAY_ACTIVATION.active}
-      threadPresentation={overlayThreadCardVisibility({
+      overlayActivation={readerOverlayActivation({
         overlayThreadId: chatThreadId,
         tabOpen: inspectorDocked && !inspectorMinimized,
         tabThreadId: dockedChatThreadId,
