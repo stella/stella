@@ -2564,32 +2564,30 @@ if (!databaseUrl || !enabled) {
     });
 
     test("actual compaction query scans only the indexed superseded retention page at production scale", async () => {
-      const { source, ids } = await fixture(10);
-      await db.insert(caseLawReplayBatches).values(
-        ids.map((id, index) => ({
-          id: `retention-${id}`,
-          sourceId: source.id,
-          firstDecisionId: id,
-          lastDecisionId: id,
-          parserVersionTo: 2,
-          budgetDay: "2026-10-01",
-          status: "completed" as const,
-          attempted: 1,
-          gateVerdict: verdict(),
-          supersededAt: index === 0 ? new Date(Date.UTC(2025, 0, 1)) : null,
-        })),
-      );
+      const sourceId = createSafeId<"caseLawSource">();
+      const ids = Array.from({ length: 3 }, () =>
+        createSafeId<"caseLawDecision">(),
+      ).toSorted();
       const rolledBack = await Result.tryPromise(
         async () =>
           await db.transaction(async (tx) => {
             const ownerRole = `replay_retention_owner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+            const fixtureSchema = `replay_retention_${Bun.randomUUIDv7().replaceAll("-", "")}`;
             await tx.execute(
               sql.raw(`CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS;
               GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE;
-              GRANT CREATE ON SCHEMA public TO ${ownerRole};
-              ALTER TABLE case_law_sources OWNER TO ${ownerRole};
-              ALTER TABLE case_law_replay_batches OWNER TO ${ownerRole};
-              SET LOCAL ROLE ${ownerRole}`),
+              GRANT SELECT ON public.case_law_sources, public.case_law_replay_batches TO ${ownerRole};
+              CREATE SCHEMA ${fixtureSchema} AUTHORIZATION ${ownerRole};
+              SET LOCAL ROLE ${ownerRole};
+              SET LOCAL search_path TO ${fixtureSchema}, public;
+              CREATE TABLE case_law_sources (LIKE public.case_law_sources INCLUDING ALL);
+              CREATE TABLE case_law_replay_batches (LIKE public.case_law_replay_batches INCLUDING ALL);
+              DROP INDEX case_law_replay_batches_source_id_parser_version_to_id_idx;
+              DROP INDEX case_law_replay_batches_superseded_at_id_idx;
+              CREATE INDEX case_law_replay_batches_retire_idx ON case_law_replay_batches (source_id, parser_version_to, id)
+                WHERE superseded_at IS NULL AND status IN ('completed', 'superseded', 'failed', 'retry-exhausted', 'retry-terminal', 'blocked');
+              CREATE INDEX case_law_replay_batches_retention_idx ON case_law_replay_batches (superseded_at, id)
+                WHERE superseded_at IS NOT NULL`),
             );
             const posture = await tx.execute<{
               superuser: boolean;
@@ -2598,6 +2596,13 @@ if (!databaseUrl || !enabled) {
               sql`SELECT rolsuper AS superuser, rolbypassrls AS bypass FROM pg_roles WHERE rolname = current_user`,
             );
             expect(posture.at(0)).toEqual({ superuser: false, bypass: false });
+            await tx.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name)
+              VALUES (${sourceId}, ${ADAPTER_KEYS.EU_ECJ}, 'replay retention fixture')`);
+            for (const [index, id] of ids.entries()) {
+              await tx.execute(sql`INSERT INTO case_law_replay_batches
+                (id, source_id, first_decision_id, last_decision_id, parser_version_to, budget_day, status, attempted, gate_verdict, superseded_at)
+                VALUES (${`retention-${id}`}, ${sourceId}, ${id}, ${id}, 2, '2026-10-01', 'completed', 1, ${verdict()}, ${index === 0 ? new Date(Date.UTC(2025, 0, 1)) : null})`);
+            }
             await tx.execute(sql`ANALYZE case_law_replay_batches`);
             await scaleTableToProfile(tx, "case_law_replay_batches", {
               tables: {
@@ -2667,16 +2672,10 @@ if (!databaseUrl || !enabled) {
     });
 
     test("actual selector and probe remain indexed and bounded under sparse and full synthetic corpus lag", async () => {
-      const { source } = await fixture(10);
-      // Seed only synthetic rows; catalog restoration is transaction-local and
-      // a deliberate rollback restores every table/index statistic afterwards.
-      await db.execute(sql`INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language, parser_version, source_raw_s3_key)
-        SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${source.id}, 'plan-' || n::text, 'fixture court', 'CZE', 'cs', 2,
-          CASE WHEN n % 2 = 0 THEN NULL ELSE 'fixture-plan' END
-        FROM generate_series(1, 1000) AS series(n)`);
-      await db.execute(sql`INSERT INTO case_law_replay_blocked (source_id, decision_id, parser_version_from, parser_version_to, outcome, reason, detail)
-        SELECT ${source.id}, id, 1, 2, 'rejected', 'missing-payload', 'synthetic blocked fixture'
-        FROM case_law_decisions WHERE source_id = ${source.id} AND case_number LIKE 'plan-%'`);
+      const sourceId = createSafeId<"caseLawSource">();
+      const fixtureIds = Array.from({ length: 3 }, () =>
+        createSafeId<"caseLawDecision">(),
+      ).toSorted();
       const end = toSafeId<"caseLawDecision">(
         "ffffffff-ffff-4fff-bfff-ffffffffffff",
       );
@@ -2684,15 +2683,19 @@ if (!databaseUrl || !enabled) {
         async () =>
           await db.transaction(async (tx) => {
             const ownerRole = `replay_plan_owner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+            const fixtureSchema = `replay_plan_${Bun.randomUUIDv7().replaceAll("-", "")}`;
             await tx.execute(
               sql.raw(`CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS;
               GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE;
-              GRANT CREATE ON SCHEMA public TO ${ownerRole};
-              ALTER TABLE case_law_sources OWNER TO ${ownerRole};
-              ALTER TABLE case_law_decisions OWNER TO ${ownerRole};
-              ALTER TABLE case_law_replay_batches OWNER TO ${ownerRole};
-              ALTER TABLE case_law_replay_blocked OWNER TO ${ownerRole};
-              SET LOCAL ROLE ${ownerRole}`),
+              GRANT SELECT ON public.case_law_sources, public.case_law_decisions, public.case_law_replay_batches, public.case_law_replay_blocked TO ${ownerRole};
+              CREATE SCHEMA ${fixtureSchema} AUTHORIZATION ${ownerRole};
+              SET LOCAL ROLE ${ownerRole};
+              SET LOCAL search_path TO ${fixtureSchema}, public;
+              CREATE TABLE case_law_sources (LIKE public.case_law_sources INCLUDING ALL);
+              CREATE TABLE case_law_decisions (LIKE public.case_law_decisions INCLUDING ALL);
+              CREATE TABLE case_law_replay_batches (LIKE public.case_law_replay_batches INCLUDING ALL);
+              CREATE TABLE case_law_replay_blocked (LIKE public.case_law_replay_blocked INCLUDING ALL);
+              CREATE INDEX case_law_replay_blocked_source_version_idx ON case_law_replay_blocked (source_id, parser_version_to, decision_id)`),
             );
             const posture = await tx.execute<{
               superuser: boolean;
@@ -2701,6 +2704,20 @@ if (!databaseUrl || !enabled) {
               sql`SELECT rolsuper AS superuser, rolbypassrls AS bypass FROM pg_roles WHERE rolname = current_user`,
             );
             expect(posture.at(0)).toEqual({ superuser: false, bypass: false });
+            await tx.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name)
+              VALUES (${sourceId}, ${ADAPTER_KEYS.EU_ECJ}, 'replay plan fixture')`);
+            for (const [index, id] of fixtureIds.entries()) {
+              await tx.execute(sql`INSERT INTO case_law_decisions
+                (id, source_id, case_number, court, country, language, parser_version, source_raw_s3_key)
+                VALUES (${id}, ${sourceId}, ${`store-${index}`}, 'fixture court', 'CZE', 'cs', 1, ${`fixture/${id}`})`);
+            }
+            await tx.execute(sql`INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language, parser_version, source_raw_s3_key)
+              SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${sourceId}, 'plan-' || n::text, 'fixture court', 'CZE', 'cs', 2,
+                CASE WHEN n % 2 = 0 THEN NULL ELSE 'fixture-plan' END
+              FROM generate_series(1, 1000) AS series(n)`);
+            await tx.execute(sql`INSERT INTO case_law_replay_blocked (source_id, decision_id, parser_version_from, parser_version_to, outcome, reason, detail)
+              SELECT ${sourceId}, id, 1, 2, 'rejected', 'missing-payload', 'synthetic blocked fixture'
+              FROM case_law_decisions WHERE source_id = ${sourceId} AND case_number LIKE 'plan-%'`);
             // Enrolment will ship these corpus indexes; the dormant feature
             // creates them only inside this rolled-back planner fixture.
             await tx.execute(
@@ -2717,23 +2734,37 @@ if (!databaseUrl || !enabled) {
                   SYNTHETIC_SCALE_PROFILE.tables.case_law_decisions,
               },
               attributes: [],
+              scaleRelationPages: true,
             });
-            await scaleTableToProfile(
-              tx,
-              "case_law_decisions",
-              SYNTHETIC_SCALE_PROFILE,
+            await tx.execute(
+              sql`SELECT pg_clear_attribute_stats(current_schema()::text, 'case_law_replay_blocked', 'source_id', false)`,
             );
+            await tx.execute(sql`SELECT pg_restore_attribute_stats(
+              'schemaname', current_schema()::text, 'relname', 'case_law_replay_blocked',
+              'attname', 'source_id', 'inherited', false, 'null_frac', 0::real, 'n_distinct', -1::real
+            )`);
+            await scaleTableToProfile(tx, "case_law_decisions", {
+              ...SYNTHETIC_SCALE_PROFILE,
+              scaleRelationPages: true,
+            });
+            await tx.execute(
+              sql`SELECT pg_clear_attribute_stats(current_schema()::text, 'case_law_decisions', 'source_id', false)`,
+            );
+            await tx.execute(sql`SELECT pg_restore_attribute_stats(
+              'schemaname', current_schema()::text, 'relname', 'case_law_decisions',
+              'attname', 'source_id', 'inherited', false, 'null_frac', 0::real, 'n_distinct', 100::real
+            )`);
             for (const lag of ["sparse", "all"] as const) {
               const frequencies =
                 lag === "sparse" ? [0.00001, 0.99999] : [0.99999, 0.00001];
               await tx.execute(sql`SELECT pg_restore_attribute_stats(
-            'schemaname', 'public', 'relname', 'case_law_decisions',
+            'schemaname', current_schema()::text, 'relname', 'case_law_decisions',
             'attname', 'parser_version', 'inherited', false, 'null_frac', 0::real, 'n_distinct', 2::real,
             'most_common_vals', '{1,2}', 'most_common_freqs', ARRAY[${frequencies.at(0)}::real, ${frequencies.at(1)}::real]::real[]
           )`);
               const queries = [
                 buildReplayScopeEndQuery(tx, {
-                  sourceId: source.id,
+                  sourceId,
                   scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
                   selection: {
                     type: "background",
@@ -2743,11 +2774,11 @@ if (!databaseUrl || !enabled) {
                 }),
                 buildBackgroundReplayProbe(tx, {
                   mode: "enrolled",
-                  sourceId: source.id,
+                  sourceId,
                   currentParserVersion: 2,
                 }),
                 buildReplayPageQuery(tx, {
-                  sourceId: source.id,
+                  sourceId,
                   scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
                   selection: {
                     type: "background",

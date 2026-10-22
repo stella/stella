@@ -627,6 +627,7 @@ const withAwaySegments = (
         matterId: null,
         document: null,
         windowTitle: null,
+        call: false,
         matter: null,
         confidence: "unmatched",
         evidence: [],

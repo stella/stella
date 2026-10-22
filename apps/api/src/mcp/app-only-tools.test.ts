@@ -30,7 +30,7 @@ const requestContext = () =>
     userEmail: "reader@example.test",
     memberRole: "owner",
     grantedScopes: ["stella:read"],
-    enabledRegistrySlugs: [],
+    loadEnabledRegistrySlugs: async () => await Promise.resolve(Result.ok([])),
   });
 
 type CallOptions = {
