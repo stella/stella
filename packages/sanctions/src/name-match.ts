@@ -169,7 +169,11 @@ type BuildingVocabulary = Omit<
   Vocabulary,
   "ids" | "gramPostings" | "postings" | "joinPostings"
 > & {
-  ids: StringMap<number>;
+  /**
+   * Per shared spelling id, this vocabulary's id plus one (zero: absent).
+   * One string map for both vocabularies keeps the build's live set small.
+   */
+  idsBySpelling: NumberColumn;
   gramPostings: PostingColumn;
   postings: PostingColumn;
   joinPostings: PostingColumn;
@@ -379,7 +383,7 @@ const emptyVocabulary = (spellings: Spellings): BuildingVocabulary => {
     strings: new VocabularyStrings(spellings, spellingIds),
     spellingIds,
     spellings,
-    ids: new StringMap(),
+    idsBySpelling: new NumberColumn(),
     bigrams: new NumberMap(),
     gramPostings: new PostingColumn(),
     postings: new PostingColumn(),
@@ -439,15 +443,17 @@ type InternOptions = {
   spellingIds: StringMap<number>;
 };
 const intern = ({ vocabulary, text, spellingIds }: InternOptions): number => {
-  const known = vocabulary.ids.get(text);
-  if (known !== undefined) {
-    return known;
+  const { idsBySpelling, spellings } = vocabulary;
+  let spelling = spellingIds.get(text);
+  if (spelling !== undefined && spelling < idsBySpelling.length) {
+    const known = idsBySpelling.getUnchecked(spelling);
+    if (known !== 0) {
+      return known - 1;
+    }
   }
   const id = vocabulary.strings.length;
   const grams = bigrams(text);
   const length = Array.from(text).length;
-  const { spellings } = vocabulary;
-  let spelling = spellingIds.get(text);
   if (spelling === undefined) {
     spelling = spellings.strings.push(text);
     spellingIds.set(text, spelling);
@@ -468,7 +474,10 @@ const intern = ({ vocabulary, text, spellingIds }: InternOptions): number => {
     spellings.characterOffsets.push(spellings.characterCounts.length);
   }
   vocabulary.spellingIds.push(spelling);
-  vocabulary.ids.set(text, id);
+  while (idsBySpelling.length <= spelling) {
+    idsBySpelling.push(0);
+  }
+  idsBySpelling.set(spelling, id + 1);
   vocabulary.postings.addList();
   vocabulary.joinPostings.addList();
   let lists = vocabulary.bigrams.get(length);
@@ -496,8 +505,13 @@ const post = (lists: PostingColumn, ids: readonly number[], alias: number) => {
 function* compactVocabulary(
   vocabulary: BuildingVocabulary,
 ): Generator<void, Vocabulary, void> {
+  // Listed field by field: build-only state must not outlive the build.
   return {
-    ...vocabulary,
+    strings: vocabulary.strings,
+    spellingIds: vocabulary.spellingIds,
+    spellings: vocabulary.spellings,
+    bigrams: vocabulary.bigrams,
+    similarityCache: vocabulary.similarityCache,
     ids: yield* stringIdsSteps(vocabulary.strings),
     gramPostings: yield* vocabulary.gramPostings.compact(),
     postings: yield* vocabulary.postings.compact(),
