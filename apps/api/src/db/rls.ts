@@ -1084,7 +1084,15 @@ const microsoft365ConnectionCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;
 
+const microsoft365ConnectionPoliciesOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sharepoint_connections'::regclass)`;
+
 export const microsoft365ConnectionPolicies = () => [
+  p.pgPolicy("sharepoint_connections_owner", {
+    for: "all",
+    to: "public",
+    using: microsoft365ConnectionPoliciesOwner,
+    withCheck: microsoft365ConnectionPoliciesOwner,
+  }),
   p.pgPolicy("sharepoint_connection_select", {
     for: "select",
     to: stella,
@@ -1107,7 +1115,15 @@ export const microsoft365ConnectionPolicies = () => [
   }),
 ];
 
+const microsoft365OAuthStatePoliciesOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sharepoint_oauth_state'::regclass)`;
+
 export const microsoft365OAuthStatePolicies = () => [
+  p.pgPolicy("sharepoint_oauth_state_owner", {
+    for: "all",
+    to: "public",
+    using: microsoft365OAuthStatePoliciesOwner,
+    withCheck: microsoft365OAuthStatePoliciesOwner,
+  }),
   p.pgPolicy("sharepoint_oauth_state_select", {
     for: "select",
     to: stella,

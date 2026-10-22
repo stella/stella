@@ -167,3 +167,33 @@ test("calendar responses enforce the byte ceiling before parsing", async () => {
     expect(result.error.kind).toBe("upstream");
   }
 });
+
+test("calendar event text fields have independent model-facing length bounds", async () => {
+  const longText = "Ž".repeat(1024);
+  const result = await listCalendarEvents(
+    { ...range, limit: 1 },
+    {
+      accessToken,
+      fetcher: async () =>
+        Response.json({
+          value: [
+            {
+              ...event,
+              subject: longText,
+              location: { displayName: longText },
+              organizer: {
+                emailAddress: {
+                  name: longText,
+                  address: "organizer@example.test",
+                },
+              },
+            },
+          ],
+        }),
+    },
+  );
+  const first = result.unwrap().events.at(0);
+  expect(first?.subject).toBe(longText.slice(0, 512));
+  expect(first?.location).toBe(longText.slice(0, 256));
+  expect(first?.organizer?.name).toBe(longText.slice(0, 256));
+});

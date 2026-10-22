@@ -4962,6 +4962,7 @@
       "microsoft365Description": "Skaitykite failus ir Outlook kalendorius pokalbyje. Kiekvienai funkcijai reikia organizacijos patvirtinimo ir jūsų sutikimo Microsoft sistemoje.",
       "microsoft365Disable": "Išjungti Microsoft 365 ir atjungti visas paskyras",
       "microsoft365Error": "Nepavyko prisijungti prie Microsoft 365. Bandykite dar kartą arba kreipkitės į administratorių.",
+      "microsoft365RevokeHint": "Šios programėlės prieigą taip pat galite atšaukti savo „Microsoft“ paskyroje.",
       "microsoft365Title": "Microsoft 365 ryšys",
       "noMatches": "Užklausą „{query}“ atitinkančių ryšių nėra",
       "notConnected": "Neprijungta",

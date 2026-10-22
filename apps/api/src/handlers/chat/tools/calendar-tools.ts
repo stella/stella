@@ -19,6 +19,7 @@ import {
   grantedCapabilities,
 } from "@/api/handlers/microsoft365/capabilities";
 import { ensureMicrosoft365AccessToken } from "@/api/handlers/microsoft365/graph-client";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -30,6 +31,7 @@ import { raiseChatToolError } from "./tool-failure";
 
 type CalendarContext = {
   safeDb: SafeDb;
+  recordAuditEvent: AuditRecorder;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 };
@@ -106,6 +108,7 @@ export const createCalendarTools = (
     return await ensureMicrosoft365AccessToken({
       connection: loaded.value,
       safeDb: context.safeDb,
+      recordAuditEvent: context.recordAuditEvent,
       capability: "calendar.read",
     });
   };

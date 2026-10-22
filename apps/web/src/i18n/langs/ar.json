@@ -4962,6 +4962,7 @@
       "microsoft365Description": "اقرأ الملفات وتقويمات Outlook في الدردشة. تتطلب كل ميزة موافقة المؤسسة وموافقتك لدى Microsoft.",
       "microsoft365Disable": "إيقاف Microsoft 365 وفصل جميع الحسابات",
       "microsoft365Error": "تعذر الاتصال بـ Microsoft 365. حاول مرة أخرى أو تواصل مع المسؤول.",
+      "microsoft365RevokeHint": "يمكنك أيضًا إلغاء وصول هذا التطبيق من حسابك لدى Microsoft.",
       "microsoft365Title": "اتصال Microsoft 365",
       "noMatches": "لا يوجد اتصال يطابق «{query}»",
       "notConnected": "غير متصل",

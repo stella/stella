@@ -4962,6 +4962,7 @@
       "microsoft365Description": "Read files and Outlook calendars in chat. Each capability requires organization approval and your Microsoft consent.",
       "microsoft365Disable": "Turn off Microsoft 365 and disconnect all accounts",
       "microsoft365Error": "Microsoft 365 could not connect. Try again or contact your administrator.",
+      "microsoft365RevokeHint": "You can also revoke this app’s access in your Microsoft account.",
       "microsoft365Title": "Microsoft 365 connection",
       "noMatches": "No connections match “{query}”",
       "notConnected": "Not connected",

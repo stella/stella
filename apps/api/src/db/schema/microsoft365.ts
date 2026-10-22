@@ -89,6 +89,8 @@ export const microsoft365OAuthState = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     codeVerifier: p.text("code_verifier").notNull(),
     redirectUri: p.text("redirect_uri").notNull(),
+    /** Server-bound scopes for this consent attempt; older attempts expire. */
+    requestedScope: p.text("requested_scope"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [

@@ -90,6 +90,11 @@ const connectMicrosoft365 = createSafeRootHandler(
           },
           columns: { scope: true },
         });
+        const requestedScope = delegatedScopes({
+          requested: body.capabilities,
+          grantedScope: connection?.scope ?? null,
+          policy,
+        });
         // Keep one pending consent attempt per member; starting again invalidates
         // an abandoned attempt and bounds retained PKCE verifiers.
         // audit: skip — replace ephemeral OAuth state before creating the next attempt.
@@ -111,8 +116,9 @@ const connectMicrosoft365 = createSafeRootHandler(
           userId: user.id,
           codeVerifier: pkce.codeVerifier,
           redirectUri,
+          requestedScope,
         });
-        return delegatedScopes(body.capabilities, connection?.scope ?? null);
+        return requestedScope;
       }),
     );
 

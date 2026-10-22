@@ -6,7 +6,11 @@ import path from "node:path";
 
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
-import { checkMigrationSources } from "./check-migration-safety";
+import {
+  checkMigrationSources,
+  checkForcedRlsOwners,
+} from "./check-migration-safety";
+import { FORCE_RLS_OWNER_ALLOWLIST } from "./migration-force-rls-owners";
 
 type CheckerResult = {
   exitCode: number | null;
@@ -1012,5 +1016,155 @@ describe("check-migration-safety", () => {
         `),
       );
     });
+  });
+});
+
+describe("forced row security owner policy", () => {
+  const owner = `CREATE POLICY fixture_owner ON fixture_owner_rows FOR ALL TO public USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.fixture_owner_rows'::regclass)) WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.fixture_owner_rows'::regclass));`;
+  it("requires the canonical owner policy when forcing row security", () => {
+    expect(
+      checkForcedRlsOwners([
+        {
+          file: "01.sql",
+          source: "ALTER TABLE fixture_owner_rows FORCE ROW LEVEL SECURITY;",
+        },
+      ]),
+    ).toMatchObject([{ ruleId: "force-rls-no-owner" }]);
+  });
+  it("accepts canonical owner policies across migrations and checks the effective state after drops", () => {
+    const sources = [
+      {
+        file: "01.sql",
+        source: `ALTER TABLE fixture_owner_rows FORCE ROW LEVEL SECURITY; ${owner}`,
+      },
+    ];
+    expect(checkForcedRlsOwners(sources)).toEqual([]);
+    expect(
+      checkForcedRlsOwners([
+        { file: "01.sql", source: owner },
+        {
+          file: "02.sql",
+          source: "ALTER TABLE fixture_owner_rows FORCE ROW LEVEL SECURITY;",
+        },
+      ]),
+    ).toEqual([]);
+    expect(
+      checkForcedRlsOwners([
+        {
+          file: "01.sql",
+          source:
+            "ALTER TABLE fixture_owner_rows FORCE ROW LEVEL SECURITY; ALTER TABLE fixture_owner_rows RENAME TO renamed_owner_rows;",
+        },
+      ]),
+    ).toMatchObject([
+      { description: expect.stringContaining("renamed_owner_rows") },
+    ]);
+    expect(
+      checkForcedRlsOwners([
+        ...sources,
+        {
+          file: "02.sql",
+          source: "DROP POLICY fixture_owner ON fixture_owner_rows;",
+        },
+      ]),
+    ).toHaveLength(1);
+    expect(
+      checkForcedRlsOwners([
+        ...sources,
+        {
+          file: "02.sql",
+          source:
+            "DROP POLICY fixture_owner ON fixture_owner_rows; ALTER TABLE fixture_owner_rows NO FORCE ROW LEVEL SECURITY;",
+        },
+      ]),
+    ).toEqual([]);
+  });
+  it("keeps the reviewed historical owner exceptions closed", () => {
+    const frozenTables = [
+      "account_audit_logs",
+      "billing_arrangements",
+      "case_law_court_directory_ranks",
+      "case_law_decision_aliases",
+      "case_law_decision_citation_stats",
+      "case_law_decision_citation_stats_state",
+      "case_law_provision_admission",
+      "case_law_provision_extraction_revisions",
+      "case_law_provision_extraction_revisions_registry",
+      "case_law_provision_extraction_scopes",
+      "case_law_provision_extractions",
+      "case_law_provision_repair_cursors",
+      "case_law_provision_scope_transitions",
+      "case_law_replay_audit_events",
+      "case_law_replay_batches",
+      "case_law_replay_blocked",
+      "case_law_replay_daily_rows",
+      "case_law_replay_source_progress",
+      "case_law_search_backfill_failures",
+      "case_law_sitemap_shards",
+      "chat_message_revisions",
+      "chat_thread_names",
+      "corpus_index_group_withdrawals",
+      "correspondence",
+      "correspondence_allowed_sender_matters",
+      "correspondence_allowed_senders",
+      "correspondence_attachments",
+      "correspondence_drop_logs",
+      "correspondence_filers",
+      "desktop_presence",
+      "desktop_time_entry_batches",
+      "invoice_lines",
+      "legal_list_claim_review_events",
+      "legal_list_claims",
+      "legal_list_verification_blocks",
+      "legal_list_verification_read_receipts",
+      "legal_reader_answer_messages",
+      "legal_reader_answers",
+      "legislation_amendment_snapshots",
+      "legislation_amendments",
+      "legislation_work_changes",
+      "legislation_work_names",
+      "matter_inbound_addresses",
+      "mcp_connector_authorization_reviews",
+      "number_series",
+      "number_series_allocations",
+      "number_series_counters",
+      "organization_access_states",
+      "pdf_signing_sessions",
+      "sanctions_edition_entries",
+      "sanctions_edition_fanouts",
+      "sanctions_editions",
+      "sanctions_entry_payloads",
+      "sanctions_sources",
+      "saved_time_narratives",
+      "seller_profiles",
+      "soft_law_document_locators",
+      "soft_law_document_versions",
+      "soft_law_documents",
+      "soft_law_ingestion_attempts",
+      "soft_law_sources",
+      "statute_sitemap_shards",
+      "time_daily_targets",
+      "time_entry_timer_states",
+      "time_timer_confirmations",
+      "time_timers",
+      "vat_rates",
+    ];
+    const currentTables = Object.keys(FORCE_RLS_OWNER_ALLOWLIST).toSorted();
+    // The baseline may shrink as legacy tables adopt canonical owner policies.
+    expect(
+      currentTables.filter((table) => !frozenTables.includes(table)),
+    ).toEqual([]);
+    expect(currentTables).toEqual(
+      frozenTables.filter((table) => currentTables.includes(table)),
+    );
+    for (const entry of Object.values(FORCE_RLS_OWNER_ALLOWLIST)) {
+      expect(entry.source).toContain("/migration.sql:");
+      expect(entry.intent.length).toBeGreaterThan(12);
+    }
+    expect(
+      Object.values(FORCE_RLS_OWNER_ALLOWLIST).filter(
+        (entry) => entry.ownerAccess === "none-declared-unverified",
+      ).length,
+    ).toBeLessThanOrEqual(33);
   });
 });

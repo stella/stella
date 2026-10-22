@@ -2,9 +2,20 @@ import { expect, test } from "bun:test";
 
 import {
   capabilityEnabled,
-  delegatedScopes,
+  delegatedScopes as scopesForPolicy,
   grantedCapabilities,
 } from "./capabilities";
+
+const allCapabilitiesPolicy = {
+  microsoft365ConnectionEnabled: true,
+  microsoft365FilesReadEnabled: true,
+  microsoft365CalendarReadEnabled: true,
+};
+const delegatedScopes = (
+  requested: Parameters<typeof scopesForPolicy>[0]["requested"],
+  grantedScope: string | null,
+) =>
+  scopesForPolicy({ requested, grantedScope, policy: allCapabilitiesPolicy });
 
 test("incremental consent preserves read grants and requests selected capabilities", () => {
   const original = delegatedScopes(["files.read"], null);
@@ -51,4 +62,15 @@ test("organization capability policy fails closed", () => {
       "files.read",
     ),
   ).toBe(false);
+});
+
+test("incremental consent retains only capabilities allowed by the current policy", () => {
+  const scope = scopesForPolicy({
+    requested: ["calendar.read"],
+    grantedScope: "Files.Read.All Sites.Read.All Calendars.Read",
+    policy: { ...allCapabilitiesPolicy, microsoft365FilesReadEnabled: false },
+  });
+  expect(grantedCapabilities(scope)).toEqual(["calendar.read"]);
+  expect(scope).not.toContain("Files.Read.All");
+  expect(scope).not.toContain("Sites.Read.All");
 });

@@ -4962,6 +4962,7 @@
       "microsoft365Description": "Čítajte súbory a kalendáre Outlooku v chate. Každá funkcia vyžaduje schválenie organizáciou a váš súhlas v Microsofte.",
       "microsoft365Disable": "Vypnúť Microsoft 365 a odpojiť všetky účty",
       "microsoft365Error": "Microsoft 365 sa nepodarilo pripojiť. Skúste to znova alebo kontaktujte správcu.",
+      "microsoft365RevokeHint": "Prístup tejto aplikácie môžete odvolať aj vo svojom konte Microsoft.",
       "microsoft365Title": "Pripojenie Microsoft 365",
       "noMatches": "Výrazu „{query}“ nezodpovedá žiadne pripojenie",
       "notConnected": "Nepripojené",

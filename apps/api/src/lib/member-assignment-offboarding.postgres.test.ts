@@ -928,6 +928,18 @@ if (!databaseUrl || !runPostgresTests) {
           resourceUrl: "https://example.test/mcp",
           authorizationServerUrl: "https://example.test",
         });
+        // Token fixtures exercise the same non-bypass table-owner role as cleanup.
+        expect(
+          await db.execute(sql`
+          SELECT r.rolsuper, r.rolbypassrls, bool_and(c.relowner = r.oid) AS owns_tables
+          FROM pg_catalog.pg_roles r CROSS JOIN pg_catalog.pg_class c
+          WHERE r.rolname = current_user
+            AND c.oid IN ('public.sharepoint_connections'::regclass, 'public.sharepoint_oauth_state'::regclass)
+          GROUP BY r.rolsuper, r.rolbypassrls
+        `),
+        ).toMatchObject([
+          { rolsuper: false, rolbypassrls: false, owns_tables: true },
+        ]);
         await db.insert(microsoft365Connections).values(
           [owner.userId, leaver.userId].map((userId) => ({
             id: createSafeId<"microsoft365Connection">(),

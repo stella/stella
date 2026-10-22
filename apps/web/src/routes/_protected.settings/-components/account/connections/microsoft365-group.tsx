@@ -27,6 +27,8 @@ import { APIError, unwrapEden } from "@/lib/errors/api";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 import { microsoft365Options } from "@/routes/_protected.settings/-queries/connections";
 
+import { Microsoft365ConnectionActions } from "./microsoft365-connection-actions";
+
 export const Microsoft365Group = () => {
   const t = useTranslations();
   const { id, activeOrganizationId } = useAuthenticatedUser();
@@ -153,24 +155,14 @@ export const Microsoft365Group = () => {
           );
         })}
       </List>
-      {data.connection && (
-        <Button
-          disabled={pending}
-          onClick={() => disconnect.mutate()}
-          variant="outline"
-        >
-          {t("common.disconnect")}
-        </Button>
-      )}
-      {canManage && data.policy.microsoft365ConnectionEnabled && (
-        <Button
-          disabled={pending}
-          onClick={() => policy.mutate({ enabled: false, capabilities: [] })}
-          variant="ghost"
-        >
-          {t("settings.connections.microsoft365Disable")}
-        </Button>
-      )}
+      <Microsoft365ConnectionActions
+        connected={data.connection !== null}
+        enabled={data.policy.microsoft365ConnectionEnabled}
+        canManage={canManage}
+        pending={pending}
+        onDisconnect={() => disconnect.mutate()}
+        onDisable={() => policy.mutate({ enabled: false, capabilities: [] })}
+      />
     </ListGroup>
   );
 };

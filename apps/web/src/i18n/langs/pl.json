@@ -4962,6 +4962,7 @@
       "microsoft365Description": "Przeglądaj pliki i kalendarze programu Outlook na czacie. Każda funkcja wymaga zatwierdzenia przez organizację i Twojej zgody w firmie Microsoft.",
       "microsoft365Disable": "Wyłącz Microsoft 365 i odłącz wszystkie konta",
       "microsoft365Error": "Nie udało się połączyć z Microsoft 365. Spróbuj ponownie lub skontaktuj się z administratorem.",
+      "microsoft365RevokeHint": "Możesz też cofnąć tej aplikacji dostęp na swoim koncie Microsoft.",
       "microsoft365Title": "Połączenie z Microsoft 365",
       "noMatches": "Żadne połączenie nie pasuje do „{query}”",
       "notConnected": "Niepołączone",

@@ -26,6 +26,7 @@ export const MIGRATION_SAFETY_RULE_IDS = [
   "permissive-policy",
   "security-definer",
   "change-owner",
+  "force-rls-no-owner",
   "set-schema",
   "high-volume-index-build",
   "on-conflict-column-target",

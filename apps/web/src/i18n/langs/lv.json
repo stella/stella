@@ -4962,6 +4962,7 @@
       "microsoft365Description": "Lasiet failus un Outlook kalendārus tērzēšanā. Katrai funkcijai nepieciešams organizācijas apstiprinājums un jūsu piekrišana Microsoft.",
       "microsoft365Disable": "Izslēgt Microsoft 365 un atvienot visus kontus",
       "microsoft365Error": "Neizdevās izveidot savienojumu ar Microsoft 365. Mēģiniet vēlreiz vai sazinieties ar administratoru.",
+      "microsoft365RevokeHint": "Šīs lietotnes piekļuvi varat atsaukt arī savā Microsoft kontā.",
       "microsoft365Title": "Microsoft 365 savienojums",
       "noMatches": "Vaicājumam “{query}” neatbilst neviens savienojums",
       "notConnected": "Nav pievienots",

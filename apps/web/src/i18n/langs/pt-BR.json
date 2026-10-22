@@ -4962,6 +4962,7 @@
       "microsoft365Description": "Consulte arquivos e calendários do Outlook no chat. Cada função exige aprovação da organização e seu consentimento na Microsoft.",
       "microsoft365Disable": "Desativar o Microsoft 365 e desconectar todas as contas",
       "microsoft365Error": "Não foi possível conectar o Microsoft 365. Tente novamente ou contate seu administrador.",
+      "microsoft365RevokeHint": "Você também pode revogar o acesso deste aplicativo na sua conta Microsoft.",
       "microsoft365Title": "Conexão com o Microsoft 365",
       "noMatches": "Nenhuma conexão corresponde a “{query}”",
       "notConnected": "Não conectada",

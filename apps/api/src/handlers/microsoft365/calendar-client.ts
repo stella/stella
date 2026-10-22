@@ -17,6 +17,10 @@ const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 const REQUEST_TIMEOUT_MS = 10_000;
 const RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
 const CALENDAR_PAGE_SIZE = 50;
+// Bound each untrusted text field as well as the number and bytes of results.
+const CALENDAR_SUBJECT_MAX_LENGTH = 512;
+const CALENDAR_LOCATION_MAX_LENGTH = 256;
+const CALENDAR_ORGANIZER_NAME_MAX_LENGTH = 256;
 
 class CalendarGraphError extends TaggedError("CalendarGraphError")<{
   message: string;
@@ -55,11 +59,22 @@ const eventSchema = v.object({
 const toCalendarEvent = (event: v.InferOutput<typeof eventSchema>) => ({
   status: event.showAs,
   id: event.id,
-  subject: event.subject,
+  subject: event.subject.slice(0, CALENDAR_SUBJECT_MAX_LENGTH),
   start: event.start,
   end: event.end,
-  location: event.location?.displayName ?? "",
-  organizer: event.organizer?.emailAddress ?? null,
+  location: (event.location?.displayName ?? "").slice(
+    0,
+    CALENDAR_LOCATION_MAX_LENGTH,
+  ),
+  organizer: event.organizer
+    ? {
+        address: event.organizer.emailAddress.address,
+        name: event.organizer.emailAddress.name?.slice(
+          0,
+          CALENDAR_ORGANIZER_NAME_MAX_LENGTH,
+        ),
+      }
+    : null,
   attendeeCount: event.attendees.length,
   isOnlineMeeting: event.isOnlineMeeting,
   webLink: event.webLink ?? null,

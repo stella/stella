@@ -37,7 +37,7 @@ const config = {
 // pipeline are separate, later slices.
 const listMicrosoft365DriveRoot = createSafeRootHandler(
   config,
-  async function* ({ query: input, safeDb, session, user }) {
+  async function* ({ query: input, safeDb, session, user, recordAuditEvent }) {
     yield* Result.await(
       assertMicrosoft365ConnectionEnabled({
         organizationId: session.activeOrganizationId,
@@ -89,6 +89,7 @@ const listMicrosoft365DriveRoot = createSafeRootHandler(
     const accessToken = yield* Result.await(
       ensureMicrosoft365AccessToken({
         capability: "files.read",
+        recordAuditEvent,
         // `user_id` is stored as plain text; brand it at this boundary so the
         // token crypto's user-scoping guard receives a typed owner id.
         connection: {

@@ -4962,6 +4962,7 @@
       "microsoft365Description": "Fájlok és Outlook-naptárak olvasása a csevegésben. Minden funkcióhoz a szervezet jóváhagyása és az Ön Microsoft-hozzájárulása szükséges.",
       "microsoft365Disable": "A Microsoft 365 kikapcsolása és az összes fiók leválasztása",
       "microsoft365Error": "Nem sikerült csatlakozni a Microsoft 365-höz. Próbálja újra, vagy forduljon a rendszergazdához.",
+      "microsoft365RevokeHint": "Az alkalmazás hozzáférését a Microsoft-fiókjában is visszavonhatja.",
       "microsoft365Title": "Microsoft 365-kapcsolat",
       "noMatches": "Egy kapcsolat sem felel meg ennek: „{query}”",
       "notConnected": "Nincs csatlakoztatva",

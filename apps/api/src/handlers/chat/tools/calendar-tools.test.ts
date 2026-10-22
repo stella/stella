@@ -53,7 +53,7 @@ test("calendar tools require the deployment, organization ceiling, and actual us
         ),
       );
     return await loadCalendarTools(
-      { safeDb, organizationId, userId },
+      { safeDb, organizationId, userId, recordAuditEvent: async () => {} },
       () => enabled,
     );
   };
@@ -141,7 +141,7 @@ test("calendar executions use stored grants, shared result provenance and execut
   let reads = 0;
   const original = applyChatToolPolicies({
     tools: createCalendarTools(
-      { safeDb, organizationId, userId },
+      { safeDb, organizationId, userId, recordAuditEvent: async () => {} },
       {
         deploymentEnabled: () => true,
         listCalendarEvents: async () => {
@@ -204,8 +204,16 @@ test("calendar executions use stored grants, shared result provenance and execut
         approval: "grant",
         grantId,
         policyKind: "scope_expansion",
+        capability: "calendar.read",
+        rangeStart: range.start,
+        rangeEnd: range.end,
       },
     });
+  }
+  for (const row of rows) {
+    expect(JSON.stringify(row)).not.toContain("attendees");
+    expect(row).not.toHaveProperty("metadata.subject");
+    expect(row).not.toHaveProperty("metadata.body");
   }
   calendarEnabled = false;
   expect(

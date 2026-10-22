@@ -10,3 +10,12 @@ ALTER TABLE "sharepoint_oauth_state" FORCE ROW LEVEL SECURITY;--> statement-brea
 -- stella-migration-safety: reviewed drop-object - Replace the unused OAuth-state update permission with an explicit denial.
 DROP POLICY "sharepoint_oauth_state_update" ON "sharepoint_oauth_state";--> statement-breakpoint
 CREATE POLICY "sharepoint_oauth_state_update" ON "sharepoint_oauth_state" AS RESTRICTIVE FOR UPDATE TO "stella" USING (false) WITH CHECK (false);
+
+--> statement-breakpoint
+CREATE POLICY "sharepoint_connections_owner" ON "sharepoint_connections" FOR ALL TO public USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sharepoint_connections'::regclass)) WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sharepoint_connections'::regclass));
+
+--> statement-breakpoint
+CREATE POLICY "sharepoint_oauth_state_owner" ON "sharepoint_oauth_state" FOR ALL TO public USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sharepoint_oauth_state'::regclass)) WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sharepoint_oauth_state'::regclass));
+
+--> statement-breakpoint
+ALTER TABLE "sharepoint_oauth_state" ADD COLUMN "requested_scope" text;

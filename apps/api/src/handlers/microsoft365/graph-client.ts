@@ -35,12 +35,14 @@ import {
   refreshAccessToken,
   tokenExpiresAt,
 } from "@/api/handlers/microsoft365/graph-oauth";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { Page } from "@/api/lib/pagination";
 import type { AccessToken } from "@/api/lib/secret-brands";
 
-import { grantedCapabilities } from "./capabilities";
+import { grantedCapabilities, scopeSet } from "./capabilities";
 
 const GRAPH_FETCH_TIMEOUT_MS = 10_000;
 const GRAPH_ACCOUNT_RESPONSE_MAX_BYTES = 64 * 1024;
@@ -114,10 +116,12 @@ export const ensureMicrosoft365AccessToken = async (
     connection,
     safeDb,
     capability,
+    recordAuditEvent,
   }: {
     connection: Microsoft365ConnectionTokens;
     safeDb: SafeDb;
     capability: Microsoft365Capability;
+    recordAuditEvent: AuditRecorder;
   },
   dependencies = TOKEN_REFRESH_DEPENDENCIES,
 ): Promise<
@@ -206,7 +210,7 @@ export const ensureMicrosoft365AccessToken = async (
       safeDb(async (tx) => {
         // Compare the token snapshot so a refresh cannot overwrite a newer
         // consent grant or return a token after the connection was removed.
-        // audit: skip - Token refresh bookkeeping; connection lifecycle actions own the audit trail.
+        // Scope changes and the rotated credentials share one transaction.
         const rows = await tx
           .update(microsoft365Connections)
           .set({
@@ -240,6 +244,27 @@ export const ensureMicrosoft365AccessToken = async (
             ),
           )
           .returning({ id: microsoft365Connections.id });
+        if (
+          rows.length > 0 &&
+          JSON.stringify(scopeSet(connection.scope)) !==
+            JSON.stringify(scopeSet(token.scope ?? connection.scope))
+        ) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+            resourceId: connection.organizationId,
+            workspaceId: null,
+            metadata: {
+              operation: "microsoft365_refresh_scope_change",
+              connectionUserId: connection.userId,
+              oldScopes: scopeSet(connection.scope),
+              newScopes: scopeSet(token.scope ?? connection.scope),
+              grantedCapabilities: grantedCapabilities(
+                token.scope ?? connection.scope,
+              ),
+            },
+          });
+        }
         return rows.length > 0;
       }),
     );

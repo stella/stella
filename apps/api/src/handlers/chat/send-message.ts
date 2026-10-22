@@ -2811,6 +2811,7 @@ export const createSendMessage = (
         };
         const calendarContext = {
           safeDb,
+          recordAuditEvent,
           organizationId: session.activeOrganizationId,
           userId: user.id,
         };

@@ -28,6 +28,13 @@ import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
+import {
+  capabilityEnabled,
+  consentedScopes,
+  grantedCapabilities,
+  scopeSet,
+} from "./capabilities";
+
 const STATE_TTL_MS = 10 * 60 * 1000;
 
 const requestQuery = t.Object({
@@ -149,6 +156,7 @@ export const createMicrosoft365OAuthCallback = (
                   userId: microsoft365OAuthState.userId,
                   codeVerifier: microsoft365OAuthState.codeVerifier,
                   redirectUri: microsoft365OAuthState.redirectUri,
+                  requestedScope: microsoft365OAuthState.requestedScope,
                   createdAt: microsoft365OAuthState.createdAt,
                 })
                 .from(microsoft365OAuthState)
@@ -236,12 +244,17 @@ export const createMicrosoft365OAuthCallback = (
                 .select({
                   microsoft365ConnectionEnabled:
                     organizationSettings.microsoft365ConnectionEnabled,
+                  microsoft365FilesReadEnabled:
+                    organizationSettings.microsoft365FilesReadEnabled,
+                  microsoft365CalendarReadEnabled:
+                    organizationSettings.microsoft365CalendarReadEnabled,
                 })
                 .from(organizationSettings)
                 .where(
                   eq(organizationSettings.organizationId, row.organizationId),
                 );
-              if (!settingsRows.at(0)?.microsoft365ConnectionEnabled) {
+              const policy = settingsRows.at(0);
+              if (!policy?.microsoft365ConnectionEnabled) {
                 return { status: "not-enabled" as const };
               }
 
@@ -259,6 +272,26 @@ export const createMicrosoft365OAuthCallback = (
                 return { status: "state-consumed" as const };
               }
 
+              const requestedCapabilities = grantedCapabilities(
+                row.requestedScope,
+              );
+              const scope = consentedScopes({
+                grantedScope: token.value.scope ?? null,
+                requestedScope: row.requestedScope,
+                policy,
+              });
+              const capabilities = grantedCapabilities(scope);
+              if (
+                requestedCapabilities.length === 0 ||
+                requestedCapabilities.some(
+                  (capability) =>
+                    !capabilityEnabled(policy, capability) ||
+                    !capabilities.includes(capability),
+                )
+              ) {
+                return { status: "capability-not-granted" as const };
+              }
+
               await innerTx
                 .insert(microsoft365Connections)
                 .values({
@@ -269,7 +302,7 @@ export const createMicrosoft365OAuthCallback = (
                   refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
                   refreshTokenIv: encryptedRefresh?.iv ?? null,
                   tokenType: token.value.token_type ?? "Bearer",
-                  scope: token.value.scope ?? null,
+                  scope,
                   accountLabel,
                   expiresAt: tokenExpiresAt(token.value),
                   status: "connected",
@@ -285,7 +318,7 @@ export const createMicrosoft365OAuthCallback = (
                     refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
                     refreshTokenIv: encryptedRefresh?.iv ?? null,
                     tokenType: token.value.token_type ?? "Bearer",
-                    scope: token.value.scope ?? null,
+                    scope,
                     accountLabel,
                     expiresAt: tokenExpiresAt(token.value),
                     status: "connected",
@@ -300,6 +333,8 @@ export const createMicrosoft365OAuthCallback = (
                 metadata: {
                   connectionUserId: rowUserId,
                   operation: "microsoft365_oauth_connect",
+                  grantedScopes: scopeSet(scope),
+                  grantedCapabilities: capabilities,
                 },
               });
               return { status: "connected" as const };
@@ -312,6 +347,14 @@ export const createMicrosoft365OAuthCallback = (
               case "not-enabled": {
                 return Result.ok(
                   redirect({ status: "error", reason: "not-enabled" }),
+                );
+              }
+              case "capability-not-granted": {
+                return Result.ok(
+                  redirect({
+                    status: "error",
+                    reason: "capability-not-granted",
+                  }),
                 );
               }
               case "state-consumed": {

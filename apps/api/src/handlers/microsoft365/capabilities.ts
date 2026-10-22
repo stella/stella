@@ -48,15 +48,21 @@ export const grantedCapabilities = (scope: string | null) => {
 
 // Preserve known read grants while requesting incremental consent. Unknown scope
 // strings never become authorization requests (in particular, write grants).
-export const delegatedScopes = (
-  requested: readonly Microsoft365Capability[],
-  grantedScope: string | null,
-) => {
-  const granted = new Set(
-    (grantedScope ?? "").split(/\s+/u).map(normalizeScope),
-  );
-  const retained = Object.values(CAPABILITY_SCOPES)
-    .flat()
+type DelegatedScopesOptions = {
+  requested: readonly Microsoft365Capability[];
+  grantedScope: string | null;
+  policy: Microsoft365Policy | undefined;
+};
+export const delegatedScopes = ({
+  requested,
+  grantedScope,
+  policy,
+}: DelegatedScopesOptions) => {
+  const granted = new Set(scopeSet(grantedScope));
+  const retained = MICROSOFT365_CAPABILITIES.filter((capability) =>
+    capabilityEnabled(policy, capability),
+  )
+    .flatMap((capability) => CAPABILITY_SCOPES[capability])
     .filter((scope) => granted.has(normalizeScope(scope)));
   return v.parse(
     delegatedScopeSchema,
@@ -64,10 +70,43 @@ export const delegatedScopes = (
       ...new Set([
         ...BASE_SCOPES,
         ...retained,
-        ...requested.flatMap((capability) => CAPABILITY_SCOPES[capability]),
+        ...requested
+          .filter((capability) => capabilityEnabled(policy, capability))
+          .flatMap((capability) => CAPABILITY_SCOPES[capability]),
       ]),
     ].join(" "),
   );
+};
+
+// Compare provider scope sets independently of order, URI spelling, and casing.
+export const scopeSet = (scope: string | null) =>
+  [
+    ...new Set((scope ?? "").split(/\s+/u).filter(Boolean).map(normalizeScope)),
+  ].toSorted();
+
+// A provider response cannot expand the stored authorization beyond the
+// server-bound request and the policy ceiling checked inside the callback lock.
+export const consentedScopes = ({
+  grantedScope,
+  requestedScope,
+  policy,
+}: {
+  grantedScope: string | null;
+  requestedScope: string | null;
+  policy: Microsoft365Policy | undefined;
+}) => {
+  const requested = new Set(scopeSet(requestedScope));
+  const allowed = new Set(
+    scopeSet(delegatedScopes({ requested: [], grantedScope, policy })),
+  );
+  return (grantedScope ?? "")
+    .split(/\s+/u)
+    .filter(
+      (scope) =>
+        requested.has(normalizeScope(scope)) &&
+        allowed.has(normalizeScope(scope)),
+    )
+    .join(" ");
 };
 
 type Microsoft365Policy = {
