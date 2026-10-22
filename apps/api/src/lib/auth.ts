@@ -749,6 +749,12 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
   }
   const request = ctx.request;
   if (request === undefined) {
+    // A server-side `auth.api.*` call carries no browser request and runs
+    // after its caller authenticated; the browser cookie snapshot this step
+    // guards against only arrives over HTTP.
+    if (isOAuthProviderSessionPath(path)) {
+      return Result.ok(undefined);
+    }
     panic("Authoritative-session hook ran outside HTTP dispatch");
   }
   const session = await resolveSession({ ...ctx, path, request });
