@@ -121,7 +121,11 @@ export const dependencyChanges = (
     } else if (!same(before, after)) {
       changed.push(name);
     }
-    if (after?.some(isRegistryResolution)) {
+    const beforeRegistry = before?.filter(isRegistryResolution) ?? [];
+    const afterRegistry = after?.filter(isRegistryResolution) ?? [];
+    if (
+      afterRegistry.some((resolution) => !beforeRegistry.includes(resolution))
+    ) {
       registry.add(name);
     }
   }

@@ -307,30 +307,59 @@ describe("audit acceptance expiry", () => {
     }
   });
 
-  test("a baseline entry without an owner fails closed", async () => {
+  test.each([
+    {
+      field: "owner",
+      owner: "  TODO: owner",
+      reason: "test acceptance",
+    },
+    {
+      field: "reason",
+      owner: "test owner",
+      reason: "todo: document why this is accepted.",
+    },
+  ])(
+    "a baseline entry with a placeholder $field fails closed",
+    async (entry) => {
+      const temporary = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));
+      const baselinePath = path.join(temporary, "baseline.json");
+      await Bun.write(
+        baselinePath,
+        JSON.stringify({
+          note: "test",
+          auditLevel: "high",
+          accepted: [
+            {
+              id: advisory.id,
+              severity: "high",
+              package: "pkg",
+              title: "test advisory",
+              owner: entry.owner,
+              reason: entry.reason,
+            },
+          ],
+        }),
+      );
+      try {
+        expect(await rejectionOf(readBaseline(baselinePath))).toHaveProperty(
+          "message",
+          expect.stringContaining(
+            `${advisory.id} must have a non-placeholder ${entry.field}`,
+          ),
+        );
+      } finally {
+        rmSync(temporary, { force: true, recursive: true });
+      }
+    },
+  );
+
+  test("a baseline entry with a real owner and reason is accepted", async () => {
     const temporary = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));
     const baselinePath = path.join(temporary, "baseline.json");
-    await Bun.write(
-      baselinePath,
-      JSON.stringify({
-        note: "test",
-        auditLevel: "high",
-        accepted: [
-          {
-            id: advisory.id,
-            severity: "high",
-            package: "pkg",
-            title: "test advisory",
-            reason: "test acceptance",
-          },
-        ],
-      }),
-    );
+    const baseline = auditBaseline();
+    await Bun.write(baselinePath, JSON.stringify(baseline));
     try {
-      expect(await rejectionOf(readBaseline(baselinePath))).toHaveProperty(
-        "message",
-        expect.stringContaining("must have a non-empty owner"),
-      );
+      expect(await readBaseline(baselinePath)).toEqual(baseline);
     } finally {
       rmSync(temporary, { force: true, recursive: true });
     }

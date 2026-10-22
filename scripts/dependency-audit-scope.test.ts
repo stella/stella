@@ -33,7 +33,7 @@ describe("dependency audit diff scope", () => {
       added: ["added"],
       changed: ["changed", "duplicate"],
       removed: ["removed"],
-      registry: new Set(["kept", "changed", "added", "duplicate"]),
+      registry: new Set(["changed", "added", "duplicate"]),
     });
     expect([...auditablePackages(changes)].toSorted()).toEqual([
       "added",
@@ -50,7 +50,7 @@ describe("dependency audit diff scope", () => {
       added: [],
       changed: [],
       removed: [],
-      registry: new Set(["package"]),
+      registry: new Set(),
     });
     expect(auditablePackages(changes).size).toBe(0);
   });
@@ -83,6 +83,50 @@ describe("dependency audit diff scope", () => {
       }),
     );
     expect([...auditablePackages(changes)]).toEqual(["mixed"]);
+  });
+
+  test("a workspace-only change to a mixed name is not audited", () => {
+    const changes = dependencyChanges(
+      lockfile({
+        registry: ["mixed@1.0.0"],
+        workspace: ["mixed@workspace:old"],
+      }),
+      lockfile({
+        registry: ["mixed@1.0.0"],
+        workspace: ["mixed@workspace:new"],
+      }),
+    );
+
+    expect(changes.changed).toEqual(["mixed"]);
+    expect([...auditablePackages(changes)]).toEqual([]);
+  });
+
+  test("a registry change to a mixed name is audited", () => {
+    const changes = dependencyChanges(
+      lockfile({
+        registry: ["mixed@1.0.0"],
+        workspace: ["mixed@workspace:packages/mixed"],
+      }),
+      lockfile({
+        registry: ["mixed@1.1.0"],
+        workspace: ["mixed@workspace:packages/mixed"],
+      }),
+    );
+
+    expect([...auditablePackages(changes)]).toEqual(["mixed"]);
+  });
+
+  test("removing one of a name's registry resolutions is not audited", () => {
+    const changes = dependencyChanges(
+      lockfile({
+        first: ["mixed@1.0.0"],
+        second: ["mixed@2.0.0"],
+      }),
+      lockfile({ first: ["mixed@1.0.0"] }),
+    );
+
+    expect(changes.changed).toEqual(["mixed"]);
+    expect([...auditablePackages(changes)]).toEqual([]);
   });
 
   test("classifies every resolution source and audits unknown specs", () => {

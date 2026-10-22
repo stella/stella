@@ -90,6 +90,20 @@ const asText = (value: unknown): string => {
   return typeof value === "number" ? String(value) : "";
 };
 
+const requireAcceptanceText = (
+  id: string,
+  field: "owner" | "reason",
+  value: unknown,
+): string => {
+  const text = asText(value);
+  if (text.trim() === "" || /^TODO\b/iu.test(text.trim())) {
+    return panic(
+      `Dependency audit baseline entry ${id} must have a non-placeholder ${field}`,
+    );
+  }
+  return text;
+};
+
 // The baseline is a repo-committed file this script owns, but a hand-edit that
 // breaks an entry must not silently accept the advisory it was meant to cover.
 // An unreadable entry is dropped, so the matching advisory reads as new and the
@@ -102,12 +116,8 @@ const toBaselineEntry = (value: unknown): BaselineEntry | null => {
   if (id === "") {
     return null;
   }
-  const owner = asText(value["owner"]);
-  if (owner.trim() === "") {
-    return panic(
-      `Dependency audit baseline entry ${id} must have a non-empty owner`,
-    );
-  }
+  const owner = requireAcceptanceText(id, "owner", value["owner"]);
+  const reason = requireAcceptanceText(id, "reason", value["reason"]);
   const expiresOn = value["expiresOn"];
   const untilPatched = value["untilPatched"];
   return {
@@ -116,7 +126,7 @@ const toBaselineEntry = (value: unknown): BaselineEntry | null => {
     severity: asText(value["severity"]),
     package: asText(value["package"]),
     title: asText(value["title"]),
-    reason: asText(value["reason"]),
+    reason,
     // Present but malformed terms are kept as read, so the entry lapses
     // instead of silently becoming permanent.
     ...(expiresOn === undefined ? {} : { expiresOn: asText(expiresOn) }),
@@ -355,7 +365,7 @@ const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
   };
   await Bun.write(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`);
   console.info(
-    `Wrote ${advisories.length} advisory(ies) to ${repoRelativePath(REPO_ROOT, BASELINE_PATH)}.`,
+    `Wrote ${advisories.length} advisory(ies) to ${repoRelativePath(REPO_ROOT, BASELINE_PATH)}. Replace all TODO placeholders before committing the baseline.`,
   );
 };
 
