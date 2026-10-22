@@ -3,6 +3,12 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import {
+  CASE_LAW_PARSED_SOURCE_HASH_REPAIR_BATCH_SIZE,
+  repairCaseLawParsedSourceHashBatch,
+} from "./case-law-parsed-source-hash-repair";
+import { CASE_LAW_RAW_GENERATION_UNKNOWN } from "./schema/case-law-replay";
+
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
   "../../drizzle/20261022120000_case_law_batch_slots/migration.sql",
@@ -68,7 +74,8 @@ INSERT INTO case_law_replay_blocked
   (source_id, decision_id, parser_version_from, parser_version_to, outcome, reason, detail, created_at)
 VALUES
   ('${SOURCE_ID}', '${PARSED_ID}', 1, 2, 'rejected', 'missing-payload', 'first', '2026-02-01T00:00:00Z'),
-  ('${SOURCE_ID}', '${PARSED_ID}', 2, 3, 'unchanged', NULL, 'second', '2026-02-02T00:00:00Z');
+  ('${SOURCE_ID}', '${PARSED_ID}', 2, 3, 'unchanged', NULL, 'second', '2026-02-02T00:00:00Z'),
+  ('${SOURCE_ID}', '${RAW_LESS_ID}', 1, 2, 'rejected', 'missing-payload', 'raw-less', '2026-02-03T00:00:00Z');
 `;
 
 const decisionProjection = `
@@ -88,8 +95,24 @@ const buildLegacyDatabase = async () => {
   return database;
 };
 
-test("the batch-slot migration preserves every row while recording parsed raw generations", async () => {
+const asRepairConnection = (database: PGlite) => ({
+  execute: async (query: string, params: readonly unknown[] = []) => {
+    await database.query(query, [...params]);
+  },
+  query: async (query: string, params: readonly unknown[] = []) =>
+    (await database.query(query, [...params])).rows,
+});
+
+test("the batch-slot migration and resumable repair preserve every row", async () => {
   const database = await buildLegacyDatabase();
+  const extraCount = CASE_LAW_PARSED_SOURCE_HASH_REPAIR_BATCH_SIZE;
+  const extraValues = Array.from({ length: extraCount }, (_, index) => {
+    const suffix = (100 + index).toString(16).padStart(12, "0");
+    return `('00000000-0000-4000-8000-${suffix}', '${SOURCE_ID}', 'extra-${String(index)}', '${"c".repeat(64)}', 'parsed')`;
+  }).join(",");
+  await database.exec(
+    `INSERT INTO case_law_decisions (id, source_id, case_number, source_hash, fulltext) VALUES ${extraValues}`,
+  );
   const decisionsBefore = await database.query(decisionProjection);
   const blockedBefore = await database.query(blockedProjection);
 
@@ -102,6 +125,28 @@ test("the batch-slot migration preserves every row while recording parsed raw ge
     blockedBefore.rows,
   );
 
+  const repairConnection = asRepairConnection(database);
+  const first = await repairCaseLawParsedSourceHashBatch(
+    repairConnection,
+    null,
+    CASE_LAW_PARSED_SOURCE_HASH_REPAIR_BATCH_SIZE,
+  );
+  expect(first.done).toBe(false);
+  const afterFirst = await database.query<{ count: number | string }>(
+    "SELECT count(*) AS count FROM case_law_decisions WHERE parsed_source_hash IS NOT NULL",
+  );
+  expect(Number(afterFirst.rows.at(0)?.count)).toBe(
+    CASE_LAW_PARSED_SOURCE_HASH_REPAIR_BATCH_SIZE - 2,
+  );
+
+  // A new process resumes from the committed cursor rather than starting over.
+  const resumed = await repairCaseLawParsedSourceHashBatch(
+    repairConnection,
+    first.cursor,
+    CASE_LAW_PARSED_SOURCE_HASH_REPAIR_BATCH_SIZE,
+  );
+  expect(resumed.done).toBe(true);
+
   const generations = await database.query<{
     id: string;
     parsed_source_hash: string | null;
@@ -110,6 +155,10 @@ test("the batch-slot migration preserves every row while recording parsed raw ge
     { id: PARSED_ID, parsed_source_hash: PARSED_HASH },
     { id: UNPARSED_ID, parsed_source_hash: null },
     { id: RAW_LESS_ID, parsed_source_hash: null },
+    ...Array.from({ length: extraCount }, (_, index) => ({
+      id: `00000000-0000-4000-8000-${(100 + index).toString(16).padStart(12, "0")}`,
+      parsed_source_hash: "c".repeat(64),
+    })),
   ]);
 
   const blocked = await database.query<{
@@ -120,6 +169,10 @@ test("the batch-slot migration preserves every row while recording parsed raw ge
   );
   expect(blocked.rows).toEqual([
     { parser_version_to: 2, source_hash: PARSED_HASH },
+    {
+      parser_version_to: 2,
+      source_hash: CASE_LAW_RAW_GENERATION_UNKNOWN,
+    },
     { parser_version_to: 3, source_hash: PARSED_HASH },
   ]);
 
@@ -136,13 +189,28 @@ test("the batch-slot migration preserves every row while recording parsed raw ge
   expect((await database.query(blockedProjection)).rows).toEqual(
     blockedBefore.rows,
   );
+  const repairedBeforeRetry = await database.query(
+    "SELECT id, parsed_source_hash FROM case_law_decisions ORDER BY id",
+  );
+  await repairCaseLawParsedSourceHashBatch(
+    repairConnection,
+    null,
+    CASE_LAW_PARSED_SOURCE_HASH_REPAIR_BATCH_SIZE,
+  );
+  expect(
+    (
+      await database.query(
+        "SELECT id, parsed_source_hash FROM case_law_decisions ORDER BY id",
+      )
+    ).rows,
+  ).toEqual(repairedBeforeRetry.rows);
   expect(
     (
       await database.query(
         "SELECT count(*) AS count FROM case_law_replay_blocked",
       )
     ).rows,
-  ).toEqual([{ count: 2 }]);
+  ).toEqual([{ count: 3 }]);
 
   await database.close();
 });

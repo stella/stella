@@ -288,6 +288,9 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
 // Any terminal receipt excludes its target version until the parser advances.
 // This existing table also owns changed and unchanged terminal receipts.
 // Decision IDs intentionally have no FK: receipts survive decision cleanup.
+/** A replay receipt whose decision predates durable raw-generation hashes. */
+export const CASE_LAW_RAW_GENERATION_UNKNOWN = "raw-generation-unknown";
+
 export const caseLawReplayBlocked = p.pgTable.withRLS(
   "case_law_replay_blocked",
   {

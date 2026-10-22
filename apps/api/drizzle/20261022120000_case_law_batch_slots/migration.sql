@@ -5,21 +5,13 @@ SET statement_timeout = '30s';--> statement-breakpoint
 ALTER TABLE "case_law_decisions"
   ADD COLUMN IF NOT EXISTS "parsed_source_hash" varchar(64);--> statement-breakpoint
 
--- Fetch and parse were one atomic write before this migration. Any persisted
--- parsed representation therefore came from the row's current raw generation.
-UPDATE "case_law_decisions"
-SET "parsed_source_hash" = "source_hash"
-WHERE "parsed_source_hash" IS NULL
-  AND (
-    "fulltext" IS NOT NULL OR "sections" IS NOT NULL OR "document_ast" IS NOT NULL OR
-    "text_s3_key" IS NOT NULL OR "normalized_s3_key" IS NOT NULL OR "ast_s3_key" IS NOT NULL
-  );--> statement-breakpoint
-
 ALTER TABLE "case_law_replay_blocked"
   ADD COLUMN IF NOT EXISTS "source_hash" varchar(64);--> statement-breakpoint
 
 UPDATE "case_law_replay_blocked" blocked
-SET "source_hash" = decision."source_hash"
+-- Rows written before raw hashing use the schema's non-SHA-256 sentinel; this
+-- preserves their terminal replay receipt without colliding with a real hash.
+SET "source_hash" = COALESCE(decision."source_hash", 'raw-generation-unknown')
 FROM "case_law_decisions" decision
 WHERE blocked."decision_id" = decision."id"
   AND blocked."source_hash" IS NULL;--> statement-breakpoint
@@ -112,7 +104,7 @@ DO $policies$ BEGIN
   END IF;
 END $policies$;--> statement-breakpoint
 
--- Release table locks before validation scans and the concurrent index build.
+-- Release table locks before validation scans.
 -- squawk-ignore transaction-nesting
 COMMIT;--> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
@@ -127,12 +119,3 @@ ALTER TABLE "case_law_batch_slot_sources" VALIDATE CONSTRAINT "case_law_batch_sl
 ALTER TABLE "case_law_fetch_item_receipts" VALIDATE CONSTRAINT "case_law_fetch_item_receipts_source_fk";--> statement-breakpoint
 ALTER TABLE "case_law_fetch_item_receipts" VALIDATE CONSTRAINT "case_law_fetch_item_receipts_outcome_check";--> statement-breakpoint
 ALTER TABLE "case_law_fetch_item_receipts" VALIDATE CONSTRAINT "case_law_fetch_item_receipts_attempt_count_check";--> statement-breakpoint
-
--- squawk-ignore transaction-nesting
-COMMIT;--> statement-breakpoint
--- squawk-ignore ban-concurrent-index-creation-in-transaction
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "case_law_decisions_parse_pending_idx"
-  ON "case_law_decisions" ("id")
-  WHERE "parsed_source_hash" IS DISTINCT FROM "source_hash";--> statement-breakpoint
--- squawk-ignore transaction-nesting, ban-uncommitted-transaction
-BEGIN;
