@@ -5757,19 +5757,12 @@ mod tests {
   /// input, as the sampler reports both foreground apps and calls.
   fn observe_span(
     manager: &mut ActivityManager,
-    clock: Instant,
     from: i64,
     to: i64,
     observation: impl Fn(i64) -> Observation,
   ) {
     for second in (from..=to).step_by(5) {
-      manager.observe_at(
-        at(second),
-        clock + Duration::from_secs(second as u64),
-        Duration::ZERO,
-        observation(second),
-        partition_in(&Local, at(second)),
-      );
+      manager.observe(at(second), observation(second));
     }
   }
 
@@ -5785,18 +5778,14 @@ mod tests {
   #[test]
   fn a_listened_call_counts_whole_and_ends_at_its_last_sample() {
     let mut manager = recording_manager();
-    let clock = Instant::now();
-    observe_span(&mut manager, clock, 0, 60, |_| active("word"));
-    observe_span(&mut manager, clock, 65, 2465, |_| call("teams", None));
+    observe_span(&mut manager, 0, 60, |_| active("word"));
+    observe_span(&mut manager, 65, 2465, |_| call("teams", None));
     // The first sample after the call reports 40 minutes without input.
-    manager.observe_at(
+    manager.observe(
       at(2470),
-      clock + Duration::from_secs(2470),
-      Duration::from_secs(2410),
       Observation::Idle {
         idle: Duration::from_secs(2410),
       },
-      partition_in(&Local, at(2470)),
     );
     manager.stop(at(2470)).unwrap();
     assert_eq!(
@@ -5809,10 +5798,9 @@ mod tests {
   #[test]
   fn a_call_stays_apart_from_the_same_app_in_front() {
     let mut manager = recording_manager();
-    let clock = Instant::now();
-    observe_span(&mut manager, clock, 0, 30, |_| active("teams"));
-    observe_span(&mut manager, clock, 35, 90, |_| call("teams", None));
-    observe_span(&mut manager, clock, 95, 120, |_| active("teams"));
+    observe_span(&mut manager, 0, 30, |_| active("teams"));
+    observe_span(&mut manager, 35, 90, |_| call("teams", None));
+    observe_span(&mut manager, 95, 120, |_| active("teams"));
     manager.stop(at(120)).unwrap();
     assert_eq!(
       segments(&manager),
@@ -5829,8 +5817,7 @@ mod tests {
   fn an_excluded_call_app_records_nothing() {
     let mut manager = recording_manager();
     manager.settings.excluded_apps = vec![AppExclusion::new("teams", "Teams").unwrap()];
-    let clock = Instant::now();
-    observe_span(&mut manager, clock, 0, 60, |_| call("teams", None));
+    observe_span(&mut manager, 0, 60, |_| call("teams", None));
     manager.stop(at(60)).unwrap();
     assert!(segments(&manager).is_empty());
   }
@@ -5839,8 +5826,7 @@ mod tests {
   fn a_call_keeps_the_first_title_its_window_showed() {
     let mut manager = recording_manager();
     manager.settings.capture_details = true;
-    let clock = Instant::now();
-    observe_span(&mut manager, clock, 0, 60, |second| match second {
+    observe_span(&mut manager, 0, 60, |second| match second {
       0..=15 => call("teams", None),
       20..=40 => call("teams", Some("Novák v. ABC | Microsoft Teams")),
       _ => call("teams", Some("Chat | Microsoft Teams")),
