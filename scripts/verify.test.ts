@@ -327,7 +327,7 @@ test("fix mode executes exact autofix workflow blocks", () => {
   expect(steps.some(({ run }) => run.includes("refresh-test-durations"))).toBe(
     false,
   );
-  expect(steps.some(({ run }) => run.includes("oxfmt"))).toBe(true);
+  expect(steps.some(({ run }) => run.includes("bun fmt"))).toBe(true);
   expect(
     steps.some(({ run }) => run.includes("fix-tauri-package-alignment.ts")),
   ).toBe(true);

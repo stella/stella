@@ -87,7 +87,7 @@
         },
         {
           "path": ".github/ci-checks/ci-checks-policy.yml",
-          "contains": ["name: Format", "bun --bun turbo run format"]
+          "contains": ["name: Format", "run: bun fmt --check"]
         },
         {
           "path": ".github/ci-checks/ci-checks-rest.yml",

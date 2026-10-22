@@ -918,7 +918,7 @@ export const classify = (
     return "test";
   }
   if (
-    /lint|format|oxlint|oxfmt|biome|prettier|stylelint/u.test(name) ||
+    /lint|format|fmt|oxlint|biome|prettier|stylelint/u.test(name) ||
     LINT_RULE.test(text)
   ) {
     return "lint";

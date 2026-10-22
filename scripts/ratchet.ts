@@ -74,8 +74,8 @@ import {
   isExcludedTestInclusiveSource,
 } from "./source-globs";
 import {
-  unmanagedTransitionTables,
   statusWriteCalls,
+  unmanagedTransitionTables,
 } from "./status-write-shapes";
 import { countUndeclaredEdenWrites } from "./undeclared-eden-writes";
 import {
@@ -1412,7 +1412,7 @@ const countUnhandledDetachedPromises = (content: string): number => {
 // counters extract module specifiers per line and resolve them against the
 // importing file's path. Deliberately NOT literal-stripped: import specifiers
 // ARE string literals. Fidelity limits: the specifier must sit on the same
-// line as its `from`/`import(`/`import` keyword (oxfmt formats imports that
+// line as its `from`/`import(`/`import` keyword (bun fmt formats imports that
 // way), and an import-shaped string inside a template literal would count
 // (stable noise; none today).
 const MODULE_SPECIFIER =

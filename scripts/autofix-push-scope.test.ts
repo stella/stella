@@ -70,7 +70,7 @@ describe("push-scoped autofix plan", () => {
 
   test.each([
     "oxlint.config.ts",
-    ".oxfmtrc.json",
+    "bunfig.toml",
     ".oxlint-plugins/rules/example.ts",
     "apps/api/tsconfig.json",
     "bun.lock",
