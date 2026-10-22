@@ -372,6 +372,7 @@ mod tests {
     });
     assert!(search_matters(&account, "A/101").await.unwrap().is_empty());
     assert!(candidates(&account).await.unwrap().is_empty());
+    drop(account);
     assert_eq!(requests.load(Ordering::SeqCst), 2);
     server.abort();
   }
@@ -426,6 +427,7 @@ mod tests {
       submit_batch(&account, &batch).await.unwrap().entries[0].id,
       "entry_fixture"
     );
+    drop(account);
     server.abort();
   }
 
@@ -498,6 +500,7 @@ mod tests {
       ));
       assert_eq!(recoveries.load(Ordering::SeqCst), 0);
       let outcome = submit_batch_with_recovery(&account, &batch).await;
+      drop(account);
       match status {
         "cancelled" => assert!(matches!(outcome, Err(SubmitFailure::Cancelled))),
         "committed" => assert_eq!(outcome.unwrap().entries[0].id, "original_entry"),

@@ -172,7 +172,20 @@ const assertHandoff = (source: Workflow) => {
     if (!job) {
       panic(`Missing generated source consumer: ${id}`);
     }
-    expect(job.needs, id).toEqual(["ci-plan", "generated-sources"]);
+    // A check that waits for the quick checks also names their gate. It runs
+    // past `!cancelled()`, so its condition must require the producer itself.
+    const gated =
+      Array.isArray(job.needs) && job.needs.includes("pr-heavy-gate");
+    expect(job.needs, id).toEqual([
+      "ci-plan",
+      "generated-sources",
+      ...(gated ? ["pr-heavy-gate"] : []),
+    ]);
+    if (gated) {
+      expect(job.if, id).toContain(
+        "&& needs.generated-sources.result == 'success' &&",
+      );
+    }
     expect(job.env?.["CI_GENERATED_SOURCES_MANIFEST"], id).toBe(manifest);
     const downloads = job.steps.filter(
       ({ name }) => name === "Download generated sources",
@@ -416,6 +429,7 @@ test("consumer hydration rejects missing dependencies, provenance, ordering and 
       "condition",
       "order",
       "generation",
+      "gate",
     ] as const) {
       const mutated = structuredClone(workflow);
       const job = mutated.jobs[id];
@@ -467,6 +481,14 @@ test("consumer hydration rejects missing dependencies, provenance, ordering and 
             name: "Unlisted preparation",
             run: "bun run generate",
           });
+          break;
+        case "gate":
+          // Waiting on the gate without requiring the producer's success.
+          job.needs = ["ci-plan", "generated-sources", "pr-heavy-gate"];
+          job.if = job.if?.replace(
+            " && needs.generated-sources.result == 'success'",
+            "",
+          );
           break;
       }
       expect(() => assertHandoff(mutated), `${id}/${mutation}`).toThrow(id);

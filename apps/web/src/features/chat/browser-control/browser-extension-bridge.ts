@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+import { TaggedError } from "better-result";
+
 import {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_LIMITS,
@@ -214,6 +216,19 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
     notifyConnectionListeners();
   };
 };
+
+/** Telemetry only: a send started while no bridge was mounted. */
+export class BrowserBridgeUnmountedError extends TaggedError(
+  "BrowserBridgeUnmountedError",
+)<{ message: string }> {}
+
+/**
+ * The bridge is mounted once by `AppFrameHost`, above every frame, so every chat send
+ * sees the extension's pairing. A send while it is unmounted drops the browser
+ * tool silently, which the send path reports.
+ */
+export const isBrowserExtensionBridgeMounted = (): boolean =>
+  bridgeRuntime !== null && bridgeRuntime.mountCount > 0;
 
 export const getBrowserClientCapability = ():
   | BrowserClientCapability
