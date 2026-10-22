@@ -113,6 +113,7 @@ jobs:
                   workflow_id: 'generated-conflicts-resolve.yml',
                   ref: pull.headRefName,
                   inputs: { head: pull.headRefOid, main: branch.commit.sha },
+                  return_run_details: true,
                 }));
               } catch (error) {
                 // 422: a branch that predates the resolve workflow cannot run
@@ -180,6 +181,7 @@ jobs:
                 workflow_id: 'generated-conflicts-publish.yml',
                 ref: 'main',
                 inputs: { resolve_run_id: String(id) },
+                return_run_details: true,
               });
               const publish = data?.workflow_run_id;
               if (!Number.isSafeInteger(publish) || publish <= 0) {

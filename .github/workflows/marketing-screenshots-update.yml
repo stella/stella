@@ -85,7 +85,9 @@ jobs:
             // The dispatch answers with the run it created, so the run
             // followed here is exactly the one this dispatch started.
             const start = async (request) => {
-              const { data } = await github.rest.actions.createWorkflowDispatch({ owner, repo, ...request });
+              const { data } = await github.rest.actions.createWorkflowDispatch({
+                owner, repo, ...request, return_run_details: true,
+              });
               const id = data?.workflow_run_id;
               if (!Number.isSafeInteger(id) || id <= 0) {
                 throw new Error(`Dispatching ${request.workflow_id} returned no run id`);
