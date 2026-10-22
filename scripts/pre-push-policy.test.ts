@@ -23,6 +23,9 @@ const assertLightweightPush = (config: unknown) => {
       secrets: { use_stdin: true, run: "bun run secrets:check:pushed" },
       "ai-skills": { run: "bash scripts/check-ai-skill-sources.sh" },
       lockfiles: { run: "bun run check:standalone-lockfiles" },
+      "job-classification": {
+        run: "bun scripts/check-ci-job-classification.ts --pre-push",
+      },
     },
   });
 };

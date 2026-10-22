@@ -172,7 +172,16 @@ describe("restricted review account auth endpoints", () => {
       "forget-password",
       REVIEW_ACCOUNT_OPERATION.changePassword,
     ],
-    ["/email-otp/send-verification-otp", "sign-in", null],
+    [
+      "/email-otp/send-verification-otp",
+      "sign-in",
+      REVIEW_ACCOUNT_OPERATION.emailCodeSignIn,
+    ],
+    [
+      "/email-otp/send-verification-otp",
+      "email-verification",
+      REVIEW_ACCOUNT_OPERATION.verifyEmail,
+    ],
     ["/sign-in/email", undefined, null],
   ] as const)("%s (%p) performs %p", (path, otpType, operation) => {
     expect(resolveReviewAccountBodyEmailOperation({ path, otpType })).toBe(

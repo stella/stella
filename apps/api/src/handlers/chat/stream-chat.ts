@@ -54,6 +54,7 @@ import {
   getAwaitingUserInteraction,
   getAwaitingUserInteractions,
   getUserFileIdFromAttachmentPart,
+  isApprovedClientCallAwaitingResult,
   isChatAttachmentPart,
   isChatDocumentPart,
   isChatPart,
@@ -685,6 +686,7 @@ export const streamChat = async ({
       Result.isOk(validateTanStackDevModelOverride(modelId, orgAIConfig)),
   });
   const primaryModel = await resolveTanStackTextModel({
+    userId: modelAdmission.userId,
     dataClass: "customer",
     modelId: turnModelSelection.modelId,
     organizationId,
@@ -1346,6 +1348,7 @@ const resolveFallbackTextModel = async ({
 }: ResolveFallbackTextModelProps): Promise<ResolvedTanStackTextModel | null> => {
   try {
     const fallbackModel = await resolveTanStackTextModel({
+      userId: modelAdmission.userId,
       dataClass: "customer",
       organizationId,
       admission: modelAdmission,
@@ -2614,9 +2617,55 @@ type SnapshotProcessorOptions = Pick<
   "responseMessageId" | "processor" | "partProvenance"
 >;
 
+type MessagesSnapshotChunk = Extract<
+  PublicStreamChunk,
+  { type: EventType.MESSAGES_SNAPSHOT }
+>;
+
 type ProcessSnapshotChunkOptions = SnapshotProcessorOptions & {
-  chunk: Extract<PublicStreamChunk, { type: EventType.MESSAGES_SNAPSHOT }>;
+  chunk: MessagesSnapshotChunk;
 };
+
+/**
+ * TanStack AI (0.65.1) answers an approved call it has not executed yet with
+ * a placeholder tool row (`uiMessagesToWire` / `uiMessageToModelMessages` in
+ * `@tanstack/ai`), and the interrupt MESSAGES_SNAPSHOT that hands an
+ * approved client tool to the browser carries it. Folded into UI parts, the
+ * placeholder becomes the call's complete output: the browser would treat the
+ * call as already run, and the tool's output schema rejects it at persistence.
+ * The SDK exports no type for the row, so it is matched by its exact shape.
+ */
+const approvedPendingExecutionSchema = v.strictObject({
+  approved: v.literal(true),
+  message: v.string(),
+  pendingExecution: v.literal(true),
+});
+
+const isApprovedPendingExecutionRow = (
+  message: MessagesSnapshotChunk["messages"][number],
+): boolean => {
+  if (message.role !== "tool" || typeof message.content !== "string") {
+    return false;
+  }
+  const parsed = parseToolResultContent(message.content);
+  return (
+    parsed.type === "json" && v.is(approvedPendingExecutionSchema, parsed.value)
+  );
+};
+
+/** Keep an approved, not yet executed call approval-responded with input only,
+ *  still owed its real result, on every processor that reads the snapshot. */
+const withoutApprovedPendingExecutionRows = (
+  chunk: MessagesSnapshotChunk,
+): MessagesSnapshotChunk =>
+  chunk.messages.some(isApprovedPendingExecutionRow)
+    ? {
+        ...chunk,
+        messages: chunk.messages.filter(
+          (message) => !isApprovedPendingExecutionRow(message),
+        ),
+      }
+    : chunk;
 
 const processPersistenceSnapshot = ({
   chunk: sourceChunk,
@@ -2624,7 +2673,7 @@ const processPersistenceSnapshot = ({
   responseMessageId,
   partProvenance,
 }: ProcessSnapshotChunkOptions) => {
-  let chunk = sourceChunk;
+  let chunk = withoutApprovedPendingExecutionRows(sourceChunk);
   const preservesPartLayout = chunk.messages.some(
     (message) => message.id === responseMessageId && "parts" in message,
   );
@@ -3129,6 +3178,18 @@ const createClientAssistantOwner = (responseMessageId: string) => {
   };
 };
 
+/** The approved client calls a resumed message holds. Their input completed
+ *  in the run that asked for approval; the resumed run hands them to the
+ *  client without streaming that input again. */
+const approvedCallIdsOf = (message: ChatMessage | undefined): Set<string> =>
+  new Set(
+    arrayOrEmpty(message?.parts).flatMap((part) =>
+      part.type === "tool-call" && isApprovedClientCallAwaitingResult(part)
+        ? [part.id]
+        : [],
+    ),
+  );
+
 export const processServerChatStream = async function* ({
   abortSignal,
   runSignal = abortSignal,
@@ -3161,7 +3222,7 @@ export const processServerChatStream = async function* ({
   // answer. Continuation history alone cannot make an empty run successful.
   let producedAnswer = false;
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
-  const toolCallsWithCompleteInput = new Set<string>();
+  const toolCallsWithCompleteInput = approvedCallIdsOf(initialResponseMessage);
   let usage: TokenUsage | undefined;
   const recordUsage = (recorded: TokenUsage | undefined) => {
     usage = recorded;
