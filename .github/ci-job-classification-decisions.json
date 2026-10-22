@@ -412,7 +412,7 @@
   "candidate:.github/workflows/deploy-staging.yml/staging-health": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "5984b77b9838deee58e538049e5d109deee7c4f91283b2a759110dcb6d52a9cc"
+    "reviewedDigest": "cfce5a06a10e39c0dcb5ea4574d74999e4d9d6aa3dba87175e332189b91b3a2a"
   },
   "candidate:.github/workflows/deploy-staging.yml/build-api": {
     "kind": "priority",
@@ -947,6 +947,6 @@
   "candidate:.github/workflows/deploy-staging.yml/staging-power-off": {
     "kind": "priority",
     "qualifier": "Releases staging capacity after deployment and verification.",
-    "reviewedDigest": "f48f3c206f5ad75e86fc9f9b85c20eeca4fdfd3f90a140a8713d1bbd123d32f9"
+    "reviewedDigest": "4add3e12a3cfbdbcb488e409824ce3e6b669c2fac3a11a93bec75a9116a64c92"
   }
 }

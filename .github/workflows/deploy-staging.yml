@@ -174,7 +174,7 @@ jobs:
     needs: resolve
     if: github.ref == 'refs/heads/main' && needs.resolve.outputs.reused != 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 70
     environment: release-app
     permissions:
       contents: read
@@ -205,8 +205,9 @@ jobs:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
 
+      # Includes a bounded readiness wait after the start request.
       - name: Acquire staging lease
-        timeout-minutes: 25
+        timeout-minutes: 50
         uses: ./.github/actions/staging-power
         with:
           app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}

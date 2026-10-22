@@ -1,5 +1,5 @@
 name: Staging power lease
-description: Acquire or release a staging lease and wait for the requested transition
+description: Acquire a staging lease and verify readiness, or release the caller lease
 inputs:
   app-client-id:
     description: GitHub App client ID
