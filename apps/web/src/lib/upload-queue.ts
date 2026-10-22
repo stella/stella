@@ -97,6 +97,7 @@ export class UploadQueue<T> {
   // run" from "a fresh run happens to be running now".
   private runId = 0;
   private readonly fileRunIds = new Map<File, number>();
+  private readonly finalizeBusyFiles = new Set<File>();
   private readonly concurrency: number;
   private readonly uploadFn: UploadFn<T>;
   private rateLimitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -164,6 +165,7 @@ export class UploadQueue<T> {
 
     this.runId++;
     this.fileRunIds.clear();
+    this.finalizeBusyFiles.clear();
     this.pending = files.map((file) => ({ file, attempt: 0 }));
     this.inflight.clear();
     this.completed = [];
@@ -219,6 +221,7 @@ export class UploadQueue<T> {
     this.inflight.clear();
     this.pending = [];
     this.retrying = 0;
+    this.finalizeBusyFiles.clear();
 
     this.setState("cancelled");
     this.emit("done", {
@@ -237,6 +240,7 @@ export class UploadQueue<T> {
     }
     this.runId++;
     this.fileRunIds.clear();
+    this.finalizeBusyFiles.clear();
     this.pending = this.failed.map(({ file }) => ({ file, attempt: 0 }));
     this.total = this.pending.length;
     this.failed = [];
@@ -305,9 +309,8 @@ export class UploadQueue<T> {
           return;
         }
         if (event === null) {
-          if (this.state === "finalize-busy") {
-            this.setState("running");
-          }
+          this.finalizeBusyFiles.delete(file);
+          this.syncRunningState();
           return;
         }
         // Only a running queue shows the retry countdown: a paused or
@@ -316,6 +319,7 @@ export class UploadQueue<T> {
         if (this.state !== "running" && this.state !== "finalize-busy") {
           return;
         }
+        this.finalizeBusyFiles.add(file);
         this.setState("finalize-busy");
         this.emit("finalize-busy", event);
       });
@@ -330,9 +334,8 @@ export class UploadQueue<T> {
         return;
       }
 
-      if (this.state === "finalize-busy") {
-        this.setState("running");
-      }
+      this.finalizeBusyFiles.delete(file);
+      this.syncRunningState();
 
       this.completed.push(result);
       this.emitProgress();
@@ -345,9 +348,8 @@ export class UploadQueue<T> {
         return;
       }
 
-      if (this.state === "finalize-busy") {
-        this.setState("running");
-      }
+      this.finalizeBusyFiles.delete(file);
+      this.syncRunningState();
 
       const status = getErrorStatus(error);
 
@@ -416,6 +418,17 @@ export class UploadQueue<T> {
       });
       this.emitProgress();
       this.pump();
+    }
+  }
+
+  private syncRunningState() {
+    if (this.state !== "running" && this.state !== "finalize-busy") {
+      return;
+    }
+    const nextState =
+      this.finalizeBusyFiles.size > 0 ? "finalize-busy" : "running";
+    if (this.state !== nextState) {
+      this.setState(nextState);
     }
   }
 

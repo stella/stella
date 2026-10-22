@@ -304,6 +304,59 @@ test.each([false, true])(
   },
 );
 
+describe("finalize-busy state is tracked per upload", () => {
+  test("another upload succeeding does not clear a finalize wait", async () => {
+    const uploader = new ScriptedUploader();
+    const { queue } = harness(uploader, 2);
+
+    queue.enqueue(makeFiles("a", "b"));
+    await flush();
+    uploader.reportFinalizeBusy("a", { retryAfterS: 1, attempt: 1 });
+
+    uploader.resolveFile("b");
+    await flush();
+
+    expect(queue.getState()).toBe("finalize-busy");
+
+    uploader.resolveFile("a");
+    await flush();
+    expect(queue.getState()).toBe("done");
+  });
+
+  test("each finalize wait must settle before the queue leaves busy", async () => {
+    const uploader = new ScriptedUploader();
+    const { queue } = harness(uploader, 2);
+
+    queue.enqueue(makeFiles("a", "b"));
+    await flush();
+    uploader.reportFinalizeBusy("a", { retryAfterS: 1, attempt: 1 });
+    uploader.reportFinalizeBusy("b", { retryAfterS: 1, attempt: 1 });
+
+    uploader.resolveFile("a");
+    await flush();
+    expect(queue.getState()).toBe("finalize-busy");
+
+    uploader.resolveFile("b");
+    await flush();
+    expect(queue.getState()).toBe("done");
+  });
+
+  test("cancelling an upload clears its finalize wait", async () => {
+    const uploader = new ScriptedUploader();
+    const { queue } = harness(uploader, 1);
+
+    queue.enqueue(makeFiles("a"));
+    await flush();
+    uploader.reportFinalizeBusy("a", { retryAfterS: 1, attempt: 1 });
+    expect(queue.getState()).toBe("finalize-busy");
+
+    queue.cancel();
+    await flush();
+
+    expect(queue.getState()).toBe("cancelled");
+  });
+});
+
 test("a finalize retry never overrides a pause", async () => {
   let reportBusy:
     | ((event: { retryAfterS: number; attempt: number } | null) => void)
