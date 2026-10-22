@@ -97,7 +97,7 @@ const contextWithoutDeclaredPermissions = (): McpRequestContext => ({
   accessibleWorkspaceIdSet: new Set(),
   accessibleWorkspaceStatusById: new Map(),
   accessibleWorkspaces: [],
-  credentialPermissions: {},
+  credentialPermissions: { searchHistory: ["read"] },
   grantedScopes: [],
   memberRole: "owner",
   organizationId: toSafeId<"organization">("org_1"),
@@ -130,7 +130,7 @@ const toolResultErrorCode = (
 test("every declared tool permission is refused before database access", async () => {
   for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
     if (
-      definition.permissions === undefined ||
+      definition.permissions.type === "open-read" ||
       definition.permissions.type === "delegated"
     ) {
       continue;
@@ -144,6 +144,217 @@ test("every declared tool permission is refused before database access", async (
       "permission_denied",
     );
   }
+});
+
+test("every read tool permission declaration stays visible in review", () => {
+  const census = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (definition) => definition.access === "read",
+  )
+    .map(({ name, permissions }) => ({
+      name,
+      kind: permissions.type,
+      ...(permissions.type === "open-read"
+        ? { reason: permissions.reason }
+        : {}),
+    }))
+    .toSorted((left, right) => {
+      if (left.name === right.name) {
+        return 0;
+      }
+      return left.name < right.name ? -1 : 1;
+    });
+
+  expect(census).toMatchInlineSnapshot(`
+    [
+      {
+        "kind": "open-read",
+        "name": "case_law_coverage",
+        "reason": "public case-law coverage metadata",
+      },
+      {
+        "kind": "all",
+        "name": "check_counterparty",
+      },
+      {
+        "kind": "open-read",
+        "name": "describe_capability",
+        "reason": "reads the static capability catalog metadata",
+      },
+      {
+        "kind": "open-read",
+        "name": "fetch",
+        "reason": "fetches only public law or caller-accessible matter records",
+      },
+      {
+        "kind": "all",
+        "name": "get_usage",
+      },
+      {
+        "kind": "all",
+        "name": "list_audit_log",
+      },
+      {
+        "kind": "open-read",
+        "name": "list_capabilities",
+        "reason": "reads the static capability catalog metadata",
+      },
+      {
+        "kind": "all",
+        "name": "list_clauses",
+      },
+      {
+        "kind": "all",
+        "name": "list_contacts",
+      },
+      {
+        "kind": "all",
+        "name": "list_documents",
+      },
+      {
+        "kind": "all",
+        "name": "list_invoices",
+      },
+      {
+        "kind": "open-read",
+        "name": "list_matters",
+        "reason": "reads only matters admitted by the caller scoped database",
+      },
+      {
+        "kind": "all",
+        "name": "list_playbooks",
+      },
+      {
+        "kind": "all",
+        "name": "list_properties",
+      },
+      {
+        "kind": "all",
+        "name": "list_reader_annotations",
+      },
+      {
+        "kind": "all",
+        "name": "list_tasks",
+      },
+      {
+        "kind": "all",
+        "name": "list_templates",
+      },
+      {
+        "kind": "all",
+        "name": "list_time_entries",
+      },
+      {
+        "kind": "all",
+        "name": "lookup_business_registry",
+      },
+      {
+        "kind": "open-read",
+        "name": "open_case_law_decision",
+        "reason": "public case-law and legislation corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "prepare_feedback",
+        "reason": "builds a feedback preview from caller-supplied data",
+      },
+      {
+        "kind": "open-read",
+        "name": "preview_cited_provision",
+        "reason": "public case-law and legislation corpus",
+      },
+      {
+        "kind": "all",
+        "name": "preview_template_conditions",
+      },
+      {
+        "kind": "delegated",
+        "name": "read_capability",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_case_law_citations",
+        "reason": "public case-law corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_case_law_decision",
+        "reason": "public case-law corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_case_law_decision_blocks",
+        "reason": "public case-law and legislation corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_contact",
+        "reason": "reads only contacts in matters admitted by the caller scoped database",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_content_across_matters",
+        "reason": "reads only documents admitted by the caller scoped database",
+      },
+      {
+        "kind": "all",
+        "name": "read_document",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_provision_history",
+        "reason": "public legislation corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_statute",
+        "reason": "public legislation corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_statute_provisions",
+        "reason": "public legislation corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "resolve_case_law_decision",
+        "reason": "public law corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "resolve_law_citation",
+        "reason": "public law corpus",
+      },
+      {
+        "kind": "all",
+        "name": "resolve_rate",
+      },
+      {
+        "kind": "open-read",
+        "name": "search",
+        "reason": "searches only public law and caller-accessible matter records",
+      },
+      {
+        "kind": "open-read",
+        "name": "search_across_matters",
+        "reason": "searches only matters admitted by the caller search allowlist",
+      },
+      {
+        "kind": "open-read",
+        "name": "search_boe_legislation",
+        "reason": "public legislation corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "search_case_law",
+        "reason": "public case-law corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "search_legislation",
+        "reason": "public legislation corpus",
+      },
+    ]
+  `);
 });
 
 // A single tool must not consume an unreviewed multi-thousand-token block of

@@ -58,6 +58,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 type ResearchAdminToolName =
   | "search_boe_legislation"
@@ -476,6 +477,7 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
       "BOE date/id/cursor patterns and the law_id read/search mode rules remain authoritative in the runtime schema; the wire schema only advertises type and length bounds.",
   },
   access: "read",
+  permissions: openMcpRead("public legislation corpus"),
   readClass: "public",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",

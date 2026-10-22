@@ -666,6 +666,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       "anchor and quote, oldest first.",
     inputSchema: listArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",

@@ -58,6 +58,7 @@ import type {
 import {
   mcpToolAuthorityRefusal,
   type McpWriteToolPermissions,
+  openMcpRead,
 } from "@/api/mcp/write-tool-authority";
 
 // The gate's one owner is `mcp/tool-feature.ts`, so the resource list and the
@@ -92,6 +93,7 @@ const externalMcpToolAccess = ({
   | {
       access: "read";
       readClass: "tenant";
+      permissions: ReturnType<typeof openMcpRead>;
       annotations: McpToolAnnotations & {
         destructiveHint: false;
         readOnlyHint: true;
@@ -112,6 +114,9 @@ const externalMcpToolAccess = ({
     ? {
         access: "read",
         readClass: "tenant",
+        permissions: openMcpRead(
+          "the upstream connector authorizes with its own credentials",
+        ),
         annotations: {
           title,
           destructiveHint: false,
@@ -334,6 +339,7 @@ export const skillToolDefinition = (
 ): McpToolDefinition => ({
   access: "read",
   readClass: "tenant",
+  permissions: openMcpRead("reads only a stored skill visible to the caller"),
   annotations: {
     ...SKILL_TOOL_ANNOTATIONS,
     title: toDynamicToolTitle(skill.displayName) || skill.exposedName,
