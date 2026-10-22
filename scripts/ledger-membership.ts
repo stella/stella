@@ -18,7 +18,24 @@ type CompareLedgerMembershipOptions = ReadBaseLedgerOptions & {
 
 type CompareLedgerMembershipResult =
   | { type: "unresolved-base" }
-  | { type: "compared"; added: string[] };
+  | { type: "compared"; added: string[]; comparedCommit: string };
+
+/**
+ * The commit a ledger is compared with: where HEAD forked from the base.
+ * Comparing with the base tip instead counts every entry the base removed
+ * after the fork as one this change added, so a re-run or an older merge
+ * checkout goes red when the base shrinks its ledger. Without shared
+ * history (an unborn HEAD or a shallow clone) the base tip itself is used:
+ * stricter, never more lenient.
+ */
+const forkPoint = (repoRoot: string, baseCommit: string): string => {
+  const result = Bun.spawnSync(
+    ["git", "merge-base", "--end-of-options", "HEAD", baseCommit],
+    { cwd: repoRoot, stderr: "pipe" },
+  );
+  const mergeBase = result.stdout.toString().trim();
+  return result.exitCode === 0 && mergeBase !== "" ? mergeBase : baseCommit;
+};
 
 const compareLedgerMembership = ({
   baseRef,
@@ -42,7 +59,7 @@ const compareLedgerMembership = ({
   if (resolved.exitCode !== 0) {
     return { type: "unresolved-base" };
   }
-  const commit = resolved.stdout.toString().trim();
+  const commit = forkPoint(repoRoot, resolved.stdout.toString().trim());
   const base = readBaseLedger({
     baseRef: commit,
     ledgerRel,
@@ -55,6 +72,7 @@ const compareLedgerMembership = ({
       current,
       base === null ? null : (normalizeBaseEntries?.(base, commit) ?? base),
     ),
+    comparedCommit: commit,
   };
 };
 
@@ -182,15 +200,16 @@ export const runLedgerMembershipGuard = ({
     );
     return 2;
   }
-  const { added } = comparison;
+  const { added, comparedCommit } = comparison;
+  const compared = `${baseRef} (fork point ${comparedCommit.slice(0, 12)})`;
   if (added.length === 0) {
     log(
-      `${label} ledger: OK. ${current.length} entries, none new vs ${baseRef}.`,
+      `${label} ledger: OK. ${current.length} entries, none new vs ${compared}.`,
     );
     return 0;
   }
   error(
-    `${label} ledger: ${added.length} entries are not in ${baseRef}. The ledger only shrinks; ${remediation}:`,
+    `${label} ledger: ${added.length} entries are not in ${compared}. The ledger only shrinks; ${remediation}:`,
   );
   for (const entry of added) {
     error(`  ${entry}`);
