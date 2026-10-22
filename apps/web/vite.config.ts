@@ -469,12 +469,10 @@ export default defineConfig(({ mode, command }) => {
             if (id.includes("node_modules/@stll/anonymize-data/")) {
               return "vendor-anonymize-data";
             }
-            if (id.includes("node_modules/@stll/") && id.includes("-wasm")) {
-              return "wasm-vendor";
-            }
-            if (id.includes("node_modules/@napi-rs/wasm-runtime")) {
-              return "wasm-vendor";
-            }
+            // The browser uses some WASM packages directly (for example the
+            // outline and key-term matchers). Let those stay with their lazy
+            // callers: `wasm-vendor` is reserved for the anonymization worker
+            // and must never become a main-thread shared chunk.
             if (id.includes("node_modules/cytoscape")) {
               return "vendor-graphs";
             }
@@ -611,13 +609,13 @@ export default defineConfig(({ mode, command }) => {
         "@stll/folio-core/utils/findReplace",
         "@streamdown/cjk",
         "@streamdown/math",
-        "@streamdown/mermaid",
         "@tanstack/react-table",
         "@tanstack/react-table/static-functions",
         "@tiptap/extension-heading",
         "@tiptap/extension-italic",
         "@tiptap/extension-list",
         "diff",
+        "pele/lazy",
         "y-prosemirror",
         "yjs",
       ],

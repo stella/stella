@@ -245,6 +245,45 @@ test("pooled conditions keep change selection, receipt reuse and event gates", (
   expect(reused).toContain("Ratchet scanner invariants");
 });
 
+test("an unset root check selection keeps every pooled check, as GitHub reads it", () => {
+  // A main PR-depth run whose planner was unavailable writes no root_checks
+  // output, so toJSON(needs) omits the key. GitHub evaluates the selection
+  // gate `root_checks == ''` as true for the unset output; the pool must
+  // agree, or main skips the checks every pull request then inherits as red.
+  for (const job of CHECK_POOL_JOBS) {
+    const checks = readCheckPool(job);
+    const names = (rootChecks: Value | undefined) =>
+      planChecks(
+        checks,
+        poolContext({
+          github: { event_name: "workflow_dispatch", ref: "refs/heads/main" },
+          needs: {
+            "ci-plan": {
+              outputs: {
+                package_checks_required: "true",
+                ...(rootChecks === undefined
+                  ? {}
+                  : { root_checks: rootChecks }),
+              },
+            },
+          },
+          steps: {
+            checkout: { outcome: "success", outputs: {} },
+            install: { outcome: "success", outputs: {} },
+          },
+          inputs: { depth: "fast", heavy_only: false, pr_depth_only: true },
+        }),
+      ).flatMap((entry) =>
+        entry.status === "selected" ? [entry.check.name] : [],
+      );
+    const all = JSON.stringify(
+      Object.keys(ROOT_CHECK_INPUTS[job]).map((name) => `${job}/${name}`),
+    );
+    expect(names(undefined), job).toEqual(names(""));
+    expect(names(undefined), job).toEqual(names(all));
+  }
+});
+
 const EXPRESSION = (body: string) => `\${{ ${body} }}`;
 
 test("pooled env values render like step env", () => {
