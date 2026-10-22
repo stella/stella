@@ -12,6 +12,9 @@ const API_ROOT = path.resolve(import.meta.dir, "../..");
 const FUNCTION_HEADER =
   /\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:"?public"?\s*\.\s*)?"?([A-Za-z_][A-Za-z0-9_]*)"?\s*\(/giu;
 const BODY_OPENER = /\bAS\s+(\$[A-Za-z_]*\$)/u;
+// SQL-standard bodies (`RETURN expr` or `BEGIN ATOMIC ... END`) carry no tag.
+const STANDARD_BODY = /\b(?:RETURN|BEGIN\s+ATOMIC)\b/iu;
+const STATEMENT_BREAK = "--> statement-breakpoint";
 const SQL_COMMENT = /--[^\n]*|\/\*[\S\s]*?\*\//gu;
 
 /** DDL that takes a table lock, as a function body can spell it. */
@@ -41,16 +44,32 @@ const readMigrationFunctions = async (): Promise<{
     const text = await Bun.file(path.join(API_ROOT, file)).text();
     for (const header of text.matchAll(FUNCTION_HEADER)) {
       const name = header[1] ?? "";
-      const rest = text.slice(header.index + header[0].length);
+      const after = text.slice(header.index + header[0].length);
+      // One statement per function: never read the next statement's body.
+      const breakAt = after.indexOf(STATEMENT_BREAK);
+      const rest = breakAt === -1 ? after : after.slice(0, breakAt);
       const opener = BODY_OPENER.exec(rest);
       const tag = opener?.[1];
-      const start = opener === null ? -1 : opener.index + opener[0].length;
-      const end = tag === undefined ? -1 : rest.indexOf(tag, start);
-      if (tag === undefined || end === -1) {
+      if (opener !== null && tag !== undefined) {
+        const start = opener.index + opener[0].length;
+        const end = rest.indexOf(tag, start);
+        if (end === -1) {
+          unparsed.push(`${file}: ${name}`);
+          continue;
+        }
+        functions.push({ migration: file, name, body: rest.slice(start, end) });
+        continue;
+      }
+      const standard = STANDARD_BODY.exec(rest);
+      if (standard === null) {
         unparsed.push(`${file}: ${name}`);
         continue;
       }
-      functions.push({ migration: file, name, body: rest.slice(start, end) });
+      functions.push({
+        migration: file,
+        name,
+        body: rest.slice(standard.index),
+      });
     }
   }
   return { functions, unparsed };
