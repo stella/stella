@@ -184,6 +184,16 @@ pub fn resolve_bridge_port() -> u16 {
 }
 
 pub fn resolve_allowed_origins() -> HashSet<String> {
+  let mut origins = unmanaged_allowed_origins();
+  if let Some(server) = managed_server() {
+    origins.insert(server.web_origin.clone());
+  }
+  origins
+}
+
+/// Allowed web origins before managed policy. API trust derives from these,
+/// never from a managed web origin: the policy names its API itself.
+fn unmanaged_allowed_origins() -> HashSet<String> {
   let web_port = parse_port(std::env::var("STELLA_WEB_PORT").ok(), DEFAULT_WEB_PORT);
 
   let mut origins = HashSet::new();
@@ -198,21 +208,21 @@ pub fn resolve_allowed_origins() -> HashSet<String> {
     origins.insert(origin);
   }
 
-  if let Some(server) = managed_server() {
-    origins.insert(server.web_origin.clone());
-  }
-
   origins
 }
 
 pub fn resolve_trusted_api_base_urls() -> HashSet<String> {
+  trusted_api_base_urls(managed_server())
+}
+
+fn trusted_api_base_urls(managed: Option<&ManagedServer>) -> HashSet<String> {
   let api_port = parse_port(std::env::var("STELLA_API_PORT").ok(), DEFAULT_API_PORT);
   let mut urls = HashSet::new();
   urls.insert(PRODUCTION_API_BASE_URL.to_string());
   urls.insert(format!("http://127.0.0.1:{api_port}"));
   urls.insert(format!("http://localhost:{api_port}"));
 
-  for origin in resolve_allowed_origins() {
+  for origin in unmanaged_allowed_origins() {
     urls.insert(normalize_api_base_url(&origin));
   }
 
@@ -224,7 +234,7 @@ pub fn resolve_trusted_api_base_urls() -> HashSet<String> {
     urls.insert(normalize_api_base_url(&url));
   }
 
-  if let Some(server) = managed_server() {
+  if let Some(server) = managed {
     urls.insert(server.api_base_url.clone());
   }
 
@@ -311,6 +321,16 @@ mod tests {
       normalize_self_host_api_base_url("https://my.stll.app").unwrap(),
       "https://api.stll.app"
     );
+  }
+
+  #[test]
+  fn a_managed_server_trusts_its_api_but_not_its_web_origin_as_an_api() {
+    let urls = trusted_api_base_urls(Some(&ManagedServer {
+      web_origin: "https://stella.firm.example".into(),
+      api_base_url: "https://api.firm.example".into(),
+    }));
+    assert!(urls.contains("https://api.firm.example"));
+    assert!(!urls.contains("https://stella.firm.example"));
   }
 
   #[test]

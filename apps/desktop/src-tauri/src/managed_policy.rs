@@ -4,10 +4,11 @@
 //!
 //! macOS reads the app's preference domain through a configuration profile
 //! or the machine-wide preferences file; Windows reads
-//! `Software\Policies\stella\Desktop` under `HKLM`, then `HKCU`. Only
-//! administrators and Group Policy can write either, so a process running as
-//! the user cannot pre-approve a server. The policy is read once at launch; a
-//! change applies on the next launch.
+//! `Software\Policies\stella\Desktop` under `HKLM`, then `HKCU` for the
+//! switches that only turn features off. The server, which grants trust, is
+//! read from `HKLM` alone. A process running as the user can write neither
+//! source, so it cannot pre-approve a server. The policy is read once at
+//! launch; a change applies on the next launch.
 
 use std::{collections::HashSet, sync::OnceLock};
 
@@ -159,15 +160,13 @@ impl PolicySource for SystemPolicy {
       .is_some_and(|value| value != 0)
   }
 
+  // Only the server keys are text, and they grant trust: machine policy only.
   fn text(&self, key: &str) -> Option<String> {
-    use windows_registry::{CURRENT_USER, LOCAL_MACHINE};
-    [LOCAL_MACHINE, CURRENT_USER].iter().find_map(|root| {
-      root
-        .open(WINDOWS_POLICY_KEY)
-        .and_then(|policy| policy.get_string(key))
-        .ok()
-        .and_then(non_empty)
-    })
+    windows_registry::LOCAL_MACHINE
+      .open(WINDOWS_POLICY_KEY)
+      .and_then(|policy| policy.get_string(key))
+      .ok()
+      .and_then(non_empty)
   }
 }
 

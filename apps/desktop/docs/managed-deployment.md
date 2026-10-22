@@ -62,10 +62,10 @@ Booleans must be plist booleans (`<true/>`, or `-bool true` with
 
 ## Windows
 
-Registry key: `Software\Policies\stella\Desktop`, read from
-`HKEY_LOCAL_MACHINE` first, then `HKEY_CURRENT_USER`. Both are writable only
-by administrators and Group Policy. Booleans are `REG_DWORD` (`1` on, `0`
-off); server values are `REG_SZ`.
+Registry key: `Software\Policies\stella\Desktop`. The two switches are
+read from `HKEY_LOCAL_MACHINE` first, then `HKEY_CURRENT_USER`; the server
+keys only from `HKEY_LOCAL_MACHINE`, because they grant trust. Booleans are
+`REG_DWORD` (`1` on, `0` off); server values are `REG_SZ`.
 
 ```reg
 Windows Registry Editor Version 5.00
