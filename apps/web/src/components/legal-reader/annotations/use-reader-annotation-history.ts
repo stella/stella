@@ -84,6 +84,11 @@ export const useReaderAnnotationHistory = ({
     current: string,
     change: (history: ReaderAnnotationHistory) => ReaderAnnotationHistory,
   ) => {
+    // A write that finishes after the reader moved to another document must
+    // not reach the history of the one now open.
+    if (latest().scope !== current) {
+      return;
+    }
     const history =
       state.current.scope === current
         ? state.current.history
