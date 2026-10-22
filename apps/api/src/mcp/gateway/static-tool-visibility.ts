@@ -1,3 +1,7 @@
+import { Result } from "better-result";
+
+import type { BusinessRegistrySlug } from "@stll/api-contract";
+
 import {
   hasLawReadScope,
   LAW_READ_SCOPE,
@@ -62,22 +66,20 @@ const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
 
 /**
  * Narrow the `lookup_business_registry` tool's `registry` enum to the
- * registries this org can actually reach (`context.enabledRegistrySlugs`,
- * resolved once at context bootstrap), and drop the tool entirely when none
- * are. Mirrors the in-app chat tool, so the external MCP surface can no longer
+ * registries this org can actually reach, and drop the tool entirely when
+ * none are. Mirrors the in-app chat tool, so the external MCP surface can no longer
  * advertise a registry whose call cannot execute — the same defect the chat
  * tool already avoids. Applied only to the default surface; the
  * anonymized projection stays tenant-neutral and is never narrowed.
  *
- * `enabledRegistrySlugs === undefined` means the set was not resolved (a
- * synthetic/test context, or a bootstrap settings-read fault): leave the full
- * enum advertised and let the call-time gate stay the backstop.
+ * `enabledSlugs === undefined` means the set was not resolved (no loader on a
+ * synthetic/test context, or a settings or credential read fault): leave the
+ * full enum advertised and let the call-time gate stay the backstop.
  */
 const narrowBusinessRegistryTool = (
-  context: McpRequestContext,
-  definitions: McpToolDefinition[],
-): McpToolDefinition[] => {
-  const enabledSlugs = context.enabledRegistrySlugs;
+  enabledSlugs: readonly BusinessRegistrySlug[] | undefined,
+  definitions: readonly McpToolDefinition[],
+): readonly McpToolDefinition[] => {
   if (enabledSlugs === undefined) {
     return definitions;
   }
@@ -125,16 +127,22 @@ const narrowBusinessRegistryTool = (
  * retains baked compound commands across scoped registry refreshes, keeping
  * its local all-scopes preflight reachable when the primary grant is absent.
  */
+type OfferedStaticMcpToolOptions = {
+  context: McpRequestContext;
+  mode: McpMode;
+  scopes?: readonly string[] | undefined;
+  audience?: "model" | "app";
+};
+
 export const listOfferedStaticMcpToolDefinitions = ({
   context,
   mode,
   scopes,
   audience,
-}: {
-  context: McpRequestContext;
-  mode: McpMode;
-  scopes?: readonly string[] | undefined;
-  audience?: "model" | "app";
+  enabledRegistrySlugs,
+}: OfferedStaticMcpToolOptions & {
+  /** The reachable registries; absent leaves the registry tool un-narrowed. */
+  enabledRegistrySlugs?: readonly BusinessRegistrySlug[] | undefined;
 }): readonly McpToolDefinition[] => {
   const staticDefinitions = listStaticMcpToolDefinitions(mode)
     .map((definition) => projectMcpFeatureInput(context, definition))
@@ -153,8 +161,35 @@ export const listOfferedStaticMcpToolDefinitions = ({
         isStaticToolAvailableToConfirmation(context, definition),
     );
   return mode === "default"
-    ? narrowBusinessRegistryTool(context, staticDefinitions)
+    ? narrowBusinessRegistryTool(enabledRegistrySlugs, staticDefinitions)
     : staticDefinitions;
+};
+
+/**
+ * {@link listOfferedStaticMcpToolDefinitions} for a live session: the
+ * organization's reachable registries are loaded (settings read and credential
+ * decryption) only when the registry tool is among the offered definitions,
+ * so a projection that does not offer it never pays for them.
+ */
+export const loadOfferedStaticMcpToolDefinitions = async (
+  options: OfferedStaticMcpToolOptions,
+): Promise<readonly McpToolDefinition[]> => {
+  const offered = listOfferedStaticMcpToolDefinitions(options);
+  if (
+    options.mode !== "default" ||
+    !offered.some(
+      (definition) => definition.name === LOOKUP_BUSINESS_REGISTRY_TOOL_NAME,
+    )
+  ) {
+    return offered;
+  }
+  const loaded = await options.context.loadEnabledRegistrySlugs?.();
+  // A failed read leaves the set unresolved: the full enum stays advertised
+  // and the call-time gate is the backstop.
+  return narrowBusinessRegistryTool(
+    loaded !== undefined && Result.isOk(loaded) ? loaded.value : undefined,
+    offered,
+  );
 };
 
 /** `undefined` grants every scope (a caller that does not filter by scope). */

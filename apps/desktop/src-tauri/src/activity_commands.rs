@@ -210,6 +210,23 @@ pub fn activity_set_capture_details(
 }
 
 #[tauri::command]
+pub fn activity_set_detect_calls(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  enabled: bool,
+) -> Result<(), String> {
+  {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    caller.require_current(&app)?;
+    manager.require_caller(&caller)?;
+    manager.set_detect_calls(enabled, Utc::now())?;
+  }
+  let _ = app.emit(activity::CHANGED_EVENT, ());
+  Ok(())
+}
+
+#[tauri::command]
 pub fn activity_set_app_detail_capture(
   caller: ActivityCaller,
   app: AppHandle,
