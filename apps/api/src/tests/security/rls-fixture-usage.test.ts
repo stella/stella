@@ -7,39 +7,50 @@ type FixtureUsageViolation = {
   line: number;
 };
 
-// These suites predate the setup-only contract. Keep the census monotonic while
-// their module-level or per-test fixture lifecycles are migrated separately.
-const LEGACY_FIXTURE_USAGES = new Set([
-  "apps/api/src/handlers/chat/provider-wire-transcripts.integration.test.ts:88",
-  "apps/api/src/handlers/reports/report-export-queue.integration.test.ts:56",
-  "apps/api/src/handlers/templates/fills/create.integration.test.ts:50",
-  "apps/api/src/lib/account-audit.test.ts:38",
-  "apps/api/src/lib/account-audit.test.ts:88",
-  "apps/api/src/lib/account-audit.test.ts:132",
-  "apps/api/src/lib/audit-log-details.db.test.ts:88",
-  "apps/api/src/lib/bilingual/run-queue.test.ts:30",
-  "apps/api/src/lib/bilingual/run-worker-inputs.integration.test.ts:57",
-  "apps/api/src/lib/document-review/run-inputs.test.ts:31",
-  "apps/api/src/lib/document-review/run-queue.test.ts:37",
-  "apps/api/src/lib/document-review/run-worker-inputs.integration.test.ts:50",
-  "apps/api/src/lib/document-translation/run-worker-inputs.integration.test.ts:57",
-  "apps/api/src/lib/lists/verification/run-worker-inputs.integration.test.ts:40",
-  "apps/api/src/lib/report-export-enqueue.db.test.ts:62",
-  "apps/api/src/lib/report-export-recovery.db.test.ts:28",
-  "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.integration.test.ts:55",
-  "apps/api/src/lib/scheduler/tasks/file-comparison-sweep.test.ts:172",
-  "apps/api/src/lib/scheduler/tasks/file-derivative-repair.test.ts:60",
-  "apps/api/src/lib/scheduler/tasks/memory-extractor.integration.test.ts:53",
-  "apps/api/src/lib/style-set-package-cleanup-queue.db.test.ts:58",
-  "apps/api/src/lib/style-set-package-cleanup-reference.test.ts:21",
-  "apps/api/src/lib/tasks/update-task-eligibility.integration.test.ts:43",
-  "apps/api/src/lib/workflow-queue.integration.test.ts:57",
-  "apps/api/src/tests/helpers/chat-thread-invariants.test.ts:486",
-  "apps/api/src/tests/security/rls-scoped-db.test.ts:35",
+// These suites predate the setup-only contract: how many acquisitions outside
+// `beforeAll` each one still has. Counts only shrink as suites migrate; keyed by
+// file so unrelated edits that move lines never fail the census.
+const LEGACY_FIXTURE_USAGES: ReadonlyMap<string, number> = new Map([
+  [
+    "apps/api/src/handlers/chat/provider-wire-transcripts.integration.test.ts",
+    1,
+  ],
+  ["apps/api/src/handlers/reports/report-export-queue.integration.test.ts", 1],
+  ["apps/api/src/handlers/templates/fills/create.integration.test.ts", 1],
+  ["apps/api/src/lib/account-audit.test.ts", 3],
+  ["apps/api/src/lib/audit-log-details.db.test.ts", 1],
+  ["apps/api/src/lib/bilingual/run-queue.test.ts", 1],
+  ["apps/api/src/lib/bilingual/run-worker-inputs.integration.test.ts", 1],
+  ["apps/api/src/lib/document-review/run-inputs.test.ts", 1],
+  ["apps/api/src/lib/document-review/run-queue.test.ts", 1],
+  ["apps/api/src/lib/document-review/run-worker-inputs.integration.test.ts", 1],
+  [
+    "apps/api/src/lib/document-translation/run-worker-inputs.integration.test.ts",
+    1,
+  ],
+  [
+    "apps/api/src/lib/lists/verification/run-worker-inputs.integration.test.ts",
+    1,
+  ],
+  ["apps/api/src/lib/report-export-enqueue.db.test.ts", 1],
+  ["apps/api/src/lib/report-export-recovery.db.test.ts", 1],
+  [
+    "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.integration.test.ts",
+    1,
+  ],
+  ["apps/api/src/lib/scheduler/tasks/file-comparison-sweep.test.ts", 1],
+  ["apps/api/src/lib/scheduler/tasks/file-derivative-repair.test.ts", 1],
+  ["apps/api/src/lib/scheduler/tasks/memory-extractor.integration.test.ts", 1],
+  ["apps/api/src/lib/style-set-package-cleanup-queue.db.test.ts", 1],
+  ["apps/api/src/lib/style-set-package-cleanup-reference.test.ts", 1],
+  ["apps/api/src/lib/tasks/update-task-eligibility.integration.test.ts", 1],
+  ["apps/api/src/lib/workflow-queue.integration.test.ts", 1],
+  ["apps/api/src/tests/helpers/chat-thread-invariants.test.ts", 1],
+  ["apps/api/src/tests/security/rls-scoped-db.test.ts", 1],
 ]);
 
 const findFixtureUsageViolations = async () => {
-  const violations: FixtureUsageViolation[] = [];
+  const outsideSetup: FixtureUsageViolation[] = [];
   const testFiles = await Array.fromAsync(
     new Bun.Glob("**/*.test.ts").scan({
       cwd: path.resolve(import.meta.dir, "../../.."),
@@ -69,9 +80,7 @@ const findFixtureUsageViolations = async () => {
       ) {
         const line =
           sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
-        if (!LEGACY_FIXTURE_USAGES.has(`${file}:${line}`)) {
-          violations.push({ file, line });
-        }
+        outsideSetup.push({ file, line });
       }
 
       if (
@@ -91,6 +100,16 @@ const findFixtureUsageViolations = async () => {
     visit(sourceFile, false);
   }
 
+  const countByFile = new Map<string, number>();
+  for (const { file } of outsideSetup) {
+    countByFile.set(file, (countByFile.get(file) ?? 0) + 1);
+  }
+  // A file over its legacy count reports every call site outside setup, so
+  // the failure names the new one among them.
+  const violations = outsideSetup.filter(
+    ({ file }) =>
+      (countByFile.get(file) ?? 0) > (LEGACY_FIXTURE_USAGES.get(file) ?? 0),
+  );
   return violations.toSorted((left, right) => {
     if (left.file !== right.file) {
       return left.file < right.file ? -1 : 1;
