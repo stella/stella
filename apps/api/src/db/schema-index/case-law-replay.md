@@ -73,51 +73,49 @@ case_law_replay_batches.failure_code           text         null              ca
 case_law_replay_batches.failure_message_class  text         null              case-law-replay.ts:220
 ```
 
-## case_law_replay_blocked · `caseLawReplayBlocked` · case-law-replay.ts:291 · rls
-
-Any terminal receipt excludes its target version until the parser advances.
+## case_law_replay_blocked · `caseLawReplayBlocked` · case-law-replay.ts:294 · rls
 
 ```text
-case_law_replay_blocked.source_id            safeUuid     fk,not null       case-law-replay.ts:294
-case_law_replay_blocked.decision_id          safeUuid     not null          case-law-replay.ts:297
-case_law_replay_blocked.source_hash          varchar      null              case-law-replay.ts:300  The migration enforces NOT NULL.
-case_law_replay_blocked.parser_version_from  integer      null              case-law-replay.ts:301
-case_law_replay_blocked.parser_version_to    integer      not null          case-law-replay.ts:302
-case_law_replay_blocked.outcome              text         not null          case-law-replay.ts:303
-case_law_replay_blocked.reason               text         null              case-law-replay.ts:304
-case_law_replay_blocked.detail               text         null              case-law-replay.ts:305
-case_law_replay_blocked.created_at           timestamptz  default,not null  case-law-replay.ts:306
+case_law_replay_blocked.source_id            safeUuid     fk,not null       case-law-replay.ts:297
+case_law_replay_blocked.decision_id          safeUuid     not null          case-law-replay.ts:300
+case_law_replay_blocked.source_hash          varchar      null              case-law-replay.ts:303  The migration enforces NOT NULL.
+case_law_replay_blocked.parser_version_from  integer      null              case-law-replay.ts:304
+case_law_replay_blocked.parser_version_to    integer      not null          case-law-replay.ts:305
+case_law_replay_blocked.outcome              text         not null          case-law-replay.ts:306
+case_law_replay_blocked.reason               text         null              case-law-replay.ts:307
+case_law_replay_blocked.detail               text         null              case-law-replay.ts:308
+case_law_replay_blocked.created_at           timestamptz  default,not null  case-law-replay.ts:309
 ```
 
-## case_law_replay_daily_rows · `caseLawReplayDailyRows` · case-law-replay.ts:337 · rls
+## case_law_replay_daily_rows · `caseLawReplayDailyRows` · case-law-replay.ts:340 · rls
 
 Recovery can charge the same reservation on a later UTC day, once per day.
 
 ```text
-case_law_replay_daily_rows.batch_id    text      not null     case-law-replay.ts:340
-case_law_replay_daily_rows.budget_day  date      not null     case-law-replay.ts:341
-case_law_replay_daily_rows.source_id   safeUuid  fk,not null  case-law-replay.ts:342
+case_law_replay_daily_rows.batch_id    text      not null     case-law-replay.ts:343
+case_law_replay_daily_rows.budget_day  date      not null     case-law-replay.ts:344
+case_law_replay_daily_rows.source_id   safeUuid  fk,not null  case-law-replay.ts:345
 ```
 
-## case_law_replay_source_progress · `caseLawReplaySourceProgress` · case-law-replay.ts:367 · rls
+## case_law_replay_source_progress · `caseLawReplaySourceProgress` · case-law-replay.ts:370 · rls
 
 ```text
-case_law_replay_source_progress.source_id               safeUuid     not null          case-law-replay.ts:370
-case_law_replay_source_progress.ticks_without_progress  integer      default,not null  case-law-replay.ts:371
-case_law_replay_source_progress.last_completed_at       timestamptz  null              case-law-replay.ts:375
-case_law_replay_source_progress.completed_rows          bigint       default,not null  case-law-replay.ts:376
+case_law_replay_source_progress.source_id               safeUuid     not null          case-law-replay.ts:373
+case_law_replay_source_progress.ticks_without_progress  integer      default,not null  case-law-replay.ts:374
+case_law_replay_source_progress.last_completed_at       timestamptz  null              case-law-replay.ts:378
+case_law_replay_source_progress.completed_rows          bigint       default,not null  case-law-replay.ts:379
 ```
 
-## case_law_replay_audit_events · `caseLawReplayAuditEvents` · case-law-replay.ts:440 · rls
+## case_law_replay_audit_events · `caseLawReplayAuditEvents` · case-law-replay.ts:443 · rls
 
 Independent of receipt FKs: audit history survives bounded receipt compaction.
 
 ```text
-case_law_replay_audit_events.id           text         not null          case-law-replay.ts:443
-case_law_replay_audit_events.source_id    safeUuid     null              case-law-replay.ts:444
-case_law_replay_audit_events.service_id   text         not null          case-law-replay.ts:445
-case_law_replay_audit_events.action       text         not null          case-law-replay.ts:446
-case_law_replay_audit_events.resource_id  text         not null          case-law-replay.ts:447
-case_law_replay_audit_events.details      jsonb        not null          case-law-replay.ts:448
-case_law_replay_audit_events.created_at   timestamptz  default,not null  case-law-replay.ts:449
+case_law_replay_audit_events.id           text         not null          case-law-replay.ts:446
+case_law_replay_audit_events.source_id    safeUuid     null              case-law-replay.ts:447
+case_law_replay_audit_events.service_id   text         not null          case-law-replay.ts:448
+case_law_replay_audit_events.action       text         not null          case-law-replay.ts:449
+case_law_replay_audit_events.resource_id  text         not null          case-law-replay.ts:450
+case_law_replay_audit_events.details      jsonb        not null          case-law-replay.ts:451
+case_law_replay_audit_events.created_at   timestamptz  default,not null  case-law-replay.ts:452
 ```
