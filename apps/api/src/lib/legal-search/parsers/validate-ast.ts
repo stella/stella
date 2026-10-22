@@ -83,7 +83,7 @@ type BlockMarkupResidue = MarkupResidue & { anchorId: string };
 
 // ── Helpers ────────────────────────────────────────────────
 
-const normalize = (text: string): string =>
+export const normalizeValidationText = (text: string): string =>
   text
     .replace(/\s+/gu, " ")
     .replace(/\u00a0/gu, " ")
@@ -136,7 +136,7 @@ const trimNonLetters = (word: string): string => {
 // and stays there), and a court document is exactly the oversized input
 // that turns the backtracking into blocking CPU. Both indexOf cursors
 // only ever advance, so this is one pass over the text.
-const separateSkipMarkers = (text: string): string => {
+export const separateValidationSkipMarkers = (text: string): string => {
   let separated = "";
   let index = 0;
   while (index < text.length) {
@@ -162,9 +162,9 @@ const separateSkipMarkers = (text: string): string => {
 const isMeaningfulWord = (clean: string): boolean =>
   clean.length >= 3 && !/^\d+$/u.test(clean) && !SKIP_WORDS.has(clean);
 
-const extractWords = (text: string): Set<string> => {
+export const extractValidationWords = (text: string): Set<string> => {
   const words = new Set<string>();
-  for (const w of separateSkipMarkers(text).split(/\s+/u)) {
+  for (const w of separateValidationSkipMarkers(text).split(/\s+/u)) {
     // Strip brackets first (anonymization markers like
     // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
     // non-letter chars from edges.
@@ -216,8 +216,8 @@ const peelDecorativeMarkers = (word: string): string => {
 // source whose text is entirely numeric. Only a token that peels away to
 // nothing, or to a skip word, counts as decoration.
 const CONTENT_CHAR = /[\p{L}\p{N}]/u;
-const holdsOnlyDecoration = (text: string): boolean =>
-  separateSkipMarkers(text)
+export const validationTextHoldsOnlyDecoration = (text: string): boolean =>
+  separateValidationSkipMarkers(text)
     .split(/\s+/u)
     .every((word) => {
       const bare = word.replace(/[[\]]/gu, "").toLowerCase();
@@ -256,7 +256,7 @@ const hasContentDescendant = (nodes: readonly AnyNode[]): boolean => {
 };
 
 /** Flatten inline nodes to text (line-break → space). */
-const inlineText = (inlines: readonly Inline[]): string => {
+export const validationInlineText = (inlines: readonly Inline[]): string => {
   let text = "";
   for (const node of inlines) {
     if (node.type === "text") {
@@ -267,13 +267,13 @@ const inlineText = (inlines: readonly Inline[]): string => {
       // Typography, not content — no characters.
     } else {
       // Every remaining kind is a container: its text is its children's.
-      text += inlineText(node.children);
+      text += validationInlineText(node.children);
     }
   }
   return text;
 };
 
-const collapseWhitespace = (text: string): string =>
+export const collapseValidationWhitespace = (text: string): string =>
   text.replace(/\s+/gu, " ").trim();
 
 /** Issue code for source markup found in a block's text. */
@@ -401,16 +401,16 @@ export const validateAst = (
     });
   }
 
-  const originalText = normalize(originalParts.join(" "));
+  const originalText = normalizeValidationText(originalParts.join(" "));
 
-  const astText = normalize(
+  const astText = normalizeValidationText(
     blocks.flatMap((b) => (b.plainText ? [b.plainText] : [])).join(" "),
   );
 
-  const originalWords = extractWords(originalText);
-  const astWords = extractWords(astText);
+  const originalWords = extractValidationWords(originalText);
+  const astWords = extractValidationWords(astText);
 
-  const sourceHasContent = !holdsOnlyDecoration(originalText);
+  const sourceHasContent = !validationTextHoldsOnlyDecoration(originalText);
 
   const retainedPct = sourceHasContent
     ? (astText.length / originalText.length) * 100
@@ -436,10 +436,10 @@ export const validateAst = (
   const wordComparisonText = options?.wordComparisonText;
   const comparisonWords =
     wordComparisonText === undefined ||
-    normalize(wordComparisonText).replace(/\s+/gu, "") !==
+    normalizeValidationText(wordComparisonText).replace(/\s+/gu, "") !==
       originalText.replace(/\s+/gu, "")
       ? originalWords
-      : extractWords(normalize(wordComparisonText));
+      : extractValidationWords(normalizeValidationText(wordComparisonText));
   const missingWords = missingFrom(comparisonWords);
   const boundaryWhitespaceWords =
     comparisonWords === originalWords
@@ -563,9 +563,9 @@ export const validateAst = (
       const inlineLen = (
         options?.sourcePolicy
           ? options.sourcePolicy.projectInlineText(block.inlines)
-          : collapseWhitespace(inlineText(block.inlines))
+          : collapseValidationWhitespace(validationInlineText(block.inlines))
       ).length;
-      const plainLen = collapseWhitespace(block.plainText).length;
+      const plainLen = collapseValidationWhitespace(block.plainText).length;
       // Allow some tolerance for whitespace differences
       if (
         Math.abs(inlineLen - plainLen) > 5 &&
