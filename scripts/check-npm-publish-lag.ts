@@ -57,13 +57,14 @@ export type RegistryResult =
   | { status: "passed"; reason: "ok" }
   | { status: "passed"; reason: "published_from_declared_repository" }
   | { status: "skipped"; reason: "publish_pending" }
+  // npm's `latest`, so callers can tell a lagging registry from one ahead.
+  | { status: "failed"; reason: "version_mismatch"; latest: string }
   | {
       status: "failed";
       reason:
         | "http_status"
         | "timeout"
         | "contract_error"
-        | "version_mismatch"
         | "publish_awaits_promote"
         | "unattested_publish";
     };
@@ -429,7 +430,11 @@ export const checkRegistry = async ({
       case "pending":
         return { status: "skipped", reason: "publish_pending" };
       case "mismatch":
-        return { status: "failed", reason: "version_mismatch" };
+        return {
+          status: "failed",
+          reason: "version_mismatch",
+          latest: payload["version"],
+        };
       default: {
         assessment satisfies never;
         throw new NpmPublishLagError("Unhandled version assessment");

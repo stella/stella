@@ -150,6 +150,16 @@ describe("release promotion diagnosis", () => {
     );
   });
 
+  test("keeps a registry ahead of main as a mismatch without fetching health", async () => {
+    const { lines, healthRequests } = await runJourney({
+      registryVersion: "1.2.4",
+    });
+    expect(healthRequests).toBe(0);
+    expect(lines).toEqual([
+      "journey registry-@stll/cli failed version_mismatch",
+    ]);
+  });
+
   test("keeps a deployed bump as a registry mismatch", async () => {
     const { lines } = await runJourney({
       gitRunner: journeyGit({ deployedContainsBump: true }),
@@ -318,6 +328,7 @@ describe("published registry versions", () => {
       ).toEqual({
         status: "failed",
         reason: "version_mismatch",
+        latest: "1.2.2",
       });
     }
     expect(
@@ -590,7 +601,7 @@ describe("published repository provenance", () => {
       "mismatch",
       "1.2.4",
       undefined,
-      { status: "failed", reason: "version_mismatch" },
+      { status: "failed", reason: "version_mismatch", latest: "1.2.4" },
     ],
   ] as const)(
     "keeps %s behavior for the same repository",
@@ -754,7 +765,11 @@ describe("published repository provenance", () => {
         bumpedAt: NOW - 2 * 24 * 60 * 60,
         latest: { version: "1.2.4", repository: declared },
       });
-      expect(result).toEqual({ status: "failed", reason: "version_mismatch" });
+      expect(result).toEqual({
+        status: "failed",
+        reason: "version_mismatch",
+        latest: "1.2.4",
+      });
       expect(npmCalls).toHaveLength(0);
     },
   );
@@ -786,11 +801,23 @@ describe("published repository provenance", () => {
   });
 });
 
-const POLICY_RESULTS = {
-  passed: { status: "passed", reason: "ok" },
-  skipped: { status: "skipped", reason: "publish_pending" },
-  failed: { status: "failed", reason: "version_mismatch" },
-} as const satisfies Record<RegistryResult["status"], RegistryResult>;
+const policyResult = (
+  status: RegistryResult["status"],
+  latest: string,
+): RegistryResult => {
+  switch (status) {
+    case "passed":
+      return { status: "passed", reason: "ok" };
+    case "skipped":
+      return { status: "skipped", reason: "publish_pending" };
+    case "failed":
+      return { status: "failed", reason: "version_mismatch", latest };
+    default: {
+      status satisfies never;
+      throw new Error("Unhandled policy status");
+    }
+  }
+};
 
 // Each row goes through both callers, including their different bump policies.
 const POLICY_MATRIX = [
@@ -830,7 +857,7 @@ describe("published version policy matrix", () => {
             registry: server.url.toString(),
             timeoutMs: 5000,
           });
-          expect(result).toEqual(POLICY_RESULTS[row[window]]);
+          expect(result).toEqual(policyResult(row[window], row.latest));
         } finally {
           await server.stop(true);
         }

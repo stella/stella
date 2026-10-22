@@ -104,9 +104,17 @@ export const checkPublishedVersions = async ({
 
   const assessPromotion = async (
     directory: string,
+    target: string | undefined,
     result: RegistryResult,
   ): Promise<PromotionAssessment> => {
     if (result.status !== "failed" || result.reason !== "version_mismatch") {
+      return { result };
+    }
+    // Only a registry behind main can be waiting for the release to deploy.
+    if (
+      target === undefined ||
+      Bun.semver.order(result.latest, target) !== -1
+    ) {
       return { result };
     }
     if (!hasCompleteHistory()) {
@@ -180,6 +188,7 @@ export const checkPublishedVersions = async ({
           status: "failed",
           reason: "contract_error",
         };
+        let target: string | undefined;
         try {
           const path = `packages/${directory}/package.json`;
           const contents = gitRunner(["show", `${ref}:${path}`]);
@@ -200,6 +209,7 @@ export const checkPublishedVersions = async ({
             policy: "journey",
           });
           if (history.exitCode === 0 && manifest !== undefined) {
+            target = manifest.version;
             result = await checkRegistry({
               name: manifest.name,
               version: manifest.version,
@@ -215,7 +225,7 @@ export const checkPublishedVersions = async ({
           // The command boundary reports malformed manifests without their contents.
           result = { status: "failed", reason: "contract_error" };
         }
-        const assessment = await assessPromotion(directory, result);
+        const assessment = await assessPromotion(directory, target, result);
         log(
           `journey registry-@stll/${directory} ${assessment.result.status} ${assessment.result.reason}`,
         );
