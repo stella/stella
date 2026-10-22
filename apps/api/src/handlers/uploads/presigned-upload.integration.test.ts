@@ -38,6 +38,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import {
+  FINALIZE_CLAIM_TIMEOUT_MS,
   legacyTmpUploadKey,
   PRESIGN_URL_EXPIRY_SECONDS,
 } from "@/api/lib/uploads/runtime";
@@ -781,6 +782,49 @@ describe("presigned upload finalize lifecycle", () => {
 
     expect(replayed).toEqual(first);
     expect(await versionCount(ids.entityA1)).toBe(versionsAfterFirst);
+  });
+
+  test("a storage failure while reading the staged object leaves the upload retryable", async () => {
+    const { uploadId, stagedKey } = await stageDocxVersion("head-outage.docx");
+    // Expired credentials answer the HEAD; the store says nothing about
+    // whether the object exists.
+    fake.failNext({
+      method: "HEAD",
+      key: stagedKey,
+      code: "AccessDenied",
+      status: 403,
+    });
+
+    const failed = await finalizeAsOwner(uploadId);
+
+    expect(failed).toMatchObject({ code: 500 });
+    expect(await uploadStatus(uploadId)).toBe("failed");
+    expect(fake.objects.has(`${envBase.S3_BUCKET}/${stagedKey}`)).toBe(true);
+
+    // Past the claim cool-down the same upload finalizes from the kept bytes.
+    await testDb
+      .update(pendingUploads)
+      .set({
+        claimedAt: sql`now() - ${FINALIZE_CLAIM_TIMEOUT_MS + 1000} * interval '1 millisecond'`,
+      })
+      .where(eq(pendingUploads.id, uploadId));
+    const retried = await finalizeAsOwner(uploadId);
+
+    expect(retried).toHaveProperty("finalizedResult.type", "entity_version");
+    expect(await uploadStatus(uploadId)).toBe("finalized");
+  });
+
+  test("rejects an upload whose staged object the store confirms is absent", async () => {
+    const presignResult = await presignDocxVersion(
+      "never-put.docx",
+      await docxWithMarkers(["Never staged"]),
+    );
+    const uploadId = getUploadId(presignResult);
+
+    const rejected = await finalizeAsOwner(uploadId);
+
+    expect(rejected).toMatchObject({ code: 404 });
+    expect(await uploadStatus(uploadId)).toBe("rejected");
   });
 
   test.each([
