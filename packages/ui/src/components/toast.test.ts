@@ -44,3 +44,45 @@ describe("full toast error text", () => {
     ).toHaveLength(1);
   });
 });
+
+describe("toast dedupe id", () => {
+  test("plain messages of the same type and text share an id", async () => {
+    const { toastDedupeId } = await import("./toast");
+    expect(toastDedupeId({ title: "Saved", type: "success" })).toBe(
+      toastDedupeId({ title: "Saved", type: "success" }),
+    );
+    expect(toastDedupeId({ title: "Saved", type: "success" })).not.toBe(
+      toastDedupeId({ title: "Saved", type: "info" }),
+    );
+    expect(
+      toastDedupeId({ title: "Saved", description: "a", type: "success" }),
+    ).not.toBe(
+      toastDedupeId({ title: "Saved", description: "b", type: "success" }),
+    );
+  });
+
+  test("actions, loading toasts and rich content never merge", async () => {
+    const { toastDedupeId } = await import("./toast");
+    expect(
+      toastDedupeId({
+        title: "Saved",
+        type: "success",
+        action: { label: "Undo" },
+      }),
+    ).toBeUndefined();
+    expect(toastDedupeId({ title: "Saving", type: "loading" })).toBeUndefined();
+    expect(toastDedupeId({ title: 42, type: "success" })).toBeUndefined();
+  });
+});
+
+describe("toast countdown", () => {
+  test("only a toast that closes on its own counts down", async () => {
+    const { toastCountdownMs } = await import("./toast");
+    expect(toastCountdownMs({ timeout: 4000, type: "success" })).toBe(4000);
+    expect(toastCountdownMs({ timeout: 0, type: "error" })).toBeUndefined();
+    expect(
+      toastCountdownMs({ timeout: 4000, type: "loading" }),
+    ).toBeUndefined();
+    expect(toastCountdownMs({ type: "info" })).toBeUndefined();
+  });
+});
