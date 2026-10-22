@@ -13,7 +13,7 @@ import {
   decideAgentCall,
   describeAgentAccess,
 } from "@/api/mcp/agent-access";
-import type { AgentAccessTarget } from "@/api/mcp/agent-access";
+import type { AgentAccess, AgentAccessTarget } from "@/api/mcp/agent-access";
 import { loadCapabilityCatalog } from "@/api/mcp/capability-tools";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -197,7 +197,7 @@ describe("classification", () => {
     );
   });
 
-  test("organization settings use the ordinary open or destructive policy", () => {
+  test("organization-wide settings changes need a person's approval", () => {
     // The sender list is a read the catalog files under write (it needs the
     // settings grant); every other settings write changes the organization.
     const reads = new Set([
@@ -210,26 +210,28 @@ describe("classification", () => {
         !reads.has(id),
     );
     expect(settingsWrites.length).toBeGreaterThan(0);
-    for (const { id, destructive } of settingsWrites) {
+    const changesSettings = {
+      kind: AGENT_ACCESS_KIND.personApproves,
+      reason: "changes-organization-settings",
+    } as const satisfies AgentAccess;
+    for (const { id } of settingsWrites) {
       expect({
         id,
         access: describeAgentAccess({
           target: { type: "capability", id },
           context: CALLER,
         }).access,
-      }).toEqual({
-        id,
-        access: destructive
-          ? { kind: AGENT_ACCESS_KIND.callerConfirms, reason: "destroys-data" }
-          : { kind: AGENT_ACCESS_KIND.open },
-      });
+      }).toEqual({ id, access: changesSettings });
     }
-    expect(kindOf(toolTarget("set_practice_jurisdictions"))).toBe(
-      AGENT_ACCESS_KIND.open,
-    );
-    expect(kindOf(toolTarget("update_organization_settings"))).toBe(
-      AGENT_ACCESS_KIND.open,
-    );
+    for (const name of [
+      "update_organization_settings",
+      "set_practice_jurisdictions",
+    ]) {
+      expect(
+        describeAgentAccess({ target: toolTarget(name), context: CALLER })
+          .access,
+      ).toEqual(changesSettings);
+    }
     for (const id of reads) {
       expect(kindOf({ type: "capability", id })).toBe(AGENT_ACCESS_KIND.open);
     }
@@ -356,6 +358,11 @@ describe("transport boundary", () => {
       tool: "delete_matter",
       args: { matter_id: MATTER_ID },
       code: "person_only",
+    },
+    {
+      tool: "update_organization_settings",
+      args: { prompt_caching_enabled: true },
+      code: "person_approval_required",
     },
   ])(
     "$tool does not run from an MCP caller, even with confirm",

@@ -11020,14 +11020,19 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("organization settings pass agent access before input validation", async () => {
+  test("organization settings need a person's approval in stella", async () => {
     const result = await handleMcpToolCall({
       args: {},
       context: createContext(),
       toolName: "update_organization_settings",
     });
 
-    expectValidationMessage(result, "Provide at least one setting to change");
+    expectErrorEnvelope(result, {
+      code: "person_approval_required",
+      message:
+        "update_organization_settings needs a person's approval in stella and cannot run from this client",
+      hint: "Do not retry it. Describe the change in your reply so the user can make or approve it in stella.",
+    });
   });
 
   test("member removal needs a person's approval in stella", async () => {
