@@ -512,3 +512,85 @@ test("release-periodic jobs also run on non-release schedules and stay off pull 
   declared.periodicJobs.push("fixture.yml/removed");
   expect(check()).toContain("fixture.yml/removed: stale periodic job");
 });
+
+const CHEAP_PULL_REQUEST_GATES = [
+  "code-quality-api",
+  "ci-quick-checks",
+] as const;
+const EXPENSIVE_PULL_REQUEST_JOBS = [
+  "ci-tests",
+  "ci-browser",
+  "postgres-service-suites",
+  "service-suites",
+  "e2e-production-shard",
+  "e2e-vite-canary",
+  "e2e-landing",
+  "e2e-report",
+  "query-perf",
+  "web-build",
+  "route-smoke",
+] as const;
+
+const cheapGateProblems = (workflow: unknown) => {
+  const parsed = v.parse(workflowSchema, workflow);
+  return EXPENSIVE_PULL_REQUEST_JOBS.flatMap((name) => {
+    const job = parsed.jobs[name];
+    if (job === undefined) {
+      return [`${name}: expected expensive job is missing`];
+    }
+    const needs = typeof job.needs === "string" ? [job.needs] : job.needs;
+    const condition = typeof job.if === "string" ? job.if : "";
+    return CHEAP_PULL_REQUEST_GATES.flatMap((gate) => [
+      ...(needs?.includes(gate) === true
+        ? []
+        : [`${name}: needs must include ${gate}`]),
+      ...(condition.includes(`needs.${gate}.result != 'failure'`)
+        ? []
+        : [`${name}: condition must tolerate a skipped ${gate}`]),
+    ]);
+  });
+};
+
+test("expensive pull request jobs wait for both cheap gates", () => {
+  const workflow = structuredClone(workflows["ci.yml"]);
+  expect(cheapGateProblems(workflow)).toEqual([]);
+
+  const parsed = v.parse(workflowSchema, workflow);
+  const job = parsed.jobs[EXPENSIVE_PULL_REQUEST_JOBS[0]];
+  if (job === undefined || !Array.isArray(job.needs)) {
+    panic("Missing expensive-job mutation fixture");
+  }
+  job.needs = job.needs.filter((need) => need !== CHEAP_PULL_REQUEST_GATES[0]);
+  expect(cheapGateProblems(parsed)).toContain(
+    "ci-tests: needs must include code-quality-api",
+  );
+});
+
+test("ci-result keeps failed cheap gates strict when gated jobs skip", () => {
+  const workflow = v.parse(
+    workflowSchema,
+    structuredClone(workflows["ci.yml"]),
+  );
+  const result = workflow.jobs["ci-result"];
+  if (result === undefined) {
+    panic("Missing ci-result fixture");
+  }
+  const needs =
+    typeof result.needs === "string" ? [result.needs] : result.needs;
+  for (const gate of CHEAP_PULL_REQUEST_GATES) {
+    expect(needs).toContain(gate);
+  }
+  const outcome = result.steps?.find(
+    (step) => step.name === "Evaluate CI outcome",
+  );
+  const fastRequired = JSON.parse(outcome?.env?.["FAST_REQUIRED"] ?? "null");
+  expect(fastRequired).toEqual(
+    expect.arrayContaining(CHEAP_PULL_REQUEST_GATES),
+  );
+  expect(outcome?.run).toContain(
+    'if $result == "success" then empty else "\\($job) (planned, \\($result))" end',
+  );
+  expect(outcome?.run).toContain(
+    'select(.value.result as $r | ["success", "skipped", "cancelled"] | index($r) | not)',
+  );
+});
