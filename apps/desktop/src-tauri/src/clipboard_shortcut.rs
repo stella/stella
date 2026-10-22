@@ -285,6 +285,7 @@ impl ClipboardShortcut {
 fn on_pressed(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
   if event.state == ShortcutState::Pressed {
     crate::clipboard_window::toggle(app);
+    crate::onboarding::shortcut_pressed(app);
   }
 }
 
