@@ -77,6 +77,7 @@ import {
   unmanagedTransitionTables,
   statusWriteCalls,
 } from "./status-write-shapes";
+import { countUndeclaredEdenWrites } from "./undeclared-eden-writes";
 import {
   countUnsignalledSkips,
   isExcludedSkipSource,
@@ -3288,6 +3289,18 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "undeclared-eden-writes",
+    description:
+      "Eden post/put/patch/delete calls in apps/web outside an invokeCapability or useCapabilityMutation callback, so they run without declaring a catalog capability; each file's count can only shrink",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) => isExcludedSource(file),
+    perFile: true,
+    growth: "shrink-only",
+    count: ((content, { file }) =>
+      countUndeclaredEdenWrites(content, file)) satisfies FileCounter,
+  },
+  {
+    scope: "file",
     id: "direct-root-connection-imports",
     description:
       "runtime references to the owner-level database handles (`rootDb`, `rlsDb` from apps/api/src/db/root.ts) anywhere in the API outside tests, one per handle named: named, renamed and namespace imports, re-exports, `import = require` and dynamic imports (scripts/root-connection-shapes.ts). An allowlist gated per file: a new file, a file naming one more handle, or a type-only import turned into a value import fails even when another file dropped one",
@@ -4841,6 +4854,23 @@ const SHARED_WEB_HELPER_FIXTURE_LINES = [
   "// title={formatFullTimestamp(value)} must not count.",
 ];
 const SELF_TEST_SHARED_WEB_HELPERS = `${SHARED_WEB_HELPER_FIXTURE_LINES.join("\n")}\n`;
+const UNDECLARED_EDEN_WRITE_FIXTURE_LINES = [
+  'import { api, memoriesApi as memories } from "@/lib/api";',
+  'import { invokeCapability } from "@/lib/capabilities/capability-request";',
+  'import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";',
+  "await api.items.post(body);",
+  "await memories({ id }).delete();",
+  "const route = api.items({ id });",
+  "await route.patch(body);",
+  'await invokeCapability("items.create", async (request) => await api.items.post(body, request));',
+  'useCapabilityMutation({ capability: "items.update", mutationFn: async (vars, request) => await route.patch(vars, request) });',
+  "await api.items.get();",
+  "map.delete(key);",
+];
+const SELF_TEST_UNDECLARED_EDEN_WRITES = `${UNDECLARED_EDEN_WRITE_FIXTURE_LINES.join("\n")}\n`;
+// The bare post, the aliased delete and the write through `route`; declared
+// writes, reads and unrelated `delete` calls are excluded.
+const EXPECTED_UNDECLARED_EDEN_WRITES = 3;
 const EXPECTED_RAW_USER_AVATAR_PRIMITIVES = 1;
 const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
 const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
@@ -6537,6 +6567,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/web/src/undeclared-eden-writes.ts",
+      SELF_TEST_UNDECLARED_EDEN_WRITES,
+    );
+    writeFixture(
+      root,
       "apps/api/src/shared-helper-shapes.ts",
       SELF_TEST_SHARED_API_HELPERS,
     );
@@ -6951,6 +6986,7 @@ const runSelfTest = (): number => {
           EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO,
       ],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
+      ["undeclared-eden-writes", EXPECTED_UNDECLARED_EDEN_WRITES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
       [
         "ad-hoc-relative-time-formatting",
