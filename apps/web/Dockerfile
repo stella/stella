@@ -14,7 +14,7 @@ WORKDIR /app
 # release builds set it to the immutable digest currently deployed.
 FROM --platform=$TARGETPLATFORM ${PREVIOUS_WEB_IMAGE} AS previous-web-image
 USER root
-COPY scripts/merge-web-assets.sh /usr/local/bin/merge-web-assets
+COPY --chmod=0755 scripts/merge-web-assets.sh /usr/local/bin/merge-web-assets
 RUN mkdir -p /previous-web-assets && : > /previous-web-assets.manifest && \
     if [ -f /app/apps/web/dist/.stella-client-assets ]; then \
       /usr/local/bin/merge-web-assets \
@@ -189,7 +189,7 @@ COPY --from=deps-prod /app/ .
 COPY --chown=stella:stella --from=pruner /app/out/json/ .
 COPY --chown=stella:stella --from=builder /app/web-runtime-stage/ .
 COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist
-COPY --chown=stella:stella scripts/merge-web-assets.sh /usr/local/bin/merge-web-assets
+COPY --chown=stella:stella --chmod=0755 scripts/merge-web-assets.sh /usr/local/bin/merge-web-assets
 COPY --chown=stella:stella --from=previous-web-image /previous-web-assets /tmp/previous-web-assets
 COPY --chown=stella:stella --from=previous-web-image /previous-web-assets.manifest /tmp/previous-web-assets.manifest
 RUN /usr/local/bin/merge-web-assets \
