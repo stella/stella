@@ -30,13 +30,18 @@ const journeyGit =
     deployedContainsBump = false,
     tag = "v1.2.3",
     recent = false,
+    shallow = "false",
   }: {
     deployedContainsBump?: boolean;
     tag?: string;
     recent?: boolean;
+    shallow?: string;
   } = {}): GitRunner =>
   (args) => {
     const command = args.join(" ");
+    if (command === "rev-parse --is-shallow-repository") {
+      return { exitCode: 0, stdout: `${shallow}\n` };
+    }
     if (args.at(0) === "show" && args.at(1)?.includes(":packages/")) {
       const directory =
         args.at(1)?.split(":packages/").at(1)?.split("/").at(0) ?? "unknown";
@@ -169,6 +174,29 @@ describe("release promotion diagnosis", () => {
       "journey registry-@stll/cli failed version_mismatch",
     ]);
   });
+
+  test.each([
+    ["is shallow", journeyGit({ shallow: "true" })],
+    [
+      "cannot report its depth",
+      (
+        (base: GitRunner): GitRunner =>
+        (args) =>
+          args.at(0) === "rev-parse"
+            ? { exitCode: 128, stdout: "" }
+            : base(args)
+      )(journeyGit()),
+    ],
+  ] as const)(
+    "fails closed without fetching health when history %s",
+    async (_, gitRunner) => {
+      const { lines, healthRequests } = await runJourney({ gitRunner });
+      expect(healthRequests).toBe(0);
+      expect(lines).toEqual([
+        "journey registry-@stll/cli failed version_mismatch",
+      ]);
+    },
+  );
 
   test("fails closed when the deployed commit is absent locally", async () => {
     const base = journeyGit();

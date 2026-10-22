@@ -90,11 +90,26 @@ export const checkPublishedVersions = async ({
     return deployedCommitRequest;
   };
 
+  // A shallow clone treats its oldest commit as a root, so every package
+  // would look bumped there; only complete history can name the bump.
+  let completeHistory: boolean | undefined;
+  const hasCompleteHistory = () => {
+    if (completeHistory === undefined) {
+      const shallow = gitRunner(["rev-parse", "--is-shallow-repository"]);
+      completeHistory =
+        shallow.exitCode === 0 && shallow.stdout.trim() === "false";
+    }
+    return completeHistory;
+  };
+
   const assessPromotion = async (
     directory: string,
     result: RegistryResult,
   ): Promise<PromotionAssessment> => {
     if (result.status !== "failed" || result.reason !== "version_mismatch") {
+      return { result };
+    }
+    if (!hasCompleteHistory()) {
       return { result };
     }
     const path = `packages/${directory}/package.json`;
