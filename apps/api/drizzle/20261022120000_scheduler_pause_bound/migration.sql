@@ -5,25 +5,14 @@ ALTER TABLE "scheduler_jobs"
   ADD COLUMN "paused_since" timestamp with time zone;
 --> statement-breakpoint
 
--- Bound existing pauses before the check: a row that keeps 'infinity' would
--- fail every later update of that row, including the boot upsert, and the
--- trigger below only sees future writes. Any pause ending beyond the 72-hour
--- maximum, 'infinity' included, ends at the maximum (its start stays NULL, so
--- the audit reports it at once); '-infinity' never paused anything.
-UPDATE "scheduler_jobs"
-  SET paused_until = CURRENT_TIMESTAMP + interval '72 hours'
-  WHERE paused_until > CURRENT_TIMESTAMP + interval '72 hours';
---> statement-breakpoint
-
-UPDATE "scheduler_jobs"
-  SET paused_until = NULL
-  WHERE paused_until = '-infinity';
---> statement-breakpoint
-
+-- Enforced for every new write; not validated, because rows written before the
+-- bound may still hold an open-ended deadline. The application owns these rows
+-- and bounds such pauses at boot before it updates any row
+-- (boundSchedulerPauses in apps/api/src/lib/scheduler/jobs.ts).
 ALTER TABLE "scheduler_jobs"
   ADD CONSTRAINT "scheduler_jobs_pause_finite_check" CHECK (
     paused_until IS NULL OR isfinite(paused_until)
-  );
+  ) NOT VALID;
 --> statement-breakpoint
 
 -- The pause audit watches every pause, so it can never be paused itself.

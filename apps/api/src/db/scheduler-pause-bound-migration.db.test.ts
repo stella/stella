@@ -1,14 +1,20 @@
 import { PGlite } from "@electric-sql/pglite";
 import { expect, test } from "bun:test";
+import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { boundSchedulerPauses } from "@/api/lib/scheduler/jobs";
+import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
 /**
- * Bounding scheduler pauses, applied to rows written before the bound.
+ * Bounding scheduler pauses on rows written before the bound.
  *
  * The shared test database runs every migration on empty tables, so it never
  * holds an open-ended pause. This suite builds `scheduler_jobs` as it was
- * before the migration, seeds every pause shape and runs the migration file.
+ * before the migration, seeds every pause shape, runs the migration file and
+ * then the boot step that bounds those pauses.
  */
 
 const MIGRATION_PATH = nodePath.resolve(
@@ -58,6 +64,17 @@ VALUES
     NULL, NULL, NULL, '2026-10-01T00:00:00Z')
 `;
 
+// The shape of the boot upsert: refresh declared fields, keep the pause.
+const BOOT_UPSERT = `
+INSERT INTO scheduler_jobs (id, task, description, schedule, enabled, next_run_at)
+SELECT id, task, 'refreshed', schedule, true, now() FROM scheduler_jobs
+ON CONFLICT (id) DO UPDATE SET
+  description = EXCLUDED.description,
+  enabled = EXCLUDED.enabled,
+  schedule = EXCLUDED.schedule,
+  task = EXCLUDED.task
+`;
+
 const migrationSql = readFileSync(MIGRATION_PATH, "utf-8").replaceAll(
   "--> statement-breakpoint",
   "",
@@ -65,14 +82,15 @@ const migrationSql = readFileSync(MIGRATION_PATH, "utf-8").replaceAll(
 
 type Snapshot = Record<string, { row: unknown; pausedUntil: string | null }>;
 
-// Each row without its pause deadline, plus the deadline as text.
+// Each row without the columns a bound may change, plus the deadline as text.
 const snapshot = async (database: PGlite): Promise<Snapshot> => {
   const result = await database.query<{
     id: string;
     row: unknown;
     paused_until: string | null;
   }>(
-    `SELECT id, to_jsonb(j) - 'paused_until' - 'paused_since' AS row,
+    `SELECT id,
+       to_jsonb(j) - 'paused_until' - 'paused_since' - 'updated_at' AS row,
        paused_until::text AS paused_until
      FROM scheduler_jobs j ORDER BY id`,
   );
@@ -84,22 +102,34 @@ const snapshot = async (database: PGlite): Promise<Snapshot> => {
   );
 };
 
-const migrated = async (): Promise<{
-  database: PGlite;
-  before: Snapshot;
-  after: Snapshot;
-}> => {
-  const database = new PGlite();
-  await database.exec(PRE_BOUND_SCHEMA);
-  await database.exec(SEED);
-  const before = await snapshot(database);
-  await database.exec(migrationSql);
-  return { database, before, after: await snapshot(database) };
-};
+const rejectionFrom = async (run: Promise<unknown>): Promise<unknown> =>
+  await run.then(
+    () => null,
+    (error: unknown) => error,
+  );
 
-test("the migration keeps every row and column and bounds only pauses past the maximum", async () => {
-  const { database, before, after } = await migrated();
+test("the migration changes no row; the boot bound ends overlong pauses at the maximum without losing anything", async () => {
+  const database = new PGlite();
   try {
+    await database.exec(PRE_BOUND_SCHEMA);
+    await database.exec(SEED);
+    const before = await snapshot(database);
+
+    await database.exec(migrationSql);
+    expect(await snapshot(database)).toEqual(before);
+
+    // Why the bound runs before the boot upsert: the check refuses any
+    // update of a row that still holds an open-ended deadline.
+    expect(await rejectionFrom(database.exec(BOOT_UPSERT))).toMatchObject({
+      message: expect.stringContaining("scheduler_jobs_pause_finite_check"),
+    });
+
+    const bounded = await boundSchedulerPauses(
+      asTestRaw<SchedulerDb>(drizzle({ client: database })),
+    );
+    expect(bounded.toSorted()).toEqual(["job.infinite", "job.long"]);
+
+    const after = await snapshot(database);
     expect(Object.keys(after)).toEqual(Object.keys(before));
     for (const id of Object.keys(before)) {
       expect(after[id]?.row).toEqual(before[id]?.row);
@@ -108,57 +138,41 @@ test("the migration keeps every row and column and bounds only pauses past the m
       expect(after[id]?.pausedUntil).toBe(before[id]?.pausedUntil ?? null);
     }
     expect(after["job.negative"]?.pausedUntil).toBeNull();
-
-    const bounded = await database.query<{ id: string; within: boolean }>(
+    const within = await database.query<{ id: string; within: boolean }>(
       `SELECT id, paused_until > now() + interval '71 hours'
-       AND paused_until <= now() + interval '72 hours' AS within
-     FROM scheduler_jobs WHERE id IN ('job.infinite', 'job.long') ORDER BY id`,
+         AND paused_until <= now() + interval '72 hours' AS within
+       FROM scheduler_jobs WHERE id IN ('job.infinite', 'job.long') ORDER BY id`,
     );
-    expect(bounded.rows).toEqual([
+    expect(within.rows).toEqual([
       { id: "job.infinite", within: true },
       { id: "job.long", within: true },
     ]);
-
-    // No start is recorded for a pause bounded by the migration, so the
-    // hourly audit reports it on its first run.
+    // A bounded pause records no start, so the pause audit reports it.
     const starts = await database.query<{ count: number | string }>(
       "SELECT count(*) AS count FROM scheduler_jobs WHERE paused_since IS NOT NULL",
     );
     expect(Number(starts.rows.at(0)?.count)).toBe(0);
-  } finally {
-    await database.close();
-  }
-});
 
-test("after the migration the boot upsert still updates every row and new open-ended pauses are refused", async () => {
-  const { database } = await migrated();
-  try {
-    // The shape of the boot upsert: refresh declared fields, keep the pause.
-    await database.exec(`
-    INSERT INTO scheduler_jobs (id, task, description, schedule, enabled, next_run_at)
-    SELECT id, task, 'refreshed', schedule, true, now() FROM scheduler_jobs
-    ON CONFLICT (id) DO UPDATE SET
-      description = EXCLUDED.description,
-      enabled = EXCLUDED.enabled,
-      schedule = EXCLUDED.schedule,
-      task = EXCLUDED.task
-  `);
+    await database.exec(BOOT_UPSERT);
     const refreshed = await database.query<{ count: number | string }>(
       "SELECT count(*) AS count FROM scheduler_jobs WHERE description = 'refreshed'",
     );
     expect(Number(refreshed.rows.at(0)?.count)).toBe(6);
 
-    const refusal = await database
-      .exec(
-        `UPDATE scheduler_jobs SET paused_until = 'infinity' WHERE id = 'job.active'`,
-      )
-      .then(
-        () => null,
-        (error: unknown) => error,
-      );
-    expect(refusal).toMatchObject({
-      message: expect.stringContaining("72-hour maximum"),
-    });
+    // A second boot finds nothing left to bound.
+    expect(
+      await boundSchedulerPauses(
+        asTestRaw<SchedulerDb>(drizzle({ client: database })),
+      ),
+    ).toEqual([]);
+
+    expect(
+      await rejectionFrom(
+        database.exec(
+          `UPDATE scheduler_jobs SET paused_until = 'infinity' WHERE id = 'job.active'`,
+        ),
+      ),
+    ).toMatchObject({ message: expect.stringContaining("72-hour maximum") });
   } finally {
     await database.close();
   }

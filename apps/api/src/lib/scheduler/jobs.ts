@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq, gt, notInArray, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -107,6 +107,34 @@ export const initialNextRunAt = (
   now: Date,
 ): Date =>
   firstRun === "on-registration" ? now : computeNextRunAt(schedule, now);
+
+/**
+ * Ends every pause beyond the 72-hour maximum at the maximum and clears a
+ * `-infinity` deadline, which never paused anything. Rows written before the
+ * bound can hold either, and the finite-deadline check refuses every later
+ * update of such a row, the boot upsert included, so this runs first at each
+ * boot. A bounded pause keeps no recorded start, so the pause audit reports it
+ * on its next run. Returns the ids it bounded.
+ */
+export const boundSchedulerPauses = async (
+  db: SchedulerDb,
+): Promise<string[]> => {
+  // audit: skip — scheduler system state; each bounded job is logged below.
+  const bounded = await db
+    .update(schedulerJobs)
+    .set({ pausedUntil: sql`now() + interval '72 hours'` })
+    .where(gt(schedulerJobs.pausedUntil, sql`now() + interval '72 hours'`))
+    .returning({ id: schedulerJobs.id });
+  // audit: skip — scheduler system state; a -infinity deadline never paused.
+  await db
+    .update(schedulerJobs)
+    .set({ pausedUntil: null })
+    .where(eq(schedulerJobs.pausedUntil, sql`'-infinity'::timestamptz`));
+  for (const { id } of bounded) {
+    logger.warn("scheduler.job.pause_bounded", { jobId: id });
+  }
+  return bounded.map(({ id }) => id);
+};
 
 export const ensureSchedulerJob = async (
   definition: SchedulerJobDefinition,
@@ -700,6 +728,7 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
       reason: "HOSTED_USAGE_WEBHOOK_RETENTION_DAYS is unset",
     });
   }
+  await boundSchedulerPauses(rootDb);
   for (const { mode, ...definition } of DECLARED_SCHEDULER_JOBS) {
     // Sequential on purpose: each upsert is a read followed by a write, so
     // issuing all of them at once puts more concurrent statements in flight
