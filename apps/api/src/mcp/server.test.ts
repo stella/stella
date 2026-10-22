@@ -2291,6 +2291,117 @@ describe("MCP transport conformance", () => {
     expect(response.headers.get("Access-Control-Allow-Credentials")).toBeNull();
   });
 
+  /**
+   * Request headers a browser sends without a preflight naming them (Fetch
+   * standard): the CORS-safelisted names, and the forbidden names the user
+   * agent alone sets. Every other header the transport reads must be allowed.
+   */
+  const BROWSER_SENDS_WITHOUT_PREFLIGHT = new Set([
+    "accept",
+    "accept-language",
+    "content-language",
+    "range",
+    "accept-charset",
+    "accept-encoding",
+    "access-control-request-headers",
+    "access-control-request-method",
+    "connection",
+    "content-length",
+    "cookie",
+    "date",
+    "dnt",
+    "expect",
+    "host",
+    "keep-alive",
+    "origin",
+    "referer",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "via",
+  ]);
+
+  test("allows on preflight every request header the transport reads", async () => {
+    authenticateSession();
+    listMcpToolsMock.mockImplementation(async () => []);
+    getMcpToolDefinitionMock.mockResolvedValue(undefined);
+    const read = new Set<string>();
+    const { get, has } = Headers.prototype;
+    // Response headers never carry credentials, so a read on a header set
+    // holding `Authorization` is a read of the caller's request.
+    const isRequestHeaders = (headers: Headers) =>
+      has.call(headers, "authorization");
+    const getSpy = spyOn(Headers.prototype, "get").mockImplementation(function (
+      this: Headers,
+      name: string,
+    ) {
+      if (isRequestHeaders(this)) {
+        read.add(name.toLowerCase());
+      }
+      return get.call(this, name);
+    });
+    const hasSpy = spyOn(Headers.prototype, "has").mockImplementation(function (
+      this: Headers,
+      name: string,
+    ) {
+      if (name.toLowerCase() !== "authorization" && isRequestHeaders(this)) {
+        read.add(name.toLowerCase());
+      }
+      return has.call(this, name);
+    });
+    try {
+      const toolCall = {
+        name: "list_matters",
+        arguments: {},
+      };
+      for (const request of [
+        createMcpRequest({ id: 1, jsonrpc: "2.0", method: "tools/list" }),
+        createMcpRequest({
+          id: 2,
+          jsonrpc: "2.0",
+          method: "tools/call",
+          params: toolCall,
+        }),
+        createModernMcpRequest({ id: 3, method: "tools/list" }),
+        createModernMcpRequest({
+          id: 4,
+          method: "tools/call",
+          params: toolCall,
+        }),
+      ]) {
+        const response = await handleMcpHttpRequest(request);
+        await response.text();
+      }
+    } finally {
+      getSpy.mockRestore();
+      hasSpy.mockRestore();
+    }
+    const preflight = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", { method: "OPTIONS" }),
+    );
+    const allowed = new Set(
+      (preflight.headers.get("Access-Control-Allow-Headers") ?? "")
+        .split(",")
+        .map((name) => name.trim().toLowerCase()),
+    );
+
+    // The census reaches the headers the modern leg requires.
+    expect([...read]).toEqual(
+      expect.arrayContaining([
+        "mcp-protocol-version",
+        "mcp-method",
+        "mcp-name",
+      ]),
+    );
+    expect(
+      [...read].filter(
+        (name) =>
+          !allowed.has(name) && !BROWSER_SENDS_WITHOUT_PREFLIGHT.has(name),
+      ),
+    ).toEqual([]);
+  });
+
   test("refuses actual oversized frames before authentication even with a smaller declared length", async () => {
     actionSizePolicyMock.mockReturnValue(
       Result.ok({
