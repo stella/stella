@@ -1596,6 +1596,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
   "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
+  // GitHub App inputs shared by deployment workflow dispatchers.
+  "APP_CLIENT_ID",
+  "APP_PRIVATE_KEY",
+  "INFRA_REPO",
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",
   "RELEASE_PR_HEAD",
