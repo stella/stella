@@ -128,6 +128,15 @@ fn macos_source_app_icon(bundle_path: &Path) -> Option<image::RgbaImage> {
   })
 }
 
+/// An installed app's icon as a small PNG data URL, for naming the app that
+/// opens a document type.
+#[cfg(target_os = "macos")]
+pub(crate) fn bundle_icon_data_url(bundle_path: &Path) -> Option<String> {
+  macos_source_app_icon(bundle_path)
+    .map(source_app_visual)
+    .and_then(|(icon_data_url, _)| icon_data_url)
+}
+
 #[derive(Default)]
 struct NativeAppVisualCache {
   entries: HashMap<String, Option<ClipboardSourceAppVisual>>,
