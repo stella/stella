@@ -6,7 +6,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import JSZip from "jszip";
 
 import {
@@ -23,6 +23,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import {
   documentProcessingRuns,
+  entityVersions,
   extractedContent,
   fields,
   pendingUploads,
@@ -769,6 +770,72 @@ describe("presigned upload finalize lifecycle", () => {
     expect(finalized).toHaveProperty("finalizedResult.type", "entity_version");
     expect(await uploadStatus(uploadId)).toBe("finalized");
   });
+
+  test("replays a finalized upload's result without creating another version", async () => {
+    const { uploadId } = await stageDocxVersion("replayed.docx");
+    const first = await finalizeAsOwner(uploadId);
+    expect(first).toHaveProperty("finalizedResult.type", "entity_version");
+    const versionsAfterFirst = await versionCount(ids.entityA1);
+
+    const replayed = await finalizeAsOwner(uploadId);
+
+    expect(replayed).toEqual(first);
+    expect(await versionCount(ids.entityA1)).toBe(versionsAfterFirst);
+  });
+
+  test.each([
+    {
+      owner: "another workspace",
+      seed: () => ({
+        organizationId: ids.orgB,
+        workspaceId: ids.wsB1,
+        userId: ids.userB1,
+        entityId: ids.entityB1,
+      }),
+    },
+    {
+      owner: "another user in the same workspace",
+      seed: () => ({
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA2,
+        entityId: ids.entityA1,
+      }),
+    },
+  ])("does not finalize an upload that belongs to $owner", async ({ seed }) => {
+    const owner = seed();
+    const uploadId = createSafeId<"pendingUpload">();
+    await testDb.insert(pendingUploads).values({
+      id: uploadId,
+      organizationId: owner.organizationId,
+      workspaceId: owner.workspaceId,
+      userId: owner.userId,
+      purpose: "entity_version",
+      purposeData: { type: "entity_version", entityId: owner.entityId },
+      declaredName: "not-yours.pdf",
+      declaredMime: "application/pdf",
+      declaredSize: 12,
+      declaredSha256:
+        "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      status: "pending",
+      expiresAt: new Date(Date.now() + 60_000),
+      createdAt: new Date(),
+    });
+    seededUploadIds.push(uploadId);
+
+    const result = await finalizeAsOwner(uploadId);
+
+    expect(result).toEqual({
+      code: 404,
+      response: { message: "Upload not found" },
+    });
+    expect(
+      await testDb.query.pendingUploads.findFirst({
+        where: { id: { eq: uploadId } },
+        columns: { claimedAt: true, status: true },
+      }),
+    ).toEqual({ claimedAt: null, status: "pending" });
+  });
 });
 
 const presignDocxVersion = async (
@@ -840,6 +907,14 @@ const uploadStatus = async (
       columns: { status: true },
     })
   )?.status;
+
+const versionCount = async (entityId: SafeId<"entity">): Promise<number> =>
+  (
+    await testDb
+      .select({ value: count() })
+      .from(entityVersions)
+      .where(eq(entityVersions.entityId, entityId))
+  ).at(0)?.value ?? 0;
 
 type TestContextOptions = {
   body?: unknown;
