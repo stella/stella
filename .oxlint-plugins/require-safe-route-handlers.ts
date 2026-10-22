@@ -108,8 +108,13 @@ export default eslintCompatPlugin({
           requireSafeHandler:
             "API route .{{method}}() must mount a safe handler object " +
             "as `endpoint.handler`. Move route schemas and permissions " +
-            "into a createSafeHandler/createSafeRootHandler endpoint, or " +
-            "document this file as an explicit protocol/public/dev exception.",
+            "into a safe handler endpoint: createSafeHandler for workspace " +
+            "routes, createSafeSessionHandler for session-scoped ones, " +
+            "createSafeTokenHandler when the route authorizes its own token, " +
+            "createSafePublicHandler for intentionally public ones (no " +
+            "workspace or root context), createSafeRootHandler for system " +
+            "routes. Or document this file as an explicit protocol/public/dev " +
+            "exception.",
         },
       },
       createOnce(context) {
