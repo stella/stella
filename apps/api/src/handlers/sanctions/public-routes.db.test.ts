@@ -1,7 +1,7 @@
 // @api-test-heavy-db: retains a full-size 20,000-entry sanctions corpus.
 import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { Worker } from "node:worker_threads";
@@ -46,7 +46,6 @@ import {
   SANCTIONS_SOURCE_CONFIG,
   sanctionsSourceIds,
 } from "@/api/lib/lists/sanctions/source-config";
-import { recordingMatcherWorker } from "@/api/lib/lists/sanctions/test-fixtures/recording-matcher-worker";
 import {
   InMemoryRateLimitContext,
   scopedGenerator,
@@ -65,6 +64,10 @@ const STALE_NOW = new Date("2026-09-23T08:00:00Z");
 const MANY_MATCHES = SANCTIONS_MATCH_LIMIT + 5;
 const BENCHMARK_ENTRY_COUNT = 20_000;
 const INSERT_BATCH_SIZE = 100;
+const INCOMPLETE_SCAN_ENTRY_COUNT = 100;
+// Candidate traversal and alignment charge more than 80 work units per alias.
+const INCOMPLETE_SCAN_WORK_LIMIT = INCOMPLETE_SCAN_ENTRY_COUNT * 80;
+const INCOMPLETE_SCAN_NAME = "Bounded Scan Target";
 
 const pools = new Set<ReturnType<typeof createSanctionsMatcherPool>>();
 const benchmarkPool = () => {
@@ -1103,7 +1106,7 @@ describe("public sanctions search parity", () => {
           },
         }),
       );
-      const partialAliases = Array.from({ length: 100 }, (_, index) =>
+      const completeAliases = Array.from({ length: 100 }, (_, index) =>
         entry({
           source: "eu",
           sourceId: `partial-${index}`,
@@ -1113,7 +1116,20 @@ describe("public sanctions search parity", () => {
           },
         }),
       );
-      await seedEntries("eu", [...costly, ...partialAliases]);
+      const incompleteScanAliases = Array.from(
+        { length: INCOMPLETE_SCAN_ENTRY_COUNT },
+        (_, index) =>
+          entry({
+            source: "ch",
+            sourceId: `incomplete-${index}`,
+            overrides: {
+              entityType: "person",
+              names: [{ name: INCOMPLETE_SCAN_NAME, quality: "weak" }],
+            },
+          }),
+      );
+      await seedEntries("eu", [...costly, ...completeAliases]);
+      await seedEntries("ch", incompleteScanAliases);
       await db
         .update(sanctionsEditions)
         .set({
@@ -1121,9 +1137,15 @@ describe("public sanctions search parity", () => {
             entriesFor("eu").length +
             BENCHMARK_ENTRY_COUNT +
             costly.length +
-            partialAliases.length,
+            completeAliases.length,
         })
         .where(eq(sanctionsEditions.id, activeEdition("eu")));
+      await db
+        .update(sanctionsEditions)
+        .set({
+          entryCount: entriesFor("ch").length + incompleteScanAliases.length,
+        })
+        .where(eq(sanctionsEditions.id, activeEdition("ch")));
       const inputDigests = new Map<SanctionsSource, string>();
       const digest = (lists: Parameters<typeof buildScreeningIndex>[0]) => {
         const inputHash = createSha256();
@@ -1140,10 +1162,60 @@ describe("public sanctions search parity", () => {
         }
         return inputHash.digest("hex");
       };
-      const recorded = recordingMatcherWorker();
+      const recorded = {
+        work: {
+          entryBatches: 0,
+          entries: 0,
+          maximumBatchEntries: 0,
+          screenings: 0,
+          indexes: 0,
+        },
+      };
+      const createWorker = () => {
+        const worker = new Worker(
+          new URL(
+            "../../lib/lists/sanctions/sanctions-matcher-worker.ts",
+            import.meta.url,
+          ),
+        );
+        const postMessage = worker.postMessage.bind(worker);
+        spyOn(worker, "postMessage").mockImplementation(
+          (message: SanctionsMatcherMessage, transferList) => {
+            switch (message.type) {
+              case "entries":
+                recorded.work.entryBatches += 1;
+                recorded.work.entries += message.entries.length;
+                recorded.work.maximumBatchEntries = Math.max(
+                  recorded.work.maximumBatchEntries,
+                  message.entries.length,
+                );
+                break;
+              case "index":
+                recorded.work.indexes += 1;
+                break;
+              case "screen":
+                recorded.work.screenings += 1;
+                break;
+              default: {
+                message satisfies never;
+                panic("Unexpected matcher message");
+              }
+            }
+            postMessage(
+              message.type === "screen" &&
+                message.source === "ch" &&
+                message.query.name === INCOMPLETE_SCAN_NAME
+                ? { ...message, maxWork: INCOMPLETE_SCAN_WORK_LIMIT }
+                : message,
+              transferList,
+            );
+          },
+        );
+        return worker;
+      };
       const pool = createSanctionsMatcherPool({
         deadlineMs: 10_000,
-        createWorker: recorded.createWorker,
+        createWorker,
       });
       pools.add(pool);
       const context = new InMemoryRateLimitContext();
@@ -1285,6 +1357,11 @@ describe("public sanctions search parity", () => {
           },
           { type: "organization", name: costlyName, companyId: null },
           { type: "organization", name: "Mohammed Ali", companyId: null },
+          {
+            type: "organization",
+            name: INCOMPLETE_SCAN_NAME,
+            companyId: null,
+          },
         ] as const satisfies readonly NameSubject[];
         const publicResponses = new Map<string, Response>();
         const analytics = installRecordingAnalytics();
@@ -1373,20 +1450,54 @@ describe("public sanctions search parity", () => {
           ),
         ).toEqual(Array.from({ length: 8 }, (_, index) => `costly-${index}`));
         expect(expensive.status).toBe("possible-match");
-        const partial = await parity({
+        const complete = await parity({
           type: "organization",
           name: "Mohammed Ali",
           companyId: null,
         });
-        expect(
-          partial.lists.find(({ source }) => source === "eu"),
-        ).toMatchObject({
+        expect(complete.lists.find(({ source }) => source === "eu")).toEqual({
+          source: "eu",
+          issuer: "EU",
+          classification: "binding",
+          editionId: activeEdition("eu"),
+          publishedAt: "2026-09-19",
+          verifiedAt: VERIFIED_AT.toISOString(),
+          pendingUpdate: null,
+          status: "clear",
+          reason: null,
+          truncated: false,
+          totalMatches: 0,
+          possibleMatches: [],
+        });
+        expect(complete.status).toBe("clear");
+
+        const incompleteSubject = {
+          type: "organization",
+          name: INCOMPLETE_SCAN_NAME,
+          companyId: null,
+        } as const;
+        const incompleteResponse =
+          publicResponses.get(JSON.stringify(incompleteSubject)) ??
+          panic("Missing bounded worker response");
+        const incomplete = Value.Decode(
+          publicSanctionsResponseSchema[200],
+          await incompleteResponse.json(),
+        );
+        expect(incomplete.lists.find(({ source }) => source === "ch")).toEqual({
+          source: "ch",
+          issuer: "CH",
+          classification: "informational",
+          editionId: activeEdition("ch"),
+          publishedAt: "2026-09-19",
+          verifiedAt: VERIFIED_AT.toISOString(),
+          pendingUpdate: null,
           status: "incomplete",
           reason: null,
           truncated: true,
+          totalMatches: 0,
           possibleMatches: [],
         });
-        expect(partial.status).toBe("incomplete");
+        expect(incomplete.status).toBe("incomplete");
       } finally {
         context.kill();
         await pool.close();
