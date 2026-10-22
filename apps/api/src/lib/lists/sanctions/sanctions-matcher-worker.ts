@@ -98,6 +98,7 @@ port.on("message", (request: SanctionsMatcherMessage) => {
   const result = screen(cached.index, request.query, {
     cutoff: request.cutoff,
     limit: request.limit,
+    ...(request.maxWork === undefined ? {} : { maxWork: request.maxWork }),
     onWork: (usage) => {
       work = usage;
     },

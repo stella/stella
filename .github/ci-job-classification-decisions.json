@@ -422,7 +422,7 @@
   "candidate:.github/workflows/deploy-staging.yml/build-web": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "276e14646d9872c13a7773713ec06dc4c4363a5bdb50ce631ae59899c37c9f78"
+    "reviewedDigest": "91b8f046a2658b073bd7da59dfda6b2c3c583ffabef5c52cba040ecdae9f8dae"
   },
   "candidate:.github/workflows/deploy-staging.yml/promote-staging": {
     "kind": "priority",
@@ -598,6 +598,11 @@
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
     "reviewedDigest": "2b7161862c4a826becec79dba7d944d9e74c7e6ed2a2a09a53a9152ab3e4049c"
+  },
+  "candidate:.github/workflows/nightly-test.yml/sanctions-real-editions": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment.",
+    "reviewedDigest": "adf2a9ae78341a48a77f72f188605a9a3ddb67b175a320ef675541f5734b0ea9"
   },
   "candidate:.github/workflows/nightly-test.yml/workspace-replay": {
     "kind": "ordinary",
@@ -802,7 +807,7 @@
   "candidate:.github/workflows/release.yml/prepare-web-image": {
     "kind": "priority",
     "qualifier": "Reuses a verified web receipt or builds, publishes and attests the resolved release web image.",
-    "reviewedDigest": "9ecd7b7ed2c09dc0a66526f0e98b829decb0828e34eff2cf7cc7a88acfa3006c"
+    "reviewedDigest": "c13164bce9e2c111d72d80631e0c0863df59facf85bf35e17fb7bbb5fbd062b9"
   },
   "candidate:.github/workflows/release.yml/manifest": {
     "kind": "priority",
