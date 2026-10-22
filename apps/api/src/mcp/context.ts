@@ -568,8 +568,7 @@ export const resolveMcpSessionContext = async (
   // Read once, on first use within this request: settings and decrypted
   // registry credentials in one scoped transaction.
   let enabledRegistrySlugs:
-    | Promise<Result<readonly BusinessRegistrySlug[], SafeDbError>>
-    | undefined;
+    Promise<Result<readonly BusinessRegistrySlug[], SafeDbError>> | undefined;
   const loadEnabledRegistrySlugs = async () => {
     enabledRegistrySlugs ??= readEnabledRegistrySlugs({
       organizationId,
