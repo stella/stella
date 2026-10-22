@@ -12,6 +12,7 @@ import { member } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import {
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
   organizationProfessionalUseAcceptances,
   userProfessionalUseAcceptances,
 } from "@/api/db/schema";
@@ -120,7 +121,11 @@ export const requireUserCreationOrigin = (
   );
 };
 
-type AcceptingUser = { userId: SafeId<"user">; statementVersion: string };
+type AcceptingUser = {
+  userId: SafeId<"user">;
+  statementVersion: string;
+  source: (typeof PROFESSIONAL_USE_ACCEPTANCE_SOURCE)[keyof typeof PROFESSIONAL_USE_ACCEPTANCE_SOURCE];
+};
 
 /**
  * Insert-once acceptance of a statement version. The caller holds the
@@ -128,7 +133,7 @@ type AcceptingUser = { userId: SafeId<"user">; statementVersion: string };
  */
 const insertUserAcceptance = async (
   tx: Pick<Transaction, "insert">,
-  { userId, statementVersion }: AcceptingUser,
+  { userId, statementVersion, source }: AcceptingUser,
 ): Promise<void> => {
   // audit: skip - audit rows are organization-scoped; each organization acceptance row is audited
   await tx
@@ -137,6 +142,7 @@ const insertUserAcceptance = async (
       userId,
       statementVersion,
       termsVersion: PROFESSIONAL_USE_TERMS_VERSION,
+      source,
     })
     .onConflictDoNothing({ target: userProfessionalUseAcceptances.userId });
 };
@@ -239,6 +245,7 @@ export const recordUserProfessionalUseAtCreation = async (
       await insertUserAcceptance(db, {
         userId,
         statementVersion: acceptance.statementVersion,
+        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.registration,
       });
       return;
     case "required":
@@ -470,6 +477,7 @@ const recordProfessionalUseAcceptance = async ({
   await insertUserAcceptance(tx, {
     userId,
     statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
+    source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
   });
   const accepted = await readUserProfessionalUse(tx, userId);
   if (accepted.status !== PROFESSIONAL_USE_STATUS.accepted) {
