@@ -32,6 +32,7 @@ export const LOCAL_ONLY_FEATURES = [
         "src/clipboard/ClipboardGroupFields.tsx",
         "src/clipboard/ClipboardImagePreview.tsx",
         "src/registry/RegistrySearch.tsx",
+        "src/shared/use-clipboard-shortcut.ts",
       ],
     },
     windows: ["clipboard", "clipboard-editor"],
