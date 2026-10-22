@@ -54,8 +54,12 @@ test("a stale case-law search keeps content or offers recovery after a deploy", 
   });
   const exited = once(server, "exit");
   const logs: string[] = [];
-  server.stdout.on("data", (chunk) => logs.push(String(chunk)));
-  server.stderr.on("data", (chunk) => logs.push(String(chunk)));
+  server.stdout.on("data", (chunk) => {
+    logs.push(String(chunk));
+  });
+  server.stderr.on("data", (chunk) => {
+    logs.push(String(chunk));
+  });
 
   try {
     await expect
@@ -107,7 +111,7 @@ test("a stale case-law search keeps content or offers recovery after a deploy", 
             content.getBoundingClientRect().height > 0;
           const populated =
             visible &&
-            ((content.textContent ?? "").trim().length > 0 ||
+            (content.textContent.trim().length > 0 ||
               content.querySelector('[data-slot="skeleton"]') !== null);
           const now = performance.now();
           if (populated) {
