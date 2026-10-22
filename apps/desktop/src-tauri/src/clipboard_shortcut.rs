@@ -183,7 +183,10 @@ pub fn validate(keys: &ShortcutKeys) -> Result<Shortcut, ShortcutRejection> {
   }
   let code = Shortcut::from_str(&keys.code)
     .map(|parsed| parsed.key)
-    .map_err(|_| ShortcutRejection::UnsupportedKey)?;
+    .map_err(crate::logging::replaced_logged(
+      "clipboard shortcut could not be parsed",
+      ShortcutRejection::UnsupportedKey,
+    ))?;
   if LOCK_KEYS.contains(&code) {
     return Err(ShortcutRejection::UnsupportedKey);
   }
@@ -360,9 +363,9 @@ pub fn resume_after_window_closed(app: &AppHandle) {
 fn locked<'a>(
   state: &'a State<'_, ClipboardShortcutState>,
 ) -> Result<std::sync::MutexGuard<'a, ClipboardShortcut>, String> {
-  state
-    .lock()
-    .map_err(|_| "clipboard shortcut state is unavailable".to_string())
+  state.lock().map_err(crate::logging::with_cause_logged(
+    "clipboard shortcut state is unavailable",
+  ))
 }
 
 #[tauri::command]
