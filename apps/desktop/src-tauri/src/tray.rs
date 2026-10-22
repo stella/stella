@@ -291,9 +291,12 @@ fn build_tray_menu_with_activity(
     builder = builder.separator();
   }
 
-  builder = builder.item(
-    &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard")).build(app)?,
-  );
+  if !crate::managed_policy::current().clipboard_disabled {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard"))
+        .build(app)?,
+    );
+  }
   if let Some(activity) = activity {
     builder = builder.item(
       &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, activity_status_label(activity))
