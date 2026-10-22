@@ -62,6 +62,7 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
+import { encryptContent } from "@/api/lib/content-encryption";
 import { createUserFileKey } from "@/api/lib/file-key";
 import { cents } from "@/api/lib/money";
 import {
@@ -1359,6 +1360,8 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
   // but a wrong-width IV would be a fixture the production reader could never
   // have written. `sourceSha256Hex` satisfies the 64-hex-character CHECK and
   // matches the digest already seeded on the corresponding file field.
+  const encryptedA = await encryptContent(ids.orgA, "extracted text a1");
+  const encryptedB = await encryptContent(ids.orgB, "extracted text b1");
   await db.insert(extractedContent).values([
     {
       entityId: ids.entityA1,
@@ -1368,8 +1371,8 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       sourceFieldId: ids.fileFieldA1,
       sourceFileId: ids.fileObjectA1,
       sourceSha256Hex: "a".repeat(64),
-      ciphertext: Buffer.from("extracted text a1"),
-      iv: Buffer.alloc(12, 0xa1),
+      ciphertext: encryptedA.ciphertext,
+      iv: encryptedA.iv,
       charCount: 17,
       language: "en",
     },
@@ -1381,8 +1384,8 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       sourceFieldId: ids.fileFieldB1,
       sourceFileId: ids.fileObjectB1,
       sourceSha256Hex: "b".repeat(64),
-      ciphertext: Buffer.from("extracted text b1"),
-      iv: Buffer.alloc(12, 0xb1),
+      ciphertext: encryptedB.ciphertext,
+      iv: encryptedB.iv,
       charCount: 17,
       language: "en",
     },
