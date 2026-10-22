@@ -106,13 +106,9 @@ describe("chat composer census", () => {
   test("a composer send cannot finish without saying whether the draft is kept", () => {
     // @ts-expect-error a send that returns nothing would let the composer drop the draft
     const quiet: ChatSend = async () => {};
-    // @ts-expect-error an early bare return is a declined send that forgot the draft
-    const earlyReturn: ChatSend = async (draft) => {
-      if (draft.html === "") {
-        return;
-      }
-      return { kind: "sent" };
-    };
+    const earlyReturn: ChatSend = async (draft) =>
+      // @ts-expect-error an early bare return is a declined send that forgot the draft
+      draft.html === "" ? undefined : { kind: "sent" };
     const declining: ChatSend = async (draft) =>
       draft.html === "" ? { kind: "kept" } : { kind: "sent" };
 
