@@ -1356,6 +1356,12 @@ export const caseLawDecisionAliases = p.pgTable(
       sql`${t.retiredDecisionId} <> ${t.canonicalDecisionId}`,
     ),
     ...caseLawIngestionOnlyPolicies(),
+    p.pgPolicy("case_law_decision_aliases_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_aliases'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_aliases'::regclass)`,
+    }),
   ],
 );
 
@@ -3220,6 +3226,12 @@ export const caseLawSearchBackfillFailures = p.pgTable(
       sql`(${t.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN} AND ${t.nextEligibleAt} IS NOT NULL) OR (${t.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED} AND ${t.nextEligibleAt} IS NULL)`,
     ),
     ...caseLawIngestionOnlyPolicies(),
+    p.pgPolicy("case_law_search_backfill_failures_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_search_backfill_failures'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_search_backfill_failures'::regclass)`,
+    }),
   ],
 );
 
@@ -3515,6 +3527,12 @@ export const caseLawDecisionCitationStats = p.pgTable(
           AND ${redistributableCaseLawSourceFor(sql`citation_stats_source.descriptor`)}
       ) END`,
     }),
+    p.pgPolicy("case_law_decision_citation_stats_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_citation_stats'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_citation_stats'::regclass)`,
+    }),
   ],
 );
 
@@ -3548,6 +3566,12 @@ export const caseLawDecisionCitationStatsState = p.pgTable(
       for: "select",
       to: stellaPublicLawReader,
       using: sql`true`,
+    }),
+    p.pgPolicy("case_law_decision_citation_stats_state_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_citation_stats_state'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_citation_stats_state'::regclass)`,
     }),
   ],
 );
