@@ -29,15 +29,19 @@ const renderWithQuery = (node: ReactNode) =>
     </QueryClientProvider>,
   );
 
-test("connector icons render only API-fetched blob URLs", async () => {
-  const remote = "https://connector.example/assets/icon.png";
+test("icon paths on the same host use distinct proxies and blob images", async () => {
+  const firstRemote = "https://connector.example/assets/first.png";
+  const secondRemote = "https://connector.example/assets/second.png";
   const requests: string[] = [];
   const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
       async (input: URL | RequestInfo) => {
-        requests.push(input instanceof Request ? input.url : input.toString());
+        const request = input instanceof Request ? input.url : input.toString();
+        requests.push(request);
         return new Response(
-          new Blob([new Uint8Array([1])], { type: "image/png" }),
+          new Blob([new Uint8Array([request.includes("first.png") ? 1 : 2])], {
+            type: "image/png",
+          }),
         );
       },
       { preconnect: () => {} },
@@ -45,18 +49,27 @@ test("connector icons render only API-fetched blob URLs", async () => {
   );
 
   try {
-    const view = renderWithQuery(<ProxiedIcon alt="" remoteUrl={remote} />);
-    await waitFor(() =>
-      expect(view.container.querySelector("img")).not.toBeNull(),
+    const view = renderWithQuery(
+      <>
+        <ProxiedIcon alt="first" remoteUrl={firstRemote} />
+        <ProxiedIcon alt="second" remoteUrl={secondRemote} />
+      </>,
     );
-    const src = view.container.querySelector("img")?.getAttribute("src");
-    expect(src?.startsWith("blob:")).toBe(true);
-    expect(src).not.toContain("connector.example");
-    expect(
-      requests.some((request) =>
-        request.includes("link-icons/connector.example"),
-      ),
-    ).toBe(true);
+    await waitFor(() =>
+      expect(view.container.querySelectorAll("img")).toHaveLength(2),
+    );
+    const sources = [...view.container.querySelectorAll("img")].map((image) =>
+      image.getAttribute("src"),
+    );
+    expect(sources.every((src) => src?.startsWith("blob:"))).toBe(true);
+    expect(new Set(sources).size).toBe(2);
+    expect(requests).toHaveLength(2);
+    expect(requests.some((request) => request.includes("first.png"))).toBe(
+      true,
+    );
+    expect(requests.some((request) => request.includes("second.png"))).toBe(
+      true,
+    );
   } finally {
     fetchSpy.mockRestore();
   }

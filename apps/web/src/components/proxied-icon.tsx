@@ -3,7 +3,7 @@ import type { ComponentProps } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { linkIconOptions } from "@/features/chat/link-icons";
+import { exactIconOptions } from "@/features/chat/link-icons";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useQueryView } from "@/lib/use-query-view";
 
@@ -21,10 +21,10 @@ export const ProxiedIcon = ({ alt, remoteUrl, ...props }: ProxiedIconProps) => {
 export const useProxiedIconSrc = (
   remoteUrl: string | null | undefined,
 ): string | undefined => {
-  const hostname = remoteUrl ? safeHostname(remoteUrl) : undefined;
+  const iconUrl = remoteUrl ? safeIconUrl(remoteUrl) : undefined;
   const iconQuery = useQuery({
-    ...linkIconOptions(hostname ?? ""),
-    enabled: hostname !== undefined,
+    ...exactIconOptions(iconUrl ?? ""),
+    enabled: iconUrl !== undefined,
   });
   const iconView = useQueryView(iconQuery);
   const icon = iconView.type === "items" ? iconView.items : undefined;
@@ -47,12 +47,10 @@ export const useProxiedIconSrc = (
   return localIcon && localIcon.blob === blob ? localIcon.src : undefined;
 };
 
-const safeHostname = (remoteUrl: string): string | undefined => {
+const safeIconUrl = (remoteUrl: string): string | undefined => {
   if (!URL.canParse(remoteUrl)) {
     return undefined;
   }
   const parsed = new URL(remoteUrl);
-  return parsed.protocol === "https:" || parsed.protocol === "http:"
-    ? parsed.hostname
-    : undefined;
+  return parsed.protocol === "https:" ? parsed.href : undefined;
 };
