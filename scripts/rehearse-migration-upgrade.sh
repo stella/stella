@@ -115,27 +115,25 @@ api_env=(
 boot_until_ready() {
   local image="$1"
   local name="$2"
-  local log_file
-  log_file="$(mktemp)"
-  docker run --rm -d --name "$name" --network host "${api_env[@]}" "$image" > /dev/null
+  # No --rm: an API that exits before /ready keeps its container, and so its
+  # startup logs, until they are printed. Every path removes it afterwards.
+  docker rm -f "$name" >/dev/null 2>&1 || true
+  docker run -d --name "$name" --network host "${api_env[@]}" "$image" > /dev/null
   for _ in $(seq 1 120); do
     if curl --connect-timeout 2 --max-time 5 -fsS http://127.0.0.1:3001/ready >/dev/null; then
       docker stop --time 10 "$name" >/dev/null
-      rm -f "$log_file"
+      docker rm -f "$name" >/dev/null 2>&1 || true
       return
     fi
-    if ! docker inspect "$name" >/dev/null 2>&1; then
-      docker logs "$name" >"$log_file" 2>&1 || true
-      cat "$log_file"
-      rm -f "$log_file"
+    if [[ "$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null)" != "true" ]]; then
+      docker logs "$name" 2>&1 || true
+      docker rm -f "$name" >/dev/null 2>&1 || true
       fail "API image ${image} exited before /ready answered."
     fi
     sleep 1
   done
-  docker logs "$name" >"$log_file" 2>&1 || true
-  cat "$log_file"
-  docker stop --time 10 "$name" >/dev/null 2>&1 || true
-  rm -f "$log_file"
+  docker logs "$name" 2>&1 || true
+  docker rm -f "$name" >/dev/null 2>&1 || true
   fail "API image ${image} did not answer /ready within 120s."
 }
 
