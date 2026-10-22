@@ -481,17 +481,17 @@ impl AccountStore {
 pub async fn current(state: &AccountState) -> Result<Option<LinkedAccount>, String> {
   let mut store = state.lock().await;
   let saved = store.load_usable().await?;
-  if saved
+  let expired = saved
     .as_ref()
-    .is_some_and(|saved| !is_live_expiry(&saved.credential.expires_at))
-  {
+    .is_some_and(|saved| !is_live_expiry(&saved.credential.expires_at));
+  if expired {
     if store.pending().await?.is_some() {
       return Err("Account renewal requires recovery".into());
     }
     store.expire().await?;
-    return Ok(None);
   }
-  Ok(saved)
+  drop(store);
+  Ok(saved.filter(|_| !expired))
 }
 
 #[derive(Deserialize)]
@@ -738,11 +738,12 @@ async fn load_account_for_request(
     return Ok(None);
   };
   let saved = recover_rotation(&mut store, saved, &HttpRenewal, mode).await?;
-  if !is_live_expiry(&saved.credential.expires_at) {
+  let live = is_live_expiry(&saved.credential.expires_at);
+  if !live {
     store.expire().await?;
-    return Ok(None);
   }
-  Ok(Some(saved))
+  drop(store);
+  Ok(live.then_some(saved))
 }
 
 async fn load_request_account(
@@ -914,6 +915,7 @@ pub async fn invalidate(
       keychain_clear_failed()
     })?;
   }
+  drop(store);
   Ok(())
 }
 
@@ -1214,11 +1216,18 @@ impl PreparedBrowserConnection {
       outcome @ (ConnectionStart::SameOriginPending
       | ConnectionStart::DifferentOriginPending) => return Ok(outcome),
     }
-    if app.opener().open_url(self.url, None::<&str>).is_err() {
+    // The reservation stays locked while the browser opens, so a failed
+    // open is withdrawn before another caller can observe it.
+    let opened = app.opener().open_url(self.url, None::<&str>).is_ok();
+    if !opened {
       *pending = None;
-      return Err("Could not open desktop connection".into());
     }
-    Ok(ConnectionStart::Started)
+    drop(pending);
+    if opened {
+      Ok(ConnectionStart::Started)
+    } else {
+      Err("Could not open desktop connection".into())
+    }
   }
 }
 
@@ -1399,20 +1408,19 @@ pub async fn signed_browser_connection_status(
   correlation_id: &str,
 ) -> Result<SignedConnectionStatus, String> {
   let status = browser_connection_status(state, correlation_id).await;
-  let pending = BROWSER_CONNECTION
+  let now = std::time::Instant::now();
+  let key = BROWSER_CONNECTION
     .lock()
-    .map_err(with_cause_logged("Desktop connection is unavailable"))?;
-  let connection = pending
+    .map_err(with_cause_logged("Desktop connection is unavailable"))?
     .as_ref()
+    .filter(|connection| {
+      connection.correlation_id == correlation_id && now < connection.expires_at
+    })
+    .map(|connection| {
+      ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes())
+    })
     .ok_or("Desktop connection is unavailable")?;
-  if connection.correlation_id != correlation_id
-    || std::time::Instant::now() >= connection.expires_at
-  {
-    return Err("Desktop connection is unavailable".into());
-  }
   let timestamp = chrono::Utc::now().timestamp().to_string();
-  let key =
-    ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes());
   let proof = hex::encode(
     ring::hmac::sign(
       &key,
@@ -1986,7 +1994,9 @@ mod tests {
         lifetime > 0 && lifetime <= max_lifetime
       );
       if lifetime <= 0 || lifetime > max_lifetime {
-        assert!(matches!(&*state.lock().await, AccountStore::Memory(None)));
+        let store = state.lock().await;
+        assert!(matches!(&*store, AccountStore::Memory(None)));
+        drop(store);
       }
     }
     assert!(!is_live_expiry("not-a-date"));
@@ -2176,10 +2186,9 @@ mod tests {
       keychain_clear_failed()
     );
     // The record is still in the store, but nothing reads its key again.
-    assert!(matches!(
-      &*state.lock().await,
-      AccountStore::ReadOnly(Some(_))
-    ));
+    let store = state.lock().await;
+    assert!(matches!(&*store, AccountStore::ReadOnly(Some(_))));
+    drop(store);
     assert!(current(&state).await.unwrap().is_none());
     assert!(request_account(&state).await.unwrap().is_none());
     assert!(foreground_account(&state).await.unwrap().is_none());
@@ -2893,6 +2902,7 @@ mod tests {
     store.clear().await.unwrap();
     assert!(!store.expired().await.unwrap());
     assert!(store.load().await.unwrap().is_none());
+    drop(store);
   }
 
   #[tokio::test]

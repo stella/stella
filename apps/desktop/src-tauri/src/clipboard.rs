@@ -51,7 +51,7 @@ use image::{DynamicImage, ImageDecoder, codecs::bmp::BmpDecoder};
 #[cfg(target_os = "macos")]
 use std::path::PathBuf;
 
-const HISTORY_EVENT: &str = "clipboard-history-changed";
+pub const HISTORY_EVENT: &str = "clipboard-history-changed";
 const HISTORY_LOADING_ERROR: &str = "clipboard history is still loading";
 const INTERNAL_CLIPBOARD_FORMAT: &str = "legal.stella.desktop.clipboard";
 #[cfg(target_os = "windows")]

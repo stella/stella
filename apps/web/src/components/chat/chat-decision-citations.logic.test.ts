@@ -18,6 +18,8 @@ import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import type { ExternalSourceReference } from "@/components/chat/external-source-store";
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 
+const APP_ORIGINS: ReadonlySet<string> = new Set(["https://app.test"]);
+
 const firstId = "019a0000-0000-7000-8000-000000000101";
 const secondId = "019a0000-0000-7000-8000-000000000103";
 const origins = new Set(["https://app.example.test"]);
@@ -133,6 +135,7 @@ test("only visible clarification analysis contributes Markdown and connector ide
     ],
   } satisfies ChatUIMessage;
   const extracted = collectSourceChipEntries({
+    appOrigins: APP_ORIGINS,
     parts: external.parts,
   }).uniqueExternalSources;
   expect(extracted).toHaveLength(1);

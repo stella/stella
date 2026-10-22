@@ -4,7 +4,7 @@
 // instead of silently dropping a readonly modifier or a symbol key.
 
 import { panic } from "better-result";
-import ts from "typescript";
+import ts from "typescript6";
 
 const SUPPORTED_MAJOR = "6.";
 // `CheckFlags.Readonly` in src/compiler/types.ts.

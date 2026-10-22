@@ -151,6 +151,7 @@ async fn current_decision(app: &AppHandle) -> AccountDecision {
     tracing::warn!(error = %error, "feature access is unavailable; gated features stay off");
     HashSet::new()
   });
+  drop(request);
   AccountDecision {
     namespace,
     expires_at,

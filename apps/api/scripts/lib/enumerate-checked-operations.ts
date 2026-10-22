@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { canonicalModuleId } from "../../../../.oxlint-plugins/module-id.ts";
 import { VERIFICATION_MODEL_TASK } from "../../src/lib/lists/verification/model-call";

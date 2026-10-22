@@ -183,7 +183,11 @@ pub fn activity_copy_text(
   let manager = state.lock().map_err(lock_error)?;
   caller.require_current(&app)?;
   manager.require_caller(&caller)?;
-  crate::clipboard::write_plain_text(text)
+  // The lock is held through the write: an account switch takes it, so the
+  // account check stays true until the text is on the clipboard.
+  let written = crate::clipboard::write_plain_text(text);
+  drop(manager);
+  written
 }
 
 #[tauri::command]
@@ -202,6 +206,23 @@ pub fn activity_set_capture_details(
   if should_prompt {
     caller.require_current(&app)?;
     activity_details::request_permission();
+  }
+  let _ = app.emit(activity::CHANGED_EVENT, ());
+  Ok(())
+}
+
+#[tauri::command]
+pub fn activity_set_detect_calls(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  enabled: bool,
+) -> Result<(), String> {
+  {
+    let mut manager = state.lock().map_err(lock_error)?;
+    caller.require_current(&app)?;
+    manager.require_caller(&caller)?;
+    manager.set_detect_calls(enabled, Utc::now())?;
   }
   let _ = app.emit(activity::CHANGED_EVENT, ());
   Ok(())

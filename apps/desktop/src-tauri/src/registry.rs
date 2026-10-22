@@ -225,9 +225,9 @@ pub async fn registry_get_state(
     .get("defaultRegistryId")
     .filter(|value| value.is_null() || value.is_string())
     .ok_or("Invalid registry configuration")?;
-  Ok(
-    serde_json::json!({"status":"connected", "accountLabel":saved.account.email, "expiresAt":saved.credential.expires_at, "registries":registries, "defaultRegistryId":default_registry_id}),
-  )
+  let connected = serde_json::json!({"status":"connected", "accountLabel":saved.account.email, "expiresAt":saved.credential.expires_at, "registries":registries, "defaultRegistryId":default_registry_id});
+  drop(saved);
+  Ok(connected)
 }
 
 /// Only a decoded credential refusal ends the link; proof and role refusals keep it.

@@ -244,6 +244,7 @@ impl DesktopCrashMonitor {
       }
     };
     state.tracking = TrackingState::Owned { lock, mode };
+    drop(state);
     Ok(Acquisition::Complete(previous))
   }
 
@@ -262,6 +263,7 @@ impl DesktopCrashMonitor {
         if matches!(state.lifecycle, RunLifecycle::Running) {
           state.tracking = TrackingState::Unavailable;
         }
+        drop(state);
         return Ok(Acquisition::Contended);
       }
       std::thread::sleep(delay.min(remaining));
@@ -631,6 +633,7 @@ mod tests {
         Some(42),
         Some("main"),
       ));
+      drop(state);
     }
     let release = std::thread::spawn(move || {
       std::thread::sleep(Duration::from_millis(20));
@@ -673,10 +676,9 @@ mod tests {
       replacement.acquire_with_retry(&policy).unwrap(),
       Acquisition::Contended
     ));
-    assert!(matches!(
-      replacement.state.lock().unwrap().tracking,
-      TrackingState::Unavailable
-    ));
+    let state = replacement.state.lock().unwrap();
+    assert!(matches!(state.tracking, TrackingState::Unavailable));
+    drop(state);
     drop(replacement);
     let replacement = waiting_monitor(path.clone(), new_marker(200, 42));
     replacement.clean_exit();

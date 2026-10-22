@@ -24,12 +24,13 @@ describe("logger attributes", () => {
         "error.type": "TaggedError",
         fileName: "strategy.pdf",
         "http.status_code": 500,
+        "x-stella-synthetic-key": "stl_syn_43-example",
         title: "Matter title",
       }),
     ).toEqual({
       "error.type": "TaggedError",
       "http.status_code": 500,
-      "log.attributes_dropped": 4,
+      "log.attributes_dropped": 5,
     });
   });
 
