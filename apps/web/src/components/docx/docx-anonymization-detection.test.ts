@@ -6,7 +6,10 @@ import type { AnonymizationTerm } from "@stll/folio-react";
 
 import { useInspectorAnonymizationStore } from "@/components/inspector/inspector-anonymization-store";
 
-import { startAnonymizationDetection } from "./docx-anonymization-detection";
+import {
+  confirmAnonymizationDetectionCurrent,
+  startAnonymizationDetection,
+} from "./docx-anonymization-detection";
 
 const schema = new Schema({
   nodes: {
@@ -56,9 +59,11 @@ type PendingDetection = {
 const createHarness = ({
   paragraphCount,
   holdRequests = false,
+  failRequests = false,
 }: {
   paragraphCount: number;
   holdRequests?: boolean;
+  failRequests?: boolean;
 }) => {
   let work = emptyWork();
   const paragraphs = Array.from({ length: paragraphCount }, (_, index) =>
@@ -85,6 +90,7 @@ const createHarness = ({
       ),
     );
   const view = { state: { doc: buildDoc() } };
+  const fieldId = `field-${paragraphCount}`;
   const requestTexts: string[] = [];
   const pending: PendingDetection[] = [];
   let delivered: AnonymizationTerm[] = [];
@@ -97,6 +103,9 @@ const createHarness = ({
       const pairs = text.includes(PERSON)
         ? [{ original: PERSON, label: "person" }]
         : [];
+      if (failRequests) {
+        return Promise.reject(new Error("detection failed"));
+      }
       if (!holdRequests) {
         return Promise.resolve({ pairs });
       }
@@ -104,7 +113,7 @@ const createHarness = ({
         pending.push({ text, resolve: () => resolve({ pairs }) });
       });
     },
-    fieldId: `field-${paragraphCount}`,
+    fieldId,
     onDetected: (terms) => {
       work.deliveries += 1;
       delivered = terms;
@@ -128,16 +137,27 @@ const createHarness = ({
       await flush();
     }
   };
-  const editParagraph = (index: number, revision: number) => {
+  /** Edits the document; `reported: false` simulates a missed Folio emission. */
+  const editParagraph = (
+    index: number,
+    revision: number,
+    { reported = true }: { reported?: boolean } = {},
+  ) => {
     paragraphs[index] = paragraphText(index, revision);
     view.state = { doc: buildDoc() };
-    detection.noteDocChanged();
+    if (reported) {
+      detection.noteDocChanged();
+    }
   };
+  const status = () =>
+    useInspectorAnonymizationStore.getState()
+      .anonymizationPipelineStatusByFieldId[fieldId] ?? "idle";
 
   return {
     advance,
     detection,
     editParagraph,
+    fieldId,
     flush,
     get delivered() {
       return delivered;
@@ -147,6 +167,7 @@ const createHarness = ({
     resetWork: () => {
       work = emptyWork();
     },
+    status,
     get work() {
       return work;
     },
@@ -260,4 +281,73 @@ test("an edit made while detection runs is detected before results are shown", a
   expect(harness.work.deliveries).toBe(1);
   expect(harness.delivered).toEqual([{ canonical: PERSON, label: "person" }]);
   harness.detection.stop();
+});
+
+test("an edit Folio never reports is detected before the anonymized download proceeds", async () => {
+  const harness = createHarness({ paragraphCount: PARAGRAPHS });
+  await harness.advance(1000);
+  expect(confirmAnonymizationDetectionCurrent(harness.fieldId)).toBe(true);
+  expect(harness.status()).toBe("ready");
+
+  harness.editParagraph(42, 1, { reported: false });
+  harness.resetWork();
+  await harness.advance(60_000);
+  // Nothing noticed the edit on its own.
+  expect(harness.work.requests).toBe(0);
+
+  // The gate refuses, leaves the ready state and detects the current text.
+  expect(confirmAnonymizationDetectionCurrent(harness.fieldId)).toBe(false);
+  expect(harness.status()).toBe("running");
+  expect(harness.work.requests).toBe(1);
+  expect(harness.requestTexts.at(-1)).toContain(paragraphText(42, 1));
+
+  await harness.flush();
+  expect(harness.status()).toBe("ready");
+  expect(confirmAnonymizationDetectionCurrent(harness.fieldId)).toBe(true);
+  expect(harness.work.requests).toBe(1);
+  harness.detection.stop();
+});
+
+test("the download gate refuses while detection for the current text runs", async () => {
+  const harness = createHarness({
+    paragraphCount: PARAGRAPHS,
+    holdRequests: true,
+  });
+  await harness.advance(1000);
+  expect(harness.pending).toHaveLength(1);
+
+  expect(confirmAnonymizationDetectionCurrent(harness.fieldId)).toBe(false);
+  // The in-flight request already covers this text; nothing is duplicated.
+  expect(harness.pending).toHaveLength(1);
+
+  harness.pending[0]?.resolve();
+  await harness.flush();
+  expect(confirmAnonymizationDetectionCurrent(harness.fieldId)).toBe(true);
+  harness.detection.stop();
+});
+
+test("the download gate refuses when detection failed for the current text", async () => {
+  const harness = createHarness({
+    paragraphCount: PARAGRAPHS,
+    failRequests: true,
+  });
+  await harness.advance(1000);
+  expect(harness.status()).toBe("error");
+
+  expect(confirmAnonymizationDetectionCurrent(harness.fieldId)).toBe(false);
+  expect(harness.status()).toBe("error");
+  harness.detection.stop();
+});
+
+test("a stopped detection no longer gates its field", async () => {
+  const harness = createHarness({
+    paragraphCount: PARAGRAPHS,
+    holdRequests: true,
+  });
+  await harness.advance(1000);
+  expect(confirmAnonymizationDetectionCurrent(harness.fieldId)).toBe(false);
+
+  harness.detection.stop();
+  harness.detection.stop();
+  expect(confirmAnonymizationDetectionCurrent(harness.fieldId)).toBe(true);
 });

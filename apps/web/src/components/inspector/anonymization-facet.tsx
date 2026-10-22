@@ -42,6 +42,7 @@ import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { confirmAnonymizationDetectionCurrent } from "@/components/docx/docx-anonymization-detection";
 import { AnonymizationContextMenu } from "@/components/inspector/anonymization-context-menu";
 import { AnonymizationMatchStatus } from "@/components/inspector/anonymization-match-status";
 import {
@@ -476,6 +477,12 @@ export const AnonymizationFacet = ({
 
   const handleDownloadAnonymized = async () => {
     if (!activeFieldId || !canDownloadAnonymized) {
+      return;
+    }
+    // Fail closed: when the open document changed since its last detection,
+    // this starts detection for the current version and the facet leaves its
+    // ready state; the user downloads once that run lands.
+    if (!confirmAnonymizationDetectionCurrent(activeFieldId)) {
       return;
     }
     setDownloadStatus("running");

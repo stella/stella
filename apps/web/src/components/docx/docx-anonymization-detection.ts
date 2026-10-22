@@ -39,6 +39,38 @@ type AnonymizationDetection = {
 };
 
 /**
+ * Live detections per field. A field can be open in more than one editor
+ * (docked and full view), and every one of them must be current.
+ */
+const liveDetections = new Map<string, Set<() => boolean>>();
+
+/**
+ * Fail-closed gate for every exit that relies on the live DOCX detection
+ * (today: the anonymized download in the inspector facet). Returns true only
+ * when each live detection for the field holds a result computed for exactly
+ * the current document text and allowlist. Otherwise it starts detection for
+ * the current version (the facet leaves its ready state) and returns false,
+ * so the caller refuses; this does not depend on Folio reporting the edit.
+ *
+ * A field without a live DOCX detection passes: those exits detect the exact
+ * text they send (the export detects the printed PDF it builds).
+ */
+export const confirmAnonymizationDetectionCurrent = (
+  fieldId: string,
+): boolean => {
+  const confirms = liveDetections.get(fieldId);
+  if (confirms === undefined) {
+    return true;
+  }
+  let current = true;
+  for (const confirm of confirms) {
+    // Every detection is asked, so each stale one starts its own run.
+    current = confirm() && current;
+  }
+  return current;
+};
+
+/**
  * Quiet period after the last edit before the whole document is detected
  * again, so a burst of keystrokes costs one worker run.
  */
@@ -221,6 +253,20 @@ export const startAnonymizationDetection = ({
     clearSettleTimer();
     settleTimer = setTimeout(run, DETECTION_SETTLE_MS);
   };
+  const confirmCurrent = (): boolean => {
+    const { text, cacheKey } = readDetectionInput();
+    if (requestStatus === "idle" && text.length === 0) {
+      return true;
+    }
+    if (requestStatus === "idle" && cacheKey === lastDeliveredKey) {
+      return true;
+    }
+    run();
+    return false;
+  };
+  const fieldConfirms = liveDetections.get(fieldId) ?? new Set();
+  fieldConfirms.add(confirmCurrent);
+  liveDetections.set(fieldId, fieldConfirms);
   // The doc text isn't always populated when the view first captures (lazy
   // DOCX load, async paged rendering); the load itself is a document change
   // and reaches `noteDocChanged`.
@@ -236,6 +282,13 @@ export const startAnonymizationDetection = ({
     stop: () => {
       cancelled = true;
       clearSettleTimer();
+      fieldConfirms.delete(confirmCurrent);
+      if (
+        fieldConfirms.size === 0 &&
+        liveDetections.get(fieldId) === fieldConfirms
+      ) {
+        liveDetections.delete(fieldId);
+      }
     },
   };
 };
