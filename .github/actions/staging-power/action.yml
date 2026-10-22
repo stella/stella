@@ -13,6 +13,9 @@ inputs:
   action:
     description: on acquires the caller lease; off releases only that lease
     required: true
+  lease-attempt:
+    description: Run attempt that acquired the lease (for off, the acquiring job's lease-attempt output)
+    required: true
 runs:
   using: composite
   steps:
@@ -23,4 +26,5 @@ runs:
         APP_PRIVATE_KEY: ${{ inputs.app-private-key }}
         INFRA_REPO: ${{ inputs.infra-repo }}
         POWER_ACTION: ${{ inputs.action }}
+        LEASE_ATTEMPT: ${{ inputs.lease-attempt }}
       run: bash "$GITHUB_ACTION_PATH/dispatch.sh"

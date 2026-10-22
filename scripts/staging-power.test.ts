@@ -62,10 +62,18 @@ const assertLifecycle = (source: unknown) => {
   expect(acquire).toBeGreaterThanOrEqual(0);
   expect(probe).toBeGreaterThan(acquire);
   expect(health.steps[acquire]?.uses).toBe("./.github/actions/staging-power");
+  expect(health.steps[acquire]?.with?.["lease-attempt"]).toBe(
+    `\${{ github.run_attempt }}`,
+  );
   const release = cleanup.steps.at(-1);
   expect(release?.uses).toBe("./.github/actions/staging-power");
   expect(release?.with?.["action"]).toBe("off");
   expect(release?.if).toBe("always()");
+  // A rerun of only the failed cleanup runs in a later attempt; it must
+  // release the lease the acquiring attempt took.
+  expect(release?.with?.["lease-attempt"]).toBe(
+    `\${{ needs.staging-health.outputs.lease-attempt }}`,
+  );
   // A job must never wait on the workflow's own concurrency group.
   for (const job of Object.values(workflow.jobs)) {
     expect(job.concurrency).not.toEqual(workflow.concurrency);
@@ -90,6 +98,10 @@ test("overlapping staging pipelines serialize acquisition through final release"
       "success() && needs.staging-health.result",
     ),
     source.replace('action: "off"', 'action: "on"'),
+    source.replace(
+      `lease-attempt: \${{ needs.staging-health.outputs.lease-attempt }}\n`,
+      `lease-attempt: \${{ github.run_attempt }}\n`,
+    ),
   ]) {
     expect(mutation).not.toBe(source);
     expect(() => assertLifecycle(Bun.YAML.parse(mutation))).toThrow(
@@ -169,12 +181,14 @@ type ScenarioOptions = {
   action: "on" | "off";
   runId?: string;
   attempt?: string;
+  leaseAttempt?: string;
   scenario?: string;
 };
 const dispatch = async ({
   action,
   runId = "42",
   attempt = "1",
+  leaseAttempt = attempt,
   scenario = "success",
 }: ScenarioOptions) => {
   const directory = await mkdtemp(path.join(tmpdir(), "staging-power-"));
@@ -202,6 +216,7 @@ const dispatch = async ({
         GITHUB_REPOSITORY: "example/app",
         GITHUB_RUN_ID: runId,
         GITHUB_RUN_ATTEMPT: attempt,
+        LEASE_ATTEMPT: leaseAttempt,
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -251,6 +266,32 @@ test("acquire and release use the same scoped lease while overlapping callers an
   expect(rerun.payload["inputs[lease_id]"]).not.toBe(
     acquired.payload["inputs[lease_id]"],
   );
+});
+
+test("a cleanup retried in a later attempt releases the lease its run acquired", async () => {
+  const acquired = await dispatch({ action: "on" });
+  const retried = await dispatch({
+    action: "off",
+    attempt: "2",
+    leaseAttempt: "1",
+  });
+  expect(retried.exit).toBe(0);
+  expect(retried.payload["inputs[lease_id]"]).toBe("example/app:42:1");
+  expect(retried.payload["inputs[lease_id]"]).toBe(
+    acquired.payload["inputs[lease_id]"],
+  );
+  expect(retried.payload["inputs[caller_run_attempt]"]).toBe("1");
+});
+
+test("the run lookup reads only runs created since its dispatch", async () => {
+  const result = await dispatch({ action: "on" });
+  const lookups = result.calls
+    .split("\n")
+    .filter((line) => line.includes("/runs?"));
+  expect(lookups.length).toBeGreaterThan(0);
+  for (const line of lookups) {
+    expect(line).toMatch(/created=%3E%3D\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/u);
+  }
 });
 
 test.each(["failure", "cancelled", "lookup-error", "ambiguous"])(

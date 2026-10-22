@@ -213,6 +213,7 @@ jobs:
           app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
           infra-repo: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
           action: "on"
+          lease-attempt: ${{ github.run_attempt }}
 
       - name: Probe staging health
         timeout-minutes: 15
@@ -876,3 +877,4 @@ jobs:
           app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
           infra-repo: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
           action: "off"
+          lease-attempt: ${{ needs.staging-health.outputs.lease-attempt }}
