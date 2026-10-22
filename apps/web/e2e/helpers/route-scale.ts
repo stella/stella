@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import type { RouteNetworkMetrics } from "./network";
+import type { RouteRenderMetrics } from "./render-census";
 
 const reason = v.pipe(v.string(), v.trim(), v.minLength(12));
 const dimensionSchema = v.picklist([
@@ -10,15 +11,35 @@ const dimensionSchema = v.picklist([
   "dbQueries",
   "transactions",
   "responseSizes",
+  "renderCommits",
+  "dataRenderCommits",
 ]);
+// Dimensions measured once per route rather than per request.
+const ROUTE_DIMENSIONS = new Set<string>([
+  "depth",
+  "renderCommits",
+  "dataRenderCommits",
+]);
+
+// The large world holds ten times the small world's rows (100 -> 1000), so a
+// commit per row costs 900 extra commits and even a commit per ten rows 90.
+// Timing alone moves far less: each released response can land in its own
+// task and commit separately instead of batching with a sibling, and a
+// Suspense reveal can fall on either side of React's throttle window. The
+// allowance is a fixed floor plus one commit per API response of the route.
+export const RENDER_COMMIT_FLOOR = 8;
+export const renderCommitAllowance = (responses: number): number =>
+  RENDER_COMMIT_FLOOR + responses;
 const rowSchema = v.strictObject({
   route: v.pipe(v.string(), v.minLength(1)),
   dimension: dimensionSchema,
-  // Depth uses "$route"; every other allowance names one normalized request.
+  // Depth and render commits use "$route"; every other allowance names one
+  // normalized request.
   request: v.pipe(v.string(), v.minLength(1)),
   owner: v.pipe(v.string(), v.trim(), v.minLength(1)),
   reason,
-  // Absolute count delta, or response byte multiplier (default: 2).
+  // Absolute count delta, or response byte multiplier (default: 2). Render
+  // commit allowances replace the route's computed allowance.
   max: v.pipe(v.number(), v.integer(), v.minValue(1)),
 });
 
@@ -36,11 +57,20 @@ export const parseRouteScaleLedger = (text: string): RouteScaleLedgerRow[] => {
     if (ids.has(id)) {
       panic(`Duplicate route scale allowance: ${id}`);
     }
-    if ((row.dimension === "depth") !== (row.request === "$route")) {
-      panic(`Depth allowances must use $route: ${id}`);
+    if (ROUTE_DIMENSIONS.has(row.dimension) !== (row.request === "$route")) {
+      panic(`Route-level allowances, and only they, use $route: ${id}`);
     }
     if (row.dimension === "responseSizes" && row.max <= 2) {
       panic(`Response size allowance must exceed the default factor 2: ${id}`);
+    }
+    if (
+      (row.dimension === "renderCommits" ||
+        row.dimension === "dataRenderCommits") &&
+      row.max <= RENDER_COMMIT_FLOOR
+    ) {
+      panic(
+        `Render commit allowance must exceed the floor ${String(RENDER_COMMIT_FLOOR)}: ${id}`,
+      );
     }
     ids.add(id);
   }
@@ -58,12 +88,15 @@ type CheckScaleCostOptions = {
   request: string;
   before: number;
   after: number;
+  // Render commits may fall freely and grow up to the route's allowance.
+  growthAllowance?: number;
 };
 
 type CompareRouteScaleOptions = {
   route: string;
   small: RouteNetworkMetrics;
   large: RouteNetworkMetrics;
+  renders: { small: RouteRenderMetrics; large: RouteRenderMetrics };
   ledger: readonly RouteScaleLedgerRow[];
 };
 
@@ -71,6 +104,7 @@ export const compareRouteScale = ({
   route,
   small,
   large,
+  renders,
   ledger,
 }: CompareRouteScaleOptions): string[] => {
   const problems: string[] = [];
@@ -81,12 +115,20 @@ export const compareRouteScale = ({
     request,
     before,
     after,
+    growthAllowance,
   }: CheckScaleCostOptions) => {
-    const observed =
-      dimension === "responseSizes"
-        ? after / Math.max(before, 1024)
-        : Math.abs(after - before);
-    const defaultMax = dimension === "responseSizes" ? 2 : 0;
+    let observed = Math.abs(after - before);
+    let defaultMax = 0;
+    let bound = "delta";
+    if (dimension === "responseSizes") {
+      observed = after / Math.max(before, 1024);
+      defaultMax = 2;
+      bound = "factor";
+    } else if (growthAllowance !== undefined) {
+      observed = after - before;
+      defaultMax = growthAllowance;
+      bound = "growth";
+    }
     if (observed <= defaultMax) {
       return;
     }
@@ -100,7 +142,7 @@ export const compareRouteScale = ({
       }
     }
     problems.push(
-      `${route}: ${dimension} ${request}: small=${before}, large=${after}, allowed ${dimension === "responseSizes" ? "factor" : "delta"}=${allowance?.max ?? defaultMax}`,
+      `${route}: ${dimension} ${request}: small=${before}, large=${after}, allowed ${bound}=${allowance?.max ?? defaultMax}`,
     );
   };
 
@@ -109,6 +151,41 @@ export const compareRouteScale = ({
     request: "$route",
     before: small.depth,
     after: large.depth,
+  });
+  for (const [world, metrics] of [
+    ["small", renders.small],
+    ["large", renders.large],
+  ] as const) {
+    // A census React never reported to counts zero commits on both sides.
+    if (metrics.renderers < 1 || metrics.commits < 1) {
+      problems.push(
+        `${route}: ${world} render evidence missing (renderers=${String(metrics.renderers)}, commits=${String(metrics.commits)})`,
+      );
+    }
+  }
+  const growthAllowance = renderCommitAllowance(
+    Math.max(
+      ...[small, large].map((world) =>
+        Object.values(world.requestCounts).reduce(
+          (sum, count) => sum + count,
+          0,
+        ),
+      ),
+    ),
+  );
+  check({
+    dimension: "renderCommits",
+    request: "$route",
+    before: renders.small.commits,
+    after: renders.large.commits,
+    growthAllowance,
+  });
+  check({
+    dimension: "dataRenderCommits",
+    request: "$route",
+    before: renders.small.dataCommits,
+    after: renders.large.dataCommits,
+    growthAllowance,
   });
   const requests = new Set([...small.requests, ...large.requests]);
   for (const request of requests) {
@@ -225,3 +302,38 @@ export const compareRouteScale = ({
   }
   return problems;
 };
+
+export type RouteScaleMeasurement = {
+  network: RouteNetworkMetrics;
+  renders: RouteRenderMetrics;
+};
+
+/**
+ * Every enrolled route must have been measured on both worlds; a route the
+ * walk skipped is a failure, not a pass.
+ */
+export const routeScaleCensus = ({
+  routes,
+  small,
+  large,
+  ledger,
+}: {
+  routes: readonly string[];
+  small: ReadonlyMap<string, RouteScaleMeasurement>;
+  large: ReadonlyMap<string, RouteScaleMeasurement>;
+  ledger: readonly RouteScaleLedgerRow[];
+}): string[] =>
+  routes.flatMap((route) => {
+    const before = small.get(route);
+    const after = large.get(route);
+    if (before === undefined || after === undefined) {
+      return [`Missing paired route measurement: ${route}`];
+    }
+    return compareRouteScale({
+      route,
+      small: before.network,
+      large: after.network,
+      renders: { small: before.renders, large: after.renders },
+      ledger,
+    });
+  });

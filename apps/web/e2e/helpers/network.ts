@@ -72,7 +72,7 @@ export type NetworkCapture = {
 
 export type NetworkCollector = {
   trackPage: (page: Page) => () => void;
-  measureRounds: (page: Page) => Promise<void>;
+  measureRounds: (page: Page, options?: MeasureRoundsOptions) => Promise<void>;
   finishRounds: () => void;
   // Waits until tracked API activity has been quiet for the requested window.
   // Long-lived SSE streams do not block this: only their request/response
@@ -81,6 +81,12 @@ export type NetworkCollector = {
   // Async: waits for in-flight response-body reads so response sizes are
   // populated before the caller summarizes the capture.
   capture: () => Promise<NetworkCapture>;
+};
+
+export type MeasureRoundsOptions = {
+  // Awaited after a round is scheduled and before any of its requests reaches
+  // the network, so the page state it reads precedes that round's responses.
+  beforeRelease?: () => Promise<void>;
 };
 
 export type NetworkQuietOptions = {
@@ -206,13 +212,34 @@ export const createNetworkCollector = (
   let lastActivityAt = Date.now();
   const rounds = createNetworkRoundController<Request>();
   const released = new Set<Request>();
+  // Set while a scheduled round waits for `beforeRelease`; its tokens are no
+  // longer held, so peers wait here instead of treating them as abandoned.
+  let releasing: Promise<void> | null = null;
+  let releaseFailure: { error: unknown } | null = null;
 
   const markActivity = () => {
     lastActivityAt = Date.now();
   };
 
   return {
-    measureRounds: async (page) => {
+    measureRounds: async (page, roundOptions = {}) => {
+      const startRelease = (tokens: readonly Request[]) => {
+        releasing = (async () => {
+          try {
+            await roundOptions.beforeRelease?.();
+          } catch (error) {
+            // Held requests must still reach the network; the failure
+            // surfaces from finishRounds instead.
+            releaseFailure ??= { error };
+          } finally {
+            for (const token of tokens) {
+              released.add(token);
+            }
+          }
+        })().finally(() => {
+          releasing = null;
+        });
+      };
       await page.route(
         (url) => url.origin === apiOrigin,
         async (route) => {
@@ -237,10 +264,13 @@ export const createNetworkCollector = (
           // awaits, so read it fresh on every iteration.
           const loaded = () => rounds.loaded;
           while (!released.delete(request) && !loaded()) {
-            for (const token of rounds.release(Date.now())) {
-              released.add(token);
+            if (releasing !== null) {
+              await releasing;
+              continue;
             }
-            if (released.has(request)) {
+            const tokens = rounds.release(Date.now());
+            if (tokens.length > 0) {
+              startRelease(tokens);
               continue;
             }
             // The page abandoned the request while it was held: it never
@@ -256,6 +286,11 @@ export const createNetworkCollector = (
     },
     finishRounds: () => {
       rounds.finish();
+      if (releaseFailure !== null) {
+        throw new Error("A round's beforeRelease hook failed", {
+          cause: releaseFailure.error,
+        });
+      }
     },
     trackPage: (page) => {
       const onRequest = (request: Request) => {
