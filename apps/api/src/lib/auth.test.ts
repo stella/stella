@@ -12,7 +12,7 @@ import { inArray } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
-import { member, organization, user } from "@/api/db/auth-schema";
+import { member, organization, session, user } from "@/api/db/auth-schema";
 import {
   contacts,
   featureEnrolments,
@@ -35,6 +35,7 @@ import {
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
   runEmailOtpRequestOnResponseSchedule,
   resolveMemberAuthorization,
+  resolveUserRealtimeAuthorization,
   resolveWorkspaceMemberAccess,
   resolveAuthoritativeSessionForSensitiveAuthPath,
   resolveWorkspaceRealtimeAudience,
@@ -79,6 +80,9 @@ const strangerUser = userId();
 const clientContactId = toSafeId<"contact">(tid());
 const clientWorkspaceId = workspaceId();
 const memberPersonalWorkspaceId = workspaceId();
+const liveOwnerSessionId = tid();
+const expiredOwnerSessionId = tid();
+const liveMemberSessionId = tid();
 
 testState.beforeAll(async () => {
   testDb = await getTestDb();
@@ -148,6 +152,27 @@ testState.beforeAll(async () => {
       userId: memberInEmpty,
       role: "member",
       createdAt: new Date(),
+    },
+  ]);
+
+  await testDb.insert(session).values([
+    {
+      id: liveOwnerSessionId,
+      token: tid(),
+      userId: ownerInFull,
+      expiresAt: new Date("2100-01-01T00:00:00.000Z"),
+    },
+    {
+      id: expiredOwnerSessionId,
+      token: tid(),
+      userId: ownerInFull,
+      expiresAt: new Date("2000-01-01T00:00:00.000Z"),
+    },
+    {
+      id: liveMemberSessionId,
+      token: tid(),
+      userId: memberInFull,
+      expiresAt: new Date("2100-01-01T00:00:00.000Z"),
     },
   ]);
 
@@ -338,7 +363,7 @@ describe("resolveMemberAuthorization", () => {
         userId: actor,
         workspaceId: target,
       };
-      const session = await resolveMemberAuthorization(lookup, testDb);
+      const authorization = await resolveMemberAuthorization(lookup, testDb);
       const workspace = await createScopedDb(
         testDb,
         [target],
@@ -346,7 +371,7 @@ describe("resolveMemberAuthorization", () => {
         actor,
       )(async (tx) => await resolveWorkspaceMemberAccess(lookup, tx));
       expect(workspace?.id ?? null).toBe(expected);
-      expect(workspace).toEqual(session?.workspace ?? null);
+      expect(workspace).toEqual(authorization?.workspace ?? null);
     },
   );
 
@@ -383,26 +408,52 @@ describe("resolveMemberAuthorization", () => {
 });
 
 describe("resolveWorkspaceRealtimeAudience", () => {
-  test("returns only users with current access to the target workspace", async () => {
+  test("returns only live sessions whose users currently access the target workspace", async () => {
     const candidates = [
-      ownerInFull,
-      memberInFull,
-      loneMemberInFull,
-      ownerInEmpty,
-      strangerUser,
+      liveOwnerSessionId,
+      expiredOwnerSessionId,
+      liveMemberSessionId,
     ];
 
     const clientMatterAudience = await resolveWorkspaceRealtimeAudience(
-      { userIds: candidates, workspaceId: clientWorkspaceId },
+      { sessionIds: candidates, workspaceId: clientWorkspaceId },
       testDb,
     );
     const personalMatterAudience = await resolveWorkspaceRealtimeAudience(
-      { userIds: candidates, workspaceId: memberPersonalWorkspaceId },
+      { sessionIds: candidates, workspaceId: memberPersonalWorkspaceId },
       testDb,
     );
 
-    expect(clientMatterAudience).toEqual(new Set([ownerInFull]));
-    expect(personalMatterAudience).toEqual(new Set([memberInFull]));
+    expect(clientMatterAudience).toEqual(new Set([liveOwnerSessionId]));
+    expect(personalMatterAudience).toEqual(new Set([liveMemberSessionId]));
+  });
+});
+
+describe("resolveUserRealtimeAuthorization", () => {
+  test("returns only live sessions for a current organization member", async () => {
+    const authorized = await resolveUserRealtimeAuthorization(
+      {
+        organizationId: orgFull,
+        sessionIds: [liveOwnerSessionId, expiredOwnerSessionId],
+        userId: ownerInFull,
+      },
+      testDb,
+    );
+
+    expect(authorized).toEqual(new Set([liveOwnerSessionId]));
+  });
+
+  test("refuses live sessions after their organization membership is removed", async () => {
+    const authorized = await resolveUserRealtimeAuthorization(
+      {
+        organizationId: orgEmpty,
+        sessionIds: [liveMemberSessionId],
+        userId: memberInFull,
+      },
+      testDb,
+    );
+
+    expect(authorized).toEqual(new Set());
   });
 });
 

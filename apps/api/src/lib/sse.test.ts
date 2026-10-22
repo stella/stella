@@ -148,6 +148,7 @@ const observeStreamRead = async (stream: ReadableStream) => {
 const workspaceId = toSafeId<"workspace">("ws_1");
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
+const sessionId = "session_1";
 const publishWorkspaceEventMock = async (
   targetWorkspaceId: SafeId<"workspace">,
   event: WorkspaceRealtimeEvent,
@@ -171,11 +172,15 @@ const publishWorkspaceEventMock = async (
 };
 const publishWorkspaceAccessRevokedMock = async (): Promise<void> => {};
 const authorizeAllWorkspaceConnections = async ({
-  userIds,
+  sessionIds,
 }: {
-  userIds: readonly SafeId<"user">[];
-}) => new Set(userIds);
-const authorizeAllUserConnections = async () => true;
+  sessionIds: readonly string[];
+}) => new Set(sessionIds);
+const authorizeAllUserConnections = async ({
+  sessionIds,
+}: {
+  sessionIds: readonly string[];
+}) => new Set(sessionIds);
 const startTestSse = (): void => {
   startSse(
     {
@@ -195,6 +200,8 @@ const subscribeToWorkspace = (
 ): ReadableStream =>
   subscribe({
     organizationId,
+    sessionId:
+      subscribingUserId === userId ? sessionId : `session-${subscribingUserId}`,
     signal,
     userId: subscribingUserId,
     workspaceId,
@@ -456,8 +463,12 @@ describe("workspace access revocation", () => {
     startSse(
       {
         user: authorizeAllUserConnections,
-        workspace: async ({ userIds }) =>
-          new Set(userIds.filter((candidate) => candidate === retainedUserId)),
+        workspace: async ({ sessionIds }) =>
+          new Set(
+            sessionIds.filter(
+              (candidate) => candidate === `session-${retainedUserId}`,
+            ),
+          ),
       },
       {
         createClient: createRedisClientMock,
@@ -588,12 +599,12 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     startSse(
       {
         user: authorizeAllUserConnections,
-        workspace: async ({ userIds }) => {
+        workspace: async ({ sessionIds }) => {
           authorizationCalls += 1;
           if (authorizationCalls === 1) {
             await firstAuthorization.promise;
           }
-          return new Set(userIds);
+          return new Set(sessionIds);
         },
       },
       {
