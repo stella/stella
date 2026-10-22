@@ -1,6 +1,18 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { check, type Advisory, type Baseline } from "./dependency-audit";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import {
+  AuditCommandError,
+  check,
+  collectGatedAdvisories,
+  readBaseline,
+  type Advisory,
+  type Baseline,
+} from "./dependency-audit";
 import {
   expiringAcceptances,
   lapsedAcceptances,
@@ -23,6 +35,7 @@ const auditBaseline = (expiresOn?: string): Baseline => ({
       severity: "high",
       package: "pkg",
       title: "test advisory",
+      owner: "test owner",
       reason: "test acceptance",
       ...(expiresOn === undefined ? {} : { expiresOn }),
     },
@@ -68,6 +81,9 @@ describe("audit acceptance expiry", () => {
     expect(
       result.info.some((line) => line.includes("accepted until 2026-11-01")),
     ).toBe(true);
+    expect(result.info.some((line) => line.includes("owner: test owner"))).toBe(
+      true,
+    );
   });
 
   test("a new advisory is reported and fails", async () => {
@@ -290,4 +306,148 @@ describe("audit acceptance expiry", () => {
       );
     }
   });
+
+  test.each([
+    {
+      field: "owner",
+      owner: "  TODO: owner",
+      reason: "test acceptance",
+    },
+    {
+      field: "owner",
+      owner: " TODO_owner",
+      reason: "test acceptance",
+    },
+    {
+      field: "reason",
+      owner: "test owner",
+      reason: "todo: document why this is accepted.",
+    },
+    {
+      field: "reason",
+      owner: "test owner",
+      reason: "todoreason",
+    },
+  ])(
+    "a baseline entry with a placeholder $field fails closed",
+    async (entry) => {
+      const temporary = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));
+      const baselinePath = path.join(temporary, "baseline.json");
+      await Bun.write(
+        baselinePath,
+        JSON.stringify({
+          note: "test",
+          auditLevel: "high",
+          accepted: [
+            {
+              id: advisory.id,
+              severity: "high",
+              package: "pkg",
+              title: "test advisory",
+              owner: entry.owner,
+              reason: entry.reason,
+            },
+          ],
+        }),
+      );
+      try {
+        expect(await rejectionOf(readBaseline(baselinePath))).toHaveProperty(
+          "message",
+          expect.stringContaining(
+            `${advisory.id} must have a non-placeholder ${entry.field}`,
+          ),
+        );
+      } finally {
+        rmSync(temporary, { force: true, recursive: true });
+      }
+    },
+  );
+
+  test("a baseline entry with a real owner and reason is accepted", async () => {
+    const temporary = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));
+    const baselinePath = path.join(temporary, "baseline.json");
+    const baseline = auditBaseline();
+    await Bun.write(baselinePath, JSON.stringify(baseline));
+    try {
+      expect(await readBaseline(baselinePath)).toEqual(baseline);
+    } finally {
+      rmSync(temporary, { force: true, recursive: true });
+    }
+  });
 });
+
+const auditJson = JSON.stringify({
+  advisories: {
+    pkg: [
+      {
+        github_advisory_id: advisory.id,
+        severity: "high",
+        title: "test advisory",
+        vulnerable_versions: "<=1.4.0",
+      },
+    ],
+  },
+});
+
+describe("advisory service retries", () => {
+  test("a 503 followed by success returns advisories", async () => {
+    const results = [
+      { exitCode: 1, stderr: "POST advisory bulk - 503", stdout: "" },
+      { exitCode: 0, stderr: "", stdout: auditJson },
+    ];
+    const delays: number[] = [];
+    const advisories = await collectGatedAdvisories({
+      delay: async (milliseconds) => {
+        delays.push(milliseconds);
+      },
+      run: async () => results.shift() ?? panicUnexpectedAttempt(),
+    });
+    expect(advisories).toEqual([currentAdvisory]);
+    expect(delays).toEqual([10_000]);
+  });
+
+  test("three 503 responses raise the final audit error", async () => {
+    let attempts = 0;
+    expect(
+      await rejectionOf(
+        collectGatedAdvisories({
+          delay: async () => undefined,
+          run: async () => {
+            attempts += 1;
+            return {
+              exitCode: 1,
+              stderr: "POST advisory bulk - 503",
+              stdout: "",
+            };
+          },
+        }),
+      ),
+    ).toBeInstanceOf(AuditCommandError);
+    expect(attempts).toBe(3);
+  });
+
+  test("non-transient failures do not retry", async () => {
+    for (const result of [
+      { exitCode: 0, stderr: "", stdout: "not JSON" },
+      { exitCode: 1, stderr: "permission denied", stdout: "" },
+    ]) {
+      let attempts = 0;
+      expect(
+        await rejectionOf(
+          collectGatedAdvisories({
+            delay: async () => undefined,
+            run: async () => {
+              attempts += 1;
+              return result;
+            },
+          }),
+        ),
+      ).toBeInstanceOf(AuditCommandError);
+      expect(attempts).toBe(1);
+    }
+  });
+});
+
+const panicUnexpectedAttempt = (): never => {
+  throw new Error("unexpected extra audit attempt");
+};

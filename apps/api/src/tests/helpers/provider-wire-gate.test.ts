@@ -39,7 +39,7 @@ const post = async (signal?: AbortSignal) =>
   await fetch(PROVIDER_URL, {
     body: JSON.stringify({ model: "fixture" }),
     method: "POST",
-    signal,
+    signal: signal ?? null,
   });
 
 /**
@@ -47,8 +47,8 @@ const post = async (signal?: AbortSignal) =>
  * waiting is handed back as `pending`, to be awaited by the next call.
  */
 const readAvailable = async (
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  carried?: Promise<ReadableStreamReadResult<Uint8Array>>,
+  reader: AnswerReader,
+  carried?: ReturnType<AnswerReader["read"]>,
 ) => {
   const decoder = new TextDecoder();
   let text = "";
@@ -70,13 +70,13 @@ const readAvailable = async (
 };
 
 /** The answer's reader; the caller releases it. */
-const readerOf = (
-  response: Response,
-): ReadableStreamDefaultReader<Uint8Array> => {
+const readerOf = (response: Response) => {
   const body = response.body ?? panic("A replayed answer has a body");
   const reader = body.getReader();
   return reader;
 };
+
+type AnswerReader = ReturnType<typeof readerOf>;
 
 let replay: ProviderWireReplay | undefined;
 
