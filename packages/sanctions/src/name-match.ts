@@ -32,7 +32,6 @@ export const spendScreeningWork = (
   return true;
 };
 const METRIC = "damerau-levenshtein";
-const MAX_REDUNDANT_JOIN_FREQUENCY = 256;
 
 // Weights are inverse document frequencies over entries, so a shared
 // "Mohammed" counts for less than a shared rare surname.
@@ -223,7 +222,6 @@ export type NameIndex = {
   maxWeight: number;
   sharedVocabulary: boolean;
   wordIds: NumberColumn;
-  joinCounts: NumberColumn;
   entities: Pick<
     EntityIndex,
     "search" | "toBytes" | "nativeBytes" | "postingCount"
@@ -383,11 +381,9 @@ export function* nameIndexSteps(
     : { strings: new ObjectColumn<string>(), ids: new StringMap<number>() };
   const aliases = new AliasColumn({ folded: folded.strings, raw: raw.strings });
   const counts = new Map<number, number>();
-  const joinedCounts = new Map<number, number>();
   for (const [entryIndex, entry] of entries.entries()) {
     const byKey = new Map<string, { alias: IndexedAlias; id: number }>();
     const entryTokens = new Set<number>();
-    const entryJoins = new Set<number>();
     for (const { name, quality } of entry.names) {
       const { tokens, adjacent } = nameReading(name, entry.entityType);
       const key = `${tokens.map((token) => token.raw).join(" ")}|${adjacent.join(";")}`;
@@ -432,27 +428,19 @@ export function* nameIndexSteps(
       for (const id of alias.folded) {
         entryTokens.add(id);
       }
-      for (const { folded: id } of alias.joins) {
-        entryJoins.add(id);
-      }
       aliases.push(alias);
     }
     for (const id of entryTokens) {
       counts.set(id, (counts.get(id) ?? 0) + 1);
-    }
-    for (const id of entryJoins) {
-      joinedCounts.set(id, (joinedCounts.get(id) ?? 0) + 1);
     }
     yield;
   }
   const maxWeight = Math.log(Math.max(entries.length, 1)) + 1;
   const weights = new NumberColumn("float");
   const wordIds = new NumberColumn("byte");
-  const joinCounts = new NumberColumn();
   for (let id = 0; id < folded.strings.length; id += 1) {
     const count = counts.get(id) ?? 0;
     wordIds.push(count > 0 ? 1 : 0);
-    joinCounts.push(joinedCounts.get(id) ?? 0);
     weights.push(
       count === 0 ? maxWeight : Math.log(entries.length / count) + 1,
     );
@@ -482,7 +470,6 @@ export function* nameIndexSteps(
     maxWeight,
     sharedVocabulary: raw === folded,
     wordIds,
-    joinCounts,
     entities,
   };
 }
@@ -808,44 +795,22 @@ export const matchNames = ({
       ? []
       : [{ type: "token" as const, positions: [position], token }],
   );
-  const joinedSources =
-    // A joined query unit that is not a listed single word adds no alignment
-    // when every part is a listed word: those parts already explain every
-    // alignment the join could add. Drop it only when more than
-    // MAX_REDUNDANT_JOIN_FREQUENCY aliases contain that join. This argument
-    // applies uniformly to all parts, including numerals.
-    reading.adjacent
-      .filter((positions) => !positions.some((position) => initials[position]))
-      .map((positions) => ({
-        type: "join" as const,
-        positions,
-        token: {
-          raw: positions
-            .map((position) => reading.tokens[position]?.raw ?? "")
-            .join(""),
-          folded: positions
-            .map((position) => reading.tokens[position]?.folded ?? "")
-            .join(""),
-        },
-      }))
-      .filter(({ token, positions }) => {
-        const id = index.folded.ids.get(token.folded);
-        const isListedWord = id !== undefined && index.wordIds.get(id) === 1;
-        const everyPartIsListed = positions.every((position) => {
-          const part = reading.tokens[position];
-          if (part === undefined) {
-            return false;
-          }
-          const partId = index.folded.ids.get(part.folded);
-          return partId !== undefined && index.wordIds.get(partId) === 1;
-        });
-        return (
-          isListedWord ||
-          !everyPartIsListed ||
-          id === undefined ||
-          index.joinCounts.get(id) <= MAX_REDUNDANT_JOIN_FREQUENCY
-        );
-      });
+  // Every joined query spelling is searched: even when each part is a listed
+  // word, the join can fuzzily match a different listed single word.
+  const joinedSources = reading.adjacent
+    .filter((positions) => !positions.some((position) => initials[position]))
+    .map((positions) => ({
+      type: "join" as const,
+      positions,
+      token: {
+        raw: positions
+          .map((position) => reading.tokens[position]?.raw ?? "")
+          .join(""),
+        folded: positions
+          .map((position) => reading.tokens[position]?.folded ?? "")
+          .join(""),
+      },
+    }));
   const sources = [...tokenSources, ...joinedSources];
   // ceiling(s) = a + (1-a)*sqrt(s); EntityIndex bounds the name score.
   const a = ceiling(0);

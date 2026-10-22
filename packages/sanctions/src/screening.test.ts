@@ -215,6 +215,30 @@ describe("name screening", () => {
     expect(found("Noorollah Aziz Mohammadi")).toContain("joined");
   });
 
+  test("a frequent joined spelling still finds a listed single word one edit away", () => {
+    // Every part of "Alpha Beta" is listed and the join is common, yet only the
+    // join reaches "Alphabeto": neither part alone is within its edit budget.
+    const extra: ParsedList = {
+      version: EXTRA_VERSION,
+      entries: [
+        ...Array.from({ length: 257 }, (_, entry) =>
+          listedPerson(`common-${entry}`, "Alpha Beta"),
+        ),
+        listedPerson("single-word", "Alphabeto"),
+      ],
+    };
+    const withExtra = buildScreeningIndex([extra]);
+    const result = screen(
+      withExtra,
+      { name: "Alpha Beta" },
+      { cutoff: 0.8, limit: 300 },
+    ).unwrap();
+    expect(result.truncated).toBe(false);
+    expect(result.possibleMatches.map(({ entry }) => entry.sourceId)).toContain(
+      "single-word",
+    );
+  });
+
   test("still sees a typo that breaks a transcription digraph", () => {
     // A real EU alias; "tp" no longer reads as "ts".
     const extra: ParsedList = {
