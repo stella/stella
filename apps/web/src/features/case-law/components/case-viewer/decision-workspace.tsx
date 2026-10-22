@@ -33,6 +33,7 @@ import {
   createCaseDecisionViewTab,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
+import { VIEWER_OVERLAY_BAR_BAND_PX } from "@/components/inspector/viewer-overlay-bar";
 import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
@@ -829,6 +830,9 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
               <OutlineRail
                 ariaLabel={t("statutes.outline")}
                 items={analysisOutline.items}
+                // The zoom bar floats beside the rail's top; the rail starts
+                // below it so reaching for the bar never opens the outline.
+                topOffset={VIEWER_OVERLAY_BAR_BAND_PX}
                 onJump={(id, container) => {
                   const anchorId = analysisOutline.anchorById.get(id);
                   if (anchorId === undefined) {
