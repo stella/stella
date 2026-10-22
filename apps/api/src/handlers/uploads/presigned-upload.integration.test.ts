@@ -80,9 +80,9 @@ const holdUploadPool = async (bytes: number) => {
     },
   });
   await startedPromise;
-  return () => {
+  return async () => {
     release();
-    void running;
+    await running;
   };
 };
 
@@ -597,7 +597,7 @@ describe("presigned upload mutation flow", () => {
           status: "pending",
         });
       } finally {
-        holdBudget();
+        await holdBudget();
       }
 
       await storageRead.reached;
@@ -633,7 +633,7 @@ describe("presigned upload mutation flow", () => {
           LIMITS.workPoolUploadMaxWaitMs,
         );
       } finally {
-        holdAgain();
+        await holdAgain();
       }
     } finally {
       recording.restore();
@@ -679,7 +679,7 @@ describe("presigned upload mutation flow", () => {
       expect(handlerResult.response.retryable).toBe(true);
       expect(handlerResult.response.retryAfterMs).toBeGreaterThan(0);
     } finally {
-      release();
+      await release();
     }
   });
 

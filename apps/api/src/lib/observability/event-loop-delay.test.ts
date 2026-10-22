@@ -153,7 +153,6 @@ describe("event-loop delay monitoring", () => {
           rssBytes: 10,
           heapUsedBytes: 5,
           arrayBuffersBytes: 2,
-          uploadFinalizeInFlightBytes: 0,
         },
       ]);
     } finally {
