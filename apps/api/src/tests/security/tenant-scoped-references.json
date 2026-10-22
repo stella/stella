@@ -1,0 +1,377 @@
+{
+  "$comment": "Progress meter, not an allowlist: every entry is a reference between tenant-owned tables that does not yet carry the tenant column. Entries only leave (one table family per change); the guard fails on an added or stale entry. When the list is empty, delete this file and the ledger checks with it.",
+  "references": {
+    "agent_skill_comments(proposal_id) -> agent_skill_proposals(id)": {
+      "family": "agent_skill_proposals",
+      "reason": "id-only; bind organization_id; agent_skill_proposals needs a unique (organization_id, id) key first."
+    },
+    "agent_skill_comments(revision_id) -> agent_skill_revisions(id)": {
+      "family": "agent_skill_revisions",
+      "reason": "id-only; bind organization_id; agent_skill_revisions needs a unique (organization_id, id) key first."
+    },
+    "agent_skill_comments(skill_id) -> agent_skills(id)": {
+      "family": "agent_skills",
+      "reason": "id-only; bind organization_id; agent_skills needs a unique (organization_id, id) key first."
+    },
+    "agent_skill_proposals(base_revision_id) -> agent_skill_revisions(id)": {
+      "family": "agent_skill_revisions",
+      "reason": "id-only; bind organization_id; agent_skill_revisions needs a unique (organization_id, id) key first."
+    },
+    "agent_skill_proposals(result_revision_id) -> agent_skill_revisions(id)": {
+      "family": "agent_skill_revisions",
+      "reason": "id-only; bind organization_id; agent_skill_revisions needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "agent_skill_proposals(skill_id) -> agent_skills(id)": {
+      "family": "agent_skills",
+      "reason": "id-only; bind organization_id; agent_skills needs a unique (organization_id, id) key first."
+    },
+    "agent_skill_resources(skill_id) -> agent_skills(id)": {
+      "family": "agent_skills",
+      "reason": "id-only; bind organization_id; agent_skills needs a unique (organization_id, id) key first."
+    },
+    "agent_skill_revisions(skill_id) -> agent_skills(id)": {
+      "family": "agent_skills",
+      "reason": "id-only; bind organization_id; agent_skills needs a unique (organization_id, id) key first."
+    },
+    "ai_memories(source_message_id) -> chat_messages(id)": {
+      "family": "chat_messages",
+      "reason": "ai_memories.workspace_id is nullable, so a composite key would skip the check for rows without it; bind a NOT NULL tenant column or derive scope from the parent; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "ai_memories(superseded_by_id) -> ai_memories(id)": {
+      "family": "ai_memories",
+      "reason": "id-only; bind organization_id; ai_memories needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "anonymization_allowlist_entries(entity_id) -> entities(id)": {
+      "family": "entities",
+      "reason": "anonymization_allowlist_entries.workspace_id is nullable, so a composite key would skip the check for rows without it; bind a NOT NULL tenant column or derive scope from the parent."
+    },
+    "bilingual_translation_rows(run_id) -> bilingual_translation_runs(id)": {
+      "family": "bilingual_translation_runs",
+      "reason": "id-only; bind workspace_id; bilingual_translation_runs needs a unique (workspace_id, id) key first."
+    },
+    "cell_metadata(entity_version_id) -> entity_versions(id)": {
+      "family": "entity_versions",
+      "reason": "id-only; bind workspace_id; entity_versions needs a unique (workspace_id, id) key first."
+    },
+    "chat_message_revisions(message_id,thread_id) -> chat_messages(id,thread_id)": {
+      "family": "chat_messages",
+      "reason": "chat_message_revisions.workspace_id is nullable, so a composite key would skip the check for rows without it; bind a NOT NULL tenant column or derive scope from the parent."
+    },
+    "chat_message_revisions(thread_id) -> chat_threads(id)": {
+      "family": "chat_threads",
+      "reason": "chat_message_revisions.workspace_id is nullable, so a composite key would skip the check for rows without it; bind a NOT NULL tenant column or derive scope from the parent."
+    },
+    "chat_messages(thread_id) -> chat_threads(id)": {
+      "family": "chat_threads",
+      "reason": "chat_messages.workspace_id is nullable, so a composite key would skip the check for rows without it; bind a NOT NULL tenant column or derive scope from the parent."
+    },
+    "chat_run_logs(turn_id) -> chat_turns(id)": {
+      "family": "chat_turns",
+      "reason": "id-only; bind organization_id; chat_turns needs a unique (organization_id, id) key first."
+    },
+    "chat_secrets(connector_id) -> mcp_connectors(id)": {
+      "family": "mcp_connectors",
+      "reason": "id-only; bind organization_id; mcp_connectors needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "chat_secrets(thread_id) -> chat_threads(id)": {
+      "family": "chat_threads",
+      "reason": "id-only; bind organization_id; chat_threads needs a unique (organization_id, id) key first."
+    },
+    "chat_threads(parent_thread_id) -> chat_threads(id)": {
+      "family": "chat_threads",
+      "reason": "id-only; bind organization_id; chat_threads needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "chat_tool_grants(chat_thread_id) -> chat_threads(id)": {
+      "family": "chat_threads",
+      "reason": "id-only; bind organization_id; chat_threads needs a unique (organization_id, id) key first."
+    },
+    "chat_tool_grants(mcp_connector_id) -> mcp_connectors(id)": {
+      "family": "mcp_connectors",
+      "reason": "id-only; bind organization_id; mcp_connectors needs a unique (organization_id, id) key first."
+    },
+    "chat_turns(assistant_message_id,thread_id) -> chat_messages(id,thread_id)": {
+      "family": "chat_messages",
+      "reason": "chat_turns.workspace_id is nullable, so a composite key would skip the check for rows without it; bind a NOT NULL tenant column or derive scope from the parent."
+    },
+    "chat_turns(thread_id) -> chat_threads(id)": {
+      "family": "chat_threads",
+      "reason": "id-only; bind organization_id; chat_threads needs a unique (organization_id, id) key first."
+    },
+    "chat_turns(timing_message_id,thread_id) -> chat_messages(id,thread_id)": {
+      "family": "chat_messages",
+      "reason": "chat_turns.workspace_id is nullable, so a composite key would skip the check for rows without it; bind a NOT NULL tenant column or derive scope from the parent."
+    },
+    "chat_turns(user_message_id,thread_id) -> chat_messages(id,thread_id)": {
+      "family": "chat_messages",
+      "reason": "chat_turns.workspace_id is nullable, so a composite key would skip the check for rows without it; bind a NOT NULL tenant column or derive scope from the parent."
+    },
+    "clause_categories(parent_id) -> clause_categories(id)": {
+      "family": "clause_categories",
+      "reason": "id-only; bind organization_id; clause_categories needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "clauses(category_id) -> clause_categories(id)": {
+      "family": "clause_categories",
+      "reason": "id-only; bind organization_id; clause_categories needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "contact_relationships(person_id) -> contacts(id)": {
+      "family": "contacts",
+      "reason": "id-only; bind organization_id; contacts already has a unique (organization_id, id) key."
+    },
+    "contact_relationships(related_contact_id) -> contacts(id)": {
+      "family": "contacts",
+      "reason": "id-only; bind organization_id; contacts already has a unique (organization_id, id) key."
+    },
+    "contact_search_document_preview_passages(contact_id) -> contact_search_documents(contact_id)": {
+      "family": "contact_search_documents",
+      "reason": "id-only; bind organization_id; contact_search_documents needs a unique (organization_id, id) key first."
+    },
+    "contact_search_documents(contact_id) -> contacts(id)": {
+      "family": "contacts",
+      "reason": "id-only; bind organization_id; contacts already has a unique (organization_id, id) key."
+    },
+    "desktop_edit_handoffs(desktop_session_id) -> desktop_edit_sessions(id)": {
+      "family": "desktop_edit_sessions",
+      "reason": "id-only; bind workspace_id; desktop_edit_sessions needs a unique (workspace_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "desktop_edit_sessions(base_version_id) -> entity_versions(id)": {
+      "family": "entity_versions",
+      "reason": "id-only; bind workspace_id; entity_versions needs a unique (workspace_id, id) key first."
+    },
+    "desktop_edit_sessions(finalized_version_id) -> entity_versions(id)": {
+      "family": "entity_versions",
+      "reason": "id-only; bind workspace_id; entity_versions needs a unique (workspace_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "document_processing_runs(entity_version_id) -> entity_versions(id)": {
+      "family": "entity_versions",
+      "reason": "id-only; bind workspace_id; entity_versions needs a unique (workspace_id, id) key first."
+    },
+    "document_reference_counters(workspace_id) -> workspaces(id)": {
+      "family": "workspaces",
+      "reason": "id-only; bind organization_id; workspaces already has a unique (organization_id, id) key; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "document_review_findings(run_id) -> document_review_runs(id)": {
+      "family": "document_review_runs",
+      "reason": "id-only; bind workspace_id; document_review_runs needs a unique (workspace_id, id) key first."
+    },
+    "document_review_parties(entity_version_id) -> entity_versions(id)": {
+      "family": "entity_versions",
+      "reason": "id-only; bind workspace_id; entity_versions needs a unique (workspace_id, id) key first."
+    },
+    "document_translation_runs(entity_id) -> entities(id)": {
+      "family": "entities",
+      "reason": "id-only; bind workspace_id; entities already has a unique (workspace_id, id) key."
+    },
+    "docx_suggestions(origin_review_finding_id) -> document_review_findings(id)": {
+      "family": "document_review_findings",
+      "reason": "id-only; bind workspace_id; document_review_findings needs a unique (workspace_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "docx_suggestions(origin_thread_id) -> chat_threads(id)": {
+      "family": "chat_threads",
+      "reason": "id-only; bind workspace_id; chat_threads needs a unique (workspace_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "entities(current_version_id) -> entity_versions(id)": {
+      "family": "entity_versions",
+      "reason": "id-only; bind workspace_id; entity_versions needs a unique (workspace_id, id) key first."
+    },
+    "entities(parent_id) -> entities(id)": {
+      "family": "entities",
+      "reason": "id-only; bind workspace_id; entities already has a unique (workspace_id, id) key; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "entity_links(source_entity_id) -> entities(id)": {
+      "family": "entities",
+      "reason": "id-only; bind workspace_id; entities already has a unique (workspace_id, id) key."
+    },
+    "entity_links(target_entity_id) -> entities(id)": {
+      "family": "entities",
+      "reason": "id-only; bind workspace_id; entities already has a unique (workspace_id, id) key."
+    },
+    "entity_version_ai_summaries(entity_version_id) -> entity_versions(id)": {
+      "family": "entity_versions",
+      "reason": "id-only; bind workspace_id; entity_versions needs a unique (workspace_id, id) key first."
+    },
+    "expenses(invoice_id) -> invoices(id)": {
+      "family": "invoices",
+      "reason": "id-only; bind workspace_id; invoices already has a unique (workspace_id, id) key; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "expenses(matter_id) -> entities(id)": {
+      "family": "entities",
+      "reason": "id-only; bind workspace_id; entities already has a unique (workspace_id, id) key."
+    },
+    "extracted_content(source_entity_version_id) -> entity_versions(id)": {
+      "family": "entity_versions",
+      "reason": "id-only; bind workspace_id; entity_versions needs a unique (workspace_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "extracted_content(source_field_id) -> fields(id)": {
+      "family": "fields",
+      "reason": "id-only; bind workspace_id; fields already has a unique (workspace_id, id) key; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "fields(entity_version_id) -> entity_versions(id)": {
+      "family": "entity_versions",
+      "reason": "id-only; bind workspace_id; entity_versions needs a unique (workspace_id, id) key first."
+    },
+    "file_chat_threads(chat_thread_id) -> chat_threads(id)": {
+      "family": "chat_threads",
+      "reason": "id-only; bind workspace_id; chat_threads needs a unique (workspace_id, id) key first."
+    },
+    "flow_run_steps(review_task_entity_id) -> entities(id)": {
+      "family": "entities",
+      "reason": "id-only; bind workspace_id; entities already has a unique (workspace_id, id) key; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "flow_runs(definition_id) -> flow_definitions(id)": {
+      "family": "flow_definitions",
+      "reason": "flow_runs carries no tenant column flow_definitions has; the reference needs organization_id on flow_runs first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "invoice_lines(expense_id) -> expenses(id)": {
+      "family": "expenses",
+      "reason": "id-only; bind workspace_id; expenses needs a unique (workspace_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "invoice_lines(invoice_id) -> invoices(id)": {
+      "family": "invoices",
+      "reason": "id-only; bind workspace_id; invoices already has a unique (workspace_id, id) key."
+    },
+    "invoice_lines(time_entry_id) -> time_entries(id)": {
+      "family": "time_entries",
+      "reason": "id-only; bind workspace_id; time_entries needs a unique (workspace_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "invoices(seller_profile_id) -> seller_profiles(id)": {
+      "family": "seller_profiles",
+      "reason": "id-only; bind organization_id; seller_profiles needs a unique (organization_id, id) key first."
+    },
+    "mcp_connector_authorization_reviews(connector_id) -> mcp_connectors(id)": {
+      "family": "mcp_connectors",
+      "reason": "id-only; bind organization_id; mcp_connectors needs a unique (organization_id, id) key first."
+    },
+    "mcp_oauth_clients(connector_id) -> mcp_connectors(id)": {
+      "family": "mcp_connectors",
+      "reason": "id-only; bind organization_id; mcp_connectors needs a unique (organization_id, id) key first."
+    },
+    "mcp_oauth_state(connector_id) -> mcp_connectors(id)": {
+      "family": "mcp_connectors",
+      "reason": "id-only; bind organization_id; mcp_connectors needs a unique (organization_id, id) key first."
+    },
+    "mcp_user_connections(connector_id) -> mcp_connectors(id)": {
+      "family": "mcp_connectors",
+      "reason": "id-only; bind organization_id; mcp_connectors needs a unique (organization_id, id) key first."
+    },
+    "notifications(workspace_id) -> workspaces(id)": {
+      "family": "workspaces",
+      "reason": "id-only; bind organization_id; workspaces already has a unique (organization_id, id) key; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "number_series(seller_profile_id) -> seller_profiles(id)": {
+      "family": "seller_profiles",
+      "reason": "id-only; bind organization_id; seller_profiles needs a unique (organization_id, id) key first."
+    },
+    "office_file_evidence(entity_version_id) -> entity_versions(id)": {
+      "family": "entity_versions",
+      "reason": "id-only; bind workspace_id; entity_versions needs a unique (workspace_id, id) key first."
+    },
+    "pdf_signing_sessions(base_version_id) -> entity_versions(id)": {
+      "family": "entity_versions",
+      "reason": "id-only; bind workspace_id; entity_versions needs a unique (workspace_id, id) key first."
+    },
+    "pdf_signing_sessions(finalized_version_id) -> entity_versions(id)": {
+      "family": "entity_versions",
+      "reason": "id-only; bind workspace_id; entity_versions needs a unique (workspace_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "properties(playbook_definition_id) -> playbook_definitions(id)": {
+      "family": "playbook_definitions",
+      "reason": "properties carries no tenant column playbook_definitions has; the reference needs organization_id on properties first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "rate_entries(rate_table_id) -> rate_tables(id)": {
+      "family": "rate_tables",
+      "reason": "id-only; bind workspace_id; rate_tables needs a unique (workspace_id, id) key first."
+    },
+    "report_exports(result_entity_id) -> entities(id)": {
+      "family": "entities",
+      "reason": "id-only; bind workspace_id; entities already has a unique (workspace_id, id) key; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "report_exports(result_field_id) -> fields(id)": {
+      "family": "fields",
+      "reason": "id-only; bind workspace_id; fields already has a unique (workspace_id, id) key; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "report_exports(view_id) -> workspace_views(id)": {
+      "family": "workspace_views",
+      "reason": "id-only; bind workspace_id; workspace_views needs a unique (workspace_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "search_document_preview_passages(entity_id) -> search_documents(entity_id)": {
+      "family": "search_documents",
+      "reason": "id-only; bind workspace_id; search_documents needs a unique (workspace_id, id) key first."
+    },
+    "search_documents(entity_id) -> entities(id)": {
+      "family": "entities",
+      "reason": "id-only; bind workspace_id; entities already has a unique (workspace_id, id) key."
+    },
+    "task_assignees(entity_id) -> entities(id)": {
+      "family": "entities",
+      "reason": "id-only; bind workspace_id; entities already has a unique (workspace_id, id) key."
+    },
+    "template_categories(parent_id) -> template_categories(id)": {
+      "family": "template_categories",
+      "reason": "id-only; bind organization_id; template_categories needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "template_chat_threads(chat_thread_id) -> chat_threads(id)": {
+      "family": "chat_threads",
+      "reason": "id-only; bind organization_id; chat_threads needs a unique (organization_id, id) key first."
+    },
+    "template_clauses(clause_id) -> clauses(id)": {
+      "family": "clauses",
+      "reason": "id-only; bind organization_id; clauses already has a unique (organization_id, id) key; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "template_clauses(clause_variant_id) -> clause_variants(id)": {
+      "family": "clause_variants",
+      "reason": "id-only; bind organization_id; clause_variants needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "template_clauses(clause_version_id) -> clause_versions(id)": {
+      "family": "clause_versions",
+      "reason": "id-only; bind organization_id; clause_versions needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "template_fills(template_id) -> templates(id)": {
+      "family": "templates",
+      "reason": "id-only; bind organization_id; templates already has a unique (organization_id, id) key; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "template_lookup_format_user_defaults(format_id) -> template_lookup_formats(id)": {
+      "family": "template_lookup_formats",
+      "reason": "id-only; bind organization_id; template_lookup_formats needs a unique (organization_id, id) key first."
+    },
+    "templates(category_id) -> template_categories(id)": {
+      "family": "template_categories",
+      "reason": "id-only; bind organization_id; template_categories needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "time_entries(invoice_id) -> invoices(id)": {
+      "family": "invoices",
+      "reason": "id-only; bind organization_id; invoices needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "time_entries(work_item_id,workspace_id) -> entities(id,workspace_id)": {
+      "family": "entities",
+      "reason": "time_entries.workspace_id is nullable, so a composite key would skip the check for rows without it; bind a NOT NULL tenant column or derive scope from the parent."
+    },
+    "time_entry_suggestions(time_entry_id) -> time_entries(id)": {
+      "family": "time_entries",
+      "reason": "id-only; bind workspace_id; time_entries needs a unique (workspace_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "time_entry_timer_states(entry_id) -> time_entries(id)": {
+      "family": "time_entries",
+      "reason": "id-only; bind organization_id; time_entries needs a unique (organization_id, id) key first."
+    },
+    "time_timer_confirmations(time_entry_id) -> time_entries(id)": {
+      "family": "time_entries",
+      "reason": "id-only; bind organization_id; time_entries needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "time_timers(legacy_time_entry_id) -> time_entries(id)": {
+      "family": "time_entries",
+      "reason": "id-only; bind organization_id; time_entries needs a unique (organization_id, id) key first; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "usage_events(workspace_id) -> workspaces(id)": {
+      "family": "workspaces",
+      "reason": "id-only; bind organization_id; workspaces already has a unique (organization_id, id) key; ON DELETE SET NULL needs a nullable tenant copy column tied by CHECK (or a column-list SET NULL)."
+    },
+    "workspace_contacts(contact_id) -> contacts(id)": {
+      "family": "contacts",
+      "reason": "id-only; bind organization_id; contacts already has a unique (organization_id, id) key."
+    },
+    "workspaces(client_id) -> contacts(id)": {
+      "family": "contacts",
+      "reason": "id-only; bind organization_id; contacts already has a unique (organization_id, id) key."
+    }
+  }
+}
