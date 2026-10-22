@@ -59,6 +59,58 @@ test("new check invocations cannot bypass the offline preload in nested shell or
   expect(offlineCheckViolations(protectedChecks, [])).toEqual([]);
 });
 
+test("every declared suppression check rejects an invalid ledger offline", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "suppression-probe-"));
+  const ledger = path.join(directory, "invalid.json");
+  const scope = path.join(directory, "scope.json");
+  writeFileSync(ledger, '{"waivers": "not-an-array"}\n');
+  writeFileSync(scope, '{"type":"all"}\n');
+  try {
+    const commands = enumerateOfflineChecks(
+      Bun.YAML.parse(
+        readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf-8"),
+      ),
+    ).filter(({ command }) => command.includes("suppression-waivers"));
+    expect(commands.length).toBeGreaterThan(0);
+    for (const { command: serialized, protected: offline } of commands) {
+      expect(offline, serialized).toBe(true);
+      const command: unknown = JSON.parse(serialized);
+      expect(Array.isArray(command)).toBe(true);
+      if (!Array.isArray(command)) {
+        panic("Suppression probe command is not an argument array");
+      }
+      const result = Bun.spawnSync(
+        [
+          ...command.map((word) =>
+            word === "$RUNNER_TEMP/suppression-waiver-scope.json"
+              ? scope
+              : word,
+          ),
+          "--ledger",
+          ledger,
+        ],
+        { cwd: root },
+      );
+      expect(result.exitCode, serialized).not.toBe(0);
+      expect(result.stderr.toString(), serialized).toContain(
+        'must be an object with a "waivers" array',
+      );
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the import-only suppression module refuses direct execution", () => {
+  const result = Bun.spawnSync(["bun", "scripts/suppression-waivers.ts"], {
+    cwd: root,
+  });
+  expect(result.exitCode).not.toBe(0);
+  expect(result.stderr.toString()).toContain(
+    "run scripts/suppression-waivers-cli.ts instead",
+  );
+});
+
 test("the preload must precede the Bun entry and package-script arguments", () => {
   for (const run of [
     "bun scripts/planted-check.ts --check --preload ./scripts/offline-network-preload.ts",

@@ -833,6 +833,7 @@ export const OUTPUT_RULES = {
           "scripts/check-lockfile-release-ages.ts",
           "scripts/check-lockfile-release-ages.test.ts",
           "scripts/check-stll-quarantine-excludes.ts",
+          "scripts/check-stll-quarantine-excludes-cli.ts",
           "scripts/bun-lock-text.ts",
         ]),
       ),

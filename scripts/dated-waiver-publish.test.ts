@@ -5,7 +5,6 @@ import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { waiverKey } from "./dated-waiver-fix-task";
 import {
   applyHealing,
   armRemoval,
@@ -24,7 +23,7 @@ import {
   validateRemovalModules,
   WaiverPublishFailures,
 } from "./dated-waiver-publish";
-import type { DatedWaiver } from "./dated-waivers";
+import { type DatedWaiver, waiverKey } from "./dated-waivers";
 
 /** Publication with no existing proposal never disarms. */
 const noDisarm = async (): Promise<void> => {};

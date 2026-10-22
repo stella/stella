@@ -193,7 +193,7 @@ checks:
     # check also fails once Bun's release-age gate can take over again.
     run: |
       bun test scripts/check-stll-quarantine-excludes.test.ts
-      bun scripts/check-stll-quarantine-excludes.ts
+      bun scripts/check-stll-quarantine-excludes-cli.ts
 
   - name: Policy evidence
     env:
@@ -681,10 +681,11 @@ checks:
     # suppression is a reviewable ledger edit and a stale entry cannot rot
     # in place. Temporary waivers fail once their expiry passes. The
     # --self-test run first proves the guard still detects each kind of
-    # drift. Draft entries: `bun scripts/suppression-waivers.ts --seed`.
+    # drift. Draft entries: `bun scripts/suppression-waivers-cli.ts --seed`.
     run: |
-      bun scripts/suppression-waivers.ts --self-test
-      bun scripts/suppression-waivers.ts --check
+      bun scripts/suppression-waivers-cli.ts --self-test
+      bun scripts/expiry-check-scope-git.ts > "$RUNNER_TEMP/suppression-waiver-scope.json"
+      bun --preload ./scripts/offline-network-preload.ts scripts/suppression-waivers-offline.ts --check --scope "$RUNNER_TEMP/suppression-waiver-scope.json"
 
   - name: Crawl posture guard
     env:

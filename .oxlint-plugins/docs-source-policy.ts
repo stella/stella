@@ -17,6 +17,12 @@ import {
   type DocSource,
   type NoLlmsTxtExclusion,
 } from "../.claude/mcp/doc-sources.ts";
+import { readExpiryCheckScope } from "../scripts/expiry-check-scope-git.ts";
+import {
+  expiryBlocksFiles,
+  expiryWarning,
+  type ExpiryCheckScope,
+} from "../scripts/expiry-check-scope.ts";
 import {
   filenameForContext,
   getPropertyName,
@@ -42,6 +48,8 @@ type DocumentationSourcePolicyOptions = {
   exclusions: readonly NoLlmsTxtExclusion[];
   now: Date;
   sources: Readonly<Record<string, DocSource>>;
+  expiryScope?: ExpiryCheckScope;
+  onExpiryWarning?: (message: string) => void;
 };
 
 const readDependencyNames = (value: unknown): string[] =>
@@ -115,6 +123,9 @@ export const checkDocumentationSourcePolicy = ({
   exclusions,
   now,
   sources,
+  expiryScope = { type: "all" },
+  onExpiryWarning = (message) =>
+    process.stderr.write(`${expiryWarning(message)}\n`),
 }: DocumentationSourcePolicyOptions): string[] => {
   const failures: string[] = [];
   const classifications = new Map<string, string[]>();
@@ -169,9 +180,12 @@ export const checkDocumentationSourcePolicy = ({
       );
     }
     if (now.getTime() >= expiresAt) {
-      failures.push(
-        `${exclusion.dependency} has an expired no-llms-txt quarantine (${exclusion.expiresAt}); recheck its canonical documentation.`,
-      );
+      const message = `${exclusion.dependency} has an expired no-llms-txt quarantine (${exclusion.expiresAt}); recheck its canonical documentation.`;
+      if (expiryBlocksFiles(expiryScope, [POLICY_PATH_SUFFIX])) {
+        failures.push(message);
+      } else {
+        onExpiryWarning(message);
+      }
     }
   }
 
@@ -267,14 +281,22 @@ const fixtureSource = (value: StaticValue): DocSource | null => {
   if (first === undefined || typeof url !== "string") {
     return null;
   }
-  return { dependencies: [first, ...strings.slice(1)], url };
+  return {
+    dependencies: [first, ...strings.slice(1)],
+    url,
+  } as const satisfies DocSource;
 };
 
 const fixtureExclusion = (value: StaticValue): NoLlmsTxtExclusion | null => {
-  if (!isStaticRecord(value) || value.reason !== NO_LLMS_TXT_REASON) {
+  if (!isStaticRecord(value)) {
     return null;
   }
-  const { checkedAt, dependency, explanation, expiresAt } = value;
+  // Destructured, not dotted: the typecheck rejects dotted index-signature
+  // reads and the lint autofix rewrites bracketed ones back to dots.
+  const { checkedAt, dependency, explanation, expiresAt, reason } = value;
+  if (reason !== NO_LLMS_TXT_REASON) {
+    return null;
+  }
   if (
     typeof checkedAt !== "string" ||
     typeof dependency !== "string" ||
@@ -299,8 +321,13 @@ const fixturePolicy = (
   if (!isStaticRecord(value)) {
     return null;
   }
-  const dependencies = staticStrings(value.dependencies);
-  const { exclusions: exclusionEntries, now, sources: sourceEntries } = value;
+  const {
+    dependencies: dependencyEntries,
+    exclusions: exclusionEntries,
+    now,
+    sources: sourceEntries,
+  } = value;
+  const dependencies = staticStrings(dependencyEntries);
   if (
     dependencies === null ||
     typeof now !== "string" ||
@@ -397,6 +424,7 @@ export default eslintCompatPlugin({
               exclusions: DOC_SOURCE_EXCLUSIONS,
               now: new Date(),
               sources: DOC_SOURCES,
+              expiryScope: readExpiryCheckScope(),
             });
             for (const failure of failures) {
               context.report({
