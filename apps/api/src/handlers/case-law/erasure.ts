@@ -283,6 +283,7 @@ const recordFailedRedactionAudit = async ({
 type RedactionFence =
   | {
       type: "fenced";
+      canonicalId: SafeId<"caseLawDecision">;
       decisions: FencedDecision[];
     }
   /** No such row, or none the projection knows: nothing to redact. */
@@ -319,11 +320,22 @@ export const redactCaseLawDecision = async ({
 > => {
   const fenced = await scopedDb(async (tx): Promise<RedactionFence> => {
     await lockCaseLawRepublication({ tx, mode: "shared" });
+    const aliasForRequestedId = (
+      await tx
+        .select({ id: caseLawDecisionAliases.canonicalDecisionId })
+        .from(caseLawDecisionAliases)
+        .where(eq(caseLawDecisionAliases.retiredDecisionId, decisionId))
+        .limit(1)
+    ).at(0);
+    const canonicalId = aliasForRequestedId?.id ?? decisionId;
     const aliases = await tx
       .select({ id: caseLawDecisionAliases.retiredDecisionId })
       .from(caseLawDecisionAliases)
-      .where(eq(caseLawDecisionAliases.canonicalDecisionId, decisionId));
-    const decisionIds = [decisionId, ...aliases.map(({ id }) => id)].toSorted();
+      .where(eq(caseLawDecisionAliases.canonicalDecisionId, canonicalId));
+    const decisionIds = [
+      canonicalId,
+      ...aliases.map(({ id }) => id),
+    ].toSorted();
     // Projection fences before decision rows, the order projection writers
     // take them; and every lock before any row changes, because a failure
     // returned from this callback commits and must find nothing mutated.
@@ -348,10 +360,6 @@ export const redactCaseLawDecision = async ({
         ) {
           return { type: "lock-failed", cause: locked.sourceLock.error };
         }
-        // A retired UUID outlives its row; only the requested row must exist.
-        if (locked.subject.entityId === decisionId) {
-          return { type: "missing" };
-        }
         continue;
       }
       lockedSubjects.push({
@@ -374,7 +382,7 @@ export const redactCaseLawDecision = async ({
       })
       .from(caseLawDecisions)
       .where(inArray(caseLawDecisions.id, lockedIds));
-    if (!decisions.some(({ id }) => id === decisionId)) {
+    if (decisions.length === 0) {
       return { type: "missing" };
     }
 
@@ -476,6 +484,7 @@ export const redactCaseLawDecision = async ({
     }
     return {
       type: "fenced",
+      canonicalId,
       decisions: await Promise.all(pendingFenceResults),
     };
   });
@@ -497,13 +506,15 @@ export const redactCaseLawDecision = async ({
       return panic(`Unhandled fence: ${String(fenced)}`);
   }
   const primary = fenced.decisions.find(
-    ({ decision }) => decision.id === decisionId,
+    ({ decision }) => decision.id === fenced.canonicalId,
   );
   if (primary === undefined) {
-    return panic(`Redaction fence omitted ${decisionId}`);
+    return panic(
+      `Redaction fence omitted canonical decision ${fenced.canonicalId}`,
+    );
   }
   const aliasDecisions = fenced.decisions.filter(
-    ({ decision }) => decision.id !== decisionId,
+    ({ decision }) => decision.id !== fenced.canonicalId,
   );
   const pendingAliasOutcomes = [];
   for (const alias of aliasDecisions) {

@@ -278,23 +278,35 @@ const drainSweeps = async (): Promise<void> => {
   });
 };
 
+let linkedSources:
+  | {
+      canonicalSource: SafeId<"caseLawSource">;
+      republisherSource: SafeId<"caseLawSource">;
+    }
+  | undefined;
+
 const seedLinkedPair = async () => {
-  const canonicalSource = createSafeId<"caseLawSource">();
-  const republisherSource = createSafeId<"caseLawSource">();
+  if (linkedSources === undefined) {
+    linkedSources = {
+      canonicalSource: createSafeId<"caseLawSource">(),
+      republisherSource: createSafeId<"caseLawSource">(),
+    };
+    await db.insert(caseLawSources).values([
+      {
+        id: linkedSources.canonicalSource,
+        adapterKey: ADAPTER_KEYS.PL_TK,
+        name: "Raw owner court fixture",
+      },
+      {
+        id: linkedSources.republisherSource,
+        adapterKey: ADAPTER_KEYS.PL_COURTS,
+        name: "Raw owner republisher fixture",
+      },
+    ]);
+  }
+  const { canonicalSource, republisherSource } = linkedSources;
   const canonicalId = createSafeId<"caseLawDecision">();
   const retiredId = createSafeId<"caseLawDecision">();
-  await db.insert(caseLawSources).values([
-    {
-      id: canonicalSource,
-      adapterKey: ADAPTER_KEYS.PL_TK,
-      name: "Raw owner court fixture",
-    },
-    {
-      id: republisherSource,
-      adapterKey: ADAPTER_KEYS.PL_COURTS,
-      name: "Raw owner republisher fixture",
-    },
-  ]);
   const common = {
     country: "POL",
     court: "Trybunał Konstytucyjny",
@@ -306,26 +318,26 @@ const seedLinkedPair = async () => {
       ...common,
       id: canonicalId,
       sourceId: canonicalSource,
-      sourceDocumentId: "raw-owner-court",
+      sourceDocumentId: canonicalId,
       fulltext: "canonical retained payload",
     },
     {
       ...common,
       id: retiredId,
       sourceId: republisherSource,
-      sourceDocumentId: "raw-owner-republisher",
+      sourceDocumentId: retiredId,
       fulltext: "retired retained payload",
     },
   ]);
   await db.insert(caseLawDecisionSourceIdentities).values([
     {
       sourceId: canonicalSource,
-      sourceDocumentId: "raw-owner-court",
+      sourceDocumentId: canonicalId,
       decisionId: canonicalId,
     },
     {
       sourceId: republisherSource,
-      sourceDocumentId: "raw-owner-republisher",
+      sourceDocumentId: retiredId,
       decisionId: retiredId,
     },
   ]);
@@ -352,7 +364,7 @@ const seedLinkedPair = async () => {
   return { canonicalId, canonicalSource, retiredId, republisherSource };
 };
 
-test("erasing a linked decision removes raw objects under both original owners", async () => {
+test("erasing a canonical decision removes raw objects under both original owners", async () => {
   const { canonicalId, canonicalSource, retiredId, republisherSource } =
     await seedLinkedPair();
   const canonicalKey = `${prefixOf(canonicalSource, canonicalId)}payloads/canonical`;
@@ -394,6 +406,55 @@ test("erasing a linked decision removes raw objects under both original owners",
       .from(caseLawDecisionSourceIdentities)
       .where(eq(caseLawDecisionSourceIdentities.sourceId, republisherSource)),
   ).toEqual([{ decisionId: canonicalId }]);
+});
+
+test("erasing a retired decision removes the canonical and retired copies", async () => {
+  const { canonicalId, canonicalSource, retiredId, republisherSource } =
+    await seedLinkedPair();
+  const canonicalKey = `${prefixOf(canonicalSource, canonicalId)}payloads/canonical`;
+  const retiredKey = `${prefixOf(republisherSource, retiredId)}payloads/retired`;
+  fake.put(envBase.S3_BUCKET, canonicalKey, "canonical");
+  fake.put(envBase.S3_BUCKET, retiredKey, "retired");
+
+  const outcome = await redact(retiredId);
+  await drainSweeps();
+
+  expect(outcome.type).toBe("redacted");
+  expect(stored(canonicalKey)).toBe(false);
+  expect(stored(retiredKey)).toBe(false);
+  expect(
+    await db
+      .select({ id: caseLawDecisions.id, fulltext: caseLawDecisions.fulltext })
+      .from(caseLawDecisions)
+      .where(sql`${caseLawDecisions.id} IN (${canonicalId}, ${retiredId})`),
+  ).toEqual(
+    expect.arrayContaining([
+      { id: canonicalId, fulltext: null },
+      { id: retiredId, fulltext: null },
+    ]),
+  );
+});
+
+test("erasing through a retired id whose row is gone still erases its canonical group", async () => {
+  const { canonicalId, canonicalSource, retiredId } = await seedLinkedPair();
+  const canonicalKey = `${prefixOf(canonicalSource, canonicalId)}payloads/canonical`;
+  fake.put(envBase.S3_BUCKET, canonicalKey, "canonical");
+  await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, retiredId));
+
+  const outcome = await redact(retiredId);
+  await drainSweeps();
+
+  expect(outcome.type).toBe("redacted");
+  expect(stored(canonicalKey)).toBe(false);
+  expect(await rowOf(canonicalId)).toEqual(
+    expect.objectContaining({ redactedAt: expect.any(Date) }),
+  );
+});
+
+test("erasing an unknown decision remains missing", async () => {
+  expect(await redact(createSafeId<"caseLawDecision">())).toEqual({
+    type: "not-found",
+  });
 });
 
 test("erasing a canonical decision skips an alias whose retired row is gone", async () => {
