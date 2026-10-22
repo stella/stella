@@ -357,6 +357,59 @@ test("every read tool permission declaration stays visible in review", () => {
   `);
 });
 
+// Read tools that a surface defines with a declaration of its own, keyed by
+// `<mode>:<name>`. Every other surface read must declare exactly what the
+// default registry declares for the same name, so the census above covers it.
+const SURFACE_READ_DECLARATIONS: Record<
+  string,
+  { kind: string; reason?: string }
+> = {
+  "law:fetch": { kind: "open-read", reason: "public law corpus" },
+  "law:search": { kind: "open-read", reason: "public law corpus" },
+};
+
+test("every surface's read declarations are covered by the census", () => {
+  const declarationOf = (definition: McpToolDefinition) =>
+    definition.access === "read"
+      ? {
+          kind: definition.permissions.type,
+          ...(definition.permissions.type === "open-read"
+            ? { reason: definition.permissions.reason }
+            : {}),
+        }
+      : undefined;
+  const defaultDeclarations = new Map(
+    DEFAULT_MCP_TOOL_DEFINITIONS.map((definition) => [
+      definition.name,
+      declarationOf(definition),
+    ]),
+  );
+  const uncovered: string[] = [];
+  const used = new Set<string>();
+  for (const { mode, definitions } of SURFACES) {
+    for (const definition of definitions) {
+      const declaration = declarationOf(definition);
+      if (declaration === undefined) {
+        continue;
+      }
+      const key = `${mode}:${definition.name}`;
+      const expected =
+        SURFACE_READ_DECLARATIONS[key] ??
+        defaultDeclarations.get(definition.name);
+      if (SURFACE_READ_DECLARATIONS[key] !== undefined) {
+        used.add(key);
+      }
+      if (!Bun.deepEquals(declaration, expected)) {
+        uncovered.push(`${key} ${JSON.stringify(declaration)}`);
+      }
+    }
+  }
+  expect(uncovered).toEqual([]);
+  expect(Object.keys(SURFACE_READ_DECLARATIONS).toSorted()).toEqual(
+    [...used].toSorted(),
+  );
+});
+
 // A single tool must not consume an unreviewed multi-thousand-token block of
 // every tools/list. The largest measured schema is in the surface baseline.
 const OUTPUT_SCHEMA_CHAR_CEILING = 4000;
