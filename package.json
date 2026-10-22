@@ -238,7 +238,7 @@
     "@stll/folio-agents": "0.16.1",
     "@stll/folio-core": "0.60.0",
     "@stll/folio-react": "0.28.0",
-    "@stll/fuzzy-search": "1.3.0",
+    "@stll/fuzzy-search": "1.4.0",
     "@stll/regex-set": "1.0.5",
     "@stll/regex-set-wasm": "1.0.5",
     "@t3-oss/env-core": "0.13.11",
