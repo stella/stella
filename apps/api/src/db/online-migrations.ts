@@ -172,6 +172,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "sanctions_contact_matches",
   },
   {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_decisions_ecli_upper_idx" ON public."case_law_decisions" USING btree (upper("ecli")) WHERE "ecli" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_decisions USING btree (upper((ecli)::text)) WHERE (ecli IS NOT NULL)",
+    isUnique: false,
+    name: "case_law_decisions_ecli_upper_idx",
+    tableName: "case_law_decisions",
+  },
+  {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_country_date_published_idx" ON public."case_law_decisions" USING btree ("country", coalesce("decision_date", '-infinity'::date), "id") WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
     definitionBody: `ON public.case_law_decisions USING btree (country, COALESCE(decision_date, '-infinity'::date), id) WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION}`,
     isUnique: false,
