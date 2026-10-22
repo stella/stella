@@ -683,6 +683,130 @@ describe("presigned upload mutation flow", () => {
     }
   });
 
+  test("marks an upload failed when its staged download fails transiently", async () => {
+    const bytes = new TextEncoder().encode("transient storage failure");
+    const presignResult = await presignUpload.handler(
+      asTestRaw<PresignCtx>(
+        createContext({
+          body: {
+            purpose: "entity_version",
+            entityId: ids.entityA1,
+            name: "storage-failure.txt",
+            mimeType: "text/plain",
+            size: bytes.byteLength,
+            sha256Hex: hashSha256Hex(bytes),
+          },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    const uploadId = getUploadId(presignResult);
+    seededUploadIds.push(uploadId);
+    const grant = readPresignedUpload(presignResult);
+    expect(
+      await fetch(grant.url, {
+        method: "PUT",
+        body: bytes,
+        headers: grant.headers,
+      }),
+    ).toMatchObject({ status: 200 });
+    fake.failNext({
+      method: "GET",
+      keyIncludes: uploadId,
+      code: "InternalError",
+      status: 500,
+      times: 10,
+    });
+
+    const finalized = await finalizeUpload.handler(
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+
+    expect(finalized).toEqual({
+      code: 500,
+      response: { message: "Failed to read uploaded file from staging" },
+    });
+    expect(
+      await testDb.query.pendingUploads.findFirst({
+        where: { id: { eq: uploadId } },
+        columns: { rejectReason: true, status: true },
+      }),
+    ).toEqual({ rejectReason: "tmp-download-failed", status: "failed" });
+    expect([...fake.objects.keys()].some((key) => key.includes(uploadId))).toBe(
+      true,
+    );
+  });
+
+  test("marks an upload failed when the finalize admission deadline aborts its download", async () => {
+    const bytes = new TextEncoder().encode("deadline storage read");
+    const presignResult = await presignUpload.handler(
+      asTestRaw<PresignCtx>(
+        createContext({
+          body: {
+            purpose: "entity_version",
+            entityId: ids.entityA1,
+            name: "storage-deadline.txt",
+            mimeType: "text/plain",
+            size: bytes.byteLength,
+            sha256Hex: hashSha256Hex(bytes),
+          },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    const uploadId = getUploadId(presignResult);
+    seededUploadIds.push(uploadId);
+    const grant = readPresignedUpload(presignResult);
+    expect(
+      await fetch(grant.url, {
+        method: "PUT",
+        body: bytes,
+        headers: grant.headers,
+      }),
+    ).toMatchObject({ status: 200 });
+    const storageRead = fake.holdNext({ method: "GET", keyIncludes: uploadId });
+
+    const finalizing = finalizeUpload.handler(
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    await storageRead.reached;
+    const finalized = await finalizing;
+    storageRead.release();
+    await storageRead.completed;
+
+    expect(finalized).toEqual({
+      code: 500,
+      response: { message: "Failed to read uploaded file from staging" },
+    });
+    expect(
+      await testDb.query.pendingUploads.findFirst({
+        where: { id: { eq: uploadId } },
+        columns: { rejectReason: true, status: true },
+      }),
+    ).toEqual({ rejectReason: "tmp-download-failed", status: "failed" });
+    expect([...fake.objects.keys()].some((key) => key.includes(uploadId))).toBe(
+      true,
+    );
+  });
+
   test("rejects a rule match deep inside a large document and stores nothing", async () => {
     const bytes = await largeDocx({
       trailer:

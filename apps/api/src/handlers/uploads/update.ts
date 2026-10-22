@@ -209,6 +209,7 @@ const finalizeUpload = createSafeHandler(
       pool: "upload",
       kind: "upload-finalize",
       bytes: pending.declaredSize,
+      deadlineMs: FINALIZE_CLAIM_TIMEOUT_MS,
       run: async (admission) =>
         await Result.gen(() =>
           claimAndFinalize({
@@ -505,6 +506,34 @@ const deleteStagedUploadObjects = async ({
   }
 };
 
+const downloadStagedUpload = async ({
+  admission,
+  claimed,
+  tmpKey,
+}: {
+  admission: WorkAdmission;
+  claimed: ClaimedRow;
+  tmpKey: string;
+}) =>
+  await Result.tryPromise({
+    try: async () =>
+      await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key: tmpKey,
+        maxBytes: claimed.declaredSize,
+        signal: AbortSignal.any([
+          admission.signal,
+          AbortSignal.timeout(FINALIZE_CLAIM_TIMEOUT_MS),
+        ]),
+      }),
+    catch: () =>
+      new UploadFinalizeError({
+        status: 500,
+        message: "Failed to read uploaded file from staging",
+        rejectReason: "tmp-download-failed",
+      }),
+  });
+
 /**
  * Generic finalize body. Verifies what S3 has against what the
  * pending row says, scans the bytes, dispatches into the
@@ -569,15 +598,15 @@ const runFinalize = async function* ({
   }
 
   // 3. Download for scan.
-  const uploadBytes = await readS3ObjectBounded({
-    bucket: envBase.S3_BUCKET,
-    key: tmpKey,
-    maxBytes: claimed.declaredSize,
-    signal: AbortSignal.any([
-      admission.signal,
-      AbortSignal.timeout(FINALIZE_CLAIM_TIMEOUT_MS),
-    ]),
+  const downloaded = await downloadStagedUpload({
+    admission,
+    claimed,
+    tmpKey,
   });
+  if (Result.isError(downloaded)) {
+    return Result.err(downloaded.error);
+  }
+  const uploadBytes = downloaded.value;
   if (!head.checksumSHA256) {
     const uploadedSha256 = hashSha256Hex(uploadBytes);
     if (uploadedSha256 !== claimed.declaredSha256) {

@@ -527,7 +527,12 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     }
   };
 
-  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: handle });
+  const server = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    idleTimeout: 255,
+    fetch: handle,
+  });
   const endpoint = server.url.origin;
   configureS3ForTesting({ endpoint });
   // Both transports point at the same store: `lib/s3.ts` (Bun's client) and
