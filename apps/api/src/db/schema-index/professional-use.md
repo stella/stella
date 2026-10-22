@@ -16,14 +16,14 @@ user_professional_use_acceptances.accepted_at        timestamptz  default,not nu
 user_professional_use_acceptances.source             text         default,not null  professional-use.ts:50  How this acceptance was given or, for legacy rows, why that is unknown.
 ```
 
-## organization_professional_use_acceptances · `organizationProfessionalUseAcceptances` · professional-use.ts:74 · rls
+## organization_professional_use_acceptances · `organizationProfessionalUseAcceptances` · professional-use.ts:80 · rls
 
 The professional-use acceptance an organization carries, with the account whose acceptance it is: its creator's at creation, or, for an organization created be…
 
 ```text
-organization_professional_use_acceptances.organization_id      safeOrganizationId  pk,not null       professional-use.ts:77
-organization_professional_use_acceptances.accepted_by_user_id  text                null              professional-use.ts:78
-organization_professional_use_acceptances.statement_version    text                not null          professional-use.ts:79
-organization_professional_use_acceptances.terms_version        text                not null          professional-use.ts:80
-organization_professional_use_acceptances.accepted_at          timestamptz         default,not null  professional-use.ts:81
+organization_professional_use_acceptances.organization_id      safeOrganizationId  pk,not null       professional-use.ts:83
+organization_professional_use_acceptances.accepted_by_user_id  text                null              professional-use.ts:84
+organization_professional_use_acceptances.statement_version    text                not null          professional-use.ts:85
+organization_professional_use_acceptances.terms_version        text                not null          professional-use.ts:86
+organization_professional_use_acceptances.accepted_at          timestamptz         default,not null  professional-use.ts:87
 ```
