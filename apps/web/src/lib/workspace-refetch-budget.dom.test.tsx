@@ -40,6 +40,15 @@ const groupKey = {
   groupByPropertyId: "_status",
   groupValue: "todo",
 };
+const compareEventTypes = (left: string, right: string) => {
+  if (left < right) {
+    return -1;
+  }
+  if (left > right) {
+    return 1;
+  }
+  return 0;
+};
 const VIEW_QUERY_KEYS = {
   entitiesOptions: entityQueries.entitiesOptions(viewKey).queryKey,
   entitiesWindowOptions: entityQueries.entitiesWindowOptions(viewKey).queryKey,
@@ -250,9 +259,14 @@ test("live-update cases cover every event branch in the cache adapter", async ()
       ([key]) => key === name,
     );
     expect(entry).toBeDefined();
-    return entry?.at(1);
+    if (!entry) {
+      throw new Error(`Missing realtime event type for ${name ?? "unknown"}`);
+    }
+    return entry[1];
   });
-  expect(branches.toSorted()).toEqual(Object.keys(EVENT_CASES).toSorted());
+  expect(Object.keys(EVENT_CASES).toSorted(compareEventTypes)).toEqual(
+    branches.toSorted(compareEventTypes),
+  );
 });
 
 for (const event of Object.values(EVENT_CASES)) {
@@ -368,20 +382,31 @@ for (const [name, mutate] of Object.entries(entityMutationBudgetCases)) {
   });
 }
 
-for (const [name, options] of Object.entries({
-  window: entityQueries.entitiesWindowOptions(viewKey),
-  kanban: entityQueries.kanbanGroupOptions(groupKey),
-})) {
-  test(`${name}: infinite entity views retain at most three refetchable pages at 10N`, async () => {
-    const { client, close } = createMeasuredClient();
-    const observer = new InfiniteQueryObserver(client, {
-      ...options,
+const infiniteEntityViewCases = {
+  window: (client: QueryClient) =>
+    new InfiniteQueryObserver(client, {
+      ...entityQueries.entitiesWindowOptions(viewKey),
       queryFn: async ({ pageParam }) => ({
         entities: [],
         nextCursor: String(Number(pageParam ?? 0) + 1),
         limit: 200,
       }),
-    });
+    }),
+  kanban: (client: QueryClient) =>
+    new InfiniteQueryObserver(client, {
+      ...entityQueries.kanbanGroupOptions(groupKey),
+      queryFn: async ({ pageParam }) => ({
+        entities: [],
+        nextCursor: String(Number(pageParam ?? 0) + 1),
+        limit: 200,
+      }),
+    }),
+};
+
+for (const [name, createObserver] of Object.entries(infiniteEntityViewCases)) {
+  test(`${name}: infinite entity views retain at most three refetchable pages at 10N`, async () => {
+    const { client, close } = createMeasuredClient();
+    const observer = createObserver(client);
     const unsubscribe = observer.subscribe(() => undefined);
     await observer.refetch();
     for (let index = 1; index < 30; index += 1) {

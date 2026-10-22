@@ -23,10 +23,11 @@ export const invalidateDeletedEntityQueries = async ({
       queryKey: entitiesKeys.all(workspaceId),
       predicate: ({ queryKey }) => isEntityCollectionQueryKey(queryKey),
     }),
-    ...entityIds.map((entityId) =>
-      queryClient.invalidateQueries({
-        queryKey: entitiesKeys.detail(workspaceId, entityId),
-      }),
+    ...entityIds.map(
+      async (entityId) =>
+        await queryClient.invalidateQueries({
+          queryKey: entitiesKeys.detail(workspaceId, entityId),
+        }),
     ),
     queryClient.invalidateQueries({
       queryKey: taskKeys.all(workspaceId),

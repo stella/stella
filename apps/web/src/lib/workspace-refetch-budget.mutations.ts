@@ -11,12 +11,12 @@ import {
 } from "../../../../scripts/ledger-membership";
 
 export const entityMutationBudgetCases = {
-  useDeleteEntities: ({
+  useDeleteEntities: async ({
     queryClient,
     workspaceId,
     entityId,
   }: Parameters<typeof invalidateRenamedEntityQueries>[0]) =>
-    invalidateDeletedEntityQueries({
+    await invalidateDeletedEntityQueries({
       queryClient,
       workspaceId,
       entityIds: [entityId],
