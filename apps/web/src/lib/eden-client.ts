@@ -1,13 +1,13 @@
 import { createStellaEdenClient } from "@stll/api-client";
 import type { EdenRoutesApp, StellaEdenClientOptions } from "@stll/api-client";
 
-import { notifyActionAdmissionRefusal } from "@/components/action-admission-outcome";
 import type {
   CorrespondenceRoutes,
   MemoriesRoutes,
   MyTimeEntriesRoutes,
   WebRoutes,
 } from "@/generated/api-routes.gen";
+import { getTranslator } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
 import {
   getApiRequestHeaders,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/api-request-context";
 import { browserApiBaseUrl } from "@/lib/api-url";
 import { observeActionAdmissionResponse } from "@/lib/errors/action-admission-response";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 export type WebApiRoutes = WebRoutes["v1"];
 
@@ -51,7 +52,8 @@ const clientOptions = {
   headers: getApiRequestHeaders,
   async onResponse(response) {
     await observeActionAdmissionResponse(response, {
-      notifyRefusal: notifyActionAdmissionRefusal,
+      notifyRefusal: (error) =>
+        notifyUserError(error, getTranslator()("errors.actionFailed")),
       captureError: (error) => {
         getAnalytics().captureError(error);
       },

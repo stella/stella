@@ -3,13 +3,15 @@ import { createElement } from "react";
 import { Result } from "better-result";
 
 import { copyToClipboard } from "@stll/clipboard";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { createDetached } from "@stll/errors";
 import { stellaToast } from "@stll/ui/toast";
 
-import { notifyActionAdmissionRefusal } from "@/components/action-admission-outcome";
 import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
 import { getTranslator } from "@/i18n/translator";
+import { fingerprintTelemetryError } from "@/lib/analytics/error-fingerprint";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -17,16 +19,80 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 type UserErrorToastOptions = Omit<
   Parameters<typeof stellaToast.add>[0],
   "title" | "type"
-> & { toastId?: string | undefined };
+> & {
+  feature?: string | undefined;
+  routeTemplate?: string | undefined;
+  toastId?: string | undefined;
+};
+
+let currentRouteTemplate = "unknown";
+const reportedFingerprints = new Set<string>();
+
+export const resetUserErrorReportDedupeForTests = (): void => {
+  reportedFingerprints.clear();
+};
+
+const featureFromRoute = (routeTemplate: string): string => {
+  if (routeTemplate === "unknown") {
+    return "web";
+  }
+  const feature = routeTemplate.split("/").find((part) => part !== "");
+  return feature?.replace(/^_protected\.?/u, "") || "web";
+};
+
+export const setUserErrorRouteTemplate = (routeTemplate: string): void => {
+  currentRouteTemplate = routeTemplate;
+};
+
+const reportUserVisibleError = (
+  error: unknown,
+  feature: string | undefined,
+  routeTemplate: string | undefined,
+): void => {
+  const reportable = error ?? new Error("UserVisibleError");
+  const fingerprint = fingerprintTelemetryError(reportable);
+  if (reportedFingerprints.has(fingerprint)) {
+    return;
+  }
+  reportedFingerprints.add(fingerprint);
+  const template = routeTemplate ?? currentRouteTemplate;
+  getAnalytics().captureError(reportable, {
+    type: "user-visible",
+    routeTemplate: template,
+    feature: feature ?? featureFromRoute(template),
+  });
+};
 
 export const notifyUserError = (
   error: unknown,
   fallback: string,
-  { toastId, ...options }: UserErrorToastOptions = {},
+  { feature, routeTemplate, toastId, ...options }: UserErrorToastOptions = {},
 ): boolean => {
+  reportUserVisibleError(error, feature, routeTemplate);
   // The stable refusal id coalesces Eden's observer and local error handlers;
   // raw fetch and SDK errors also need to emit the same notice here.
-  if (notifyActionAdmissionRefusal(error)) {
+  const refusal = actionAdmissionOutcome(error);
+  if (refusal) {
+    const t = getTranslator();
+    stellaToast.add({
+      id: refusal.code,
+      title: t(refusal.messageKey),
+      type: "info",
+      ...(refusal.contactUrl
+        ? {
+            description: createElement(
+              "a",
+              {
+                className: "underline underline-offset-4",
+                href: sanitizeHref(refusal.contactUrl),
+                rel: "noreferrer",
+                target: "_blank",
+              },
+              t("errors.actionAdmission.contact"),
+            ),
+          }
+        : {}),
+    });
     if (toastId !== undefined) {
       stellaToast.close(toastId);
     }
@@ -45,7 +111,6 @@ export const notifyUserError = (
                 `${diagnostic.provider}: ${diagnostic.message}`,
               );
               if (Result.isError(copied)) {
-                getAnalytics().captureError(copied.error);
                 notifyUserError(
                   copied.error,
                   getTranslator()("errors.actionFailed"),
@@ -94,8 +159,7 @@ export const detachedUserAction = (
   operation: unknown,
   { context, failureMessage }: DetachedUserActionOptions,
 ): void => {
-  createDetached((error, label) => {
-    getAnalytics().captureError(error, { type: "detached", operation: label });
+  createDetached((error) => {
     notifyUserError(error, failureMessage);
   })(operation, context);
 };

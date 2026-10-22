@@ -4,7 +4,12 @@ import { sleep } from "@stll/concurrency/sleep";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import { detachedUserAction } from "@/lib/errors/user-toast";
+import { toAPIError } from "@/lib/errors/api";
+import {
+  detachedUserAction,
+  notifyUserError,
+  resetUserErrorReportDedupeForTests,
+} from "@/lib/errors/user-toast";
 
 const FAILURE = "That did not work";
 
@@ -14,6 +19,7 @@ const settle = async () => {
 };
 
 afterEach(() => {
+  resetUserErrorReportDedupeForTests();
   mock.restore();
 });
 
@@ -32,8 +38,9 @@ describe("detachedUserAction", () => {
     await settle();
 
     expect(capture).toHaveBeenCalledWith(failure, {
-      type: "detached",
-      operation: "test.press",
+      feature: "web",
+      routeTemplate: "unknown",
+      type: "user-visible",
     });
     expect(add).toHaveBeenCalledTimes(1);
     expect(add.mock.calls.at(0)?.[0]).toMatchObject({ type: "error" });
@@ -53,5 +60,50 @@ describe("detachedUserAction", () => {
 
     expect(capture).not.toHaveBeenCalled();
     expect(add).not.toHaveBeenCalled();
+  });
+});
+
+describe("notifyUserError", () => {
+  test("reports a visible error once with explicit route metadata", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const failure = new Error("private detail");
+
+    notifyUserError(failure, FAILURE, {
+      feature: "auth",
+      routeTemplate: "/auth/error",
+    });
+    notifyUserError(failure, FAILURE, {
+      feature: "auth",
+      routeTemplate: "/auth/error",
+    });
+
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture).toHaveBeenCalledWith(failure, {
+      feature: "auth",
+      routeTemplate: "/auth/error",
+      type: "user-visible",
+    });
+  });
+
+  test("reports an admission refusal while keeping its own notice", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const add = spyOn(stellaToast, "add").mockReturnValue("refusal-toast");
+    const refusal = toAPIError({
+      status: 403,
+      value: { code: "action_not_enabled", message: "private detail" },
+    });
+
+    expect(notifyUserError(refusal, FAILURE)).toBe(false);
+
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(add.mock.calls.at(0)?.at(0)).toMatchObject({
+      id: "action_not_enabled",
+      type: "info",
+    });
   });
 });
