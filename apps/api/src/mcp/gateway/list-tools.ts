@@ -231,6 +231,11 @@ export const getGatewayMcpToolDefinition = async ({
 }): Promise<McpToolDefinition | undefined> => {
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (staticTool) {
+    // A tool hidden from the member role stays unknown, even on a call by
+    // name, before any authority refusal could reveal it.
+    if (!isStaticToolShownToMemberRole(context, staticTool)) {
+      return undefined;
+    }
     // Keep role refusals reachable over HTTP before the enrolment lookup;
     // authorized callers still see an unenrolled tool as unknown.
     if (
@@ -243,13 +248,12 @@ export const getGatewayMcpToolDefinition = async ({
     ) {
       return staticTool;
     }
-    return isStaticToolShownToMemberRole(context, staticTool) &&
-      isMcpDescriptorFeatureEnabled({
-        context,
-        kind: "tools",
-        id: staticTool.name,
-        featureId: staticTool.featureId,
-      })
+    return isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: staticTool.name,
+      featureId: staticTool.featureId,
+    })
       ? staticTool
       : undefined;
   }
