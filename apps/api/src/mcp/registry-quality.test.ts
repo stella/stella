@@ -378,7 +378,7 @@ test("every surface's read declarations are covered by the census", () => {
             : {}),
         }
       : undefined;
-  const defaultDeclarations = new Map(
+  const defaultDeclarations = new Map<string, ReturnType<typeof declarationOf>>(
     DEFAULT_MCP_TOOL_DEFINITIONS.map((definition) => [
       definition.name,
       declarationOf(definition),
