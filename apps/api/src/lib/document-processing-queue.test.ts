@@ -394,12 +394,21 @@ describe("reconciliation fault isolation", () => {
     const repairSource = queueSource.slice(repairStart, repairEnd);
 
     expect(dispatchStart).toBeGreaterThan(-1);
-    expect(dispatchSource).toContain('selection === "native-only"');
-    expect(dispatchSource).toContain('"native-extraction" : "ocr"');
-    expect(ocrSchedulerSource).toContain('selection: "ocr-only"');
-    expect(ocrSchedulerSource).not.toContain('selection: "native-only"');
-    expect(nativeSchedulerSource).toContain('selection: "native-only"');
-    expect(nativeSchedulerSource).not.toContain('selection: "ocr-only"');
+    expect(dispatchSource).toContain('selection.kind === "any"');
+    expect(dispatchSource).toContain("selection.scheduledRetriesOnly");
+    expect(dispatchSource).toContain(
+      "isNotNull(documentProcessingRuns.nextAttemptAt)",
+    );
+    expect(queueSource).toContain(
+      'selection: { kind: "any", scheduledRetriesOnly: true }',
+    );
+    expect(ocrSchedulerSource).toContain(
+      'selection: { kind: "ocr", scheduledRetriesOnly: false }',
+    );
+    expect(ocrSchedulerSource).not.toContain('kind: "native-extraction"');
+    expect(nativeSchedulerSource).toContain('kind: "native-extraction"');
+    expect(nativeSchedulerSource).toContain("scheduledRetriesOnly: false");
+    expect(nativeSchedulerSource).not.toContain('kind: "ocr"');
     expect(repairStart).toBeGreaterThan(-1);
     expect(repairSource).toContain("persistMissingNativeExtractionRuns");
     expect(repairSource).not.toContain("organizationSettings");

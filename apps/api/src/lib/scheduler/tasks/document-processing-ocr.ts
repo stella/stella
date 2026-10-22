@@ -95,7 +95,7 @@ export const dispatchDocumentOcr: SchedulerTask = async ({
         await dispatchQueuedDocumentProcessingRuns({
           database: db,
           limit,
-          selection: "ocr-only",
+          selection: { kind: "ocr", scheduledRetriesOnly: false },
         }),
       signal,
     });

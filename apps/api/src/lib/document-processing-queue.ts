@@ -2197,6 +2197,11 @@ const updateQueuedRunSchedule = async ({
     );
 };
 
+type DocumentProcessingDispatchSelection = {
+  kind: "native-extraction" | "ocr" | "any";
+  scheduledRetriesOnly: boolean;
+};
+
 export const dispatchQueuedDocumentProcessingRuns = async ({
   database,
   enqueue = enqueueDocumentProcessingRun,
@@ -2206,7 +2211,7 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   database: typeof rootDb;
   enqueue?: typeof enqueueDocumentProcessingRun;
   limit?: number;
-  selection: "native-only" | "ocr-only";
+  selection: DocumentProcessingDispatchSelection;
 }): Promise<{
   attempted: number;
   hasMore: boolean;
@@ -2214,15 +2219,17 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
 }> => {
   const now = new Date();
   const runs = await database
-    .select({ id: documentProcessingRuns.id })
+    .select({
+      id: documentProcessingRuns.id,
+      kind: documentProcessingRuns.kind,
+    })
     .from(documentProcessingRuns)
     .where(
       and(
         eq(documentProcessingRuns.status, "queued"),
-        eq(
-          documentProcessingRuns.kind,
-          selection === "native-only" ? "native-extraction" : "ocr",
-        ),
+        selection.kind === "any"
+          ? undefined
+          : eq(documentProcessingRuns.kind, selection.kind),
         lt(
           documentProcessingRuns.attemptCount,
           DOCUMENT_PROCESSING_MAX_ATTEMPTS,
@@ -2232,7 +2239,9 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
           lte(documentProcessingRuns.nextDeliveryAt, now),
         ),
         or(
-          isNull(documentProcessingRuns.nextAttemptAt),
+          selection.scheduledRetriesOnly
+            ? isNotNull(documentProcessingRuns.nextAttemptAt)
+            : isNull(documentProcessingRuns.nextAttemptAt),
           lte(documentProcessingRuns.nextAttemptAt, now),
         ),
       ),
@@ -2245,17 +2254,22 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
     .limit(limit);
 
   const attempts = await Promise.all(
-    runs.map(
-      async ({ id }) =>
-        await tryEnqueueDocumentProcessingRun({ enqueue, runId: id }),
-    ),
+    runs.map(async ({ id, kind }) => ({
+      ...(await tryEnqueueDocumentProcessingRun({ enqueue, runId: id })),
+      kind,
+    })),
   );
-  const enqueuedIds: SafeId<"documentProcessingRun">[] = [];
+  const enqueuedNativeExtractionIds: SafeId<"documentProcessingRun">[] = [];
+  const enqueuedOcrIds: SafeId<"documentProcessingRun">[] = [];
   const failedIds: SafeId<"documentProcessingRun">[] = [];
   for (const attempt of attempts) {
     switch (attempt.status) {
       case "enqueued":
-        enqueuedIds.push(attempt.runId);
+        if (attempt.kind === "native-extraction") {
+          enqueuedNativeExtractionIds.push(attempt.runId);
+        } else {
+          enqueuedOcrIds.push(attempt.runId);
+        }
         break;
       case "failed":
         failedIds.push(attempt.runId);
@@ -2269,11 +2283,14 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   const updatedAt = new Date();
   await updateQueuedRunSchedule({
     database,
-    delayMs:
-      selection === "native-only"
-        ? NATIVE_CONTENT_SEARCH_BOUND_MS
-        : OCR_ENQUEUE_VISIBILITY_TIMEOUT_MS,
-    runIds: enqueuedIds,
+    delayMs: NATIVE_CONTENT_SEARCH_BOUND_MS,
+    runIds: enqueuedNativeExtractionIds,
+    updatedAt,
+  });
+  await updateQueuedRunSchedule({
+    database,
+    delayMs: OCR_ENQUEUE_VISIBILITY_TIMEOUT_MS,
+    runIds: enqueuedOcrIds,
     updatedAt,
   });
   await updateQueuedRunSchedule({
@@ -2317,7 +2334,7 @@ const dispatchScheduledDocumentProcessingRetries = async (
     await dispatchQueuedDocumentProcessingRuns({
       database: dependencies.database,
       enqueue: dependencies.enqueueDocumentProcessingRun,
-      selection: "ocr-only",
+      selection: { kind: "any", scheduledRetriesOnly: true },
     });
   return resolveScheduledDeliveryBatch({
     attempted,

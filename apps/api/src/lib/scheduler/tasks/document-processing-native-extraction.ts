@@ -24,7 +24,10 @@ export const dispatchNativeExtraction: SchedulerTask = async ({
         await dispatchQueuedDocumentProcessingRuns({
           database: db,
           limit,
-          selection: "native-only",
+          selection: {
+            kind: "native-extraction",
+            scheduledRetriesOnly: false,
+          },
         }),
       signal,
     });
