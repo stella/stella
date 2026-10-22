@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use crate::managed_policy::{self, ManagedServer};
 use crate::types::DEFAULT_BRIDGE_PORT;
 
 const DEFAULT_WEB_PORT: u16 = 3000;
@@ -123,8 +124,14 @@ pub fn normalize_self_host_api_base_url(value: &str) -> Result<String, String> {
 }
 
 /// The web origin that links a desktop account for an API the build trusts
-/// without a self-host approval: production, or a local development stack.
+/// without a self-host approval: the server an administrator named,
+/// production, or a local development stack.
 pub fn web_origin_for_trusted_api(api_base_url: &str) -> Option<String> {
+  if let Some(server) = managed_server()
+    && server.api_base_url == api_base_url
+  {
+    return Some(server.web_origin.clone());
+  }
   if api_base_url == PRODUCTION_API_BASE_URL {
     return Some(PRODUCTION_WEB_ORIGIN.into());
   }
@@ -140,9 +147,13 @@ pub fn web_origin_for_trusted_api(api_base_url: &str) -> Option<String> {
   Some(format!("http://{}:{web_port}", parsed.host()?))
 }
 
-/// The server a fresh "Connect to stella web" links to: the API and web
-/// origin this build was made for, or production when the build names none.
+/// The server a fresh "Connect to stella web" links to: the server an
+/// administrator named, else the API and web origin this build was made for,
+/// or production when the build names none.
 pub fn default_connect_target() -> (String, String) {
+  if let Some(server) = managed_server() {
+    return (server.api_base_url.clone(), server.web_origin.clone());
+  }
   let api = parse_origins(BUILD_TIME_DEFAULT_API_BASE_URLS.map(str::to_string))
     .into_iter()
     .next();
@@ -187,6 +198,10 @@ pub fn resolve_allowed_origins() -> HashSet<String> {
     origins.insert(origin);
   }
 
+  if let Some(server) = managed_server() {
+    origins.insert(server.web_origin.clone());
+  }
+
   origins
 }
 
@@ -209,7 +224,15 @@ pub fn resolve_trusted_api_base_urls() -> HashSet<String> {
     urls.insert(normalize_api_base_url(&url));
   }
 
+  if let Some(server) = managed_server() {
+    urls.insert(server.api_base_url.clone());
+  }
+
   urls
+}
+
+fn managed_server() -> Option<&'static ManagedServer> {
+  managed_policy::current().server.as_ref()
 }
 
 #[cfg(test)]
