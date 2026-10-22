@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { parseMigrationStatements } from "./check-migration-safety";
 import { censusSql, DDL_FORMS } from "./migration-lock-census";

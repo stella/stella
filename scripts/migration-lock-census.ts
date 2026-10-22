@@ -710,6 +710,18 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
     reason:
       "CHECK constraints are added NOT VALID under a 1s lock_timeout; 20261015060010 validates them without ACCESS EXCLUSIVE.",
   },
+  {
+    migration: "20261020090000_corpus_projection_desired_at",
+    form: "add-column",
+    reason:
+      "Nullable, default-free columns are a catalog-only change under a 1s lock_timeout.",
+  },
+  {
+    migration: "20261020090000_corpus_projection_desired_at",
+    form: "alter-column",
+    reason:
+      "SET DEFAULT changes only the catalog default for future rows (no rewrite or scan) under a 1s lock_timeout.",
+  },
 ];
 export type LockBaselineEntry = {
   migration: string;
