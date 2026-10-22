@@ -39,19 +39,19 @@ describe("CopyButton", () => {
 });
 
 describe("copied feedback", () => {
-  test("confirms, resets, and restarts the reset timer", () => {
+  test("confirms, resets, and restarts the reset timer", async () => {
     jest.useFakeTimers();
     const hook = renderHook(() => useCopiedFeedback());
 
     act(() => hook.result.current.confirm());
     expect(hook.result.current.copied).toBe(true);
 
-    act(() => jest.advanceTimersByTime(COPIED_RESET_MS - 1));
+    await act(() => jest.advanceTimersByTime(COPIED_RESET_MS - 1));
     act(() => hook.result.current.confirm());
-    act(() => jest.advanceTimersByTime(COPIED_RESET_MS - 1));
+    await act(() => jest.advanceTimersByTime(COPIED_RESET_MS - 1));
     expect(hook.result.current.copied).toBe(true);
 
-    act(() => jest.advanceTimersByTime(1));
+    await act(() => jest.advanceTimersByTime(1));
     expect(hook.result.current.copied).toBe(false);
   });
 });
