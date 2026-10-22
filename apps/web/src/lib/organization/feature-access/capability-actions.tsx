@@ -123,6 +123,14 @@ export const useActionCapabilities = (
   return fixture ?? live;
 };
 
+/**
+ * Whether `CapabilityAction` renders anything for `action`. Chrome that
+ * belongs to the action but sits outside its render function (a separator
+ * before it) follows the same answer, so it never outlives the action.
+ */
+export const useCapabilityActionShown = (action: ActionDescriptor): boolean =>
+  isCapabilityActionVisible(action, useActionCapabilities(action.capability));
+
 type CapabilityActionChildProps = {
   disabled?: boolean;
   "aria-disabled"?: boolean;
