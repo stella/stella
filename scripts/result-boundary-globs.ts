@@ -125,6 +125,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/views/**/*.ts",
   "apps/api/src/lib/work-obligations/**/*.ts",
   "apps/api/src/lib/workspaces/**/*.ts",
+  "apps/desktop/src/onboarding/**/*.{ts,tsx}",
   "apps/desktop/src/registry/**/*.{ts,tsx}",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
   "apps/web/src/components/ai-prompt-input/**/*.{ts,tsx}",
@@ -143,6 +144,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/billing/**/*.{ts,tsx}",
   "apps/web/src/components/public-law-table/**/*.{ts,tsx}",
   "apps/web/src/components/references/**/*.{ts,tsx}",
+  "apps/web/src/components/route-provider-scope/**/*.{ts,tsx}",
   "apps/web/src/components/viewer/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
@@ -152,6 +154,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/knowledge/**/*.{ts,tsx}",
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/features/workspaces/**/*.{ts,tsx}",
+  "apps/web/src/lib/capabilities/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
   "apps/web/src/lib/drag-and-drop/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
@@ -197,9 +200,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
-  "packages/test-kit/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
-  "packages/time/src/**/*.ts",
   "packages/uuid-codec/src/**/*.ts",
   "packages/workspace-model/src/**/*.ts",
   "packages/workspace-ui/src/**/*.{ts,tsx}",
@@ -308,11 +309,6 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/cli/src/cli.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
-  // The test kit reports a hung wait or a refused connection to the test
-  // runner, and stands in for the platform's throwing socket API.
-  "packages/test-kit/src/network.ts",
-  "packages/test-kit/src/regenerate.ts",
-  "packages/test-kit/src/wait.ts",
   "packages/property-testing/src/index.ts",
   // wasm-bindgen reports initialization failures and traps through rejection;
   // this adapter converts that runtime contract to a typed Result.

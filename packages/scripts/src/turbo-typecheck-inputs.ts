@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 const turboTypecheckInputsSchema = v.object({
