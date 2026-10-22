@@ -1787,6 +1787,10 @@
       "replyReadyBody": "stella dokončila odpověď ve vašem chatu.",
       "replyReadyTitle": "Odpověď je hotová"
     },
+    "turnPaused": {
+      "continue": "Pokračovat",
+      "status": "Pozastaveno po {count, plural, one {# kroku} few {# krocích} many {# kroku} other {# krocích}}"
+    },
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
     "usageFallbackNotice": "Denní příděl AI je vyčerpán — odpovědi pokračují na standardním modelu.",

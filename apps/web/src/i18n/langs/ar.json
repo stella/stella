@@ -1787,6 +1787,10 @@
       "replyReadyBody": "أنهت stella الرد في الدردشة.",
       "replyReadyTitle": "الرد جاهز"
     },
+    "turnPaused": {
+      "continue": "متابعة",
+      "status": "متوقف مؤقتًا بعد {count, plural, zero {# خطوة} one {خطوة واحدة} two {خطوتين} few {# خطوات} many {# خطوة} other {# خطوة}}"
+    },
     "unsupportedFileType": "نوع ملف غير مدعوم",
     "uploadFailed": "تعذّرت معالجة الملف",
     "usageFallbackNotice": "استُنفدت الحصة اليومية للذكاء الاصطناعي — تستمر الردود على النموذج القياسي.",

@@ -1787,6 +1787,10 @@
       "replyReadyBody": "stella hat in Ihrem Chat fertig geantwortet.",
       "replyReadyTitle": "Antwort fertig"
     },
+    "turnPaused": {
+      "continue": "Fortsetzen",
+      "status": "Nach {count, plural, one {# Schritt} other {# Schritten}} pausiert"
+    },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",
     "usageFallbackNotice": "Tägliches KI-Kontingent aufgebraucht — Antworten laufen weiter über das Standardmodell.",

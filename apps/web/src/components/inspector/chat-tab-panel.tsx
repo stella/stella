@@ -270,6 +270,7 @@ export const ChatTabPanel = ({
     isLoadingOlder,
     loadOlderError,
     approvalIdsAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -707,6 +708,7 @@ export const ChatTabPanel = ({
                   onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
                   onOpenPlaybook={handleOpenPlaybook}
+                  onContinuePausedTurn={continuePausedTurn}
                   onResend={resendLatestMessage}
                   onSendWithoutAnonymization={sendWithoutAnonymization}
                   queuedMessageActions={{

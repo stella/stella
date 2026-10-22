@@ -1076,6 +1076,18 @@ export const resolveChatAssistantTurnOutcome = (
   }
 };
 
+/**
+ * The pause a stored answer ended on: its turn reached its budget, and the
+ * user's next message (Continue sends one) runs the next step. Null for any
+ * other answer.
+ */
+export const getPausedChatTurn = (
+  message: ChatAssistantTurnMessage | null,
+): Extract<ServerChatTurnOutcome, { type: "paused" }> | null => {
+  const outcome = resolveChatAssistantTurnOutcome(message);
+  return outcome.type === "paused" ? outcome : null;
+};
+
 export const getChatAssistantTurnError = (
   message: ChatAssistantTurnMessage | null,
 ): Error | undefined => {

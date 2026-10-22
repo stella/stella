@@ -811,6 +811,15 @@ export const useChatSession = ({
     ],
   );
 
+  // A turn paused on its budget runs its next step only on the user's word:
+  // Continue sends that word as their next message, which opens a new budget.
+  const continuePausedTurn = useCallback(async () => {
+    await sendMessage({
+      content: t("chat.turnPaused.continue"),
+      id: toSafeId<"chatMessage">(createUuid()),
+    });
+  }, [sendMessage, t]);
+
   const removeQueuedMessage = useCallback(
     (id: string) => {
       applySendQueueEvent({ type: "queued-message-removed", id });
@@ -1708,6 +1717,7 @@ export const useChatSession = ({
     loadOlderError,
     resendLatestMessage,
     sendMessage,
+    continuePausedTurn,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,

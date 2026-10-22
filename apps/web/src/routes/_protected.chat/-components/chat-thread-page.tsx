@@ -250,6 +250,7 @@ export const ChatThreadPage = ({
     isLoadingOlder,
     loadOlderError,
     approvalIdsAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -705,6 +706,7 @@ export const ChatThreadPage = ({
                         }
                         onOpenCreatedDocument={handleOpenCreatedDocument}
                         onOpenPlaybook={handleOpenPlaybook}
+                        onContinuePausedTurn={continuePausedTurn}
                         onResend={resendLatestMessage}
                         onSendWithoutAnonymization={sendWithoutAnonymization}
                         queuedMessageActions={{

@@ -117,7 +117,8 @@ type RecordedAction =
   | { type: "stop" }
   | { type: "drop-connection" }
   | { type: "reload" }
-  | { type: "retry" };
+  | { type: "retry" }
+  | { messageId: string; text: string; type: "continue" };
 type RecordedConversation = {
   initialPage: RecordedPage;
   scenario: string;
@@ -158,6 +159,7 @@ const STEP_KINDS: readonly RecordedAction["type"][] = [
   "approve",
   "auto-approve",
   "client-tool",
+  "continue",
   "drop-connection",
   "reload",
   "retry",
@@ -533,6 +535,7 @@ const ALLOWED = messages.chat.approval.allowed;
 const DENIED = messages.chat.approval.denied;
 const SUBMIT_ANSWERS = messages.chat.askUser.submit;
 const ANSWER_PLACEHOLDER = messages.chat.askUser.placeholder;
+const CONTINUE_PAUSED_TURN = messages.chat.turnPaused.continue;
 const ASK_USER_TITLE = messages.chat.tool["ask-user"];
 const BUSY_TEXTS = [messages.chat.thinking, messages.chat.analyzingSources];
 /** The approval tool the recordings call; its one input is the call's id. */
@@ -929,6 +932,13 @@ const performAction = async ({
       );
       return;
     }
+    case "continue": {
+      // The paused answer's Continue, which sends the recorded message.
+      fireEvent.click(
+        within(container).getByRole("button", { name: CONTINUE_PAUSED_TURN }),
+      );
+      return;
+    }
     case "retry": {
       // The latest answer's Retry.
       await act(async () => {
@@ -1166,6 +1176,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   ),
   "check-saved-private-input": OUTSIDE_THE_CONVERSATION,
   "check-stored-grant": OUTSIDE_THE_CONVERSATION,
+  "continue-paused-turn": recordedAs(({ type }) => type === "continue"),
   "continue-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
   ),

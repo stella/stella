@@ -1787,6 +1787,10 @@
       "replyReadyBody": "stella pabeidza atbildēt jūsu tērzēšanā.",
       "replyReadyTitle": "Atbilde gatava"
     },
+    "turnPaused": {
+      "continue": "Turpināt",
+      "status": "Apturēts pēc {count, plural, zero {# soļiem} one {# soļa} other {# soļiem}}"
+    },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",
     "usageFallbackNotice": "Dienas AI apjoms izlietots — atbildes turpinās ar standarta modeli.",

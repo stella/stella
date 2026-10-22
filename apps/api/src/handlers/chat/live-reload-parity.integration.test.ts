@@ -1132,6 +1132,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   ),
   "check-saved-private-input": READS_ONLY,
   "check-stored-grant": READS_ONLY,
+  "continue-paused-turn": notModelled(
+    "The harness's turns stay far below the turn budget; the recorded paused-turn conversation covers the pause and its Continue.",
+  ),
   "continue-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
   ),

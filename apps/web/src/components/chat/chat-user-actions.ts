@@ -49,6 +49,9 @@ export const CHAT_USER_ACTIONS = {
     handler: "confirmStoredApprovalGrant",
     via: "session",
   },
+  /** Sends the message that runs the next step of a turn paused on its
+   *  budget. */
+  "continue-paused-turn": { handler: "continuePausedTurn", via: "session" },
   /** Resumes the chat with a committed private input receipt. */
   "continue-private-input": {
     handler: "continueRequestSecret",

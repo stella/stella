@@ -1787,6 +1787,10 @@
       "replyReadyBody": "A stella terminou de responder no seu chat.",
       "replyReadyTitle": "Resposta pronta"
     },
+    "turnPaused": {
+      "continue": "Continuar",
+      "status": "Pausado após {count, plural, one {# etapa} other {# etapas}}"
+    },
     "unsupportedFileType": "Tipo de arquivo não suportado",
     "uploadFailed": "Falha ao processar o arquivo",
     "usageFallbackNotice": "Cota diária de IA esgotada — as respostas continuam no modelo padrão.",

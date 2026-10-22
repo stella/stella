@@ -94,6 +94,7 @@ import type {
 import {
   getAwaitedAssistantMessageId,
   getChatToolTitleKey,
+  getPausedChatTurn,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
@@ -287,6 +288,7 @@ export const ChatThreadMessages = ({
   onAskUserSubmit,
   onAskUserEditAndRerun,
   onAskUserEditingChange,
+  onContinuePausedTurn,
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
@@ -415,6 +417,15 @@ export const ChatThreadMessages = ({
                         data-chat-answer-footer
                         data-chat-copy-exclude
                       >
+                        <PausedTurnNotice
+                          message={message}
+                          onContinue={
+                            message.id === retryableAssistantMessageId &&
+                            !generationActive
+                              ? onContinuePausedTurn
+                              : undefined
+                          }
+                        />
                         <AssistantMessageActions
                           exportArtifact={findCreateDocumentArtifactForMessage(
                             messages,
@@ -1251,6 +1262,45 @@ const getMessageText = (message: PersistedChatMessage) => {
   return textParts.join("\n\n").trim();
 };
 
+/**
+ * A turn that reached its budget says so where it stopped, live and after a
+ * reload alike (both read the stored outcome), and offers Continue on the
+ * latest answer: nothing runs until the user sends it.
+ */
+const PausedTurnNotice = ({
+  message,
+  onContinue,
+}: {
+  message: PersistedChatMessage;
+  onContinue: (() => void | PromiseLike<void>) | undefined;
+}) => {
+  const t = useTranslations();
+  const paused = getPausedChatTurn(message);
+  if (paused === null) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center gap-1" data-chat-turn-paused>
+      <span className="text-muted-foreground px-1.5 text-xs" role="status">
+        {t("chat.turnPaused.status", { count: paused.toolCalls })}
+      </span>
+      {onContinue !== undefined && (
+        <Button
+          className="h-6 px-1.5"
+          onClick={() => {
+            detached(onContinue(), "chat-thread-messages.continue-paused-turn");
+          }}
+          size="xs"
+          variant="outline"
+        >
+          {t("chat.turnPaused.continue")}
+        </Button>
+      )}
+    </div>
+  );
+};
+
 const AssistantMessageActions = ({
   canFork: forkOffered,
   canRetry: retryOffered,
@@ -1390,6 +1440,11 @@ type ChatThreadMessagesProps = {
     | ((options?: ChatResendOptions) => void | PromiseLike<void>)
     | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
+  /**
+   * Sends the message that continues a turn paused on its budget. Surfaces
+   * that omit it show the pause without the Continue action.
+   */
+  onContinuePausedTurn?: (() => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
     output: AskUserOutput,

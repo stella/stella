@@ -1787,6 +1787,10 @@
       "replyReadyBody": "stella a fini de répondre dans votre conversation.",
       "replyReadyTitle": "Réponse prête"
     },
+    "turnPaused": {
+      "continue": "Continuer",
+      "status": "En pause après {count, plural, one {# étape} other {# étapes}}"
+    },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",
     "usageFallbackNotice": "Quota d’IA quotidien épuisé — les réponses se poursuivent sur le modèle standard.",
