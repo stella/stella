@@ -1396,6 +1396,7 @@
     "credentialSendDescription": "Envie somente se quiser compartilhar este valor na conversa.",
     "credentialSendTitle": "Esta mensagem pode conter uma credencial",
     "deleteThread": "Excluir conversa",
+    "diagramUnavailable": "Não foi possível exibir este diagrama. O código-fonte está abaixo.",
     "editMode": {
       "autoDirect": "Automático · reescrever",
       "autoDirectDescription": "As edições da IA são aplicadas imediatamente, reescrevendo o documento diretamente (sem controle de alterações).",
@@ -4198,7 +4199,9 @@
     "prompt": "O que você procura?",
     "recent": "Recentes",
     "recentCasesFilter": "Decisões",
+    "recentLoadFailed": "Não foi possível carregar a atividade recente.",
     "recentSearchFilter": "Pesquisas",
+    "recentUpdateFailed": "Não foi possível atualizar a atividade recente.",
     "recentlyInForce": "Em vigor recentemente",
     "searchLabel": "Pesquisar na base jurídica",
     "searchPlaceholder": "Número do processo, número da norma, ECLI ou palavras-chave",
