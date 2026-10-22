@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { organizationDataExports } from "@/api/db/schema";
 import type { DataExportStatus } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -67,7 +68,7 @@ const config = {
 
 const downloadDataExport = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
+  async function* ({ safeDb, session, params, body, user, recordAuditEvent }) {
     const organizationId = session.activeOrganizationId;
     const granted = yield* Result.await(
       safeDb(async (tx) => {
@@ -124,10 +125,13 @@ const downloadDataExport = createSafeRootHandler(
         // Part names are generated server-side; sanitising is idempotent.
         const fileName = sanitizeFilename(file.fileName);
         const url = await auditedPresignDownload({
+          readSessionAuthority: ownerSyntheticSessionAuthorityReader,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.DATA_EXPORT,
           resourceId: params.exportId,
+          userId: user.id,
+          source: { kind: "request", sessionId: session.id },
           s3Key: dataExportObjectKey({
             organizationId,
             exportId: params.exportId,
