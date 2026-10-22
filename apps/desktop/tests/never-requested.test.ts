@@ -3,6 +3,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import en from "../src/i18n/langs/en.json";
+import hu from "../src/i18n/langs/hu.json";
+import pl from "../src/i18n/langs/pl.json";
 import { NEVER_REQUESTED } from "../src/onboarding/onboarding-types";
 import type { NeverRequested } from "../src/onboarding/onboarding-types";
 
@@ -120,4 +122,11 @@ describe("never-requested claims", () => {
       claims.toSorted(),
     );
   });
+});
+
+// The heading over the list must say the app never asks, in every locale that
+// once phrased it as a request.
+test("the never-requested label says the app never asks", () => {
+  expect(hu.onboarding.neverRequested).toBe("Az alkalmazás soha nem kéri:");
+  expect(pl.onboarding.neverRequested).toBe("Aplikacja nigdy nie prosi o:");
 });
