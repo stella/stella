@@ -42,6 +42,7 @@ type FakeStellaApi = {
   setGeneration: (generation: number) => void;
   setAuthorizedGeneration: (generation: number) => void;
   setLoadResponse: (response: FolioCollabSnapshotLoadResponse) => void;
+  setStoreFailureStatus: (status: number | null) => void;
   snapshotAuthorizationHeaders: () => (string | null)[];
   storeRequestBodies: () => Record<string, unknown>[];
   storeRequests: () => number;
@@ -147,6 +148,7 @@ const createFakeStellaApi = ({
   const snapshotAuthorizationHeaders: (string | null)[] = [];
   const storeRequestBodies: Record<string, unknown>[] = [];
   let storeRequests = 0;
+  let storeFailureStatus: number | null = null;
   let currentToken = token;
   let tokenGeneration = generation;
   const firstStoreGate = Promise.withResolvers<undefined>();
@@ -275,6 +277,12 @@ const createFakeStellaApi = ({
           );
         }
 
+        if (storeFailureStatus !== null) {
+          return Response.json(
+            { message: "Snapshot store failed." },
+            { status: storeFailureStatus },
+          );
+        }
         storeRequests += 1;
         if (firstStoreHeld) {
           firstStoreHeld = false;
@@ -333,6 +341,9 @@ const createFakeStellaApi = ({
       loadResponse = response;
       latestSnapshotBase64 = response.snapshotBase64;
       latestSnapshotRevision = response.snapshotRevision;
+    },
+    setStoreFailureStatus: (status) => {
+      storeFailureStatus = status;
     },
     snapshotAuthorizationHeaders: () => snapshotAuthorizationHeaders,
     storeRequestBodies: () => storeRequestBodies,
@@ -1248,8 +1259,16 @@ describe("collaboration server", () => {
         });
         fakeApi.releaseFirstStore();
         const storeError = await storeResult;
-        expect(storeError).toBeInstanceOf(FetchBoundaryError);
-        expect(storeError).toHaveProperty("status", 428);
+        // The refusal retires the room, so the store is not retried.
+        expect(storeError).toHaveProperty(
+          "_tag",
+          "CollabSnapshotRoomRetiredError",
+        );
+        expect(storeError).toHaveProperty(
+          "cause",
+          expect.any(FetchBoundaryError),
+        );
+        expect(storeError).toHaveProperty("cause.status", 428);
         expect(fakeApi.loadRequestBodies()).toHaveLength(2);
         if (resetGeneration === 0) {
           await waitFor(
@@ -1458,6 +1477,146 @@ describe("collaboration server", () => {
       provider.destroy();
       ydoc.destroy();
       await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test.each([
+    { reason: "an unavailable API", status: 503 },
+    { reason: "a snapshot above the API size limit", status: 413 },
+  ])(
+    "retries a snapshot store refused by $reason until it lands after the last client leaves",
+    async ({ status }) => {
+      const fakeApi = createFakeStellaApi();
+      const collabServer = await createCollabServer({
+        apiUrl: fakeApi.url,
+        debounceMs: 20,
+        maxDebounceMs: 100,
+        port: 0,
+        serviceToken: TEST_SERVICE_TOKEN,
+        snapshotStoreRetryBaseDelayMs: 10,
+        snapshotStoreRetryMaxDelayMs: 40,
+      });
+      const ydoc = new Doc();
+      const provider = createProvider({
+        name: TEST_ROOM_NAME,
+        token: "collab_token_test",
+        url: collabServer.websocketUrl,
+        ydoc,
+      });
+
+      try {
+        await waitFor(
+          () =>
+            provider.isAuthenticated &&
+            collabServer.hocuspocus.getDocumentsCount() === 1,
+          "Provider did not load the room.",
+        );
+        fakeApi.setStoreFailureStatus(status);
+        ydoc.getText("body").insert(0, "kept until stored");
+
+        await waitFor(
+          () => fakeApi.storeRequestBodies().length >= 2,
+          "Server did not retry the refused snapshot store.",
+        );
+        provider.destroy();
+        const attemptsAtLastDisconnect = fakeApi.storeRequestBodies().length;
+        await waitFor(
+          () =>
+            fakeApi.storeRequestBodies().length >= attemptsAtLastDisconnect + 2,
+          "Server stopped retrying once the last client left.",
+        );
+        expect(collabServer.hocuspocus.getDocumentsCount()).toBe(1);
+        expect(fakeApi.latestSnapshotRevision()).toBe(0);
+
+        fakeApi.setStoreFailureStatus(null);
+
+        await waitFor(
+          () =>
+            fakeApi.latestSnapshotRevision() === 1 &&
+            collabServer.hocuspocus.getDocumentsCount() === 0,
+          "Server did not store and release the room once the API accepted it.",
+        );
+        const restored = new Doc();
+        applyUpdate(
+          restored,
+          Buffer.from(fakeApi.latestSnapshotBase64() ?? "", "base64"),
+        );
+        expect(getTextContent(restored, "body")).toBe("kept until stored");
+        restored.destroy();
+      } finally {
+        provider.destroy();
+        ydoc.destroy();
+        await collabServer.destroy();
+        await fakeApi.destroy();
+      }
+    },
+  );
+
+  test("stores a room whose last-disconnect store failed when the server shuts down", async () => {
+    const fakeApi = createFakeStellaApi();
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 10_000,
+      maxDebounceMs: 10_000,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+      shutdownDrainTimeoutMs: 2000,
+      snapshotStoreRetryBaseDelayMs: 60_000,
+    });
+    const ydoc = new Doc();
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc,
+    });
+    let destroyed = false;
+
+    try {
+      await waitFor(
+        () =>
+          provider.isAuthenticated &&
+          collabServer.hocuspocus.getDocumentsCount() === 1,
+        "Provider did not load the room.",
+      );
+      fakeApi.setStoreFailureStatus(503);
+      ydoc.getText("body").insert(0, "stored at shutdown");
+      provider.flushPendingUpdates();
+      await waitFor(
+        () =>
+          collabServer.hocuspocus.documents
+            .get(TEST_ROOM_NAME)
+            ?.getText("body")
+            .toJSON() === "stored at shutdown",
+        "Server did not receive the edit.",
+      );
+      provider.destroy();
+      await waitFor(
+        () => fakeApi.storeRequestBodies().length === 1,
+        "Server did not attempt the last-disconnect store.",
+      );
+      expect(fakeApi.latestSnapshotRevision()).toBe(0);
+
+      fakeApi.setStoreFailureStatus(null);
+      await collabServer.destroy();
+      destroyed = true;
+
+      expect(fakeApi.storeRequestBodies()).toHaveLength(2);
+      expect(fakeApi.latestSnapshotRevision()).toBe(1);
+      const restored = new Doc();
+      applyUpdate(
+        restored,
+        Buffer.from(fakeApi.latestSnapshotBase64() ?? "", "base64"),
+      );
+      expect(getTextContent(restored, "body")).toBe("stored at shutdown");
+      restored.destroy();
+    } finally {
+      provider.destroy();
+      ydoc.destroy();
+      if (!destroyed) {
+        await collabServer.destroy();
+      }
       await fakeApi.destroy();
     }
   });
