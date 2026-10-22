@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { prDepthJobs, prHeavyJobs } from "./ci-pr-jobs";
+import { prDepthJobs, prHeavyJobs, QUICK_GATED_CLAUSE } from "./ci-pr-jobs";
 import { evaluate } from "./github-expression";
 
 const readWorkflow = (name: string) =>
@@ -261,6 +261,11 @@ test("reused PR-depth evidence still schedules every merge-group code check", ()
             "github.event_name": event,
             "inputs.heavy_only": false,
             "inputs.pr_depth_only": false,
+            "needs.ci-plan.result": "success",
+            "needs.generated-sources.result": "success",
+            // The gate runs on pull requests only.
+            "needs.pr-heavy-gate.result":
+              event === "merge_group" ? "skipped" : "success",
             "needs.ci-plan.outputs.pr_depth_reused": "true",
             "needs.ci-plan.outputs.run_required": "true",
             "needs.ci-plan.outputs.trusted": "true",
@@ -286,6 +291,78 @@ test("reused PR-depth evidence still schedules every merge-group code check", ()
         );
       }
     }
+  }
+});
+
+// The repository checks and the desktop Rust lint wait for the quick checks
+// on a pull request, like the heavy suites, but never in a merge group and
+// not on a push whose plan schedules no gate.
+const QUICK_GATED_JOBS = [
+  "ci-checks-policy",
+  "ci-checks-rest",
+  "code-quality-api",
+  "code-quality-web-rest",
+  "desktop-rust-lint",
+] as const;
+
+const jobNeeds = (job: string) => {
+  const { needs } = v.parse(
+    v.object({ needs: v.union([v.string(), v.array(v.string())]) }),
+    v.parse(v.record(v.string(), v.unknown()), ci["jobs"])[job],
+  );
+  return typeof needs === "string" ? [needs] : needs;
+};
+
+test("the repository checks and desktop Rust lint wait for the quick checks on pull requests only", () => {
+  for (const job of QUICK_GATED_JOBS) {
+    expect(jobNeeds(job), job).toContain("pr-heavy-gate");
+    expect(ciJobs[job]?.if, job).toContain(QUICK_GATED_CLAUSE);
+  }
+  // Other jobs consume the generated sources, so they never wait.
+  expect(jobNeeds("generated-sources")).not.toContain("pr-heavy-gate");
+  expect(
+    prHeavyJobs(ci).filter((job) =>
+      QUICK_GATED_JOBS.some((gated) => gated === job),
+    ),
+  ).toEqual([]);
+  expect(prDepthJobs(ci)).not.toContain("pr-heavy-gate");
+
+  const runs = (
+    job: string,
+    event: string,
+    gatePlanned: boolean,
+    gate: string,
+  ) =>
+    evaluate(ciJobs[job]?.if ?? "false", {
+      values: {
+        "github.event_name": event,
+        "inputs.heavy_only": false,
+        "inputs.pr_depth_only": false,
+        "needs.ci-plan.result": "success",
+        "needs.generated-sources.result": "success",
+        "needs.pr-heavy-gate.result": gate,
+        "needs.ci-plan.outputs.pr_heavy_gate_required": String(gatePlanned),
+        "needs.ci-plan.outputs.pr_depth_reused": "false",
+        "needs.ci-plan.outputs.run_required": "true",
+        "needs.ci-plan.outputs.trusted": "true",
+      },
+      fallback: (name) =>
+        name.startsWith("needs.ci-plan.outputs.") && name.endsWith("_required")
+          ? "true"
+          : undefined,
+      status: { always: true, success: true, failure: false, cancelled: false },
+    });
+  for (const job of QUICK_GATED_JOBS) {
+    expect(runs(job, "pull_request", true, "success"), job).toBe(true);
+    for (const gate of ["failure", "skipped", "cancelled"]) {
+      expect(runs(job, "pull_request", true, gate), `${job}/${gate}`).toBe(
+        false,
+      );
+    }
+    // A push that only merges the base reuses the heavy suites, schedules no
+    // gate, and still runs these checks.
+    expect(runs(job, "pull_request", false, "skipped"), job).toBe(true);
+    expect(runs(job, "merge_group", false, "skipped"), job).toBe(true);
   }
 });
 

@@ -21,6 +21,7 @@ describe("route error recovery", () => {
       "error loading dynamically imported module: https://example.test/chunk.js",
       "Importing a module script failed.",
       "Unable to preload CSS for /assets/chunk.css",
+      'Failed to load module script: Expected a JavaScript module script but the server responded with a MIME type of "text/html".',
     ];
 
     for (const message of messages) {

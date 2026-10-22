@@ -1397,6 +1397,7 @@
     "credentialSendDescription": "Envie somente se quiser compartilhar este valor na conversa.",
     "credentialSendTitle": "Esta mensagem pode conter uma credencial",
     "deleteThread": "Excluir conversa",
+    "diagramUnavailable": "Não foi possível exibir este diagrama. O código-fonte está abaixo.",
     "editMode": {
       "autoDirect": "Automático · reescrever",
       "autoDirectDescription": "As edições da IA são aplicadas imediatamente, reescrevendo o documento diretamente (sem controle de alterações).",
