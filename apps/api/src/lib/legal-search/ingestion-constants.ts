@@ -1,9 +1,11 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 /** Adapter keys for all supported court data sources. */
 export const ADAPTER_KEYS = {
   CZ_REGIONAL: "cz-regional",
   CZ_NS: "cz-ns",
   CZ_NSS: "cz-nss",
   CZ_US: "cz-us",
+  CZ_UOHS: "cz-uohs",
   SK_COURTS: "sk-courts",
   SK_US: "sk-us",
   PL_COURTS: "pl-courts",
@@ -53,6 +55,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.CZ_NS]: 19,
   [ADAPTER_KEYS.CZ_NSS]: 20,
   [ADAPTER_KEYS.CZ_US]: 25,
+  [ADAPTER_KEYS.CZ_UOHS]: 2,
   [ADAPTER_KEYS.SK_COURTS]: 17,
   [ADAPTER_KEYS.SK_US]: 11,
   [ADAPTER_KEYS.PL_COURTS]: 13,
@@ -74,7 +77,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.AT_BKS]: 8,
   [ADAPTER_KEYS.AT_FINDOK]: 10,
   [ADAPTER_KEYS.EU_ECJ]: 15,
-  [ADAPTER_KEYS.HU_BHGY]: 18,
+  [ADAPTER_KEYS.HU_BHGY]: 19,
   [ADAPTER_KEYS.PL_KIS]: 8,
   [ADAPTER_KEYS.PL_UODO]: 12,
   [ADAPTER_KEYS.PL_UOKIK]: 10,

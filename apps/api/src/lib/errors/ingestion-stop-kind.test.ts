@@ -160,7 +160,7 @@ describe("ingestion failure kinds", () => {
     const databaseTimeout = new TimeoutError({
       message: "Database budget exceeded",
       label: "write",
-      timeoutMs: 1,
+      timeoutMs: 1, // timeout under test
     });
     expect(ingestionStopKindOf(databaseTimeout)).toBe("internal_error");
     expect(adapterError(databaseTimeout).stopKind).toBe("internal_error");

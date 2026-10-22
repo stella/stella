@@ -16,6 +16,19 @@ pub use focused_window::{
   request_accessibility_permission,
 };
 
+#[cfg(target_os = "macos")]
+mod managed_preferences;
+#[cfg(target_os = "macos")]
+pub use managed_preferences::{ManagedPreference, managed_preference};
+
+#[cfg(target_os = "macos")]
+mod system_permissions;
+#[cfg(target_os = "macos")]
+pub use system_permissions::{
+  LoginItemApproval, NotificationAuthorization, login_item_approval,
+  notification_authorization, request_notification_authorization,
+};
+
 #[cfg(target_os = "windows")]
 mod windows_window;
 #[cfg(target_os = "windows")]

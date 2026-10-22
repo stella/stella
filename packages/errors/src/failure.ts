@@ -1,4 +1,4 @@
-// parser-output-unchanged: total failure grading changes observation policy without changing parsed records.
+// parser-output-unchanged: total failure grading changes telemetry observation policy; no parser reads this vocabulary.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
 
