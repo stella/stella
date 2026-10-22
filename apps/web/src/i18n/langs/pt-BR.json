@@ -5943,7 +5943,6 @@
     },
     "files": {
       "addFilePropertyToUpload": "Adicione uma propriedade de arquivo para fazer upload de arquivos",
-      "additionalUploadFailures": "e mais {count, plural, one {# arquivo} many {# arquivos} other {# arquivos}}",
       "attachedTemplateUpload": {
         "confirm": "Remover link e enviar",
         "description": "{count, plural, one {Este arquivo contém um link para um modelo do Word fora do documento.} other {Estes arquivos contêm links para modelos do Word fora dos documentos.}} A stella não os enviará sem alterações porque o Word pode carregar conteúdo ou macros por esses links.",

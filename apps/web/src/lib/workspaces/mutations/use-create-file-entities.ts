@@ -406,8 +406,7 @@ export const useBatchUploadLabels = (): BatchUploadLabels => {
     rateLimited: (seconds) => t("workspaces.files.rateLimited", { seconds }),
     cancel: t("common.cancel"),
     retryFailed: (count) => t("workspaces.files.retryFailed", { count }),
-    additionalFailures: (count) =>
-      t("workspaces.files.additionalUploadFailures", { count }),
+    additionalFailures: (count) => t("chat.historyContext.unnamed", { count }),
   };
 };
 

@@ -5943,7 +5943,6 @@
     },
     "files": {
       "addFilePropertyToUpload": "Añada una propiedad de archivo para subir archivos",
-      "additionalUploadFailures": "y {count, plural, one {# archivo más} other {# archivos más}}",
       "attachedTemplateUpload": {
         "confirm": "Quitar enlace y subir",
         "description": "{count, plural, one {Este archivo contiene un enlace a una plantilla de Word externa al documento.} other {Estos archivos contienen enlaces a plantillas de Word externas a los documentos.}} stella no los subirá sin cambios porque Word puede cargar contenido o macros mediante estos enlaces.",

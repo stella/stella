@@ -5943,7 +5943,6 @@
     },
     "files": {
       "addFilePropertyToUpload": "Adjon hozzá fájltulajdonságot a fájlok feltöltéséhez",
-      "additionalUploadFailures": "és további {count, plural, one {# fájl} other {# fájl}}",
       "attachedTemplateUpload": {
         "confirm": "Hivatkozás eltávolítása és feltöltés",
         "description": "{count, plural, one {Ez a fájl a dokumentumon kívüli Word-sablonra mutató hivatkozást tartalmaz.} other {Ezek a fájlok a dokumentumokon kívüli Word-sablonokra mutató hivatkozásokat tartalmaznak.}} A stella nem tölti fel őket változatlanul, mert a Word ezeken keresztül tartalmat vagy makrókat tölthet be.",

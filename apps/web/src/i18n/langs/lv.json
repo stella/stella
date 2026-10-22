@@ -5943,7 +5943,6 @@
     },
     "files": {
       "addFilePropertyToUpload": "Pievienojiet faila rekvizītu, lai augšupielādētu failus",
-      "additionalUploadFailures": "un vēl {count, plural, zero {# failu} one {# fails} other {# faili}}",
       "attachedTemplateUpload": {
         "confirm": "Noņemt saiti un augšupielādēt",
         "description": "{count, plural, zero {Šajos failos ir saites uz Word veidnēm ārpus dokumentiem.} one {Šajā failā ir saite uz Word veidni ārpus dokumenta.} other {Šajos failos ir saites uz Word veidnēm ārpus dokumentiem.}} stella bloķē nemainītu failu augšupielādi, jo Word ar šīm saitēm var ielādēt saturu vai makro.",

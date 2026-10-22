@@ -5943,7 +5943,6 @@
     },
     "files": {
       "addFilePropertyToUpload": "Ajoutez une propriété de fichier pour importer des fichiers",
-      "additionalUploadFailures": "et {count, plural, one {# fichier de plus} other {# fichiers de plus}}",
       "attachedTemplateUpload": {
         "confirm": "Supprimer le lien et importer",
         "description": "{count, plural, one {Ce fichier contient un lien vers un modèle Word externe au document.} other {Ces fichiers contiennent des liens vers des modèles Word externes aux documents.}} stella ne les importera pas tels quels, car Word peut charger du contenu ou des macros via ces liens.",

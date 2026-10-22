@@ -5943,7 +5943,6 @@
     },
     "files": {
       "addFilePropertyToUpload": "Pridėkite failo savybę norėdami įkelti failus",
-      "additionalUploadFailures": "ir dar {count, plural, one {# failas} few {# failai} other {# failų}}",
       "attachedTemplateUpload": {
         "confirm": "Pašalinti saitą ir įkelti",
         "description": "{count, plural, one {Šiame faile yra saitas į už dokumento ribų esantį „Word“ šabloną.} few {Šiuose failuose yra saitų į už dokumentų ribų esančius „Word“ šablonus.} many {Šiuose failuose yra saitų į už dokumentų ribų esančius „Word“ šablonus.} other {Šiuose failuose yra saitų į už dokumentų ribų esančius „Word“ šablonus.}} stella blokuoja nepakeistų failų įkėlimą, nes per šiuos saitus „Word“ gali įkelti turinį arba makrokomandas.",
