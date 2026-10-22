@@ -127,10 +127,48 @@ const text = (value: Value | undefined): string => {
   return value === null || value === undefined ? "" : JSON.stringify(value);
 };
 
-const looseEquals = (left: Value | undefined, right: Value | undefined) =>
-  typeof left === "string" && typeof right === "string"
+// GitHub's number coercion for a comparison of two different types: null is 0,
+// a boolean is 0 or 1, a string is a JSON number (blank reads as 0, anything
+// else as NaN), and an array or object is NaN.
+const JSON_NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/u;
+const coercedNumber = (value: Value | undefined): number => {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  if (typeof value === "boolean") {
+    return value ? 1 : 0;
+  }
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") {
+      return 0;
+    }
+    return JSON_NUMBER.test(trimmed) ? Number(trimmed) : Number.NaN;
+  }
+  return Number.NaN;
+};
+const kind = (value: Value | undefined) => {
+  if (value === null || value === undefined) {
+    return "null";
+  }
+  return Array.isArray(value) ? "array" : typeof value;
+};
+
+// Loose equality as GitHub evaluates it: strings compare case-insensitively,
+// arrays and objects only by identity, and values of different types as the
+// numbers they coerce to. `null == ''` is therefore true, as it is for an
+// unset job output in a workflow `if:`.
+const looseEquals = (left: Value | undefined, right: Value | undefined) => {
+  if (kind(left) !== kind(right)) {
+    return coercedNumber(left) === coercedNumber(right);
+  }
+  return typeof left === "string" && typeof right === "string"
     ? left.toLowerCase() === right.toLowerCase()
     : left === right;
+};
 
 const compare = (operator: string, left: Result, right: Result): Result => {
   if (left === UNKNOWN || right === UNKNOWN) {

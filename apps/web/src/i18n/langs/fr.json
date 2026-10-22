@@ -1396,6 +1396,7 @@
     "credentialSendDescription": "Envoyez-le uniquement si vous souhaitez partager cette valeur dans la conversation.",
     "credentialSendTitle": "Ce message peut contenir un identifiant",
     "deleteThread": "Supprimer la conversation",
+    "diagramUnavailable": "Impossible d’afficher ce diagramme. Son code source figure ci-dessous.",
     "editMode": {
       "autoDirect": "Automatique · réécrire",
       "autoDirectDescription": "Les modifications de l’IA sont appliquées immédiatement en réécrivant directement le document (sans suivi des modifications).",
@@ -2708,6 +2709,7 @@
       "aiConfigModelInvalid": "La configuration du modèle d’IA est invalide. Vérifiez les modèles sélectionnés.",
       "aiConfigProviderInvalid": "La configuration du fournisseur d’IA est invalide. Vérifiez les paramètres du fournisseur.",
       "aiConfigProviderValidationFailed": "Le fournisseur d’IA a refusé la configuration. Vérifiez la clé API et le modèle.",
+      "aiDeadlineExceeded": "L’IA n’a pas répondu à temps. Réessayez dans un instant.",
       "aiOutputInvalid": "La réponse de l’IA avait un format inattendu. Réessayez.",
       "aiOutputModerated": "Le fournisseur d’IA a modéré la réponse. Reformulez la demande ou choisissez un autre modèle.",
       "aiProviderTaskUnsupported": "Le fournisseur d’IA configuré ne peut pas effectuer cette tâche. Choisissez-en un qui le peut.",

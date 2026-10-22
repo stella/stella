@@ -284,6 +284,7 @@ fn reserve_dialog(bridge: DialogBridge) -> Result<(), ()> {
     return Err(());
   }
   *guard = Some(bridge);
+  drop(guard);
   Ok(())
 }
 
