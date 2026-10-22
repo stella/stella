@@ -1,0 +1,168 @@
+{
+  "fulltext": "NÁLEZ\n\nÚstavný súd Slovenskej republiky v senáte o ústavnej sťažnosti sťažovateľa\n\nanonymizované takto\n\nrozh od ol :\n\nZákladné právo sťažovateľa na súdnu ochranu porušené bolo.\n\nO d ôvod n eni e:\n\nÚstavný súd preskúmal napadnuté rozhodnutie a dospel k záveru, že je arbitrárne.\n\nPou čen i e :  Proti tomuto nálezu nemožno podať opravný prostriedok.\n\nV Košiciach 29. júla 2021\n\nMartin Vernarský predseda senátu",
+  "documentAst": {
+    "version": 1,
+    "source": {
+      "system": "ustavnysud.sk",
+      "documentId": "III. ÚS 425/2021",
+      "webUrl": "https://www.ustavnysud.sk/docDownload/11111111-2222-4333-8444-555555555555",
+      "printUrl": ""
+    },
+    "metadata": {
+      "caseNumber": "III. ÚS 425/2021",
+      "ecli": "ECLI:SK:USSR:2021:3.US.425.2021.1",
+      "court": "Ústavný súd SR",
+      "decisionDate": "2021-07-29",
+      "decisionType": "Nález",
+      "keywords": [],
+      "statutes": []
+    },
+    "blocks": [
+      {
+        "id": "b1",
+        "anchorId": "h-title",
+        "type": "heading",
+        "level": 1,
+        "role": "decision-title",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "NÁLEZ"
+          }
+        ],
+        "plainText": "NÁLEZ"
+      },
+      {
+        "id": "b2",
+        "anchorId": "h-title",
+        "type": "heading",
+        "level": 1,
+        "role": "decision-title",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Ústavný súd Slovenskej republiky v senáte o ústavnej sťažnosti sťažovateľa"
+          }
+        ],
+        "plainText": "Ústavný súd Slovenskej republiky v senáte o ústavnej sťažnosti sťažovateľa"
+      },
+      {
+        "id": "b3",
+        "anchorId": "p1",
+        "type": "paragraph",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "anonymizované",
+            "anonymized": true
+          },
+          {
+            "type": "text",
+            "text": " takto"
+          }
+        ],
+        "plainText": "anonymizované takto"
+      },
+      {
+        "id": "b4",
+        "anchorId": "h-holding",
+        "type": "heading",
+        "level": 2,
+        "role": "section-heading",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "rozh od ol :"
+          }
+        ],
+        "plainText": "rozh od ol :"
+      },
+      {
+        "id": "b5",
+        "anchorId": "p2",
+        "type": "paragraph",
+        "role": "holding",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Základné právo sťažovateľa na súdnu ochranu porušené bolo."
+          }
+        ],
+        "plainText": "Základné právo sťažovateľa na súdnu ochranu porušené bolo."
+      },
+      {
+        "id": "b6",
+        "anchorId": "h-reasoning",
+        "type": "heading",
+        "level": 2,
+        "role": "section-heading",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "O d ôvod n eni e:"
+          }
+        ],
+        "plainText": "O d ôvod n eni e:"
+      },
+      {
+        "id": "b7",
+        "anchorId": "p3",
+        "type": "paragraph",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Ústavný súd preskúmal napadnuté rozhodnutie a dospel k záveru, že je arbitrárne."
+          }
+        ],
+        "plainText": "Ústavný súd preskúmal napadnuté rozhodnutie a dospel k záveru, že je arbitrárne."
+      },
+      {
+        "id": "b8",
+        "anchorId": "p4",
+        "type": "paragraph",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Pou čen i e :  Proti tomuto nálezu nemožno podať opravný prostriedok."
+          }
+        ],
+        "plainText": "Pou čen i e :  Proti tomuto nálezu nemožno podať opravný prostriedok."
+      },
+      {
+        "id": "b9",
+        "anchorId": "p5",
+        "type": "paragraph",
+        "role": "closing",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "V Košiciach 29. júla 2021"
+          }
+        ],
+        "plainText": "V Košiciach 29. júla 2021"
+      },
+      {
+        "id": "b10",
+        "anchorId": "p6",
+        "type": "paragraph",
+        "role": "signature",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Martin Vernarský"
+          },
+          {
+            "type": "text",
+            "text": " "
+          },
+          {
+            "type": "text",
+            "text": "predseda senátu"
+          }
+        ],
+        "plainText": "Martin Vernarský predseda senátu"
+      }
+    ]
+  },
+  "parserVersion": 11
+}
