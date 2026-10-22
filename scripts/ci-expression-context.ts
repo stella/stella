@@ -212,6 +212,10 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "pilot-plan": { fast_jobs: "[]" },
   "pilot-queue-plan": { queue_jobs: "[]" },
   pilot: { coverage_profile: "normal-v1" },
+  "postgres-shards": {
+    postgres_shard_count: "2",
+    postgres_shards: '["1/2","2/2"]',
+  },
   "postgres-test-durations": { hash: "" },
   "postgres-test-plan": {
     postgres_selection_reason: "",

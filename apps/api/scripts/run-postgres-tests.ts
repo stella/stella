@@ -1,5 +1,3 @@
-import { Result } from "better-result";
-import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -17,7 +15,7 @@ import {
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
 } from "./postgres-test-plan";
 import {
-  planPostgresTestShards,
+  readPostgresTestDurations,
   selectPostgresTestShard,
 } from "./postgres-test-shards";
 import {
@@ -26,22 +24,11 @@ import {
 } from "./postgres-test-workers";
 import { preparePostgresTests } from "./prepare-postgres-tests";
 import { runGatedTests } from "./run-gated-tests";
-import { parseApiTestShard } from "./test-file-shards";
-import { durationSeconds } from "./test-timings";
 
 const shardValue = process.env["CI_POSTGRES_TEST_SHARD"];
-const durationPath = process.env["POSTGRES_TEST_DURATIONS_FILE"];
-const measured = durationPath
-  ? Result.try(() =>
-      durationSeconds(JSON.parse(readFileSync(durationPath, "utf-8"))),
-    )
-  : undefined;
-if (measured === undefined || measured.isErr()) {
-  console.log(
-    "::notice::Postgres duration cache unavailable; using conservative estimates",
-  );
-}
-const durations = measured?.unwrapOr({}) ?? {};
+const durations = readPostgresTestDurations(
+  process.env["POSTGRES_TEST_DURATIONS_FILE"],
+);
 
 loadTestEnv(path.resolve(import.meta.dir, "../.env.test"));
 const parsedWorkers = parsePostgresWorkerCount(Bun.argv.slice(2));
@@ -57,10 +44,6 @@ process.exitCode = await runGatedTests({
   prepare: preparePostgresTests,
   validateTestPlan: async (apiRoot, files) => {
     await assertSharedTableDdlIsolated(apiRoot, files);
-    const shard = parseApiTestShard(shardValue);
-    if (shard !== null) {
-      planPostgresTestShards({ files, durations, count: shard.count });
-    }
   },
   shardTestFiles: shardValue
     ? (files) => selectPostgresTestShard({ files, durations, shardValue })
