@@ -49,8 +49,12 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
-import type { S3PresignError } from "@/api/lib/s3-presign";
-import { copyObject, headObject } from "@/api/lib/s3-presign";
+import {
+  copyObject,
+  headObject,
+  S3ObjectMissingError,
+  type S3PresignError,
+} from "@/api/lib/s3-presign";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { parseUserFileId, toUserFileUrl } from "@/api/lib/user-files/types";
 
@@ -370,8 +374,10 @@ const copyUserFiles = async ({
             ? Result.err(copied.error)
             : Result.ok(checked.objectKey);
         },
-        confirmedDestinationAbsentOnCopyError: (error: S3PresignError) =>
-          isMissingS3ObjectError(error.cause),
+        confirmedDestinationAbsentOnCopyError: (
+          error: S3ObjectMissingError | S3PresignError,
+        ) =>
+          S3ObjectMissingError.is(error) || isMissingS3ObjectError(error.cause),
       };
     });
     const copied = await copyOrganizationFiles({
@@ -392,7 +398,9 @@ const copyUserFiles = async ({
         ),
     );
   };
-  const copyFailure = (error: S3PresignError | OrganizationFileUsageError) =>
+  const copyFailure = (
+    error: S3ObjectMissingError | S3PresignError | OrganizationFileUsageError,
+  ) =>
     error instanceof OrganizationFileUsageError
       ? error
       : new HandlerError({
@@ -418,6 +426,13 @@ const copyUserFiles = async ({
       panic("Chat attachment copy must have a main storage result");
     }
     if (Result.isError(main)) {
+      if (S3ObjectMissingError.is(main.error)) {
+        outcomes.push({
+          kind: "source-object-missing",
+          fileId: copy.source.id,
+        });
+        continue;
+      }
       if (
         !(main.error instanceof OrganizationFileUsageError) &&
         isMissingS3ObjectError(main.error.cause)
@@ -450,7 +465,10 @@ const copyUserFiles = async ({
     }
     const head = copy.thumbnailHead;
     if (head !== undefined && Result.isError(head)) {
-      if (!isMissingS3ObjectError(head.error.cause)) {
+      if (
+        !S3ObjectMissingError.is(head.error) &&
+        !isMissingS3ObjectError(head.error.cause)
+      ) {
         return Result.err(copyFailure(head.error));
       }
       missingThumbnails.add(copy.thumbnailKey);
@@ -475,7 +493,8 @@ const copyUserFiles = async ({
     if (thumbnail !== undefined && Result.isError(thumbnail)) {
       if (
         thumbnail.error instanceof OrganizationFileUsageError ||
-        !isMissingS3ObjectError(thumbnail.error.cause)
+        (!S3ObjectMissingError.is(thumbnail.error) &&
+          !isMissingS3ObjectError(thumbnail.error.cause))
       ) {
         return Result.err(copyFailure(thumbnail.error));
       }

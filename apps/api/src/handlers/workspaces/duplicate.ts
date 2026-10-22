@@ -50,7 +50,10 @@ import { escapeLike } from "@/api/lib/escape-like";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import type { CheckedFileCopy } from "@/api/lib/files/organization-file-usage";
+import type {
+  CheckedFileCopy,
+  OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -64,7 +67,12 @@ import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
-import { copyObject, headObject } from "@/api/lib/s3-presign";
+import {
+  copyObject,
+  headObject,
+  S3ObjectMissingError,
+  type S3PresignError,
+} from "@/api/lib/s3-presign";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -367,7 +375,12 @@ const copyWorkspaceFiles = async ({
   organizationId: SafeId<"organization">;
   sourceWorkspaceId: SafeId<"workspace">;
   targetWorkspaceId: SafeId<"workspace">;
-}) => {
+}): Promise<
+  Result<
+    undefined,
+    S3ObjectMissingError | S3PresignError | OrganizationFileUsageError
+  >
+> => {
   const prepareFile = async (copy: FileCopy) => {
     const sourceKey = createFileKey({
       organizationId,
@@ -671,8 +684,10 @@ export const createDuplicateWorkspace = (
           });
           return Result.err(
             new HandlerError({
-              status: 500,
-              message: "Failed to copy matter files",
+              status: S3ObjectMissingError.is(copyResult.error) ? 404 : 500,
+              message: S3ObjectMissingError.is(copyResult.error)
+                ? "Matter file not found"
+                : "Failed to copy matter files",
               cause: copyResult.error,
             }),
           );

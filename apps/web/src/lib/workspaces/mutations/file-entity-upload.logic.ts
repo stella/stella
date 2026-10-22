@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { isTransientUploadStatus, uploadErrorStatus } from "@/lib/upload-queue";
 
 const HTTP_CONFLICT = 409;
@@ -70,22 +72,26 @@ export const createFileEntityUploader = <TResult>(
       stagedUploadIds.set(file, uploadId);
     }
 
-    try {
-      const result = await steps.finalize(uploadId, signal);
+    const finalized = await Result.tryPromise({
+      try: () => steps.finalize(uploadId, signal),
+      catch: (error) => error,
+    });
+    if (Result.isOk(finalized)) {
       stagedUploadIds.delete(file);
-      return result;
-    } catch (error) {
-      const stillStaged = stagedUploadIds.get(file) === uploadId;
-      if (signal.aborted || !finalizeFailureKeepsUpload(error)) {
-        stagedUploadIds.delete(file);
-      }
-      if (signal.aborted && stillStaged) {
-        // Cancelled while this finalize was in flight, and the batch's
-        // `abortStaged` has not released this upload yet.
-        await steps.abort(uploadId);
-      }
-      throw error;
+      return finalized.value;
     }
+
+    const error = finalized.error;
+    const stillStaged = stagedUploadIds.get(file) === uploadId;
+    if (signal.aborted || !finalizeFailureKeepsUpload(error)) {
+      stagedUploadIds.delete(file);
+    }
+    if (signal.aborted && stillStaged) {
+      // Cancelled while this finalize was in flight, and the batch's
+      // `abortStaged` has not released this upload yet.
+      await steps.abort(uploadId);
+    }
+    throw error;
   };
 
   const abortStaged = async (): Promise<void> => {
