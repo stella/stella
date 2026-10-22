@@ -215,6 +215,27 @@ describe("name screening", () => {
     expect(found("Noorollah Aziz Mohammadi")).toContain("joined");
   });
 
+  test("a shared raw and folded vocabulary keeps exact scores for raw spellings", () => {
+    // Every listed token folds to itself, so the index searches one form; raw
+    // query spellings must still score exactly through the folded form.
+    const shared: ParsedList = {
+      version: EXTRA_VERSION,
+      entries: [
+        listedPerson("novak", "Marek Novak"),
+        listedPerson("turing", "Alan Turing"),
+      ],
+    };
+    const sharedIndex = buildScreeningIndex([shared]);
+    expect(sharedIndex.names.sharedVocabulary).toBe(true);
+    // "Nowak" reads raw "nowak" but folds to the listed "novak".
+    for (const name of ["Marek Novak", "Marek Nowak", "Novak Marek"]) {
+      const hit = screen(sharedIndex, { name }, { cutoff: 1 })
+        .unwrap()
+        .possibleMatches.find(({ entry }) => entry.sourceId === "novak");
+      expect(hit?.score).toBe(1);
+    }
+  });
+
   test("a frequent joined spelling still finds a listed single word one edit away", () => {
     // Every part of "Alpha Beta" is listed and the join is common, yet only the
     // join reaches "Alphabeto": neither part alone is within its edit budget.
