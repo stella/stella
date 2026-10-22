@@ -73,7 +73,7 @@ export const createFileEntityUploader = <TResult>(
     }
 
     const finalized = await Result.tryPromise({
-      try: () => steps.finalize(uploadId, signal),
+      try: async () => steps.finalize(uploadId, signal),
       catch: (error) => error,
     });
     if (Result.isOk(finalized)) {
