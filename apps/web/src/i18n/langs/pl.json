@@ -1412,6 +1412,7 @@
     "credentialSendDescription": "Wyślij ją tylko wtedy, gdy chcesz udostępnić tę wartość w rozmowie.",
     "credentialSendTitle": "Ta wiadomość może zawierać dane dostępowe",
     "deleteThread": "Usuń rozmowę",
+    "diagramUnavailable": "Nie udało się wyświetlić tego diagramu. Poniżej znajduje się jego kod źródłowy.",
     "editMode": {
       "autoDirect": "Automatycznie · przepisz",
       "autoDirectDescription": "Zmiany AI są stosowane natychmiast przez bezpośrednie przepisanie dokumentu (bez śledzenia zmian).",
