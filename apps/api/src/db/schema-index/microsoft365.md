@@ -4,38 +4,38 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## sharepoint_connections · `microsoft365Connections` · microsoft365.ts:33 · rls
+## sharepoint_connections · `microsoft365Connections` · microsoft365.ts:35 · rls
 
 Per user+org delegated Graph connection.
 
 ```text
-sharepoint_connections.id                       pUuid               pk,not null       microsoft365.ts:36
-sharepoint_connections.organization_id          safeOrganizationId  fk,not null       microsoft365.ts:37
-sharepoint_connections.user_id                  text                fk,not null       microsoft365.ts:40
-sharepoint_connections.access_token_encrypted   bytea               not null          microsoft365.ts:44
-sharepoint_connections.access_token_iv          bytea               not null          microsoft365.ts:45
-sharepoint_connections.refresh_token_encrypted  bytea               null              microsoft365.ts:46
-sharepoint_connections.refresh_token_iv         bytea               null              microsoft365.ts:47
-sharepoint_connections.token_type               varchar             null              microsoft365.ts:48
-sharepoint_connections.scope                    text                null              microsoft365.ts:50  Space-delimited scopes Microsoft actually granted.
-sharepoint_connections.account_label            text                null              microsoft365.ts:52  Display-only Microsoft account identifier (userPrincipalName).
-sharepoint_connections.expires_at               timestamptz         null              microsoft365.ts:53
-sharepoint_connections.status                   text                not null          microsoft365.ts:54
-sharepoint_connections.last_used_at             timestamptz         null              microsoft365.ts:58
-sharepoint_connections.created_at               timestamptz         default,not null  microsoft365.ts:59
-sharepoint_connections.updated_at               timestamptz         default,not null  microsoft365.ts:60
+sharepoint_connections.id                       pUuid               pk,not null       microsoft365.ts:38
+sharepoint_connections.organization_id          safeOrganizationId  fk,not null       microsoft365.ts:39
+sharepoint_connections.user_id                  text                fk,not null       microsoft365.ts:42
+sharepoint_connections.access_token_encrypted   bytea               not null          microsoft365.ts:46
+sharepoint_connections.access_token_iv          bytea               not null          microsoft365.ts:47
+sharepoint_connections.refresh_token_encrypted  bytea               null              microsoft365.ts:48
+sharepoint_connections.refresh_token_iv         bytea               null              microsoft365.ts:49
+sharepoint_connections.token_type               varchar             null              microsoft365.ts:50
+sharepoint_connections.scope                    text                null              microsoft365.ts:52  Space-delimited granted scopes within the authorized connection ceiling.
+sharepoint_connections.account_label            text                null              microsoft365.ts:54  Display-only Microsoft account identifier (userPrincipalName).
+sharepoint_connections.expires_at               timestamptz         null              microsoft365.ts:55
+sharepoint_connections.status                   text                not null          microsoft365.ts:56
+sharepoint_connections.last_used_at             timestamptz         null              microsoft365.ts:60
+sharepoint_connections.created_at               timestamptz         default,not null  microsoft365.ts:61
+sharepoint_connections.updated_at               timestamptz         default,not null  microsoft365.ts:62
 ```
 
-## sharepoint_oauth_state · `microsoft365OAuthState` · microsoft365.ts:79 · rls
+## sharepoint_oauth_state · `microsoft365OAuthState` · microsoft365.ts:81 · rls
 
 Short-lived per-request OAuth state consumed by the callback.
 
 ```text
-sharepoint_oauth_state.state            varchar             pk,not null       microsoft365.ts:82
-sharepoint_oauth_state.organization_id  safeOrganizationId  fk,not null       microsoft365.ts:83
-sharepoint_oauth_state.user_id          text                fk,not null       microsoft365.ts:86
-sharepoint_oauth_state.code_verifier    text                not null          microsoft365.ts:90
-sharepoint_oauth_state.redirect_uri     text                not null          microsoft365.ts:91
-sharepoint_oauth_state.requested_scope  text                null              microsoft365.ts:93  Server-bound scopes for this consent attempt; older attempts expire.
-sharepoint_oauth_state.created_at       timestamptz         default,not null  microsoft365.ts:94
+sharepoint_oauth_state.state            varchar             pk,not null       microsoft365.ts:84
+sharepoint_oauth_state.organization_id  safeOrganizationId  fk,not null       microsoft365.ts:85
+sharepoint_oauth_state.user_id          text                fk,not null       microsoft365.ts:88
+sharepoint_oauth_state.code_verifier    text                not null          microsoft365.ts:92
+sharepoint_oauth_state.redirect_uri     text                not null          microsoft365.ts:93
+sharepoint_oauth_state.requested_scope  text                null              microsoft365.ts:95  Server-bound scopes for this consent attempt; older attempts expire.
+sharepoint_oauth_state.created_at       timestamptz         default,not null  microsoft365.ts:96
 ```
