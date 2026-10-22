@@ -20,7 +20,9 @@ type FakeStellaApiOptions = {
   generation?: number;
   holdFirstStore?: boolean;
   initialSnapshotBase64?: string | null;
+  loadFailureStatus?: number;
   refreshedToken?: string;
+  refreshedTokenTtlMs?: number;
   replacementToken?: string;
   roomId?: string;
   token?: string;
@@ -120,7 +122,9 @@ const createFakeStellaApi = ({
   generation = 0,
   holdFirstStore = false,
   initialSnapshotBase64 = null,
+  loadFailureStatus,
   refreshedToken = "collab_token_refreshed",
+  refreshedTokenTtlMs = 60 * 60 * 1000,
   replacementToken,
   roomId = TEST_ROOM_ID,
   token = "collab_token_test",
@@ -207,7 +211,9 @@ const createFakeStellaApi = ({
           canEdit,
           generation: roomGenerations.get(String(body["roomId"])),
           token: refreshedToken,
-          tokenExpiresAt: farFutureTokenExpiresAt(),
+          tokenExpiresAt: new Date(
+            Date.now() + refreshedTokenTtlMs,
+          ).toISOString(),
         });
       }
 
@@ -232,6 +238,12 @@ const createFakeStellaApi = ({
             `Bearer ${TEST_SERVICE_TOKEN}`
         ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
+        }
+        if (loadFailureStatus !== undefined) {
+          return Response.json(
+            { message: "Snapshot load failed." },
+            { status: loadFailureStatus },
+          );
         }
 
         return Response.json(
@@ -1391,6 +1403,61 @@ describe("collaboration server", () => {
       if (!destroyed) {
         await collabServer.destroy();
       }
+      await fakeApi.destroy();
+    }
+  });
+
+  test("a failed room load releases its heartbeat and token refresh", async () => {
+    // The join refreshes its near-expiry token once; each refreshed token
+    // expires again soon, so an armed refresh timer keeps firing.
+    const fakeApi = createFakeStellaApi({
+      loadFailureStatus: 500,
+      refreshedTokenTtlMs: 600,
+      tokenExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      port: 0,
+      roomHeartbeatIntervalMs: 20,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const ydoc = new Doc();
+    let authenticationFailed = false;
+    const provider = new HocuspocusProvider({
+      document: ydoc,
+      name: TEST_ROOM_NAME,
+      onAuthenticationFailed: () => {
+        authenticationFailed = true;
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+    });
+
+    try {
+      await waitFor(
+        () => authenticationFailed,
+        "Provider was not refused after the room load failed.",
+      );
+      provider.destroy();
+      expect(fakeApi.loadRequestBodies()).toHaveLength(1);
+      expect(collabServer.hocuspocus.getDocumentsCount()).toBe(0);
+      const heartbeatsAfterRefusal = fakeApi.heartbeatRequestBodies().length;
+      const refreshesAfterRefusal = fakeApi.refreshRequests();
+      // The join itself renewed both, so the fixture reaches the timers.
+      expect(heartbeatsAfterRefusal).toBeGreaterThan(0);
+      expect(refreshesAfterRefusal).toBeGreaterThan(0);
+
+      // 45 heartbeat intervals and three refresh delays.
+      await Bun.sleep(900);
+
+      expect(fakeApi.heartbeatRequestBodies()).toHaveLength(
+        heartbeatsAfterRefusal,
+      );
+      expect(fakeApi.refreshRequests()).toBe(refreshesAfterRefusal);
+    } finally {
+      provider.destroy();
+      ydoc.destroy();
+      await collabServer.destroy();
       await fakeApi.destroy();
     }
   });

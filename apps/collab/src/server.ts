@@ -1,6 +1,7 @@
 import { Redis as RedisExtension } from "@hocuspocus/extension-redis";
 import { Hocuspocus } from "@hocuspocus/server";
 import type {
+  Configuration as HocuspocusConfiguration,
   Document as HocuspocusDocument,
   WebSocketLike,
 } from "@hocuspocus/server";
@@ -30,10 +31,26 @@ import { logCollabEvent } from "./log";
 import { createCollabRedisClient } from "./redis-client";
 
 type CollabAuthContext = {
+  join: CollabRoomJoin;
   roomId: string;
   tokenState: CollabRoomTokenState;
   userId: string;
   userName: string;
+};
+
+/**
+ * One authorized join holds one count on its room token state. Hocuspocus
+ * copies the auth context when it merges hook results, so the join keeps its
+ * identity in this object and is released exactly once.
+ */
+type CollabRoomJoin = {
+  released: boolean;
+};
+
+type CollabRoomJoinRelease = {
+  context: CollabAuthContext;
+  documentName: string;
+  socketId: string;
 };
 
 type CollabRoomTokenState = {
@@ -71,6 +88,7 @@ type CreateCollabServerBaseOptions = {
   hostname?: string;
   maxDebounceMs?: number;
   port: number;
+  roomHeartbeatIntervalMs?: number;
   shutdownDrainTimeoutMs?: number;
 };
 
@@ -229,6 +247,37 @@ const postJson = async <TSchema extends v.GenericSchema>({
   return v.parse(schema, await response.json());
 };
 
+/**
+ * Hocuspocus runs `onDisconnect` only for joins that reached a document. A
+ * join whose document load fails never gets a connection, so the failure is
+ * handed back here to release what `onAuthenticate` acquired for it.
+ */
+class CollabHocuspocus extends Hocuspocus<CollabAuthContext> {
+  readonly #releaseJoin: (join: CollabRoomJoinRelease) => void;
+
+  constructor(
+    releaseJoin: (join: CollabRoomJoinRelease) => void,
+    configuration: Partial<HocuspocusConfiguration<CollabAuthContext>>,
+  ) {
+    super(configuration);
+    this.#releaseJoin = releaseJoin;
+  }
+
+  override async createDocument(
+    ...args: Parameters<Hocuspocus<CollabAuthContext>["createDocument"]>
+  ) {
+    try {
+      return await super.createDocument(...args);
+    } catch (error) {
+      const [documentName, , socketId, , context] = args;
+      if (context !== undefined) {
+        this.#releaseJoin({ context, documentName, socketId });
+      }
+      throw error;
+    }
+  }
+}
+
 const createManagedWebSocket = (peer: Peer): ManagedWebSocketLike => {
   let readyState: number = WebSocket.OPEN;
 
@@ -266,6 +315,7 @@ export const createCollabServer = async (
     hostname = "0.0.0.0",
     maxDebounceMs = 10_000,
     port,
+    roomHeartbeatIntervalMs = ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS,
     serviceToken,
     shutdownDrainTimeoutMs = SHUTDOWN_DRAIN_TIMEOUT_MS,
   } = options;
@@ -527,6 +577,46 @@ export const createCollabServer = async (
     }
   };
 
+  const releaseRoomJoin = ({
+    context,
+    documentName,
+    socketId,
+  }: CollabRoomJoinRelease) => {
+    if (context.join.released) {
+      return;
+    }
+    context.join.released = true;
+    const { tokenState } = context;
+    tokenState.activeConnections = Math.max(
+      0,
+      tokenState.activeConnections - 1,
+    );
+    if (tokenState.activeConnections === 0) {
+      // A token state without joins renews nothing: stop its activity lease
+      // and its refresh so the room reads as idle.
+      clearRoomHeartbeat(tokenState);
+      clearRoomTokenRefresh(tokenState);
+      if (tokenStates.get(tokenState.token) === tokenState) {
+        tokenStates.delete(tokenState.token);
+      }
+    }
+    tokenStatesBySocketId.delete(socketId);
+    const managedConnection = managedConnectionsBySocketId.get(socketId);
+    const connectionCount =
+      managedConnection?.roomConnectionCounts.get(documentName);
+    if (managedConnection === undefined || connectionCount === undefined) {
+      return;
+    }
+    if (connectionCount === 1) {
+      managedConnection.roomConnectionCounts.delete(documentName);
+      return;
+    }
+    managedConnection.roomConnectionCounts.set(
+      documentName,
+      connectionCount - 1,
+    );
+  };
+
   const scheduleTokenRefresh = (
     state: CollabRoomTokenState,
     delayMs = tokenRefreshDelayMs(state.tokenExpiresAtMs),
@@ -690,7 +780,7 @@ export const createCollabServer = async (
           hocuspocus.closeConnections(state.tokenState.roomName);
           clearRoomTokens(state.tokenState.roomName);
         });
-    }, ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS);
+    }, roomHeartbeatIntervalMs);
   };
 
   const ensureRoomHeartbeat = async (tokenState: CollabRoomTokenState) => {
@@ -840,7 +930,7 @@ export const createCollabServer = async (
     return await current;
   };
 
-  const hocuspocus = new Hocuspocus<CollabAuthContext>({
+  const hocuspocus = new CollabHocuspocus(releaseRoomJoin, {
     debounce: debounceMs,
     async afterUnloadDocument({ documentName }) {
       cancelRoomCleanup(documentName);
@@ -919,6 +1009,7 @@ export const createCollabServer = async (
         tokenStatesBySocketId.set(socketId, tokenState);
 
         return {
+          join: { released: false },
           roomId: authorized.roomId,
           tokenState,
           userId: authorized.userId,
@@ -931,28 +1022,7 @@ export const createCollabServer = async (
     },
     async onDisconnect({ context, documentName, socketId }) {
       await Promise.resolve();
-      context.tokenState.activeConnections = Math.max(
-        0,
-        context.tokenState.activeConnections - 1,
-      );
-      if (context.tokenState.activeConnections === 0) {
-        clearRoomHeartbeat(context.tokenState);
-      }
-      tokenStatesBySocketId.delete(socketId);
-      const managedConnection = managedConnectionsBySocketId.get(socketId);
-      const connectionCount =
-        managedConnection?.roomConnectionCounts.get(documentName);
-      if (managedConnection === undefined || connectionCount === undefined) {
-        return;
-      }
-      if (connectionCount === 1) {
-        managedConnection.roomConnectionCounts.delete(documentName);
-        return;
-      }
-      managedConnection.roomConnectionCounts.set(
-        documentName,
-        connectionCount - 1,
-      );
+      releaseRoomJoin({ context, documentName, socketId });
     },
     async beforeHandleAwareness({ context, document, states }) {
       if (context === undefined) {
