@@ -674,9 +674,14 @@ export const aiHandlerError = (
                 },
         })
       : mapped;
-  return kind === "unknown"
-    ? handlerError
-    : classifyFailure(handlerError, AI_ERROR_KIND_FAILURE_REASON[kind]);
+  if (kind !== "unknown") {
+    return classifyFailure(handlerError, AI_ERROR_KIND_FAILURE_REASON[kind]);
+  }
+  // The fallback wraps the generation helper's own error, whose grade sits
+  // below the new failure node; carry it up so the wrapper grades alike.
+  return isCancelledGeneration(error)
+    ? classifyFailure(handlerError, "generation_cancelled")
+    : handlerError;
 };
 
 type AIErrorStatusBody = {

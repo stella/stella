@@ -880,6 +880,45 @@ describe("model runs this service names itself", () => {
   });
 });
 
+describe("aiHandlerError on a cancelled generation", () => {
+  const sink = failureSink({ event: "ai-error.test", expected: [] });
+  const cancelled = (): HandlerError =>
+    new HandlerError({
+      status: 502,
+      message: "AI generation was cancelled",
+      cause: new AIGenerationCancelledError({
+        message: "AI generation was cancelled",
+      }),
+    });
+
+  test("keeps the caller's fallback answer", () => {
+    const error = aiHandlerError(cancelled(), {
+      status: 502,
+      message: "Fallback failed",
+    });
+    expect(error.status).toBe(502);
+    expect(error.message).toBe("Fallback failed");
+  });
+
+  test("grades the wrapper as a cancelled generation", () => {
+    const error = aiHandlerError(cancelled(), {
+      status: 502,
+      message: "Fallback failed",
+    });
+    expect(gradeFailure(readEvidence(error), sink).reason).toBe(
+      "generation_cancelled",
+    );
+  });
+
+  test("leaves an unrelated unknown failure unclassified", () => {
+    const error = aiHandlerError(new Error("unexpected"), {
+      status: 500,
+      message: "Fallback failed",
+    });
+    expect(gradeFailure(readEvidence(error), sink).reason).toBe("unclassified");
+  });
+});
+
 describe("structured-output run error codes", () => {
   // The engine rebuilds a structured-output failure as an `Error` carrying
   // the adapter's or its own code, so the code is the evidence.
