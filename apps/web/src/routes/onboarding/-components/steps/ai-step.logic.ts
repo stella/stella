@@ -2,8 +2,8 @@ import { panic } from "better-result";
 
 import type { ProviderRowStatus } from "@/components/ai-config-providers-editor";
 import {
-  createDefaultRoleModels,
-  serializeOverrideModels,
+  ROLE_KEYS,
+  isProviderRoleSupported,
 } from "@/components/ai-config-role-models.logic";
 import type {
   ProviderCredentialDraft,
@@ -35,10 +35,9 @@ export const canContinueWithProviderConfiguration = ({
 }): boolean =>
   hasAnyConfirmed &&
   allProvidersConfirmed &&
-  serializeOverrideModels({
-    providers,
-    roleModels: createDefaultRoleModels(providers),
-  }) !== null;
+  ROLE_KEYS.every((role) =>
+    providers.some((provider) => isProviderRoleSupported(provider, role)),
+  );
 
 export const createProviderPreview = (
   providers: readonly ProviderCredentialDraft[],

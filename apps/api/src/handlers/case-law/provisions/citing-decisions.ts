@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -15,7 +15,7 @@ import {
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawProvisionCitations,
   caseLawSources,
 } from "@/api/db/schema";
@@ -26,7 +26,6 @@ import type {
 import { courtPresentation } from "@/api/lib/case-law/court-presentation";
 import type { CourtRegistry } from "@/api/lib/case-law/court-presentation";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import {
@@ -136,7 +135,7 @@ type CitingDecisionsCursor = {
   decisionId: string;
 };
 
-const decodeCitingDecisionsCursor = (
+export const decodeCitingDecisionsCursor = (
   cursor: string,
 ): CitingDecisionsCursor | null => {
   const parts = decodePaginationCursor(cursor);
@@ -154,6 +153,15 @@ const decodeCitingDecisionsCursor = (
   }
   return { context, decisionDate, decisionId };
 };
+
+export const encodeCitingDecisionsCursor = (
+  cursor: CitingDecisionsCursor,
+): string =>
+  encodePaginationCursor([
+    cursor.context,
+    cursor.decisionDate,
+    cursor.decisionId,
+  ]);
 
 type CitingDecisionRowsOptions = {
   tx: CaseLawPublicReadTransaction;
@@ -177,26 +185,22 @@ const readCitingDecisionRows = async ({
       ...PROVISION_VERSION_COLUMNS,
       versionValidFrom: caseLawProvisionCitations.versionValidFrom,
       decisionId: caseLawProvisionCitations.decisionId,
-      caseNumber: caseLawDecisions.caseNumber,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
       // The decision's own address, so a reader can follow the citation
       // without a second read to resolve one.
-      slug: caseLawDecisions.slug,
-      court: caseLawDecisions.court,
-      courtId: caseLawDecisions.courtId,
-      ecli: caseLawDecisions.ecli,
-      sourceUrl: caseLawDecisions.sourceUrl,
-      country: caseLawDecisions.country,
-      language: caseLawDecisions.language,
-      languageGroupKey: caseLawDecisions.languageGroupKey,
-      decisionDate: caseLawDecisions.decisionDate,
-      citationAuthority: caseLawDecisions.citationAuthority,
-      // Keep the public citation relationship when its source decision is
-      // tombstoned, but do not return a verbatim excerpt from removed text.
-      sentenceText: sql<string | null>`CASE
-          WHEN ${caseLawDecisions.redactedAt} IS NULL
-          THEN ${caseLawProvisionCitations.sentenceText}
-          ELSE NULL
-        END`.as("sentence_text"),
+      slug: publishedCaseLawDecisions.slug,
+      court: publishedCaseLawDecisions.court,
+      courtId: publishedCaseLawDecisions.courtId,
+      ecli: publishedCaseLawDecisions.ecli,
+      sourceUrl: publishedCaseLawDecisions.sourceUrl,
+      country: publishedCaseLawDecisions.country,
+      language: publishedCaseLawDecisions.language,
+      languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
+      citationAuthority: publishedCaseLawDecisions.citationAuthority,
+      sentenceText: sql<
+        string | null
+      >`${caseLawProvisionCitations.sentenceText}`.as("sentence_text"),
       printText: caseLawProvisionCitations.printText,
       spanStart: caseLawProvisionCitations.spanStart,
       spanEnd: caseLawProvisionCitations.spanEnd,
@@ -213,10 +217,13 @@ const readCitingDecisionRows = async ({
     })
     .from(caseLawProvisionCitations)
     .innerJoin(
-      caseLawDecisions,
-      eq(caseLawDecisions.id, caseLawProvisionCitations.decisionId),
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, caseLawProvisionCitations.decisionId),
     )
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(and(...conditions))
     .as("citing_decision_mentions");
 
@@ -291,6 +298,30 @@ const readCitingDecisionRows = async ({
   );
 };
 
+/** Target jurisdiction and citing-country admission are one scope decision. */
+const citingJurisdictionScope = (country: string) => {
+  if (country === "EU") {
+    return {
+      jurisdiction: "EU",
+      decisionCountryCondition: inArray(
+        publishedCaseLawDecisions.country,
+        PUBLIC_CASE_LAW_COUNTRIES,
+      ),
+    };
+  }
+  const jurisdiction = publicCaseLawCountry(country);
+  if (jurisdiction === null) {
+    return null;
+  }
+  return {
+    jurisdiction,
+    decisionCountryCondition: eq(
+      publishedCaseLawDecisions.country,
+      jurisdiction,
+    ),
+  };
+};
+
 type CitingDecisionsReadOptions = {
   caseLawDb: CaseLawPublicReadDb;
   courtRegistry: CourtRegistry;
@@ -305,6 +336,7 @@ export const listCitingDecisionsHandler = async (
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     surface: "search",
     parameter: "jurisdiction",
+    jurisdictionType: "provision",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;
@@ -312,10 +344,11 @@ export const listCitingDecisionsHandler = async (
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });
   }
-  const jurisdiction = publicCaseLawCountry(countryRead.country);
-  if (jurisdiction === null) {
+  const scope = citingJurisdictionScope(countryRead.country);
+  if (scope === null) {
     return status(404, { message: "Not Found" });
   }
+  const { jurisdiction, decisionCountryCondition } = scope;
   const work = workCondition(query);
 
   if (work === null) {
@@ -358,21 +391,16 @@ export const listCitingDecisionsHandler = async (
   }
   const conditions: SQL[] = [
     eq(caseLawProvisionCitations.jurisdiction, jurisdiction),
-    eq(caseLawDecisions.country, jurisdiction),
+    decisionCountryCondition,
     work,
     redistributableCaseLawSource,
-    publishedCaseLawDecision,
   ];
 
   if (query.anchor !== undefined) {
     conditions.push(eq(caseLawProvisionCitations.anchor, query.anchor));
   }
-  if (query.excerpt === "required") {
-    conditions.push(isNull(caseLawDecisions.redactedAt));
-  }
-
   if (query.court !== undefined) {
-    conditions.push(eq(caseLawDecisions.court, query.court));
+    conditions.push(eq(publishedCaseLawDecisions.court, query.court));
   }
   if (query.year !== undefined) {
     const from = `${String(query.year).padStart(4, "0")}-01-01`;

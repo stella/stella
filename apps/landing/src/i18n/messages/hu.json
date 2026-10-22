@@ -569,7 +569,7 @@
           "question": "Honnan származnak az adatok?"
         },
         "1": {
-          "answer": "Két lista, mindkettő bővül. A csatlakoztatott nyilvántartások között már ott van az ARES (Csehország), a Companies House (Egyesült Királyság), a SEC EDGAR (Egyesült Államok), a KRS (Lengyelország), a PRH (Finnország) és a VIES (uniós áfa). A nyilvántartásokon túl a hivatalos források joghatóságról joghatóságra kerülnek be; Csehországnak, Spanyolországnak és Tajvannak például már vannak összekapcsolt forrásai, az ítélkezési gyakorlat olvasónézete pedig úgy készült, hogy joghatóság szerint lehessen böngészni és szűrni, ahogy újabb hivatalos források kerülnek be.",
+          "answer": "A nyilvános ítélkezési gyakorlat olvasója jelenleg cseh határozatokat tesz elérhetővé. A csatlakoztatott cégnyilvántartások közé tartozik az ARES (Csehország), a Companies House (Egyesült Királyság), a SEC EDGAR (Egyesült Államok), a KRS (Lengyelország), a PRH (Finnország) és a VIES (uniós áfa).",
           "question": "Mely joghatóságokra és nyilvántartásokra terjed ki?"
         },
         "2": {
@@ -892,9 +892,11 @@
     "bringWorkspaceToFront": "A stella alkalmazás munkaterületének előtérbe hozása",
     "controlBody": "A stella <gh>nyílt forráskódú</gh> jogi szoftver, amelyet saját maga is üzemeltethet: vizsgálja meg a kódot, futtassa a maga módján, és exportáljon mindent szabványos formátumokban.",
     "controlTitle": "Tartsa kézben a rendszerét.",
-    "dataBody": "Ítélkezési gyakorlat és cégnyilvántartások közvetlenül az ügyben, minden joghatóságból, amelyben dolgozik. Az anonimizálás távol tartja az azonosító adatokat az AI-tól.",
+    "dataBody": "Olvasson cseh ítélkezési gyakorlatot a jogkérdésekhez fűzött AI-megjegyzésekkel, kiemelésekkel, aláhúzásokkal, ügyvédi hozzászólásokkal és forráshivatkozásos válaszokkal. Keressen cégeket a csatlakoztatott hivatalos nyilvántartásokban, és hivatkozzon a forrásokra az ügyből.",
+    "dataConstitutionalAlt": "A cseh Alkotmánybíróság IV.ÚS 1394/24 számú határozata számozott bekezdésekkel, a jogkérdéshez fűzött egy AI-megjegyzéssel, egy kiemeléssel, egy aláhúzással, egy ügyvédi hozzászólással és két kérdést, valamint forráshivatkozásos válaszokat tartalmazó beszélgetéssel.",
     "dataEyebrow": "Jogi adatok",
-    "dataMainAlt": "Egy hivatalos bírósági határozat a stella alkalmazásban megnyitva",
+    "dataMainAlt": "A cseh Legfelsőbb Bíróság 27 Cdo 59/2022 számú határozata számozott bekezdésekkel, a jogkérdéshez fűzött egy AI-megjegyzéssel, egy kiemeléssel, egy aláhúzással, egy ügyvédi hozzászólással és két kérdést, valamint forráshivatkozásos válaszokat tartalmazó beszélgetéssel.",
+    "dataSupremeAlt": "A cseh Legfelsőbb Bíróság 27 Cdo 1525/2025 számú határozata számozott bekezdésekkel, a jogkérdéshez fűzött egy AI-megjegyzéssel, egy kiemeléssel, egy aláhúzással, egy ügyvédi hozzászólással és két kérdést, valamint forráshivatkozásos válaszokat tartalmazó beszélgetéssel.",
     "dataTitle": "Ítélkezési gyakorlat és nyilvántartások kéznél.",
     "exploreAgent": "AI-ügynök felfedezése",
     "exploreAnonymization": "Anonimizálás felfedezése",

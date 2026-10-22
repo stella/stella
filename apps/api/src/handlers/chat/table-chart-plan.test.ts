@@ -61,8 +61,9 @@ const askWith =
 
 const organizationId = toSafeId<"organization">("org-table-chart");
 const generation = {
-  role: "fast",
+  task: "short-text",
   dataClass: "customer",
+  userId: null,
   orgAIConfig: null,
   managedAIResidency: "eu",
   organizationId,

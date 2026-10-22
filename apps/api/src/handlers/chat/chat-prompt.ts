@@ -48,6 +48,8 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   legalReaderAnnotations,
+  caseLawSources,
+  publishedCaseLawDecisions,
   entities,
   entityVersions,
   fields,
@@ -122,7 +124,6 @@ import type {
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import {
   CorpusPayloadUnavailableError,
@@ -1049,11 +1050,11 @@ export const buildChatSystemPromptParts = async ({
     // session (e.g. anonymous prompt-preview builders) there is no
     // memory to inject.
     const memorySection =
-      isDeploymentFeatureEnabled("FEATURE_AI_MEMORY") &&
-      organizationId &&
-      userId
+      organizationId && userId
         ? yield* Result.await(
             buildMemoryPromptParts({
+              featureAccessSnapshot:
+                featureAccessContext?.featureAccessSnapshot,
               contextMatterIds,
               hydrateRefs: refRegistry.hydrateAssistantTextRefs,
               organizationId,
@@ -2114,20 +2115,6 @@ const ACTIVE_DECISION_TEXT_READ_STEP = "chatPrompt.activeDecisionText";
  * document itself is resolved through. A canonical row's payload columns are
  * trimmed and the corpus objects are the document.
  */
-const ACTIVE_DECISION_COLUMNS = {
-  id: true,
-  astS3Key: true,
-  caseNumber: true,
-  contentHash: true,
-  country: true,
-  court: true,
-  decisionDate: true,
-  decisionType: true,
-  documentAst: true,
-  fulltext: true,
-  textS3Key: true,
-} as const;
-
 type ActiveDecisionAstPointers = {
   astS3Key: string | null;
   contentHash: string | null;
@@ -2266,12 +2253,34 @@ export const buildActiveDecisionSection = async ({
             caseLawDb,
             "search",
             { kind: "id", id: activeDecision.decisionId },
-            async ({ id, tx }) =>
-              await tx.query.caseLawDecisions.findFirst({
-                where: { id: { eq: id } },
-                columns: ACTIVE_DECISION_COLUMNS,
-                with: { source: { columns: { descriptor: true } } },
-              }),
+            async ({ id, tx }) => {
+              const [decisionRow] = await tx
+                .select({
+                  id: publishedCaseLawDecisions.id,
+                  astS3Key: publishedCaseLawDecisions.astS3Key,
+                  caseNumber: publishedCaseLawDecisions.caseNumber,
+                  contentHash: publishedCaseLawDecisions.contentHash,
+                  country: publishedCaseLawDecisions.country,
+                  court: publishedCaseLawDecisions.court,
+                  decisionDate: publishedCaseLawDecisions.decisionDate,
+                  decisionType: publishedCaseLawDecisions.decisionType,
+                  documentAst: publishedCaseLawDecisions.documentAst,
+                  fulltext: publishedCaseLawDecisions.fulltext,
+                  textS3Key: publishedCaseLawDecisions.textS3Key,
+                  source: {
+                    id: caseLawSources.id,
+                    descriptor: caseLawSources.descriptor,
+                  },
+                })
+                .from(publishedCaseLawDecisions)
+                .leftJoin(
+                  caseLawSources,
+                  eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+                )
+                .where(eq(publishedCaseLawDecisions.id, id))
+                .limit(1);
+              return decisionRow;
+            },
           );
           if (row === null || row === undefined) {
             return null;

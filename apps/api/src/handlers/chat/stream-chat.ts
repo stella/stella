@@ -24,7 +24,7 @@ import {
 } from "@stll/agent-engine";
 import {
   getModelImageInputCapability,
-  type ModelRole,
+  type ModelTask,
   type ReasoningEffort,
 } from "@stll/ai-catalog";
 import {
@@ -54,6 +54,7 @@ import {
   getAwaitingUserInteraction,
   getAwaitingUserInteractions,
   getUserFileIdFromAttachmentPart,
+  isApprovedClientCallAwaitingResult,
   isChatAttachmentPart,
   isChatDocumentPart,
   isChatPart,
@@ -240,6 +241,7 @@ import {
   providerErrorReason,
 } from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
+import { emitRequestStage } from "@/api/lib/observability/request-metrics";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   ActionAdmissionError,
@@ -484,6 +486,85 @@ export type StreamChatOutcome =
   | { type: "streaming"; response: Response }
   | { type: "refused"; response: ChatTurnFailureResponse };
 
+type ObserveChatOutputStagesOptions = {
+  source: AsyncIterable<StreamChunk>;
+  startedAt: number;
+  getSettlementOutcome: () =>
+    | StreamChatFinishEvent["outcome"]["type"]
+    | undefined;
+  now?: () => number;
+  emitStage?: typeof emitRequestStage;
+};
+
+type SettlementOutcomeKind = StreamChatFinishEvent["outcome"]["type"];
+type RequestStageOutcome = Parameters<typeof emitRequestStage>[0]["outcome"];
+
+const SETTLEMENT_STAGE_OUTCOME = {
+  "awaiting-user": "completed",
+  completed: "completed",
+  cancelled: "cancelled",
+  failed: "failed",
+  interrupted: "cancelled",
+} as const satisfies Record<SettlementOutcomeKind, RequestStageOutcome>;
+
+type OutputGeneratorPosition =
+  | { type: "running" }
+  | { type: "suspended" }
+  | { type: "completed" };
+
+const UNFINISHED_GENERATOR_STAGE_OUTCOME = {
+  running: "failed",
+  suspended: "cancelled",
+} as const satisfies Record<
+  Exclude<OutputGeneratorPosition["type"], "completed">,
+  RequestStageOutcome
+>;
+
+export const observeChatOutputStages = async function* ({
+  source,
+  startedAt,
+  getSettlementOutcome,
+  now = () => performance.now(),
+  emitStage = emitRequestStage,
+}: ObserveChatOutputStagesOptions) {
+  let firstTokenAt: number | undefined;
+  let position: OutputGeneratorPosition = { type: "running" };
+  try {
+    for await (const chunk of source) {
+      if (firstTokenAt === undefined && chunkCarriesAnswer(chunk)) {
+        firstTokenAt = now();
+        emitStage({
+          route: "/v1/chat/:threadId/messages",
+          stage: "provider_first_token",
+          durationMs: firstTokenAt - startedAt,
+          outcome: "completed",
+        });
+      }
+      position = { type: "suspended" };
+      yield chunk;
+      position = { type: "running" };
+    }
+    position = { type: "completed" };
+  } finally {
+    const settlementOutcome = getSettlementOutcome();
+    let outcome: RequestStageOutcome;
+    if (position.type === "completed") {
+      outcome =
+        settlementOutcome === undefined
+          ? "failed"
+          : SETTLEMENT_STAGE_OUTCOME[settlementOutcome];
+    } else {
+      outcome = UNFINISHED_GENERATOR_STAGE_OUTCOME[position.type];
+    }
+    emitStage({
+      route: "/v1/chat/:threadId/messages",
+      stage: "stream_finish",
+      durationMs: now() - startedAt,
+      outcome,
+    });
+  }
+};
+
 export const streamChat = async ({
   visualOrigin,
   devModelId,
@@ -526,6 +607,7 @@ export const streamChat = async ({
   userId,
   workspaceId,
 }: StreamChatProps): Promise<StreamChatOutcome> => {
+  const admittedAt = performance.now();
   const messages = pruneOrphanedToolParts(rawMessages);
   const agentBoundaryError = resolveAgentRunBoundaryError({
     boundary: thirdPartyBoundary,
@@ -604,6 +686,7 @@ export const streamChat = async ({
       Result.isOk(validateTanStackDevModelOverride(modelId, orgAIConfig)),
   });
   const primaryModel = await resolveTanStackTextModel({
+    userId: modelAdmission.userId,
     dataClass: "customer",
     modelId: turnModelSelection.modelId,
     organizationId,
@@ -611,7 +694,7 @@ export const streamChat = async ({
     orgAIConfig,
     managedAIResidency,
     reasoningEffort: turnModelSelection.reasoningEffort,
-    role: "chat",
+    task: "chat",
   });
   run.attributeProvider(primaryModel.provider);
 
@@ -992,11 +1075,23 @@ export const streamChat = async ({
     return readPresent(timing.value);
   };
 
+  emitRequestStage({
+    route: "/v1/chat/:threadId/messages",
+    stage: "request_setup",
+    durationMs: performance.now() - admittedAt,
+    outcome: "completed",
+  });
+  const providerWaitStartedAt = performance.now();
+  const observedOutput = observeChatOutputStages({
+    source: output,
+    startedAt: providerWaitStartedAt,
+    getSettlementOutcome: () => settlement.event?.outcome.type,
+  });
   return {
     type: "streaming",
     response: run.produce(
       withChatTurnTiming({
-        source: output,
+        source: observedOutput,
         getPhase: () => timingPhase.status,
         readTiming,
       }),
@@ -1253,12 +1348,13 @@ const resolveFallbackTextModel = async ({
 }: ResolveFallbackTextModelProps): Promise<ResolvedTanStackTextModel | null> => {
   try {
     const fallbackModel = await resolveTanStackTextModel({
+      userId: modelAdmission.userId,
       dataClass: "customer",
       organizationId,
       admission: modelAdmission,
       orgAIConfig,
       managedAIResidency,
-      role: "reasoning",
+      task: "reasoning",
     });
     if (
       fallbackModel.provider === primaryModel.provider &&
@@ -1278,7 +1374,7 @@ const resolveFallbackTextModel = async ({
 
 type CreateChatAttemptAnalyticsProps = {
   feature: string;
-  modelRole: ModelRole;
+  modelTask: ModelTask;
   modelTier: ManagedModelTier;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
@@ -1295,7 +1391,7 @@ type CreateChatAttemptAnalyticsProps = {
 
 const createChatAttemptAnalytics = ({
   feature,
-  modelRole,
+  modelTask,
   modelTier,
   organizationId,
   orgAIConfig,
@@ -1320,7 +1416,7 @@ const createChatAttemptAnalytics = ({
       workspaceId,
     },
     feature,
-    modelRole,
+    modelTask,
     orgAIConfig,
     modelTier,
     properties: {
@@ -1332,7 +1428,7 @@ const createChatAttemptAnalytics = ({
     traceId: Bun.randomUUIDv7(),
   });
 
-type ChatAttemptRole = Extract<ModelRole, "chat" | "reasoning">;
+type ChatAttemptTask = Extract<ModelTask, "chat" | "reasoning">;
 
 /**
  * Every surface this request hands to the provider, each one minted by the
@@ -1445,7 +1541,7 @@ const runChatAttempts = async function* ({
     runId,
     parentRunId,
     resume,
-    role: "chat",
+    task: "chat",
     safeDb,
     sandboxRun,
     usageLane,
@@ -1498,7 +1594,7 @@ const runChatAttempts = async function* ({
     managedAIResidency,
     promptCacheKey,
     promptCachingEnabled,
-    role: "reasoning",
+    task: "reasoning",
     safeDb,
     // The provider-fallback attempt serves the same user turn, so it
     // settles against the same budget lane.
@@ -1539,7 +1635,7 @@ type RunChatAttemptProps = {
   runId?: string | undefined;
   parentRunId?: string | undefined;
   resume?: RunAgentResumeItem[] | undefined;
-  role: ChatAttemptRole;
+  task: ChatAttemptTask;
   safeDb: SafeDb;
   /**
    * When set, this attempt runs inside an agent sandbox: the
@@ -1576,7 +1672,7 @@ const runChatAttempt = async function* ({
   runId,
   parentRunId,
   resume,
-  role,
+  task,
   safeDb,
   sandboxRun,
   usageLane,
@@ -1599,11 +1695,11 @@ const runChatAttempt = async function* ({
   } = surfaces;
   const caching = resolveCaching({
     promptCachingEnabled,
-    role,
+    task,
     scopeKey: promptCacheKey,
   });
   // Sandbox turns dispatch on the harness's own model, not the thread's
-  // selection, so their consumption must rate against the role default
+  // selection, so their consumption must rate against the task default
   // rather than a model that never served them.
   const servedModelId = sandboxRun ? undefined : modelId;
   // Sandbox turns are machine work: they settle against the pool
@@ -1611,7 +1707,7 @@ const runChatAttempt = async function* ({
   const servedLane = sandboxRun ? "pool" : usageLane;
   const analytics = createChatAttemptAnalytics({
     feature,
-    modelRole: role,
+    modelTask: task,
     modelTier: modelAdmission.modelTier,
     organizationId,
     orgAIConfig,
@@ -1626,7 +1722,7 @@ const runChatAttempt = async function* ({
   });
   const compactionAnalytics = createChatAttemptAnalytics({
     feature: compactionFeature,
-    modelRole: role,
+    modelTask: task,
     modelTier: modelAdmission.modelTier,
     organizationId,
     orgAIConfig,
@@ -1683,7 +1779,7 @@ const runChatAttempt = async function* ({
           modelAdmission,
           orgAIConfig,
           managedAIResidency,
-          role,
+          task,
           state,
           systemLayers,
           tenantWorkspaceIds,
@@ -1700,7 +1796,7 @@ const runChatAttempt = async function* ({
       caching,
       model,
       modelTools,
-      role,
+      task,
       system: baseSystem,
       systemLayers,
       toolCallIds,
@@ -1741,7 +1837,7 @@ const runChatAttempt = async function* ({
         modelAdmission,
         orgAIConfig,
         managedAIResidency,
-        role,
+        task,
         state,
         systemLayers,
         tenantWorkspaceIds,
@@ -1827,7 +1923,7 @@ type ChatRuntimeMiddlewareProps = {
   modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
-  role: ChatAttemptRole;
+  task: ChatAttemptTask;
   state: ChatAttemptState;
   systemLayers: ChatSafePromptLayers;
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -1847,7 +1943,7 @@ const createChatRuntimeMiddleware = ({
   modelAdmission,
   orgAIConfig,
   managedAIResidency,
-  role,
+  task,
   state,
   systemLayers,
   tenantWorkspaceIds,
@@ -1921,7 +2017,7 @@ const createChatRuntimeMiddleware = ({
         admission: modelAdmission,
         orgAIConfig,
         managedAIResidency,
-        role,
+        task,
         tenantWorkspaceIds,
         onSummaryError: (error) => {
           captureError(error, {
@@ -2521,9 +2617,55 @@ type SnapshotProcessorOptions = Pick<
   "responseMessageId" | "processor" | "partProvenance"
 >;
 
+type MessagesSnapshotChunk = Extract<
+  PublicStreamChunk,
+  { type: EventType.MESSAGES_SNAPSHOT }
+>;
+
 type ProcessSnapshotChunkOptions = SnapshotProcessorOptions & {
-  chunk: Extract<PublicStreamChunk, { type: EventType.MESSAGES_SNAPSHOT }>;
+  chunk: MessagesSnapshotChunk;
 };
+
+/**
+ * TanStack AI (0.65.1) answers an approved call it has not executed yet with
+ * a placeholder tool row (`uiMessagesToWire` / `uiMessageToModelMessages` in
+ * `@tanstack/ai`), and the interrupt MESSAGES_SNAPSHOT that hands an
+ * approved client tool to the browser carries it. Folded into UI parts, the
+ * placeholder becomes the call's complete output: the browser would treat the
+ * call as already run, and the tool's output schema rejects it at persistence.
+ * The SDK exports no type for the row, so it is matched by its exact shape.
+ */
+const approvedPendingExecutionSchema = v.strictObject({
+  approved: v.literal(true),
+  message: v.string(),
+  pendingExecution: v.literal(true),
+});
+
+const isApprovedPendingExecutionRow = (
+  message: MessagesSnapshotChunk["messages"][number],
+): boolean => {
+  if (message.role !== "tool" || typeof message.content !== "string") {
+    return false;
+  }
+  const parsed = parseToolResultContent(message.content);
+  return (
+    parsed.type === "json" && v.is(approvedPendingExecutionSchema, parsed.value)
+  );
+};
+
+/** Keep an approved, not yet executed call approval-responded with input only,
+ *  still owed its real result, on every processor that reads the snapshot. */
+const withoutApprovedPendingExecutionRows = (
+  chunk: MessagesSnapshotChunk,
+): MessagesSnapshotChunk =>
+  chunk.messages.some(isApprovedPendingExecutionRow)
+    ? {
+        ...chunk,
+        messages: chunk.messages.filter(
+          (message) => !isApprovedPendingExecutionRow(message),
+        ),
+      }
+    : chunk;
 
 const processPersistenceSnapshot = ({
   chunk: sourceChunk,
@@ -2531,7 +2673,7 @@ const processPersistenceSnapshot = ({
   responseMessageId,
   partProvenance,
 }: ProcessSnapshotChunkOptions) => {
-  let chunk = sourceChunk;
+  let chunk = withoutApprovedPendingExecutionRows(sourceChunk);
   const preservesPartLayout = chunk.messages.some(
     (message) => message.id === responseMessageId && "parts" in message,
   );
@@ -3036,6 +3178,18 @@ const createClientAssistantOwner = (responseMessageId: string) => {
   };
 };
 
+/** The approved client calls a resumed message holds. Their input completed
+ *  in the run that asked for approval; the resumed run hands them to the
+ *  client without streaming that input again. */
+const approvedCallIdsOf = (message: ChatMessage | undefined): Set<string> =>
+  new Set(
+    arrayOrEmpty(message?.parts).flatMap((part) =>
+      part.type === "tool-call" && isApprovedClientCallAwaitingResult(part)
+        ? [part.id]
+        : [],
+    ),
+  );
+
 export const processServerChatStream = async function* ({
   abortSignal,
   runSignal = abortSignal,
@@ -3068,7 +3222,7 @@ export const processServerChatStream = async function* ({
   // answer. Continuation history alone cannot make an empty run successful.
   let producedAnswer = false;
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
-  const toolCallsWithCompleteInput = new Set<string>();
+  const toolCallsWithCompleteInput = approvedCallIdsOf(initialResponseMessage);
   let usage: TokenUsage | undefined;
   const recordUsage = (recorded: TokenUsage | undefined) => {
     usage = recorded;

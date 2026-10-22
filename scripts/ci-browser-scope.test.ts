@@ -420,9 +420,6 @@ test("the desktop browser scope passes through the plan's emitted value", () => 
       .trim();
   expect(plan("apps/desktop/src/mainview/browser-scope-probe.ts")).toBe("true");
   expect(plan("docs/unrelated-probe.md")).toBe("false");
-  // The plan fails open when the selector cannot decide.
-  const changedFiles = ["$", "{changed_files[@]}"].join("");
-  expect(source).toContain(
-    `--desktop-browser "${changedFiles}") || desktop_browser_required=true`,
-  );
+  // scripts/ci-plan-scope.test.ts covers the planner's wiring: the detector
+  // reads the dependency-classified list and fails closed.
 }, 60_000);

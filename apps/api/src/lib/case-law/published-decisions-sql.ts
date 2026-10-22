@@ -1,5 +1,4 @@
-// parser-output-unchanged: Publication predicates serve database reads and indexes; parsed decision output is unchanged.
-import { panic } from "better-result";
+// parser-output-unchanged: Database publication predicates reached through schema imports do not change adapter parsing or emitted document content.
 import type { Column, SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -7,43 +6,62 @@ import {
   storedObservationHasDetail,
   storedObservationHasDetailSqlFor,
 } from "@/api/lib/legal-search/partial-observation-sql";
-import type { LegalSearchEngine } from "@/api/lib/legal-search/types";
 
-/** Leaf publication owner shared by reads and partial indexes without importing the schema. */
-export const publishedCaseLawDecisionFor = storedObservationHasDetail;
-
-/** The alias is a code constant, never request input. */
-export const publishedCaseLawDecisionSqlFor = (alias: string): string =>
-  storedObservationHasDetailSqlFor(`${alias}.metadata`);
-
-/** Coverage bounds describe published dates whose decisions have not been withdrawn. */
-export const publishedUnredactedCaseLawDecisionFor = (decision: {
+type DecisionPublicationColumns = {
   metadata: Column;
   redactedAt: Column;
-}): SQL =>
-  sql`(${decision.redactedAt} IS NULL AND ${publishedCaseLawDecisionFor(decision.metadata)})`;
-
-/** Raw spelling of the same coverage predicate for a code-owned alias. */
-export const publishedUnredactedCaseLawDecisionSqlFor = (
-  alias: string,
-): string =>
-  `(${alias}.redacted_at IS NULL AND ${publishedCaseLawDecisionSqlFor(alias)})`;
-
-/** Exact SQL eligibility for the serving provider; null when it cannot be read in SQL. */
-export const servedCaseLawDecisionFor = (
-  alias: string,
-  engine: LegalSearchEngine,
-): SQL | null => {
-  switch (engine) {
-    case "pg-fts":
-      return sql`(${sql.raw(publishedUnredactedCaseLawDecisionSqlFor(alias))} AND EXISTS (
-        SELECT 1 FROM case_law_search_documents AS serving_document
-        WHERE serving_document.decision_id = ${sql.identifier(alias)}.id
-      ))`;
-    case "corpus-index":
-      return null;
-    default:
-      engine satisfies never;
-      return panic("Unhandled serving provider");
-  }
 };
+
+export const unredactedCaseLawDecisionFor = (
+  decision: Pick<DecisionPublicationColumns, "redactedAt">,
+): SQL => sql`${decision.redactedAt} IS NULL`;
+
+export const publishedCaseLawDecisionFor = (
+  decision: DecisionPublicationColumns,
+): SQL =>
+  sql`(${unredactedCaseLawDecisionFor(decision)} AND ${storedObservationHasDetail(decision.metadata)})`;
+
+type PublishedCaseLawDecisionPredicateOptions = {
+  redactedAtColumn: string;
+  metadataColumn: string;
+};
+
+const publishedCaseLawDecisionPredicateSqlFor = ({
+  redactedAtColumn,
+  metadataColumn,
+}: PublishedCaseLawDecisionPredicateOptions): string =>
+  `(${redactedAtColumn} IS NULL AND ${storedObservationHasDetailSqlFor(metadataColumn)})`;
+
+/** The alias is a code-owned identifier. */
+export const publishedCaseLawDecisionSqlFor = (alias: string): string =>
+  publishedCaseLawDecisionPredicateSqlFor({
+    redactedAtColumn: `${alias}.redacted_at`,
+    metadataColumn: `${alias}.metadata`,
+  });
+
+/** The same publication gate, unqualified for a case-law index predicate. */
+export const publishedCaseLawDecisionIndexPredicateSql = (): string =>
+  publishedCaseLawDecisionPredicateSqlFor({
+    redactedAtColumn: "redacted_at",
+    metadataColumn: "metadata",
+  });
+
+/** PostgreSQL's normalized form used to verify the online index definition. */
+export const publishedCaseLawDecisionIndexDefinitionPredicateSql = (): string =>
+  `${publishedCaseLawDecisionIndexPredicateSql()
+    .replaceAll(/'([^']*)'/gu, "'$1'::text")
+    .replace(
+      /jsonb_extract_path_text\(([^,]+), ([^)]+)\)/u,
+      "jsonb_extract_path_text($1, VARIADIC ARRAY[$2])",
+    )
+    .replace("(", "((")
+    .replace(" IS NULL AND ", " IS NULL) AND (")
+    .replace(" is distinct from ", " IS DISTINCT FROM ")})`;
+
+/** Database materializers use the same rendered policy as public reads. */
+export const caseLawPublicationFunctionSql =
+  (): string => `CREATE OR REPLACE FUNCTION "case_law_statute_citation_is_published"(metadata jsonb, redacted_at timestamptz)
+RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE
+SET search_path = public, pg_temp
+AS $$ SELECT ${publishedCaseLawDecisionSqlFor("decision")}
+FROM (SELECT metadata, redacted_at) decision $$;`;

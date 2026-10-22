@@ -38,7 +38,6 @@ export const createCaseLawParser = () => {
       facets: courtFacets,
       nextCursor: view.nextCursor,
       searches: view.searches,
-      nextStep: view.nextStep,
     };
   };
 };

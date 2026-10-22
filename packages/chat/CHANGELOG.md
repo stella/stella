@@ -1,5 +1,48 @@
 # @stll/chat
 
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [[`6787bf4`](https://github.com/stella/stella/commit/6787bf4a6e33a5fa97538d91428d928ffffaabc8), [`f68baf7`](https://github.com/stella/stella/commit/f68baf7f2240db328e62201120dde71f3baf2b7b)]:
+  - @stll/ui@0.49.0
+
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [[`ed25af1`](https://github.com/stella/stella/commit/ed25af1211e6e5f091842ddf553f2795f5c16622)]:
+  - @stll/ui@0.48.0
+
+## 0.2.2
+
+### Patch Changes
+
+- [#6211](https://github.com/stella/stella/pull/6211) [`a2b5091`](https://github.com/stella/stella/commit/a2b5091f41d9786b93415df0321dbf1ab7bacffa) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the unused shared composer shell and action component while retaining
+  composer action-mode resolution for host-owned controls.
+
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [[`187f232`](https://github.com/stella/stella/commit/187f2321dddcd7776e00b789a84411bd7f319f61), [`55d62c9`](https://github.com/stella/stella/commit/55d62c989b81bf063cc4cef899aae4a3efe00077)]:
+  - @stll/ai-catalog@0.8.0
+  - @stll/ui@0.47.0
+
+## 0.2.0
+
+### Minor Changes
+
+- [#5868](https://github.com/stella/stella/pull/5868) [`caf3070`](https://github.com/stella/stella/commit/caf30706e4945d156eeaca072bf18df2c4d73449) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the bundled link icon decision so host adapters can avoid redundant icon requests.
+
+- [#5768](https://github.com/stella/stella/pull/5768) [`4a9c808`](https://github.com/stella/stella/commit/4a9c808a3c3d68cfcc53496913c3a531c8bcfe94) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared chat link detection, inline link chips and composer/markdown adapters, with bundled site icons and a local proxy-image seam. Export the X brand icon.
+
+### Patch Changes
+
+- Updated dependencies [[`7d21fdb`](https://github.com/stella/stella/commit/7d21fdb179373956566d4c5f2098a0dfb37af275), [`eac3ba7`](https://github.com/stella/stella/commit/eac3ba744bf28f96adcec06a6ebc9edf6b60d1c1), [`4a9c808`](https://github.com/stella/stella/commit/4a9c808a3c3d68cfcc53496913c3a531c8bcfe94), [`4479e67`](https://github.com/stella/stella/commit/4479e67c3290234e3a73fc307b213eb061f74870), [`1b7773e`](https://github.com/stella/stella/commit/1b7773effd472e11422bc82d0d417fdf22ce9ff1), [`ad3cd0a`](https://github.com/stella/stella/commit/ad3cd0a68ebcb2bee63dc8a8d12a0fb3c9783975)]:
+  - @stll/ai-catalog@0.7.1
+  - @stll/ui@0.46.0
+
 ## 0.1.40
 
 ### Patch Changes

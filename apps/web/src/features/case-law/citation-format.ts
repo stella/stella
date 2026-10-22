@@ -1,6 +1,9 @@
 import { createFormatter } from "use-intl/core";
 
-import type { CaseLawBrowserCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  CASE_LAW_REGION_BY_COUNTRY,
+  type CaseLawBrowserCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 import { US_ABBREVIATED_COURTS } from "@stll/api-contract/us-court-abbreviations";
 import type { UsAbbreviatedCourtId } from "@stll/api-contract/us-court-abbreviations";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -20,9 +23,10 @@ type IntlFormatter = ReturnType<typeof createFormatter>;
  * legal copy modes. The convention follows the COURT's jurisdiction, never
  * the UI language: a Czech decision is cited in Czech form everywhere.
  *
- * Pincites are emitted for USA reporter pages and Hungarian bracketed
- * locators. Court paragraph numbers still need to be threaded from the
- * selected block; Czech, Slovak and EU paragraph pincites are not emitted. Czech and
+ * Pincites: reporter pages where the convention uses them (USA), Hungarian
+ * bracketed locators, and the court's paragraph number for Czech and Slovak
+ * decisions ("bod N") when the caller located the passage; EU paragraph
+ * pincites are not emitted yet. Czech and
  * Slovak court names are inflected to the genitive by a suffix rule that
  * covers the standing court names; an unrecognized name passes through
  * unchanged rather than guessing.
@@ -41,6 +45,12 @@ export type CitationInput = {
   name: string | null;
   /** Supplied pinpoint locator, formatted by the cited jurisdiction. */
   pincite: string | null;
+  /**
+   * The number the court printed on the cited paragraph, when the quotation
+   * was located in a numbered block (Czech and Slovak "bod N"); null when the
+   * passage is unlocated or the court numbered none.
+   */
+  paragraph: number | null;
 };
 
 export const parseDecisionDate = (
@@ -128,12 +138,17 @@ const genitiveCourt = (court: string, language: "cs" | "sk"): string => {
   return inflected.join(" ");
 };
 
+// Czech and Slovak practice pinpoints a passage by the court's own numbered
+// paragraph: "…, sp. zn. III. ÚS 2429/24, bod 12".
+const paragraphPincite = (input: CitationInput): string =>
+  input.paragraph === null ? "" : `, bod ${String(input.paragraph)}`;
+
 const czechCitation = (input: CitationInput): string => {
   const type = input.decisionType ?? "rozhodnutí";
   const court = genitiveCourt(input.court, "cs");
   const date = parseDecisionDate(input.decisionDate);
   const dated = date === null ? "" : ` ze dne ${dottedDate(date)}`;
-  return `${type} ${court}${dated}, sp. zn. ${input.caseNumber}`;
+  return `${type} ${court}${dated}, sp. zn. ${input.caseNumber}${paragraphPincite(input)}`;
 };
 
 const slovakCitation = (input: CitationInput): string => {
@@ -141,7 +156,7 @@ const slovakCitation = (input: CitationInput): string => {
   const court = genitiveCourt(input.court, "sk");
   const date = parseDecisionDate(input.decisionDate);
   const dated = date === null ? "" : ` zo dňa ${dottedDate(date)}`;
-  return `${type} ${court}${dated}, sp. zn. ${input.caseNumber}`;
+  return `${type} ${court}${dated}, sp. zn. ${input.caseNumber}${paragraphPincite(input)}`;
 };
 
 /**
@@ -245,14 +260,29 @@ const QUOTATION_MARKS = {
   SVK: ["„", "“"],
 } as const satisfies Record<CaseLawBrowserCountry, readonly [string, string]>;
 
-export const formatDecisionQuotation = (
+const COUNTRY_BY_REGION = Object.fromEntries(
+  Object.entries(CASE_LAW_REGION_BY_COUNTRY).map(([country, region]) => [
+    region,
+    country,
+  ]),
+);
+const DEFAULT_QUOTATION_MARKS = QUOTATION_MARKS.EU;
+
+const quotationCountry = (country: string): CaseLawBrowserCountry | null => {
+  const normalized = fromCaseLawCountryParam(country);
+  const corpusCountry = COUNTRY_BY_REGION[normalized] ?? normalized;
+  return isCaseLawBrowserCountry(corpusCountry) ? corpusCountry : null;
+};
+
+export const formatJurisdictionQuotation = (
   text: string,
   country: string,
 ): string => {
-  const normalizedCountry = fromCaseLawCountryParam(country);
-  const marks = isCaseLawBrowserCountry(normalizedCountry)
-    ? QUOTATION_MARKS[normalizedCountry]
-    : ["“", "”"];
+  const normalizedCountry = quotationCountry(country);
+  const marks =
+    normalizedCountry === null
+      ? DEFAULT_QUOTATION_MARKS
+      : QUOTATION_MARKS[normalizedCountry];
   return `${marks[0]}${text}${marks[1]}`;
 };
 

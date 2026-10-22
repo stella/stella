@@ -11,9 +11,23 @@ export {
 } from "../packages/scripts/src/generated-files";
 
 type GeneratorCheck =
-  | { check: readonly string[]; checkedBy?: string; unchecked?: never }
-  | { check: null; checkedBy: string; unchecked?: never }
-  | { check: null; checkedBy?: never; unchecked: string };
+  | {
+      check: readonly string[];
+      checkedBy?: string;
+      checkedWith?: never;
+      unchecked?: never;
+    }
+  | {
+      check: null;
+      checkedBy: string;
+      /**
+       * The command the `checkedBy` step runs when it is neither `write` nor
+       * its `--check` form.
+       */
+      checkedWith?: readonly string[];
+      unchecked?: never;
+    }
+  | { check: null; checkedBy?: never; checkedWith?: never; unchecked: string };
 
 export type Generator = {
   id: string;
@@ -116,6 +130,27 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "case-law-publication-migration",
+    outputKind: "committed",
+    outputs: [
+      "apps/api/drizzle/20261010212100_case_law_publication_filter/migration.sql",
+    ],
+    inputs: [
+      "scripts/generate-case-law-publication-migration.ts",
+      "apps/api/src/lib/case-law/published-decisions-sql.ts",
+      "apps/api/src/lib/legal-search/partial-observation-sql.ts",
+      "apps/api/drizzle/20260916110000_published_statute_citation_counts/migration.sql",
+    ],
+    write: ["bun", "scripts/generate-case-law-publication-migration.ts"],
+    check: [
+      "bun",
+      "scripts/generate-case-law-publication-migration.ts",
+      "--check",
+    ],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "status-tables",
     outputKind: "committed",
     outputs: ["apps/api/src/lib/db/status-tables.gen.ts"],
@@ -127,6 +162,26 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "apps/api/scripts/generate-status-tables.ts", "--write"],
     check: ["bun", "apps/api/scripts/generate-status-tables.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "account-export-tables",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/account-export/user-owned-tables.gen.ts"],
+    inputs: [
+      "apps/api/src/db/schema/**",
+      "apps/api/src/db/auth-schema.ts",
+      "apps/api/src/db/agent-auth-schema.ts",
+      "apps/api/src/lib/account-export/schema-census.ts",
+      "apps/api/scripts/generate-account-export-tables.ts",
+    ],
+    write: [
+      "bun",
+      "apps/api/scripts/generate-account-export-tables.ts",
+      "--write",
+    ],
+    check: ["bun", "apps/api/scripts/generate-account-export-tables.ts"],
     autofix: true,
     after: [],
   },
@@ -219,10 +274,14 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/scripts/export-mcp-tool-registry.ts",
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
+      "apps/api/src/lib/chat/case-law-citation-projection.ts",
       "apps/api/src/lib/chat/case-law-court-projection.ts",
       "apps/api/src/lib/chat/legislation-result-projections.ts",
       "apps/api/src/lib/chat/projection-fields.ts",
       "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
+      "apps/api/src/lib/case-law/citation-vocabulary.ts",
+      "apps/api/src/lib/case-law/search-warnings.ts",
+      "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "packages/api-contract/src/case-law-court-year.ts",
       "packages/api-contract/src/statute-version.ts",
       "packages/api-contract/src/mcp-tool-name.ts",
@@ -282,6 +341,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/mcp/valibot-tool-definition.ts",
       "apps/api/src/lib/chat/*projection*.ts",
       "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
+      "apps/api/src/lib/case-law/citation-vocabulary.ts",
       "apps/api/src/lib/case-law/search-warnings.ts",
       "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "apps/api/src/lib/json-schema/**",
@@ -448,6 +508,35 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    // Refreshes only the reviewed digests of jobs whose kind, qualifier and
+    // privilege are unchanged since the merge base; new, reclassified and
+    // privileged jobs keep failing the check until a human reviews them.
+    // This file loads without imports in reduced checkouts, so the paths are
+    // spelled out; a test binds them to scripts/ci-job-classification/inputs.ts.
+    id: "ci-job-classification-digests",
+    outputKind: "committed",
+    outputs: [".github/ci-job-classification-decisions.json"],
+    inputs: [
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/ci-job-classification-decisions.json",
+      ".github/ci-job-classification-sources.json",
+      "scripts/check-ci-job-classification.ts",
+      "scripts/ci-job-classification/**",
+      "packages/collation/src/collation.ts",
+      "packages/sha256/src/node.ts",
+      "packages/sha256/src/types.ts",
+    ],
+    write: ["bun", "scripts/check-ci-job-classification.ts", "--write"],
+    check: null,
+    checkedBy: "Check workflow job classifications",
+    // The check reads git history, so it cannot load the offline network
+    // preload every `--check` command must use; it runs as the default mode.
+    checkedWith: ["bun", "scripts/check-ci-job-classification.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "design-tokens",
     outputKind: "committed",
     outputs: ["DESIGN.md"],
@@ -584,24 +673,18 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "i18n-messages-web",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: CI_GENERATED_OUTPUTS.webMessages,
     inputs: [
       "apps/web/src/i18n/langs/*.json",
       "packages/scripts/src/i18n-typegen.ts",
+      "apps/web/package.json",
     ],
-    write: [
-      "bun",
-      "packages/scripts/src/i18n-typegen.ts",
-      "apps/web/src/i18n/langs",
-    ],
-    check: [
-      "bun",
-      "packages/scripts/src/i18n-typegen.ts",
-      "apps/web/src/i18n/langs",
-      "--check",
-    ],
-    autofix: true,
+    write: ["bun", "--filter", "@stll/web", "generate:messages"],
+    check: null,
+    unchecked:
+      "derived on demand; the web i18n check validates the source catalogs",
+    autofix: false,
     after: [],
   },
   {
@@ -1096,7 +1179,67 @@ export const generatorsForFiles = (files: readonly string[]) => {
       }
     }
   }
+  // A derived output is never committed, so a clean checkout lacks it: every
+  // derived generator a selected one declares in `after` must run first, and
+  // so must its own derived prerequisites.
+  const pending = [...selected];
+  while (pending.length > 0) {
+    const id = pending.pop();
+    const generator = GENERATORS.find((candidate) => candidate.id === id);
+    if (generator === undefined) {
+      continue;
+    }
+    for (const upstream of derivedPrerequisites(generator)) {
+      if (!selected.has(upstream.id)) {
+        selected.add(upstream.id);
+        pending.push(upstream.id);
+      }
+    }
+  }
   return GENERATORS.filter((generator) => selected.has(generator.id));
+};
+
+/**
+ * Derived generators whose outputs `generator` needs present to run: the
+ * derived ones it declares in `after`. (Input globs are too broad to infer
+ * this from; a generator that reads a derived output declares it.)
+ */
+export const derivedPrerequisites = (generator: Generator) =>
+  GENERATORS.filter(
+    (upstream) =>
+      upstream.outputKind === "derived" &&
+      generator.after.includes(upstream.id),
+  );
+
+/**
+ * The check that proves `generator`'s outputs are current, so a run may skip
+ * `write`. A derived output is never committed, so a passing check (it guards
+ * tracking, not presence) says nothing about whether a clean checkout has it:
+ * derived generators always write.
+ */
+const upToDateCheck = (generator: Generator) =>
+  generator.outputKind === "committed" ? generator.check : null;
+
+/**
+ * Run `write` for every generator whose outputs are not proven current, in
+ * the given order. Returns the first generator that failed, or null.
+ */
+export const runGenerators = (
+  generators: readonly Generator[],
+  spawn: (command: readonly string[]) => number,
+  log: (line: string) => void = console.log,
+): Generator | null => {
+  for (const generator of generators) {
+    const check = upToDateCheck(generator);
+    if (check && spawn(check) === 0) {
+      continue;
+    }
+    log(`Regenerating ${generator.id}`);
+    if (spawn(generator.write) !== 0) {
+      return generator;
+    }
+  }
+  return null;
 };
 
 export const allowedOutputs = (generators: readonly Generator[]) => [

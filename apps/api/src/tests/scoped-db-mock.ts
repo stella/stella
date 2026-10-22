@@ -24,6 +24,14 @@ export const toSafeDbMock =
     return result;
   };
 
+type DocumentProcessingRunFindFirst =
+  Transaction["query"]["documentProcessingRuns"]["findFirst"];
+
+export const findNoDocumentProcessingRun = async (
+  _input?: Parameters<DocumentProcessingRunFindFirst>[0],
+): Promise<Awaited<ReturnType<DocumentProcessingRunFindFirst>>> =>
+  await Promise.resolve(undefined);
+
 type FeatureAccessMockOptions = {
   identity: Pick<typeof user.$inferSelect, "email" | "emailVerified"> | null;
   enrolments?: Pick<
@@ -33,6 +41,7 @@ type FeatureAccessMockOptions = {
 };
 
 type ScopedDbMockOptions = {
+  authorizedWorkspaceIds?: readonly string[];
   siblingRows?: { name: string; parentId: string | null }[];
   featureAccess?: FeatureAccessMockOptions;
   visibleResources?: {
@@ -190,11 +199,40 @@ export const createScopedDbMock = (
   ) => {
     callCount += 1;
     // Tests provide only the transaction members touched by the handler.
+    const providedQuery =
+      typeof tx === "object" &&
+      tx !== null &&
+      "query" in tx &&
+      typeof tx.query === "object" &&
+      tx.query !== null
+        ? tx.query
+        : {};
+    const providedDocumentProcessingRuns =
+      "documentProcessingRuns" in providedQuery &&
+      typeof providedQuery.documentProcessingRuns === "object" &&
+      providedQuery.documentProcessingRuns !== null
+        ? providedQuery.documentProcessingRuns
+        : {};
     const transaction = {
       execute: async () => {
         await Promise.resolve();
       },
+      ...(options?.authorizedWorkspaceIds === undefined
+        ? {}
+        : {
+            selectDistinct: () =>
+              createSelectQueryMock(
+                options.authorizedWorkspaceIds?.map((id) => ({ id })) ?? [],
+              ),
+          }),
       ...(typeof tx === "object" && tx !== null ? tx : {}),
+      query: {
+        ...providedQuery,
+        documentProcessingRuns: {
+          findFirst: findNoDocumentProcessingRun,
+          ...providedDocumentProcessingRuns,
+        },
+      },
       select: fixtureSelect(tx, options),
     };
     return await callback(asTestRaw<Transaction>(transaction));

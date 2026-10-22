@@ -1,0 +1,78 @@
+[
+  {
+    "id": ".github/workflows/ci.yml#dependency-malware#Scan dependency malware#retry",
+    "reason": "The install through the Safe Chain proxy is the malware verdict itself; a check is never retried."
+  },
+  {
+    "id": ".github/workflows/ci.yml#dependency-malware#Verify malware scanner fixtures#retry",
+    "reason": "The fixture install must be blocked by the scanner; retrying an expected failure would hide nothing and only repeat the check."
+  },
+  {
+    "id": ".github/workflows/dependency-malware-nightly.yml#dependency-malware-scan#Scan all dependency lockfiles#retry",
+    "reason": "The install through the Safe Chain proxy is the malware verdict itself; a check is never retried."
+  },
+  {
+    "id": ".github/workflows/dependency-malware-nightly.yml#dependency-malware-scan#Verify malware scanner fixtures#retry",
+    "reason": "The fixture install must be blocked by the scanner; retrying an expected failure would hide nothing and only repeat the check."
+  },
+  {
+    "id": ".github/workflows/deploy-staging.yml#promote-staging#Check staging corpus search backend#retry",
+    "reason": "Health check of the deployed backend; the response is the verdict, so a retry would mask an outage."
+  },
+  {
+    "id": ".github/workflows/deploy-staging.yml#promote-staging#Run staging web smoke#timeout",
+    "reason": "The smoke first waits until staging serves the deployed commit, so its duration includes the service rollover; no step timings exist to bound that wait."
+  },
+  {
+    "id": ".github/workflows/deploy-staging.yml#staging-health#Probe staging health#retry",
+    "reason": "Health probe with its own bounded attempt loop; the probe result decides whether to deploy."
+  },
+  {
+    "id": ".github/workflows/desktop-release-canary.yml#check-latest#Verify GitHub latest is a complete desktop release#retry",
+    "reason": "Canary over published release assets; the HEAD responses are the verdict."
+  },
+  {
+    "id": ".github/workflows/journey-canary.yml#journeys#Check public journeys#retry",
+    "reason": "Canary of public journeys, including installing the released CLI; every request is part of the checked journey."
+  },
+  {
+    "id": ".github/workflows/journey-canary.yml#journeys#Check released CLI journeys#retry",
+    "reason": "Canary of public journeys, including installing the released CLI; every request is part of the checked journey."
+  },
+  {
+    "id": ".github/workflows/landing-canary.yml#served#Check the served site#retry",
+    "reason": "Canary of the served site; the status codes are the verdict."
+  },
+  {
+    "id": ".github/workflows/marketing-screenshots-capture.yml#capture#Capture marketing screenshots#timeout",
+    "reason": "One composite step installs, captures and commits; no step timings exist yet. Split the install into its own step to give it a measured deadline."
+  },
+  {
+    "id": ".github/workflows/marketing-screenshots.yml#check#Capture marketing screenshots#timeout",
+    "reason": "One composite step installs, captures and compares; no step timings exist yet. Split the install into its own step to give it a measured deadline."
+  },
+  {
+    "id": ".github/workflows/release-desktop.yml#carry-forward#Copy previous stable desktop assets forward#timeout",
+    "reason": "Downloads and re-uploads every desktop asset in one step through gh-retry.sh; no step timings exist yet to size a deadline."
+  },
+  {
+    "id": ".github/workflows/release-desktop.yml#carry-forward#Promote release to latest#retry",
+    "reason": "The release policy check probes the published installers with HEAD requests that are the verdict; it already retries each probe once and reports a pass after retry, and the GitHub API calls go through gh-retry.sh."
+  },
+  {
+    "id": ".github/workflows/release-desktop.yml#promote-latest#Promote release to latest#retry",
+    "reason": "The release policy check probes the published installers with HEAD requests that are the verdict; it already retries each probe once and reports a pass after retry, and the GitHub API calls go through gh-retry.sh."
+  },
+  {
+    "id": ".github/workflows/release.yml#manifest#Create multi-arch manifest list#timeout",
+    "reason": "Receipt download, image pull and manifest publication share one step; no step timings exist yet to size a deadline."
+  },
+  {
+    "id": ".github/workflows/release.yml#prepare-web-image#Reuse an existing release receipt#timeout",
+    "reason": "Receipt download and registry inspection share one step; no step timings exist yet to size a deadline."
+  },
+  {
+    "id": ".github/workflows/scheduled-run-alerts.yml#notify#Send failure alert#retry",
+    "reason": "Non-idempotent webhook POST; retry.sh only wraps idempotent commands, and a retry could deliver the alert twice."
+  }
+]

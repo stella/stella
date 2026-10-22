@@ -488,7 +488,7 @@ test("new web and UI surfaces cannot import element registration outside an owne
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
     "apps/web/src/routes/knowledge/-components/position-editor.tsx",
-    "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx",
+    "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx",
     "apps/web/src/components/pdf/page-organizer.tsx",
     "apps/web/src/components/workspaces/table/workspace-table/header-cells.tsx",
     "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",

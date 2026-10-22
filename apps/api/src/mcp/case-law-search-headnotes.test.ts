@@ -64,7 +64,7 @@ describe("expanded case-law headnotes", () => {
           LIMITS.mcpCaseLawHeadnoteMaxChars,
         );
         expect(row.headnote?.text.isWellFormed()).toBe(true);
-        expect(row.appUrl).toBe(first.appUrl);
+        expect(row.url).toBe(first.url);
         expect(row).toMatchObject({ snippet });
       }
     },
@@ -98,7 +98,7 @@ describe("expanded case-law headnotes", () => {
       expect(result.headnotes).toBe("omitted");
       expect(result.results.every((row) => row.headnote === null)).toBe(true);
       expect(JSON.stringify(result).length).toBeLessThanOrEqual(baseline);
-      expect(result.results.at(0)?.appUrl).toBe(first.appUrl);
+      expect(result.results.at(0)?.url).toBe(first.url);
     },
   );
 

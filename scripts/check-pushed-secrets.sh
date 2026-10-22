@@ -7,7 +7,9 @@
 # Commits on a remote-tracking ref are already published, so a branch that
 # merged main scans its own commits, not main's. Merges are read with
 # `--remerge-diff`: a plain `git log -p` prints no patch for a merge, which
-# would leave anything added while resolving it unscanned.
+# would leave anything added while resolving it unscanned. If replay fails,
+# scan against the published parent closest to the merge, or the first parent
+# when none is published.
 # Everything else is validated in CI.
 set -euo pipefail
 
@@ -133,16 +135,47 @@ for range in "${ranges[@]}"; do
   # conflict resolution or any other edit made while merging. Git still exits
   # 0 when it cannot read a blob that diff needs (a partial clone whose lazy
   # fetch fails), and the scanner then reads nothing, so any error falls back
-  # to the merge's full diff against its first parent.
+  # to a diff against a published parent (first parent if none is published).
   merges="$(git rev-list --merges "${revisions[@]}")"
   while read -r merge; do
     [[ -n "${merge}" ]] || continue
     merge_diff="--remerge-diff"
     if ! git show -p --remerge-diff --no-ext-diff --no-color --format=%x01 "${merge}" \
       >"${merge_patch}" 2>"${merge_errors}" || [[ -s "${merge_errors}" ]]; then
-      echo "secrets: cannot replay merge ${merge}; scanning its diff against the first parent." >&2
-      merge_diff="--diff-merges=first-parent"
-      git show -p --diff-merges=first-parent --no-ext-diff --no-color --format=%x01 "${merge}" >"${merge_patch}"
+      parents="$(git show -s --format=%P "${merge}")"
+      read -r -a parent_oids <<<"${parents}"
+      # Any published parent is sound: whatever it lacks is scanned. Merging
+      # main into an already pushed branch publishes both parents, and the
+      # first parent's diff would rescan all of main, so take the published
+      # parent closest to the merge. A parent whose diff cannot be read is
+      # skipped; with no usable published parent, the first parent is used.
+      fallback_parent="${parent_oids[0]}"
+      fallback_size=""
+      for parent in "${parent_oids[@]}"; do
+        published_refs="$(git for-each-ref --contains="${parent}" --format='%(refname)' refs/remotes/)"
+        [[ -n "${published_refs}" ]] || continue
+        size="$(git diff --numstat "${parent}" "${merge}" 2>/dev/null | awk '{ n += $1 + $2 } END { print n + 0 }')" || continue
+        if [[ -z "${fallback_size}" ]] || ((size < fallback_size)); then
+          fallback_parent="${parent}"
+          fallback_size="${size}"
+        fi
+      done
+      echo "secrets: cannot replay merge ${merge}; scanning its diff against parent ${fallback_parent}." >&2
+      if [[ "${fallback_parent}" == "${parent_oids[0]}" ]]; then
+        merge_diff="--diff-merges=first-parent"
+      else
+        # A single-parent commit with the merge's tree lets gitleaks read
+        # exactly this diff, retaining paths, added lines and scan accounting.
+        # Only an unreachable object is written: no refs or index are changed.
+        merge="$(git -c user.name=secret-scan -c user.email=secret-scan@example.invalid \
+          commit-tree "${merge}^{tree}" -p "${fallback_parent}" <<<"Secret scan merge fallback")"
+        merge_diff="--no-merges"
+      fi
+      if ! git show -p "${merge_diff}" --no-ext-diff --no-color --format=%x01 "${merge}" \
+        >"${merge_patch}" 2>"${merge_errors}" || [[ -s "${merge_errors}" ]]; then
+        echo "error: cannot read the fallback patch; secret scanning refused." >&2
+        exit 1
+      fi
     fi
     expected="$(count_changed_commits <"${merge_patch}")"
     scan_history "${merge_diff} -n 1 ${merge}" "${expected}" "merge ${merge}"

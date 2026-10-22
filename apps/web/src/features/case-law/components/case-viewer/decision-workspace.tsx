@@ -7,11 +7,16 @@ import { useTranslations } from "use-intl";
 import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
 import { READER_ANSWER_QUOTE_MAX_LENGTH } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
+import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
 import {
   decisionCaseName,
   visibleDecisionBlocks,
 } from "@stll/decision-reader/decision-text.logic";
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
+import {
+  type DocumentAst,
+  parseDocumentAst,
+} from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
@@ -41,6 +46,7 @@ import {
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
+import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
 import Tooltip from "@/components/tooltip";
 import {
   AiHeadnotes,
@@ -57,6 +63,7 @@ import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis
 import type {
   AnalysisMarginItem,
   AnswerMarginItem,
+  ProvisionMarginItem,
 } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import { useAnalysisReaderBreadcrumb } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import {
@@ -77,6 +84,7 @@ import {
   resolveVisitorOffer,
 } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
+import { paragraphRangeIndices } from "@/features/case-law/components/case-viewer/paragraph-reference";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
@@ -172,6 +180,12 @@ export type DecisionWorkspaceProps =
   | GatedDecisionWorkspaceProps;
 
 /** What the margin's source filter means for the reader's own marks. */
+/** A decision without a parsed body has no blocks to range over. */
+const NO_BLOCKS: DocumentAst["blocks"] = [];
+
+const decisionBlocks = (ast: DocumentAst | null): DocumentAst["blocks"] =>
+  ast?.blocks ?? NO_BLOCKS;
+
 const MARKS_FOR_NOTES_FILTER = {
   ai: "none",
   all: "all",
@@ -185,10 +199,12 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const user = useMaybeAuthenticatedUser();
   return (
-    <DecisionWorkspaceContent
-      {...props}
-      key={`${user?.activeOrganizationId ?? "guest"}:${user?.id ?? "guest"}:${props.decisionId}`}
-    />
+    <WebReaderProvider>
+      <DecisionWorkspaceContent
+        {...props}
+        key={`${user?.activeOrganizationId ?? "guest"}:${user?.id ?? "guest"}:${props.decisionId}`}
+      />
+    </WebReaderProvider>
   );
 };
 
@@ -253,10 +269,37 @@ const ReaderStatusNotices = ({
   );
 };
 
+const decisionAnalysisView = (
+  analysisState: ReturnType<typeof useLazyDecisionAnalysis>["state"],
+) => {
+  const hasAnalysis =
+    analysisState.status === "done" ||
+    (analysisState.status === "generating" && analysisState.tree.length > 0);
+  const isAnalyzing =
+    analysisState.status === "generating" && analysisState.tree.length === 0;
+  const analysisTree = (() => {
+    if (analysisState.status === "done") {
+      return analysisState.analysis.tree;
+    }
+    if (analysisState.status === "generating") {
+      return analysisState.tree;
+    }
+    return [];
+  })();
+
+  // The written layers come whole with the finished analysis; a run still
+  // in flight streams only its tree, so there is nothing to show yet.
+  const completeAnalysis =
+    analysisState.status === "done" ? analysisState.analysis : null;
+
+  return { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis };
+};
+
 const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, landingSessionId } = props;
   const t = useTranslations();
   const ast = parseDocumentAst(decision.documentAst);
+  const astBlocks = decisionBlocks(ast);
   // The case's citable name, for the legal copy modes.
   const caseName = decisionCaseName({
     ast,
@@ -479,7 +522,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
   const citationAnchors = useDecisionCitationAnchors(decisionId);
-  const provisionAnchors = useDecisionProvisionAnchors({
+  const {
+    anchors: provisionAnchors,
+    externalAnchors: externalProvisionAnchors,
+  } = useDecisionProvisionAnchors({
     court: decision.court,
     caseNumber: decision.caseNumber,
     surface: "full-reader",
@@ -518,25 +564,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     generateDecisionAnalysis();
   }, [ensureAIAvailable, generateDecisionAnalysis]);
 
-  const hasAnalysis =
-    analysisState.status === "done" ||
-    (analysisState.status === "generating" && analysisState.tree.length > 0);
-  const isAnalyzing =
-    analysisState.status === "generating" && analysisState.tree.length === 0;
-  const analysisTree = (() => {
-    if (analysisState.status === "done") {
-      return analysisState.analysis.tree;
-    }
-    if (analysisState.status === "generating") {
-      return analysisState.tree;
-    }
-    return [];
-  })();
-
-  // The written layers come whole with the finished analysis; a run still
-  // in flight streams only its tree, so there is nothing to show yet.
-  const completeAnalysis =
-    analysisState.status === "done" ? analysisState.analysis : null;
+  const { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis } =
+    decisionAnalysisView(analysisState);
 
   const fallbackBreadcrumb = useAnalysisReaderBreadcrumb(
     completeAnalysis?.tree ?? null,
@@ -567,7 +596,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     sessionId: landingSessionId,
   });
 
-  const jumpToAnchor = (anchorId: string) => {
+  const jumpToAnchor = (anchorId: string, endAnchorId = anchorId) => {
     setLandingAnchorId(undefined);
     const container = mainRef.current;
     const el = container?.querySelector<HTMLElement>(
@@ -583,9 +612,28 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         container.scrollTop,
       behavior: "instant",
     });
-    delete el.dataset["highlight"];
+    const blocks = astBlocks;
+    const range = paragraphRangeIndices(blocks, {
+      startAnchorId: anchorId,
+      endAnchorId,
+    });
+    const highlighted =
+      range === null ? [] : blocks.slice(range.startIndex, range.endIndex + 1);
+    const highlightedElements = highlighted
+      .map((block) =>
+        container.querySelector<HTMLElement>(`#${CSS.escape(block.anchorId)}`),
+      )
+      .filter((blockElement) => blockElement !== null);
+    if (highlightedElements.length === 0) {
+      highlightedElements.push(el);
+    }
+    for (const blockElement of highlightedElements) {
+      delete blockElement.dataset["highlight"];
+    }
     forceReflow(el);
-    el.dataset["highlight"] = "";
+    for (const blockElement of highlightedElements) {
+      blockElement.dataset["highlight"] = "";
+    }
   };
 
   // The model's headnote and abstract open the decision, under the court's
@@ -596,7 +644,11 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     completeAnalysis !== null &&
     showAiNotes &&
     hasAiHeadnotes(completeAnalysis) ? (
-      <AiHeadnotes analysis={completeAnalysis} onAnchorClick={jumpToAnchor} />
+      <AiHeadnotes
+        analysis={completeAnalysis}
+        blocks={astBlocks}
+        onAnchorClick={jumpToAnchor}
+      />
     ) : null;
 
   const sectionMap = (() => {
@@ -689,6 +741,17 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const visibleMarginItems = [
     ...(answerPlacement === "gutter" ? answerNotes : []),
     ...(hasAnalysis && showAiNotes ? marginItems : []),
+    ...(provisions.expandProvisions && answerPlacement === "gutter"
+      ? prepareDecisionProvisionCards({
+          blocks: visibleDecisionBlocks(ast, decision.caseNumberType),
+          provisionAnchors,
+        }).map(({ citations, id, startAnchorId }): ProvisionMarginItem => ({
+          citations,
+          id: `provision:${id}`,
+          kind: "provision",
+          startAnchorId,
+        }))
+      : []),
     ...exampleMarginItems,
     ...annotations.notes,
   ];
@@ -758,7 +821,6 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
             );
           })}
         </div>
-
         {/* The composer floats over the text here as it does in the inspector's
             reader, bound to the same decision and so to the same conversation.
             The annotation toolbar stays outside it: it belongs to the marks on
@@ -780,6 +842,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 the published block-end inset as the composer grows. */}
             {showAiNotes && hasAnalysis && analysisTree.length > 0 && (
               <OutlineRail
+                ariaLabel={t("statutes.outline")}
                 items={analysisOutline.items}
                 onJump={(id, container) => {
                   const anchorId = analysisOutline.anchorById.get(id);
@@ -978,7 +1041,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                     citationAnchors={citationAnchors}
                     decision={decision}
                     decisionId={decisionId}
-                    expandProvisions={provisions.expandProvisions}
+                    expandProvisions={
+                      provisions.expandProvisions &&
+                      answerPlacement === "inline"
+                    }
                     landingAnchorId={landingAnchorId}
                     onAnnotationActivate={activateMark}
                     notesByAnchorId={
@@ -1000,6 +1066,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                     }
                     landingSessionId={landingSessionId}
                     provisionAnchors={provisionAnchors}
+                    externalProvisionAnchors={externalProvisionAnchors}
                     sectionMap={showAiNotes ? sectionMap : undefined}
                     statuteCitationAnchors={statuteCitationAnchors}
                   />
@@ -1117,9 +1184,11 @@ const GatedAnalysisInvitation = ({
         data-slot="gated-analysis-invitation"
         role="region"
       >
-        <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
-          <SparklesIcon className="size-3.5" />
-          {t("caseLaw.notesFilter.ai")}
+        <span className="text-muted-foreground text-xs">
+          <ReaderAiLabel
+            context="caseLaw"
+            label={t("caseLaw.notesFilter.ai")}
+          />
         </span>
       </div>
     );

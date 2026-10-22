@@ -34,6 +34,7 @@ import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
@@ -98,9 +99,13 @@ beforeAll(
     caseLawDb = readDb as unknown as CaseLawPublicReadDb;
 
     await db.insert(caseLawSources).values([
-      caseLawSourceRow({ adapterKey: "open", id: openSourceId, name: "open" }),
       caseLawSourceRow({
-        adapterKey: "closed",
+        adapterKey: ADAPTER_KEYS.CZ_NS,
+        id: openSourceId,
+        name: "open",
+      }),
+      caseLawSourceRow({
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
         descriptor: {
           allowsDerivedAi: false,
           allowsRedistribution: false,
@@ -247,7 +252,7 @@ test(
 );
 
 test(
-  "decision reads describe the AST actually served and null missing or redacted bodies",
+  "public decision reads describe available document content",
   async () => {
     const storedAst = {
       version: 1,
@@ -333,11 +338,10 @@ test(
     expect(served.projectionDigest).toBe(await projectionDigest(storedAst));
     expect(served.documentAst).not.toEqual(storedAst);
 
-    for (const id of [bodylessId, redactedId]) {
-      const withoutAst = await read(id);
-      expect(withoutAst.documentAstSource).toBeNull();
-      expect(withoutAst.projectionDigest).toBeNull();
-    }
+    const withoutAst = await read(bodylessId);
+    expect(withoutAst.documentAstSource).toBeNull();
+    expect(withoutAst.projectionDigest).toBeNull();
+    expect((await get(`/d/${redactedId}`)).status).toBe(404);
   },
   DB_TEST_TIMEOUT_MS,
 );
@@ -416,7 +420,7 @@ test(
     const decision = createSafeId<"caseLawDecision">();
     await db.insert(caseLawSources).values([
       caseLawSourceRow({
-        adapterKey: "revoked",
+        adapterKey: ADAPTER_KEYS.CZ_US,
         id: revoked,
         name: "revoked",
       }),
@@ -583,6 +587,36 @@ test(
         });
       }
     }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "an erased absorbed supplement is not found",
+  async () => {
+    const db = drizzle({ client });
+    const absorbedId = await insertAbsorbedRow({
+      slug: "absorbed-erased-reasons",
+      sourceDocumentId: "syn-erased-reasons",
+      judgmentId: openId,
+    });
+    const resolve = async (id: SafeId<"caseLawDecision">) =>
+      await withRedistributableSubject(
+        caseLawDb,
+        "pages",
+        { kind: "id", id },
+        async (subject) => subject.id,
+      );
+
+    expect(await resolve(absorbedId)).toBe(openId);
+
+    await db
+      .update(caseLawDecisions)
+      .set({ redactedAt: new Date("2026-10-11T12:00:00.000Z") })
+      .where(eq(caseLawDecisions.id, absorbedId));
+
+    expect(await resolve(absorbedId)).toBe(await resolve(missingId));
+    expect(await resolve(absorbedId)).toBeNull();
   },
   DB_TEST_TIMEOUT_MS,
 );
