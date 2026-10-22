@@ -22,11 +22,12 @@ import { isRecord } from "@/api/lib/type-guards";
  * cross-publisher match.
  */
 
-const SOURCE_AUTHORITY = {
+export const SOURCE_AUTHORITY = {
   [ADAPTER_KEYS.CZ_REGIONAL]: 0,
   [ADAPTER_KEYS.CZ_NS]: 0,
   [ADAPTER_KEYS.CZ_NSS]: 0,
   [ADAPTER_KEYS.CZ_US]: 0,
+  [ADAPTER_KEYS.CZ_UOHS]: 0,
   [ADAPTER_KEYS.SK_COURTS]: 1,
   [ADAPTER_KEYS.SK_US]: 0,
   [ADAPTER_KEYS.PL_COURTS]: 1,

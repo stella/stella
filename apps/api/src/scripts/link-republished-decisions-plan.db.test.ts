@@ -23,6 +23,7 @@ import {
   reverseRepublishedDecisionBatch,
   selectRepublishedDecisionCandidates,
   selectRepublishedDecisionReport,
+  SOURCE_AUTHORITY,
 } from "@/api/scripts/link-republished-decisions-plan";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -96,6 +97,12 @@ beforeAll(
 );
 
 afterAll(async () => await client.close());
+
+test("every adapter has an authority rank", () => {
+  for (const adapterKey of Object.values(ADAPTER_KEYS)) {
+    expect(SOURCE_AUTHORITY[adapterKey]).toBeOneOf([0, 1]);
+  }
+});
 
 test("dry run is read-only and court authority wins over storage age", async () => {
   const candidates = await db.transaction(
@@ -171,7 +178,7 @@ test("apply skips a candidate whose canonical decision was erased after selectio
   ).toBe(false);
 
   if (!candidate) {
-    return panic("Erasure fixture must be selected before redaction");
+    panic("Erasure fixture must be selected before redaction");
   }
   await db.transaction(async (tx) => {
     expect(
