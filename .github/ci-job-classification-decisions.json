@@ -2,7 +2,7 @@
   "candidate:.github/workflows/autofix-generated-conflicts.yml/dispatch": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "c761a04865fa388de3b43608089164a0b6e104aabfca2564a0894bbb86fe1ca0"
+    "reviewedDigest": "179aa841905dd3b6dbea39bcdc749622d8dfa80b83e96f043d48adb913a0dad7"
   },
   "candidate:.github/workflows/generated-conflicts-publish.yml/publish": {
     "kind": "ordinary",
@@ -522,7 +522,7 @@
   "candidate:.github/workflows/marketing-screenshots-update.yml/update": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "b6a9667d02cc18aca3f2df0c238b128689d51b6320593e4497334ae206d7172a"
+    "reviewedDigest": "83f66d3935c14d15253b9bfddfe466cd5393e24a24f249fccf18e90aa2ed4737"
   },
   "candidate:.github/workflows/marketing-screenshots.yml/check": {
     "kind": "support",
