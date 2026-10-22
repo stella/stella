@@ -22,6 +22,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   permissions: { legalReaderAnnotation: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   description:

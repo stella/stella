@@ -5,6 +5,7 @@ import type { ExpenseCategory } from "@stll/api-contract";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -25,14 +26,20 @@ type CreateExpenseVars = {
 export const useCreateExpense = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: CreateExpenseVars) => {
+  return useIdempotentMutation({
+    mutationFn: async (
+      { workspaceId, ...body }: CreateExpenseVars,
+      request,
+    ) => {
       const response = await api
         .expenses({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({
-          ...body,
-          matterId: toSafeId<"entity">(body.matterId),
-        });
+        .put(
+          {
+            ...body,
+            matterId: toSafeId<"entity">(body.matterId),
+          },
+          request,
+        );
 
       return unwrapEden(response);
     },

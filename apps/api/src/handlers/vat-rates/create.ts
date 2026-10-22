@@ -12,6 +12,7 @@ import {
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Create a VAT rate validity period in the active organization. validFrom is inclusive; validTo is exclusive.",
   permissions: { organizationSettings: ["update"] },

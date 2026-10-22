@@ -48,8 +48,11 @@ const useTemplateCategoryOps = (): CategoryOps => {
   const t = useTranslations();
 
   return useCategoryOps({
-    create: async (name) => {
-      const { data, error } = await api["template-categories"].put({ name });
+    create: async (name, request) => {
+      const { data, error } = await api["template-categories"].put(
+        { name },
+        request,
+      );
       return { data, error };
     },
     rename: async (id, name) => {

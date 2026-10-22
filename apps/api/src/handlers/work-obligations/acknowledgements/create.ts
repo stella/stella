@@ -20,6 +20,7 @@ const acknowledgeParams = workspaceParams({ entityId: tSafeId("entity") });
 const acknowledgeWorkObligation = createSafeHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Acknowledge ownership of governed work assigned to the signed-in user.",
     permissions: { entity: ["update"] },

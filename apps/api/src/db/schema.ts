@@ -58,6 +58,7 @@ export * from "./schema/notifications";
 export * from "./schema/correspondence";
 export * from "./schema/feedback";
 export * from "./schema/feature-enrolments";
+export * from "./schema/request-idempotency";
 export * from "./schema/relations";
 export {
   ACCOUNT_DELETION_REQUEST_STATUSES,

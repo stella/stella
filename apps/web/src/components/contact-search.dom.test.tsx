@@ -53,7 +53,8 @@ globalThis.fetch = Object.assign(
 );
 
 const testing = await import("@testing-library/react");
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
@@ -76,7 +77,7 @@ const { contactsKeys } = await import("@/lib/contacts/queries");
 const { contactPickerKeys } =
   await import("@/components/contact-picker-queries");
 const ORGANIZATION = "contact-search-org";
-const clients: InstanceType<typeof query.QueryClient>[] = [];
+const clients: InstanceType<typeof QueryClient>[] = [];
 const user = {
   activeOrganizationId: ORGANIZATION,
   id: "reader",
@@ -107,7 +108,7 @@ afterAll(async () => {
 });
 
 const mount = async (picker = false, locale: "en" | "ar" = "en") => {
-  const client = new query.QueryClient({
+  const client = new QueryClient({
     defaultOptions: {
       queries: { retry: 1, retryDelay: 0, staleTime: Infinity },
     },
@@ -149,7 +150,7 @@ const mount = async (picker = false, locale: "en" | "ar" = "en") => {
         },
       }}
     >
-      <query.QueryClientProvider client={client}>
+      <QueryClientProvider client={client}>
         <IntlProvider
           locale={locale}
           messages={catalog}
@@ -161,7 +162,7 @@ const mount = async (picker = false, locale: "en" | "ar" = "en") => {
             </AuthenticatedUserProvider>
           </FormattingProvider>
         </IntlProvider>
-      </query.QueryClientProvider>
+      </QueryClientProvider>
     </AnalyticsContext>,
   );
   return client;

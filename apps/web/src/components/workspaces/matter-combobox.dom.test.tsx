@@ -20,7 +20,8 @@ GlobalRegistrator.register({ url: "http://localhost:3000/", width: 1280 });
 setDefaultTimeout(10_000);
 
 const testing = await import("@testing-library/react");
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const { Profiler, useState } = await import("react");
 const { panic } = await import("better-result");
 const { IntlProvider } = await import("use-intl");
@@ -99,7 +100,7 @@ const many = (index: number) =>
 
 type ChatActivity = { workspaceId: string; updatedAt: string };
 
-const clients: InstanceType<typeof query.QueryClient>[] = [];
+const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(() => {
   usePinnedStore.setState({ pinnedIds: new Set(), pinnedOrder: [] });
@@ -128,7 +129,7 @@ const openCombobox = (
     workspaces?: WorkspaceNavigationItem[];
   } = {},
 ) => {
-  const client = new query.QueryClient({
+  const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   clients.push(client);
@@ -183,13 +184,13 @@ const openCombobox = (
   };
   const ui = testing.render(
     <RenderLoopGuard>
-      <query.QueryClientProvider client={client}>
+      <QueryClientProvider client={client}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <Profiler id="matter-combobox" onRender={onCommit}>
             <Host />
           </Profiler>
         </IntlProvider>
-      </query.QueryClientProvider>
+      </QueryClientProvider>
     </RenderLoopGuard>,
   );
   const input = ui.getByRole("combobox");

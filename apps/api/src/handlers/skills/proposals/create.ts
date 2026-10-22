@@ -32,6 +32,7 @@ const createSkillProposalBodySchema = t.Object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Open a draft change proposal against an agent skill, branched from its " +
     "newest revision. Omit body to start from that revision's text. The " +

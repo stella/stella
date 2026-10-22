@@ -73,8 +73,8 @@ export const DocumentTypesCard = () => {
   const once = useSingleFlight();
 
   const createMutation = useSettingsMutation({
-    mutationFn: async (label: string) =>
-      unwrapEden(await api["document-types"].post({ label })),
+    mutationFn: async (label: string, request) =>
+      unwrapEden(await api["document-types"].post({ label }, request)),
     invalidate: documentTypesInvalidationKey,
     errorToast: {
       title: t("errors.actionFailed"),

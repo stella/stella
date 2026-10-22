@@ -73,6 +73,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { routeQueryOptions } from "@/lib/react-query";
 import {
   DAY_AND_MONTH_FORMAT,
@@ -158,6 +159,7 @@ const formatHours = (hours: number) =>
 // ── Main component ───────────────────────────────────────
 
 export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const workflowsEnabled = useWorkflowsPreviewEnabled();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
@@ -210,11 +212,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
 
   const handleCreateTask = useCallback(async () => {
-    const { data: taskData, error: taskError } = await api
-      .tasks({ workspaceId })
-      .put({
+    const { data: taskData, error: taskError } = await idempotentSubmit.run({
+      operation: JSON.stringify(["api.tasks({workspaceId})", { workspaceId }]),
+      body: {
         name: t("tasks.untitled"),
-      });
+      },
+      send: api.tasks({ workspaceId }).put,
+    });
     const entityId = taskData?.entityId;
     if (taskError || !entityId) {
       notifyUserError(
@@ -236,7 +240,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     useInspectorTabsStore
       .getState()
       .openTask({ taskId: entityId, workspaceId, isNew: true });
-  }, [workspaceId, t, queryClient]);
+  }, [workspaceId, t, queryClient, idempotentSubmit]);
 
   const updateTaskStatus = useMutation({
     mutationFn: async ({

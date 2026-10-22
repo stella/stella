@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Save a reusable company specification format for colleagues in the active organization.",
   permissions: { template: ["create"] },

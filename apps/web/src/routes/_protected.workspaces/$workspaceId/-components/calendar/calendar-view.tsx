@@ -22,6 +22,7 @@ import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { appToday } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
@@ -77,6 +78,7 @@ type HandleDropParams = {
 };
 
 export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const locale = useLocale();
   const firstWeekday = getFirstWeekday(locale);
@@ -109,13 +111,15 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       datePropertyId === TASK_DATE_IDS[1]
         ? toDayStartDateTime(date)
         : undefined;
-    const { data: taskData, error: taskError } = await api
-      .tasks({ workspaceId })
-      .put({
+    const { data: taskData, error: taskError } = await idempotentSubmit.run({
+      operation: JSON.stringify(["api.tasks({workspaceId})", { workspaceId }]),
+      body: {
         name: t("tasks.untitled"),
         ...(dueDate && { dueDate }),
         ...(startAt && { allDay: true, startAt }),
-      });
+      },
+      send: api.tasks({ workspaceId }).put,
+    });
 
     const entityId = taskData?.entityId;
     if (taskError || !entityId) {

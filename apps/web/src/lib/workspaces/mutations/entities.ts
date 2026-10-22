@@ -18,6 +18,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { replaceCachedFileName } from "@/lib/files/queries";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { inboxKeys } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
@@ -36,18 +37,26 @@ type CreateEntitiesVars = {
 export const useCreateEntities = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: CreateEntitiesVars) => {
+  return useIdempotentMutation({
+    mutationFn: async (
+      { workspaceId, ...body }: CreateEntitiesVars,
+      request,
+    ) => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({
-          name: body.name,
-          ...(body.kind !== undefined && { kind: body.kind }),
-          ...(body.parentId !== undefined && {
-            parentId:
-              body.parentId === null ? null : toSafeId<"entity">(body.parentId),
-          }),
-        });
+        .put(
+          {
+            name: body.name,
+            ...(body.kind !== undefined && { kind: body.kind }),
+            ...(body.parentId !== undefined && {
+              parentId:
+                body.parentId === null
+                  ? null
+                  : toSafeId<"entity">(body.parentId),
+            }),
+          },
+          request,
+        );
 
       return unwrapEden(response);
     },

@@ -10,7 +10,9 @@ import type { contactOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
+import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 
@@ -73,7 +75,6 @@ type ContactMetadataSection =
   | { customFields: ContactCustomField[]; dataBoxes?: never };
 
 type CreateContactVars = {
-  id: SafeId<"contact">;
   type: ContactType;
   displayName: string;
   firstName?: string;
@@ -103,9 +104,15 @@ type CreateContactVars = {
 export const useCreateContact = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
-    mutationFn: async (vars: CreateContactVars) => {
-      const response = await api.contacts.put(vars);
+  return useIdempotentMutation({
+    mutationFn: async (vars: CreateContactVars, request) => {
+      const response = await api.contacts.put(
+        {
+          ...vars,
+          id: toSafeId<"contact">(request.headers["Idempotency-Key"]),
+        },
+        request,
+      );
 
       return unwrapEden(response);
     },

@@ -40,6 +40,7 @@ import type {
   LifecycleSpec,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
+import { REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS } from "@/api/lib/idempotency/request-receipt-transition-spec";
 import {
   CONTACT_MONITORING_TRANSITIONS,
   FIRM_MONITORING_TRANSITIONS,
@@ -383,6 +384,7 @@ export const TRANSITIONS = {
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
+  requestIdempotencyReceipts: REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS,
   sanctionsContactMatches: {
     scoped: {
       state: MATCH_MEMBERSHIP_TRANSITIONS,

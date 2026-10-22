@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { sendTimeEntryMutation } from "@/lib/workspaces/time-entries-api";
@@ -21,13 +22,13 @@ type CreateTimeEntryVars = {
 export const useCreateTimeEntry = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      workItemId,
-      ...body
-    }: CreateTimeEntryVars) => {
+  return useIdempotentMutation({
+    mutationFn: async (
+      { workspaceId, workItemId, ...body }: CreateTimeEntryVars,
+      request,
+    ) => {
       await sendTimeEntryMutation({
+        headers: request.headers,
         workspaceId,
         mutation: {
           type: "create",
@@ -109,9 +110,13 @@ export const useDecideTimeSuggestion = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: DecideTimeSuggestionVars) => {
+  return useIdempotentMutation({
+    mutationFn: async (
+      { workspaceId, ...body }: DecideTimeSuggestionVars,
+      request,
+    ) => {
       await sendTimeEntryMutation({
+        headers: request.headers,
         workspaceId,
         mutation: {
           type: "suggestion_decision",
@@ -217,7 +222,7 @@ type SplitTimeEntryVars = {
 export const useSplitTimeEntry = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
+  return useIdempotentMutation({
     mutationFn: async ({ workspaceId, ...body }: SplitTimeEntryVars) => {
       await sendTimeEntryMutation({
         workspaceId,

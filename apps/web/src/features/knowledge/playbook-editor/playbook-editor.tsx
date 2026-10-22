@@ -97,6 +97,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError, APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   duplicatePosition,
   extractToGraded,
@@ -662,6 +663,7 @@ const PlaybookEditorForm = ({
   host,
   onReload,
 }: PlaybookEditorFormProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const isEdit = playbookId !== null;
@@ -1145,7 +1147,11 @@ const PlaybookEditorForm = ({
     // request reads as success anywhere the response is not checked.
     const response =
       playbookId === null
-        ? await api.playbooks.post(payload)
+        ? await idempotentSubmit.run({
+            operation: "api.playbooks",
+            body: payload,
+            send: api.playbooks.post,
+          })
         : await api
             .playbooks({
               playbookId: toSafeId<"playbookDefinition">(playbookId),

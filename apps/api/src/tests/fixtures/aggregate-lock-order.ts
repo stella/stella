@@ -20,6 +20,15 @@ export const aggregateFences = () => {
   const userId = mintAuthProviderId<"user">();
   const answerId = createSafeId<"legalReaderAnswer">();
   return {
+    requestReceipt: {
+      aggregate: "requestReceipt",
+      id: {
+        id: createSafeId<"requestIdempotencyReceipt">(),
+        organizationId,
+        userId,
+      },
+      mode: "update",
+    },
     account: { aggregate: "account", id: userId, mode: "no key update" },
     accountExport: {
       aggregate: "accountExport",

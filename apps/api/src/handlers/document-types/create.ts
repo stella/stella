@@ -15,6 +15,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Add one document type to the organization's classification list. Its " +
     "key is slugified from the label and de-duplicated automatically, and " +

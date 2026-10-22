@@ -18,6 +18,7 @@ const fromStarterBodySchema = t.Object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Create or reopen the organization's playbook from a bundled starter, " +
     "cloning its positions with fresh ids on first use and otherwise taking exactly the path " +

@@ -16,6 +16,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Create an issuer profile for the active organization. The first active " +
     "profile becomes the default; later profiles can be made default explicitly. " +

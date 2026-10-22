@@ -46,6 +46,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { INBOX_VIEWS, inboxKeys } from "@/lib/inbox/queries";
 import type { InboxView } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -75,6 +76,7 @@ const isUnsavedViewId = (id: string) =>
 type EntityViewsProps = { organizationId: string; scope: EntityViewScope };
 
 export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
@@ -135,9 +137,13 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       const id = savedIds.current.get(view.id) ?? view.id;
       const result = isUnsavedViewId(id)
         ? unwrapEden(
-            await api["entity-views"].put({
-              name: view.name,
-              layout: view.layout,
+            await idempotentSubmit.run({
+              operation: JSON.stringify(['api["entity-views"]']),
+              body: {
+                name: view.name,
+                layout: view.layout,
+              },
+              send: api["entity-views"].put,
             }),
           )
         : unwrapEden(

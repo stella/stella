@@ -15,6 +15,7 @@ import {
 const config = {
   featureAccess: { type: "required", featureId: AI_MEMORY_FEATURE_ID },
   contract: "patch",
+  idempotency: { type: "replay" },
   // Memory is part of the AI assistant; gate on the chat capability.
   // Firm-scoped writes go through the separate, permission-gated route.
   permissions: { chat: ["create"] },
