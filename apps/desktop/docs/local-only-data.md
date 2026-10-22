@@ -61,6 +61,18 @@ local-only feature follows every rule below and adds one entry to
 - `tests/window-capabilities.test.ts`: each window's capability grants what
   its page invokes.
 
+## Calls
+
+While recording, the activity sampler also asks the system which apps capture
+microphone input: CoreAudio's per-process objects on macOS 14 and later, the
+microphone consent store on Windows. Only a catalog of call apps and browsers
+counts (`activity_calls.rs`); a browser must hold the microphone for about
+fifteen seconds. Call time is recorded as a call segment for that app, whatever
+is in front and however long the user only listens, and it ends at the last
+sample that saw the call. Audio is never read. Excluded apps stay unrecorded,
+window titles follow the same detail opt-ins, and the user can turn call
+detection off in Activity settings.
+
 ## Activity account ownership
 
 Activity days, settings and welcome consent belong to the linked account.

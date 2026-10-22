@@ -52,6 +52,7 @@ export const notificationsRoute = new Elysia({
 
       const stream = subscribeUser({
         organizationId: session.activeOrganizationId,
+        sessionId: session.id,
         signal: request.signal,
         userId: user.id,
       });
