@@ -49,7 +49,7 @@ const config = {
     },
   },
   body: prepareBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 /**
@@ -92,7 +92,7 @@ const prepareTemplate = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "templates.prepare",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
       modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },

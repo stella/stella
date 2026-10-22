@@ -16,8 +16,8 @@ export const openDecisionAnchor = async (
     await host.openDecision(anchor.decisionId);
     return;
   }
-  if (anchor.appUrl !== null) {
-    await host.openLink(anchor.appUrl);
+  if (anchor.url !== null) {
+    await host.openLink(anchor.url);
   }
 };
 export const openProvisionAnchor = async (
@@ -28,7 +28,7 @@ export const openProvisionAnchor = async (
     await host.previewProvision(anchor.provision);
     return;
   }
-  if (anchor.appUrl !== null) {
-    await host.openLink(anchor.appUrl);
+  if (anchor.url !== null) {
+    await host.openLink(anchor.url);
   }
 };

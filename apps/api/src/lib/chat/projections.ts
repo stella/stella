@@ -9,7 +9,6 @@ import {
 } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { DoctrineTreatment } from "@stll/api-contract/case-law-doctrine";
-import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
 import {
   DECISION_TEXT_FIELD,
   DECISION_TEXT_WITHHELD_REASON,
@@ -35,7 +34,6 @@ import {
   ENTITY_CHECK_SUBJECT_TYPES,
   ENTITY_CHECK_UNAVAILABLE_REASONS,
 } from "@stll/business-registries/entity-checks";
-import { CITATION_PASSAGE_MENTIONS } from "@stll/legal-ast/citation-passage";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
@@ -43,10 +41,7 @@ import {
   SANCTIONS_COMPANY_ID_COUNTRIES,
   SANCTIONS_COMPANY_REGISTRIES,
 } from "@/api/lib/business-registries/sanctions-check-vocabulary";
-import {
-  CITATION_READ_DIRECTIONS,
-  CITATION_TREATMENTS,
-} from "@/api/lib/case-law/citation-vocabulary";
+import type { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
@@ -58,6 +53,7 @@ import {
   DOCUMENT_PROCESSING_REQUIRED_STATUS,
 } from "@/api/lib/document-processing-contract";
 import { TEMPLATE_WARNING_CODES } from "@/api/lib/docx/template-warnings";
+import { LEGISLATION_AMENDMENT_CHANGE_KINDS } from "@/api/lib/legal-search/legislation-ingestion-types";
 import {
   SANCTIONS_CLASSIFICATIONS,
   SANCTIONS_ENTITY_TYPES,
@@ -803,7 +799,9 @@ const clauseParagraphProjection = v.strictObject({
   directiveKind: v.optional(v.string()),
   directiveExpression: v.optional(v.string()),
   listKind: v.optional(v.string()),
-  listLevel: v.optional(v.number()),
+  numbering: v.optional(
+    v.strictObject({ kind: v.literal("levelOnly"), ilvl: v.number() }),
+  ),
 });
 
 const clauseBodyProjection = v.array(clauseParagraphProjection);
@@ -1613,7 +1611,18 @@ const caseLawDecisionProjection = v.strictObject({
   source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
   caseNumberType: caseNumberTypeProjection,
-  citations: v.optional(caseLawCitationSummaryProjection),
+  citations: v.optional(
+    v.union([
+      projectionBranch(caseLawCitationSummaryProjection),
+      projectionBranch(
+        v.strictObject({
+          status: v.literal("unavailable"),
+          reason: v.literal("country_not_search_admitted"),
+          country: v.string(),
+        }),
+      ),
+    ]),
+  ),
   country: v.optional(v.string()),
   court: v.optional(v.string()),
   // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
@@ -1753,73 +1762,49 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
   ),
 });
 
-/**
- * read_case_law_citations. Source of truth: `handleReadCaseLawCitationsTool`
- * (`stella-tools.ts`) mapping `readGatedDecisionCitations`. All ids are public
- * case-law corpus ids (citation, decision). `passage` is publisher decision
- * text, withheld where the source bars derived AI use.
- */
-export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
-  doctrineAvailability: v.picklist(["available", "unavailable"]),
-  // The decision the citations were read from, echoed so a paged reply still
-  // says what it is about.
-  decisionId: passthroughId(),
-  direction: v.picklist(CITATION_READ_DIRECTIONS),
-  // Opaque citation-id cursor, base64url-encoded.
-  nextCursor: v.nullable(passthroughId()),
-  citations: v.array(
-    v.strictObject({
-      citationId: passthroughId(),
-      citationText: v.nullable(v.string()),
-      textWithheldReason: v.nullable(
-        v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
-      ),
-      // The classified reading, or `unclassified` where there is none: a row
-      // the classifier never reached and one it could not answer for are both
-      // the absence of a reading, never a neutral one.
-      polarity: v.picklist(CITATION_TREATMENTS),
-      doctrine: v.nullable(v.picklist([...DOCTRINAL_TREATMENTS, "unread"])),
-      // Null for a citation the corpus holds no decision for.
-      decision: v.nullable(
-        v.strictObject({
-          // Nullable for the same reason as search_case_law's `appUrl`.
-          appUrl: v.nullable(v.string()),
-          url: v.nullable(publicUrl()),
-          source_url: v.optional(publicUrl()),
-          caseNumber: v.string(),
-          caseNumberType: caseNumberTypeProjection,
-          citationAuthority: v.number(),
-          court: v.string(),
-          decisionDate: v.nullable(v.string()),
-          decisionId: passthroughId(),
-          decisionType: v.nullable(v.string()),
-          resourceName: passthroughId(),
-        }),
-      ),
-      // An excerpt of the citing paragraph, by AST anchor. Null where none is
-      // available. `truncated` says the block was longer than the excerpt;
-      // `mention` says whether the document left a choice of paragraph, in
-      // which case `polarity` may have been read from another one.
-      passage: v.nullable(
-        v.strictObject({
-          anchorId: passthroughId(),
-          text: contentText(),
-          truncated: v.boolean(),
-          mention: v.picklist(CITATION_PASSAGE_MENTIONS),
-          evidenceQuote: v.optional(v.string()),
-          evidenceAnchorId: v.optional(v.nullable(passthroughId())),
-        }),
-      ),
-    }),
-  ),
-});
+export { READ_CASE_LAW_CITATIONS_PROJECTION } from "./case-law-citation-projection";
 
 /**
  * The window of a Work's consolidated versions a statute read returns.
  * Newest validity window first, bounded by the versions page size: enough to
  * see which consolidations exist, not the whole amendment history.
  */
+const STATUTE_AMENDMENT_PAGE_PROJECTION = v.nullable(
+  v.strictObject({
+    items: v.array(
+      v.strictObject({
+        publisherId: v.string(),
+        amendingEli: v.string(),
+        amendingTitle: v.nullable(v.string()),
+        affectedAnchor: v.string(),
+        changeKind: v.picklist(LEGISLATION_AMENDMENT_CHANGE_KINDS),
+        effectiveDate: v.nullable(v.string()),
+        effectiveText: v.nullable(v.string()),
+      }),
+    ),
+    observedAt: v.string(),
+    coverage: v.variant("type", [
+      projectionBranch(v.strictObject({ type: v.literal("complete") })),
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("partial"),
+          unlocatedRelations: v.number(),
+          reason: v.string(),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("not-stated"),
+          reason: v.string(),
+        }),
+      ),
+    ]),
+    truncated: v.boolean(),
+  }),
+);
+
 const STATUTE_VERSION_PROJECTION = v.strictObject({
+  amendedBy: STATUTE_AMENDMENT_PAGE_PROJECTION,
   documentId: passthroughId(),
   resourceName: passthroughId(),
   versionValidFrom: v.nullable(v.string()),
@@ -1841,15 +1826,15 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
       paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
       results: v.array(
         v.strictObject({
-          // Null while the public-law surface is off (`FEATURE_PUBLIC_LAW`);
-          // without a stored slug the canonical route uses the document id.
-          appUrl: v.nullable(v.string()),
+          // The reader is primary when served; otherwise use the publisher.
           url: v.nullable(publicUrl()),
           source_url: v.optional(publicUrl()),
           country: v.string(),
           documentId: passthroughId(),
           documentType: v.nullable(v.string()),
           effectiveDate: v.nullable(v.string()),
+          versionValidFrom: v.nullable(v.string()),
+          versionValidTo: v.nullable(v.string()),
           eli: v.string(),
           language: v.string(),
           match: v.strictObject({
@@ -1882,8 +1867,7 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
   // whole consolidation and do not continue, so only the text pages.
   nextCursor: v.nullable(passthroughId()),
   statute: v.strictObject({
-    // Nullable for the same reasons as search_legislation's `appUrl`.
-    appUrl: v.nullable(v.string()),
+    // Nullable for the same reasons as search_legislation's `url`.
     url: v.nullable(publicUrl()),
     source_url: v.optional(publicUrl()),
     charCount: v.nullable(v.number()),
@@ -1896,14 +1880,16 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     // The consolidation's heading blocks in document order. Each `anchorId`
     // is what read_statute_provisions and read_provision_history take as
     // `anchor`, in the publisher's own scheme.
-    outline: v.array(
-      v.strictObject({
-        anchorId: passthroughId(),
-        level: v.number(),
-        text: contentText(),
-      }),
+    outline: v.optional(
+      v.array(
+        v.strictObject({
+          anchorId: passthroughId(),
+          level: v.number(),
+          text: contentText(),
+        }),
+      ),
     ),
-    outlineTruncated: v.boolean(),
+    outlineTruncated: v.optional(v.boolean()),
     resourceName: passthroughId(),
     // The publisher's own document URL, which may embed the publisher's own
     // UUID — never a Stella tenant id, so it is forwarded unchanged.
@@ -1918,7 +1904,8 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     versionValidFrom: v.nullable(v.string()),
     versionValidTo: v.nullable(v.string()),
     ...statuteExpressionLabel,
-    versions: v.array(STATUTE_VERSION_PROJECTION),
+    pendingChanges: STATUTE_AMENDMENT_PAGE_PROJECTION,
+    versions: v.optional(v.array(STATUTE_VERSION_PROJECTION)),
   }),
 });
 

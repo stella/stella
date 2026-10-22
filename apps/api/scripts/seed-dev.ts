@@ -122,6 +122,7 @@ import type {
   ExportReviewMetadata,
 } from "./seed-export-review";
 import { buildMarketingAgentThread } from "./seed-marketing-agent-thread";
+import { seedMarketingCaseLaw } from "./seed-marketing-case-law";
 import { writeSeedRecentFiles } from "./seed-recents";
 import { seedTemplates } from "./seed-templates";
 import {
@@ -6329,8 +6330,10 @@ export async function seed(organizationId?: string, userId?: string) {
   // fixtures and is the most schema-coupled step; a local schema drift here
   // (e.g. a worktree whose migrations lag the shared dev DB) must not abort the
   // whole seed or dump a giant error toast — warn and continue.
+  let caseLawSeeded = false;
   try {
     await seedCaseLaw();
+    caseLawSeeded = true;
   } catch (error) {
     logErrorOutput({
       level: "warn",
@@ -6339,6 +6342,12 @@ export async function seed(organizationId?: string, userId?: string) {
         error,
       ],
     });
+  }
+
+  // The marketing seed needs the corpus rows; skip it when the corpus seed
+  // was skipped, but keep its own failures fatal (the screenshots need them).
+  if (caseLawSeeded) {
+    await seedMarketingCaseLaw({ db, organizationId: ORG_ID, userId: USER_ID });
   }
 
   console.log("\nDone. Dev data seeded successfully.");

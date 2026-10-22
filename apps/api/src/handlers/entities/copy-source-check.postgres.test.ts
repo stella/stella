@@ -557,6 +557,10 @@ if (!databaseUrl || !runPostgresTests) {
                         userId,
                       ),
                     ),
+                    source: {
+                      kind: "background",
+                      reason: "copy-source integration test",
+                    },
                     userId,
                     workspaceId: sourceWorkspaceId,
                   }),

@@ -48,7 +48,7 @@ import { seedId } from "./seed-utils";
 
 const FIXTURES_DIR = path.join(import.meta.dir, "__fixtures__", "case-law");
 
-const sourceIdFor = (adapterKey: string) =>
+export const sourceIdFor = (adapterKey: string) =>
   seedId(`case-law-source-${adapterKey}`);
 const decisionIdFor = (
   adapterKey: string,

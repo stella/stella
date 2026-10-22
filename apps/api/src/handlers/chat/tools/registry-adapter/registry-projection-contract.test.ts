@@ -12,6 +12,7 @@ import {
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
+  DECISION_SEARCH_MATCHES,
   FACET_COUNT_TYPE,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGE_REACH,
@@ -43,6 +44,7 @@ import {
   deriveRefMediationEntry,
   projectForChat,
 } from "@/api/lib/chat/projection-schema";
+import * as projectionModule from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -304,6 +306,7 @@ const recordOutboundFetches = async <TResult>(
  * outline and the plain text are both derived from.
  */
 const statuteDocumentFixture = (documentId: string) => ({
+  pendingChanges: null,
   id: documentId,
   eli: "/eli/cz/sb/2012/89",
   slug: "89-2012-sb-obcansky-zakonik",
@@ -632,6 +635,7 @@ const CONTRACT_CORPUS = {
         entity_id: entityRef(refRegistry, uid(12)),
       }),
       tx: () => ({
+        selectDistinct: () => chainable([{ id: WS }]),
         query: {
           entities: {
             findFirst: async () => ({
@@ -671,17 +675,49 @@ const CONTRACT_CORPUS = {
             findFirst: async () => ({ id: uid(60) }),
           },
           extractedContent: {
-            findFirst: async () => ({
-              charCount: EXTRACTED_TEXT.length,
-              ciphertext: extractedEnvelope.ciphertext,
-              extractedAt: new Date("2026-01-02"),
-              iv: extractedEnvelope.iv,
-              sourceEntityVersionId: uid(60),
-              sourceFieldId: uid(61),
-              sourceFileId: uid(63),
-              sourceSha256Hex: "a".repeat(64),
-              entity: { kind: "document", name: "NDA draft", workspaceId: WS },
-            }),
+            findMany: async () => [
+              {
+                charCount: EXTRACTED_TEXT.length,
+                ciphertext: extractedEnvelope.ciphertext,
+                entityId: uid(12),
+                extractedAt: new Date("2026-01-02"),
+                iv: extractedEnvelope.iv,
+                language: null,
+                ocrRunId: null,
+                sourceEntityVersionId: uid(60),
+                sourceFieldId: uid(61),
+                sourceFileId: uid(63),
+                sourceSha256Hex: "a".repeat(64),
+                workspaceId: WS,
+                entity: {
+                  name: "NDA draft",
+                  workspaceId: WS,
+                  workspace: { status: "active" },
+                  versions: [{ id: uid(60) }],
+                  currentVersion: {
+                    id: uid(60),
+                    createdAt: new Date("2026-01-01"),
+                    deletedAt: null,
+                    fields: [
+                      {
+                        id: uid(61),
+                        content: {
+                          version: 1,
+                          type: "file",
+                          id: uid(63),
+                          fileName: "NDA draft.pdf",
+                          mimeType: "application/pdf",
+                          sizeBytes: 12_345,
+                          encrypted: false,
+                          sha256Hex: "a".repeat(64),
+                          pdfFileId: uid(64),
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
           },
         },
       }),
@@ -1467,8 +1503,8 @@ const CONTRACT_CORPUS = {
     },
   ],
   search_case_law: [
-    {
-      mode: "search",
+    ...DECISION_SEARCH_MATCHES.map((match) => ({
+      mode: `search-${match}`,
       buildArgs: () => ({ country: "CZE", queries: ["dobré mravy"] }),
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
@@ -1505,6 +1541,7 @@ const CONTRACT_CORPUS = {
               language: "cs",
               textWithheldReason: null,
               matchingPassages: 3,
+              match,
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               languageAlternates: [],
@@ -1520,7 +1557,8 @@ const CONTRACT_CORPUS = {
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],
-    },
+      expectPayloadContains: [JSON.stringify({ match }).slice(1, -1)],
+    })),
     {
       // Page one of a single query carries the filter rail. A source facet's
       // value is the source's own id, which an agent passes back as
@@ -1581,6 +1619,7 @@ const CONTRACT_CORPUS = {
               language: "cs",
               textWithheldReason: null,
               matchingPassages: 3,
+              match: "all_terms",
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               languageAlternates: [],
@@ -1816,6 +1855,8 @@ const CONTRACT_CORPUS = {
             documentType: "act",
             status: "in_force",
             effectiveDate: "2014-01-01",
+            versionValidFrom: "2014-01-01",
+            versionValidTo: null,
             // GUID-bearing publisher URL; see the statute fixture above.
             sourceUrl: `https://example.test/89-2012/${uid(95)}`,
             headline: "<mark>náhrada škody</mark>",
@@ -2149,7 +2190,7 @@ const recordedExceptions = () =>
   (analytics ?? panic("recording analytics is not installed")).exceptions();
 
 // Production serves the public-law pages, so every corpus result carries an
-// `appUrl`; a decision or statute without a slug is addressed by its id there.
+// `url`; a decision or statute without a slug is addressed by its id there.
 let previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
 
 afterEach(() => {
@@ -2230,7 +2271,6 @@ describe("registry projection contract", () => {
           if (!isRecord(item)) {
             panic("Invalid citation result");
           }
-          expect(item["appUrl"]).toBeNull();
           expect(item["url"]).toBe(item["sourceUrl"]);
           expect(item["url"]).toMatch(/^https:/u);
           expect(item["source_url"]).toBeUndefined();
@@ -2241,6 +2281,25 @@ describe("registry projection contract", () => {
       }
     });
   }
+
+  test("every registry projection omits the redundant reader URL alias", () => {
+    const visited = new Set<unknown>();
+    const assertNoAlias = (value: unknown) => {
+      if (typeof value !== "object" || value === null || visited.has(value)) {
+        return;
+      }
+      visited.add(value);
+      expect(Object.hasOwn(value, "appUrl")).toBe(false);
+      for (const child of Object.values(value)) {
+        assertNoAlias(child);
+      }
+    };
+    for (const entry of Object.values(READ_TOOL_REF_FIELD_MAP)) {
+      if (entry.chatProjectable) {
+        assertNoAlias(entry.projection);
+      }
+    }
+  });
 
   test("every declared outputRef path is exercised by some fixture call", () => {
     for (const [toolName, calls] of corpusEntries()) {
@@ -2268,6 +2327,7 @@ describe("registry projection contract", () => {
         const refRegistry = createChatRefRegistry();
         const context = contextFor(toolName, call.tx?.() ?? {});
 
+        const projectionSpy = spyOn(projectionModule, "projectForChat");
         const { result, fetched } = await recordOutboundFetches(
           async () =>
             await runRegistryReadTool({
@@ -2277,6 +2337,8 @@ describe("registry projection contract", () => {
               toolName,
             }),
         );
+        const projectionCalls = [...projectionSpy.mock.calls];
+        projectionSpy.mockRestore();
         expect(
           fetched,
           `${toolName} (${call.mode}): the read sent a request past its seams`,
@@ -2306,24 +2368,29 @@ describe("registry projection contract", () => {
           if (typeof value !== "object" || value === null) {
             return;
           }
-          if ("appUrl" in value) {
-            expect(
-              "url" in value,
-              `${toolName}: every reader link has a primary url`,
-            ).toBe(true);
-            if ("url" in value && typeof value.appUrl === "string") {
-              expect(value.url).toBe(value.appUrl);
-              if ("sourceUrl" in value && typeof value.sourceUrl === "string") {
-                expect("source_url" in value && value.source_url).toBe(
-                  new URL(value.sourceUrl).href,
-                );
-              }
-            }
+          expect(
+            "appUrl" in value,
+            `${toolName}: primary/source links must not expose appUrl`,
+          ).toBe(false);
+          if (
+            "url" in value &&
+            typeof value.url === "string" &&
+            "sourceUrl" in value &&
+            typeof value.sourceUrl === "string" &&
+            value.url !== new URL(value.sourceUrl).href
+          ) {
+            expect("source_url" in value && value.source_url).toBe(
+              new URL(value.sourceUrl).href,
+            );
           }
           for (const child of Object.values(value)) {
             assertCitationLinks(child);
           }
         };
+        expect(projectionCalls.length).toBeGreaterThan(0);
+        for (const [projection] of projectionCalls) {
+          assertCitationLinks(projection.payload);
+        }
         assertCitationLinks(payload);
         if (call.expectPayloadContains) {
           const serialized = JSON.stringify(payload);

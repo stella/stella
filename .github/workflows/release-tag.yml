@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: "Commit SHA (blank selects the newest staging/verified success on main)"
+        description: "Version commit SHA (blank selects the commit that set VERSION on main)"
         required: false
         type: string
       proof_sha:
@@ -42,7 +42,7 @@ jobs:
   tag:
     name: Push release tag
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: release-app
     timeout-minutes: 15
     outputs:
@@ -57,7 +57,7 @@ jobs:
       # Bun runs the release queue history check that decides whether a
       # merge-group receipt may stand in for the heavy statuses.
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -84,6 +84,7 @@ jobs:
         run: git checkout --detach "$RELEASE_SHA"
 
       - name: Install dependencies for the release audit
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -156,7 +157,7 @@ jobs:
   marketing-freshness:
     name: Warn on changed marketing recording provenance
     needs: tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -168,12 +169,13 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""

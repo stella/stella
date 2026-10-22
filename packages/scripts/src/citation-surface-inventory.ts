@@ -1,5 +1,5 @@
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -517,7 +517,7 @@ function checkInventory(inventory: Inventory) {
       } else if (value && wrappers.has(value)) {
         hosts.push(opening);
       }
-      if (imported?.module === "@/components/chat/source-chips" && value) {
+      if (imported?.module === "@/features/chat/source-chips" && value) {
         for (const child of componentChildren(inventory, value)) {
           trays.add(child);
         }

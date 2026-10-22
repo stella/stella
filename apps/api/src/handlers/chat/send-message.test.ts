@@ -10,8 +10,10 @@ import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   chatMessages,
+  chatRunLogEntries,
   chatRunLogs,
   chatThreadNames,
+  chatToolGrants,
   chatThreads,
   chatTurns,
 } from "@/api/db/schema";
@@ -178,6 +180,10 @@ const fromSharedReads = (table: unknown, otherwise: () => unknown) => {
   if (table === chatThreadNames) {
     return { where: async () => startedThreadNames };
   }
+  // The turn loads the user's stored approval grants; these users have none.
+  if (table === chatToolGrants) {
+    return { leftJoin: () => ({ where: () => ({ limit: async () => [] }) }) };
+  }
   return otherwise();
 };
 
@@ -205,7 +211,7 @@ const withRunLogInsert =
 
 const withRunLogUpdate =
   (update: (table: unknown) => unknown) => (table: unknown) =>
-    table === chatRunLogs
+    table === chatRunLogs || table === chatRunLogEntries
       ? { set: () => ({ where: async () => undefined }) }
       : update(table);
 

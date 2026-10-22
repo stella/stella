@@ -64,6 +64,7 @@ export type Advisory = {
 };
 
 export type BaselineEntry = Omit<Advisory, "vulnerableVersions"> & {
+  owner: string;
   reason: string;
   expiresOn?: string;
   untilPatched?: unknown;
@@ -89,6 +90,21 @@ const asText = (value: unknown): string => {
   return typeof value === "number" ? String(value) : "";
 };
 
+const requireAcceptanceText = (
+  id: string,
+  field: "owner" | "reason",
+  value: unknown,
+): string => {
+  const text = asText(value);
+  const trimmed = text.trim();
+  if (trimmed === "" || trimmed.toUpperCase().startsWith("TODO")) {
+    return panic(
+      `Dependency audit baseline entry ${id} must have a non-placeholder ${field}`,
+    );
+  }
+  return text;
+};
+
 // The baseline is a repo-committed file this script owns, but a hand-edit that
 // breaks an entry must not silently accept the advisory it was meant to cover.
 // An unreadable entry is dropped, so the matching advisory reads as new and the
@@ -101,14 +117,17 @@ const toBaselineEntry = (value: unknown): BaselineEntry | null => {
   if (id === "") {
     return null;
   }
+  const owner = requireAcceptanceText(id, "owner", value["owner"]);
+  const reason = requireAcceptanceText(id, "reason", value["reason"]);
   const expiresOn = value["expiresOn"];
   const untilPatched = value["untilPatched"];
   return {
     id,
+    owner,
     severity: asText(value["severity"]),
     package: asText(value["package"]),
     title: asText(value["title"]),
-    reason: asText(value["reason"]),
+    reason,
     // Present but malformed terms are kept as read, so the entry lapses
     // instead of silently becoming permanent.
     ...(expiresOn === undefined ? {} : { expiresOn: asText(expiresOn) }),
@@ -116,8 +135,10 @@ const toBaselineEntry = (value: unknown): BaselineEntry | null => {
   };
 };
 
-export const readBaseline = async (): Promise<Baseline> => {
-  const file = Bun.file(BASELINE_PATH);
+export const readBaseline = async (
+  baselinePath: string = BASELINE_PATH,
+): Promise<Baseline> => {
+  const file = Bun.file(baselinePath);
   if (!(await file.exists())) {
     return { note: "", auditLevel: "high", accepted: [] };
   }
@@ -149,7 +170,7 @@ const ghsaId = (advisory: Record<string, unknown>): string => {
 // Raised when `bun audit` itself fails (crash, network, unparseable output)
 // rather than reporting a clean lockfile. The gate must fail closed on this:
 // an external-tool failure must never be conflated with "no advisories".
-class AuditCommandError extends Error {
+export class AuditCommandError extends Error {
   override readonly name = "AuditCommandError";
 }
 
@@ -244,7 +265,9 @@ const gatedAdvisoriesFromAuditResult = ({
 
 // Runs `bun audit --json` in the repo root and returns the distinct gated
 // (high/critical) advisories. `bun audit` groups advisories by package name.
-const collectGatedAdvisories = async (): Promise<Advisory[]> => {
+type AuditRunner = () => Promise<AuditProcessResult>;
+
+const runAudit: AuditRunner = async () => {
   const proc = Bun.spawn(["bun", "audit", "--json"], {
     cwd: REPO_ROOT,
     stdout: "pipe",
@@ -256,7 +279,46 @@ const collectGatedAdvisories = async (): Promise<Advisory[]> => {
     proc.exited,
   ]);
 
-  return gatedAdvisoriesFromAuditResult({ exitCode, stderr, stdout });
+  return { exitCode, stderr, stdout };
+};
+
+type CollectGatedAdvisoriesOptions = {
+  delay?: (milliseconds: number) => Promise<void>;
+  run?: AuditRunner;
+};
+
+const TRANSIENT_AUDIT_FAILURE =
+  /(?:- 5\d\d\b|ECONNRESET|ETIMEDOUT|ConnectionRefused|fetch failed)/u;
+const RETRY_DELAYS_MS = [10_000, 30_000] as const;
+
+export const collectGatedAdvisories = async ({
+  delay = async (milliseconds) => {
+    await Bun.sleep(milliseconds);
+  },
+  run = runAudit,
+}: CollectGatedAdvisoriesOptions = {}): Promise<Advisory[]> => {
+  for (let attempt = 0; ; attempt += 1) {
+    const result = await run();
+    try {
+      return gatedAdvisoriesFromAuditResult(result);
+    } catch (error) {
+      const retryDelay = RETRY_DELAYS_MS.at(attempt);
+      const producedJson = safeJsonParse(result.stdout.trim()) !== null;
+      if (
+        !(error instanceof AuditCommandError) ||
+        result.exitCode === 0 ||
+        producedJson ||
+        !TRANSIENT_AUDIT_FAILURE.test(result.stderr) ||
+        retryDelay === undefined
+      ) {
+        throw error;
+      }
+      console.warn(
+        `bun audit failed transiently; retrying in ${retryDelay / 1000}s (attempt ${attempt + 2} of ${RETRY_DELAYS_MS.length + 1}).`,
+      );
+      await delay(retryDelay);
+    }
+  }
 };
 
 const formatAdvisory = (advisory: Advisory): string =>
@@ -290,6 +352,7 @@ const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
       const kept = existingById.get(id);
       return {
         id,
+        owner: kept?.owner ?? "TODO: owner",
         severity,
         package: pkg,
         title,
@@ -303,7 +366,7 @@ const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
   };
   await Bun.write(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`);
   console.info(
-    `Wrote ${advisories.length} advisory(ies) to ${repoRelativePath(REPO_ROOT, BASELINE_PATH)}.`,
+    `Wrote ${advisories.length} advisory(ies) to ${repoRelativePath(REPO_ROOT, BASELINE_PATH)}. Replace all TODO placeholders before committing the baseline.`,
   );
 };
 
@@ -477,7 +540,7 @@ export const check = async (
       continue;
     }
     console.info(
-      `${formatAdvisory(advisory)}  ${formatAcceptanceTerm(acceptance)}`,
+      `${formatAdvisory(advisory)}  ${formatAcceptanceTerm(acceptance)} (owner: ${acceptance.owner})`,
     );
   }
 
@@ -583,10 +646,10 @@ const checkDiff = async (baseRevision: string): Promise<number> => {
   const changes = dependencyChanges(baseLockfile, headLockfile);
   const packages = auditablePackages(changes);
   console.info(
-    `Lockfile diff: ${changes.added.length} added, ${changes.changed.length} changed, ${changes.removed.length} removed dependency package(s).`,
+    `Lockfile diff: ${changes.added.length} added, ${changes.changed.length} changed, ${changes.removed.length} removed dependency package(s); ${packages.size} added or changed name(s) are registry-resolved.`,
   );
   if (packages.size === 0) {
-    console.info("No added or changed dependency resolutions to audit.");
+    console.info("No added or changed registry resolutions to audit.");
     return 0;
   }
   const advisories = (await collectGatedAdvisories()).filter(

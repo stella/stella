@@ -20,6 +20,7 @@ import {
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
+import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   ChatReconnectError,
@@ -42,10 +43,17 @@ import {
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
 import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
-import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
+import {
+  BrowserBridgeUnmountedError,
+  getBrowserClientCapability,
+  isBrowserExtensionBridgeMounted,
+} from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
 import { keepShownRejoinMessages } from "@/features/chat/chat-rejoin-messages";
+import { createChatSendTiming } from "@/features/chat/chat-send-timing";
 import { keepPostedMessagesInSnapshots } from "@/features/chat/chat-snapshot-history";
+import { getAnalytics } from "@/lib/analytics/provider";
+import type { ChatTimingSurface } from "@/lib/analytics/types";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import {
@@ -70,7 +78,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
-import { chatFetchClient } from "./chat-fetch";
+import { chatFetchClient, chatResponseError } from "./chat-fetch";
 import { observeChatProviderDiagnostic } from "./chat-provider-diagnostic";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "./chat-query-contract";
 import type {
@@ -100,6 +108,8 @@ export type ChatContinuationRequestBody = {
 };
 export type ChatSendMessageOptions = {
   body?: ChatContinuationRequestBody | undefined;
+  /** Where the message was sent from; a send without it is not timed. */
+  timingSurface?: ChatTimingSurface | undefined;
 };
 export type ChatRouteHandoffStart = {
   messageId: SafeId<"chatMessage">;
@@ -260,6 +270,20 @@ const isRejectedChatContinuation = (error: unknown): boolean =>
 const isSettledTurnRefusal = (error: unknown): boolean =>
   hasChatErrorCode(error, CHAT_TURN_NOT_OWNED_ERROR_CODE);
 
+/**
+ * The SDK replays a transport failure as a generic error after its typed
+ * cause reached the page (a refused rejoin ends its stream as a bare
+ * `HTTP error! status: 502`). The typed error already shown stays: losing it
+ * would report an ended session or an admission refusal as a failed send.
+ */
+const keepsShownChatError = (shown: Error | undefined, next: Error): boolean =>
+  (actionAdmissionOutcome(shown) && !actionAdmissionOutcome(next)) ||
+  (chatRefusal(shown) !== null && chatRefusal(next) === null) ||
+  (findChatRequestError(shown) !== undefined &&
+    findChatRequestError(next) === undefined) ||
+  (providerDiagnosticFromThrown(shown) !== undefined &&
+    providerDiagnosticFromThrown(next) === undefined);
+
 const CHAT_RESUME_PROBE_TIMEOUT_MS = 10_000;
 
 /** How often, and how many times, a Stop the server accepted but has not
@@ -335,6 +359,9 @@ export const createChatRuntime = ({
   reloadThread,
   scheduleEmit = scheduleStreamEmit,
 }: CreateChatRuntimeProps): ChatRuntime => {
+  const observeTurnTimings = createChatTurnTimingObserver();
+  observeTurnTimings(initialMessages, performance.now());
+  const sendTiming = createChatSendTiming(getAnalytics);
   const listeners = new Set<() => void>();
   let subscriberCount = 0;
   let replayFloor = activeTurnId === null ? undefined : initialMessages;
@@ -406,6 +433,9 @@ export const createChatRuntime = ({
 
   const setSnapshot = (patch: Partial<ChatRuntimeSnapshot>) => {
     snapshot = { ...snapshot, ...patch };
+    if (patch.messages !== undefined) {
+      observeTurnTimings(snapshot.messages, performance.now());
+    }
     emit();
   };
 
@@ -582,10 +612,16 @@ export const createChatRuntime = ({
           if (response.status === 404) {
             return { type: "transcript", turnId };
           }
+          const refused = response.status === 401 || response.status === 403;
           return await Promise.reject(
             new ChatReconnectError({
-              ...(response.status === 401 || response.status === 403
-                ? { code: "refused" as const }
+              // The server's refusal stays the cause, so the page tells an
+              // ended session (sign in again) from lost access.
+              ...(refused
+                ? {
+                    code: "refused" as const,
+                    cause: await chatResponseError(response),
+                  }
                 : {}),
               message: `Chat resume probe failed (${response.status}).`,
             }),
@@ -618,6 +654,14 @@ export const createChatRuntime = ({
         return panic("Stella chat connection received model messages");
       }
       providerDiagnostic = undefined;
+      if (!isBrowserExtensionBridgeMounted()) {
+        getAnalytics().captureError(
+          new BrowserBridgeUnmountedError({
+            message:
+              "Chat sent without the browser extension bridge mounted; the browser tool is unavailable for this turn",
+          }),
+        );
+      }
       const prepared = Result.try({
         try: () =>
           buildSendRequestBody({
@@ -708,6 +752,9 @@ export const createChatRuntime = ({
         normalizeChatStreamError(error),
         providerDiagnostic,
       );
+      if (keepsShownChatError(snapshot.error, normalized)) {
+        return;
+      }
       onError(normalized);
       setSnapshot({ error: normalized });
     },
@@ -721,15 +768,10 @@ export const createChatRuntime = ({
       }
       if (
         error !== undefined &&
-        ((actionAdmissionOutcome(snapshot.error) &&
-          !actionAdmissionOutcome(error)) ||
-          (chatRefusal(snapshot.error) !== null &&
-            chatRefusal(error) === null) ||
-          (findChatRequestError(snapshot.error) !== undefined &&
-            findChatRequestError(error) === undefined) ||
-          (providerDiagnosticFromThrown(snapshot.error) !== undefined &&
-            providerDiagnosticFromThrown(error) === undefined &&
-            providerDiagnostic === undefined))
+        keepsShownChatError(
+          snapshot.error,
+          withProviderDiagnostic(error, providerDiagnostic),
+        )
       ) {
         return;
       }
@@ -768,11 +810,16 @@ export const createChatRuntime = ({
             ? persisted
             : keepShownRejoinMessages(replayFloor, persisted),
       };
+      observeTurnTimings(snapshot.messages, performance.now());
+      sendTiming.messagesChanged(snapshot.messages);
       emitMessagesChange();
     },
     onSessionGeneratingChange: (sessionGenerating) =>
       setSnapshot({ sessionGenerating }),
-    onStatusChange: (status) => setSnapshot({ status }),
+    onStatusChange: (status) => {
+      sendTiming.statusChanged(status);
+      setSnapshot({ status });
+    },
     tools: [browserTool.tool],
   });
 
@@ -949,6 +996,7 @@ export const createChatRuntime = ({
       };
     }
     startTurn();
+    sendTiming.started(options?.timingSurface, message.id);
     return { messageId: message.id, status: "started", stream };
   };
 
@@ -1227,6 +1275,7 @@ export const createChatRuntime = ({
       // Stopping the request does not stop the extension: a browser command
       // already approved would otherwise keep acting on the page.
       browserTool.cancel();
+      sendTiming.abandoned();
       const stoppedTurn = turnId;
       if (stoppedTurn === null && isTurnActive()) {
         // Delivery cancellation no longer ends the accepted server turn.
@@ -1253,7 +1302,10 @@ export const createChatRuntime = ({
       setSnapshot({ stop: { status: "pending", turnId: stoppedTurn } });
       detached(settleStop(stoppedTurn), "chat-runtime.stop");
     },
-    leave: closeRequest,
+    leave: () => {
+      sendTiming.abandoned();
+      closeRequest();
+    },
     subscribe: (listener) => {
       listeners.add(listener);
       subscriberCount += 1;
@@ -1261,7 +1313,13 @@ export const createChatRuntime = ({
       return () => {
         listeners.delete(listener);
         subscriberCount -= 1;
-        if (subscriberCount === 0) {
+        // TanStack's detach aborts an open request, and a run this client
+        // sent itself leaves no resume pointer for the next attach to
+        // rejoin: the runtime would keep generating with only what it had
+        // shown. So the last view going (a route handoff's destination
+        // remounting, a move between surfaces) leaves an open request to
+        // end with its turn; `leave` is what drops delivery on purpose.
+        if (subscriberCount === 0 && !client.getIsLoading()) {
           client.detach();
         }
       };

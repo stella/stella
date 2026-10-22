@@ -55,7 +55,7 @@ const inboundDomain = "inbound.example.test";
 const organizationId = mintAuthProviderId<"organization">();
 const memberId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
-const token = generateInboundAddressToken();
+const token = generateInboundAddressToken({ userId: null });
 
 const message = (from: string, messageId: string) =>
   new TextEncoder().encode(

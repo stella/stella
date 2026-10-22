@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "hungarian-decision": {
+    load: async () => {
+      const { HungarianDecisionPlayground } =
+        await import("./-components/hungarian-decision-playground");
+      return { default: HungarianDecisionPlayground };
+    },
+  },
   "table-chart": {
     load: async () => {
       const { TableChartPlayground } =
@@ -40,6 +47,20 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "chat-status": {
+    load: async () => {
+      const { ChatStatusPlayground } =
+        await import("./-components/chat-status-playground");
+      return { default: ChatStatusPlayground };
+    },
+  },
+  "chat-citations": {
+    load: async () => {
+      const { ChatCitationsPlayground } =
+        await import("./-components/chat-citations-playground");
+      return { default: ChatCitationsPlayground };
+    },
+  },
   "chat-link-icons": {
     load: async () => {
       const { ChatLinkIconsPlayground } =
@@ -52,6 +73,13 @@ const visualLoaders = {
       const { ReaderAnswersPlayground } =
         await import("./-components/reader-answers-playground");
       return { default: ReaderAnswersPlayground };
+    },
+  },
+  "reader-selection": {
+    load: async () => {
+      const { ReaderSelectionPlayground } =
+        await import("./-components/reader-selection-playground");
+      return { default: ReaderSelectionPlayground };
     },
   },
   "chat-history-decision": {

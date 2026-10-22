@@ -54,7 +54,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { readReferenceHolders } from "@/api/tests/helpers/citation-reference-holders";
 import type { StoredReference } from "@/api/tests/helpers/citation-reference-holders";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createTestPglite,
+  rebuildTestPublicLawViews,
+} from "@/api/tests/pglite-test-db";
 
 type Db = ReturnType<typeof drizzle>;
 
@@ -713,11 +716,13 @@ const openMatrix = async (
   const client = await createTestPglite();
   const db = drizzle({ client });
   if (decisionTypeCollation !== null) {
-    await db.execute(
-      sql.raw(
-        `ALTER TABLE case_law_decisions ALTER COLUMN decision_type TYPE varchar(128) COLLATE "${decisionTypeCollation}"`,
-      ),
-    );
+    await rebuildTestPublicLawViews(client, async () => {
+      await db.execute(
+        sql.raw(
+          `ALTER TABLE case_law_decisions ALTER COLUMN decision_type TYPE varchar(128) COLLATE "${decisionTypeCollation}"`,
+        ),
+      );
+    });
   }
   await db.insert(caseLawSources).values({
     id: sourceId,

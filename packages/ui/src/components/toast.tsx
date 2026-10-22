@@ -12,6 +12,7 @@ import {
   TriangleAlertIcon,
   XIcon,
 } from "../icons";
+import { SAFE_AREA_TOAST_GEOMETRY_CLASS_NAME } from "../lib/safe-area";
 import { cn } from "../lib/utils";
 import { buttonVariants } from "./button";
 import { Loader } from "./loader";
@@ -103,7 +104,12 @@ const stellaToast: ToastApi = Object.assign(
     addToast(title, undefined, options),
   {
     add: (options: ToastAddOptions) =>
-      toastManager.add(normalizeToastAddOptions(options)),
+      toastManager.add(
+        normalizeToastAddOptions({
+          ...options,
+          id: options.id ?? toastDedupeId(options),
+        }),
+      ),
     close: (id?: string) => {
       toastManager.close(id);
     },
@@ -172,6 +178,11 @@ const ToastProvider = ({
 const Toasts = ({ position }: { position: ToastPosition }) => {
   const { toasts } = Toast.useToastManager<ToastData>();
   const isTop = position.startsWith("top");
+  const windowFocused = React.useSyncExternalStore(
+    subscribeWindowFocus,
+    readWindowFocus,
+    readServerWindowFocus,
+  );
 
   return (
     <Toast.Portal data-slot="toast-portal">
@@ -182,24 +193,20 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
           // glass, and above dialogs (z-[85]) so a toast raised by a dialog's
           // own action stays readable; still below actively-open context
           // menus (z-[100]). See @stll/ui/overlay-layer for the ladder.
-          "fixed z-[90] mx-auto flex w-[calc(100%-var(--toast-inset)*2)] max-w-90 [--toast-inset:--spacing(4)] sm:[--toast-inset:--spacing(8)]",
-          "md:data-[position*=right]:w-[calc(100%-var(--toast-inset)*2-min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
-          // Vertical positioning
-          "data-[position*=top]:top-(--toast-inset)",
-          "data-[position*=bottom]:bottom-(--toast-inset)",
-          // Horizontal positioning
-          "data-[position*=left]:start-(--toast-inset)",
-          "data-[position*=right]:end-(--toast-inset)",
-          "md:data-[position*=right]:end-[calc(var(--toast-inset)+min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
-          "data-[position*=center]:left-1/2 data-[position*=center]:-translate-x-1/2",
+          "fixed z-[90] mx-auto flex max-w-90 [--toast-inset:--spacing(4)] sm:[--toast-inset:--spacing(8)]",
+          SAFE_AREA_TOAST_GEOMETRY_CLASS_NAME,
+          // Vertical positioning, clear of the status bar and home indicator
+          "data-[position*=top]:top-[calc(var(--toast-inset)+var(--safe-area-top))]",
+          "data-[position*=bottom]:bottom-[calc(var(--toast-inset)+var(--safe-area-bottom))]",
         )}
         data-position={position}
         data-slot="toast-viewport"
+        data-window-blurred={windowFocused ? undefined : ""}
       >
         {toasts.map((toastItem) => (
           <Toast.Root
             className={cn(
-              "bg-popover text-popover-foreground absolute z-[calc(9999-var(--toast-index))] h-(--toast-calc-height) w-full rounded-lg border shadow-lg/5 [transition:transform_.5s_var(--ease-smooth),opacity_.5s,height_.15s] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] motion-reduce:transition-none dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+              "bg-popover text-popover-foreground absolute z-[calc(9999-var(--toast-index))] h-(--toast-calc-height) w-full rounded-lg border shadow-lg/5 [transition:transform_300ms_var(--ease-out),opacity_300ms_var(--ease-out),height_150ms_var(--ease-out)] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:[transition-duration:200ms,200ms,150ms] motion-reduce:transition-none dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
               // Base positioning using data-position
               "data-[position*=right]:start-auto data-[position*=right]:end-0",
               "data-[position*=left]:start-0 data-[position*=left]:end-auto",
@@ -292,11 +299,41 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
                   <XIcon className="size-4" />
                 </Toast.Close>
               </div>
+              <ToastCountdown toast={toastItem} />
             </Toast.Content>
           </Toast.Root>
         ))}
       </Toast.Viewport>
     </Toast.Portal>
+  );
+};
+
+/**
+ * A faint line along the bottom edge that shrinks over the toast's lifetime
+ * and holds still whenever Base UI holds the timer (hover, focus, blurred
+ * window). Keyed on `updateKey`, so a refreshed toast starts it again.
+ */
+const ToastCountdown = ({
+  toast,
+}: {
+  toast: {
+    timeout?: number | undefined;
+    type?: string | undefined;
+    updateKey?: number | undefined;
+  };
+}) => {
+  const countdownMs = toastCountdownMs(toast);
+  if (countdownMs === undefined) {
+    return null;
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="bg-foreground/10 animate-toast-countdown pointer-events-none absolute inset-x-3 bottom-1 h-0.5 rounded-full in-data-expanded:[animation-play-state:paused] in-data-window-blurred:[animation-play-state:paused] motion-reduce:hidden ltr:origin-left rtl:origin-right"
+      data-slot="toast-countdown"
+      key={toast.updateKey ?? 0}
+      style={{ animationDuration: `${String(countdownMs)}ms` }}
+    />
   );
 };
 
@@ -405,14 +442,74 @@ function addToast(
   type: ToastType | undefined,
   options?: ToastOptions,
 ) {
+  const addOptions = { ...options, title, type };
   return toastManager.add(
     normalizeToastAddOptions({
-      ...options,
-      title,
-      type,
+      ...addOptions,
+      id: addOptions.id ?? toastDedupeId(addOptions),
     }),
   );
 }
+
+/**
+ * The same message raised again refreshes the toast already on screen (and
+ * restarts its timer) instead of stacking a copy. Only plain-text messages
+ * without an action merge: an action belongs to the call that raised it, and
+ * a loading toast is owned by the promise that will settle it.
+ */
+function toastDedupeId({
+  action,
+  actionProps,
+  description,
+  title,
+  type,
+}: Pick<
+  ToastAddOptions,
+  "action" | "actionProps" | "description" | "title" | "type"
+>): string | undefined {
+  if (
+    type === "loading" ||
+    action !== undefined ||
+    actionProps !== undefined ||
+    typeof title !== "string" ||
+    (description !== undefined &&
+      description !== null &&
+      typeof description !== "string")
+  ) {
+    return undefined;
+  }
+  return `toast-dedupe:${JSON.stringify([type ?? "neutral", title, description ?? ""])}`;
+}
+
+/**
+ * How long the countdown runs, or `undefined` when the toast stays until
+ * dismissed (errors, loading, timeout 0).
+ */
+function toastCountdownMs({
+  timeout,
+  type,
+}: {
+  timeout?: number | undefined;
+  type?: string | undefined;
+}): number | undefined {
+  return type === "loading" || timeout === undefined || timeout <= 0
+    ? undefined
+    : timeout;
+}
+
+// Base UI pauses toast timers while the window is blurred; the countdown bar
+// pauses with them. The viewport's hover and focus pause shows as
+// `data-expanded` on each toast.
+const subscribeWindowFocus = (onChange: () => void) => {
+  window.addEventListener("focus", onChange);
+  window.addEventListener("blur", onChange);
+  return () => {
+    window.removeEventListener("focus", onChange);
+    window.removeEventListener("blur", onChange);
+  };
+};
+const readWindowFocus = () => document.hasFocus();
+const readServerWindowFocus = () => true;
 
 function normalizeToastAddOptions({
   action,
@@ -592,4 +689,6 @@ export {
   TOAST_RIGHT_OFFSET_VAR,
   stellaToast,
   AnchoredToastProvider,
+  toastCountdownMs,
+  toastDedupeId,
 };

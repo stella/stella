@@ -719,6 +719,69 @@ describe("runCapabilityCommand: reserved flag values", () => {
 });
 
 describe("runCapabilityCommand: output contract", () => {
+  test("JSON output preserves full and partial case-law matches and their warning", async () => {
+    const payload = {
+      results: [
+        { decisionId: "decision-1", match: "all_terms" },
+        { decisionId: "decision-2", match: "some_terms" },
+      ],
+      searches: [{ warnings: [{ code: "partial_matches_appended" }] }],
+      nextCursor: null,
+    };
+    const server = startServer({ kind: "pages", pages: [payload] });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { output: "json" },
+      spec: capSpec({
+        capabilityId: "case-law.decisions.search",
+        itemsKey: "results",
+      }),
+    });
+    server.stop();
+    expect(tty.exitCode()).toBeUndefined();
+    expect(JSON.parse(tty.stdoutText())).toEqual(payload);
+  });
+
+  test("typed country unavailability preserves its domain and recovery guidance in machine and human output", async () => {
+    const unavailable = {
+      code: "public_country_unavailable",
+      status: "unavailable",
+      domain: "legislation",
+      country: "SVK",
+      reason: "pending_public",
+      message: "Legislation for this country is not publicly available yet.",
+      hint: "Choose a country with public legislation search: CZE.",
+    };
+    for (const output of ["json", "jsonl", "table"] as const) {
+      const server = startServer({ kind: "pages", pages: [unavailable] });
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: output === "table",
+      });
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { output },
+        spec: capSpec({ capabilityId: "legislation.search" }),
+      });
+      server.stop();
+      if (output === "table") {
+        expect(tty.stdoutText()).toContain("domain");
+        expect(tty.stdoutText()).toContain(unavailable.domain);
+        expect(tty.stdoutText()).toContain(unavailable.message);
+        expect(tty.stdoutText()).toContain(unavailable.hint);
+      } else {
+        expect(JSON.parse(tty.stdoutText())).toEqual(unavailable);
+      }
+      expect(tty.stderrText()).toBe("");
+      expect(tty.exitCode()).toBeUndefined();
+    }
+  });
   test("a page under `result` renders as a table with its resume cursor", async () => {
     const server = startServer({
       kind: "pages",

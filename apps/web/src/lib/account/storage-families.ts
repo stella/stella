@@ -198,6 +198,14 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     owner: "scoped",
     retention: "cleared",
   },
+  // Restored inspector tabs that have not yet settled in this tab: a
+  // short-lived safety flag, gone when its owner leaves.
+  {
+    area: "session",
+    prefix: "stella:inspector-restore-pending:v1:",
+    owner: "scoped",
+    retention: "cleared",
+  },
   // Whether the inspector is minimized: a layout choice.
   {
     area: "local",

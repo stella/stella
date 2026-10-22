@@ -51,6 +51,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/lib/analytics/tanstack-ai",
   "@/lib/errors/action-admission",
   "@/lib/errors/action-admission-response",
+  "@/lib/errors/ai-failure",
   "@/lib/errors/api",
   "@/lib/errors/api-tag",
   "@/lib/errors/auth",

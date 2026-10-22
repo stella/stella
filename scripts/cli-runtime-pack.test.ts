@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -53,6 +54,7 @@ const EXPORTED_PATHS = [
   // Historical base revisions still import the root metadata.
   "scripts/generated-files.ts",
 ];
+const COMPILER_WRAPPER = "packages/scripts/src/tsc-native.ts";
 // The exported tree is parameterized; bind its source scope to the same
 // export inventory so unresolved scans retain named package checks.
 export const CI_MARKDOWN_READER_INPUTS = EXPORTED_PATHS;
@@ -110,7 +112,7 @@ test("fresh CLI export includes preparation metadata imports", () => {
     missingPreparationImports(
       EXPORTED_PATHS.filter((file) => file !== "packages/scripts"),
     ),
-  ).toContain("packages/scripts/src/generated-files.ts");
+  ).toContain("packages/scripts/src/generated-file-inventory.ts");
 });
 
 const Sha = v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/u));
@@ -183,6 +185,14 @@ const exportRevision = (root: string, revision: string): Tree => {
     path.join(REPO_ROOT, "node_modules"),
     path.join(root, "node_modules"),
     "dir",
+  );
+  // The compiler wrapper resolves the compiler inside node_modules, which every
+  // export shares with the checkout, so it comes from the checkout too: an
+  // older revision's wrapper can name a compiler path that is no longer
+  // installed.
+  copyFileSync(
+    path.join(REPO_ROOT, COMPILER_WRAPPER),
+    path.join(root, COMPILER_WRAPPER),
   );
   return { root, revision };
 };
@@ -498,6 +508,34 @@ describe("generated imports", () => {
     expect(
       scan({ source: 'import type { R } from "./generated/runtime.js";' }),
     ).toEqual([]);
+  });
+
+  test("canonical preparation derives a package import only through its pack lifecycle", () => {
+    const prepared = {
+      ...derived,
+      write: ["bun", "scripts/probe.ts"],
+      prepare: ["bun", "--cwd=packages/probe", "run", "build"],
+    } as const satisfies Generator;
+    const scanPrepared = (scripts: Record<string, string>) =>
+      findUnbuildableGeneratedImports({
+        trackedFiles: ["packages/probe/package.json", importer],
+        readSource: () => 'import "./generated/runtime.js";',
+        readScripts: () => scripts,
+        generators: [prepared],
+      });
+    expect(
+      scanPrepared({
+        prepack: "bun run build",
+        build: "bun ../../scripts/probe.ts",
+      }),
+    ).toEqual([]);
+    expect(scanPrepared({ build: "bun ../../scripts/probe.ts" })).toEqual([
+      {
+        importer,
+        specifier: "./generated/runtime.js",
+        missing: "packages/probe/src/generated/runtime.ts",
+      },
+    ]);
   });
 
   test("a derived module whose script prepack never reaches is not", () => {

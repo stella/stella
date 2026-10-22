@@ -1,11 +1,11 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import { CI_GENERATED_FILES } from "./generated-files";
+import { ciGeneratedFiles } from "./generated-file-inventory";
 import {
   generatedInputGit,
   generatedInputTreeHash,
@@ -28,7 +28,8 @@ export const generatedInputIdentity = (root: string) => {
     v.object({ version: v.string() }),
     JSON.parse(
       readFileSync(
-        path.join(root, "node_modules/typescript/package.json"),
+        // The generators run on the TypeScript 6 compiler API.
+        path.join(root, "node_modules/typescript6/package.json"),
         "utf-8",
       ),
     ),
@@ -123,8 +124,8 @@ export const validatePreparedManifest = (root: string, raw: unknown) => {
     panic("Generated source artifact does not match this source and toolchain");
   }
   if (
-    Object.keys(manifest.files).length !== CI_GENERATED_FILES.length ||
-    CI_GENERATED_FILES.some((file) => !Object.hasOwn(manifest.files, file))
+    Object.keys(manifest.files).length !== ciGeneratedFiles(root).length ||
+    ciGeneratedFiles(root).some((file) => !Object.hasOwn(manifest.files, file))
   ) {
     panic("Generated source artifact has an incomplete output inventory");
   }
@@ -136,7 +137,7 @@ export const preparedManifestPath = (root: string) =>
 
 export const verifyPreparedGeneratedFiles = (root: string, raw: unknown) => {
   const manifest = validatePreparedManifest(root, raw);
-  for (const file of CI_GENERATED_FILES) {
+  for (const file of ciGeneratedFiles(root)) {
     if (
       generatedFileHash(readFileSync(path.join(root, file))) !==
       manifest.files[file]
@@ -145,6 +146,45 @@ export const verifyPreparedGeneratedFiles = (root: string, raw: unknown) => {
     }
   }
   return manifest;
+};
+
+/**
+ * The producer's bytes of one generated file, when this checkout's prepared
+ * manifest belongs to the current source and toolchain and the file on disk
+ * still has the bytes the producer recorded; otherwise undefined, never an
+ * error. Unlike hasPreparedGeneratedSources it ignores
+ * CI_GENERATED_SOURCES_MANIFEST, which regeneration guards clear for the rest
+ * of their job: it answers only whether an independent printout is on disk.
+ */
+export const preparedGeneratedFile = (
+  root: string,
+  file: string,
+): Uint8Array | undefined => {
+  const raw = Result.try((): unknown =>
+    JSON.parse(readFileSync(preparedManifestPath(root), "utf-8")),
+  );
+  if (Result.isError(raw)) {
+    return undefined;
+  }
+  const manifest = v.safeParse(preparedManifestSchema, raw.value);
+  if (!manifest.success) {
+    return undefined;
+  }
+  const expected = generatedInputIdentity(root);
+  const recorded = manifest.output.files[file];
+  if (
+    recorded === undefined ||
+    manifest.output.sourceSha !== expected.sourceSha ||
+    manifest.output.inputHash !== expected.inputHash ||
+    manifest.output.bunVersion !== expected.bunVersion ||
+    manifest.output.compilerVersion !== expected.compilerVersion
+  ) {
+    return undefined;
+  }
+  const bytes = Result.try(() => readFileSync(path.join(root, file)));
+  return Result.isOk(bytes) && generatedFileHash(bytes.value) === recorded
+    ? bytes.value
+    : undefined;
 };
 
 export const hasPreparedGeneratedSources = (root: string) => {
@@ -172,7 +212,7 @@ export const restorePreparedGeneratedSources = (
   );
   // Validate every byte before writing any output; only the canonical inventory
   // can name a destination in the checkout.
-  const files = CI_GENERATED_FILES.map((file) => {
+  const files = ciGeneratedFiles(root).map((file) => {
     const bytes = readFileSync(path.join(source, "files", file));
     if (generatedFileHash(bytes) !== manifest.files[file]) {
       panic(`Generated source artifact differs: ${file}`);

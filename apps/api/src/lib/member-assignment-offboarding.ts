@@ -32,6 +32,7 @@ import {
   flowDefinitions,
   flowRunSteps,
   mcpUserConnections,
+  chatToolGrants,
   sharepointConnections,
   sharepointOAuthState,
   mcpOAuthState,
@@ -1408,6 +1409,36 @@ const clearMemberPresence = async ({
   });
 };
 
+type ValidateMemberReplacementOptions = Pick<
+  RemoveOrganizationMemberOptions,
+  "tx" | "organizationId" | "userId" | "reassignTo"
+>;
+
+const validateMemberReplacement = async ({
+  tx,
+  organizationId,
+  userId,
+  reassignTo,
+}: ValidateMemberReplacementOptions) => {
+  if (reassignTo) {
+    const replacement = await tx.query.member.findFirst({
+      columns: { id: true },
+      where: {
+        organizationId: { eq: organizationId },
+        userId: { eq: reassignTo },
+      },
+    });
+    if (reassignTo === userId || replacement === undefined) {
+      abortTransaction(
+        new HandlerError({
+          status: 400,
+          message: "User is not a member of this organization",
+        }),
+      );
+    }
+  }
+};
+
 /**
  * Better Auth's permission/owner checks precede this transactional operation.
  * The membership row, its credentials and every assignment leave in the
@@ -1438,23 +1469,7 @@ export const removeOrganizationMemberInTransaction = async (
   if (Result.isError(timerClose)) {
     abortTransaction(timerClose.error);
   }
-  if (reassignTo) {
-    const replacement = await tx.query.member.findFirst({
-      columns: { id: true },
-      where: {
-        organizationId: { eq: organizationId },
-        userId: { eq: reassignTo },
-      },
-    });
-    if (reassignTo === userId || replacement === undefined) {
-      abortTransaction(
-        new HandlerError({
-          status: 400,
-          message: "User is not a member of this organization",
-        }),
-      );
-    }
-  }
+  await validateMemberReplacement({ tx, organizationId, userId, reassignTo });
   const ledMatters = await tx
     .select({ id: workspaces.id })
     .from(workspaces)
@@ -1558,6 +1573,14 @@ export const removeOrganizationMemberInTransaction = async (
       ),
     );
   await tx
+    .delete(chatToolGrants)
+    .where(
+      and(
+        eq(chatToolGrants.organizationId, organizationId),
+        eq(chatToolGrants.userId, userId),
+      ),
+    );
+  await tx
     .delete(mcpOAuthState)
     .where(
       and(
@@ -1582,7 +1605,6 @@ export const removeOrganizationMemberInTransaction = async (
         eq(invitation.status, "pending"),
       ),
     );
-
   await tx
     .delete(workspaceMembers)
     .where(
@@ -1649,6 +1671,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [mcpOAuthState.userId, "cleared"],
   [sharepointConnections.userId, "cleared"],
   [sharepointOAuthState.userId, "cleared"],
+  [chatToolGrants.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],
   // Revoked by `removeOrganizationMemberWithAuthArtifacts`.

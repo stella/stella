@@ -13,7 +13,7 @@ import { sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -606,6 +606,7 @@ describe("duplicate name collisions", () => {
           });
         },
       ),
+      propertyConfig({ numRuns: 24 }),
     );
   });
 });

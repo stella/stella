@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
@@ -177,7 +177,7 @@ test("the Postgres search narrows to decisions citing the provision, level by le
   await client.close();
 }, 60_000);
 
-test("the provision scope is the whole citing set while it fits, else its exact size", async () => {
+test("the provision scope includes only published redistributable decisions in its set and exact size", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client });
   const sourceId = createSafeId<"caseLawSource">();
@@ -192,6 +192,19 @@ test("the provision scope is the whole citing set while it fits, else its exact 
     decisionDate: "2020-01-01",
   }));
   await db.insert(caseLawDecisions).values(decisions);
+  const restrictedSourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values(
+    caseLawSourceRow({
+      id: restrictedSourceId,
+      adapterKey: "restricted-provision",
+      descriptor: {
+        allowsDerivedAi: false,
+        allowsRedistribution: false,
+        attribution: null,
+        license: "restricted",
+      },
+    }),
+  );
   // Two links in one decision count it once; the third decision cites
   // another subsection.
   const link = (
@@ -219,6 +232,32 @@ test("the provision scope is the whole citing set while it fits, else its exact 
   if (first === undefined || second === undefined || third === undefined) {
     throw new Error("expected three decisions");
   }
+  const excludedDecisions = [
+    {
+      ...first,
+      id: createSafeId<"caseLawDecision">(),
+      caseNumber: "listing-only",
+      metadata: {
+        _stellaPartialObservation: {
+          caseNumberIsPlaceholder: false,
+          isListingOnly: true,
+        },
+      },
+    },
+    {
+      ...first,
+      id: createSafeId<"caseLawDecision">(),
+      caseNumber: "redacted",
+      redactedAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+    {
+      ...first,
+      id: createSafeId<"caseLawDecision">(),
+      caseNumber: "restricted-source",
+      sourceId: restrictedSourceId,
+    },
+  ];
+  await db.insert(caseLawDecisions).values(excludedDecisions);
   await db
     .insert(caseLawProvisionCitations)
     .values([
@@ -226,7 +265,14 @@ test("the provision scope is the whole citing set while it fits, else its exact 
       link(first.id, "2", 40),
       link(second.id, "2", 10),
       link(third.id, "1", 10),
+      ...excludedDecisions.map(({ id }) => link(id, "2", 10)),
     ]);
+  const [storedScope] = await db
+    .select({
+      count: sql<number>`count(DISTINCT ${caseLawProvisionCitations.decisionId})::int`,
+    })
+    .from(caseLawProvisionCitations);
+  expect(storedScope?.count).toBe(6);
   const read = async (provision: CaseLawProvisionFilter, idSetMax?: number) =>
     await withPublicLawReaderRole(db, async (roleTx) => {
       // SAFETY: the role transaction supplies the select surface the read uses.
@@ -257,6 +303,35 @@ test("the provision scope is the whole citing set while it fits, else its exact 
   expect((await read(subsection, 2)).type).toBe("decisions");
   expect(
     await read({ work: "262/2006 Sb.", unit: "section", section: 317 }),
+  ).toEqual({ type: "decisions", decisionIds: [] });
+  await db
+    .update(caseLawDecisions)
+    .set({ country: "SVK" })
+    .where(eq(caseLawDecisions.id, third.id));
+  await db.insert(caseLawProvisionCitations).values(
+    [first.id, third.id].map((decisionId) => ({
+      ...link(decisionId, "1", 80),
+      jurisdiction: "EU",
+      workIdentifier: "32016R0679",
+      euWorkNumber: 679,
+      euWorkYear: 2016,
+      workCollection: "EUR-Lex",
+      workEli: "http://data.europa.eu/eli/reg/2016/679/oj",
+      unit: "article" as const,
+      section: 6,
+      anchor: "art_6-par_1",
+    })),
+  );
+  const euScope = await read({
+    jurisdiction: "EU",
+    work: "32016R0679",
+    unit: "article",
+    section: 6,
+  });
+  expect(euScope).toEqual({ type: "decisions", decisionIds: [first.id] });
+  // The same work token in a national filter cannot reach EU links.
+  expect(
+    await read({ work: "32016R0679", unit: "article", section: 6 }),
   ).toEqual({ type: "decisions", decisionIds: [] });
   await client.close();
 }, 60_000);

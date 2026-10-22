@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/stella/stella/releases"><img src="https://img.shields.io/github/v/release/stella/stella?include_prereleases&label=release" alt="Latest release" /></a>
+  <a href="https://github.com/stella/stella/releases"><img src="https://img.shields.io/github/v/release/stella/stella?filter=v*&label=release" alt="Latest release" /></a>
   <a href="https://github.com/stella/stella/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
   <a href="https://stll.app"><img src="https://img.shields.io/badge/cloud-stll.app-black" alt="stella cloud" /></a>
   <a href="https://github.com/stella/stella/issues"><img src="https://img.shields.io/github/issues/stella/stella" alt="Issues" /></a>
@@ -25,7 +25,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/story-public-data-1-dark.png" />
-    <img src="apps/landing/public/media/products/story-public-data-1.png" alt="stella's case-law reader open on a Czech Supreme Court judgment, 27 Cdo 59/2022, on a company director's statutory guarantee to creditors. The decision's numbered paragraphs fill the centre with a reader's highlight and underline; the margin shows an AI note on the issue and a lawyer's comment; the chat on the right answers whether a creditor must first make the company demand compensation, citing the decision." width="100%" />
+    <img src="apps/landing/public/media/products/story-public-data-1.png" alt="stella's case-law reader open on a Czech Supreme Court judgment, 27 Cdo 59/2022, on a company director's statutory guarantee to creditors. The decision's numbered paragraphs fill the centre with a reader's highlight and underline; the margin shows an AI note on the issue and a lawyer's comment; the two-turn chat on the right answers whether a creditor must first make the company demand compensation from its director, citing the decision." width="100%" />
   </picture>
   <br /><sub><b>Case law</b> from public sources: read the decision, mark it up, and ask questions answered from its own paragraphs.</sub>
 </p>

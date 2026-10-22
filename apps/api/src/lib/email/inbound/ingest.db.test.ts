@@ -54,8 +54,8 @@ const snapshotUserId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
 const otherWorkspaceId = createSafeId<"workspace">();
 const mailboxId = createSafeId<"correspondenceAllowedSender">();
-const token = generateInboundAddressToken();
-const otherToken = generateInboundAddressToken();
+const token = generateInboundAddressToken({ userId: null });
+const otherToken = generateInboundAddressToken({ userId: null });
 const receivedAt = "2026-09-26T12:00:00.000Z";
 let db: GatedTestDb;
 const fixtureScoped = () =>
@@ -369,7 +369,7 @@ if (!databaseUrl || !runPostgresTests) {
           receipt: {
             ...event.receipt,
             recipients: [
-              `${generateInboundAddressToken()}@inbound.example.test`,
+              `${generateInboundAddressToken({ userId: null })}@inbound.example.test`,
             ],
           },
         },

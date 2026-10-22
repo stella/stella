@@ -36,7 +36,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -57,8 +59,8 @@ import {
   type GlobalSearchHit,
   type GlobalSearchResultType,
 } from "@/api/lib/search/types";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 const SEARCH_SUMMARY_RESULT_LIMIT = 5;
 const SEARCH_CONTEXT_CHARS_PER_RESULT = 3000;
@@ -246,6 +248,7 @@ const citableSummaryTypes = (
 };
 
 type SearchSummaryChatContext = {
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   accessibleWorkspaceIds: SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
@@ -337,9 +340,10 @@ const generateRefinedSearchQuery = async ({
 }: GenerateRefinedSearchQueryOptions) =>
   await Result.tryPromise({
     try: async () =>
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
-        role: "fast",
+        task: "short-text",
         serviceTier: "standard",
         orgAIConfig,
         managedAIResidency,
@@ -358,7 +362,7 @@ const generateRefinedSearchQuery = async ({
         }),
         outputSchema: refineSearchOutputSchema,
         maxOutputTokens: 180,
-        abortSignal: AbortSignal.timeout(20_000),
+        deadlineMs: 20_000,
       }),
     catch: (error: unknown) => error,
   });
@@ -377,11 +381,11 @@ export const refineSearchQuery = async ({
 }: SearchAIContext & {
   body: RefineSearchBody;
 }) => {
-  const gate = requireTanStackAIAvailableForRole({
+  const gate = requireTanStackAIAvailableForTask({
     dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
-    role: "fast",
+    task: "short-text",
   });
   if (gate.isErr()) {
     return status(gate.error.status, { message: gate.error.message });
@@ -398,7 +402,7 @@ export const refineSearchQuery = async ({
       workspaceId: null,
     },
     feature: "search.refine",
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: { organization_id: organizationId },
@@ -419,7 +423,7 @@ export const refineSearchQuery = async ({
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
-        role: "fast",
+        task: "short-text",
         scopeKey: null,
       }),
     });
@@ -476,11 +480,11 @@ export const summarizeSearchResults = async ({
 }: SearchSummaryContext & {
   body: SummarizeSearchBody;
 }) => {
-  const gate = requireTanStackAIAvailableForRole({
+  const gate = requireTanStackAIAvailableForTask({
     dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
-    role: "fast",
+    task: "short-text",
   });
   if (gate.isErr()) {
     return status(gate.error.status, { message: gate.error.message });
@@ -524,7 +528,7 @@ export const summarizeSearchResults = async ({
       workspaceId: null,
     },
     feature: "search.summary",
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: {
@@ -536,9 +540,10 @@ export const summarizeSearchResults = async ({
 
   const result = await Result.tryPromise({
     try: async () =>
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
-        role: "fast",
+        task: "short-text",
         serviceTier: "standard",
         orgAIConfig,
         managedAIResidency,
@@ -548,7 +553,7 @@ export const summarizeSearchResults = async ({
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "fast",
+          task: "short-text",
           scopeKey: null,
         }),
         system: SEARCH_SUMMARY_SYSTEM,
@@ -560,7 +565,7 @@ export const summarizeSearchResults = async ({
         }),
         outputSchema: searchSummaryOutputSchema,
         maxOutputTokens: 700,
-        abortSignal: AbortSignal.timeout(30_000),
+        deadlineMs: 30_000,
       }),
     catch: (error: unknown) => error,
   });
@@ -641,6 +646,7 @@ const resolveSummaryCitations = ({
 };
 
 export const createSearchSummaryChatThread = async ({
+  featureAccessSnapshot,
   accessibleWorkspaceIds,
   body,
   organizationId,
@@ -733,6 +739,12 @@ export const createSearchSummaryChatThread = async ({
       createdAt: now,
       updatedAt: now,
     });
+    const memoryEnabled =
+      featureAccessSnapshot !== undefined &&
+      isFeatureEnabled(featureAccessSnapshot, AI_MEMORY_FEATURE_ID, {
+        organizationId,
+        userId,
+      });
     await tx.insert(chatMessages).values([
       {
         id: userMessageId,
@@ -744,8 +756,7 @@ export const createSearchSummaryChatThread = async ({
           version: 3,
           data: [{ type: "text", content: userText }],
         }),
-        memoryExtractionEligible:
-          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+        memoryExtractionEligible: memoryEnabled,
         createdAt: now,
       },
       {
@@ -762,8 +773,7 @@ export const createSearchSummaryChatThread = async ({
             sourceDocuments: citedContexts.flatMap(toChatSourceDocuments),
           },
         }),
-        memoryExtractionEligible:
-          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+        memoryExtractionEligible: memoryEnabled,
         createdAt: new Date(now.getTime() + 1),
       },
     ]);

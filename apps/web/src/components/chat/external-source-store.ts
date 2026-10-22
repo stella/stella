@@ -22,7 +22,6 @@ export type CaseLawDecisionSourceReference = {
 };
 
 export type ExternalSourceReference = {
-  appUrl?: string | undefined;
   sourceUrl?: string | undefined;
   businessRegistry?: BusinessRegistrySourceReference | undefined;
   caseLawDecision?: CaseLawDecisionSourceReference | undefined;
@@ -66,14 +65,19 @@ export const useExternalSourceStore = create<ExternalSourceState>()(
           const merged = {
             ...existing,
             ...source,
-            appUrl: source.appUrl ?? existing?.appUrl,
+            // A publisher-only refresh enriches the citation without replacing its reader.
+            url:
+              existing?.sourceUrl !== undefined &&
+              sourceKey(source.url) === sourceKey(existing.sourceUrl)
+                ? existing.url
+                : source.url,
             sourceUrl: source.sourceUrl ?? existing?.sourceUrl,
             businessRegistry:
               source.businessRegistry ?? existing?.businessRegistry,
             caseLawDecision:
               source.caseLawDecision ?? existing?.caseLawDecision,
           };
-          for (const url of [source.url, source.appUrl, source.sourceUrl]) {
+          for (const url of [source.url, merged.url, merged.sourceUrl]) {
             if (url !== undefined) {
               sourcesByUrl[sourceKey(url)] = merged;
             }

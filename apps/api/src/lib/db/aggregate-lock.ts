@@ -50,12 +50,16 @@ import { isRecord } from "@/api/lib/type-guards";
 
 /** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = {
+  account: { rank: -20, kind: "row" },
+  accountExport: { rank: -10, kind: "row" },
   organization: { rank: 0, kind: "row" },
   professionalUseAcceptance: { rank: 5, kind: "advisory" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
   definition: { rank: 40, kind: "row" },
+  // Public-corpus work fence is taken before its legacy projection/expression locks.
+  legislationAmendmentWork: { rank: 50, kind: "advisory" },
   scoutCensus: { rank: 60, kind: "row" },
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
@@ -69,9 +73,11 @@ export const AGGREGATE_LOCKS = {
   readerAnswerMessage: { rank: 130, kind: "row" },
   chatTurn: { rank: 130, kind: "row" },
   chatSecret: { rank: 140, kind: "row" },
+  chatToolGrants: { rank: 150, kind: "advisory" },
   run: { rank: 200, kind: "row" },
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
+  folioCollabRoom: { rank: 450, kind: "row" },
   entity: { rank: 500, kind: "row" },
   entityVersion: { rank: 510, kind: "row" },
   field: { rank: 520, kind: "row" },
@@ -139,7 +145,9 @@ export const AGGREGATE_CHAINS = {
     "processingClaim",
   ],
   scoutRun: ["orgFeatureAdmission", "scoutCensus"],
+  legislationAmendments: ["legislationAmendmentWork"],
   chatSecret: ["chatThread", "chatTurn", "chatSecret"],
+  chatToolGrants: ["chatThread", "chatToolGrants"],
   memberPrefix: [
     "workspace",
     "memberCleanup",
@@ -148,11 +156,20 @@ export const AGGREGATE_CHAINS = {
     "obligation",
     "entity",
   ],
+  accountExport: ["account", "accountExport"],
   professionalUseAcceptance: ["professionalUseAcceptance"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   desktopBatch: ["desktopBatch", "workspace"],
   documentSource: [
     "workspace",
+    "entity",
+    "entityVersion",
+    "field",
+    "processingClaim",
+  ],
+  folioPublication: [
+    "workspace",
+    "folioCollabRoom",
     "entity",
     "entityVersion",
     "field",
@@ -204,6 +221,13 @@ const modeCovers = (
 };
 
 type AggregateIdentities = {
+  legislationAmendmentWork: {
+    sourceId: SafeId<"legislationSource">;
+    eli: string;
+    language: string;
+  };
+  account: SafeId<"user">;
+  accountExport: { id: string; userId: SafeId<"user"> };
   sampleCase: { workspaceId: SafeId<"workspace"> };
   organization: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
@@ -276,6 +300,10 @@ type AggregateIdentities = {
   run: { id: SafeId<"flowRun">; workspaceId: SafeId<"workspace"> };
   currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
   obligation: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
+  folioCollabRoom: {
+    id: SafeId<"folioCollabRoom">;
+    workspaceId: SafeId<"workspace">;
+  };
   entity: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
   entityVersion: {
     id: SafeId<"entityVersion">;
@@ -289,6 +317,10 @@ type AggregateIdentities = {
     workspaceId: SafeId<"workspace">;
   };
   contactCapacity: { organizationId: SafeId<"organization"> };
+  chatToolGrants: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
   personalCatalog: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
@@ -767,14 +799,22 @@ const memberCleanupRowResource = (
 };
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
+    case "account":
     case "organization":
       return {
-        table: "organization",
+        table: options.aggregate === "account" ? "user" : "organization",
         columns: ["id"],
         values: [options.id],
         scopeColumns: [],
         scopeValues: [],
       };
+    case "accountExport":
+      return byIdWithin(
+        "account_exports",
+        options.id.id,
+        "user_id",
+        options.id.userId,
+      );
     case "desktopMembership":
       return {
         table: "member",
@@ -834,6 +874,13 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeColumns: ["workspace_id"],
         scopeValues: [options.id.workspaceId],
       };
+    case "folioCollabRoom":
+      return byIdWithin(
+        "folio_collab_rooms",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "entity":
       return byIdWithin(
         "entities",
@@ -1181,6 +1228,17 @@ const rowStatement = (
 };
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
+    case "legislationAmendmentWork":
+      return {
+        first: sql`${0x0f_10_cc_ad}::integer`,
+        second: sql`hashtext(${JSON.stringify([options.id.sourceId, options.id.eli, options.id.language])})`,
+        order: [
+          options.aggregate,
+          options.id.sourceId,
+          options.id.eli,
+          options.id.language,
+        ],
+      };
     case "desktopBatch":
       return {
         first: sql`${0x0f_10_cc_ac}::integer`,
@@ -1215,6 +1273,16 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         first: sql`hashtext('contact_capacity')`,
         second: sql`hashtext(${options.id.organizationId})`,
         order: [options.aggregate, options.id.organizationId],
+      };
+    case "chatToolGrants":
+      return {
+        first: sql`hashtext('chat.tool-grants')`,
+        second: sql`hashtext(${JSON.stringify([options.id.organizationId, options.id.userId])})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.userId,
+        ],
       };
     case "personalCatalog":
       return {

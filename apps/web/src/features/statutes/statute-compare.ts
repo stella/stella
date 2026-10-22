@@ -4,6 +4,7 @@ import type { Result } from "better-result";
 import { provisionHeadingLine } from "@stll/decision-reader/reader-outline";
 import { compareContent } from "@stll/folio-core";
 import type {
+  FolioContentBlock,
   FolioContentComparisonError,
   FolioContentComparisonEvent,
 } from "@stll/folio-core";
@@ -32,14 +33,13 @@ import type {
 } from "@/features/statutes/statute-reader-blocks";
 
 /** What the comparison pairs blocks by: a heading only pairs a heading. */
-type CompareBlockKind = "heading" | "text";
+type CompareBlockKind = Extract<
+  FolioContentBlock["kind"],
+  "heading" | "paragraph"
+>;
 
-type ComparedBlock = {
-  id: string;
-  kind: CompareBlockKind;
-  text: string;
+type ComparedBlock = FolioContentBlock<CompareBlockKind> & {
   idStability: "positional";
-  headingLevel?: number;
   /** The block the reader renders; the comparison itself reads `text`. */
   block: Block;
 };
@@ -57,14 +57,16 @@ const toComparedBlock = (block: Block, index: number): ComparedBlock =>
         kind: "heading",
         text: compareText([block]),
         idStability: "positional",
+        statedNumbering: { kind: "inherit" },
         headingLevel: block.level,
         block,
       }
     : {
         id: `b${index}`,
-        kind: "text",
+        kind: "paragraph",
         text: compareText([block]),
         idStability: "positional",
+        statedNumbering: { kind: "inherit" },
         block,
       };
 

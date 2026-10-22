@@ -34,6 +34,12 @@ import type {
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
+import {
+  authorizeSyntheticSession,
+  readSyntheticSessionAuthority,
+} from "@/api/lib/synthetic-principal/session-authority";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
+import type { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { recoverOrphanedMatterSteward } from "@/api/lib/workspaces/visibility";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -159,8 +165,30 @@ export const bindOwnerReviewAccountOrganizationStore = (
   createStore: typeof createReviewAccountOrganizationStore,
 ) => createStore(rootDb);
 
-type Database = typeof rootDb;
-export type Transaction = TransactionOf<Database>;
+/** The dedicated-session route receives its bounded store, never the owner handle. */
+export const bindOwnerSyntheticSessionStore = (
+  createStore: typeof createSyntheticSessionStore,
+) => createStore(rootDb);
+
+/** Dedicated-session validation receives one bounded owner operation. */
+export const bindOwnerSyntheticSessionAuthorityReader =
+  (
+    readAuthority: typeof readSyntheticSessionAuthority,
+  ): SyntheticSessionAuthorityReader =>
+  async (options) =>
+    await readAuthority(rootDb, options);
+
+/** Request handlers receive the bounded reader, never the owner database. */
+export const ownerSyntheticSessionAuthorityReader =
+  bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
+
+/** Better Auth receives a bounded session decision, never the owner database. */
+export const authorizeOwnerSyntheticSession = async (
+  current: Parameters<typeof authorizeSyntheticSession>[1],
+) => await authorizeSyntheticSession(rootDb, current);
+
+export type RootDatabase = typeof rootDb;
+export type Transaction = TransactionOf<RootDatabase>;
 
 /** The deployment operator receives only audited activity aggregates. */
 export const readOperatorActivitySummary = async (now: number) =>

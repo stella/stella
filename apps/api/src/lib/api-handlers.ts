@@ -4,7 +4,7 @@ import { panic, Result, UnhandledException } from "better-result";
 import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
 import { ElysiaCustomStatusResponse, status, t } from "elysia";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -115,7 +115,7 @@ import {
   type CachePolicy,
 } from "@/api/lib/security-headers";
 import {
-  getTanStackTextModelInfoForRole,
+  getTanStackTextModelInfoForTask,
   resolveEffectiveServiceTierForProvider,
   resolveFallbackChatSelection,
 } from "@/api/lib/tanstack-ai-models";
@@ -126,11 +126,8 @@ import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import { recordWriteContract } from "@/api/lib/write-contract";
 import type { WriteContract } from "@/api/lib/write-contract";
-// Type-only: derive the closed tool-name union from the single MCP registry
-// so `mcp: { type: "tool", name }` typechecks against the real tools. The
-// import is erased at build time and never creates a runtime import cycle
-// (api-handlers must stay importable without pulling in the MCP graph).
-import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
+// Type-only: keep endpoint metadata independent of the expensive MCP schema graph.
+import type { McpToolName } from "@/api/mcp/static-tool-names";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -139,7 +136,7 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
  * `type: "covered"` disposition references one of these; the coverage guard
  * (`apps/api/scripts/mcp-coverage-guard.ts`) cross-checks the runtime registry.
  */
-export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
+export type { McpToolName };
 
 /**
  * Reasons an endpoint is a real end-to-end capability a user or their agent
@@ -336,12 +333,12 @@ export type UsageMeteringConfig = {
    */
   laneRouting?: true;
   /**
-   * Logical model role recorded on the consumption ledger row.
-   * Defaults to `"chat"`. Set to the role the handler will pass
+   * Logical model task recorded on the consumption ledger row.
+   * Defaults to `"chat"`. Set to the task the handler will pass
    * to the model resolver so cross-cutting analytics match
    * the actual model.
    */
-  modelRole?: ModelRole;
+  modelTask?: ModelTask;
 };
 
 /**
@@ -568,6 +565,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
       email: string;
     };
     session: {
+      id: string;
       activeOrganizationId: SafeId<"organization">;
     };
     featureAccessSnapshot?: FeatureAccessSnapshot;
@@ -592,7 +590,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
      * Whether `orgAIConfig` reflects the org's stored configuration.
      * `unreadable` means a stored row failed to decrypt, so the null
      * config above must not be read as "this org has none": pass this
-     * to `requireTanStackAIAvailableForRole` before any model call.
+     * to `requireTanStackAIAvailableForTask` before any model call.
      */
     orgAIConfigStatus: OrgAIConfigStatus;
     /**
@@ -1155,6 +1153,7 @@ const runAdmittedFiniteHandler = async function* <
         }
         const outcome = await admitModelDispatch({
           organizationId: ctx.session.activeOrganizationId,
+          userId: ctx.user.id,
           actionKind,
           organizationStateDb: ctx.scopedDb,
           signal,
@@ -1597,8 +1596,8 @@ export const resolveMeteringContext = ({
   workspaceId: SafeId<"workspace"> | null;
   userId: SafeId<"user">;
 }): ResolvedMeteringContext => {
-  const modelRole = metering.modelRole ?? "chat";
-  const modelInfo = getTanStackTextModelInfoForRole(modelRole, orgAIConfig, {
+  const modelTask = metering.modelTask ?? "chat";
+  const modelInfo = getTanStackTextModelInfoForTask(modelTask, orgAIConfig, {
     dataClass: "customer",
     organizationId,
     // Unit metering and the free tier never run together
@@ -2418,6 +2417,7 @@ const logAndCaptureSafeError = ({
     sink: SHADOW_SINKS.handler,
     channel: legacyChannelOf({ severity, capture: telemetry === "capture" }),
     request,
+    route,
     requestState: { answeredStatus: statusCode },
   });
 

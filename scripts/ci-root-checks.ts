@@ -8,13 +8,20 @@ import {
   readSelectionGraph,
   requiresFullSelection,
   type SelectionGraph,
+  withDerivedOutputs,
 } from "./ci-affected-selection";
+import {
+  readWorkingTreeCheckPool,
+  type ReadCheckPool,
+} from "./ci-check-pool-registry";
 import { rootCheckGate } from "./ci-root-check-gate";
 import declaredInputs from "./ci-root-check-inputs.json" with { type: "json" };
+import { flattenWorkflowSteps } from "./workflow-steps";
 
 const root = path.resolve(import.meta.dir, "..");
 const stepSchema = v.looseObject({
   name: v.string(),
+  id: v.optional(v.string()),
   run: v.optional(v.string()),
   if: v.optional(v.string()),
 });
@@ -63,12 +70,18 @@ export const rootCheckInputs = (graph: SelectionGraph) =>
 export const validateRootCheckCensus = (
   workflowSource: string,
   inputs = ROOT_CHECK_INPUTS,
+  readPool: ReadCheckPool = readWorkingTreeCheckPool,
 ) => {
   const workflow = v.parse(workflowSchema, Bun.YAML.parse(workflowSource));
   for (const [job, checks] of Object.entries(inputs)) {
-    const { steps } = v.parse(
+    const { steps: declaredSteps } = v.parse(
       jobSchema,
       workflow.jobs[job] ?? panic(`Missing root job: ${job}`),
+    );
+    // Pooled checks are steps of their job for selection purposes.
+    const steps = v.parse(
+      v.array(stepSchema),
+      flattenWorkflowSteps(declaredSteps, readPool),
     );
     const actual = steps
       .filter(({ run }) => run !== undefined)
@@ -84,6 +97,23 @@ export const validateRootCheckCensus = (
       const gated = step.if?.includes(gate) === true;
       if (gated === paths.includes("**")) {
         panic(`Root check selection gate differs: ${job}/${step.name}`);
+      }
+      // A deselected step reports `skipped`: a later step that requires its
+      // success or reads its outputs would silently skip or misread.
+      const { id } = step;
+      const consumed =
+        id !== undefined &&
+        steps.some(
+          (other) =>
+            other !== step &&
+            [
+              `steps.${id}.outputs.`,
+              `steps.${id}.outcome == 'success'`,
+              `steps.${id}.conclusion == 'success'`,
+            ].some((use) => JSON.stringify(other).includes(use)),
+        );
+      if (gated && consumed) {
+        panic(`Root check gate skips a consumed step: ${job}/${step.name}`);
       }
     }
   }
@@ -114,6 +144,9 @@ export const selectRootChecks = ({
   // A package test that reads another package is not a source dependency of
   // these CLI checks. Their source imports follow the workspace graph only.
   const affected = affectedPackages(changed, { ...graph, inputs: new Map() });
+  // CI restores derived outputs before these checks, so a path reader sees
+  // the outputs of every changed generator input.
+  const files = [...withDerivedOutputs(changed)];
   return [...inputs]
     .filter(([, paths]) =>
       paths.some((input) => {
@@ -123,7 +156,7 @@ export const selectRootChecks = ({
         if (input.startsWith("@stll/")) {
           return affected.has(input);
         }
-        return changed.some(
+        return files.some(
           (file) => file === input || new Bun.Glob(input).match(file),
         );
       }),

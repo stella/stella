@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts",
+  "delta": 2,
+  "reason": "A generation-wide read attaches each jurisdiction flipped to another generation: one serving-generation read and one target resolution per flipped jurisdiction, of which a family has at most a handful, each depending on the generation that jurisdiction names."
+}

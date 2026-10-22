@@ -11,7 +11,7 @@ import { eq } from "drizzle-orm";
 import fc from "fast-check";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { organization } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -465,6 +465,6 @@ test("contact link mutations preserve the database capacity", async () => {
         }
       },
     ),
-    { numRuns: 12 },
+    propertyConfig({ numRuns: 12 }),
   );
 });

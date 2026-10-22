@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 /** Enumerates mutation route registrations without importing the API stack. */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
