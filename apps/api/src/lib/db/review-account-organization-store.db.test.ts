@@ -10,6 +10,7 @@ import {
   organizationAccessStates,
 } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import {
@@ -152,7 +153,7 @@ describe("review account provisioning store", () => {
     };
 
     const created = await snapshot();
-    const ownerId = await store.findUserIdByEmail(config.email);
+    const ownerId = await store.findUserIdByEmail(normalizeEmail(config.email));
     expect(created.organizations).toEqual([
       { id: organizationId, name: "Sample law firm" },
     ]);

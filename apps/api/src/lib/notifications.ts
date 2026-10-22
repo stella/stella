@@ -14,6 +14,7 @@ import { member as organizationMember, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { notifications, workspaceMembers } from "@/api/db/schema";
+import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -327,10 +328,10 @@ export const resolveMentionTargets = async (
 
   // Stored addresses are whatever the identity provider recorded, and a
   // reader types the address they see. Match both the verbatim mention and its
-  // lower-case form rather than folding the column, which would turn the
+  // normalized form rather than folding the column, which would turn the
   // unique email index into a sequential scan of every account.
   const candidates = [
-    ...new Set(mentioned.flatMap((email) => [email, email.toLowerCase()])),
+    ...new Set(mentioned.flatMap((email) => [email, normalizeEmail(email)])),
   ];
 
   const members = await tx

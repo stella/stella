@@ -13,6 +13,7 @@ import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped, type ScopedDb } from "@/api/db/safe-db";
 import { correspondenceAttachments, entities } from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { verifyOriginalSignature } from "@/api/lib/email/inbound/authentication";
@@ -262,7 +263,7 @@ export const fileUploadedMail = async ({
           verifyOriginal,
         }),
       },
-      sender: file.uploaderEmail.toLowerCase(),
+      sender: normalizeEmail(file.uploaderEmail),
       receivedAt: file.createdAt.toISOString(),
     }),
     attachments: [],

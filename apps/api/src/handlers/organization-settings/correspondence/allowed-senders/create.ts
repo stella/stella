@@ -11,6 +11,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -44,7 +45,7 @@ const createAllowedSender = createSafeRootHandler(
     user,
     recordAuditEvent,
   }) {
-    const address = senderAddress.trim().toLowerCase();
+    const address = normalizeEmail(senderAddress);
     if (
       (scope === "organization" && workspaceIds.length > 0) ||
       (scope === "matters" && workspaceIds.length === 0)
