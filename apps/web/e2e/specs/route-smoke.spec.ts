@@ -17,6 +17,7 @@ import {
 import { apiDelete, E2E_API_ORIGIN, apiGet, apiPut } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
+import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
 import {
   CORRESPONDENCE_SMOKE_SUBJECT,
   createTestCorrespondence,
@@ -88,11 +89,6 @@ type SmokeRoute = {
   // (freshly minted ids, dev-only gates), where only "left /auth and rendered"
   // is assertable.
   expectation?: RouteExpectation;
-};
-
-type ContentSecurityPolicyViolation = {
-  blockedURI: string;
-  effectiveDirective: string;
 };
 
 // Redirect targets for workspace-scoped aliases depend on the runtime view id,
@@ -345,6 +341,7 @@ const declareRouteSmokeGroup = ({
                 isolatedBrowser,
                 storageState,
               );
+              const csp = await installContentSecurityPolicyCollector(page);
               const browserErrors = createBrowserErrorCollector({
                 tolerateColdMountWarning: true,
               });
@@ -356,6 +353,7 @@ const declareRouteSmokeGroup = ({
                   expectation: { kind: "redirectsTo", to: destination },
                 } as const satisfies SmokeRoute;
                 await renderSmokeRoute({ page, route });
+                await csp.assertClean();
                 assertFinalDestination(page, route);
                 await assertNoRouteBoundary(page, template);
                 browserErrors.assertEmpty(
@@ -511,28 +509,7 @@ const measureRouteTarget = async ({
   route: SmokeRoute;
 }): Promise<RouteNetworkMetrics> => {
   const { context, page } = await openCleanPage(browser);
-  // The last main-frame document response is the one the route renders.
-  let documentPolicy: string | undefined;
-  page.on("response", (response) => {
-    const request = response.request();
-    if (
-      request.isNavigationRequest() &&
-      request.frame() === page.mainFrame() &&
-      response.status() < 300
-    ) {
-      documentPolicy = response.headers()["content-security-policy"];
-    }
-  });
-  await context.addInitScript(() => {
-    const violations: ContentSecurityPolicyViolation[] = [];
-    Object.assign(globalThis, { __cspViolations: violations });
-    document.addEventListener("securitypolicyviolation", (event) => {
-      violations.push({
-        blockedURI: event.blockedURI,
-        effectiveDirective: event.effectiveDirective,
-      });
-    });
-  });
+  const csp = await installContentSecurityPolicyCollector(page);
   const browserErrors = createBrowserErrorCollector({
     tolerateColdMountWarning: true,
   });
@@ -560,32 +537,7 @@ const measureRouteTarget = async ({
       `${route.template} must show exactly one divider under the app chrome`,
     ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
-    expect(
-      await page.evaluate(
-        () =>
-          (
-            globalThis as typeof globalThis & {
-              __cspViolations?: ContentSecurityPolicyViolation[];
-            }
-          ).__cspViolations ?? [],
-      ),
-      `content security policy violations on ${route.template}`,
-    ).toEqual([]);
-    // No violations only proves something when a policy is enforced: the
-    // document must carry it, and its nonce must reach the rendered scripts.
-    const policyNonce = /'nonce-([^']+)'/u.exec(documentPolicy ?? "")?.[1];
-    expect(
-      policyNonce,
-      `content security policy nonce on ${route.template}`,
-    ).toBeDefined();
-    expect(
-      await page.evaluate(
-        (nonce) =>
-          [...document.scripts].some((script) => script.nonce === nonce),
-        policyNonce,
-      ),
-      `scripts carry the policy nonce on ${route.template}`,
-    ).toBe(true);
+    await csp.assertClean();
     // Captured after the route shell and tracked API work are ready, so the
     // manifest reflects the fully-rendered route.
     return summarizeCapture(await network.capture());
@@ -607,12 +559,14 @@ const assertRedirectRoute = async ({
 }) => {
   const { context, page } = await openCleanPage(browser);
   const redirectRoute = { ...route, expectation };
+  const csp = await installContentSecurityPolicyCollector(page);
 
   try {
     await gotoSmokeRoute(page, redirectRoute);
     await expect(page, redirectRoute.template).not.toHaveURL(/\/auth(?:\/|$)/u);
     await waitForRedirectDestination(page, redirectRoute);
     assertFinalDestination(page, redirectRoute);
+    await csp.assertClean();
   } finally {
     await context.close();
   }

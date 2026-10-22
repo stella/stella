@@ -5,6 +5,7 @@ import {
   ROUTE_ERROR_HEADING,
 } from "../helpers/app-shell";
 import { setFixedBrowserTime } from "../helpers/clock";
+import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
 import { STAGING_CHECKS } from "../helpers/staging-state";
 
@@ -49,14 +50,17 @@ test.beforeEach(({ page }) => {
 });
 
 test("deployed app serves the authenticated shell", async ({ page }) => {
+  const policy = await installContentSecurityPolicyCollector(page);
   await page.goto("/", { waitUntil: "commit" });
   await expect(appShellNavigationLink(page, "/chat")).toBeVisible();
   await expect(page).not.toHaveURL(/\/auth(?:\/|$)/u);
+  await policy.assertClean();
 });
 
 test("chat thread page renders for an entitlement-less owner", async ({
   page,
 }) => {
+  const policy = await installContentSecurityPolicyCollector(page);
   await page.goto("/chat/new", { waitUntil: "commit" });
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u);
 
@@ -65,11 +69,13 @@ test("chat thread page renders for an entitlement-less owner", async ({
   await expect(page.getByText(ROUTE_ERROR_HEADING)).toBeHidden();
 
   await expect(chatReadySurface(page)).toBeVisible();
+  await policy.assertClean();
 });
 
 test("authenticated chat navigation stays same-origin and has no API preflights", async ({
   page,
 }) => {
+  const policy = await installContentSecurityPolicyCollector(page);
   const apiRequests: string[] = [];
   const optionsRequests: string[] = [];
   const directApiRequests: string[] = [];
@@ -98,6 +104,7 @@ test("authenticated chat navigation stays same-origin and has no API preflights"
   );
   expect(directApiRequests).toEqual([]);
   expect(optionsRequests).toEqual([]);
+  await policy.assertClean();
 });
 
 test.describe("public hydration", () => {
@@ -113,6 +120,7 @@ test.describe("public hydration", () => {
     "server-rendered public law decisions stay stable after hydration",
     { tag: STAGING_CHECKS["public-law-hydration"].tag },
     async ({ page }) => {
+      const policy = await installContentSecurityPolicyCollector(page);
       const fixedBrowserDate = new Date();
       fixedBrowserDate.setUTCHours(2, 0, 0, 0);
       const expectedToday = new Date(fixedBrowserDate.getTime() - 86_400_000)
@@ -181,8 +189,11 @@ test.describe("public hydration", () => {
       await expect(customRangeButton).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(customRangeButton).toBeHidden();
+      await policy.assertClean();
       await firstDecision.click();
       await expect(page).toHaveURL(/\/law\/[a-z]{2,3}\/cases\//u);
+      await expect(page.locator("article").first()).toBeVisible();
+      await policy.assertClean();
 
       // Force a full server-rendered load of the decision page: client-side
       // navigation alone would never exercise the hydration path that broke.
@@ -230,6 +241,7 @@ test.describe("public hydration", () => {
       expect(pageErrors).toEqual([]);
       expect(hydrationConsoleErrors).toEqual([]);
       expect(failedAssets).toEqual([]);
+      await policy.assertClean();
     },
   );
 });
