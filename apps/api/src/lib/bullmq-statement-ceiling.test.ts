@@ -9,7 +9,7 @@ import {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 class ProcessorProbe extends BullMqWorker<unknown, number> {
-  static invoke(name: string, processor: () => Promise<number>) {
+  static async invoke(name: string, processor: () => Promise<number>) {
     // Exercise BullMQ's processor boundary without opening a queue connection.
     const worker = asTestRaw<ProcessorProbe>({ name, processFn: processor });
     return ProcessorProbe.prototype.callProcessJob.call(

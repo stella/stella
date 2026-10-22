@@ -719,7 +719,7 @@ export const handleMcpToolCall = async ({
   await runWithStatementCeiling({
     kind: "mcp",
     key: toolName,
-    run: () =>
+    run: async () =>
       observeMcpToolCall({
         context,
         mode,

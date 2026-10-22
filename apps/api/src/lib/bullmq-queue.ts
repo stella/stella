@@ -67,7 +67,7 @@ export class BullMqWorker<
   ResultType = void,
   NameType extends string = string,
 > extends Worker<DataType, ResultType, NameType> {
-  protected override callProcessJob(
+  protected override async callProcessJob(
     job: Job<DataType, ResultType, NameType>,
     token: string,
     signal?: AbortSignal,
@@ -75,7 +75,7 @@ export class BullMqWorker<
     return runWithStatementCeiling({
       kind: "worker",
       key: this.name,
-      run: () => super.callProcessJob(job, token, signal),
+      run: async () => super.callProcessJob(job, token, signal),
     });
   }
 

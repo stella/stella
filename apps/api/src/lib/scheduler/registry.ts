@@ -312,7 +312,7 @@ export const createSchedulerTaskRegistry = (
     Object.entries(schedulerTasks(reapOwnerlessChatTurns)).map(
       ([name, entry]) => [
         name,
-        (context: SchedulerTaskContext) =>
+        async (context: SchedulerTaskContext) =>
           runWithStatementCeiling({
             kind: "scheduler",
             key: name,

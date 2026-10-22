@@ -37,7 +37,7 @@ const withTransactionClient = async (run: (client: SQL) => Promise<void>) =>
         },
       });
       Object.defineProperty(client, "unsafe", {
-        value: () =>
+        value: async () =>
           Object.assign(Promise.resolve([]), { values: async () => [] }),
       });
       Object.defineProperty(client, "savepoint", {
