@@ -215,6 +215,16 @@ export const admitWork: ReturnType<
 >["admit"] = async (options) => await getWorkAdmission().admit(options);
 export const readWorkPoolMetrics = () => getWorkAdmission().stats();
 
+export const resetWorkAdmissionForTesting = (): void => {
+  const activePools = Object.values(getWorkAdmission().stats()).filter(
+    ({ inFlight, queued }) => inFlight !== 0 || queued !== 0,
+  );
+  if (activePools.length > 0) {
+    panic("Cannot reset work admission while work is active");
+  }
+  processAdmission = undefined;
+};
+
 export const assertWorkAdmission = (admission: WorkAdmission): void => {
   if (admission[ADMITTED].status === "settled") {
     panic("Work admission proof outlived its run");

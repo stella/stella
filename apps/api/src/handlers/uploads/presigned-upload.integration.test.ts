@@ -1,5 +1,6 @@
 import {
   afterAll,
+  beforeEach,
   beforeAll,
   describe,
   expect,
@@ -34,7 +35,11 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { processDocumentProcessingRun } from "@/api/lib/document-processing-queue";
 import { LIMITS } from "@/api/lib/limits";
-import { admitWork, readWorkPoolMetrics } from "@/api/lib/load/work-admission";
+import {
+  admitWork,
+  readWorkPoolMetrics,
+  resetWorkAdmissionForTesting,
+} from "@/api/lib/load/work-admission";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { legacyTmpUploadKey } from "@/api/lib/uploads/runtime";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
@@ -163,6 +168,8 @@ afterAll(async () => {
     await releaseRlsFixture();
   }
 });
+
+beforeEach(resetWorkAdmissionForTesting);
 
 describe("presigned upload mutation flow", () => {
   test("a DOCX uploaded through create and finalize is cited by chat after extraction", async () => {

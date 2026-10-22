@@ -8,8 +8,10 @@ import {
 } from "@/api/lib/observability/logger";
 
 import {
+  admitWork,
   assertWorkAdmission,
   createWorkAdmission,
+  resetWorkAdmissionForTesting,
   WorkDeadlineError,
   WorkRefusal,
   type AdmittedWork,
@@ -17,6 +19,33 @@ import {
 } from "./work-admission";
 
 afterEach(resetLogSinkForTesting);
+
+test("the process pool resets only after admitted work settles", async () => {
+  let release: () => void = () => undefined;
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let started: () => void = () => undefined;
+  const reached = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const running = admitWork({
+    pool: "upload",
+    kind: "test-reset",
+    run: async () => {
+      started();
+      await blocked;
+    },
+  });
+  await reached;
+
+  expect(resetWorkAdmissionForTesting).toThrow(
+    "Cannot reset work admission while work is active",
+  );
+  release();
+  await running;
+  expect(resetWorkAdmissionForTesting).not.toThrow();
+});
 
 test("memory pressure refuses new work", async () => {
   const records: LogRecord[] = [];
