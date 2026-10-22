@@ -63,4 +63,7 @@ export const parserParityOutput = async (
 };
 
 export const parityGoldenUrl = (entry: ParserParityEntry): URL =>
-  new URL(entry.golden, INGESTION_ROOT);
+  new URL(
+    `__goldens__/${entry.fixture.replace("/__fixtures__/", "/")}.golden.json`,
+    INGESTION_ROOT,
+  );

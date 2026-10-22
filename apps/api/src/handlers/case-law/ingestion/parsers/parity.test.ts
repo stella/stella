@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 
 import { PARSER_PARITY_MANIFEST } from "@/api/handlers/case-law/ingestion/parsers/parity-manifest";
@@ -14,7 +15,14 @@ afterEach(() => {
 
 for (const entry of PARSER_PARITY_MANIFEST) {
   test(`${entry.adapterKey}: ${entry.fixture} matches its parser golden`, async () => {
-    const expected: unknown = await Bun.file(parityGoldenUrl(entry)).json();
+    const goldenUrl = parityGoldenUrl(entry);
+    const golden = Bun.file(goldenUrl);
+    if (!(await golden.exists())) {
+      panic(
+        `Missing parser golden for ${entry.fixture}. Run bun apps/api/scripts/update-parser-goldens.ts to generate it.`,
+      );
+    }
+    const expected: unknown = await golden.json();
     const actual: unknown = await parserParityOutput(entry);
     expect(actual).toEqual(expected);
   });
