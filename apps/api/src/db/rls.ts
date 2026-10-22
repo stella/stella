@@ -54,6 +54,7 @@ export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
 export const SETTING_WORKSPACE_ACCESS_MODE = "app.workspace_access_mode";
 export const SETTING_ORGANIZATION_ID = "app.organization_id";
 export const SETTING_USER_ID = "app.user_id";
+export const SETTING_ACCOUNT_EXPORT_USER_ID = "app.account_export_user_id";
 
 export const WORKSPACE_ACCESS_MODE = {
   explicit: "explicit",
