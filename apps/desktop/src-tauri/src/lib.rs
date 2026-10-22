@@ -1,5 +1,6 @@
 mod account;
 mod activity;
+mod activity_calls;
 mod activity_commands;
 mod activity_details;
 mod activity_store;
