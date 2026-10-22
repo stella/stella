@@ -429,9 +429,6 @@ test.each(["create", "follow-up", "regenerate"] as const)(
           active={false}
           openRevision={0}
           busy={false}
-          error={readerAnswerFailureKind(
-            hook.result.current.errors.get(answer.id),
-          )}
           onOpen={() => undefined}
           onFollowUp={() => undefined}
           onRegenerate={() => undefined}
@@ -443,12 +440,7 @@ test.each(["create", "follow-up", "regenerate"] as const)(
       </IntlProvider>,
     );
     expect(view.getByText(content)).toBeTruthy();
-    expect(view.queryByText(messages.readerAnswers.networkError)).toBeNull();
-    expect(view.queryByText(messages.readerAnswers.modelError)).toBe(
-      action === "regenerate"
-        ? view.getByText(messages.readerAnswers.modelError)
-        : null,
-    );
+    expect(view.queryByRole("alert")).toBeNull();
     expect(hook.result.current.errors.size).toBe(0);
     expect(hook.result.current.error).toBeNull();
   },
@@ -507,7 +499,7 @@ test.each(["follow-up", "regenerate", "share", "delete"] as const)(
     );
     expect(
       readerAnswerFailureKind(hook.result.current.errors.get("answer-1")),
-    ).toBe("network");
+    ).toBe("model");
   },
 );
 
