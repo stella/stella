@@ -3,10 +3,10 @@ import { afterEach, expect, mock, spyOn, test } from "bun:test";
 import { PROFESSIONAL_USE_REQUIRED_CODE } from "@stll/api-contract/professional-use";
 import { stellaToast } from "@stll/ui/toast";
 
+import { reportUnhandledAuthClientError } from "@/lib/account/auth-code-report";
 import { sanitizeExceptionEvent } from "@/lib/analytics/posthog";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
-import { reportUnhandledAuthClientError } from "@/lib/auth-code-report";
 import { webApiClientOptions } from "@/lib/eden-client";
 import {
   resetUserErrorReportDedupeForTests,

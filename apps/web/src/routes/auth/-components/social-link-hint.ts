@@ -2,8 +2,8 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { socialProviderSchema } from "@/components/auth/access-reset.logic";
+import { SOCIAL_LINK_HINT_PATH } from "@/lib/account/auth-code-report";
 import { authClient } from "@/lib/auth-client";
-import { SOCIAL_LINK_HINT_PATH } from "@/lib/auth-code-report";
 import { toAuthClientError } from "@/lib/errors/auth";
 
 const hintSchema = v.object({

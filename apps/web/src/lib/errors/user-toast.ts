@@ -12,6 +12,7 @@ import { getTranslator } from "@/i18n/translator";
 import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { resetReportedErrorsForTests } from "@/lib/analytics/reported-error";
+import { BoundedSet } from "@/lib/bounded-set";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -34,8 +35,11 @@ type UserVisibleErrorReportOptions = {
 };
 
 let currentRouteTemplate = "unknown";
-const reportedFingerprints = new Set<string>();
-const reportedApiErrorsWithoutNotice = new Set<string>();
+const REPORTED_ERROR_LIMIT = 1000;
+const reportedFingerprints = new BoundedSet<string>(REPORTED_ERROR_LIMIT);
+const reportedApiErrorsWithoutNotice = new BoundedSet<string>(
+  REPORTED_ERROR_LIMIT,
+);
 
 export const resetUserErrorReportDedupeForTests = (): void => {
   reportedFingerprints.clear();

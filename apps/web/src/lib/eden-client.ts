@@ -8,13 +8,14 @@ import type {
   WebRoutes,
 } from "@/generated/api-routes.gen";
 import { getTranslator } from "@/i18n/translator";
+import { reportUnhandledMeResponse } from "@/lib/account/auth-code-report";
 import { getAnalytics } from "@/lib/analytics/provider";
 import {
   getApiRequestHeaders,
   waitForSimulatedApiDelay,
 } from "@/lib/api-request-context";
 import { browserApiBaseUrl } from "@/lib/api-url";
-import { reportUnhandledMeResponse } from "@/lib/auth-code-report";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { observeActionAdmissionResponse } from "@/lib/errors/action-admission-response";
 import {
   notifyUserError,
@@ -57,7 +58,10 @@ export const webApiClientOptions = {
   async onResponse(response) {
     await reportUnhandledMeResponse(response, reportUserVisibleError);
     await observeActionAdmissionResponse(response, {
+      // Only a refusal is announced here; the caller's own handler owns every
+      // other failed response.
       notifyRefusal: (error) =>
+        actionAdmissionOutcome(error) !== undefined &&
         notifyUserError(error, getTranslator()("errors.actionFailed")),
       captureError: (error) => {
         getAnalytics().captureError(error);

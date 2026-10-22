@@ -19,8 +19,8 @@ import {
   takeBootPrefetch,
 } from "@/boot-prefetch";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
+import { reportUnhandledAuthClientError } from "@/lib/account/auth-code-report";
 import { browserAuthBaseUrl } from "@/lib/api-url";
-import { reportUnhandledAuthClientError } from "@/lib/auth-code-report";
 import {
   notifyUserError,
   reportUserVisibleError,
