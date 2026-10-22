@@ -19,6 +19,7 @@ import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { listMcpTools } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -35,22 +36,23 @@ const throwingScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
 
 const createContext = (
   memberRole: MemberRole = "owner",
-): AuthorizedMcpRequestContext => ({
-  accessibleWorkspaceIds: [],
-  accessibleWorkspaceIdSet: new Set(),
-  accessibleWorkspaceStatusById: new Map(),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole,
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent: async () => {},
-  safeDb: toSafeDbMock(throwingScopedDb),
-  scopedDb: throwingScopedDb,
-  // The MCP transport holds a permit for every request (`context.ts`).
-  thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "standard@example.test",
-});
+): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [],
+    accessibleWorkspaceIdSet: new Set(),
+    accessibleWorkspaceStatusById: new Map(),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole,
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent: async () => {},
+    safeDb: toSafeDbMock(throwingScopedDb),
+    scopedDb: throwingScopedDb,
+    // The MCP transport holds a permit for every request (`context.ts`).
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
+  });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

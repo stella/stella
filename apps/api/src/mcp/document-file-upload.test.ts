@@ -22,6 +22,7 @@ import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { getStaticMcpToolOutputContract } from "@/api/mcp/static-tool-definitions";
 import { errorResult, serializeToolResult } from "@/api/mcp/tool-utils";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -36,7 +37,7 @@ const createContext = (): AuthorizedMcpRequestContext => {
     "00000000-0000-4000-8000-000000000001",
   );
   const safeDb = toSafeDbMock(emptyScopedDb);
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [workspaceId],
     accessibleWorkspaceIdSet: new Set([workspaceId]),
     accessibleWorkspaceStatusById: new Map([[workspaceId, "active"]]),
@@ -57,7 +58,7 @@ const createContext = (): AuthorizedMcpRequestContext => {
     scopedDb: emptyScopedDb,
     userId: toSafeId<"user">("00000000-0000-4000-8000-000000000003"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 describe("document file upload surface", () => {

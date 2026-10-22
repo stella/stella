@@ -16,6 +16,7 @@ import {
   listGatewayExternalMcpTools,
 } from "@/api/mcp/gateway/external-tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const loadActiveMcpConnectionsForUserMock = mock();
@@ -93,7 +94,7 @@ const createContext = (
   const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (callback) =>
     Result.ok(await callback(asTestRaw<Transaction>(tx)));
 
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [],
     accessibleWorkspaceIdSet: new Set(),
     accessibleWorkspaceStatusById: new Map(),
@@ -107,7 +108,7 @@ const createContext = (
     scopedDb,
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 /** Context whose backing-store read always fails (transient DB outage). */

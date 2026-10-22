@@ -50,6 +50,7 @@ import {
 import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
+import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import {
   projectMcpRefusal,
@@ -76,7 +77,7 @@ import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority
  */
 export const bindWorkspaceRecorder =
   (
-    context: AuthorizedMcpRequestContext,
+    context: McpRequestContext,
     workspaceId: SafeId<"workspace">,
   ): AuditRecorder =>
   async (tx, event) => {

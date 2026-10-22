@@ -23,6 +23,7 @@ import { namedToolNames, scopeProseToSurface } from "@/api/mcp/tool-mentions";
 import * as toolUtils from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -244,20 +245,21 @@ describe("the dispatch boundary scopes the hints it emits", () => {
       throw new Error("database unavailable");
     },
   );
-  const failingContext = (): AuthorizedMcpRequestContext => ({
-    accessibleWorkspaceIds: [],
-    accessibleWorkspaceIdSet: new Set(),
-    accessibleWorkspaceStatusById: new Map(),
-    accessibleWorkspaces: [],
-    grantedScopes: ["stella:search", "stella:read"],
-    memberRole: "owner",
-    organizationId: toSafeId<"organization">("org_1"),
-    recordAuditEvent: asTestRaw(async () => undefined),
-    safeDb: toSafeDbMock(throwingScopedDb),
-    scopedDb: throwingScopedDb,
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-  });
+  const failingContext = (): AuthorizedMcpRequestContext =>
+    authorizedMcpContextForTest({
+      accessibleWorkspaceIds: [],
+      accessibleWorkspaceIdSet: new Set(),
+      accessibleWorkspaceStatusById: new Map(),
+      accessibleWorkspaces: [],
+      grantedScopes: ["stella:search", "stella:read"],
+      memberRole: "owner",
+      organizationId: toSafeId<"organization">("org_1"),
+      recordAuditEvent: asTestRaw(async () => undefined),
+      safeDb: toSafeDbMock(throwingScopedDb),
+      scopedDb: throwingScopedDb,
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
+    });
 
   const INTERNAL_ERROR_ENVELOPE = v.object({
     error: v.object({

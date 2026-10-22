@@ -25,6 +25,7 @@ import {
   createRewritingAnonymizeDependencies,
   replaceFirstFieldDelimiterToken,
 } from "@/api/tests/helpers/anonymize-pipeline-fakes";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -111,7 +112,7 @@ const finalizeMcpEgress = async (
 
 const createContext = (): AuthorizedMcpRequestContext => {
   const scopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(mock());
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
     accessibleWorkspaceIdSet: new Set(["ws_1"]),
     accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),
@@ -124,7 +125,7 @@ const createContext = (): AuthorizedMcpRequestContext => {
     scopedDb,
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const parseText = (result: CallToolResult): unknown => {

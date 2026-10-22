@@ -13,6 +13,7 @@ import {
   type McpToolResponse,
 } from "@/api/mcp/tool-types";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -244,7 +245,7 @@ const buildContext = ({
   workspaceIds?: readonly string[];
 } = {}): AuthorizedMcpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock(tx);
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
     accessibleWorkspaceIdSet: new Set(workspaceIds),
     accessibleWorkspaceStatusById: new Map(
@@ -299,7 +300,7 @@ const buildContext = ({
     scopedDb,
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const parseResultText = (result: CallToolResult): string => {

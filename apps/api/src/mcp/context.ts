@@ -356,16 +356,18 @@ export const bindApprovedMcpAuditContext = <TContext extends McpRequestContext>(
     },
   };
 
-  context.auditExecution = auditExecution;
-  context.recordAuditEvent = createAuditRecorder({
-    execution: auditExecution,
-    organizationId: context.organizationId,
-    request: context.request,
-    server: null,
-    userId: context.userId,
-    workspaceId: null,
-  });
-  return context;
+  return {
+    ...context,
+    auditExecution,
+    recordAuditEvent: createAuditRecorder({
+      execution: auditExecution,
+      organizationId: context.organizationId,
+      request: context.request,
+      server: null,
+      userId: context.userId,
+      workspaceId: null,
+    }),
+  };
 };
 
 type LoadAccessibleMcpWorkspacesOptions = {

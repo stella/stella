@@ -50,6 +50,7 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { selectableOperations } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   compileWireSchema,
@@ -94,22 +95,23 @@ const databaseAccessForbidden = asTestRaw<
   throw new Error("database must not be reached before tool authorization");
 });
 
-const contextWithoutDeclaredPermissions = (): AuthorizedMcpRequestContext => ({
-  accessibleWorkspaceIds: [],
-  accessibleWorkspaceIdSet: new Set(),
-  accessibleWorkspaceStatusById: new Map(),
-  accessibleWorkspaces: [],
-  credentialPermissions: { searchHistory: ["read"] },
-  grantedScopes: [],
-  memberRole: "owner",
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent: async () => {},
-  safeDb: toSafeDbMock(databaseAccessForbidden),
-  scopedDb: databaseAccessForbidden,
-  thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
-  userEmail: "standard@example.test",
-  userId: toSafeId<"user">("user_1"),
-});
+const contextWithoutDeclaredPermissions = (): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [],
+    accessibleWorkspaceIdSet: new Set(),
+    accessibleWorkspaceStatusById: new Map(),
+    accessibleWorkspaces: [],
+    credentialPermissions: { searchHistory: ["read"] },
+    grantedScopes: [],
+    memberRole: "owner",
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent: async () => {},
+    safeDb: toSafeDbMock(databaseAccessForbidden),
+    scopedDb: databaseAccessForbidden,
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
+    userEmail: "standard@example.test",
+    userId: toSafeId<"user">("user_1"),
+  });
 
 const toolResultErrorCode = (
   result: Awaited<ReturnType<typeof handleMcpToolCall>>,

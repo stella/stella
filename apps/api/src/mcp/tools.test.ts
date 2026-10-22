@@ -138,6 +138,7 @@ import {
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import {
   CASE_LAW_COVERAGE_FIXTURE,
   CASE_LAW_COVERAGE_EXPECTED,
@@ -1143,60 +1144,62 @@ const createContext = ({
   /** Overrides merged over the suite's own seams, for the few tests that
    *  need a different answer from one of them. */
   testDependencies?: AuthorizedMcpRequestContext["testDependencies"];
-} = {}): AuthorizedMcpRequestContext => ({
-  accessibleWorkspaceIds: accessibleWorkspaceIds.map((workspaceId) =>
-    toSafeId<"workspace">(workspaceId),
-  ),
-  accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
-  accessibleWorkspaceStatusById: new Map(
-    accessibleWorkspaceIds.map((workspaceId) => [
-      workspaceId,
-      archivedWorkspaceIds.includes(workspaceId) ? "archived" : "active",
-    ]),
-  ),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole: "owner",
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent,
-  safeDb: toSafeDbMock(scopedDb),
-  scopedDb,
-  // The MCP transport holds a permit for every request (`context.ts`).
-  thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
-  testDependencies: {
-    ...testDependencies,
-    anonymizeTextFields: anonymizeTextFieldsMock,
-    getSearchReader: () => ({
-      search: searchProviderSearchMock,
-      searchContent: mock(async () => ({ hits: [], totalCount: 0 })),
-    }),
-    loadAnonymizationAllowlistCanonicalsByWorkspace:
-      loadAllowlistByWorkspaceMock,
-    loadAnonymizationGazetteerEntriesByWorkspace: loadGazetteerByWorkspaceMock,
-    readGatedDecisionCitations: readGatedDecisionCitationsMock,
-    readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
-    readGatedDecisionWithDocument: readGatedDecisionMock,
-    readOverviewHandler: readOverviewHandlerMock,
-    readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
-    readWorkspaceHandler: readWorkspaceHandlerMock,
-    readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
-    searchDecisionsHandler: searchDecisionsHandlerMock,
-    listCaseLawProvisionDecisions: listCaseLawProvisionDecisionsMock,
-    readCaseLawProvisionScope: readCaseLawProvisionScopeMock,
-    readCaseLawCourtNames: async () => STORED_CZ_COURTS,
-    searchLegislationHandler: searchLegislationHandlerMock,
-    resolveStatuteExpression: resolveStatuteExpressionMock,
-    resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
-    readPublicLegislationHandler: readPublicLegislationHandlerMock,
-    listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
-    readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
-    readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
-    readVersionBlocks: readVersionBlocksMock,
-    withTimeout: withTimeoutDependency,
-  },
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "standard@example.test",
-});
+} = {}): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: accessibleWorkspaceIds.map((workspaceId) =>
+      toSafeId<"workspace">(workspaceId),
+    ),
+    accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
+    accessibleWorkspaceStatusById: new Map(
+      accessibleWorkspaceIds.map((workspaceId) => [
+        workspaceId,
+        archivedWorkspaceIds.includes(workspaceId) ? "archived" : "active",
+      ]),
+    ),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole: "owner",
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent,
+    safeDb: toSafeDbMock(scopedDb),
+    scopedDb,
+    // The MCP transport holds a permit for every request (`context.ts`).
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
+    testDependencies: {
+      ...testDependencies,
+      anonymizeTextFields: anonymizeTextFieldsMock,
+      getSearchReader: () => ({
+        search: searchProviderSearchMock,
+        searchContent: mock(async () => ({ hits: [], totalCount: 0 })),
+      }),
+      loadAnonymizationAllowlistCanonicalsByWorkspace:
+        loadAllowlistByWorkspaceMock,
+      loadAnonymizationGazetteerEntriesByWorkspace:
+        loadGazetteerByWorkspaceMock,
+      readGatedDecisionCitations: readGatedDecisionCitationsMock,
+      readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
+      readGatedDecisionWithDocument: readGatedDecisionMock,
+      readOverviewHandler: readOverviewHandlerMock,
+      readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
+      readWorkspaceHandler: readWorkspaceHandlerMock,
+      readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
+      searchDecisionsHandler: searchDecisionsHandlerMock,
+      listCaseLawProvisionDecisions: listCaseLawProvisionDecisionsMock,
+      readCaseLawProvisionScope: readCaseLawProvisionScopeMock,
+      readCaseLawCourtNames: async () => STORED_CZ_COURTS,
+      searchLegislationHandler: searchLegislationHandlerMock,
+      resolveStatuteExpression: resolveStatuteExpressionMock,
+      resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
+      readPublicLegislationHandler: readPublicLegislationHandlerMock,
+      listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
+      readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
+      readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
+      readVersionBlocks: readVersionBlocksMock,
+      withTimeout: withTimeoutDependency,
+    },
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
+  });
 
 /**
  * The sentence the factory appends to a country description, rendered from the

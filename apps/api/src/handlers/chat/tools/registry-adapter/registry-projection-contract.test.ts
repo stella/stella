@@ -57,6 +57,7 @@ import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -208,54 +209,56 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
   const scopedDb = asTestRaw<ScopedDb>(
     async (run: (transaction: unknown) => unknown) => await run(tx),
   );
-  return buildMcpContextFromChat({
-    memberRole: sessionMemberRole("owner"),
-    organizationId: ORGANIZATION_ID,
-    safeDb: toSafeDbMock(scopedDb),
-    scopedDb,
-    toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],
-      pinnedIds: [],
-    }),
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-    testDependencies: {
-      // Billing reads are enrolment-gated; this caller is enrolled so every
-      // projectable read runs.
-      featureAccessSnapshot: enrolledTimeBillingSnapshot({
-        organizationId: ORGANIZATION_ID,
-        userId: "user_1",
+  return authorizedMcpContextForTest(
+    buildMcpContextFromChat({
+      memberRole: sessionMemberRole("owner"),
+      organizationId: ORGANIZATION_ID,
+      safeDb: toSafeDbMock(scopedDb),
+      scopedDb,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],
+        pinnedIds: [],
       }),
-      readWorkspaceHandler: readWorkspaceHandlerMock,
-      readOverviewHandler: readOverviewHandlerMock,
-      readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
-      readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
-      describeStoredTemplate: describeStoredTemplateMock,
-      getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
-      searchDecisionsHandler: searchDecisionsHandlerMock,
-      readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
-      readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
-      readGatedDecisionCitations: readGatedDecisionCitationsMock,
-      readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
-      searchLegislationHandler: searchLegislationHandlerMock,
-      resolveStatuteExpression: resolveStatuteExpressionMock,
-      resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
-      readPublicLegislationHandler: readPublicLegislationHandlerMock,
-      listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
-      readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
-      readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
-      readVersionBlocks: readVersionBlocksMock,
-      // The corpus gate has its own tests; here a document is reachable.
-      resolveAnnotationTarget: async () =>
-        await Promise.resolve({
-          status: "available" as const,
-          readBlocks: async () => await Promise.resolve([]),
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
+      testDependencies: {
+        // Billing reads are enrolment-gated; this caller is enrolled so every
+        // projectable read runs.
+        featureAccessSnapshot: enrolledTimeBillingSnapshot({
+          organizationId: ORGANIZATION_ID,
+          userId: "user_1",
         }),
-      searchConsolidatedLegislation: searchConsolidatedLegislationMock,
-      getLawTextBlock: getLawTextBlockMock,
-      executeRegistryLookup: executeRegistryLookupMock,
-    },
-  });
+        readWorkspaceHandler: readWorkspaceHandlerMock,
+        readOverviewHandler: readOverviewHandlerMock,
+        readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
+        readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
+        describeStoredTemplate: describeStoredTemplateMock,
+        getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
+        searchDecisionsHandler: searchDecisionsHandlerMock,
+        readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
+        readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
+        readGatedDecisionCitations: readGatedDecisionCitationsMock,
+        readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
+        searchLegislationHandler: searchLegislationHandlerMock,
+        resolveStatuteExpression: resolveStatuteExpressionMock,
+        resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
+        readPublicLegislationHandler: readPublicLegislationHandlerMock,
+        listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
+        readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
+        readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
+        readVersionBlocks: readVersionBlocksMock,
+        // The corpus gate has its own tests; here a document is reachable.
+        resolveAnnotationTarget: async () =>
+          await Promise.resolve({
+            status: "available" as const,
+            readBlocks: async () => await Promise.resolve([]),
+          }),
+        searchConsolidatedLegislation: searchConsolidatedLegislationMock,
+        getLawTextBlock: getLawTextBlockMock,
+        executeRegistryLookup: executeRegistryLookupMock,
+      },
+    }),
+  );
 };
 
 /**

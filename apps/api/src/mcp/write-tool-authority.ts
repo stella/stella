@@ -305,8 +305,18 @@ const authorizedMcpRequestContextBrand: unique symbol = Symbol(
 
 export type AuthorizedMcpRequestContext = McpRequestContext &
   McpRequestDataAccess & {
-    readonly [authorizedMcpRequestContextBrand]?: true;
+    readonly [authorizedMcpRequestContextBrand]: true;
   };
+
+/** Constructs an authorized context for tests without weakening the production brand. */
+export const authorizedMcpContextForTest = <
+  TContext extends McpRequestContext & McpRequestDataAccess,
+>(
+  context: TContext,
+): AuthorizedMcpRequestContext & TContext => ({
+  ...context,
+  [authorizedMcpRequestContextBrand]: true,
+});
 
 /**
  * The refusal for `subject` (a tool, or the operation its input selects). A

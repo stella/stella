@@ -44,6 +44,8 @@ import type {
   TypedHandlerDataByName,
 } from "@/api/mcp/tool-types";
 import { validationErrorResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizeMcpToolContext } from "@/api/mcp/write-tool-authority";
 
 import type {
   ChatProjectableToolName,
@@ -217,7 +219,7 @@ const runInjectedHandler = async ({
   handler,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestResources;
+  context: AuthorizedMcpRequestContext;
   toolName: RegistryReadToolName;
   handler: McpToolHandler;
 }): Promise<McpToolResponse> => {
@@ -343,21 +345,37 @@ export const runRegistryReadTool = async ({
   if (Result.isError(scoped)) {
     return Result.err(scoped.error);
   }
+  const authorization = authorizeMcpToolContext({
+    context,
+    dataAccess: context,
+    definition: staticDefinition,
+    input: scoped.value,
+    toolName,
+  });
+  if (!authorization.authorized) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: authorization.refusal.message,
+      }),
+    );
+  }
+  const authorizedContext = authorization.context;
 
   const response =
     handler === undefined
       ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
           args: scoped.value,
-          context,
+          context: authorizedContext,
         })
       : await runInjectedHandler({
           args: scoped.value,
-          context,
+          context: authorizedContext,
           toolName,
           handler,
         });
   const finished = await finalizeToolEgress({
-    context,
+    context: authorizedContext,
     mode: "default",
     response,
   });

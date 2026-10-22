@@ -30,6 +30,7 @@ import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -259,49 +260,50 @@ const createContext = ({
   memberRole?: AuthorizedMcpRequestContext["memberRole"];
   scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
   workspaceStatus?: "active" | "archived";
-} = {}): AuthorizedMcpRequestContext => ({
-  accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
-  accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
-  accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, workspaceStatus]]),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole,
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent: asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
-    mock(async () => undefined),
-  ),
-  safeDb: toSafeDbMock(scopedDb),
-  scopedDb,
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "standard@example.test",
-  testDependencies: {
-    describeStoredTemplate: describeStoredTemplateMock,
-    fillStoredTemplateDocx: fillStoredTemplateDocxMock,
-    fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
-    fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
-    createStoredTemplate: createStoredTemplateMock,
-    renameStoredTemplate: renameStoredTemplateMock,
-    writeStoredTemplate: writeStoredTemplateMock,
-    safeOutboundFetchBytes: safeOutboundFetchBytesMock,
-    recordTemplateFill: recordTemplateFillMock,
-    recordTemplateUse: recordTemplateUseMock,
-    claimTemplatePersistenceRequest: claimTemplatePersistenceRequestMock,
-    fingerprintTemplatePersistenceRequest:
-      fingerprintTemplatePersistenceRequestMock,
-    persistFilledTemplateDocument: createEntityFromBufferMock,
-    persistFilledTemplateVersion: createEntityVersionFromBufferMock,
-    recordTemplatePersistenceReceipt: recordTemplatePersistenceReceiptMock,
-    releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
-    configureTemplateFields: configureTemplateFieldsMock,
-    templateDecideConditionsLogic: templateDecideConditionsLogicMock,
-    decideTemplateConditions: decideTemplateConditionsMock,
-    loadOrgAIConfig: loadOrgAIConfigMock,
-    loadManagedAIResidency: async () => "eu",
-    anonymizeTextFields: anonymizeTextFieldsMock,
-    loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
-    loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,
-  },
-});
+} = {}): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
+    accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
+    accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, workspaceStatus]]),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole,
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent: asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
+      mock(async () => undefined),
+    ),
+    safeDb: toSafeDbMock(scopedDb),
+    scopedDb,
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
+    testDependencies: {
+      describeStoredTemplate: describeStoredTemplateMock,
+      fillStoredTemplateDocx: fillStoredTemplateDocxMock,
+      fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
+      fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
+      createStoredTemplate: createStoredTemplateMock,
+      renameStoredTemplate: renameStoredTemplateMock,
+      writeStoredTemplate: writeStoredTemplateMock,
+      safeOutboundFetchBytes: safeOutboundFetchBytesMock,
+      recordTemplateFill: recordTemplateFillMock,
+      recordTemplateUse: recordTemplateUseMock,
+      claimTemplatePersistenceRequest: claimTemplatePersistenceRequestMock,
+      fingerprintTemplatePersistenceRequest:
+        fingerprintTemplatePersistenceRequestMock,
+      persistFilledTemplateDocument: createEntityFromBufferMock,
+      persistFilledTemplateVersion: createEntityVersionFromBufferMock,
+      recordTemplatePersistenceReceipt: recordTemplatePersistenceReceiptMock,
+      releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
+      configureTemplateFields: configureTemplateFieldsMock,
+      templateDecideConditionsLogic: templateDecideConditionsLogicMock,
+      decideTemplateConditions: decideTemplateConditionsMock,
+      loadOrgAIConfig: loadOrgAIConfigMock,
+      loadManagedAIResidency: async () => "eu",
+      anonymizeTextFields: anonymizeTextFieldsMock,
+      loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
+      loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,
+    },
+  });
 
 const createOutboundContext = (): AuthorizedMcpRequestContext => ({
   ...createContext(),

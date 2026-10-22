@@ -51,6 +51,7 @@ import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -223,7 +224,7 @@ const createContext = ({
   toolConfirmation?: AuthorizedMcpRequestContext["toolConfirmation"];
 } = {}): AuthorizedMcpRequestContext => {
   const accessibleWorkspaceIdSet = new Set(workspaceIds);
-  return {
+  return authorizedMcpContextForTest({
     testDependencies: {
       loadOrgSettingsForAuth: loadOrgSettingsMock,
       consumeInvokeCapabilityRateLimit: consumeRateLimitMock,
@@ -285,7 +286,7 @@ const createContext = ({
     ...(toolConfirmation === undefined ? {} : { toolConfirmation }),
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const call = async (toolName: string, args: Record<string, unknown>) =>

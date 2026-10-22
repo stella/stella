@@ -15,6 +15,7 @@ import type { McpErrorCode } from "@/api/mcp/error-codes";
 import type { McpToolHandler, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -62,21 +63,22 @@ const createRecordAuditEventMock = () =>
 // Owner role with one active, accessible workspace, so authorization and
 // workspace-access pre-checks pass and each handler advances to its first DB
 // call (the only thing that fails here).
-const createFailingDbContext = (): AuthorizedMcpRequestContext => ({
-  accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
-  accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
-  accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole: "owner",
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent: createRecordAuditEventMock(),
-  testDependencies: { createTimeEntryHandler: createTimeEntryHandlerMock },
-  safeDb: toSafeDbMock(throwingScopedDb),
-  scopedDb: throwingScopedDb,
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "standard@example.test",
-});
+const createFailingDbContext = (): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
+    accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
+    accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole: "owner",
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent: createRecordAuditEventMock(),
+    testDependencies: { createTimeEntryHandler: createTimeEntryHandlerMock },
+    safeDb: toSafeDbMock(throwingScopedDb),
+    scopedDb: throwingScopedDb,
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
+  });
 
 const asCallToolResult = (result: McpToolResponse) => {
   if (isMcpEgressPlan(result)) {

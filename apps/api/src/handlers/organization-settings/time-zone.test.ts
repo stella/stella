@@ -23,6 +23,7 @@ import type { McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import updateOrganizationSettings, {
@@ -108,24 +109,25 @@ const mcpContext = (
   memberRole: MemberRole,
   safeDb: SafeDb,
   audits: Parameters<AuditRecorder>[1][],
-): AuthorizedMcpRequestContext => ({
-  accessibleWorkspaceIds: [],
-  accessibleWorkspaceIdSet: new Set(),
-  accessibleWorkspaceStatusById: new Map(),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole,
-  organizationId,
-  recordAuditEvent: async (_tx, event) => {
-    audits.push(event);
-  },
-  safeDb,
-  scopedDb: asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(() => {
-    throw new Error("update_organization_settings reads through safeDb");
-  }),
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "admin@example.test",
-});
+): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [],
+    accessibleWorkspaceIdSet: new Set(),
+    accessibleWorkspaceStatusById: new Map(),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole,
+    organizationId,
+    recordAuditEvent: async (_tx, event) => {
+      audits.push(event);
+    },
+    safeDb,
+    scopedDb: asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(() => {
+      throw new Error("update_organization_settings reads through safeDb");
+    }),
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "admin@example.test",
+  });
 
 const toolPayload = (response: McpToolResponse) => {
   if (isMcpEgressPlan(response)) {

@@ -53,6 +53,7 @@ import { isCapabilityFeatureEnabled } from "@/api/mcp/capability-feature";
 import { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { CONTEXT_FIDELITY_WAIVERS } from "@/api/mcp/capability-waivers";
 import { bindApprovedMcpAuditContext } from "@/api/mcp/context";
+import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   projectMcpRefusal,
@@ -861,7 +862,7 @@ const listCapabilitiesArgsSchema = nullAsAbsent(
 
 const contextFeatureEnabled = (
   feature: string | undefined,
-  context: AuthorizedMcpRequestContext | undefined,
+  context: McpRequestContext | undefined,
 ): boolean =>
   (
     context?.testDependencies?.isCapabilityFeatureEnabled ??
@@ -870,7 +871,7 @@ const contextFeatureEnabled = (
 
 const capabilityFeatureEnabled = (
   entry: CatalogEntry,
-  context: AuthorizedMcpRequestContext,
+  context: McpRequestContext,
 ) =>
   entry.featureAccess === "conditional" ||
   isMcpDescriptorFeatureEnabled({
@@ -881,7 +882,7 @@ const capabilityFeatureEnabled = (
   });
 
 export const accessibleFeatureCapabilityIds = async (
-  context: AuthorizedMcpRequestContext,
+  context: McpRequestContext,
 ): Promise<string[]> =>
   (await getCatalog())
     .filter(
@@ -1564,7 +1565,7 @@ const resolveCapabilityWorkspace = ({
 
 type CapabilityServiceClassificationOptions = {
   args: unknown;
-  context: AuthorizedMcpRequestContext;
+  context: McpRequestContext;
   access: keyof typeof MCP_CAPABILITY_EXECUTORS;
 };
 

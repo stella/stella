@@ -9,8 +9,19 @@ const AUTHORITY_MODULES = new Set([
 ]);
 const INTERNAL_NAMES = new Set([
   "authorizedMcpRequestContextBrand",
+  "authorizedMcpContextForTest",
   "createAuthorizedMcpRequestContext",
 ]);
+const TEST_HELPER_MODULES = new Set([
+  "@/api/tests/helpers/authorized-mcp-context",
+  "@/api/tests/helpers/authorized-mcp-context.ts",
+]);
+const TEST_HELPER = "authorizedMcpContextForTest";
+
+const isTestFile = (filename: string): boolean =>
+  /(?:\.test|\.integration\.test|\.db\.test|\.postgres\.test)\.tsx?$/.test(
+    filename,
+  ) || filename.includes("/tests/helpers/");
 
 export default eslintCompatPlugin({
   meta: { name: "mcp-authorized-context-owner" },
@@ -21,6 +32,8 @@ export default eslintCompatPlugin({
         messages: {
           owner:
             "Only write-tool-authority.ts may construct or export an AuthorizedMcpRequestContext brand.",
+          testOnly:
+            "authorizedMcpContextForTest may only be imported by tests and test helpers.",
         },
       },
       createOnce(context) {
@@ -31,10 +44,21 @@ export default eslintCompatPlugin({
             return !filenameForContext(context).endsWith(OWNER);
           },
           ImportDeclaration(node) {
-            if (
-              typeof node.source.value !== "string" ||
-              !AUTHORITY_MODULES.has(node.source.value)
-            ) {
+            if (typeof node.source.value !== "string") {
+              return;
+            }
+            if (TEST_HELPER_MODULES.has(node.source.value)) {
+              if (isTestFile(filenameForContext(context))) {
+                return;
+              }
+              for (const specifier of node.specifiers) {
+                if (getImportedName(specifier) === TEST_HELPER) {
+                  context.report({ node: specifier, messageId: "testOnly" });
+                }
+              }
+              return;
+            }
+            if (!AUTHORITY_MODULES.has(node.source.value)) {
               return;
             }
             for (const specifier of node.specifiers) {

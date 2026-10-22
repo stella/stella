@@ -11,6 +11,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import type { MaterializePlaybookRunResult } from "@/api/lib/workflow/materialize-playbook-run";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -281,28 +282,29 @@ const createContext = ({
 }: {
   memberRole?: AuthorizedMcpRequestContext["memberRole"];
   scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
-} = {}): AuthorizedMcpRequestContext => ({
-  accessibleWorkspaceIds: [toSafeId<"workspace">(MATTER_ID)],
-  accessibleWorkspaceIdSet: new Set([MATTER_ID]),
-  accessibleWorkspaceStatusById: new Map([[MATTER_ID, "active"]]),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole,
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent: asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
-    mock(async () => undefined),
-  ),
-  testDependencies: {
-    materializePlaybookRun: materializePlaybookRunMock,
-    startWorkflow: startWorkflowMock,
-    loadLatestApprovedVersion: loadLatestApprovedVersionMock,
-    createPlaybookTableRuns: createPlaybookTableRunsMock,
-  },
-  safeDb: toSafeDbMock(scopedDb),
-  scopedDb,
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "standard@example.test",
-});
+} = {}): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [toSafeId<"workspace">(MATTER_ID)],
+    accessibleWorkspaceIdSet: new Set([MATTER_ID]),
+    accessibleWorkspaceStatusById: new Map([[MATTER_ID, "active"]]),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole,
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent: asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
+      mock(async () => undefined),
+    ),
+    testDependencies: {
+      materializePlaybookRun: materializePlaybookRunMock,
+      startWorkflow: startWorkflowMock,
+      loadLatestApprovedVersion: loadLatestApprovedVersionMock,
+      createPlaybookTableRuns: createPlaybookTableRunsMock,
+    },
+    safeDb: toSafeDbMock(scopedDb),
+    scopedDb,
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
+  });
 
 describe("MCP knowledge tools", () => {
   beforeEach(() => {

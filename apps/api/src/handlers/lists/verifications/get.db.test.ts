@@ -25,9 +25,9 @@ import { recordVerificationRead } from "@/api/lib/lists/verification/read-audit"
 import { readVerificationRun } from "@/api/lib/lists/verification/read-run";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/lists.verifications.get";
 import { handleMcpToolCall } from "@/api/mcp/tools";
-import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
 import {
   NO_DB,
@@ -225,7 +225,7 @@ const seed = async (db: GatedTestDb) => {
           userId: actor,
         }),
     );
-    const context = {
+    const context = authorizedMcpContextForTest({
       organizationId,
       userId: actor,
       userEmail: `${actor}@example.test`,
@@ -257,7 +257,7 @@ const seed = async (db: GatedTestDb) => {
             managedAIResidency: "eu",
           }),
       },
-    } satisfies AuthorizedMcpRequestContext;
+    });
     return context;
   };
   const capabilityRead = async () =>

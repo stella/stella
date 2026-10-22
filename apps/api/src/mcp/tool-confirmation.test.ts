@@ -9,6 +9,7 @@ import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { confirmationUnavailableResult } from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -18,7 +19,7 @@ const createContext = (
   const scopedDb = asTestRaw<
     AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>
   >(mock(async () => []));
-  const context: AuthorizedMcpRequestContext = {
+  const context: AuthorizedMcpRequestContext = authorizedMcpContextForTest({
     accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
     accessibleWorkspaceIdSet: new Set(["ws_1"]),
     accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),
@@ -34,7 +35,7 @@ const createContext = (
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
     ...(toolConfirmation === undefined ? {} : { toolConfirmation }),
-  };
+  });
   return { context, scopedDb };
 };
 
