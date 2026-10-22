@@ -11,7 +11,10 @@ import {
   findIcuError,
   findMissingPluralCategories,
   findPlaceholderMismatch,
+  findBareErrors,
+  isBareErrorMessage,
   isSuppressed,
+  parseBareErrorPending,
 } from "./i18n-lint";
 import type { LintBaseline } from "./i18n-lint";
 
@@ -742,5 +745,69 @@ describe("terminology: matter transfers", () => {
         "errors.example",
       ),
     ).toEqual([]);
+  });
+});
+
+describe("bare error messages", () => {
+  test("a message that only says something failed is bare", () => {
+    for (const message of [
+      "Error",
+      "error.",
+      "Something went wrong",
+      "Something went  wrong. Please try again.",
+      "An unexpected error occurred!",
+      "Oops\u2026",
+      "Action failed",
+    ]) {
+      expect(isBareErrorMessage(message)).toBe(true);
+    }
+  });
+
+  test("a message naming what failed is not bare", () => {
+    for (const message of [
+      "Recent activity could not be loaded.",
+      "Couldn't save the message",
+      "Error loading the invoice",
+      "Failed",
+    ]) {
+      expect(isBareErrorMessage(message)).toBe(false);
+    }
+  });
+
+  test("pending keys pass while bare and fail once gone or specific", () => {
+    const source = {
+      "common.error": "Error",
+      "lawHome.recentLoadFailed": "Recent activity could not be loaded.",
+      "billing.saveFailed": "Something went wrong",
+    };
+    expect(
+      findBareErrors(
+        source,
+        new Set(["common.error", "lawHome.recentLoadFailed", "common.removed"]),
+      ),
+    ).toEqual({
+      bare: ["billing.saveFailed"],
+      stale: ["common.removed", "lawHome.recentLoadFailed"],
+    });
+  });
+
+  test("the web pending list never grows", async () => {
+    const pendingPath = path.resolve(
+      import.meta.dir,
+      "../../../apps/web/src/i18n/i18n-bare-error-pending.json",
+    );
+    const pending = parseBareErrorPending(
+      await Bun.file(pendingPath).text(),
+      pendingPath,
+    );
+    const swept = new Set([
+      "agentClaim.error",
+      "common.error",
+      "common.somethingWentWrong",
+      "consent.error",
+      "errors.actionFailed",
+      "folio.somethingWentWrong",
+    ]);
+    expect([...pending].filter((key) => !swept.has(key))).toEqual([]);
   });
 });

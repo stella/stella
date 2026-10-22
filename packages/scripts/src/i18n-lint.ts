@@ -13,6 +13,10 @@
  *    category the target locale needs (e.g. Polish few/many, Arabic's six).
  *  - terminology: per-locale renderings marked `forbidden` in glossary.json
  *    do not appear (keeps canonical terms consistent across the product).
+ *  - bare errors: no en message says only that something failed ("Error",
+ *    "Something went wrong"). Never grandfathered; keys still being swept
+ *    are listed in i18n-bare-error-pending.json beside the catalog, which
+ *    may only shrink.
  *
  * Existing debt is grandfathered in i18n-lint-baseline.json so the gate
  * catches only NEW regressions. Burn the baseline down over time.
@@ -26,6 +30,8 @@ import { parse, TYPE } from "@formatjs/icu-messageformat-parser";
 import type { MessageFormatElement } from "@formatjs/icu-messageformat-parser";
 import { panic } from "better-result";
 import path from "node:path";
+
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { parseGlossary } from "./glossary-gen";
 import type { Glossary } from "./glossary-gen";
@@ -598,6 +604,76 @@ export const findForbiddenTerms = (
 
 // --- baseline ---
 
+/**
+ * Whole messages that say something failed but never what. Nobody can act on
+ * them and support cannot trace them, so every failure names what failed.
+ */
+const BARE_ERROR_MESSAGES = new Set([
+  "action failed",
+  "an error has occurred",
+  "an error occurred",
+  "an unexpected error occurred",
+  "an unknown error occurred",
+  "error",
+  "error occurred",
+  "errors",
+  "oops",
+  "oops, something went wrong",
+  "operation failed",
+  "request failed",
+  "something went wrong",
+  "something went wrong, please try again",
+  "something went wrong. please try again",
+  "unexpected error",
+  "unknown error",
+]);
+
+const bareErrorForm = (value: string): string =>
+  normalizeUnicode(value, "NFC")
+    .toLowerCase()
+    .replaceAll("\u2019", "'")
+    .replaceAll(/\s+/gu, " ")
+    .trim()
+    .replace(/[.!\u2026]+$/u, "")
+    .trim();
+
+export const isBareErrorMessage = (value: string): boolean =>
+  BARE_ERROR_MESSAGES.has(bareErrorForm(value));
+
+/**
+ * Bare en messages outside `pending`, and `pending` entries that are gone or
+ * no longer bare. Both fail, so the pending list can only shrink.
+ */
+export const findBareErrors = (
+  source: Record<string, string>,
+  pending: ReadonlySet<string>,
+): { bare: string[]; stale: string[] } => ({
+  bare: Object.entries(source)
+    .filter(([key, value]) => isBareErrorMessage(value) && !pending.has(key))
+    .map(([key]) => key)
+    .toSorted(),
+  stale: [...pending]
+    .filter((key) => {
+      const value = source[key];
+      return value === undefined || !isBareErrorMessage(value);
+    })
+    .toSorted(),
+});
+
+export const parseBareErrorPending = (
+  text: string,
+  filePath: string,
+): ReadonlySet<string> => {
+  const parsed: unknown = JSON.parse(text);
+  if (
+    !Array.isArray(parsed) ||
+    !parsed.every((key): key is string => typeof key === "string")
+  ) {
+    return panic(`${filePath} is not a list of message keys`);
+  }
+  return new Set(parsed);
+};
+
 export type LintCategory = "placeholder" | "icu" | "plural" | "terminology";
 
 export type BaselineEntry = { source: string; target: string };
@@ -820,6 +896,32 @@ if (import.meta.main) {
         console.log(`\n${path.resolve(langsDir, "en.json")}:`);
         for (const key of sourceErrors) {
           console.log(`  icu (source): ${key}`);
+        }
+      }
+
+      // A bare failure message is never grandfathered either.
+      const pendingPath = path.resolve(
+        langsDir,
+        "..",
+        "i18n-bare-error-pending.json",
+      );
+      const pendingFile = Bun.file(pendingPath);
+      const pending = (await pendingFile.exists())
+        ? parseBareErrorPending(await pendingFile.text(), pendingPath)
+        : new Set<string>();
+      const { bare, stale } = findBareErrors(source, pending);
+      if (bare.length > 0 || stale.length > 0) {
+        hasIssues = true;
+        console.log(`\n${path.resolve(langsDir, "en.json")}:`);
+        for (const key of bare) {
+          console.log(
+            `  bare-error (source): ${key} says only that something failed; name what failed`,
+          );
+        }
+        for (const key of stale) {
+          console.log(
+            `  bare-error (pending): ${key} is gone or no longer bare; remove it from ${pendingPath}`,
+          );
         }
       }
     }

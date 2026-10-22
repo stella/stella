@@ -1,0 +1,8 @@
+[
+  "agentClaim.error",
+  "common.error",
+  "common.somethingWentWrong",
+  "consent.error",
+  "errors.actionFailed",
+  "folio.somethingWentWrong"
+]
