@@ -15,6 +15,3 @@
   mechanical removals. Keep manual memoization when a library contract requires
   referential stability or profiling proves a real benefit.
 - Reserve `Props` for React component props.
-- Reuse React utility types instead of hand-rolling equivalents: for example,
-  `React.PropsWithChildren<P>` for props with children and
-  `React.ComponentProps<typeof ExistingComponent>` when wrapping a component.

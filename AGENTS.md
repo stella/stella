@@ -56,15 +56,12 @@ details unless they are already public in the repository.
 
 ## Meta Preferences
 
+- Use Computer Use or desktop/browser UI control only when the user explicitly asks for it. General fix, build, and test requests do not authorize operating user applications; isolated automated tests and code-level checks remain allowed.
 - Never manually reformat code you did not semantically change (auto-formatter output
   from `bun run format` is fine to include)
 - In prose, vary punctuation: prefer colons, semicolons, commas, and parentheses
   over em dashes. This does not apply to source code, command syntax, generated
   content, or exact identifiers.
-- Omit needless words. Vigorous writing is concise: a sentence should contain no
-  unnecessary words, a paragraph no unnecessary sentences, for the same reason that a
-  drawing should have no unnecessary lines and a machine no unnecessary parts. Applies
-  to comments, commits, PRs, and docs.
 - Do not add backward-compatibility machinery by default. First identify the concrete
   older clients, persisted data, integrations, or deployment states that must remain
   supported. When none exist, prefer a clean migration or cutover; aliases, dual
@@ -110,9 +107,6 @@ details unless they are already public in the repository.
 - Enable `git rerere` (`git config --global rerere.enabled true`, plus
   `rerere.autoupdate true` to auto-stage what it resolves) so conflict
   resolutions are recorded and auto-replayed across repeated or long rebases
-- Fail fast: validate at boundaries, return/throw early
-- Minimize brace nesting: invert conditions, early returns
-- Use named constants, not string literals for domain values
 - No direct `document.cookie` assignment
 - Avoid spread in loop accumulators (use `.push()`)
 - If you encounter a pre-existing bug or lint error, fix it. Preserve focus through
@@ -154,9 +148,6 @@ details unless they are already public in the repository.
 - When the linter blocks an `as` cast, restructure to narrow properly (type guards,
   `in` checks, records instead of arrays). If truly unavoidable, ask before adding and
   include a `// SAFETY:` comment explaining why the cast is sound.
-- When a type mismatch appears, trace it to the source (e.g., the handler or query
-  that produces the wrong type) rather than casting at the consumer. Check git to
-  verify you did not introduce the mismatch yourself before blaming the framework.
 - Never annotate or cast a value the compiler already infers, and never pass explicit
   type arguments to inference-driven APIs. Every redundant annotation or generic can
   mask real errors and break the inference chain; let inference flow and narrow at
@@ -166,7 +157,7 @@ details unless they are already public in the repository.
   widening it or paying the annotation's instantiation cost.
 - Companion maps over a union (policy, consent, projection, or rendering
   dispositions per tool/route/kind) must be total: `as const satisfies
-Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
+  Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
   member land without a decision. Derive the union from the source of truth
   (`keyof typeof SOURCE_MAP`, or a mapped filter over it) instead of
   hand-listing names.
@@ -184,14 +175,9 @@ Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
   readable. Use a named `SomethingOptions`, `SomethingArgs`, or `SomethingParams`
   object for 3+ arguments, or when two same-type or otherwise interchangeable
   positional arguments would be easy to mix up.
-- Reuse utility types from libraries instead of hand-rolling equivalents. Check the
-  dependencies already in use before defining a custom helper type.
 - Keep helper-local types close to the helper they describe: put `SomethingOptions`,
   `SomethingResult`, and similar aliases immediately above the function, not in a
   file-level type dump far away from the implementation.
-- If a return type is noisy enough to hurt readability, hoist it into a nearby alias
-  such as `SomethingResult` and use it in the signature (e.g., `SomethingResult` or
-  `Promise<SomethingResult>`). If the return type is simple, keep it inline.
 - Watch type-instantiation cost in hot generic paths such as schema builders, route
   trees, and query-option graphs. Prefer narrowing over annotation, and keep large
   unused types out of inferred return positions.

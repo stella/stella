@@ -9,20 +9,12 @@
 
 - Use semantic design tokens (for example, `bg-muted`, `text-foreground`, and
   `border`) instead of raw colour values.
-- Prefer semantic HTML elements (`<button>`, `<nav>`, `<main>`) over generic elements
-  with ARIA roles. Provide meaningful alternative text, a proper heading hierarchy,
-  labels for form controls, and keyboard behavior alongside pointer behavior.
-- Reuse the project's established components and primitives with local styling
-  overrides instead of recreating native controls. This preserves accessibility,
-  focus behavior, and sizing conventions.
 - When using statically scanned utility CSS, do not construct class names dynamically
   (for example, `` `bg-${token}-200` ``). Use an explicit class map or a style backed
   by CSS custom properties.
 
 ### UI Architecture
 
-- Prefer explicit branches over nested ternaries. Extract complex conditional UI into
-  a small helper or component that returns early.
 - Subscribe to the smallest state slice a view needs. Broad subscriptions cause
   unrelated state changes to rerender the view.
 - Do not add memoization or caches prophylactically. Keep them when an API contract
@@ -42,9 +34,6 @@
   mechanical removals. Keep manual memoization when a library contract requires
   referential stability or profiling proves a real benefit.
 - Reserve `Props` for React component props.
-- Reuse React utility types instead of hand-rolling equivalents: for example,
-  `React.PropsWithChildren<P>` for props with children and
-  `React.ComponentProps<typeof ExistingComponent>` when wrapping a component.
 
 ## TanStack React
 

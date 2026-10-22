@@ -20,7 +20,6 @@
   fetch(url, { signal: AbortSignal.timeout(10_000) });
   ```
 
-- Validate inputs at the boundary with Valibot or Elysia schemas
 - Prefer one obvious validation split: use Elysia `t` for HTTP route contracts,
   Valibot for web and general runtime validation, and Zod only when a dependency
   explicitly requires it
@@ -33,8 +32,6 @@
 - Put normalization inside the Valibot schema (`v.trim()`, `v.toLowerCase()`, etc.),
   then use `v.InferInput` for raw form values and `v.InferOutput` after
   parsing/normalization
-- Prefer declarative/built-in validators over manual checks (e.g.,
-  `t.File({ maxSize })`, `v.isoDate()`, `v.email()`).
 - Do not add fallback values for properties that the framework already guarantees
   (e.g., `file.type || "..."` when Elysia's `t.File()` always provides a type). Trust
   internal code and framework guarantees; only add defensive fallbacks at true system
