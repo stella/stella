@@ -21,7 +21,6 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-roles.postgres.test.ts",
-    "src/lib/member-assignment-offboarding.postgres.test.ts",
     "src/lib/scheduler/tasks/registration-retention.postgres.test.ts",
   ]);
 

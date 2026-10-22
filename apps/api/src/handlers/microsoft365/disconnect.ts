@@ -10,6 +10,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
   contract: "patch",
@@ -87,5 +88,10 @@ const disconnectMicrosoft365 = createSafeRootHandler(
     return Result.ok({ disconnected: deleted.length > 0 });
   },
 );
+
+declareAggregateMutation(disconnectMicrosoft365.handler, {
+  type: "aggregate",
+  aggregates: ["orgFeatureAdmission"],
+});
 
 export default disconnectMicrosoft365;

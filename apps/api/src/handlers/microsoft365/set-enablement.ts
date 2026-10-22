@@ -10,6 +10,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { disableAndPurgeMicrosoft365ForOrg } from "@/api/lib/microsoft365-disable-purge";
@@ -134,5 +135,10 @@ const setMicrosoft365Enablement = createSafeRootHandler(
     return Result.ok({ enabled: true });
   },
 );
+
+declareAggregateMutation(setMicrosoft365Enablement.handler, {
+  type: "aggregate",
+  aggregates: ["orgFeatureAdmission"],
+});
 
 export default setMicrosoft365Enablement;

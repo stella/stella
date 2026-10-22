@@ -17,6 +17,7 @@ import { microsoft365RealtimeUpdates } from "@/api/handlers/realtime-resource-se
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import { capabilityEnabled, delegatedScopes } from "./capabilities";
@@ -143,5 +144,10 @@ const connectMicrosoft365 = createSafeRootHandler(
     return Result.ok({ authorizeUrl });
   },
 );
+
+declareAggregateMutation(connectMicrosoft365.handler, {
+  type: "aggregate",
+  aggregates: ["orgFeatureAdmission"],
+});
 
 export default connectMicrosoft365;
