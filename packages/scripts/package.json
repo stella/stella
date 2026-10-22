@@ -40,7 +40,6 @@
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
-    "fast-check": "catalog:",
-    "oxc-transform-react": "catalog:"
+    "fast-check": "catalog:"
   }
 }

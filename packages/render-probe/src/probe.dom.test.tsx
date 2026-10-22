@@ -1,5 +1,12 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 
 import { installRenderProbe } from "./probe";
 import { formatRenderReport } from "./report";
@@ -111,20 +118,30 @@ const renders = () =>
     ]),
   );
 
-const container = document.createElement("div");
-document.body.append(container);
-const root = createRoot(container);
+let container: HTMLDivElement;
+let root: ReturnType<typeof createRoot>;
 
 describe("the render probe", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
     probe.reset();
-  });
-
-  test("counts each component of a mounted tree once, as a mount", async () => {
     await act(async () => {
       root.render(<App />);
       await Promise.resolve();
     });
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      root.unmount();
+      await Promise.resolve();
+    });
+    container.remove();
+  });
+
+  test("counts each component of a mounted tree once, as a mount", async () => {
     expect(renders()).toEqual({
       App: { mount: 1 },
       Header: { mount: 1 },
@@ -136,6 +153,7 @@ describe("the render probe", () => {
   });
 
   test("a parent's own state change renders it and its unmemoized children, never the memoized ones", async () => {
+    probe.reset();
     await click("count");
     // Rows and the boundary bailed out: their stale flags must not count.
     expect(renders()).toEqual({
@@ -146,6 +164,7 @@ describe("the render probe", () => {
   });
 
   test("a changed prop renders only the row it reached", async () => {
+    probe.reset();
     await click("capitalize-second");
     expect(renders()).toEqual({
       App: { state: 1 },
@@ -155,6 +174,7 @@ describe("the render probe", () => {
   });
 
   test("a context change reaches its reader through a memo boundary that bailed out", async () => {
+    probe.reset();
     await click("dark");
     expect(renders()).toEqual({
       App: { state: 1 },
@@ -164,6 +184,7 @@ describe("the render probe", () => {
   });
 
   test("a commit after earlier renders counts only its own", async () => {
+    probe.reset();
     await click("count");
     await click("count");
     expect(probe.snapshot()).toMatchObject({
@@ -174,11 +195,11 @@ describe("the render probe", () => {
   });
 
   test("the report names the widest renderers first", async () => {
+    probe.reset();
     await click("capitalize");
     const report = formatRenderReport(probe.snapshot());
-    // The second row was capitalized already: only the other two render.
     expect(report.split("\n")[0]).toBe(
-      "1 commits, 4 component renders, widest commit 4, 1 with unchanged props",
+      "1 commits, 5 component renders, widest commit 5, 1 with unchanged props",
     );
     expect(report.split("\n")[2]).toStartWith("Row");
   });
