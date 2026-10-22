@@ -208,15 +208,39 @@ type Observation = {
   readonly bare: readonly string[];
 };
 
+// The walk and the reads are not atomic: tests in the same check pool create
+// and remove their own files. A walked path that no longer resolves to a file
+// carries no directive, so it is skipped; any other read error still fails.
+const VANISHED_FILE_CODES = new Set(["ENOENT", "ENOTDIR"]);
+
+export const readWalkedSource = (root: string, file: string): string | null => {
+  try {
+    return readFileSync(path.join(root, file), "utf-8");
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      typeof error.code === "string" &&
+      VANISHED_FILE_CODES.has(error.code)
+    ) {
+      return null;
+    }
+    throw error;
+  }
+};
+
 export const observeSecurityDirectives = (
   files: readonly string[],
-  read: (file: string) => string,
+  read: (file: string) => string | null,
 ): Observation => {
   const counts = new Map<string, ObservedWaiver>();
   const bare: string[] = [];
 
   for (const file of files) {
     const content = read(file);
+    if (content === null) {
+      continue;
+    }
     const directives = collectLintDirectives(content, file);
     if (directives.length === 0) {
       continue;
@@ -447,7 +471,7 @@ const readLedger = (): Ledger => {
 
 const observeRepo = (root: string): Observation =>
   observeSecurityDirectives(scanSourceFiles(root), (file) =>
-    readFileSync(path.join(root, file), "utf-8"),
+    readWalkedSource(root, file),
   );
 
 const runCheck = (): number => {

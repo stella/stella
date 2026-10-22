@@ -209,6 +209,9 @@ const decide = async ({
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
+  // Metadata events mirror the head's earlier code run; one exists here.
+  const listWorkflowRuns = () => {};
+  const listJobsForWorkflowRun = () => {};
   await new Script(`(async () => {${lookup}\n})()`).runInNewContext({
     Buffer,
     require: (name: string) => {
@@ -252,6 +255,18 @@ const decide = async ({
       info: () => {},
     },
     github: {
+      paginate: async (method: unknown) =>
+        method === listWorkflowRuns
+          ? [
+              {
+                id: 50,
+                head_sha: pull.head.sha,
+                status: "completed",
+                conclusion: "success",
+                pull_requests: [{ number: pull.number }],
+              },
+            ]
+          : [{ name: "ci-plan" }, { name: "ci-result" }],
       rest: {
         pulls: {
           get: async (request: unknown) => {
@@ -272,6 +287,8 @@ const decide = async ({
           },
         },
         actions: {
+          listWorkflowRuns,
+          listJobsForWorkflowRun,
           downloadArtifact: async (request: unknown) => {
             requests.push(request);
             if (downloadFailure) {
@@ -1156,6 +1173,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
           "needs.ci-plan.outputs.queue_depth": "thin",
           "needs.ci-plan.result": "success",
           "needs.pr-heavy-gate.result": "skipped",
+          "needs.generated-sources.result": "success",
           "needs.web-build.result": "success",
           "needs.heavy-web-build.result": "skipped",
           "inputs.pr_depth_only": false,

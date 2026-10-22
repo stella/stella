@@ -1396,6 +1396,7 @@
     "credentialSendDescription": "Wyślij ją tylko wtedy, gdy chcesz udostępnić tę wartość w rozmowie.",
     "credentialSendTitle": "Ta wiadomość może zawierać dane dostępowe",
     "deleteThread": "Usuń rozmowę",
+    "diagramUnavailable": "Nie udało się wyświetlić tego diagramu. Poniżej znajduje się jego kod źródłowy.",
     "editMode": {
       "autoDirect": "Automatycznie · przepisz",
       "autoDirectDescription": "Zmiany AI są stosowane natychmiast przez bezpośrednie przepisanie dokumentu (bez śledzenia zmian).",
@@ -4198,7 +4199,9 @@
     "prompt": "Czego szukasz?",
     "recent": "Ostatnie",
     "recentCasesFilter": "Orzeczenia",
+    "recentLoadFailed": "Nie udało się wczytać ostatniej aktywności.",
     "recentSearchFilter": "Wyszukiwania",
+    "recentUpdateFailed": "Nie udało się zaktualizować ostatniej aktywności.",
     "recentlyInForce": "Niedawno weszło w życie",
     "searchLabel": "Szukaj w bazie prawnej",
     "searchPlaceholder": "Sygnatura, numer aktu, ECLI lub słowa kluczowe",

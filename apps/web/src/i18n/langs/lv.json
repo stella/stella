@@ -1396,6 +1396,7 @@
     "credentialSendDescription": "Sūtiet tikai tad, ja vēlaties šo vērtību kopīgot sarunā.",
     "credentialSendTitle": "Šajā ziņojumā var būt piekļuves informācija",
     "deleteThread": "Dzēst sarunu",
+    "diagramUnavailable": "Šo diagrammu neizdevās attēlot. Tās pirmkods ir redzams zemāk.",
     "editMode": {
       "autoDirect": "Automātiski · pārrakstīt",
       "autoDirectDescription": "AI labojumi tiek lietoti uzreiz, tieši pārrakstot dokumentu (bez izmaiņu izsekošanas).",
@@ -4198,7 +4199,9 @@
     "prompt": "Ko jūs meklējat?",
     "recent": "Nesenie",
     "recentCasesFilter": "Nolēmumi",
+    "recentLoadFailed": "Neizdevās ielādēt nesenās darbības.",
     "recentSearchFilter": "Meklējumi",
+    "recentUpdateFailed": "Neizdevās atjaunināt nesenās darbības.",
     "recentlyInForce": "Nesen stājās spēkā",
     "searchLabel": "Meklēt tiesību datubāzē",
     "searchPlaceholder": "Lietas numurs, akta numurs, ECLI vai atslēgvārdi",

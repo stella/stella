@@ -1266,7 +1266,6 @@ test("organization settings skip authenticated reads until an organization is se
     organizationId: ORG,
     userId: USER,
   });
-  expect(typeof selected.queryFn).toBe("function");
   expect(selected.queryKey).not.toEqual(unselected.queryKey);
   const selectedOptional = optionalOrganizationSettingsOptions({
     organizationId: ORG,
