@@ -835,6 +835,7 @@ const writeDesiredStates = async (
       set: {
         desiredAction: sql`excluded.desired_action`,
         desiredEpoch: sql`excluded.desired_epoch`,
+        desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE clock_timestamp() END`,
         desiredFingerprint: sql`excluded.desired_fingerprint`,
         desiredIndexId: sql`excluded.desired_index_id`,
         workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
