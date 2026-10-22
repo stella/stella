@@ -307,6 +307,25 @@ const RESTRICTED_IMPORT_RULES = {
       owners: ["apps/web/src/hooks/use-effect.ts"],
     },
   ],
+  "tooltip-provider-owner": [
+    {
+      messageId: "tooltipProviderOwner",
+      message:
+        "Do not mount a nested TooltipProvider. Use the provider owned by the app shell instead.",
+      modules: ["@stll/ui/tooltip", "packages/ui/src/components/tooltip"],
+      restriction: {
+        type: "exports",
+        names: new Set(["TooltipProvider"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [
+        "apps/web/src/app-providers.tsx",
+        "apps/desktop/src/mainview/main.tsx",
+        "packages/mcp-apps/src/case-law-results/app.tsx",
+        "packages/mcp-apps/src/decision-reader/app.tsx",
+      ],
+    },
+  ],
 } as const satisfies Record<string, readonly RestrictedImportEntry[]>;
 
 export type RestrictedImportRuleName = keyof typeof RESTRICTED_IMPORT_RULES;
