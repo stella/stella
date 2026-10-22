@@ -574,7 +574,7 @@
       "scope": "onboarding"
     },
     "name": "set_practice_jurisdictions",
-    "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {country_code, is_primary}; exactly one entry should be primary.",
+    "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {country_code, is_primary}; exactly one entry should be primary. Needs a person's approval in stella: MCP and CLI calls are refused, so describe the change for the user instead.",
     "inputSchema": {
       "type": "object",
       "required": ["jurisdictions"],
@@ -5418,7 +5418,7 @@
       "scope": "admin_write"
     },
     "name": "update_organization_settings",
-    "description": "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions.",
+    "description": "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions. Needs a person's approval in stella: MCP and CLI calls are refused, so describe the change for the user instead.",
     "inputSchema": {
       "type": "object",
       "required": [],
