@@ -10,28 +10,15 @@ const MAP_SHARDS = 256;
 const MAP_SHARD_MASK = MAP_SHARDS - 1;
 const MAP_CHUNK_SIZE = 4096;
 
+/** Unsigned 32-bit integers; one typed-array type keeps every access site monomorphic. */
 export class NumberColumn {
-  private readonly chunks: (Uint8Array | Uint32Array | Float64Array)[] = [];
-  private readonly kind;
-  constructor(kind: "integer" | "float" | "byte" = "integer") {
-    this.kind = kind;
-  }
+  private readonly chunks: Uint32Array[] = [];
   length = 0;
 
   push(value: number): number {
     const index = this.length;
-    if (index % COLUMN_CHUNK_SIZE === 0) {
-      switch (this.kind) {
-        case "float":
-          this.chunks.push(new Float64Array(COLUMN_CHUNK_SIZE));
-          break;
-        case "byte":
-          this.chunks.push(new Uint8Array(COLUMN_CHUNK_SIZE));
-          break;
-        case "integer":
-          this.chunks.push(new Uint32Array(COLUMN_CHUNK_SIZE));
-          break;
-      }
+    if ((index & COLUMN_CHUNK_MASK) === 0) {
+      this.chunks.push(new Uint32Array(COLUMN_CHUNK_SIZE));
     }
     this.length += 1;
     this.set(index, value);
@@ -55,18 +42,51 @@ export class NumberColumn {
     );
   }
 
+  set(index: number, value: number): void {
+    const chunk =
+      this.chunks[index >>> COLUMN_CHUNK_SHIFT] ??
+      panic("Missing compact column chunk");
+    chunk[index & COLUMN_CHUNK_MASK] = value;
+  }
+}
+
+/** Bytes (UTF-8 spellings, varint postings) in their own monomorphic column. */
+export class ByteColumn {
+  private readonly chunks: Uint8Array[] = [];
+  length = 0;
+
+  push(value: number): number {
+    const index = this.length;
+    if ((index & COLUMN_CHUNK_MASK) === 0) {
+      this.chunks.push(new Uint8Array(COLUMN_CHUNK_SIZE));
+    }
+    this.length += 1;
+    const chunk =
+      this.chunks[index >>> COLUMN_CHUNK_SHIFT] ??
+      panic("Missing compact byte chunk");
+    chunk[index & COLUMN_CHUNK_MASK] = value;
+    return index;
+  }
+
+  get(index: number): number {
+    if (index < 0 || index >= this.length) {
+      return panic("Missing compact byte value");
+    }
+    return (
+      this.chunks[index >>> COLUMN_CHUNK_SHIFT]?.[index & COLUMN_CHUNK_MASK] ??
+      panic("Missing compact byte chunk")
+    );
+  }
+
   byteChunk(index: number): Uint8Array {
-    const chunk = this.chunks[index >>> COLUMN_CHUNK_SHIFT];
-    return chunk instanceof Uint8Array
-      ? chunk
-      : panic("Missing compact byte chunk");
+    return (
+      this.chunks[index >>> COLUMN_CHUNK_SHIFT] ??
+      panic("Missing compact byte chunk")
+    );
   }
 
   bytes(from: number, to: number): Uint8Array {
-    const chunk = this.chunks[from >>> COLUMN_CHUNK_SHIFT];
-    if (!(chunk instanceof Uint8Array)) {
-      return panic("Missing compact byte chunk");
-    }
+    const chunk = this.byteChunk(from);
     const localFrom = from & COLUMN_CHUNK_MASK;
     if (to - from <= chunk.length - localFrom) {
       return chunk.subarray(localFrom, localFrom + to - from);
@@ -74,13 +94,6 @@ export class NumberColumn {
     return Uint8Array.from({ length: to - from }, (_, offset) =>
       this.get(from + offset),
     );
-  }
-
-  set(index: number, value: number): void {
-    const chunk =
-      this.chunks[index >>> COLUMN_CHUNK_SHIFT] ??
-      panic("Missing compact column chunk");
-    chunk[index & COLUMN_CHUNK_MASK] = value;
   }
 }
 
@@ -173,10 +186,61 @@ export class StringMap<T> {
   }
 }
 
+const NUMBER_MAP_SHARDS = 16;
+const NUMBER_MAP_SHARD_SHIFT = 28;
+const HIGH_WORD = 4_294_967_296;
+
+/**
+ * Integer keys up to 2^53, with the same chunk cap as {@link StringMap}. Keys
+ * need no string allocation or hashing, so lookups stay off the GC heap.
+ */
+export class NumberMap<T> {
+  private readonly shards = Array.from({ length: NUMBER_MAP_SHARDS }, () => [
+    new Map<number, T>(),
+  ]);
+
+  private bucket(key: number): Map<number, T>[] {
+    // Fibonacci hashing of both words; equality remains Map-owned.
+    const mixed = Math.imul(
+      (key >>> 0) ^ Math.floor(key / HIGH_WORD),
+      0x9e_37_79_b1,
+    );
+    return (
+      this.shards[mixed >>> NUMBER_MAP_SHARD_SHIFT] ??
+      panic("Missing compact number map shard")
+    );
+  }
+
+  get(key: number): T | undefined {
+    const maps = this.bucket(key);
+    for (const map of maps) {
+      const value = map.get(key);
+      if (value !== undefined) {
+        return value;
+      }
+    }
+    return undefined;
+  }
+
+  /** Adds a key the map does not hold yet. */
+  add(key: number, value: T): void {
+    if (this.get(key) !== undefined) {
+      panic("Compact number map key is already present");
+    }
+    const maps = this.bucket(key);
+    let last = maps.at(-1) ?? panic("Missing compact number map chunk");
+    if (last.size >= MAP_CHUNK_SIZE) {
+      last = new Map();
+      maps.push(last);
+    }
+    last.set(key, value);
+  }
+}
+
 /** UTF-8 storage for normalized spellings, which contain complete Unicode letters. */
 export class SpellingColumn {
   private readonly offsets = new NumberColumn();
-  private readonly values = new NumberColumn("byte");
+  private readonly values = new ByteColumn();
   private readonly encoder = new TextEncoder();
   private readonly decoder = new TextDecoder();
   constructor() {
@@ -301,7 +365,7 @@ export function* stringIdsSteps(
   return new StringIds(strings, slots);
 }
 
-export const appendUnsigned = (bytes: NumberColumn, value: number): void => {
+export const appendUnsigned = (bytes: ByteColumn, value: number): void => {
   let rest = value;
   while (rest >= 128) {
     bytes.push((rest % 128) + 128);
@@ -310,7 +374,7 @@ export const appendUnsigned = (bytes: NumberColumn, value: number): void => {
   bytes.push(rest);
 };
 
-type UnsignedReaderOptions = { bytes: NumberColumn; from: number; to: number };
+type UnsignedReaderOptions = { bytes: ByteColumn; from: number; to: number };
 export class UnsignedReader {
   private readonly bytes;
   private readonly to;
@@ -383,7 +447,7 @@ class DeltaIterator implements IterableIterator<number> {
 type PackedPostingsOptions = {
   offsets: NumberColumn;
   sizes: NumberColumn;
-  values: NumberColumn;
+  values: ByteColumn;
 };
 
 export class PackedPostings {
@@ -446,13 +510,19 @@ export class PostingColumn {
 
   *compact(): Generator<void, PackedPostings, void> {
     const offsets = new NumberColumn();
-    const values = new NumberColumn("byte");
+    const values = new ByteColumn();
     const sizes = new NumberColumn();
     let processed = 0;
     offsets.push(0);
     for (let id = 0; id < this.heads.length; id += 1) {
       let previous = 0;
-      for (const value of this.get(id)) {
+      // A direct node walk: a nested generator per list dominates packing.
+      for (
+        let node = this.heads.get(id);
+        node !== NO_NODE;
+        node = this.next.getUnchecked(node)
+      ) {
+        const value = this.values.getUnchecked(node);
         if (value < previous) {
           panic("Unordered compact postings");
         }

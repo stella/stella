@@ -1,5 +1,8 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import type { ParsedList, SanctionsEntry } from "./entry";
 import {
@@ -381,3 +384,131 @@ test("identifier-only screening preserves shared postings and legacy work limits
     expect(successes).toBeGreaterThan(0);
   }
 });
+
+// Few syllables give a dense vocabulary: long gram posting lists and many
+// fuzzy neighbours per token. Non-Latin and astral letters reach the packed
+// bigram keys' full code-point range and split folded from raw spellings.
+const syllable = fc.constantFrom(
+  "ka",
+  "ri",
+  "mo",
+  "med",
+  "al",
+  "sch",
+  "ov",
+  "ša",
+  "жи",
+  "é",
+  "𐐀",
+  "ul",
+);
+const generatedWord = fc
+  .array(syllable, { minLength: 2, maxLength: 4 })
+  .map((parts) => parts.join(""));
+const NAME_EDITS = [
+  "exact",
+  "transpose",
+  "delete",
+  "insert",
+  "drop-token",
+  "reverse",
+] as const;
+type NameEdit = (typeof NAME_EDITS)[number];
+
+const editName = (name: string, edit: NameEdit): string => {
+  const characters = Array.from(name);
+  const tokens = name.split(" ");
+  switch (edit) {
+    case "exact":
+      return name;
+    case "transpose":
+      return [
+        ...characters.slice(0, -2),
+        ...characters.slice(-2).toReversed(),
+      ].join("");
+    case "delete":
+      return characters.slice(0, -1).join("");
+    case "insert":
+      return `${characters.slice(0, 2).join("")}a${characters.slice(2).join("")}`;
+    case "drop-token":
+      return tokens.length > 1 ? tokens.slice(1).join(" ") : name;
+    case "reverse":
+      return tokens.toReversed().join(" ");
+    default:
+      edit satisfies never;
+      return panic("Unhandled generated name edit");
+  }
+};
+
+test("compact screening matches the legacy oracle on generated dense lists", () => {
+  const fixture =
+    compactLists([1, 0, 0]).at(0) ?? panic("compact list fixture is empty");
+  const base =
+    fixture.entries.at(0) ?? panic("compact list fixture has no OFAC entry");
+  assertProperty(
+    "compact screening matches the legacy oracle on generated dense lists",
+    fc.property(
+      fc.uniqueArray(generatedWord, { minLength: 8, maxLength: 40 }),
+      fc.array(
+        fc.record({
+          names: fc.array(fc.array(fc.nat(), { minLength: 1, maxLength: 3 }), {
+            minLength: 1,
+            maxLength: 3,
+          }),
+          entityType: fc.constantFrom("person", "organisation", "unknown"),
+        }),
+        { minLength: 1, maxLength: 60 },
+      ),
+      fc.array(
+        fc.record({
+          entry: fc.nat(),
+          name: fc.nat(),
+          edit: fc.constantFrom(...NAME_EDITS),
+          entityType: fc.constantFrom(undefined, "person", "organisation"),
+          cutoff: fc.constantFrom(0.5, 0.65, 0.8),
+        }),
+        { minLength: 1, maxLength: 8 },
+      ),
+      (words, shapes, probes) => {
+        const entries = shapes.map(
+          ({ names, entityType }, index): SanctionsEntry => ({
+            ...base,
+            sourceId: `generated-${index}`,
+            entityType,
+            names: names.map((tokens, alias) => ({
+              name: tokens
+                .map(
+                  (token) =>
+                    words[token % words.length] ??
+                    panic("Missing generated word"),
+                )
+                .join(" "),
+              quality: alias === 1 ? "weak" : "strong",
+            })),
+          }),
+        );
+        const lists: ParsedList[] = [{ version: fixture.version, entries }];
+        const current = buildScreeningIndex(lists);
+        const legacy = buildLegacyScreeningIndex(lists);
+        for (const probe of probes) {
+          const entry =
+            entries[probe.entry % entries.length] ??
+            panic("Missing generated entry");
+          const listed =
+            entry.names[probe.name % entry.names.length] ??
+            panic("Missing generated name");
+          const name = editName(listed.name, probe.edit);
+          const query: ScreeningQuery =
+            probe.entityType === undefined
+              ? { name }
+              : { name, entityType: probe.entityType };
+          const options = { cutoff: probe.cutoff, limit: 25 };
+          expect(legacyScreenOutcome(screen(current, query, options))).toEqual(
+            legacyScreenOutcome(legacyScreen(legacy, query, options)),
+          );
+        }
+      },
+    ),
+    { numRuns: 60 },
+  );
+}, 120_000);

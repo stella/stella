@@ -5,11 +5,13 @@ import { distance } from "@stll/fuzzy-search";
 import {
   type SpellingColumn,
   appendUnsigned,
+  ByteColumn,
   spellingColumnSteps,
   stringIdsSteps,
   UnsignedReader,
   BoundedCache,
   NumberColumn,
+  NumberMap,
   ObjectColumn,
   PostingColumn,
   type PackedPostings,
@@ -102,7 +104,7 @@ type Spellings = {
   lengths: NumberColumn;
   gramCounts: NumberColumn;
   characterOffsets: NumberColumn;
-  characterCounts: NumberColumn;
+  characterCounts: ByteColumn;
   characterCache: BoundedCache<number, Uint32Array>;
 };
 
@@ -147,7 +149,8 @@ type Vocabulary = {
   spellingIds: NumberColumn;
   spellings: Spellings;
   ids: Pick<StringMap<number>, "get">;
-  bigrams: StringMap<number>;
+  /** Gram posting list ids by spelling length, then by packed bigram. */
+  bigrams: NumberMap<NumberMap<number>>;
   gramPostings: ReadonlyPostings & Pick<PackedPostings, "reader">;
   postings: ReadonlyPostings;
   joinPostings: ReadonlyPostings;
@@ -343,7 +346,8 @@ export type NameIndex = {
   aliases: AliasColumn;
   folded: Vocabulary;
   raw: Vocabulary;
-  weights: NumberColumn;
+  /** Per folded token id, its inverse document frequency weight. */
+  weights: Float64Array;
   maxWeight: number;
 };
 
@@ -376,7 +380,7 @@ const emptyVocabulary = (spellings: Spellings): BuildingVocabulary => {
     spellingIds,
     spellings,
     ids: new StringMap(),
-    bigrams: new StringMap(),
+    bigrams: new NumberMap(),
     gramPostings: new PostingColumn(),
     postings: new PostingColumn(),
     joinPostings: new PostingColumn(),
@@ -384,19 +388,24 @@ const emptyVocabulary = (spellings: Spellings): BuildingVocabulary => {
   };
 };
 
-const bigrams = (text: string): Set<string> => {
-  const chars = ["^", ...Array.from(text), "$"];
-  const grams = new Set<string>();
-  for (const [index, char] of chars.entries()) {
-    const previous = chars[index - 1];
-    if (previous !== undefined) {
-      grams.add(`${previous}${char}`);
-    }
+// A bigram is two code points (or a boundary marker and one) packed into one
+// exact integer below 2^42, so gram lookups allocate no key strings.
+const CODE_POINT_SPACE = 2_097_152;
+const GRAM_START = 94; // "^"
+const GRAM_END = 36; // "$"
+
+const bigrams = (text: string): Set<number> => {
+  const grams = new Set<number>();
+  let previous = GRAM_START;
+  for (const character of text) {
+    const codePoint =
+      character.codePointAt(0) ?? panic("Missing code point in bigram");
+    grams.add(previous * CODE_POINT_SPACE + codePoint);
+    previous = codePoint;
   }
+  grams.add(previous * CODE_POINT_SPACE + GRAM_END);
   return grams;
 };
-
-const gramKey = (length: number, gram: string) => `${length}:${gram}`;
 
 const characterHistogram = (
   text: string,
@@ -462,12 +471,16 @@ const intern = ({ vocabulary, text, spellingIds }: InternOptions): number => {
   vocabulary.ids.set(text, id);
   vocabulary.postings.addList();
   vocabulary.joinPostings.addList();
+  let lists = vocabulary.bigrams.get(length);
+  if (lists === undefined) {
+    lists = new NumberMap();
+    vocabulary.bigrams.add(length, lists);
+  }
   for (const gram of grams) {
-    const key = gramKey(length, gram);
-    let list = vocabulary.bigrams.get(key);
+    let list = lists.get(gram);
     if (list === undefined) {
       list = vocabulary.gramPostings.addList();
-      vocabulary.bigrams.set(key, list);
+      lists.add(gram, list);
     }
     vocabulary.gramPostings.push(list, id);
   }
@@ -521,7 +534,7 @@ export function* nameIndexSteps(
     lengths: new NumberColumn(),
     gramCounts: new NumberColumn(),
     characterOffsets: new NumberColumn(),
-    characterCounts: new NumberColumn("byte"),
+    characterCounts: new ByteColumn(),
     characterCache: new BoundedCache(CHARACTER_CACHE_LIMIT),
   };
   spellings.characterOffsets.push(0);
@@ -615,12 +628,11 @@ export function* nameIndexSteps(
   }
 
   const maxWeight = Math.log(Math.max(entries.length, 1)) + 1;
-  const weights = new NumberColumn("float");
+  const weights = new Float64Array(folded.strings.length);
   for (let id = 0; id < folded.strings.length; id += 1) {
     const count = id < entryCounts.length ? entryCounts.get(id) : 0;
-    weights.push(
-      count === 0 ? maxWeight : Math.log(entries.length / count) + 1,
-    );
+    weights[id] =
+      count === 0 ? maxWeight : Math.log(entries.length / count) + 1;
     if (id % 4096 === 0) {
       yield;
     }
@@ -888,8 +900,12 @@ const similarStrings = ({
   touched.length = 0;
   candidates.length = 0;
   for (let other = length - budget; other <= length + budget; other += 1) {
+    const lists = vocabulary.bigrams.get(other);
+    if (lists === undefined) {
+      continue;
+    }
     for (const gram of grams) {
-      const list = vocabulary.bigrams.get(gramKey(other, gram));
+      const list = lists.get(gram);
       if (list === undefined) {
         continue;
       }
@@ -1069,7 +1085,7 @@ const prepareQuery = ({
     for (const [id, similarity] of single?.folded ?? []) {
       if (similarity > best && index.folded.postings.size(id) > 0) {
         best = similarity;
-        weight = index.weights.get(id);
+        weight = index.weights[id] ?? panic("Missing token weight");
       }
     }
     return weight;
@@ -1215,9 +1231,9 @@ const listedCoverage = ({ index, alias, matched }: ListedCoverageOptions) => {
     const weight =
       raw.length === 1
         ? INITIAL_WEIGHT
-        : index.weights.get(
-            alias.folded[listed] ?? panic("Missing weighted token"),
-          );
+        : (index.weights[
+            alias.folded[listed] ?? panic("Missing weighted token")
+          ] ?? panic("Missing token weight"));
     const optional =
       alias.entityType === "person" &&
       ((listed > 0 && listed < last) ||

@@ -1,13 +1,18 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   appendUnsigned,
   BoundedCache,
+  ByteColumn,
   SpellingColumn,
   stringIdsSteps,
   UnsignedReader,
   NumberColumn,
+  NumberMap,
   ObjectColumn,
   PostingColumn,
   StringMap,
@@ -44,9 +49,55 @@ test("compact maps preserve every key and updates across a shard rollover", () =
   expect(map.get("absent")).toBeUndefined();
 });
 
+// Packed bigram keys reach 2^42 and composite keys approach 2^53.
+const numberKey = fc.oneof(
+  fc.integer({ min: 0, max: 64 }),
+  fc.integer({ min: 0, max: 2 ** 42 }),
+  fc.integer({ min: 0, max: Number.MAX_SAFE_INTEGER }),
+);
+
+test("number maps agree with an engine Map for keys up to 2^53", () => {
+  assertProperty(
+    "number maps agree with an engine Map for keys up to 2^53",
+    fc.property(
+      fc.uniqueArray(numberKey, { maxLength: 300 }),
+      fc.array(numberKey, { maxLength: 100 }),
+      (keys, probes) => {
+        const map = new NumberMap<number>();
+        const oracle = new Map<number, number>();
+        for (const [index, key] of keys.entries()) {
+          map.add(key, index);
+          oracle.set(key, index);
+        }
+        for (const key of [...keys, ...probes]) {
+          expect(map.get(key)).toBe(oracle.get(key));
+        }
+      },
+    ),
+  );
+});
+
+test("number maps keep every key across a chunk rollover and refuse duplicates", () => {
+  const map = new NumberMap<number>();
+  // Multiples of 2^32 differ only in the high word, so a shard hash that
+  // ignored it would put them all in one chunk list; either way, more keys
+  // than one chunk holds must stay reachable.
+  const keys = Array.from({ length: 9000 }, (_, index) => index * 2 ** 32);
+  for (const [index, key] of keys.entries()) {
+    map.add(key, index);
+  }
+  for (const [index, key] of keys.entries()) {
+    expect(map.get(key)).toBe(index);
+  }
+  expect(map.get(1)).toBeUndefined();
+  expect(() => {
+    map.add(keys.at(-1) ?? panic("Missing rollover key"), 0);
+  }).toThrow("Compact number map key is already present");
+});
+
 test("compact columns and interleaved postings preserve insertion order across chunks", () => {
   const numbers = new NumberColumn();
-  const floating = new NumberColumn("float");
+  const bytes = new ByteColumn();
   const objects = new ObjectColumn<string>();
   const postings = new PostingColumn();
   const first = postings.addList();
@@ -54,7 +105,7 @@ test("compact columns and interleaved postings preserve insertion order across c
   const empty = postings.addList();
   for (let index = 0; index < 8200; index += 1) {
     numbers.push(index);
-    floating.push(index / 3);
+    bytes.push(index % 256);
     objects.push(`word-${index}`);
     postings.push(index % 2 === 0 ? first : second, index);
   }
@@ -63,7 +114,7 @@ test("compact columns and interleaved postings preserve insertion order across c
   expect(numbers.get(4096)).toBe(123);
   for (const [index, value] of objects.entries()) {
     expect(value).toBe(`word-${index}`);
-    expect(floating.get(index)).toBe(index / 3);
+    expect(bytes.get(index)).toBe(index % 256);
   }
   expect([...objects]).toHaveLength(8200);
   expect([...postings.get(first)]).toEqual(
@@ -111,7 +162,7 @@ test("packing postings preserves empty lists, duplicate values and list order", 
 });
 
 test("unsigned column values round-trip across byte widths and chunk boundaries", () => {
-  const bytes = new NumberColumn("byte");
+  const bytes = new ByteColumn();
   const values = [
     0, 1, 127, 128, 255, 16_383, 16_384, 65_535, 1_114_111, 4_294_967_295,
   ];
