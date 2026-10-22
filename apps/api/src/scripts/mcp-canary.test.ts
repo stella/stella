@@ -1634,6 +1634,43 @@ describe("OAuth client journeys", () => {
     ).toHaveLength(0);
   });
 
+  test("reports an unreachable client metadata host as upstream, not a failure", async () => {
+    const { fetcher: baseFetcher, requests } = fakeOAuth();
+    const unreachableClient = CANARY_CLIENT_IDS[0];
+    const fetcher: CanaryFetcher = async (input, init) => {
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
+      if (url.href === unreachableClient) {
+        throw new TypeError("fetch failed");
+      }
+      return await baseFetcher(input, init);
+    };
+
+    const results = await runOAuthJourneys(
+      {
+        baseUrl: "https://api.example",
+        frontendUrl: "https://app.example",
+        mode: "frequent",
+      },
+      fetcher,
+    );
+
+    expect(results).toContainEqual({
+      name: `client metadata ${unreachableClient}`,
+      status: "upstream",
+      detail: "client metadata unavailable upstream (unreachable)",
+    });
+    expect(results.some(({ status }) => status === "failed")).toBe(false);
+    expect(
+      requests.filter(
+        ({ url }) =>
+          url.pathname === "/oauth/authorize" &&
+          url.searchParams.get("client_id") === unreachableClient,
+      ),
+    ).toHaveLength(0);
+  });
+
   test("stops a client's authorize variants after its first failure", async () => {
     const { fetcher: baseFetcher, requests } = fakeOAuth();
     const failingClient = CANARY_CLIENT_IDS[0];

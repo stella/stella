@@ -1051,30 +1051,44 @@ export const runOAuthJourneys = async (
     if (CANARY_CLIENT_IDS.some((knownClientId) => knownClientId === clientId)) {
       const metadataName = `client metadata ${clientId}`;
       const metadataResult = await runNamedProbe(metadataName, async () => {
-        const response = await fetchWithRateLimitRetry(
+        // A third-party host that cannot be reached is an upstream state,
+        // never a canary failure; rate limiting keeps its own result.
+        const attempt = await Result.tryPromise(async () => {
+          const response = await fetchWithRateLimitRetry(
+            metadataName,
+            clientMetadataFetcher,
+            clientId,
+            {
+              headers: { accept: "application/json" },
+              method: "GET",
+              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            },
+          );
+          if (!response.ok) {
+            await response.body?.cancel();
+            return upstream(
+              metadataName,
+              `client metadata unavailable upstream (HTTP ${String(response.status)})`,
+            );
+          }
+          if (!(await readBoundedJsonObject(response))) {
+            return upstream(
+              metadataName,
+              "client metadata unavailable upstream (invalid JSON document)",
+            );
+          }
+          return passed(metadataName, "client metadata available upstream");
+        });
+        if (Result.isOk(attempt)) {
+          return attempt.value;
+        }
+        if (CanaryRateLimitError.is(attempt.error.cause)) {
+          throw attempt.error.cause;
+        }
+        return upstream(
           metadataName,
-          clientMetadataFetcher,
-          clientId,
-          {
-            headers: { accept: "application/json" },
-            method: "GET",
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
-          },
+          "client metadata unavailable upstream (unreachable)",
         );
-        if (!response.ok) {
-          await response.body?.cancel();
-          return upstream(
-            metadataName,
-            `client metadata unavailable upstream (HTTP ${String(response.status)})`,
-          );
-        }
-        if (!(await readBoundedJsonObject(response))) {
-          return upstream(
-            metadataName,
-            "client metadata unavailable upstream (invalid JSON document)",
-          );
-        }
-        return passed(metadataName, "client metadata available upstream");
       });
       results.push(metadataResult);
       if (metadataResult.status !== PROBE_STATUS.passed) {
