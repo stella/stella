@@ -649,9 +649,11 @@ describe("update follows the capture to its publish", () => {
               ) => {
                 dispatches.push(request);
                 const id = input.runIds[String(request["workflow_id"])];
+                // The API answers 204 with no body unless run details
+                // are requested.
                 return {
                   data:
-                    id === undefined
+                    id === undefined || request["return_run_details"] !== true
                       ? undefined
                       : { workflow_run_id: id, html_url: `run/${String(id)}` },
                 };
@@ -689,6 +691,7 @@ describe("update follows the capture to its publish", () => {
         repo: "stella",
         workflow_id: "marketing-screenshots-capture.yml",
         ref: "feat/ui",
+        return_run_details: true,
       },
       {
         owner: "stella",
@@ -696,6 +699,7 @@ describe("update follows the capture to its publish", () => {
         workflow_id: "marketing-screenshots-publish.yml",
         ref: "main",
         inputs: { capture_run_id: String(CAPTURE) },
+        return_run_details: true,
       },
     ]);
   });

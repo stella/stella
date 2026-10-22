@@ -127,8 +127,10 @@ describe("dispatch", () => {
               }
               dispatched.push(request);
               return {
+                // The API answers 204 with no body unless run details
+                // are requested.
                 data:
-                  noRunId === true
+                  noRunId === true || request["return_run_details"] !== true
                     ? undefined
                     : { workflow_run_id: 1000 + dispatched.length },
               };
@@ -188,6 +190,7 @@ describe("dispatch", () => {
         workflow_id: RESOLVE,
         ref: "feat/a",
         inputs: { head: HEAD, main: MAIN },
+        return_run_details: true,
       },
       {
         owner: "stella",
@@ -195,6 +198,7 @@ describe("dispatch", () => {
         workflow_id: RESOLVE,
         ref: "feat/b",
         inputs: { head: "c".repeat(40), main: MAIN },
+        return_run_details: true,
       },
     ]);
   });
@@ -393,9 +397,14 @@ describe("dispatch follows each resolve run to its publish", () => {
                 request["inputs"],
               );
               return {
-                data: {
-                  workflow_run_id: publishOf(Number(inputs.resolve_run_id)),
-                },
+                data:
+                  request["return_run_details"] === true
+                    ? {
+                        workflow_run_id: publishOf(
+                          Number(inputs.resolve_run_id),
+                        ),
+                      }
+                    : undefined,
               };
             },
           },
@@ -416,6 +425,7 @@ describe("dispatch follows each resolve run to its publish", () => {
         workflow_id: PUBLISH,
         ref: "main",
         inputs: { resolve_run_id: String(id) },
+        return_run_details: true,
       })),
     );
   });
