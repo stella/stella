@@ -6,7 +6,8 @@
     "main",
     "selfHostConnectDialog",
     "takeoverDialog",
-    "activity"
+    "activity",
+    "onboarding"
   ],
   "operations": [
     "autostartRead",
