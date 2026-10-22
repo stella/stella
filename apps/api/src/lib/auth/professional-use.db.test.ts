@@ -1,3 +1,4 @@
+import { PGlite } from "@electric-sql/pglite";
 import { panic, Result } from "better-result";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -13,6 +14,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
   auditLogs,
   organizationProfessionalUseAcceptances,
   userProfessionalUseAcceptances,
@@ -55,6 +57,159 @@ const CURRENT_VERSIONS = {
   statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
   termsVersion: PROFESSIONAL_USE_TERMS_VERSION,
 };
+const REGISTRATION_ACCEPTANCE = {
+  ...CURRENT_VERSIONS,
+  source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.registration,
+};
+
+const SOURCE_MIGRATION = new URL(
+  "../../../drizzle/20261022120000_professional_use_acceptance_source/migration.sql",
+  import.meta.url,
+);
+const BACKFILL_MIGRATION = new URL(
+  "../../../drizzle/20261022120100_professional_use_acceptance_owner_backfill/migration.sql",
+  import.meta.url,
+);
+
+const migrationSql = async (migration: URL): Promise<string> =>
+  await Bun.file(migration).text();
+
+describe("professional-use provenance migrations", () => {
+  test("the owner backfill versions stay coupled to the current contract", async () => {
+    const source = await migrationSql(BACKFILL_MIGRATION);
+    const versions =
+      /SELECT u\.id, '([^']+)', '([^']+)', 'owner_backfill_2026_10_22'/u.exec(
+        source,
+      );
+    expect(versions?.slice(1)).toEqual([
+      PROFESSIONAL_USE_STATEMENT_VERSION,
+      PROFESSIONAL_USE_TERMS_VERSION,
+    ]);
+  });
+
+  test("every TypeScript writer supplies a typed acceptance source", async () => {
+    const writers: string[] = [];
+    const glob = new Bun.Glob("src/**/*.ts");
+    for await (const path of glob.scan({
+      cwd: new URL("../../..", import.meta.url).pathname,
+    })) {
+      if (path.endsWith(".test.ts")) {
+        continue;
+      }
+      const source = await Bun.file(
+        new URL(`../../../${path}`, import.meta.url),
+      ).text();
+      if (source.includes(".insert(userProfessionalUseAcceptances)")) {
+        writers.push(path);
+      }
+    }
+    expect(writers).toEqual(["src/lib/auth/professional-use.ts"]);
+    const writer = await Bun.file(
+      new URL("professional-use.ts", import.meta.url),
+    ).text();
+    expect(writer).toContain(
+      "source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.registration",
+    );
+    expect(writer).toContain(
+      "source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive",
+    );
+  });
+
+  test("the real migration path preserves existing rows and backfills only human accounts once", async () => {
+    await using db = await PGlite.create();
+    await db.exec(`
+      CREATE TABLE "user" (
+        id text PRIMARY KEY,
+        name text NOT NULL,
+        email text NOT NULL
+      );
+      CREATE TABLE organization (
+        id text PRIMARY KEY,
+        name text NOT NULL,
+        slug text NOT NULL
+      );
+      CREATE TABLE member (
+        id text PRIMARY KEY,
+        user_id text NOT NULL,
+        organization_id text NOT NULL,
+        role text NOT NULL
+      );
+      CREATE TABLE agent_registration (
+        id text PRIMARY KEY,
+        bound_user_id text
+      );
+      CREATE TABLE agent_delegation (
+        id text PRIMARY KEY,
+        user_id text NOT NULL
+      );
+      CREATE TABLE user_professional_use_acceptances (
+        user_id text PRIMARY KEY,
+        statement_version text NOT NULL,
+        terms_version text NOT NULL,
+        accepted_at timestamptz NOT NULL DEFAULT now()
+      );
+      INSERT INTO "user" (id, name, email) VALUES
+        ('existing', 'Existing', 'existing@example.test'),
+        ('human', 'Human', 'human@example.test'),
+        ('agent', 'Agent', 'agent@example.test'),
+        ('reviewer', 'Reviewer', 'reviewer@example.test');
+      INSERT INTO user_professional_use_acceptances VALUES
+        ('existing', '1999-01', '1999-02', '2000-01-02T03:04:05Z');
+      INSERT INTO agent_delegation VALUES ('delegation', 'agent');
+      INSERT INTO organization VALUES
+        ('review-org', 'Sample law firm', 'review-review-org');
+      INSERT INTO member VALUES
+        ('review-member', 'reviewer', 'review-org', 'owner');
+    `);
+    const before = await db.query<{
+      user_id: string;
+      statement_version: string;
+      terms_version: string;
+      accepted_at: Date;
+    }>(
+      `SELECT user_id, statement_version, terms_version, accepted_at
+       FROM user_professional_use_acceptances ORDER BY user_id`,
+    );
+
+    await db.exec(await migrationSql(SOURCE_MIGRATION));
+    await db.exec(await migrationSql(BACKFILL_MIGRATION));
+    const once = await db.query(
+      `SELECT user_id, statement_version, terms_version, accepted_at, source
+       FROM user_professional_use_acceptances ORDER BY user_id`,
+    );
+    expect(once.rows).toEqual([
+      {
+        ...before.rows[0],
+        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.recordedBeforeProvenance,
+      },
+      {
+        user_id: "human",
+        statement_version: PROFESSIONAL_USE_STATEMENT_VERSION,
+        terms_version: PROFESSIONAL_USE_TERMS_VERSION,
+        accepted_at: expect.any(Date),
+        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.ownerBackfill20261022,
+      },
+    ]);
+    expect(
+      (
+        await db.query(
+          `SELECT user_id FROM user_professional_use_acceptances
+           WHERE user_id IN ('agent', 'reviewer')`,
+        )
+      ).rows,
+    ).toEqual([]);
+
+    await db.exec(await migrationSql(BACKFILL_MIGRATION));
+    expect(
+      (
+        await db.query(
+          `SELECT user_id, statement_version, terms_version, accepted_at, source
+           FROM user_professional_use_acceptances ORDER BY user_id`,
+        )
+      ).rows,
+    ).toEqual(once.rows);
+  });
+});
 
 const userAcceptances = async (userIds: string[]) =>
   await testDb
@@ -126,7 +281,7 @@ describe("professional-use acceptance", () => {
           );
           expect(users).toHaveLength(created.length);
           for (const row of users) {
-            expect(row).toMatchObject(CURRENT_VERSIONS);
+            expect(row).toMatchObject(REGISTRATION_ACCEPTANCE);
           }
 
           const expectedOrganizations = created.flatMap(
@@ -299,7 +454,10 @@ describe("professional-use acceptance", () => {
       termsVersion: ownAcceptance.termsVersion,
       acceptedAt: ownAcceptance.acceptedAt.toISOString(),
     });
-    expect(ownAcceptance).toMatchObject(CURRENT_VERSIONS);
+    expect(ownAcceptance).toMatchObject({
+      ...CURRENT_VERSIONS,
+      source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+    });
     expect(await organizationAcceptances([organizationId])).toMatchObject([
       { acceptedByUserId: person.userId, ...CURRENT_VERSIONS },
     ]);
@@ -365,7 +523,12 @@ describe("professional-use acceptance", () => {
       status: "accepted",
       ...CURRENT_VERSIONS,
     });
-    expect(await userAcceptances([userId])).toMatchObject([CURRENT_VERSIONS]);
+    expect(await userAcceptances([userId])).toMatchObject([
+      {
+        ...CURRENT_VERSIONS,
+        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+      },
+    ]);
     // The organization it owns is recorded the way creation records one.
     expect(await organizationAcceptances([organizationId])).toMatchObject([
       { acceptedByUserId: userId, ...CURRENT_VERSIONS },
@@ -432,7 +595,10 @@ describe("professional-use acceptance", () => {
       { displayedStatementVersion: PROFESSIONAL_USE_STATEMENT_VERSION },
     );
     expect(await userAcceptances([person.userId])).toMatchObject([
-      { statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION },
+      {
+        statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
+        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.registration,
+      },
     ]);
   });
 
