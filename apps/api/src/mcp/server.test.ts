@@ -1283,7 +1283,12 @@ describe("handleMcpHttpRequest", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(captured).toEqual([
+    expect(
+      captured.map(({ distinctId, ...capture }) => ({
+        ...capture,
+        distinctId: distinctId.toString(),
+      })),
+    ).toEqual([
       {
         distinctId: "user_1",
         event: "mcp_session_initialized",
