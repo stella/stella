@@ -25,34 +25,34 @@ sanctions_sources.created_at                   timestamptz  default,not null  sa
 sanctions_sources.updated_at                   timestamptz  default,not null  sanctions.ts:65
 ```
 
-## sanctions_editions · `sanctionsEditions` · sanctions.ts:113 · rls
+## sanctions_editions · `sanctionsEditions` · sanctions.ts:119 · rls
 
 ```text
-sanctions_editions.id                    pUuid        pk,not null       sanctions.ts:116
-sanctions_editions.source_id             text         fk,not null       sanctions.ts:117
-sanctions_editions.marker_key            text         not null          sanctions.ts:123
-sanctions_editions.published_at          text         not null          sanctions.ts:124
-sanctions_editions.file_id               text         null              sanctions.ts:125
-sanctions_editions.content_hash          text         not null          sanctions.ts:126
-sanctions_editions.entry_count           integer      not null          sanctions.ts:127
-sanctions_editions.state                 text         not null          sanctions.ts:128
-sanctions_editions.guard_code            text         null              sanctions.ts:129
-sanctions_editions.previous_entry_count  integer      null              sanctions.ts:132
-sanctions_editions.created_at            timestamptz  default,not null  sanctions.ts:133
-sanctions_editions.activated_at          timestamptz  null              sanctions.ts:134
+sanctions_editions.id                    pUuid        pk,not null       sanctions.ts:122
+sanctions_editions.source_id             text         fk,not null       sanctions.ts:123
+sanctions_editions.marker_key            text         not null          sanctions.ts:129
+sanctions_editions.published_at          text         not null          sanctions.ts:130
+sanctions_editions.file_id               text         null              sanctions.ts:131
+sanctions_editions.content_hash          text         not null          sanctions.ts:132
+sanctions_editions.entry_count           integer      not null          sanctions.ts:133
+sanctions_editions.state                 text         not null          sanctions.ts:134
+sanctions_editions.guard_code            text         null              sanctions.ts:135
+sanctions_editions.previous_entry_count  integer      null              sanctions.ts:138
+sanctions_editions.created_at            timestamptz  default,not null  sanctions.ts:139
+sanctions_editions.activated_at          timestamptz  null              sanctions.ts:140
 ```
 
-## sanctions_entry_payloads · `sanctionsEntryPayloads` · sanctions.ts:177 · rls
+## sanctions_entry_payloads · `sanctionsEntryPayloads` · sanctions.ts:189 · rls
 
 ```text
-sanctions_entry_payloads.content_hash  text   pk,not null  sanctions.ts:180
-sanctions_entry_payloads.payload       jsonb  not null     sanctions.ts:181
+sanctions_entry_payloads.content_hash  text   pk,not null  sanctions.ts:192
+sanctions_entry_payloads.payload       jsonb  not null     sanctions.ts:193
 ```
 
-## sanctions_edition_entries · `sanctionsEditionEntries` · sanctions.ts:197 · rls
+## sanctions_edition_entries · `sanctionsEditionEntries` · sanctions.ts:215 · rls
 
 ```text
-sanctions_edition_entries.edition_id       safeUuid  fk,not null  sanctions.ts:200
-sanctions_edition_entries.source_entry_id  text      not null     sanctions.ts:203
-sanctions_edition_entries.content_hash     text      not null     sanctions.ts:204
+sanctions_edition_entries.edition_id       safeUuid  fk,not null  sanctions.ts:218
+sanctions_edition_entries.source_entry_id  text      not null     sanctions.ts:221
+sanctions_edition_entries.content_hash     text      not null     sanctions.ts:222
 ```
