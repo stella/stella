@@ -34,6 +34,7 @@ import { UploadQueue } from "@/lib/upload-queue";
 import {
   buildDroppedFolderUploadPlan,
   type DroppedFolderUploadPlan,
+  folderReservableFiles,
 } from "@/lib/workspaces/mutations/create-file-tree-upload.logic";
 import {
   buildEntityCreatePresignPayload,
@@ -87,10 +88,11 @@ const prepareFolderTreeUpload = async ({
   propertyId,
   plan,
 }: PrepareFolderTreeUploadOptions): Promise<PreparedFolderTreeUpload> => {
+  const reservable = folderReservableFiles(plan);
   const files = [];
-  for (const [index, placement] of plan.files.entries()) {
+  for (const { key, placement } of reservable) {
     files.push({
-      key: String(index),
+      key,
       parentKey: placement.parentKey,
       name: placement.file.name,
       mimeType: placement.file.type || "application/octet-stream",
@@ -113,8 +115,8 @@ const prepareFolderTreeUpload = async ({
   }
 
   const fileByKey = new Map<string, File>();
-  for (const [index, placement] of plan.files.entries()) {
-    fileByKey.set(String(index), placement.file);
+  for (const { key, placement } of reservable) {
+    fileByKey.set(key, placement.file);
   }
 
   const preparedUploadByFile = new Map<File, PreparedFileEntityUpload>();
@@ -134,7 +136,7 @@ const prepareFolderTreeUpload = async ({
     });
   }
 
-  if (preparedUploadByFile.size !== plan.files.length) {
+  if (preparedUploadByFile.size !== reservable.length) {
     throw new ClientOperationError({
       action: "prepare-dropped-folder-upload",
       message: "Prepared upload response did not include every file",
