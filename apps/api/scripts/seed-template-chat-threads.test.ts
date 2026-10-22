@@ -12,6 +12,7 @@ import {
   getRlsFixture,
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   buildTemplateChatSeedRows,
@@ -159,5 +160,5 @@ describe("seeded Template Studio chat associations", () => {
     } finally {
       await releaseRlsFixture();
     }
-  });
+  }, HAPPY_PATH_TIMEOUT_MS);
 });
