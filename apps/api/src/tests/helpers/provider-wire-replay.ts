@@ -301,7 +301,7 @@ const responseFor = (
   signal: AbortSignal | null,
   holdAfterBytes: number | undefined,
   chunking: Chunking = DEFAULT_CHUNKING,
-  pauses: PausePoints | undefined = undefined,
+  pauses?: PausePoints,
 ): Response => {
   const bytes = bodyBytesOf(exchange.response.body);
   const limit = holdAfterBytes ?? bytes.length;
