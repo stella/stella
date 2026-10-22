@@ -819,11 +819,13 @@ export const AnnotationToolbar = ({
                 </Button>
               )}
             </CapabilityAction>
-            {onExplain !== undefined && (
-              <CapabilityAction action={{ capability: "ai" }} surface="control">
-                {(capabilityProps) => {
-                  const refusal = explainRefusal?.(spans);
-                  return refusal === undefined ? (
+            {onExplain !== undefined &&
+              (explainRefusal?.(spans) === undefined ? (
+                <CapabilityAction
+                  action={{ capability: "ai" }}
+                  surface="control"
+                >
+                  {(capabilityProps) => (
                     <Button
                       onClick={() => {
                         onExplain(spans);
@@ -836,28 +838,27 @@ export const AnnotationToolbar = ({
                       <SparklesIcon className="size-3.5" />
                       {t("readerAnswers.explain")}
                     </Button>
-                  ) : (
-                    <>
-                      <Button
-                        aria-describedby={explainReasonId}
-                        disabled
-                        size="sm"
-                        variant="ghost"
-                      >
-                        <SparklesIcon className="size-3.5" />
-                        {t("readerAnswers.explain")}
-                      </Button>
-                      <span
-                        className="text-muted-foreground px-2 text-xs"
-                        id={explainReasonId}
-                      >
-                        {refusal}
-                      </span>
-                    </>
-                  );
-                }}
-              </CapabilityAction>
-            )}
+                  )}
+                </CapabilityAction>
+              ) : (
+                <>
+                  <Button
+                    aria-describedby={explainReasonId}
+                    disabled
+                    size="sm"
+                    variant="ghost"
+                  >
+                    <SparklesIcon className="size-3.5" />
+                    {t("readerAnswers.explain")}
+                  </Button>
+                  <span
+                    className="text-muted-foreground px-2 text-xs"
+                    id={explainReasonId}
+                  >
+                    {explainRefusal?.(spans)}
+                  </span>
+                </>
+              ))}
           </>
         )}
         {spans.length > 0 && (

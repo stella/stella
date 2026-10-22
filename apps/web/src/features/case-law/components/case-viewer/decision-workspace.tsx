@@ -457,7 +457,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     return spans.length === 1 &&
       span !== undefined &&
       span.quote.length <= READER_ANSWER_QUOTE_MAX_LENGTH &&
-      anchoredSelectionMatches(anchoredTextsOf(ast?.blocks ?? []), {
+      anchoredSelectionMatches(anchoredTextsOf(astBlocks), {
         ...span,
         anchorId: span.blockAnchorId,
       })
