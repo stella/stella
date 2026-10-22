@@ -116,11 +116,17 @@ describe("dispatch", () => {
               expect(request["workflow_id"]).toBe(RESOLVE);
               // The lookup of a dispatch that named no run.
               if (request["branch"] !== undefined) {
-                const index = dispatched.findIndex(
-                  (entry) => entry["ref"] === request["branch"],
+                const lookup = v.parse(
+                  v.looseObject({
+                    branch: v.string(),
+                    event: v.literal("workflow_dispatch"),
+                    created: v.pipe(v.string(), v.regex(/^>=\d{4}-/u)),
+                  }),
+                  request,
                 );
-                expect(request["event"]).toBe("workflow_dispatch");
-                expect(String(request["created"])).toMatch(/^>=\d{4}-/u);
+                const index = dispatched.findIndex(
+                  (entry) => entry["ref"] === lookup.branch,
+                );
                 return {
                   data: {
                     workflow_runs:
@@ -128,7 +134,7 @@ describe("dispatch", () => {
                         ? [
                             {
                               id: 1001 + index,
-                              display_title: `Resolve generated-only conflicts on ${String(request["branch"])}`,
+                              display_title: `Resolve generated-only conflicts on ${lookup.branch}`,
                             },
                             { id: 9999, display_title: "Some other run" },
                           ]
