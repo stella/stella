@@ -18,7 +18,7 @@ permissions: {}
 jobs:
   check-latest:
     name: Check latest desktop release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read # query the repository's GitHub Release API

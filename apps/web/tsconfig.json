@@ -24,7 +24,6 @@
       "@stll/template-conditions": [
         "../../packages/template-conditions/src/index.ts"
       ],
-      "@stll/time": ["../../packages/time/src/index.ts"],
       "@stll/ui/*": ["../../packages/ui/src/*"]
     }
   },

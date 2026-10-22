@@ -929,6 +929,7 @@ const runTask = async ({
     organizationId: EVAL_ORGANIZATION_ID,
     // An offline evaluation runs no admission: it mints the proof itself.
     admission: admitFixtureModelDispatch({
+      userId: null,
       organizationId: EVAL_ORGANIZATION_ID,
       actionKind: "workflow.background",
       modelTier: MANAGED_MODEL_TIER.standard,

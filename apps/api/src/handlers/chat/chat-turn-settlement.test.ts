@@ -2,6 +2,8 @@ import { convertMessagesToModelMessages } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import {
   closeCutShortCalls,
@@ -33,6 +35,7 @@ const call = (
   id: string,
   fields: {
     approval?: { approved?: boolean; id: string; needsApproval: boolean };
+    metadata?: Record<string, unknown>;
     output?: unknown;
     state: ToolCallState;
   },
@@ -89,6 +92,26 @@ describe("tool calls a settled turn may leave open", () => {
         streaming,
       ]),
     ).toEqual(["approved", "streaming"]);
+  });
+
+  test("a turn awaiting the user leaves an approved client call owed its result", () => {
+    const executedBy = (executor: "client" | "server") =>
+      call(`approved-${executor}`, {
+        approval: {
+          approved: true,
+          id: `approval_${executor}`,
+          needsApproval: true,
+        },
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor },
+        state: "approval-responded",
+      });
+    const parts = [executedBy("client"), executedBy("server")];
+
+    expect(openIds("awaiting-user", parts)).toEqual(["approved-server"]);
+    expect(openIds("completed", parts)).toEqual([
+      "approved-client",
+      "approved-server",
+    ]);
   });
 
   test.each(["cancelled", "failed", "interrupted"] as const)(
@@ -382,6 +405,40 @@ describe("the settled history the engine converts", () => {
       ]),
     };
   };
+
+  // A stop while a call's input streams stores the call with the text that
+  // had arrived. What the provider is handed must still be a call: a JSON
+  // object as its arguments, answered by the result that says it never ran.
+  test.each(["", '{"name": "N'])(
+    "a call cut off with arguments %p reaches the engine with no input",
+    (partial) => {
+      const cutOff = {
+        arguments: partial,
+        id: "cut-off",
+        name: "mcp__external__delete",
+        state: "input-streaming",
+        type: "tool-call",
+      } satisfies ChatPart;
+      const storedCall =
+        closeCutShortCalls(
+          toPersistableChatMessage({
+            id: toSafeId<"chatMessage">("01a0e22c-ba01-7525-803d-b57dcb87e6fc"),
+            parts: [cutOff],
+            role: "assistant",
+          }),
+        ).parts[0] ?? panic("The cut-short message lost its call");
+      // The stored call keeps the partial text: the fixture reaches the fault.
+      expect(storedCall).toMatchObject({ arguments: partial, state: "error" });
+
+      const request = modelRequest([storedCall]);
+      expect(findTranscriptProblems(request)).toEqual([]);
+      expect(
+        request.messages.flatMap(({ toolCalls }) =>
+          (toolCalls ?? []).map(({ function: { arguments: text } }) => text),
+        ),
+      ).toEqual(["{}"]);
+    },
+  );
 
   test("a batch with an unanswered call keeps its calls in one step", () => {
     const parts = [approval("first", false), question, approval("last", false)];

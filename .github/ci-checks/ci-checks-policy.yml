@@ -132,7 +132,7 @@ checks:
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-      BASE_SHA: ${{ github.event.pull_request.base.sha || needs.ci-plan.outputs.target_base_sha || '' }}
+      BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
     run: |
       bun test scripts/check-oxlint-rule-coverage.test.ts
       bun scripts/check-oxlint-rule-coverage.ts

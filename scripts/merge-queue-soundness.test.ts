@@ -18,7 +18,7 @@ const RULESET_PATH = path.join(
 );
 const WORKFLOW_PATH = path.join(ROOT, ".github/workflows/ci.yml");
 const MERGE_GROUP_BASE = "github.event.merge_group.base_sha";
-const TARGET_BASE_OUTPUT = "steps.target-base.outputs.sha";
+const TARGET_BASE_OUTPUT = "steps.target-base.outputs.base_sha";
 const QUEUE_BASE_EXPRESSION = `${String.fromCodePoint(36)}{{ github.event.merge_group.queue_base_sha }}`;
 
 type WorkflowRecord = Record<string, unknown>;
@@ -198,11 +198,11 @@ test("merge queue grouping and the planner comparison base form a sound pair", (
   );
 });
 
-test("target-base is the only merge-group base reader", () => {
+test("the patch id is the only direct merge-group base reader", () => {
   expect(mergeGroupBaseReaders()).toEqual([
     {
       file: ".github/workflows/ci.yml",
-      path: "ci-plan/target-base/env/TARGET_BASE_SHA",
+      path: "ci-plan/patch-id/env/GROUP_BASE_SHA",
     },
   ]);
 });
