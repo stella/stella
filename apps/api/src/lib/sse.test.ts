@@ -8,6 +8,10 @@ import {
 } from "@stll/api-contract";
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import {
+  createSseBroadcastPublisher,
+  type SseBroadcastPublisher,
+} from "@/api/lib/sse-broadcast";
 
 type MessageHandler = (message: string) => void;
 
@@ -170,6 +174,16 @@ const publishWorkspaceEventMock = async (
   }
 };
 const publishWorkspaceAccessRevokedMock = async (): Promise<void> => {};
+// Workspace publishes loop back through the fake Redis above; the remaining
+// scopes publish to a client that accepts and drops, so no test reaches a real
+// connection.
+const testPublisher: SseBroadcastPublisher = {
+  ...createSseBroadcastPublisher({
+    createClient: () => ({ publish: async () => 0 }),
+  }),
+  publishWorkspaceAccessRevoked: publishWorkspaceAccessRevokedMock,
+  publishWorkspaceEvent: publishWorkspaceEventMock,
+};
 const authorizeAllWorkspaceConnections = async ({
   userIds,
 }: {
@@ -184,8 +198,7 @@ const startTestSse = (): void => {
     },
     {
       createClient: createRedisClientMock,
-      publishAccessRevoked: publishWorkspaceAccessRevokedMock,
-      publishWorkspace: publishWorkspaceEventMock,
+      publisher: testPublisher,
     },
   );
 };
@@ -461,7 +474,7 @@ describe("workspace access revocation", () => {
       },
       {
         createClient: createRedisClientMock,
-        publishWorkspace: publishWorkspaceEventMock,
+        publisher: testPublisher,
       },
     );
     stopSse();
@@ -598,7 +611,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
       },
       {
         createClient: createRedisClientMock,
-        publishWorkspace: publishWorkspaceEventMock,
+        publisher: testPublisher,
       },
     );
     await settlePendingWork();

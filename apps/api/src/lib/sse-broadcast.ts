@@ -327,7 +327,13 @@ export const createSseBroadcastPublisher = ({
   };
 };
 
-const defaultPublisher = createSseBroadcastPublisher();
+export type SseBroadcastPublisher = ReturnType<
+  typeof createSseBroadcastPublisher
+>;
+
+/** The process-wide publisher; its Redis connection opens on first publish. */
+export const defaultSseBroadcastPublisher: SseBroadcastPublisher =
+  createSseBroadcastPublisher();
 
 export const {
   publishOrganizationEvent,
@@ -336,4 +342,4 @@ export const {
   publishUserEvent,
   publishWorkspaceAccessRevoked,
   publishWorkspaceEvent,
-} = defaultPublisher;
+} = defaultSseBroadcastPublisher;
