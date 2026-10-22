@@ -109,17 +109,19 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 13,
+    version: 14,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "publisher page rejections carry their stop kind; parsed values are unchanged",
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 18,
+    version: 19,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "publisher page rejections carry their stop kind; parsed values are unchanged",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
@@ -137,10 +139,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 16,
+    version: 17,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "publisher page rejections carry their stop kind; parsed values are unchanged",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
@@ -270,10 +273,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.AT_FINDOK]: {
-    version: 9,
+    version: 10,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "publisher page rejections carry their stop kind; parsed values are unchanged",
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
