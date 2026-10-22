@@ -358,7 +358,7 @@ describe("spreadsheets", () => {
 describe("client invoice export attribution", () => {
   test("every exported line retains its own matter and the complete invoice total", () => {
     assertProperty(
-      "invoicing.client-export.matter-attribution",
+      "every exported line retains its own matter and the complete invoice total",
       fc.property(
         fc.array(
           fc.record({

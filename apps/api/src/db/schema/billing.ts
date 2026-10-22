@@ -1079,6 +1079,7 @@ export const invoices = p.pgTable(
       .uniqueIndex("invoices_ws_number_uidx")
       .on(table.workspaceId, table.invoiceNumber),
     ...invoicePolicies(table),
+    ...reviewResetOwnerPolicies("invoices"),
   ],
 );
 
@@ -1166,6 +1167,7 @@ export const invoiceLines = p.pgTable(
   },
   (table) => [
     invoiceLineVisibilityPolicy(table),
+    ...reviewResetOwnerPolicies("invoice_lines"),
     p.check(
       "invoice_lines_recorded_snapshot_check",
       sql`(${table.recordedDescription} IS NULL AND ${table.recordedQuantity} IS NULL AND ${table.recordedUnitPrice} IS NULL AND ${table.recordedNetAmount} IS NULL) OR (${table.recordedDescription} IS NOT NULL AND ${table.recordedQuantity} IS NOT NULL AND ${table.recordedUnitPrice} IS NOT NULL AND ${table.recordedNetAmount} IS NOT NULL)`,

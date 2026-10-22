@@ -102,6 +102,20 @@ describe("review organization reset scope", () => {
     expect(undecided).toEqual([]);
   });
 
+  test("invoice records admit the owner-fenced reset independently of matter visibility", () => {
+    for (const name of ["invoices", "invoice_lines"]) {
+      const table = tables.get(name);
+      expect(table, name).toBeDefined();
+      const policyNames = new Set(
+        table === undefined
+          ? []
+          : getTableConfig(table).policies.map(({ name: policy }) => policy),
+      );
+      expect(policyNames.has("review_reset_owner_select"), name).toBe(true);
+      expect(policyNames.has("review_reset_owner_delete"), name).toBe(true);
+    }
+  });
+
   test("swept tables are only those that name their organization", () => {
     const unscoped = REVIEW_RESET_CLEARED_TABLES.filter((name) => {
       const table = tables.get(name);
