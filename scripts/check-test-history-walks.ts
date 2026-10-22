@@ -10,7 +10,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 // Every test convention a CI runner picks up, script and shell tests included.

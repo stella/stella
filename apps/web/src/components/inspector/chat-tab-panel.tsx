@@ -280,6 +280,7 @@ export const ChatTabPanel = ({
     turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
+    confirmStoredApprovalGrant,
     handleApprove,
     handleAllowInConversation,
     handleDeny,
@@ -299,6 +300,7 @@ export const ChatTabPanel = ({
     approvalPendingMessageId,
   } = useChatSession({
     chat,
+    timingSurface: "inspector-chat",
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,
@@ -614,6 +616,7 @@ export const ChatTabPanel = ({
           activeOrganizationId,
           alwaysApprovedTools,
           conversationApprovedTools,
+          confirmStoredApprovalGrant,
           handleAllowInConversation,
           handleAlwaysAllow,
           handleApprove,

@@ -1,3 +1,32 @@
+// parser-output-unchanged: [cz-ns] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [cz-nss] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [cz-us] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [cz-regional] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [sk-courts] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [sk-us] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-courts] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-sn] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-kio] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-tk] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-nsa] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-ncourt] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-courts] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-vfgh] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-vwgh] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-bvwg] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-lvwg] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-asylgh] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-ubas] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-uvs] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-verg] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-umse] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-bks] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [at-findok] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [eu-ecj] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [hu-bhgy] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-kis] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-uodo] shared utilities moved to parser owners with byte-identical output.
+// parser-output-unchanged: [pl-uokik] shared utilities moved to parser owners with byte-identical output.
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 // parser-output-unchanged: removes an unused type guard; no adapter calls it.
@@ -8,6 +37,7 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 export { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
+export { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
 
 const CE_DATE_PATTERN =
   /^(?<day>\d{1,2})\.\s*(?<month>\d{1,2})\.\s*(?<year>\d{4})$/;
@@ -55,95 +85,6 @@ export const normalizeMetadataValues = (
   );
   return [...new Set(normalized.filter((value) => value.length > 0))];
 };
-
-/**
- * Remove every `<`…`>` span, taking each `<` to the next `>` exactly as
- * `/<[^>]*>/g` does, and leaving a trailing unterminated `<` in place.
- *
- * Written as a scan rather than a pattern because both regex spellings
- * are wrong in their own way on the multi-megabyte pages this runs over.
- * `[^>]*` re-walks the remainder of the input from every `<` when no `>`
- * follows, which is quadratic; narrowing it to `[^<>]*` is linear but
- * silently weakens the strip, leaving `<script` behind on input like
- * `<script <x>`. Indexed scanning is linear and keeps the original
- * meaning.
- */
-const stripTags = (html: string): string => {
-  let out = "";
-  let cursor = 0;
-
-  while (cursor < html.length) {
-    const open = html.indexOf("<", cursor);
-    if (open === -1) {
-      return out + html.slice(cursor);
-    }
-    const close = html.indexOf(">", open + 1);
-    if (close === -1) {
-      // No closing bracket: `/<[^>]*>/` would not match here either.
-      return out + html.slice(cursor);
-    }
-    out += html.slice(cursor, open);
-    cursor = close + 1;
-  }
-
-  return out;
-};
-
-/**
- * Every entity form we decode, in one alternation so the whole string is
- * rewritten in a single pass.
- *
- * Decoding in separate passes double-unescapes: with `&amp;` replaced
- * before `&lt;`, the text `&amp;lt;` becomes `&lt;` and the next pass
- * turns it into `<`, so a document that escaped a literal `&lt;` comes
- * back as a bracket. One pass never re-reads what it just wrote.
- */
-const HTML_ENTITY_PATTERN =
-  /&(?<named>nbsp|amp|lt|gt);|&#[xX](?<hex>[0-9a-fA-F]+);|&#(?<dec>\d+);/gu;
-
-const NAMED_ENTITIES: Record<string, string> = {
-  nbsp: " ",
-  amp: "&",
-  lt: "<",
-  gt: ">",
-};
-
-/**
- * Replacer for HTML_ENTITY_PATTERN. Takes the captures positionally —
- * `replace` passes them in order before the offset — so the groups
- * object never has to be narrowed back out of the variadic tail.
- */
-const decodeEntity = (
-  entity: string,
-  named: string | undefined,
-  hex: string | undefined,
-  dec: string | undefined,
-): string => {
-  if (named !== undefined) {
-    return NAMED_ENTITIES[named] ?? entity;
-  }
-
-  const codePoint =
-    hex === undefined
-      ? Number.parseInt(dec ?? "", 10)
-      : Number.parseInt(hex, 16);
-  try {
-    return String.fromCodePoint(codePoint);
-  } catch {
-    // Not a valid code point (out of range or a lone surrogate).
-    return entity;
-  }
-};
-
-/**
- * Strip HTML tags, decode common entities (including numeric
- * &#xNN; and &#NNNN; forms), and collapse excessive newlines.
- */
-export const stripHtml = (html: string): string =>
-  stripTags(html.replace(/<br\s*\/?>/gi, "\n"))
-    .replace(HTML_ENTITY_PATTERN, decodeEntity)
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
 
 /**
  * Parse Central-European date formats to ISO "YYYY-MM-DD".

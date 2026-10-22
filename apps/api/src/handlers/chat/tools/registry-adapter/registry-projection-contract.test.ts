@@ -12,6 +12,7 @@ import {
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
+  DECISION_SEARCH_MATCHES,
   FACET_COUNT_TYPE,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGE_REACH,
@@ -632,6 +633,7 @@ const CONTRACT_CORPUS = {
         entity_id: entityRef(refRegistry, uid(12)),
       }),
       tx: () => ({
+        selectDistinct: () => chainable([{ id: WS }]),
         query: {
           entities: {
             findFirst: async () => ({
@@ -671,17 +673,49 @@ const CONTRACT_CORPUS = {
             findFirst: async () => ({ id: uid(60) }),
           },
           extractedContent: {
-            findFirst: async () => ({
-              charCount: EXTRACTED_TEXT.length,
-              ciphertext: extractedEnvelope.ciphertext,
-              extractedAt: new Date("2026-01-02"),
-              iv: extractedEnvelope.iv,
-              sourceEntityVersionId: uid(60),
-              sourceFieldId: uid(61),
-              sourceFileId: uid(63),
-              sourceSha256Hex: "a".repeat(64),
-              entity: { kind: "document", name: "NDA draft", workspaceId: WS },
-            }),
+            findMany: async () => [
+              {
+                charCount: EXTRACTED_TEXT.length,
+                ciphertext: extractedEnvelope.ciphertext,
+                entityId: uid(12),
+                extractedAt: new Date("2026-01-02"),
+                iv: extractedEnvelope.iv,
+                language: null,
+                ocrRunId: null,
+                sourceEntityVersionId: uid(60),
+                sourceFieldId: uid(61),
+                sourceFileId: uid(63),
+                sourceSha256Hex: "a".repeat(64),
+                workspaceId: WS,
+                entity: {
+                  name: "NDA draft",
+                  workspaceId: WS,
+                  workspace: { status: "active" },
+                  versions: [{ id: uid(60) }],
+                  currentVersion: {
+                    id: uid(60),
+                    createdAt: new Date("2026-01-01"),
+                    deletedAt: null,
+                    fields: [
+                      {
+                        id: uid(61),
+                        content: {
+                          version: 1,
+                          type: "file",
+                          id: uid(63),
+                          fileName: "NDA draft.pdf",
+                          mimeType: "application/pdf",
+                          sizeBytes: 12_345,
+                          encrypted: false,
+                          sha256Hex: "a".repeat(64),
+                          pdfFileId: uid(64),
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
           },
         },
       }),
@@ -1467,8 +1501,8 @@ const CONTRACT_CORPUS = {
     },
   ],
   search_case_law: [
-    {
-      mode: "search",
+    ...DECISION_SEARCH_MATCHES.map((match) => ({
+      mode: `search-${match}`,
       buildArgs: () => ({ country: "CZE", queries: ["dobré mravy"] }),
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
@@ -1505,6 +1539,7 @@ const CONTRACT_CORPUS = {
               language: "cs",
               textWithheldReason: null,
               matchingPassages: 3,
+              match,
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               languageAlternates: [],
@@ -1520,7 +1555,8 @@ const CONTRACT_CORPUS = {
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],
-    },
+      expectPayloadContains: [JSON.stringify({ match }).slice(1, -1)],
+    })),
     {
       // Page one of a single query carries the filter rail. A source facet's
       // value is the source's own id, which an agent passes back as
@@ -1581,6 +1617,7 @@ const CONTRACT_CORPUS = {
               language: "cs",
               textWithheldReason: null,
               matchingPassages: 3,
+              match: "all_terms",
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               languageAlternates: [],

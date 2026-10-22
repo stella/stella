@@ -29,6 +29,9 @@ import { routeTree } from "@/routeTree.gen";
 
 enableMapSet();
 
+// The one owner of the generated route tree; tests read it through here.
+export { routeTree };
+
 export function getRouter() {
   const analyticsValue = createAnalyticsValue(WEB_ROUTE_TEMPLATES);
   const routeErrorLifecycle = createRouteErrorLifecycleController(

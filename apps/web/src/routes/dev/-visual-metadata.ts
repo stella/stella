@@ -33,6 +33,7 @@ export const visualRegistry = {
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
   "hungarian-decision": { label: "Hungarian decision", layout: "plain" },
   "reader-answers": { label: "Reader anchored answers", layout: "plain" },
+  "reader-selection": { label: "Reader selection toolbar", layout: "plain" },
   "answer-edit": { label: "Chat answer edits", layout: "plain" },
   autocomplete: { label: "Autocomplete", layout: "plain" },
   ui: { label: "UI components", layout: "plain" },
