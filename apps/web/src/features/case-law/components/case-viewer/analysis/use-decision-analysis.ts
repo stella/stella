@@ -156,7 +156,8 @@ export const useDecisionAnalysis = ({
   const timingKey = `${key.decisionId}:${key.decisionUpdatedAt}`;
   useExternalSyncEffect(() => {
     if (!enabled) {
-      return;
+      // No timing session to clean up while the analysis is disabled.
+      return undefined;
     }
     const existing = timingRef.current;
     if (existing === null || existing.key !== timingKey) {
