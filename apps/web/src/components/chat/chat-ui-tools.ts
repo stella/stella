@@ -1068,6 +1068,7 @@ export const resolveChatAssistantTurnOutcome = (
     case "completed":
     case "failed":
     case "interrupted":
+    case "paused":
       return outcome;
     default:
       outcome satisfies never;
@@ -1096,6 +1097,7 @@ export const getChatAssistantTurnError = (
     case "incomplete":
     case "interrupted":
     case "legacy-completed":
+    case "paused":
       return undefined;
     default:
       outcome satisfies never;
