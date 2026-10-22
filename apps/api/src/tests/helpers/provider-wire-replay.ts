@@ -301,7 +301,7 @@ const responseFor = (
   signal: AbortSignal | null,
   holdAfterBytes: number | undefined,
   chunking: Chunking = DEFAULT_CHUNKING,
-  pauses: PausePoints | undefined = undefined,
+  pauses?: PausePoints,
 ): Response => {
   const bytes = bodyBytesOf(exchange.response.body);
   const limit = holdAfterBytes ?? bytes.length;
@@ -320,6 +320,9 @@ const responseFor = (
     .toSorted((left, right) => left - right);
   let offset = 0;
   let onAbort: (() => void) | undefined;
+  // Read through a call so a check after an await is not narrowed by the
+  // one before it.
+  const isAborted = () => signal?.aborted === true;
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       onAbort = () => {
@@ -342,7 +345,7 @@ const responseFor = (
       if (pauses !== undefined && due !== undefined && due.atByte <= offset) {
         pending.shift();
         await pauses.gate.pause(due.label, signal);
-        if (signal?.aborted === true) {
+        if (isAborted()) {
           controller.error(abortError());
         }
         return;
