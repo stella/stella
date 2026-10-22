@@ -95,6 +95,10 @@ const promotionScenario = async ({
     const actionPath = path.join(directory, ".github/actions/promote-dispatch");
     await Promise.all([mkdir(scripts), mkdir(actionPath, { recursive: true })]);
     await writeFile(path.join(scripts, "gh-retry.sh"), await readFile(HELPER));
+    await writeFile(
+      path.join(scripts, "github-app-token.sh"),
+      await readFile(path.resolve(import.meta.dir, "github-app-token.sh")),
+    );
     for (const [name, source] of Object.entries({
       gh: FAKE_GH,
       openssl: FAKE_OPENSSL,

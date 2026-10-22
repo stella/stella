@@ -525,7 +525,7 @@ describe("API deployment health receipt", () => {
     // deploy into it anyway.
     expect(healthJob).toContain("DEPLOY_WHEN_UNREACHABLE");
     expect(healthJob).toContain(
-      "Start staging, then dispatch this workflow again.",
+      "The readiness check did not pass after acquiring staging capacity.",
     );
     expect(apiBuild).toContain("needs: [resolve, staging-health]");
     expect(apiBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
@@ -533,8 +533,12 @@ describe("API deployment health receipt", () => {
     expect(webBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
     expect(apiBuild).toContain("cancel-in-progress: true");
     expect(webBuild).toContain("cancel-in-progress: true");
-    expect(promoteJob).toContain("cancel-in-progress: false");
-    expect(promoteJob).toContain("needs: [resolve, build-api, build-web]");
+    expect(workflow).toContain(
+      "group: deploy-staging\n  cancel-in-progress: false",
+    );
+    expect(promoteJob).toContain(
+      "needs: [resolve, staging-health, build-api, build-web]",
+    );
     expect(promoteJob).not.toContain("Confirm this SHA is still main");
     expect(promoteJob).toContain("web-image-digest:");
     expect(promoteJob).toContain("Run staging web smoke");

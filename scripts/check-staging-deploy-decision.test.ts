@@ -272,7 +272,7 @@ beforeAll(async () => {
     extractStepScript(
       workflow,
       "Probe staging health",
-      "\n      # Staging that does not answer",
+      "\n      # A successful power transition",
     ),
   );
   const recordStart = workflow.indexOf(
@@ -284,7 +284,10 @@ beforeAll(async () => {
       "deploy-staging.yml no longer records staging verification",
     );
   }
-  const recordBody = workflow.slice(recordRun + "run: |\n".length);
+  const recordBody = workflow.slice(
+    recordRun + "run: |\n".length,
+    workflow.indexOf("\n  staging-power-off:", recordRun),
+  );
   await Bun.write(
     recordScriptPath,
     recordBody
@@ -375,7 +378,7 @@ describe("staging deploy decision", () => {
     expect(result.calls).toBe(
       `api repos/stella/stella/statuses/${TIP_SHA} --method POST --input - {"state":"error","context":"staging/verified","description":"staging off","target_url":"https://github.com/stella/stella/actions/runs/9"}\n`,
     );
-    expect(result.summary).toContain("Staging is off");
+    expect(result.summary).toContain("Staging is unavailable");
     expect(result.summary).toContain(TIP_SHA);
   });
 
@@ -451,7 +454,7 @@ describe("staging deploy decision", () => {
 });
 
 describe("staging readiness cutover", () => {
-  test("accepts a legacy health response only after /ready returns exact 404", async () => {
+  test("requires /ready even when legacy liveness answers", async () => {
     const result = await runProbe({
       healthBody: `{"status":"ok","commit":"${OTHER_SHA}"}`,
       healthStatus: "200",
@@ -460,10 +463,9 @@ describe("staging readiness cutover", () => {
     });
 
     expect(result.exitCode).toBe(0);
-    expect(result.output).toContain("status=ready");
-    expect(result.output).toContain(`served_commit=${OTHER_SHA}`);
+    expect(result.output).toContain("status=not_ready");
     expect(result.calls).toBe(
-      "https://api-staging.stll.app/ready\nhttps://api-staging.stll.app/health\n",
+      "https://api-staging.stll.app/ready\n".repeat(60),
     );
   });
 
@@ -480,7 +482,7 @@ describe("staging readiness cutover", () => {
       expect(result.exitCode).toBe(0);
       expect(result.output).toContain("status=not_ready");
       expect(result.calls).toBe(
-        "https://api-staging.stll.app/ready\n".repeat(3),
+        "https://api-staging.stll.app/ready\n".repeat(60),
       );
     },
   );
@@ -588,6 +590,8 @@ describe("staging deploy commit", () => {
         /needs: (resolve|\[resolve, )/u,
       );
     }
-    expect(workflow).toContain("needs: [resolve, build-api, build-web]");
+    expect(workflow).toContain(
+      "needs: [resolve, staging-health, build-api, build-web]",
+    );
   });
 });

@@ -1,0 +1,26 @@
+name: Staging power lease
+description: Acquire or release a staging lease and wait for the requested transition
+inputs:
+  app-client-id:
+    description: GitHub App client ID
+    required: true
+  app-private-key:
+    description: GitHub App private key
+    required: true
+  infra-repo:
+    description: Repository hosting the staging power workflow
+    required: true
+  action:
+    description: on acquires the caller lease; off releases only that lease
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Apply staging power lease
+      shell: bash
+      env:
+        APP_CLIENT_ID: ${{ inputs.app-client-id }}
+        APP_PRIVATE_KEY: ${{ inputs.app-private-key }}
+        INFRA_REPO: ${{ inputs.infra-repo }}
+        POWER_ACTION: ${{ inputs.action }}
+      run: bash "$GITHUB_ACTION_PATH/dispatch.sh"
