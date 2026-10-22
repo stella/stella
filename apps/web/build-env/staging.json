@@ -7,6 +7,8 @@
     "VITE_AUTH_MICROSOFT": "true",
     "VITE_BETA_FEATURES_ENABLED": "true",
     "VITE_BROWSER_API_URL": "https://staging.stll.app/api",
+    "VITE_DOCUMENTS_BUCKET": "stella-staging-documents",
+    "VITE_DOCUMENTS_ENDPOINT": "https://s3.eu-central-1.amazonaws.com",
     "VITE_POSTHOG_HOST": "https://e-staging.stll.app",
     "VITE_POSTHOG_UI_HOST": "https://eu.posthog.com",
     "VITE_PUBLIC_APP_URL": "https://staging.stll.app",
