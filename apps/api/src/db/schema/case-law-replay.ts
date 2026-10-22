@@ -298,9 +298,7 @@ export const caseLawReplayBlocked = p.pgTable.withRLS(
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "restrict" }),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
-    // The migration enforces NOT NULL. This stays optional in the write shape
-    // until the separate replay runner cutover starts supplying generations.
-    sourceHash: p.varchar("source_hash", { length: 64 }),
+    sourceHash: p.varchar("source_hash", { length: 64 }).notNull(),
     parserVersionFrom: p.integer("parser_version_from"),
     parserVersionTo: p.integer("parser_version_to").notNull(),
     outcome: p.text({ enum: REPLAY_TERMINAL_OUTCOMES }).notNull(),

@@ -8,24 +8,6 @@ ALTER TABLE "case_law_decisions"
 ALTER TABLE "case_law_replay_blocked"
   ADD COLUMN IF NOT EXISTS "source_hash" varchar(64);--> statement-breakpoint
 
-UPDATE "case_law_replay_blocked" blocked
--- Rows written before raw hashing use the schema's non-SHA-256 sentinel; this
--- preserves their terminal replay receipt without colliding with a real hash.
-SET "source_hash" = COALESCE(decision."source_hash", 'raw-generation-unknown')
-FROM "case_law_decisions" decision
-WHERE blocked."decision_id" = decision."id"
-  AND blocked."source_hash" IS NULL;--> statement-breakpoint
-
-ALTER TABLE "case_law_replay_blocked"
-  ALTER COLUMN "source_hash" SET NOT NULL;--> statement-breakpoint
-
--- stella-migration-safety: reviewed drop-constraint - Replaced immediately by the generation-aware primary key; no rows are removed.
-ALTER TABLE "case_law_replay_blocked"
-  DROP CONSTRAINT IF EXISTS "case_law_replay_blocked_pkey";--> statement-breakpoint
-ALTER TABLE "case_law_replay_blocked"
-  ADD CONSTRAINT "case_law_replay_blocked_pkey"
-  PRIMARY KEY ("decision_id", "source_hash", "parser_version_to");--> statement-breakpoint
-
 CREATE TABLE IF NOT EXISTS "case_law_batch_slot_runs" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "slot_date" date NOT NULL UNIQUE,

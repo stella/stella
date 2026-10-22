@@ -739,13 +739,13 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
-    "fingerprint": "65a2cced9688f11f5c2752acff32f311a49db2827d0a458a7ba0faab0bde5589",
+    "fingerprint": "11f32d8cf700f37801ae63eb2b15d13e33796f9d604cba90a7bf41c10b76e158",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
-    "fingerprint": "83c58d06a833095cc8f8c28201cd36c35ed7c7a7a469cbc43bb8dcf45962d57d",
+    "fingerprint": "2ba645e7a429236c7c0ac70eb90c4f9fd2c5a613de054e5f64b5623759a1f492",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
@@ -763,7 +763,7 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
-    "fingerprint": "e9d48912e72f8b0b3523c3bc0a65998ebabc7852816a7b9c2a42de12e995ca37",
+    "fingerprint": "dccb9f8958c96584c128a0db4f60a18a784b0ac0d2de511baa7856baf8bd8402",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },

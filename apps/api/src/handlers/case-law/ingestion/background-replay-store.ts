@@ -32,6 +32,7 @@ import {
   caseLawReplayDailyRows,
   caseLawReplaySourceProgress,
   caseLawReplayAuditEvents,
+  CASE_LAW_RAW_GENERATION_UNKNOWN,
   type ReplayMaintenanceAuditDetails,
   databaseBackfillStates,
 } from "@/api/db/schema";
@@ -1263,6 +1264,7 @@ const recordFailure = async (
       await tx
         .select({
           parserVersion: caseLawDecisions.parserVersion,
+          sourceHash: caseLawDecisions.sourceHash,
           redactedAt: caseLawDecisions.redactedAt,
           corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
         })
@@ -1302,6 +1304,7 @@ const recordFailure = async (
         .values({
           sourceId: batch.source.id,
           decisionId: batch.decisionId,
+          sourceHash: decision.sourceHash ?? CASE_LAW_RAW_GENERATION_UNKNOWN,
           parserVersionFrom: batch.parserVersionFrom,
           parserVersionTo: batch.targetParserVersion,
           outcome: "changed",
@@ -1545,6 +1548,7 @@ const completeBatch = async (
       await tx
         .select({
           parserVersion: caseLawDecisions.parserVersion,
+          sourceHash: caseLawDecisions.sourceHash,
           updateToken: sql<string>`${caseLawDecisions.updatedAt}::text`,
           redactedAt: caseLawDecisions.redactedAt,
           corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
@@ -1566,6 +1570,7 @@ const completeBatch = async (
         .values({
           sourceId: batch.source.id,
           decisionId: terminal.decisionId,
+          sourceHash: decision?.sourceHash ?? CASE_LAW_RAW_GENERATION_UNKNOWN,
           parserVersionFrom: batch.parserVersionFrom,
           parserVersionTo: terminal.targetParserVersion,
           outcome: terminal.outcome,
@@ -1738,9 +1743,24 @@ export const buildReplayCompactionQuery = (
       id: caseLawReplayBatches.id,
       sourceId: caseLawReplayBatches.sourceId,
       decisionId: caseLawReplayBatches.firstDecisionId,
+      sourceHash: caseLawReplayBlocked.sourceHash,
       parserVersionTo: caseLawReplayBatches.parserVersionTo,
     })
     .from(caseLawReplayBatches)
+    .leftJoin(
+      caseLawReplayBlocked,
+      and(
+        eq(caseLawReplayBlocked.sourceId, caseLawReplayBatches.sourceId),
+        eq(
+          caseLawReplayBlocked.decisionId,
+          caseLawReplayBatches.firstDecisionId,
+        ),
+        eq(
+          caseLawReplayBlocked.parserVersionTo,
+          caseLawReplayBatches.parserVersionTo,
+        ),
+      ),
+    )
     .where(
       and(
         isNotNull(caseLawReplayBatches.supersededAt),
@@ -1864,16 +1884,23 @@ const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
     await tx
       .delete(caseLawReplayDailyRows)
       .where(inArray(caseLawReplayDailyRows.batchId, ids));
-    // tuple membership is bounded by the locked compaction page
-    await tx.delete(caseLawReplayBlocked).where(
-      sql`(${caseLawReplayBlocked.sourceId}, ${caseLawReplayBlocked.decisionId}, ${caseLawReplayBlocked.parserVersionTo}) IN (${sql.join(
-        old.map(
-          (row) =>
-            sql`(${row.sourceId}::uuid, ${row.decisionId}::uuid, ${row.parserVersionTo}::int)`,
-        ),
-        sql`, `,
-      )})`,
+    const receiptRows = old.filter(
+      (row): row is typeof row & { sourceHash: string } =>
+        row.sourceHash !== null,
     );
+    if (receiptRows.length > 0) {
+      // Tuple membership is bounded by the locked compaction page. Including
+      // the raw generation prevents retirement from deleting a newer receipt.
+      await tx.delete(caseLawReplayBlocked).where(
+        sql`(${caseLawReplayBlocked.sourceId}, ${caseLawReplayBlocked.decisionId}, ${caseLawReplayBlocked.sourceHash}, ${caseLawReplayBlocked.parserVersionTo}) IN (${sql.join(
+          receiptRows.map(
+            (row) =>
+              sql`(${row.sourceId}::uuid, ${row.decisionId}::uuid, ${row.sourceHash}::varchar, ${row.parserVersionTo}::int)`,
+          ),
+          sql`, `,
+        )})`,
+      );
+    }
     // bounded superseded receipt retention, latest receipt preserved
     const compacted = (
       await tx

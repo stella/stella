@@ -7,6 +7,12 @@ import {
   CASE_LAW_PARSED_SOURCE_HASH_REPAIR_BATCH_SIZE,
   repairCaseLawParsedSourceHashBatch,
 } from "./case-law-parsed-source-hash-repair";
+import {
+  CASE_LAW_REPLAY_RECEIPT_REPAIR_BATCH_SIZE,
+  finishCaseLawReplayReceiptRepair,
+  repairCaseLawReplayReceiptBatch,
+} from "./case-law-replay-receipt-repair";
+import { createUngatedTableGateForTests } from "./online-ddl";
 import { CASE_LAW_RAW_GENERATION_UNKNOWN } from "./schema/case-law-replay";
 
 const MIGRATION_PATH = nodePath.resolve(
@@ -97,10 +103,19 @@ const buildLegacyDatabase = async () => {
 
 const asRepairConnection = (database: PGlite) => ({
   execute: async (query: string, params: readonly unknown[] = []) => {
-    await database.query(query, [...params]);
+    const compatible = query.replaceAll(
+      "CREATE UNIQUE INDEX CONCURRENTLY",
+      "CREATE UNIQUE INDEX",
+    );
+    if (params.length === 0 && compatible.includes(";")) {
+      await database.exec(compatible);
+      return;
+    }
+    await database.query(compatible, [...params]);
   },
   query: async (query: string, params: readonly unknown[] = []) =>
     (await database.query(query, [...params])).rows,
+  release: () => {},
 });
 
 test("the batch-slot migration and resumable repair preserve every row", async () => {
@@ -112,6 +127,13 @@ test("the batch-slot migration and resumable repair preserve every row", async (
   }).join(",");
   await database.exec(
     `INSERT INTO case_law_decisions (id, source_id, case_number, source_hash, fulltext) VALUES ${extraValues}`,
+  );
+  const extraReceipts = Array.from({ length: extraCount }, (_, index) => {
+    const suffix = (100 + index).toString(16).padStart(12, "0");
+    return `('${SOURCE_ID}', '00000000-0000-4000-8000-${suffix}', 1, 2, 'unchanged')`;
+  }).join(",");
+  await database.exec(
+    `INSERT INTO case_law_replay_blocked (source_id, decision_id, parser_version_from, parser_version_to, outcome) VALUES ${extraReceipts}`,
   );
   const decisionsBefore = await database.query(decisionProjection);
   const blockedBefore = await database.query(blockedProjection);
@@ -147,6 +169,31 @@ test("the batch-slot migration and resumable repair preserve every row", async (
   );
   expect(resumed.done).toBe(true);
 
+  const firstReceiptBatch = await repairCaseLawReplayReceiptBatch(
+    repairConnection,
+    null,
+    CASE_LAW_REPLAY_RECEIPT_REPAIR_BATCH_SIZE,
+  );
+  expect(firstReceiptBatch.done).toBe(false);
+  const repairedReceiptCount = await database.query<{ count: number | string }>(
+    "SELECT count(*) AS count FROM case_law_replay_blocked WHERE source_hash IS NOT NULL",
+  );
+  expect(Number(repairedReceiptCount.rows.at(0)?.count)).toBe(
+    CASE_LAW_REPLAY_RECEIPT_REPAIR_BATCH_SIZE,
+  );
+  const resumedReceiptBatch = await repairCaseLawReplayReceiptBatch(
+    repairConnection,
+    firstReceiptBatch.cursor,
+    CASE_LAW_REPLAY_RECEIPT_REPAIR_BATCH_SIZE,
+  );
+  expect(resumedReceiptBatch.done).toBe(true);
+  expect(
+    await finishCaseLawReplayReceiptRepair(
+      repairConnection,
+      createUngatedTableGateForTests(repairConnection),
+    ),
+  ).toEqual({ type: "complete" });
+
   const generations = await database.query<{
     id: string;
     parsed_source_hash: string | null;
@@ -165,7 +212,9 @@ test("the batch-slot migration and resumable repair preserve every row", async (
     parser_version_to: number;
     source_hash: string;
   }>(
-    "SELECT parser_version_to, source_hash FROM case_law_replay_blocked ORDER BY parser_version_to",
+    `SELECT parser_version_to, source_hash FROM case_law_replay_blocked
+     WHERE decision_id IN ('${PARSED_ID}', '${RAW_LESS_ID}')
+     ORDER BY parser_version_to, source_hash`,
   );
   expect(blocked.rows).toEqual([
     { parser_version_to: 2, source_hash: PARSED_HASH },
@@ -174,6 +223,17 @@ test("the batch-slot migration and resumable repair preserve every row", async (
       source_hash: CASE_LAW_RAW_GENERATION_UNKNOWN,
     },
     { parser_version_to: 3, source_hash: PARSED_HASH },
+  ]);
+
+  const primaryKey = await database.query<{ columns: string[] }>(`
+    SELECT array_agg(a.attname ORDER BY k.ordinality) AS columns
+    FROM pg_constraint c
+    JOIN unnest(c.conkey) WITH ORDINALITY k(attnum, ordinality) ON true
+    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+    WHERE c.conrelid = 'case_law_replay_blocked'::regclass AND c.contype = 'p'
+    GROUP BY c.oid`);
+  expect(primaryKey.rows).toEqual([
+    { columns: ["decision_id", "source_hash", "parser_version_to"] },
   ]);
 
   const tableCount = await database.query<{ count: number | string }>(`
@@ -204,13 +264,38 @@ test("the batch-slot migration and resumable repair preserve every row", async (
       )
     ).rows,
   ).toEqual(repairedBeforeRetry.rows);
+  const receiptsBeforeRetry = await database.query(
+    "SELECT * FROM case_law_replay_blocked ORDER BY decision_id, parser_version_to",
+  );
+  const retryFirst = await repairCaseLawReplayReceiptBatch(
+    repairConnection,
+    null,
+    CASE_LAW_REPLAY_RECEIPT_REPAIR_BATCH_SIZE,
+  );
+  expect(retryFirst.done).toBe(false);
+  expect(
+    (
+      await repairCaseLawReplayReceiptBatch(
+        repairConnection,
+        retryFirst.cursor,
+        CASE_LAW_REPLAY_RECEIPT_REPAIR_BATCH_SIZE,
+      )
+    ).done,
+  ).toBe(true);
+  expect(
+    (
+      await database.query(
+        "SELECT * FROM case_law_replay_blocked ORDER BY decision_id, parser_version_to",
+      )
+    ).rows,
+  ).toEqual(receiptsBeforeRetry.rows);
   expect(
     (
       await database.query(
         "SELECT count(*) AS count FROM case_law_replay_blocked",
       )
     ).rows,
-  ).toEqual([{ count: 3 }]);
+  ).toEqual([{ count: extraCount + 3 }]);
 
   await database.close();
 });

@@ -20,6 +20,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  CASE_LAW_RAW_GENERATION_UNKNOWN,
   caseLawDecisions,
   caseLawReplayBlocked,
   caseLawReplayBatches,
@@ -338,6 +339,10 @@ const replaySelectionPredicate = (
             and(
               eq(caseLawReplayBlocked.sourceId, caseLawDecisions.sourceId),
               eq(caseLawReplayBlocked.decisionId, caseLawDecisions.id),
+              eq(
+                caseLawReplayBlocked.sourceHash,
+                sql`coalesce(${caseLawDecisions.sourceHash}, ${CASE_LAW_RAW_GENERATION_UNKNOWN})`,
+              ),
               eq(
                 caseLawReplayBlocked.parserVersionTo,
                 selection.currentParserVersion,
