@@ -256,7 +256,7 @@ type AnonymizationPipelineStatus = "idle" | "running" | "ready" | "error";
  * Asks one open editor's live DOCX detection whether its result covers the
  * current document version; a stale one starts detection and answers false.
  */
-export type AnonymizationDetectionConfirm = () => boolean;
+type AnonymizationDetectionConfirm = () => boolean;
 
 type InspectorAnonymizationState = {
   anonymizationActiveMountCount: number;
