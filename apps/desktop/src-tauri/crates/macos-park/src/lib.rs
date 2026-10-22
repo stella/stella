@@ -17,6 +17,16 @@ pub use focused_window::{
 };
 
 #[cfg(target_os = "macos")]
+mod managed_preferences;
+#[cfg(target_os = "macos")]
+pub use managed_preferences::{ManagedPreference, managed_preference};
+
+#[cfg(target_os = "macos")]
+mod microphone;
+#[cfg(target_os = "macos")]
+pub use microphone::microphone_input_bundle_ids;
+
+#[cfg(target_os = "macos")]
 mod system_permissions;
 #[cfg(target_os = "macos")]
 pub use system_permissions::{
