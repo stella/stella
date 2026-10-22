@@ -660,7 +660,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
     key: ADAPTER_KEYS.CZ_UOHS,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Czech Office for the Protection of Competition Decisions",
     publisher: "Úřad pro ochranu hospodářské soutěže",

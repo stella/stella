@@ -497,7 +497,7 @@ test(
 
 test("per-year missing counts sum to the source missing count", () => {
   assertProperty(
-    "case-law coverage per-year missing counts sum to the source missing count",
+    "per-year missing counts sum to the source missing count",
     fc.property(
       fc.array(
         fc.record({
