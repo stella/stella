@@ -1396,6 +1396,7 @@
     "credentialSendDescription": "Senden Sie sie nur, wenn Sie diesen Wert in der Unterhaltung teilen möchten.",
     "credentialSendTitle": "Diese Nachricht könnte Zugangsdaten enthalten",
     "deleteThread": "Konversation löschen",
+    "diagramUnavailable": "Dieses Diagramm konnte nicht dargestellt werden. Der Quelltext steht unten.",
     "editMode": {
       "autoDirect": "Automatisch · direkt überschreiben",
       "autoDirectDescription": "KI-Änderungen werden sofort angewendet und überschreiben das Dokument direkt (ohne Änderungsverfolgung).",
