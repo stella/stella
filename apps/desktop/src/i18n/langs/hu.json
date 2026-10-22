@@ -378,6 +378,9 @@
     "browserAppNameOnly": "Ez a böngésző csak az alkalmazásnév rögzítésére van beállítva.",
     "captureDetails": "Az ablakcímek és a megnyitott dokumentumok rögzítése is",
     "captureDetailsDescription": "Kikapcsoláskor nem rögzülnek új részletek. A korábbiak a megőrzési idő végéig vagy törlésükig megmaradnak.",
+    "detectCalls": "Hívások rögzítése",
+    "detectCallsDescription": "Amíg a Teams, a Zoom vagy egy böngésző használja a mikrofont, ez az idő hívásnak számít, akkor is, ha csak hallgat, vagy egy másik alkalmazásban dolgozik. Hangot soha nem rögzítünk.",
+    "callIn": "Hívás: {app}",
     "accessibilityRequired": "A részletek rögzítéséhez engedélyezze a Kisegítő lehetőségek hozzáférést. Az alkalmazásnevek továbbra is rögzülnek.",
     "openAccessibilitySettings": "Kisegítő lehetőségek beállításainak megnyitása",
     "detailsUnavailable": "A részletek ezen az eszközön nem érhetők el. Az alkalmazásnevek továbbra is rögzülnek.",
@@ -504,6 +507,7 @@
     "windowsKeyReserved": "A Windows-billentyűs parancsokat a Windows magának tartja fenn. Használja a Ctrl vagy az Alt billentyűt.",
     "taken": "Ezt a billentyűparancsot már egy másik alkalmazás használja: {shortcut}. Válasszon másikat.",
     "unavailable": "Egy másik alkalmazás használja ezt: {shortcut}, ezért nem nyitja meg a vágólapot. Válasszon másik billentyűparancsot.",
+    "managed": "A szervezete kikapcsolta a vágólap-előzményeket.",
     "action": {
       "copy": "Másolás",
       "paste": "Beillesztés",
