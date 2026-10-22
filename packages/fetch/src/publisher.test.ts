@@ -1413,7 +1413,7 @@ describe("publisher scheduler", () => {
         if (input.url.pathname === "/robots.txt") {
           return new Response(null, { status: 404 });
         }
-        // oxlint-disable-next-line no-throw-literal -- Fixture: a fetcher that throws a non-Error value.
+        // oxlint-disable-next-line no-throw-literal, typescript/only-throw-error -- Fixture: a fetcher that throws a non-Error value.
         throw "socket closed";
       },
       defaultMinimumIntervalMs: 0,
