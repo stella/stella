@@ -1211,6 +1211,11 @@ export type OutboundPermitGrantOwner = {
 /** Direct request boundaries allowed to create outbound permits. */
 export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
+    path: "apps/api/src/handlers/chat/link-icons/get-exact.ts",
+    reason:
+      "Authenticated direct boundary for verified public connector and catalogue icon bytes.",
+  },
+  {
     path: "apps/api/src/handlers/chat/link-icons/get.ts",
     reason: "Authenticated direct boundary for verified public favicon bytes.",
   },
