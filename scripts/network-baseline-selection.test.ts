@@ -62,6 +62,7 @@ set -euo pipefail
 endpoint=''
 for argument in "$@"; do
   case "$argument" in
+    status=*) echo "the API status filter is unreliable; select by conclusion" >&2; exit 1 ;;
     name=network-baseline-main-*) endpoint="artifacts-\${argument#name=network-baseline-main-}" ;;
     repos/*/actions/workflows/*/runs) endpoint=record-runs ;;
     repos/*/actions/runs/*) endpoint="run-\${argument##*/}" ;;
@@ -229,6 +230,21 @@ for (const event of ["schedule", "workflow_dispatch"]) {
   });
 }
 
+test("only a successful recording run makes its commit a candidate", () => {
+  const runs = { total_count: 1, workflow_runs: [] as unknown[] };
+  for (const conclusion of ["failure", "cancelled", null]) {
+    runs.workflow_runs = [
+      { event: "workflow_dispatch", head_sha: fixture.expected, conclusion },
+    ];
+    const result = replay({ overrides: { "record-runs": runs } });
+    expect(result.code, String(conclusion)).toBe(0);
+    expect(result.stdout, String(conclusion)).toContain("recorded=false");
+    expect(result.summary, String(conclusion)).toContain(
+      `candidate=${fixture.expected} artifacts=not-queried verdict=no-successful-record-run`,
+    );
+  }
+});
+
 test("a recording artifact cannot claim a different main commit", () => {
   const result = replay({
     walk: fixture.walk.slice(0, fixture.walk.indexOf(fixture.expected) + 1),
@@ -251,7 +267,9 @@ test("a retained delivery from an earlier push recorder remains eligible", () =>
     overrides: {
       "record-runs": {
         total_count: 1,
-        workflow_runs: [{ event: "push", head_sha: fixture.expected }],
+        workflow_runs: [
+          { event: "push", head_sha: fixture.expected, conclusion: "success" },
+        ],
       },
     },
   });
