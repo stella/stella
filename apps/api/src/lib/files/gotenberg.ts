@@ -3,6 +3,7 @@ import { Result, TaggedError } from "better-result";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { env } from "@/api/env";
+import { basicAuthorizationHeader } from "@/api/lib/auth/http-basic-auth";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
 import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
@@ -16,7 +17,6 @@ import {
 } from "@/api/lib/files/image-pdf";
 import { streamMultipartForm } from "@/api/lib/files/multipart-stream";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
-import { basicAuthorizationHeader } from "@/api/lib/http-basic-auth";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";

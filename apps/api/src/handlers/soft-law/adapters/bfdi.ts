@@ -382,6 +382,34 @@ const createBfdiDocumentReader =
       });
     });
 
+const BFDI_DEFINITION = {
+  key: "de-bfdi",
+  authority: "de-bfdi",
+  access: {
+    publisherGate: "bfdi-de",
+    userAgent: "Stella/1.0 (+https://github.com/stella/stella)",
+    window: { type: "any_time" },
+  },
+  getTotalCount: async () =>
+    await Promise.resolve({ type: "no-count-endpoint" }),
+  sliceWalk: {
+    type: "unsupported",
+    reason:
+      "Topical publication pages provide no exhaustive count or date-slice interface.",
+  },
+  sourceFields: {
+    status: "declared",
+    fields: SOURCE_FIELD_DISPOSITIONS,
+    listSourceFields: (parts) => {
+      const $ = load(parts["detail"] ?? "");
+      return Object.entries(FIELD_SELECTORS)
+        .filter(([, selector]) => $(selector).length > 0)
+        .map(([field]) => field);
+    },
+  },
+  sourceSurfaces: { surfaces: SOURCE_SURFACE_DISPOSITIONS },
+} as const satisfies Omit<SoftLawSourceAdapter, "discover" | "fetchDocument">;
+
 export const createBfdiAdapter = (input: unknown) =>
   Result.gen(function* () {
     const parsed = v.safeParse(policySchema, input);
@@ -409,13 +437,7 @@ export const createBfdiAdapter = (input: unknown) =>
     }
     const policyHash = sha256Hex(JSON.stringify(policy));
     const adapter = {
-      key: "de-bfdi",
-      authority: "de-bfdi",
-      access: {
-        publisherGate: "bfdi-de",
-        userAgent: "Stella/1.0 (+https://github.com/stella/stella)",
-        window: { type: "any_time" },
-      },
+      ...BFDI_DEFINITION,
       discover: async ({ cursor, fetch: read }) =>
         Result.gen(async function* () {
           const parts = cursor?.split(":");
@@ -494,24 +516,6 @@ export const createBfdiAdapter = (input: unknown) =>
           });
         }),
       fetchDocument: createBfdiDocumentReader({ policy, urls }),
-      getTotalCount: async () =>
-        await Promise.resolve({ type: "no-count-endpoint" }),
-      sliceWalk: {
-        type: "unsupported",
-        reason:
-          "Topical publication pages provide no exhaustive count or date-slice interface.",
-      },
-      sourceFields: {
-        status: "declared",
-        fields: SOURCE_FIELD_DISPOSITIONS,
-        listSourceFields: (parts) => {
-          const $ = load(parts["detail"] ?? "");
-          return Object.entries(FIELD_SELECTORS)
-            .filter(([, selector]) => $(selector).length > 0)
-            .map(([field]) => field);
-        },
-      },
-      sourceSurfaces: { surfaces: SOURCE_SURFACE_DISPOSITIONS },
     } as const satisfies SoftLawSourceAdapter;
     return Result.ok(adapter);
   });
@@ -553,3 +557,15 @@ export const loadBfdiAdapter = async (
     });
     return createBfdiAdapter(input);
   });
+
+/** Registration exposes the source contract; ingestion requires an admission packet. */
+export const bfdiAdapter = {
+  ...BFDI_DEFINITION,
+  configure: loadBfdiAdapter,
+  discover: async () =>
+    await Promise.resolve(invalid("BfDI source admission is not configured")),
+  fetchDocument: async () =>
+    await Promise.resolve(invalid("BfDI source admission is not configured")),
+} as const satisfies SoftLawSourceAdapter & {
+  configure: typeof loadBfdiAdapter;
+};

@@ -16,19 +16,15 @@ test("unregistered authorities cannot enter the sync contract", () => {
   expectTypeOf<"de-bfdi">().toExtend<RegisteredSoftLawAuthority>();
 });
 
-test("every configured adapter belongs to its authority; pending kinds are refused", async () => {
+test("every registered adapter belongs to its authority; pending kinds are refused", () => {
   for (const [authority, disposition] of Object.entries(SOFT_LAW_ADMISSIONS)) {
     if (disposition.state === "registered") {
-      if (authority !== "de-bfdi") {
-        const loaded = await disposition.loadAdapter({ type: "default" });
-        expect(loaded.isOk()).toBe(true);
-        expect(authority).toBe(loaded.unwrap().authority);
-      }
+      expect(authority).toBe(disposition.adapter.authority);
       expect(disposition.descriptor.allowsRedistribution).toBe(false);
       expect(disposition.descriptor.allowsDerivedAi).toBe(false);
       continue;
     }
-    expect(disposition).not.toHaveProperty("loadAdapter");
+    expect(disposition).not.toHaveProperty("adapter");
   }
   for (const authority of ["eu-edps", "de-bfdi"] as const) {
     for (const kind of SOFT_LAW_KINDS) {

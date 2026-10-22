@@ -151,6 +151,7 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
       }
       return Result.ok(
         await generate({
+          userId: deps.admission.userId,
           dataClass: "customer",
           task: VERIFICATION_MODEL_TASK,
           orgAIConfig: deps.orgAIConfig,
@@ -163,10 +164,8 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
           tenantWorkspaceIds: [deps.workspaceId],
           system,
           messages,
-          abortSignal: AbortSignal.any([
-            deps.abortSignal,
-            AbortSignal.timeout(CALL_TIMEOUT_MS),
-          ]),
+          abortSignal: deps.abortSignal,
+          deadlineMs: CALL_TIMEOUT_MS,
           outputSchema,
         }),
       );

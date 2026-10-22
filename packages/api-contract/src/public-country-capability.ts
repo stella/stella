@@ -70,7 +70,8 @@ export const PUBLIC_COUNTRY_CAPABILITIES = {
   CZE: { caseLaw: "admitted", legislation: "admitted" },
   EU: { caseLaw: "identity_public", legislation: "pending_public" },
   HUN: { caseLaw: "pending_public", legislation: "pending_public" },
-  POL: { caseLaw: "pending_public", legislation: "pending_public" },
+  // parser-output-unchanged: Poland's row is read by no parser; the EU and US parsers read only their own rows.
+  POL: { caseLaw: "admitted", legislation: "pending_public" },
   SVK: { caseLaw: "pages_public", legislation: "pages_public" },
   USA: { caseLaw: "pending_public", legislation: "pending_public" },
 } as const satisfies Record<

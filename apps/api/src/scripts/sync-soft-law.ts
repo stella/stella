@@ -4,7 +4,7 @@ import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {
   SOFT_LAW_ADMISSIONS,
-  isRegisteredSoftLawAuthority,
+  configureSoftLawAdapter,
 } from "@/api/handlers/soft-law/adapters/registry";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
@@ -16,34 +16,42 @@ if (import.meta.main) {
       args: process.argv.slice(2),
       options: {
         source: { type: "string" },
-        apply: { type: "boolean", default: false },
         "admission-file": { type: "string" },
+        apply: { type: "boolean", default: false },
       },
       strict: true,
       allowPositionals: false,
     });
-    if (!values.source || !isRegisteredSoftLawAuthority(values.source)) {
+    const source = Object.values(SOFT_LAW_ADMISSIONS).find(
+      (entry) =>
+        entry.state === "registered" && entry.adapter.key === values.source,
+    );
+    if (!source || source.state !== "registered") {
       throw new SoftLawIngestionError({
-        message:
-          "Use --source with a registered soft-law authority; --apply starts one bounded ingestion run",
+        message: `Use --source ${Object.values(SOFT_LAW_ADMISSIONS)
+          .filter((entry) => entry.state === "registered")
+          .map((entry) => entry.adapter.key)
+          .join(" | ")}; --apply starts one bounded ingestion run`,
       });
     }
-    const authority = values.source;
-    const source = SOFT_LAW_ADMISSIONS[authority];
-    const loaded = await source.loadAdapter(
+    const authority = source.adapter.authority;
+    const configuration =
       values["admission-file"] === undefined
-        ? { type: "default" }
-        : { type: "admission-file", path: values["admission-file"] },
+        ? { type: "default" as const }
+        : { type: "admission-file" as const, path: values["admission-file"] };
+    const configured = await configureSoftLawAdapter(
+      source.adapter,
+      configuration,
     );
-    if (loaded.status === "error") {
-      throw loaded.error;
+    if (configured.isErr()) {
+      throw configured.error;
     }
     if (!values.apply) {
       console.log(
         JSON.stringify({
           mode: "dry-run",
           source: authority,
-          access: loaded.value.access,
+          access: source.adapter.access,
           descriptor: source.descriptor,
           reuseNotice: source.reuseNotice,
         }),
@@ -54,7 +62,8 @@ if (import.meta.main) {
     const session = await enterCaseLawMaintenanceLane();
     try {
       const result = await syncSoftLaw({
-        adapter: loaded.value,
+        authority,
+        configuration,
         scopedDb: session.ingestionDb,
         signal: AbortSignal.timeout(15 * 60 * 1000),
       });

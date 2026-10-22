@@ -22,6 +22,7 @@ import {
   parseBfdiDocument,
   parseBfdiListing,
 } from "./bfdi";
+import { SOFT_LAW_ADMISSIONS, configureSoftLawAdapter } from "./registry";
 
 const ORIGIN = "https://www.bfdi.bund.de";
 const INDEX = `${ORIGIN}/DE/Fachthemen/Datenschutzpraxis/Datenverarbeitung/Datenverarbeitung-node.html`;
@@ -91,10 +92,40 @@ const responses = async () =>
 
 test("BfDI loading requires an explicit bounded private admission file", async () => {
   expect((await loadBfdiAdapter({ type: "default" })).isErr()).toBe(true);
+  expect(
+    (
+      await configureSoftLawAdapter(SOFT_LAW_ADMISSIONS["de-bfdi"].adapter, {
+        type: "default",
+      })
+    ).isErr(),
+  ).toBe(true);
+  expect(
+    (
+      await configureSoftLawAdapter(SOFT_LAW_ADMISSIONS["eu-edpb"].adapter, {
+        type: "default",
+      })
+    ).unwrap(),
+  ).toBe(SOFT_LAW_ADMISSIONS["eu-edpb"].adapter);
   const directory = await mkdtemp(path.join(tmpdir(), "bfdi-admission-test-"));
   const admissionPath = path.join(directory, "admission.json");
   try {
     await writeFile(admissionPath, JSON.stringify(policy));
+    expect(
+      (
+        await configureSoftLawAdapter(SOFT_LAW_ADMISSIONS["eu-edpb"].adapter, {
+          type: "admission-file",
+          path: admissionPath,
+        })
+      ).isErr(),
+    ).toBe(true);
+    expect(
+      (
+        await configureSoftLawAdapter(SOFT_LAW_ADMISSIONS["de-bfdi"].adapter, {
+          type: "admission-file",
+          path: admissionPath,
+        })
+      ).unwrap().authority,
+    ).toBe("de-bfdi");
     expect(
       (
         await loadBfdiAdapter({ type: "admission-file", path: admissionPath })

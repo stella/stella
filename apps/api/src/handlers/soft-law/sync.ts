@@ -4,31 +4,36 @@ import { eq } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { softLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  SoftLawIngestionError,
-  type SoftLawSourceAdapter,
-} from "@/api/lib/legal-search/soft-law-types";
+import type { SoftLawAdapterConfiguration } from "@/api/lib/legal-search/soft-law-types";
+import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 import {
   SOFT_LAW_ADMISSIONS,
+  configureSoftLawAdapter,
   type RegisteredSoftLawAuthority,
 } from "./adapters/registry";
 import { runSoftLawIngestion } from "./ingestion";
 
 type SyncSoftLawOptions = {
-  adapter: SoftLawSourceAdapter & { authority: RegisteredSoftLawAuthority };
+  authority: RegisteredSoftLawAuthority;
+  configuration: SoftLawAdapterConfiguration;
   scopedDb: ScopedDb;
   signal: AbortSignal;
 };
 
 /** Registration and retries share the existing source identity and ingestion lease. */
 export const syncSoftLaw = async ({
-  adapter,
+  authority,
+  configuration,
   scopedDb,
   signal,
 }: SyncSoftLawOptions) => {
-  const { descriptor } = SOFT_LAW_ADMISSIONS[adapter.authority];
+  const { adapter, descriptor } = SOFT_LAW_ADMISSIONS[authority];
+  const configured = await configureSoftLawAdapter(adapter, configuration);
+  if (configured.isErr()) {
+    return { status: "failed" as const, error: configured.error };
+  }
   const auditSubject = createSafeId<"systemScriptRun">();
   const registration = await Result.tryPromise(
     async () =>
@@ -79,13 +84,13 @@ export const syncSoftLaw = async ({
       status: "failed" as const,
       error: new SoftLawIngestionError({
         message:
-          "Soft-law acquisition requires an ingestion-only source descriptor",
+          "EU soft-law acquisition requires an ingestion-only source descriptor",
       }),
     };
   }
   return await runSoftLawIngestion({
     sourceId: registration.value.id,
-    adapter,
+    adapter: configured.value,
     scopedDb,
     signal,
   });

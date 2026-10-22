@@ -135,7 +135,7 @@ type CitingDecisionsCursor = {
   decisionId: string;
 };
 
-const decodeCitingDecisionsCursor = (
+export const decodeCitingDecisionsCursor = (
   cursor: string,
 ): CitingDecisionsCursor | null => {
   const parts = decodePaginationCursor(cursor);
@@ -153,6 +153,15 @@ const decodeCitingDecisionsCursor = (
   }
   return { context, decisionDate, decisionId };
 };
+
+export const encodeCitingDecisionsCursor = (
+  cursor: CitingDecisionsCursor,
+): string =>
+  encodePaginationCursor([
+    cursor.context,
+    cursor.decisionDate,
+    cursor.decisionId,
+  ]);
 
 type CitingDecisionRowsOptions = {
   tx: CaseLawPublicReadTransaction;

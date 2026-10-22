@@ -11,6 +11,7 @@ import { readerAnnotationKeys } from "@/components/legal-reader/annotations/read
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
 import { timeTimersOptions } from "@/features/time-timers/queries";
@@ -114,12 +115,14 @@ const DOWNLOAD = "a file download, not cached";
 const OAUTH_REDIRECT = "an OAuth redirect, not cached";
 const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
+const READ_FRESH = "read fresh at each use, never cached";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
   "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
   "account-exports/get.ts": { kind: "no-web-caller", calls: [] },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
+  "files/thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
   "search-history/list.ts": {
     kind: "keyed",
     calls: ['api["search-history"].get'],
@@ -299,6 +302,19 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     },
   },
   "chat/saved-secret.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/tool-grants/list.ts": {
+    kind: "keyed",
+    calls: ['api.chat["tool-grants"].get'],
+    files: ["features/chat/chat-tool-grants.ts"],
+    keys: () => [
+      chatToolGrantsOptions({
+        activeOrganizationId: ORG,
+        threadId: "thread",
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "chat/tool-grants/coverage.ts": { kind: "not-per-user", reason: READ_FRESH },
   "chat/skill-availability/list.ts": {
     kind: "keyed",
     calls: ['api.chat["skill-availability"].get'],
@@ -576,6 +592,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "not-per-user",
     reason: "the caller is recorded for usage only",
   },
+  "templates/get.ts": { kind: "owned-id", reason: DOWNLOAD },
   "templates/fills/preview.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "templates/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
   "templates/lookup-formats/list.ts": {
@@ -590,6 +607,8 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }),
     ],
   },
+  "templates/versions/get.ts": { kind: "owned-id", reason: DOWNLOAD },
+  "style-sets/download.ts": { kind: "owned-id", reason: DOWNLOAD },
   "time-entries/get.ts": { kind: "not-per-user", reason: JOINS_NAMES },
   "time-entries/list.ts": {
     kind: "keyed",
@@ -1247,7 +1266,6 @@ test("organization settings skip authenticated reads until an organization is se
     organizationId: ORG,
     userId: USER,
   });
-  expect(typeof selected.queryFn).toBe("function");
   expect(selected.queryKey).not.toEqual(unselected.queryKey);
   const selectedOptional = optionalOrganizationSettingsOptions({
     organizationId: ORG,
