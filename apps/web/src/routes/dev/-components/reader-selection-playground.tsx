@@ -33,9 +33,11 @@ export const ReaderSelectionPlayground = () => {
         activeAnnotation={null}
         activeSpans={[]}
         controller={{
-          create: () => undefined,
-          remove: () => undefined,
-          update: () => undefined,
+          create: async () => undefined,
+          redo: async () => undefined,
+          remove: async () => undefined,
+          undo: async () => undefined,
+          update: async () => undefined,
         }}
         mode="authenticated"
         onActivateAnnotation={() => undefined}
