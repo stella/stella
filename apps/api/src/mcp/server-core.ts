@@ -119,6 +119,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import { omittedWriteToolResult } from "@/api/mcp/write-result-omission";
 import { mcpToolAuthorityRefusal } from "@/api/mcp/write-tool-authority";
 
 const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();
@@ -770,20 +771,8 @@ const boundMcpToolResult = async ({
       hint: "Request a smaller selection using this tool's filters or page limit.",
     });
   }
-  return {
-    isError: false,
-    content: [
-      {
-        type: "text",
-        text: "Action applied. The result was too large and was omitted. Do not repeat the action; use a read tool to inspect its outcome.",
-      },
-    ],
-    structuredContent: {
-      applied: true,
-      resultOmitted: true,
-      reason: "result_too_large",
-    },
-  } satisfies CallToolResult;
+  // Every write tool advertises this shape beside its own output.
+  return omittedWriteToolResult();
 };
 
 export const createMcpHttpRequestHandler = ({
