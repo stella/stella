@@ -117,8 +117,20 @@ const createRedisClientMock = mock(() => makeFakeRedisClient());
 const setIntervalSpy = spyOn(globalThis, "setInterval");
 const clearIntervalSpy = spyOn(globalThis, "clearInterval");
 
+const clientsBeforeImport = createdClients.length;
+const redisClientCallsBeforeImport = createRedisClientMock.mock.calls.length;
+const intervalCallsBeforeImport = setIntervalSpy.mock.calls.length;
 const { broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
   await import("@/api/lib/sse");
+
+// Measure the import itself. Bun's --rerun-each retains mock history between
+// iterations, so absolute call counts include lifecycle calls from earlier
+// runs even though importing (or retrieving) the module performed no work.
+const clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
+const redisClientsCreatedDuringImport =
+  createRedisClientMock.mock.calls.length - redisClientCallsBeforeImport;
+const intervalsStartedDuringImport =
+  setIntervalSpy.mock.calls.length - intervalCallsBeforeImport;
 
 // Let the fire-and-forget subscribe promise inside startSse settle. A timer
 // turn drains the whole pending microtask queue, so this does not depend on
@@ -224,9 +236,9 @@ const broadcastTestEvent = (
 
 describe("sse module import", () => {
   test("importing the module opens no Redis connection and starts no timer", () => {
-    expect(createdClients).toHaveLength(0);
-    expect(setIntervalSpy).not.toHaveBeenCalled();
-    expect(createRedisClientMock).not.toHaveBeenCalled();
+    expect(clientsCreatedDuringImport).toBe(0);
+    expect(intervalsStartedDuringImport).toBe(0);
+    expect(redisClientsCreatedDuringImport).toBe(0);
   });
 
   test("registering a local connection before startSse does not throw", () => {
