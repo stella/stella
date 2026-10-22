@@ -419,16 +419,14 @@ describe("the settled history the engine converts", () => {
         state: "input-streaming",
         type: "tool-call",
       } satisfies ChatPart;
-      const [storedCall] = closeCutShortCalls(
-        toPersistableChatMessage({
-          id: toSafeId<"chatMessage">("01a0e22c-ba01-7525-803d-b57dcb87e6fc"),
-          parts: [cutOff],
-          role: "assistant",
-        }),
-      ).parts;
-      if (storedCall === undefined) {
-        return panic("The cut-short message lost its call");
-      }
+      const storedCall =
+        closeCutShortCalls(
+          toPersistableChatMessage({
+            id: toSafeId<"chatMessage">("01a0e22c-ba01-7525-803d-b57dcb87e6fc"),
+            parts: [cutOff],
+            role: "assistant",
+          }),
+        ).parts[0] ?? panic("The cut-short message lost its call");
       // The stored call keeps the partial text: the fixture reaches the fault.
       expect(storedCall).toMatchObject({ arguments: partial, state: "error" });
 
