@@ -123,6 +123,7 @@ export const generateThreadRecapText = async ({
 
   try {
     const text = await generateTanStackTextForTask({
+      userId: admission.userId,
       dataClass: "customer",
       deadlineMs: RECAP_GENERATION_TIMEOUT_MS,
       finishPolicy: "allow-incomplete",

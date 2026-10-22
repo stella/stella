@@ -102,7 +102,7 @@ describe("detectFileEncryption", () => {
     const detection = await detectFileEncryption({
       mimeType: PDF_MIME_TYPE,
       scanned: pdfFile(await createEncryptedPdf()),
-      probe: async (file) => await isEncryptedPdf(file, { timeoutMs: 1 }),
+      probe: async (file) => await isEncryptedPdf(file, { timeoutMs: 1 }), // timeout under test
     });
 
     expect(detection.status).toBe("unsure");

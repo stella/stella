@@ -488,42 +488,25 @@ type PlanAndEnqueueWorkflowOptions = Omit<
   releaseClaimAndFail: (cause: unknown) => Promise<StartWorkflowResult>;
 };
 
-type RequestedWorkflowPlanOptions = {
-  entityIds: StartWorkflowArgs["entityIds"];
-  propertyIds: StartWorkflowArgs["propertyIds"];
-  executionPlanData: Awaited<ReturnType<typeof getExecutionPlanData>>;
-};
-
-const requestedWorkflowPlan = ({
-  entityIds,
-  propertyIds,
-  executionPlanData,
-}: RequestedWorkflowPlanOptions) => {
-  // Property-status freshness is an optimization for full-workspace
-  // runs ("nothing changed, skip"). It must be bypassed when the
-  // caller is asking for an explicit re-run: entity backfills
-  // ("backfill these new rows") and column reruns ("re-extract this
-  // column") both need the property in the plan even if it is
-  // marked fresh. The per-entity / per-property targeting below
-  // still scopes the actual computation correctly.
-  const planInput =
-    (entityIds && entityIds.length > 0) ||
-    (propertyIds && propertyIds.length > 0)
-      ? {
-          ...executionPlanData,
-          properties: executionPlanData.properties.map((p) => ({
-            ...p,
-            status: "stale" as const,
-          })),
-        }
-      : executionPlanData;
-
-  const fullExecutionPlan = getPropertyExecutionPlan(planInput);
-
-  return propertyIds && propertyIds.length > 0
-    ? filterPlanByPropertyIds(fullExecutionPlan, propertyIds)
-    : fullExecutionPlan;
-};
+const executionPlanInput = ({
+  data,
+  inputEntityIds,
+  inputPropertyIds,
+}: {
+  data: Parameters<typeof getPropertyExecutionPlan>[0];
+  inputEntityIds: readonly SafeId<"entity">[] | undefined;
+  inputPropertyIds: readonly SafeId<"property">[] | undefined;
+}) =>
+  (inputEntityIds && inputEntityIds.length > 0) ||
+  (inputPropertyIds && inputPropertyIds.length > 0)
+    ? {
+        ...data,
+        properties: data.properties.map((property) => ({
+          ...property,
+          status: "stale" as const,
+        })),
+      }
+    : data;
 
 const planAndEnqueueWorkflow = async (
   {
@@ -580,11 +563,29 @@ const planAndEnqueueWorkflow = async (
     const executionPlanData = await getExecutionPlanData(workspaceId, scopedDb);
     signal?.throwIfAborted();
 
-    const executionPlan = requestedWorkflowPlan({
-      entityIds: inputEntityIds,
-      propertyIds: inputPropertyIds,
-      executionPlanData,
+    // Property-status freshness is an optimization for full-workspace
+    // runs ("nothing changed, skip"). It must be bypassed when the
+    // caller is asking for an explicit re-run: entity backfills
+    // ("backfill these new rows") and column reruns ("re-extract this
+    // column") both need the property in the plan even if it is
+    // marked fresh. The per-entity / per-property targeting below
+    // still scopes the actual computation correctly.
+    const planInput = executionPlanInput({
+      data: executionPlanData,
+      inputEntityIds,
+      inputPropertyIds,
     });
+
+    const planned = getPropertyExecutionPlan(planInput);
+    if (Result.isError(planned)) {
+      return await releaseClaimAndFail(planned.error);
+    }
+    const fullExecutionPlan = planned.value;
+
+    const executionPlan =
+      inputPropertyIds && inputPropertyIds.length > 0
+        ? filterPlanByPropertyIds(fullExecutionPlan, inputPropertyIds)
+        : fullExecutionPlan;
 
     const hasWork = executionPlan.some((level) =>
       level.some((batch) => batch.properties.length > 0),

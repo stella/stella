@@ -347,6 +347,7 @@ const runGeneration = async ({
       },
     );
     const result = await generateTanStackObjectForTask({
+      userId: admission.userId,
       dataClass: "public_corpus",
       task: "short-text",
       serviceTier: "standard",

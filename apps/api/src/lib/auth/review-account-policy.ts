@@ -44,13 +44,13 @@ export const REVIEW_ACCOUNT_OPERATION = {
 export type ReviewAccountOperation =
   (typeof REVIEW_ACCOUNT_OPERATION)[keyof typeof REVIEW_ACCOUNT_OPERATION];
 
-const REVIEW_ACCOUNT_DISPOSITION = {
+export const REVIEW_ACCOUNT_DISPOSITION = {
   allowed: "allowed",
   ownOrganization: "own-organization",
   refused: "refused",
 } as const;
 
-type ReviewAccountDisposition =
+export type ReviewAccountDisposition =
   (typeof REVIEW_ACCOUNT_DISPOSITION)[keyof typeof REVIEW_ACCOUNT_DISPOSITION];
 
 /** What the review account may do; every new operation must pick one. */
@@ -274,9 +274,16 @@ export const resolveReviewAccountBodyEmailOperation = ({
   otpType: unknown;
 }): ReviewAccountOperation | null => {
   if (path === SEND_VERIFICATION_OTP_PATH) {
-    return otpType === "forget-password"
-      ? REVIEW_ACCOUNT_OPERATION.changePassword
-      : null;
+    switch (otpType) {
+      case "forget-password":
+        return REVIEW_ACCOUNT_OPERATION.changePassword;
+      case "sign-in":
+        return REVIEW_ACCOUNT_OPERATION.emailCodeSignIn;
+      case "email-verification":
+        return REVIEW_ACCOUNT_OPERATION.verifyEmail;
+      default:
+        return null;
+    }
   }
   return Object.hasOwn(BODY_EMAIL_AUTH_PATH_OPERATIONS, path)
     ? (BODY_EMAIL_AUTH_PATH_OPERATIONS[path] ?? null)

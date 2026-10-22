@@ -288,6 +288,7 @@ const getSuggestedPrompts = createSafeRootHandler(
 
           try {
             const text = await generateTanStackTextForTask({
+              userId: modelAdmission.userId,
               dataClass: "customer",
               finishPolicy: "allow-incomplete",
               task: "short-text",

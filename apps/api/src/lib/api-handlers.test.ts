@@ -1223,6 +1223,7 @@ describe("provider failure HTTP response", () => {
                 dataClass: "public_corpus",
                 task: "chat",
                 organizationId: null,
+                userId: null,
                 admission: NO_ORGANIZATION_MODEL_DISPATCH,
                 prompt: "Draft a memo",
                 finishPolicy: "require-complete",

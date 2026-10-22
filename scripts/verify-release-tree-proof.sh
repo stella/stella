@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# A proof belongs to this repository and either main's unchanged first-parent
-# chain or a same-repository PR squashed onto the exact main base it contains.
+# A proof belongs to this repository and is the target or a same-repository
+# release PR squashed onto the exact main base it contains.
 # No merge/rebase chains are inferred: an ambiguous relation is refused.
 set -euo pipefail
 export GIT_NO_REPLACE_OBJECTS=1
@@ -171,12 +171,6 @@ if [[ $'\n'"$history"$'\n' == *$'\n'"$sha"$'\n'* ]]; then
     || refuse 'RELEASE_HEAVY_NOT_GREEN: target is not on repository main'
   if [[ "$proof" == "$sha" ]]; then
     relation=main
-  elif [[ $'\n'"$history"$'\n' == *$'\n'"$proof"$'\n'* ]] && git merge-base --is-ancestor "$proof" "$sha"; then
-    # The supported ancestor chain consists solely of unchanged trees.
-    for commit in $(git rev-list --first-parent "$proof..$sha"); do
-      [[ "$(git rev-parse "$commit^{tree}")" == "$tree" ]] || refuse 'ancestor chain changes the tree'
-    done
-    relation=ancestor
   else
     parents=$(git show -s --format=%P "$sha")
     [[ "$parents" =~ ^[0-9a-f]{40}$ ]] || refuse 'target must have one squash parent'
@@ -184,7 +178,7 @@ if [[ $'\n'"$history"$'\n' == *$'\n'"$sha"$'\n'* ]]; then
     jq -e --arg repo "$repo" --arg proof "$proof" --arg sha "$sha" --arg base "$parents" '
       [.[][] | select((.merged_at | type) == "string" and .merged_at != "" and .state == "closed" and .merge_commit_sha == $sha and
         .head.sha == $proof and .head.repo.full_name == $repo and .base.repo.full_name == $repo and
-        .base.ref == "main")] | length == 1
+        (.title | startswith("chore: release v")) and .base.ref == "main")] | length == 1
     ' <<< "$pulls" >/dev/null || refuse 'squash PR relation is unverified'
     git merge-base --is-ancestor "$parents" "$proof" || refuse 'proof does not contain squash base'
     # PR base.sha can predate a rebase. The trusted proof jobs record the main

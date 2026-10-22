@@ -304,6 +304,7 @@ export const ChatTabPanel = ({
   } = useChatSession({
     exceptionScope: { type: "handler", handlerId: "chat-session.inspector" },
     chat,
+    timingSurface: "inspector-chat",
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,

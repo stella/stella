@@ -297,6 +297,7 @@ const extractProcuracao = createSafeRootHandler(
       const generated = await Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForTask({
+            userId: user.id,
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
             task: "short-text",

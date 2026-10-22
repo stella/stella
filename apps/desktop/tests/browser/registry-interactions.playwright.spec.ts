@@ -309,6 +309,14 @@ const installNativeBoundary = async (
               return { ...clipboardSnapshot, welcomeStatus: "completed" };
             case "get_state":
               return settingsSnapshot;
+            case "shortcut_get_snapshot":
+              return {
+                defaultKeys: { code: "KeyV", modifiers: ["shift", "super"] },
+                keys: { code: "KeyV", modifiers: ["shift", "super"] },
+                registration: "active",
+              };
+            case "permissions_get_snapshot":
+              return { rows: [] };
             case "account_get_state":
               return accountSnapshot;
             case "open_stella_account":

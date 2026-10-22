@@ -82,7 +82,6 @@ import { useInspectorCommandStore } from "@/components/inspector/inspector-comma
 import "@/components/chat/create-document-draft-inspector";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { entityReferenceHref } from "@/components/references/reference.logic";
-import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import {
   isChatMessageStartError,
@@ -129,9 +128,10 @@ import {
 } from "@/features/chat/queries";
 import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
 import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
+import type { ChatTimingSurface } from "@/lib/analytics/types";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type {
@@ -199,6 +199,8 @@ type UseChatSessionOptions = {
   /** Whether a playbook this thread saves opens beside it by itself. */
   playbookPane: PlaybookPaneMode;
   threadRef: ChatThreadRef;
+  /** Where the conversation is shown; every send is timed under it. */
+  timingSurface: ChatTimingSurface;
   workspaceId?: string | undefined;
 };
 
@@ -312,9 +314,9 @@ export const useChatSession = ({
   onError,
   playbookPane,
   threadRef,
+  timingSurface,
   workspaceId,
 }: UseChatSessionOptions) => {
-  useMountEffect(mountBrowserExtensionBridge);
   const t = useTranslations();
   const { activeOrganizationId: organizationId, id: userId } =
     useAuthenticatedUser();
@@ -566,9 +568,12 @@ export const useChatSession = ({
   }, [addToolResult, chat, messages, status, t, exceptionHandlerId]);
   const sendChatMessage = useCallback(
     async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
-      await sendThreadChatMessage(chat, message, options);
+      await sendThreadChatMessage(chat, message, {
+        ...options,
+        timingSurface,
+      });
     },
-    [chat],
+    [chat, timingSurface],
   );
   const setMessages = chat.setMessages;
   const stop = chat.stop;

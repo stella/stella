@@ -855,7 +855,6 @@
         "unavailable": "Šiam sprendimui DI analizė neprieinama."
       },
       "generate": "Parengti DI santraukas",
-      "holdingAnchor": "Pereiti prie pastraipos",
       "invitation": "Su nemokama paskyra DI parengia darbines pastabas apie šį sprendimą.",
       "topics": "Temos",
       "treatment": "Vėlesnis vertinimas"
@@ -1111,6 +1110,8 @@
         "hint": "Pašalinkite filtrą arba jį išplėskite ir ieškokite dar kartą.",
         "message": "Niekas neatitiko pasirinktų filtrų."
       },
+      "partialMatch": "Dalinė atitiktis",
+      "partialMatches": "Dalinės atitiktys užklausai: <bdi>{query}</bdi>",
       "resultsFor": "Rezultatai pagal: <bdi>{query}</bdi>",
       "searchEveryWord": "Ieškoti visų žodžių"
     },
@@ -1148,6 +1149,7 @@
       "judges": "Teisėjai",
       "legalArea": "Teisės sritis",
       "legalSentence": "Teisinė tezė",
+      "paragraphReference": "{number} pastraipa",
       "popularName": "Populiarus pavadinimas",
       "portraitCredit": "Portretų šaltinis: {source}",
       "provisionMentions": "{count, number}×",
@@ -1394,6 +1396,7 @@
     "credentialSendDescription": "Siųskite tik jei norite bendrinti šią reikšmę pokalbyje.",
     "credentialSendTitle": "Šiame pranešime gali būti prisijungimo duomenų",
     "deleteThread": "Ištrinti pokalbį",
+    "diagramUnavailable": "Šios diagramos nepavyko atvaizduoti. Jos šaltinio kodas pateiktas žemiau.",
     "editMode": {
       "autoDirect": "Automatiškai · perrašyti",
       "autoDirectDescription": "DI pakeitimai pritaikomi iš karto tiesiogiai perrašant dokumentą (be pakeitimų sekimo).",
@@ -1614,6 +1617,9 @@
         "private": "Jūsų įgūdžiai",
         "team": "Komandos įgūdžiai"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Taip pat peržiūrėta ({count, number})"
     },
     "sourcePlaceholder": "Kalbėtis apie {title}",
     "sourcePlaceholderAction": "Kalbėtis apie",
@@ -2703,6 +2709,7 @@
       "aiConfigModelInvalid": "DI modelio konfigūracija netinkama. Patikrinkite pasirinktus modelius.",
       "aiConfigProviderInvalid": "DI teikėjo konfigūracija netinkama. Patikrinkite teikėjo nustatymus.",
       "aiConfigProviderValidationFailed": "DI teikėjas atmetė konfigūraciją. Patikrinkite API raktą ir modelį.",
+      "aiDeadlineExceeded": "DI neatsakė laiku. Pabandykite po akimirkos dar kartą.",
       "aiOutputInvalid": "DI atsakymas buvo netikėto formato. Bandykite dar kartą.",
       "aiOutputModerated": "DI teikėjas moderavo išvestį. Performuluokite užklausą arba pasirinkite kitą modelį.",
       "aiProviderTaskUnsupported": "Sukonfigūruotas DI teikėjas negali atlikti šios užduoties. Pasirinkite teikėją, kuris gali.",

@@ -23,7 +23,7 @@ test("preserves a committed translation run when queue delivery stalls", async (
     ...ids,
     captureDeliveryError,
     enqueue,
-    timeoutMs: 5,
+    timeoutMs: 5, // timeout under test
   });
 
   expect(enqueue).toHaveBeenCalledWith(ids);

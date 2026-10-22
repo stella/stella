@@ -52,7 +52,7 @@
 // operations in ROOT_OPERATION_RESULTS, each named with the one file it may
 // be awaited in and why its result is not a handle.
 
-import ts from "typescript";
+import ts from "typescript6";
 
 import { parseSource } from "./parse-memo";
 

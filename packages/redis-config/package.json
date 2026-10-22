@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@stll/errors": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/time": "0.4.1",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

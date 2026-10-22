@@ -293,6 +293,7 @@ const normalizeTree = ({
 };
 
 type PrepareSignedFilesProps = {
+  userId: SafeId<"user">;
   files: NormalizedTreeFile[];
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -300,6 +301,7 @@ type PrepareSignedFilesProps = {
 };
 
 const prepareSignedFiles = async ({
+  userId,
   files,
   organizationId,
   workspaceId,
@@ -322,6 +324,7 @@ const prepareSignedFiles = async ({
       workspaceId,
     });
     const presign = await presignUploadUrl({
+      userId,
       key: tmpKey,
       expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
       contentType: resolvedMime,
@@ -577,6 +580,7 @@ const entityCreateTree = createSafeHandler(
       now.getTime() + PRESIGN_URL_EXPIRY_SECONDS * 1000,
     );
     const signedFiles = await prepareSignedFiles({
+      userId: user.id,
       files: normalizedTree.value.files,
       organizationId: session.activeOrganizationId,
       workspaceId,

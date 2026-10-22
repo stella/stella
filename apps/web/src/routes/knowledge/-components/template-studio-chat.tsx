@@ -705,6 +705,7 @@ const TemplateStudioChatInner = ({
       handlerId: "chat-session.template-studio",
     },
     chat,
+    timingSurface: "template-studio",
     conversationId: threadRef.threadId,
     getSendMode,
     initialOlderCursor: data.olderCursor,

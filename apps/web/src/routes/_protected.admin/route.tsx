@@ -10,12 +10,17 @@ import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
+import { APP_FRAME_SCOPE, PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 const searchSchema = v.strictObject({
   q: optionalSearchStringSchema(),
 });
 
 export const Route = createFileRoute("/_protected/admin")({
+  staticData: {
+    appFrame: APP_FRAME_SCOPE.admin,
+    providerScopes: [PROVIDER_SCOPE.auth],
+  },
   validateSearch: searchSchema,
   beforeLoad: async ({ context, location, matches }) => {
     // These routes already require enrolment before commit. Its read is
@@ -25,7 +30,6 @@ export const Route = createFileRoute("/_protected/admin")({
       if (
         !matches.some(
           ({ staticData }) =>
-            "organizationSettingsAdmission" in staticData &&
             staticData.organizationSettingsAdmission === "time-billing",
         )
       ) {

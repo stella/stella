@@ -43,7 +43,6 @@ import {
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
-import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import {
   decisionLinkElement,
   formatDecisionDate,
@@ -57,7 +56,10 @@ import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
-import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
+import {
+  caseLawCountryName,
+  resolveCaseLawRouteCountry,
+} from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";

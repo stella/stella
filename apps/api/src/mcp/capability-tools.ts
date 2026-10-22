@@ -104,6 +104,7 @@ import {
   getWorkspaceStatus,
   invalidCursorResult,
   MAX_LIST_LIMIT,
+  MAX_TOOL_NAME_CHARS,
   MCP_INTERNAL_ERROR_HINT,
   notFoundResult,
   nullAsAbsent,
@@ -1069,6 +1070,7 @@ const describeCapabilityArgsSchema = nullAsAbsent(
     capability: v.pipe(
       v.string(),
       v.minLength(1),
+      v.maxLength(MAX_TOOL_NAME_CHARS),
       v.description(
         'Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create").',
       ),
@@ -1314,6 +1316,7 @@ const CAPABILITY_ARGUMENTS = {
   capability: v.pipe(
     v.string(),
     v.nonEmpty(),
+    v.maxLength(MAX_TOOL_NAME_CHARS),
     v.description(
       "Capability id to invoke. Use an id list_capabilities returned.",
     ),

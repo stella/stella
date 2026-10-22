@@ -3147,6 +3147,7 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
           usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
           generation: {
             dataClass: "customer",
+            userId: context.userId,
             managedAIResidency:
               await (context.testDependencies?.loadManagedAIResidency?.(
                 context.organizationId,

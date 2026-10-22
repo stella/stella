@@ -43,6 +43,7 @@ import type {
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
@@ -58,6 +59,7 @@ import {
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 type AIAvailabilityContextValue = {
   ensureAIAvailable: () => Promise<boolean>;
@@ -179,15 +181,12 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   );
 };
 
-export const useAIKeyGate = () => {
-  const context = use(AIAvailabilityContext);
-
-  if (!context) {
-    panic("useAIKeyGate must be used within AIAvailabilityProvider");
-  }
-
-  return context;
-};
+export const useAIKeyGate = () =>
+  useRequiredRouteProvider({
+    context: AIAvailabilityContext,
+    scope: PROVIDER_SCOPE.ai,
+    missingMessage: "useAIKeyGate must be used within AIAvailabilityProvider",
+  });
 
 const OpenAIKeyDialogOnMount = ({ open }: { open: () => void }) => {
   useMountEffect(() => {

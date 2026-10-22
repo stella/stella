@@ -25,6 +25,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 const searchSchema = v.object({
@@ -32,6 +33,7 @@ const searchSchema = v.object({
 });
 
 export const Route = createFileRoute("/agent-claim")({
+  staticData: { appFrame: APP_FRAME_SCOPE.none },
   validateSearch: searchSchema,
   beforeLoad: async ({ context, location }) => {
     const authContext = await loadAuthContext(context.queryClient);

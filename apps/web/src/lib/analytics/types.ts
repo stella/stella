@@ -7,6 +7,7 @@ import type { ExceptionScope } from "@stll/errors";
 
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
+import type { KeyActionDurationBucketMs } from "@/lib/analytics/key-action-timing";
 
 export const WEB_ANALYTICS_EVENTS = {
   exception: "$exception",
@@ -29,6 +30,7 @@ export const WEB_ANALYTICS_EVENTS = {
   inspectorRestoreRecovered: "inspector_restore_recovered",
   followupShown: "followup_shown",
   followupSelected: "followup_selected",
+  keyActionTimed: "key_action_timed",
 } as const;
 
 export type WebAnalyticsEvent =
@@ -71,6 +73,7 @@ export type Analytics = {
   ) => void;
   captureFollowupShown: (properties: FollowupShownProperties) => void;
   captureFollowupSelected: (properties: FollowupSelectedProperties) => void;
+  captureKeyActionTiming: (properties: KeyActionTiming) => void;
   captureRouteErrorLifecycle: (
     properties: RouteErrorLifecycleProperties,
   ) => Promise<void>;
@@ -97,6 +100,29 @@ type FollowupShownProperties = FollowupProperties & {
 type FollowupSelectedProperties = FollowupProperties & {
   index: number;
   via: "chip" | "ghost-tab";
+};
+
+export type DocumentTimingSurface = "full-view" | "inspector";
+
+export type SearchTimingSurface = "case-law" | "legislation";
+
+export type ChatTimingSurface = FollowupSurface | "template-studio";
+
+/** One user-visible action and where it ran. The surface is the only
+ *  context a timing carries: no document, query, thread or message
+ *  identifies what the action touched. */
+export type KeyActionMeasure =
+  // Click on a document until its editor accepts input.
+  | { action: "document-open"; surface: DocumentTimingSurface }
+  // A checkpoint save from snapshot to the server's confirmation.
+  | { action: "document-save"; surface: DocumentTimingSurface }
+  // A changed search query until its first result page is on screen.
+  | { action: "search-results"; surface: SearchTimingSurface }
+  // A sent chat message until the reply starts streaming, and until it ends.
+  | { action: "chat-first-token" | "chat-total"; surface: ChatTimingSurface };
+
+export type KeyActionTiming = KeyActionMeasure & {
+  durationBucketMs: KeyActionDurationBucketMs;
 };
 
 // Why a guide step could not be shown against the live app surface. Emitted so

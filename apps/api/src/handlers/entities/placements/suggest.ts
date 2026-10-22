@@ -297,6 +297,7 @@ const organizeSuggestionsHandler = async function* ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForTask({
+        userId,
         dataClass: "customer",
         task: "short-text",
         serviceTier: "flex",
@@ -779,6 +780,7 @@ const generateMissingSummaries = async ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForTask({
+        userId,
         dataClass: "customer",
         task: "short-text",
         serviceTier: "flex",

@@ -1586,6 +1586,7 @@ const FileChatOverlayInner = ({
   } = useChatSession({
     exceptionScope: { type: "handler", handlerId: "chat-session.file-overlay" },
     chat,
+    timingSurface: "document-chat",
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getDocxEditRepresentation,

@@ -14,6 +14,7 @@ import { sha256Base64ToHex } from "@stll/sha256";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { fileComparisonUploads } from "@/api/db/schema";
 import {
   compareDocxBuffers,
@@ -429,8 +430,10 @@ const deliver = async ({
       bytes: new Uint8Array(compared.buffer),
       fileName,
       organizationId: context.organizationId,
+      readSessionAuthority: ownerSyntheticSessionAuthorityReader,
       scopedDb: context.scopedDb,
       signal,
+      source: { kind: "background", reason: "MCP credential request" },
       userId: context.userId,
     },
     dependencies,

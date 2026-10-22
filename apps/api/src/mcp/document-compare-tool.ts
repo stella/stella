@@ -751,7 +751,7 @@ export const handleCompareDocumentsTool = async (
         // uploads source above has one fewer, and it never reaches here.
         output: { type: input.output_mode },
       },
-      session: { activeOrganizationId: context.organizationId },
+      session: { activeOrganizationId: context.organizationId, id: null },
       user: { id: context.userId },
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       // The MCP transport carries the client's request; the chat projection
