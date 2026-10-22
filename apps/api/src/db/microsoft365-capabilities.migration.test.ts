@@ -71,7 +71,12 @@ test("Microsoft 365 capability migration preserves delegated rows and maps file 
   expect(
     (await db.query("SELECT * FROM sharepoint_oauth_state ORDER BY state"))
       .rows,
-  ).toEqual(oauthStateBefore.map((row) => ({ ...row, requested_scope: null })));
+  ).toEqual(
+    oauthStateBefore.map((row) => ({
+      ...(typeof row === "object" && row !== null ? row : {}),
+      requested_scope: null,
+    })),
+  );
   expect(
     (
       await db.query(

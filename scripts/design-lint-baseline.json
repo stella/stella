@@ -754,6 +754,8 @@
     "apps/api/src/handlers/mcp-connectors/create-connection.ts": 1,
     "apps/api/src/handlers/mcp-connectors/oauth-callback.ts": 1,
     "apps/api/src/handlers/memories/update.ts": 1,
+    "apps/api/src/handlers/microsoft365/graph-client.ts": 2,
+    "apps/api/src/handlers/microsoft365/oauth-callback.ts": 1,
     "apps/api/src/handlers/playbooks/approve.ts": 1,
     "apps/api/src/handlers/playbooks/update-shared.ts": 1,
     "apps/api/src/handlers/playbooks/versions/restore.ts": 1,
@@ -862,9 +864,7 @@
     "apps/api/src/scripts/backfill-corpus-storage.ts": 1,
     "apps/api/src/scripts/corpus-column-trim.ts": 1,
     "apps/api/src/scripts/normalize-case-numbers-sql.ts": 1,
-    "apps/api/src/scripts/seed-migration-rehearsal-plan.ts": 1,
-    "apps/api/src/handlers/microsoft365/graph-client.ts": 2,
-    "apps/api/src/handlers/microsoft365/oauth-callback.ts": 1
+    "apps/api/src/scripts/seed-migration-rehearsal-plan.ts": 1
   },
   "eslint/complexity": {
     ".oxlint-plugins/no-ambient-nondeterminism.ts": 5,
@@ -1033,6 +1033,7 @@
     "apps/api/src/handlers/entities/versions/delete.ts": 2,
     "apps/api/src/handlers/entities/versions/list.ts": 1,
     "apps/api/src/handlers/hosted-usage-webhook/dispatch.ts": 1,
+    "apps/api/src/handlers/microsoft365/oauth-callback.ts": 4,
     "apps/api/src/handlers/organization-settings/update.ts": 1,
     "apps/api/src/handlers/properties/update.ts": 2,
     "apps/api/src/handlers/signals/acceptances/create.ts": 2,
@@ -1178,8 +1179,7 @@
     "scripts/db-await-in-loop.ts": 1,
     "scripts/env-tool.ts": 1,
     "scripts/ratchet.ts": 1,
-    "scripts/suppression-waivers.ts": 1,
-    "apps/api/src/handlers/microsoft365/oauth-callback.ts": 2
+    "scripts/suppression-waivers.ts": 1
   },
   "eslint/max-params": {
     ".oxlint-plugins/no-ambient-nondeterminism.ts": 6,

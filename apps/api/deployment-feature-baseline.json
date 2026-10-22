@@ -216,6 +216,10 @@
     "reason": "pending gate classification"
   },
   {
+    "key": "route-file:apps/api/src/handlers/microsoft365/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
     "key": "route-file:apps/api/src/handlers/notifications/routes.ts",
     "reason": "pending gate classification"
   },
@@ -245,10 +249,6 @@
   },
   {
     "key": "route-file:apps/api/src/handlers/search/routes.ts",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "route-file:apps/api/src/handlers/microsoft365/routes.ts",
     "reason": "pending gate classification"
   },
   {

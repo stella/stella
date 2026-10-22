@@ -337,7 +337,12 @@ test("callback persists the scope returned by consent and consumes the bound sta
   const row = await testDb.query.microsoft365Connections.findFirst({
     where: { id: { eq: connOrgAUserA1 } },
   });
-  expect(row?.scope).toBe("User.Read Calendars.Read");
+  expect(row?.scope).toBe(
+    boundGrantedScope({
+      ceiling: "User.Read Calendars.Read",
+      returned: "User.Read Calendars.Read",
+    }),
+  );
   expect(audit).toMatchObject([
     {
       metadata: {
@@ -433,7 +438,9 @@ test("a token refresh preserves a newer consent grant", async () => {
   const current = await testDb.query.microsoft365Connections.findFirst({
     where: { id: { eq: connOrgAUserA1 } },
   });
-  expect(current?.scope).toBe(upgraded);
+  expect(current?.scope).toBe(
+    boundGrantedScope({ ceiling: upgraded, returned: upgraded }),
+  );
   expect(current?.accessTokenEncrypted).toEqual(Buffer.from("newer-consent"));
 });
 
@@ -513,7 +520,9 @@ test("an existing delegated connection refreshes its original ciphertext and ret
   if (!current?.refreshTokenEncrypted || !current.refreshTokenIv) {
     panic("Expected refreshed delegated credentials");
   }
-  expect(current.scope).toBe(scope);
+  expect(current.scope).toBe(
+    boundGrantedScope({ ceiling: scope, returned: scope }),
+  );
   expect(grantedCapabilities(current.scope)).toEqual(["files.read"]);
   const storedRefresh = await decryptMicrosoft365Secret({
     ciphertext: current.refreshTokenEncrypted,
@@ -718,7 +727,12 @@ test("consent stores only requested scopes within the current organization polic
   const row = await testDb.query.microsoft365Connections.findFirst({
     where: { id: { eq: connOrgAUserA1 } },
   });
-  expect(row?.scope).toBe("User.Read Calendars.Read");
+  expect(row?.scope).toBe(
+    boundGrantedScope({
+      ceiling: "User.Read Calendars.Read",
+      returned: "User.Read Calendars.Read",
+    }),
+  );
 });
 
 test("a refreshed scope set change is audited with the credential update", async () => {
@@ -789,7 +803,12 @@ test("a refreshed scope set change is audited with the credential update", async
   const current = await testDb.query.microsoft365Connections.findFirst({
     where: { id: { eq: connOrgAUserA1 } },
   });
-  expect(current?.scope).toBe("User.Read Files.Read.All");
+  expect(current?.scope).toBe(
+    boundGrantedScope({
+      ceiling: "User.Read Files.Read.All",
+      returned: "User.Read Files.Read.All",
+    }),
+  );
 });
 
 test("a refreshed calendar connection retains its authorized scope ceiling", async () => {
@@ -865,7 +884,9 @@ test("a refreshed calendar connection retains its authorized scope ceiling", asy
   const current = await testDb.query.microsoft365Connections.findFirst({
     where: { id: { eq: connOrgAUserA1 } },
   });
-  expect(current?.scope).toBe(authorized);
+  expect(current?.scope).toBe(
+    boundGrantedScope({ ceiling: authorized, returned: authorized }),
+  );
   expect(grantedCapabilities(current?.scope ?? null)).toEqual([
     "calendar.read",
   ]);

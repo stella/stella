@@ -770,6 +770,27 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
+    "file": "apps/api/src/handlers/microsoft365/graph-client.ts",
+    "function": "module/fetchAccountLabel",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/microsoft365/graph-client.ts",
+    "function": "module/listDriveRootChildren",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/microsoft365/graph-oauth.ts",
+    "function": "module/requestToken",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
     "file": "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/list.ts",
     "function": "module/listAllowedSenders/createSafeRootHandler[1]",
     "kind": "fixed-page-size",
@@ -978,13 +999,6 @@
     "kind": "numeric-timeout",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/auth.ts",
-    "function": "module/resolveWorkspaceRealtimeAudience",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
     "file": "apps/api/src/lib/bilingual/run-queue.ts",

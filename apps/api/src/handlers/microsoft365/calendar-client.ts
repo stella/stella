@@ -194,7 +194,6 @@ const requestGraph = async (
         ...(options.body === undefined ? {} : { body: options.body }),
         redirect: "error",
         timeout: { type: "idle", ms: REQUEST_TIMEOUT_MS },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (!response.ok) {
         await response.body?.cancel();

@@ -425,7 +425,7 @@ const ownerPolicyTable = (statement: Statement) => {
     /^CREATE POLICY \w+ ON (?:public\.)?(?<table>\w+) (?:AS PERMISSIVE )?FOR ALL TO public USING /iu.exec(
       normalized,
     );
-  const table = header?.groups?.table?.toLowerCase();
+  const table = header?.groups?.["table"]?.toLowerCase();
   if (!header || !table) {
     return null;
   }
@@ -2400,9 +2400,9 @@ export const checkForcedRlsOwners = (
           description: "Cannot resolve the FORCE RLS table to its owner policy",
         });
       }
-      const table = force?.groups?.table?.toLowerCase();
+      const table = force?.groups?.["table"]?.toLowerCase();
       if (table) {
-        if (force?.groups?.undo) {
+        if (force?.groups?.["undo"]) {
           forced.delete(table);
         } else {
           forced.set(table, { file, line: statement.line });
@@ -2412,9 +2412,9 @@ export const checkForcedRlsOwners = (
         /^ALTER TABLE (?:IF EXISTS )?(?:ONLY )?(?:public\.)?(?<table>\w+) RENAME TO (?<next>\w+)/iu.exec(
           normalized,
         )?.groups;
-      if (rename?.table && rename.next) {
-        const old = rename.table.toLowerCase();
-        const next = rename.next.toLowerCase();
+      if (rename?.["table"] && rename["next"]) {
+        const old = rename["table"].toLowerCase();
+        const next = rename["next"].toLowerCase();
         const location = forced.get(old);
         if (location) {
           forced.set(next, location);
@@ -2429,7 +2429,7 @@ export const checkForcedRlsOwners = (
       const dropTable =
         /^DROP TABLE (?:IF EXISTS )?(?:public\.)?(?<table>\w+)/iu
           .exec(normalized)
-          ?.groups?.table?.toLowerCase();
+          ?.groups?.["table"]?.toLowerCase();
       if (dropTable) {
         forced.delete(dropTable);
         policies.delete(dropTable);
@@ -2438,14 +2438,14 @@ export const checkForcedRlsOwners = (
         /^(?:CREATE|DROP|ALTER) POLICY (?:IF EXISTS )?(?<name>\w+) ON (?:public\.)?(?<table>\w+)/iu.exec(
           normalized,
         );
-      if (!policy?.groups?.table || !policy.groups.name) {
+      if (!policy?.groups?.["table"] || !policy.groups["name"]) {
         continue;
       }
-      const policyTable = policy.groups.table.toLowerCase();
+      const policyTable = policy.groups["table"].toLowerCase();
       const ownerPolicies = policies.get(policyTable) ?? new Set<string>();
-      ownerPolicies.delete(policy.groups.name.toLowerCase());
+      ownerPolicies.delete(policy.groups["name"].toLowerCase());
       if (ownerPolicyTable(statement) === policyTable) {
-        ownerPolicies.add(policy.groups.name.toLowerCase());
+        ownerPolicies.add(policy.groups["name"].toLowerCase());
       }
       policies.set(policyTable, ownerPolicies);
     }

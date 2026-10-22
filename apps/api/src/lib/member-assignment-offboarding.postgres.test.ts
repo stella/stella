@@ -929,33 +929,58 @@ if (!databaseUrl || !runPostgresTests) {
           authorizationServerUrl: "https://example.test",
         });
         // Token fixtures exercise the same non-bypass table-owner role as cleanup.
-        expect(
-          await db.execute(sql`
-          SELECT r.rolsuper, r.rolbypassrls, bool_and(c.relowner = r.oid) AS owns_tables
-          FROM pg_catalog.pg_roles r CROSS JOIN pg_catalog.pg_class c
-          WHERE r.rolname = current_user
-            AND c.oid IN ('public.sharepoint_connections'::regclass, 'public.sharepoint_oauth_state'::regclass)
-          GROUP BY r.rolsuper, r.rolbypassrls
-        `),
-        ).toMatchObject([
-          { rolsuper: false, rolbypassrls: false, owns_tables: true },
-        ]);
-        await db.insert(microsoft365Connections).values(
-          [owner.userId, leaver.userId].map((userId) => ({
-            id: createSafeId<"microsoft365Connection">(),
-            organizationId,
-            userId,
-            accessTokenEncrypted: Buffer.from("fixture"),
-            accessTokenIv: Buffer.from("fixture"),
-            status: "connected" as const,
-          })),
+        await db.execute(sql`
+          DO $owner$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_catalog.pg_roles
+              WHERE rolname = 'microsoft365_test_owner'
+            ) THEN
+              CREATE ROLE microsoft365_test_owner NOLOGIN NOSUPERUSER NOBYPASSRLS;
+            END IF;
+          END
+          $owner$
+        `);
+        await db.execute(
+          sql`ALTER ROLE microsoft365_test_owner NOLOGIN NOSUPERUSER NOBYPASSRLS`,
         );
-        await db.insert(microsoft365OAuthState).values({
-          state: inviteId,
-          organizationId,
-          userId: leaver.userId,
-          codeVerifier: "fixture",
-          redirectUri: "https://example.test/callback",
+        await db.execute(
+          sql`ALTER TABLE sharepoint_connections OWNER TO microsoft365_test_owner`,
+        );
+        await db.execute(
+          sql`ALTER TABLE sharepoint_oauth_state OWNER TO microsoft365_test_owner`,
+        );
+        await db.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL ROLE microsoft365_test_owner`);
+          const ownerPosture = await tx.execute(sql`
+            SELECT r.rolsuper, r.rolbypassrls, bool_and(c.relowner = r.oid) AS owns_tables
+            FROM pg_catalog.pg_roles r CROSS JOIN pg_catalog.pg_class c
+            WHERE r.rolname = current_user
+              AND c.oid IN ('public.sharepoint_connections'::regclass, 'public.sharepoint_oauth_state'::regclass)
+            GROUP BY r.rolsuper, r.rolbypassrls
+          `);
+          expect(ownerPosture.at(0)).toEqual({
+            rolsuper: false,
+            rolbypassrls: false,
+            owns_tables: true,
+          });
+          await tx.insert(microsoft365Connections).values(
+            [owner.userId, leaver.userId].map((userId) => ({
+              id: createSafeId<"microsoft365Connection">(),
+              organizationId,
+              userId,
+              accessTokenEncrypted: Buffer.from("fixture"),
+              accessTokenIv: Buffer.from("fixture"),
+              status: "connected" as const,
+            })),
+          );
+          await tx.insert(microsoft365OAuthState).values({
+            state: inviteId,
+            organizationId,
+            userId: leaver.userId,
+            codeVerifier: "fixture",
+            redirectUri: "https://example.test/callback",
+          });
         });
         await db.insert(invitation).values([
           {
