@@ -90,7 +90,6 @@ const createRecordingContext = (userId: SafeId<"user">) => {
     return result;
   };
   const context = asTestRaw<McpRequestContext>({
-    enabledRegistrySlugs: undefined,
     grantedScopes: [],
     memberRole: "owner",
     organizationId: ids.orgA,
