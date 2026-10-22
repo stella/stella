@@ -26,6 +26,7 @@ const WORKFLOW_RUN_WORKFLOWS = [
   "bot-refresh-auto-merge.yml",
   "cla.yml",
   "publish-npm.yml",
+  "refresh-after-main-fix.yml",
   "release-desktop.yml",
   "scheduled-run-alerts.yml",
 ] as const;
@@ -290,6 +291,10 @@ describe("workflow_run trust", () => {
       return workflow["on"]["workflow_run"];
     };
     expect(trigger("scheduled-run-alerts.yml")).toMatchObject({
+      branches: ["main"],
+      types: ["completed"],
+    });
+    expect(trigger("refresh-after-main-fix.yml")).toMatchObject({
       branches: ["main"],
       types: ["completed"],
     });
@@ -660,6 +665,33 @@ const ALERT_ONLY_TOKEN_DISPATCHES: Record<string, string[]> = {
   ],
   "release.yml#Dispatch release-health.yml": ["release-health.yml"],
 };
+// Followers whose every job refuses a dispatched triggering run: a run that
+// GITHUB_TOKEN started never reaches them, and they would ignore it anyway.
+const DISPATCH_IGNORING_FOLLOWERS = ["refresh-after-main-fix.yml"];
+
+const refusesDispatchedRuns = (workflow: unknown) => {
+  const jobs =
+    isRecord(workflow) && isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
+  return (
+    Object.keys(jobs).length > 0 &&
+    Object.values(jobs).every(
+      (job) =>
+        isRecord(job) &&
+        definitelyFalse(conditionOf(job), {
+          values: {
+            "github.event_name": "workflow_run",
+            [`${RUN}.event`]: "workflow_dispatch",
+          },
+          status: {
+            always: true,
+            success: true,
+            failure: false,
+            cancelled: false,
+          },
+        }),
+    )
+  );
+};
 
 // Built, not written literally: a `${...}` in a plain string reads as a
 // broken template literal to the linter.
@@ -764,11 +796,38 @@ describe("a followed run is never started with GITHUB_TOKEN", () => {
         expect(declared, site).toEqual(targets);
       }
       for (const target of declared) {
-        expect(followers.get(target), `${site} -> ${target}`).toEqual([
-          ALERTING_WORKFLOW,
-        ]);
+        expect(
+          followers
+            .get(target)
+            ?.filter(
+              (follower) => !DISPATCH_IGNORING_FOLLOWERS.includes(follower),
+            ),
+          `${site} -> ${target}`,
+        ).toEqual([ALERTING_WORKFLOW]);
       }
     }
+    for (const follower of DISPATCH_IGNORING_FOLLOWERS) {
+      const workflow = workflows.find(({ file }) => file === follower);
+      expect(refusesDispatchedRuns(workflow?.workflow), follower).toBe(true);
+    }
+  });
+
+  test("a dispatch-ignoring follower must refuse dispatched runs in every job", () => {
+    const gated = (condition: string) => ({
+      on: { workflow_run: {} },
+      jobs: { only: { if: condition } },
+    });
+    expect(
+      refusesDispatchedRuns(
+        gated(`contains(fromJSON('["push"]'), ${RUN}.event)`),
+      ),
+    ).toBe(true);
+    expect(refusesDispatchedRuns(gated(`${RUN}.conclusion == 'success'`))).toBe(
+      false,
+    );
+    expect(refusesDispatchedRuns({ on: { workflow_run: {} }, jobs: {} })).toBe(
+      false,
+    );
   });
 
   const fixture = (step: Record<string, unknown>) => [

@@ -832,7 +832,7 @@
   "candidate:.github/workflows/scheduled-run-alerts.yml/notify": {
     "kind": "ordinary",
     "qualifier": "Notifies failures of watched workflows, including release health and quarantine maintenance; no release publication or deployment.",
-    "reviewedDigest": "93f0abb577f41d97d2ccb9a34001bed9eef9fc13b4dc96a7c17fb88446ec3b44"
+    "reviewedDigest": "816d044a2107e421f2a129dafe7fe4095346099eaefbaff5806a587b31ab9a1a"
   },
   "candidate:.github/workflows/scorecard.yml/scorecard": {
     "kind": "ordinary",
@@ -943,5 +943,10 @@
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
     "reviewedDigest": "d7314118f0938bde6fef2c4bbcdad6f3638726507a776fe89b86537b858188f9"
+  },
+  "candidate:.github/workflows/refresh-after-main-fix.yml/refresh": {
+    "kind": "support",
+    "qualifier": "Updates the branches of open pull requests whose only CI failures main has since fixed, with the provenance app token; no merge, no queue action, no release or deployment.",
+    "reviewedDigest": "50eee372fbfe0d678e7c52befccd7b3eeeae2ea8ae96c2829cae96eb13d741c6"
   }
 }
