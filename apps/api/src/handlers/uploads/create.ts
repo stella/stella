@@ -43,6 +43,7 @@ import {
 import {
   PRESIGN_URL_EXPIRY_SECONDS,
   tmpUploadKey,
+  uploadTimeline,
 } from "@/api/lib/uploads/runtime";
 
 const baseFileMetadataSchema = {
@@ -224,9 +225,7 @@ const presignUpload = createSafeHandler(
       workspaceId,
     });
     const now = new Date();
-    const expiresAt = new Date(
-      now.getTime() + PRESIGN_URL_EXPIRY_SECONDS * 1000,
-    );
+    const { urlExpiresAt, finalizeDeadline } = uploadTimeline(now);
     const purposeData = toPurposeData(purposeBody);
 
     const presign = await presignUploadUrl({
@@ -297,7 +296,7 @@ const presignUpload = createSafeHandler(
           declaredSize: purposeBody.size,
           declaredSha256: purposeBody.sha256Hex,
           status: "pending",
-          expiresAt,
+          expiresAt: finalizeDeadline,
           createdAt: now,
         });
 
@@ -316,7 +315,7 @@ const presignUpload = createSafeHandler(
     return Result.ok({
       uploadId,
       url: presign.value.url,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: urlExpiresAt.toISOString(),
       headers: presign.value.headers,
     });
   },

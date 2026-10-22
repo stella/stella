@@ -14,6 +14,7 @@ import {
   buildDocumentVersionUploadReservationInput,
   buildUploadAbortInput,
   buildUploadFinalizeInput,
+  DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "./generated/document-version-upload-transport.js";
 import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
@@ -49,7 +50,7 @@ const UPLOAD_PURPOSE = {
 export const DOCUMENT_UPLOAD_POLICY = {
   maxBytes: 52_428_800, // 50 MiB
   minimumBytesPerSecond: 32_768, // 32 KiB/s
-  putTimeoutMs: 1_800_000, // 30 minutes
+  putTimeoutMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
 } as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

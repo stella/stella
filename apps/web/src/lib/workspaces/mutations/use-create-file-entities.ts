@@ -6,6 +6,7 @@ import {
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
@@ -41,11 +42,6 @@ import {
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 const MAX_DISPLAYED_FAILURES = 5;
-// Matches the versions-sidebar PUT-to-S3 upload budget (same flow, uploaded
-// file can be arbitrarily large). This is a stall ceiling, not a target
-// duration: a healthy slow upload of a large file can legitimately take
-// several minutes.
-const UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
 
 const formatFailedFiles = (names: readonly string[]): string => {
   const shown = names.slice(0, MAX_DISPLAYED_FAILURES);
@@ -309,7 +305,7 @@ const uploadPreparedFileEntity = async ({
       headers,
       body: file,
       signal,
-      timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
+      timeoutMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
     });
   } catch (error) {
     // Best-effort cleanup: abortUpload swallows its own errors and its

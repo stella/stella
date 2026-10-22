@@ -100,6 +100,8 @@ const config = {
 
 type ClaimedRow = typeof pendingUploads.$inferSelect;
 
+const UPLOAD_FINALIZE_DEADLINE_PASSED = "Upload finalize deadline passed";
+
 const fileSecurityRejectionDetails = (
   error: UploadFinalizeError,
 ): ApiFileSecurityRejectionDetails | null => {
@@ -327,7 +329,7 @@ const claimAndFinalize = async function* ({
           .update(pendingUploads)
           .set({
             status: "rejected",
-            rejectReason: "Upload URL expired",
+            rejectReason: UPLOAD_FINALIZE_DEADLINE_PASSED,
             finalizedAt: new Date(),
           })
           .where(
@@ -348,7 +350,10 @@ const claimAndFinalize = async function* ({
     );
     if (expiredRows.at(0)) {
       return Result.err(
-        new HandlerError({ status: 422, message: "Upload URL expired" }),
+        new HandlerError({
+          status: 422,
+          message: UPLOAD_FINALIZE_DEADLINE_PASSED,
+        }),
       );
     }
     return Result.err(

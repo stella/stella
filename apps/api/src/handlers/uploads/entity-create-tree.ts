@@ -46,6 +46,8 @@ import {
 import {
   PRESIGN_URL_EXPIRY_SECONDS,
   tmpUploadKey,
+  uploadTimeline,
+  type UploadTimeline,
 } from "@/api/lib/uploads/runtime";
 
 const TREE_KEY_MAX_LENGTH = 512;
@@ -105,7 +107,7 @@ type NormalizedTreeFile = {
 type SignedTreeFile = NormalizedTreeFile & {
   uploadId: SafeId<"pendingUpload">;
   resolvedMime: string;
-  expiresAt: Date;
+  timeline: UploadTimeline;
   url: string;
   headers: Record<string, string>;
 };
@@ -296,7 +298,7 @@ type PrepareSignedFilesProps = {
   files: NormalizedTreeFile[];
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  expiresAt: Date;
+  timeline: UploadTimeline;
 };
 
 const prepareSignedFiles = async ({
@@ -304,7 +306,7 @@ const prepareSignedFiles = async ({
   files,
   organizationId,
   workspaceId,
-  expiresAt,
+  timeline,
 }: PrepareSignedFilesProps): Promise<
   Result<SignedTreeFile[], HandlerError>
 > => {
@@ -350,7 +352,7 @@ const prepareSignedFiles = async ({
       name: sanitizedName,
       uploadId,
       resolvedMime,
-      expiresAt,
+      timeline,
       url: presign.value.url,
       headers: presign.value.headers,
     });
@@ -517,7 +519,7 @@ const createPendingRows = async ({
       declaredSize: file.size,
       declaredSha256: file.sha256Hex,
       status: "pending",
-      expiresAt: file.expiresAt,
+      expiresAt: file.timeline.finalizeDeadline,
       createdAt: now,
     });
 
@@ -526,7 +528,7 @@ const createPendingRows = async ({
       uploadId: file.uploadId,
       parentId,
       url: file.url,
-      expiresAt: file.expiresAt.toISOString(),
+      expiresAt: file.timeline.urlExpiresAt.toISOString(),
       headers: file.headers,
     });
   }
@@ -575,15 +577,12 @@ const entityCreateTree = createSafeHandler(
     }
 
     const now = new Date();
-    const expiresAt = new Date(
-      now.getTime() + PRESIGN_URL_EXPIRY_SECONDS * 1000,
-    );
     const signedFiles = await prepareSignedFiles({
       userId: user.id,
       files: normalizedTree.value.files,
       organizationId: session.activeOrganizationId,
       workspaceId,
-      expiresAt,
+      timeline: uploadTimeline(now),
     });
     if (Result.isError(signedFiles)) {
       return Result.err(signedFiles.error);

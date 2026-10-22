@@ -6,11 +6,12 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import JSZip from "jszip";
 
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
   FILE_SECURITY_REMEDIATION,
 } from "@stll/api-contract";
 import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
@@ -35,7 +36,10 @@ import { processDocumentProcessingRun } from "@/api/lib/document-processing-queu
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
-import { legacyTmpUploadKey } from "@/api/lib/uploads/runtime";
+import {
+  legacyTmpUploadKey,
+  PRESIGN_URL_EXPIRY_SECONDS,
+} from "@/api/lib/uploads/runtime";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { docxWithMarkers } from "@/api/tests/helpers/docx-with-markers";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -744,6 +748,98 @@ describe("presigned upload mutation flow", () => {
     ).toEqual([{ status: "pending" }]);
   });
 });
+
+describe("presigned upload finalize lifecycle", () => {
+  test("finalizes an upload whose PUT ran from its URL's expiry to the longest client PUT", async () => {
+    const { uploadId } = await stageDocxVersion("long-put.docx");
+    // The PUT started just before the URL expired and ran for the full
+    // client budget: shift the reservation back by exactly that much.
+    const elapsedMs =
+      PRESIGN_URL_EXPIRY_SECONDS * 1000 + DOCUMENT_UPLOAD_PUT_TIMEOUT_MS;
+    await testDb
+      .update(pendingUploads)
+      .set({
+        createdAt: sql`${pendingUploads.createdAt} - ${elapsedMs} * interval '1 millisecond'`,
+        expiresAt: sql`${pendingUploads.expiresAt} - ${elapsedMs} * interval '1 millisecond'`,
+      })
+      .where(eq(pendingUploads.id, uploadId));
+
+    const finalized = await finalizeAsOwner(uploadId);
+
+    expect(finalized).toHaveProperty("finalizedResult.type", "entity_version");
+    expect(await uploadStatus(uploadId)).toBe("finalized");
+  });
+});
+
+const presignDocxVersion = async (
+  name: string,
+  bytes: Uint8Array,
+): Promise<unknown> => {
+  const presignResult = await presignUpload.handler(
+    asTestRaw<PresignCtx>(
+      createContext({
+        body: {
+          purpose: "entity_version",
+          entityId: ids.entityA1,
+          name,
+          mimeType: DOCX_MIME,
+          size: bytes.byteLength,
+          sha256Hex: hashSha256Hex(bytes),
+        },
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
+    ),
+  );
+  seededUploadIds.push(getUploadId(presignResult));
+  return presignResult;
+};
+
+/** Reserve a DOCX version upload for user A1 and PUT its bytes to the store. */
+const stageDocxVersion = async (
+  name: string,
+): Promise<{ uploadId: SafeId<"pendingUpload">; stagedKey: string }> => {
+  const bytes = await docxWithMarkers([`Staged for ${name}`]);
+  const presignResult = await presignDocxVersion(name, bytes);
+  const grant = readPresignedUpload(presignResult);
+  const staged = await fetch(grant.url, {
+    method: "PUT",
+    body: bytes,
+    headers: grant.headers,
+  });
+  expect(staged.status).toBe(200);
+  return {
+    uploadId: getUploadId(presignResult),
+    stagedKey: new URL(grant.url).pathname.slice(
+      `/${envBase.S3_BUCKET}/`.length,
+    ),
+  };
+};
+
+const finalizeAsOwner = async (
+  uploadId: SafeId<"pendingUpload">,
+): Promise<unknown> =>
+  await finalizeUpload.handler(
+    asTestRaw<FinalizeCtx>(
+      createContext({
+        params: { workspaceId: ids.wsA1, uploadId },
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
+    ),
+  );
+
+const uploadStatus = async (
+  uploadId: SafeId<"pendingUpload">,
+): Promise<string | undefined> =>
+  (
+    await testDb.query.pendingUploads.findFirst({
+      where: { id: { eq: uploadId } },
+      columns: { status: true },
+    })
+  )?.status;
 
 type TestContextOptions = {
   body?: unknown;
