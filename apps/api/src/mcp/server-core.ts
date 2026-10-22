@@ -19,7 +19,7 @@ import type {
   Resource,
   RequestId,
 } from "@modelcontextprotocol/server";
-import { panic, Result } from "better-result";
+import { isTaggedError, panic, Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
@@ -45,11 +45,7 @@ import {
 import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
-import {
-  isMcpSession,
-  type McpAuthenticationFailure,
-  type McpSession,
-} from "@/api/mcp/auth";
+import type { McpAuthenticationFailure, McpSession } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
   invokedCapabilityConsumesServices,
@@ -71,9 +67,8 @@ import {
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
-  McpAuthenticationError,
+  type McpAccessRefusalError,
   McpGatewayLoadError,
-  McpOrganizationAccessError,
 } from "@/api/mcp/errors";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
@@ -393,6 +388,27 @@ const MCP_ACCESS_DENIALS = {
 
 type McpAccessDenial = keyof typeof MCP_ACCESS_DENIALS;
 
+/**
+ * The denial each refusal error answers with, total over
+ * `McpAccessRefusalError`: a new refusal kind does not compile without its
+ * status here, so it cannot fall through to the retryable server-fault answer.
+ */
+const MCP_DENIAL_BY_REFUSAL = {
+  McpAuthenticationError: "invalid_token",
+  McpOrganizationAccessError: "organization_forbidden",
+} as const satisfies Record<McpAccessRefusalError["_tag"], McpAccessDenial>;
+
+const isMcpAccessRefusalTag = (
+  tag: string,
+): tag is keyof typeof MCP_DENIAL_BY_REFUSAL =>
+  Object.hasOwn(MCP_DENIAL_BY_REFUSAL, tag);
+
+/** The denial a thrown or returned refusal answers with; none for a fault. */
+const accessRefusalDenial = (error: unknown): McpAccessDenial | undefined =>
+  isTaggedError(error) && isMcpAccessRefusalTag(error._tag)
+    ? MCP_DENIAL_BY_REFUSAL[error._tag]
+    : undefined;
+
 const accessDeniedResponse = ({
   denial,
   mode,
@@ -583,34 +599,25 @@ const withCappedRequestBody = async (
 };
 
 /**
- * The handler factory receives only `{ era, authInfo, requestInfo }`, and auth
- * is strictly pass-through, so the session we already resolved rides along on
- * `authInfo.extra` under a namespaced key. The value is ours from a few
- * microseconds earlier, not caller input: a missing or malformed one is a wiring
- * bug, so it panics rather than degrading to an unauthenticated instance.
+ * What the handler factory builds a server from: the session and the request
+ * context this endpoint resolved before choosing a protocol leg. The factory
+ * receives only `{ era, authInfo, requestInfo }`, so the state rides on the
+ * exchange's async context. Resolving the context here rather than inside the
+ * factory keeps every refusal it raises on this endpoint's side of the SDK
+ * boundary, where both legs answer it alike. A factory run without it is a
+ * wiring bug, so it panics rather than degrading to an unauthenticated
+ * instance.
  */
-const FACTORY_STATE_KEY = "app.stll.mcp/factory-state";
-
 type McpFactoryState = {
-  clientIp: string | null;
+  context: McpRequestContext;
   session: McpSession;
 };
 
-const isMcpFactoryState = (value: unknown): value is McpFactoryState => {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  const { clientIp, session }: Record<string, unknown> = { ...value };
-  return (
-    (clientIp === null || typeof clientIp === "string") && isMcpSession(session)
-  );
-};
+const factoryState = new AsyncLocalStorage<McpFactoryState>();
 
-const readFactoryState = (
-  extra: Record<string, unknown> | undefined,
-): McpFactoryState => {
-  const state = extra?.[FACTORY_STATE_KEY];
-  if (!isMcpFactoryState(state)) {
+const readFactoryState = (): McpFactoryState => {
+  const state = factoryState.getStore();
+  if (state === undefined) {
     panic("The MCP handler factory ran without its per-request session state");
   }
   return state;
@@ -1036,26 +1043,15 @@ export const createMcpHttpRequestHandler = ({
     return retryableToolErrorResult(mode, context);
   };
 
-  const createMcpServer = async ({
-    clientIp,
+  const createMcpServer = ({
+    context,
     mode,
-    request,
     session,
   }: {
-    clientIp: string | null;
+    context: McpRequestContext;
     mode: McpMode;
-    request: Request;
     session: McpSession;
   }) => {
-    const context = await measureMcpPhase(
-      "context",
-      async () =>
-        await resolveMcpSessionContext(session, {
-          clientIp,
-          request,
-        }),
-    );
-
     const serverBuildStartedAt = performance.now();
     // The low-level Server API accepts JSON Schema directly, which keeps the
     // MCP surface independent from the chat tool generics used elsewhere.
@@ -1178,18 +1174,7 @@ export const createMcpHttpRequestHandler = ({
     }
 
     const handler = createMcpHandler(
-      async ({ authInfo, requestInfo }) => {
-        const { clientIp, session } = readFactoryState(authInfo?.extra);
-        if (!requestInfo) {
-          panic("The MCP handler factory ran without its HTTP request");
-        }
-        return createMcpServer({
-          clientIp,
-          mode,
-          request: requestInfo,
-          session,
-        });
-      },
+      () => createMcpServer({ ...readFactoryState(), mode }),
       {
         legacy: "reject",
         // The v2 handler converts factory/dispatch exceptions into responses
@@ -1214,20 +1199,20 @@ export const createMcpHttpRequestHandler = ({
    */
   const serveLegacyRequest = async ({
     authInfo,
-    clientIp,
+    context,
     mode,
     parsedBody,
     request,
     session,
   }: {
     authInfo: AuthInfo;
-    clientIp: string | null;
+    context: McpRequestContext;
     mode: McpMode;
     parsedBody: unknown;
     request: Request;
     session: McpSession;
   }): Promise<Response> => {
-    const server = await createMcpServer({ clientIp, mode, request, session });
+    const server = createMcpServer({ context, mode, session });
     const transport = new WebStandardStreamableHTTPServerTransport({
       enableJsonResponse: true,
       keepAliveMs: MCP_NOTIFICATION_KEEP_ALIVE_MS,
@@ -1499,19 +1484,9 @@ export const createMcpHttpRequestHandler = ({
           error: unknown,
           requestId: RequestId | null,
         ): Response => {
-          if (error instanceof McpAuthenticationError) {
-            return accessDeniedResponse({
-              denial: "invalid_token",
-              mode,
-              requestId,
-            });
-          }
-          if (error instanceof McpOrganizationAccessError) {
-            return accessDeniedResponse({
-              denial: "organization_forbidden",
-              mode,
-              requestId,
-            });
+          const denial = accessRefusalDenial(error);
+          if (denial !== undefined) {
+            return accessDeniedResponse({ denial, mode, requestId });
           }
 
           captureError(error, {
@@ -1565,9 +1540,16 @@ export const createMcpHttpRequestHandler = ({
           const { parsedBody, request } = inbound;
           requestId = inbound.requestId;
 
+          // Before the leg is chosen, so a refusal it raises is answered by
+          // this endpoint on either leg, never by the SDK as a server fault.
+          const context = await measureMcpPhase(
+            "context",
+            async () =>
+              await resolveMcpSessionContext(session, { clientIp, request }),
+          );
+
           const authInfo = {
             clientId: session.userId,
-            extra: { [FACTORY_STATE_KEY]: { clientIp, session } },
             scopes: session.scopes,
             token,
           };
@@ -1578,16 +1560,20 @@ export const createMcpHttpRequestHandler = ({
               legacyRequest
                 ? await serveLegacyRequest({
                     authInfo,
-                    clientIp,
+                    context,
                     mode,
                     parsedBody,
                     request,
                     session,
                   })
-                : await handlerForMode(mode).fetch(request, {
-                    authInfo,
-                    parsedBody,
-                  }),
+                : await factoryState.run(
+                    { context, session },
+                    async () =>
+                      await handlerForMode(mode).fetch(request, {
+                        authInfo,
+                        parsedBody,
+                      }),
+                  ),
             );
           const response =
             policy === undefined

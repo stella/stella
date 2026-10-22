@@ -53,6 +53,7 @@ import {
 } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import {
+  type McpAccessRefusalError,
   McpAuthenticationError,
   McpGatewayLoadError,
   McpOrganizationAccessError,
@@ -747,6 +748,152 @@ describe("handleMcpHttpRequest", () => {
     expect(listMcpToolsMock).not.toHaveBeenCalled();
     expect(handleMcpToolCallMock).not.toHaveBeenCalled();
     expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+
+  test("answers every organization access refusal with the same 403 on both transports", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        userId: "user_one",
+        organizationId: "org_one",
+        scopes: ["stella:read"],
+      }),
+    );
+    const refusals = {
+      membership: async () => {
+        throw new McpOrganizationAccessError({
+          message: "User is not a member of this organization",
+        });
+      },
+      demo_account: async (
+        session: Parameters<typeof resolveMcpSessionContext>[0],
+        options: Parameters<typeof resolveMcpSessionContext>[1],
+      ) =>
+        await resolveMcpSessionContext(session, {
+          ...options,
+          resolveAuthorization: async () => ({
+            memberId: "member_one",
+            email: "limited@example.test",
+            role: "owner",
+            workspace: null,
+          }),
+          checkAccountOperation: (email) =>
+            checkDemoAccountAccess({
+              email,
+              config: {
+                email: "limited@example.test",
+                organizationId: "org_one",
+              },
+              operation: "growth",
+            }),
+        }),
+    };
+
+    for (const [refusal, resolveContext] of Object.entries(refusals)) {
+      for (const protocol of ["legacy", "modern"] as const) {
+        captureErrorMock.mockClear();
+        resolveMcpSessionContextMock.mockImplementation(resolveContext);
+        const response = await handleMcpHttpRequest(
+          protocol === "modern"
+            ? createModernMcpRequest({ id: 7, method: "tools/list" })
+            : createMcpRequest({
+                id: 7,
+                jsonrpc: "2.0",
+                method: "tools/list",
+                params: {},
+              }),
+        );
+
+        expect({
+          refusal,
+          protocol,
+          status: response.status,
+          retryAfter: response.headers.get("Retry-After"),
+          captured: captureErrorMock.mock.calls.length,
+        }).toEqual({
+          refusal,
+          protocol,
+          status: 403,
+          retryAfter: null,
+          captured: 0,
+        });
+        expect(response.headers.get("WWW-Authenticate")).not.toContain(
+          "error=",
+        );
+        expect(await readTestJson<McpJsonRpcFailure>(response)).toEqual({
+          error: { code: -32_001, message: "Forbidden" },
+          id: 7,
+          jsonrpc: "2.0",
+        });
+      }
+    }
+    expect(listMcpToolsMock).not.toHaveBeenCalled();
+  });
+
+  test("answers every refusal kind raised while resolving the session with its denial on both transports", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    // Total over the refusal union: a new refusal kind fails to compile here
+    // until its expected answer is stated.
+    const refusals = {
+      McpAuthenticationError: {
+        error: () => new McpAuthenticationError({ message: "Token revoked" }),
+        status: 401,
+        message: "Invalid or expired token",
+      },
+      McpOrganizationAccessError: {
+        error: () =>
+          new McpOrganizationAccessError({ message: "Membership removed" }),
+        status: 403,
+        message: "Forbidden",
+      },
+    } satisfies Record<
+      McpAccessRefusalError["_tag"],
+      {
+        error: () => McpAccessRefusalError;
+        status: 401 | 403;
+        message: string;
+      }
+    >;
+
+    for (const [tag, refusal] of Object.entries(refusals)) {
+      for (const protocol of ["legacy", "modern"] as const) {
+        captureErrorMock.mockClear();
+        resolveMcpSessionContextMock.mockRejectedValue(refusal.error());
+        const response = await handleMcpHttpRequest(
+          protocol === "modern"
+            ? createModernMcpRequest({ id: 3, method: "tools/list" })
+            : createMcpRequest({
+                id: 3,
+                jsonrpc: "2.0",
+                method: "tools/list",
+                params: {},
+              }),
+        );
+
+        expect({
+          tag,
+          protocol,
+          status: response.status,
+          captured: captureErrorMock.mock.calls.length,
+          body: await readTestJson<McpJsonRpcFailure>(response),
+        }).toEqual({
+          tag,
+          protocol,
+          status: refusal.status,
+          captured: 0,
+          body: {
+            error: { code: -32_001, message: refusal.message },
+            id: 3,
+            jsonrpc: "2.0",
+          },
+        });
+      }
+    }
   });
 
   test("captures unexpected transport errors as a retryable 5xx, not a 401", async () => {
