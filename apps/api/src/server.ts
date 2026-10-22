@@ -735,7 +735,12 @@ const scopeRequestAsyncStores = (): void => {
   // Reuse the framework's matcher so parameter values and loose-path aliases
   // share the registered route's budget identity.
   const statementRoutes = isLocalTestRun()
-    ? new Elysia({ aot: false, strictPath: api.config.strictPath })
+    ? new Elysia({
+        aot: false,
+        ...(api.config.strictPath === undefined
+          ? {}
+          : { strictPath: api.config.strictPath }),
+      })
     : undefined;
   if (statementRoutes !== undefined) {
     for (const { method, path } of api.routes) {
@@ -762,7 +767,7 @@ const scopeRequestAsyncStores = (): void => {
   });
   api.wrap(
     (handleRequest) => async (request: Request) =>
-      runWithRequestScope(() => {
+      runWithRequestScope(async () => {
         const run = async () => {
           if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
             return handleRequest(request);

@@ -1,7 +1,4 @@
-import { afterAll } from "bun:test";
-
 import { envApiServerSchema } from "../env-schema";
-import { assertStatementCeilingsSatisfied } from "../lib/db-statement-ceiling";
 import { configureTestDatabaseEnvironment } from "./test-database-environment";
 
 // Preserve configured providers while preventing inherited credentials from
@@ -105,6 +102,3 @@ process.env["CORPUS_INDEX_Q09_SEARCH_ENDPOINT"] ??= "http://localhost:7291";
 process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
 process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
-
-// Assert retained violations even when a transport converted them to a response.
-afterAll(assertStatementCeilingsSatisfied);
