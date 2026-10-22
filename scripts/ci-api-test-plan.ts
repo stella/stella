@@ -15,6 +15,10 @@ import {
   isApiTestShardId,
 } from "./api-test-shard-plan";
 import { selectedTestJobs } from "./ci-affected-selection";
+import { encodePlanFileList } from "./plan-output-codec";
+
+export const serializeApiTestFilesOutput = (files: readonly string[]): string =>
+  encodePlanFileList(files);
 
 const ImpactSchema = v.strictObject({
   mode: v.picklist(["all", "selected", "none"]),
@@ -180,6 +184,6 @@ if (import.meta.main) {
     plan.type === "run" ? plan.matrix : { shard: ["rest-web"] as const };
   appendFileSync(
     process.env["GITHUB_OUTPUT"] ?? panic("Missing GITHUB_OUTPUT"),
-    `ci_tests_required=${plan.type === "run"}\nci_tests_matrix=${JSON.stringify(matrix)}\napi_test_shards=${plan.impact.shards}\ntest_scope=${testScope}\napi_test_files<<API_TEST_FILES_END\n${plan.impact.files.join("\n")}\nAPI_TEST_FILES_END\n`,
+    `ci_tests_required=${plan.type === "run"}\nci_tests_matrix=${JSON.stringify(matrix)}\napi_test_shards=${plan.impact.shards}\ntest_scope=${testScope}\napi_test_files_encoded=${serializeApiTestFilesOutput(plan.impact.files)}\n`,
   );
 }

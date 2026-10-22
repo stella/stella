@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { decodePostgresTestSelection } from "../../../scripts/plan-output-codec";
 import { buildApiTestCommand } from "./api-test-command";
 import {
   mergeJunitReports,
@@ -50,7 +51,11 @@ process.exitCode = await runGatedTests({
   requiredEnv: ["DATABASE_URL"],
   script: "test:postgres",
   preload: "./src/tests/setup-postgres.ts",
-  selection: process.env["CI_POSTGRES_TEST_SELECTION"],
+  selection: JSON.stringify(
+    decodePostgresTestSelection(
+      process.env["CI_POSTGRES_TEST_SELECTION_ENCODED"] ?? "",
+    ),
+  ),
   exclusiveTestPaths: EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   runnerArguments: parsedWorkers.arguments,
   spawnTestProcess: spawnPostgresTestProcess,

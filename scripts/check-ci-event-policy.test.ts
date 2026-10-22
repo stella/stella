@@ -118,6 +118,24 @@ test("every real workflow job has an event policy and the fast gate follows it",
   expect(checkCiEventPolicies({ workflows, policy })).toEqual([]);
 });
 
+test("whole-context environment values require an exact budget-test allowlist entry", () => {
+  const changed = structuredClone(workflows);
+  const workflow = v.parse(workflowSchema, changed["ci.yml"]);
+  const job = workflow.jobs["ci-checks-rest"] ?? panic("Missing check job");
+  job.steps?.push({
+    name: "Unbudgeted context",
+    env: { EVERYTHING: ["$", "{{ toJSON(needs) }}"].join("") },
+  });
+  expect(
+    checkCiEventPolicies({
+      workflows: { ...changed, "ci.yml": workflow },
+      policy,
+    }),
+  ).toContain(
+    "ci.yml/ci-checks-rest/Unbudgeted context/EVERYTHING: whole-context env is not covered by whole workflow contexts stay below the per-variable environment budget",
+  );
+});
+
 test("duplicate raw event-policy job keys fail before JSON key collapse", () => {
   const source =
     '{"jobs":{"fixture.yml/job":"pr-fast","fixture.yml/job":"main"}}';
