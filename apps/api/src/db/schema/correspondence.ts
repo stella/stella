@@ -551,6 +551,12 @@ export const correspondenceAllowedSenderMatters = p.pgTable.withRLS(
     p
       .index("correspondence_allowed_sender_matters_ws_sender_idx")
       .on(table.workspaceId, table.allowedSenderId),
+    p.pgPolicy("correspondence_allowed_sender_matters_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_sender_matters'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_sender_matters'::regclass)`,
+    }),
     ...wsOrganizationPolicies("correspondence_allowed_sender_matters", {
       columns: table,
     }),
@@ -582,6 +588,12 @@ export const correspondenceDropLogs = p.pgTable.withRLS(
       "correspondence_drop_logs_reason_check",
       sql`${table.reason} in (${valuesSql(CORRESPONDENCE_DROP_REASONS)})`,
     ),
+    p.pgPolicy("correspondence_drop_logs_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_drop_logs'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_drop_logs'::regclass)`,
+    }),
     ...wsOrganizationPolicies("correspondence_drop_logs", { columns: table }),
   ],
 );

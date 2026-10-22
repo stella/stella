@@ -670,6 +670,12 @@ export const sellerProfiles = p.pgTable(
       "seller_profiles_vat_payer_check",
       sql`NOT ${table.vatPayer} OR btrim(coalesce(${table.vatId}, '')) <> ''`,
     ),
+    p.pgPolicy("seller_profiles_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.seller_profiles'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.seller_profiles'::regclass)`,
+    }),
     ...orgPolicies(),
   ],
 );
@@ -737,6 +743,12 @@ export const numberSeries = p.pgTable(
       "number_series_archived_default_check",
       sql`${table.archivedAt} IS NULL OR NOT ${table.isDefault}`,
     ),
+    p.pgPolicy("number_series_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.number_series'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.number_series'::regclass)`,
+    }),
     ...orgPolicies(),
   ],
 );
@@ -763,6 +775,12 @@ export const numberSeriesCounters = p.pgTable(
       "number_series_counters_positive_check",
       sql`${table.lastValue} > 0`,
     ),
+    p.pgPolicy("number_series_counters_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.number_series_counters'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.number_series_counters'::regclass)`,
+    }),
     ...orgPolicies(),
   ],
 );
@@ -795,6 +813,12 @@ export const numberSeriesAllocations = p.pgTable(
       "number_series_allocations_document_type_check",
       sql`${table.documentType} IN (${sql.join(NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES, sql`, `)})`,
     ),
+    p.pgPolicy("number_series_allocations_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.number_series_allocations'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.number_series_allocations'::regclass)`,
+    }),
     ...orgPolicies(),
   ],
 );
@@ -1161,6 +1185,12 @@ export const invoiceLines = p.pgTable(
       "invoice_lines_description_check",
       sql`length(${table.description}) between 1 and 10000`,
     ),
+    p.pgPolicy("invoice_lines_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_lines'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_lines'::regclass)`,
+    }),
     ...wsOrganizationPolicies("invoice_lines", { columns: table }),
   ],
 );
@@ -1195,6 +1225,12 @@ export const vatRates = p.pgTable(
       "vat_rates_validity_check",
       sql`${table.validTo} IS NULL OR ${table.validTo} > ${table.validFrom}`,
     ),
+    p.pgPolicy("vat_rates_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.vat_rates'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.vat_rates'::regclass)`,
+    }),
     ...orgPolicies(),
   ],
 );
