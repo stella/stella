@@ -344,6 +344,7 @@ export const redactCaseLawDecision = async ({
       const subject = { family: "case_law", entityId: id } as const;
       pendingSourceLocks.push(
         Result.tryPromise({
+          // db-await-in-loop: take per-subject projection fences in sorted order before any row changes
           try: async () => await lockSource(tx, subject),
           catch: (cause) => cause,
         }).then((sourceLock) => ({ sourceLock, subject })),
