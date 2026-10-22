@@ -71,6 +71,7 @@ import { RESET_REVIEW_ORGANIZATION_TASK } from "@/api/lib/scheduler/tasks/review
 import { DRAIN_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring";
 import { BACKFILL_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring-backfill";
 import { REFRESH_SANCTIONS_SOURCES_TASK } from "@/api/lib/scheduler/tasks/sanctions-refresh";
+import { AUDIT_SCHEDULER_PAUSES_TASK } from "@/api/lib/scheduler/tasks/scheduler-pause-audit";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
@@ -233,6 +234,13 @@ type DeclaredSchedulerJob = SchedulerJobDefinition & { mode: SchedulerJobMode };
  * was no work to do" — so the set has to be checkable from outside the loop.
  */
 export const DECLARED_SCHEDULER_JOBS = [
+  {
+    description: "Report scheduler pauses older than 24 hours",
+    id: "scheduler.pauseAudit.hourly",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
+    task: AUDIT_SCHEDULER_PAUSES_TASK,
+  },
   {
     description: "Release queued PDFs to the searchable-text worker",
     id: "documentProcessing.dispatchOcr.configuredInterval",
