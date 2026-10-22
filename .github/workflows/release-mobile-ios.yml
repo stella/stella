@@ -131,6 +131,10 @@ jobs:
       # no upload key; only the next step authenticates to App Store Connect.
       - name: Archive
         working-directory: apps/mobile/ios
+        env:
+          # Expo's bundle phase re-reads the app config, which needs the team
+          # beside the profile UUID; the team id is not a key.
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           workspaces=(*.xcworkspace)
