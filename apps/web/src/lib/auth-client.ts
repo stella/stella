@@ -20,7 +20,11 @@ import {
 } from "@/boot-prefetch";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { browserAuthBaseUrl } from "@/lib/api-url";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { reportUnhandledAuthClientError } from "@/lib/auth-code-report";
+import {
+  notifyUserError,
+  reportUserVisibleError,
+} from "@/lib/errors/user-toast";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 
 export const HTTP_TOO_MANY_REQUESTS = 429;
@@ -168,7 +172,9 @@ const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
         if (context.response.status === HTTP_TOO_MANY_REQUESTS) {
           const t = getTranslator();
           notifyUserError(context.error, t("auth.rateLimitExceeded"));
+          return;
         }
+        reportUnhandledAuthClientError(context.error, reportUserVisibleError);
       },
     },
   });

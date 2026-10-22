@@ -44,7 +44,7 @@ export const setUserErrorRouteTemplate = (routeTemplate: string): void => {
   currentRouteTemplate = routeTemplate;
 };
 
-const reportUserVisibleError = (
+export const reportUserVisibleError = (
   error: unknown,
   feature: string | undefined,
   routeTemplate: string | undefined,

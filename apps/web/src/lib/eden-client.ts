@@ -14,8 +14,12 @@ import {
   waitForSimulatedApiDelay,
 } from "@/lib/api-request-context";
 import { browserApiBaseUrl } from "@/lib/api-url";
+import { reportUnhandledMeResponse } from "@/lib/auth-code-report";
 import { observeActionAdmissionResponse } from "@/lib/errors/action-admission-response";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  notifyUserError,
+  reportUserVisibleError,
+} from "@/lib/errors/user-toast";
 
 export type WebApiRoutes = WebRoutes["v1"];
 
@@ -45,12 +49,13 @@ export type {
   ViewTemplateProperty,
 } from "@/generated/api-routes.gen";
 
-const clientOptions = {
+export const webApiClientOptions = {
   async onRequest() {
     await waitForSimulatedApiDelay();
   },
   headers: getApiRequestHeaders,
   async onResponse(response) {
+    await reportUnhandledMeResponse(response, reportUserVisibleError);
     await observeActionAdmissionResponse(response, {
       notifyRefusal: (error) =>
         notifyUserError(error, getTranslator()("errors.actionFailed")),
@@ -63,14 +68,14 @@ const clientOptions = {
 
 const eden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
   browserApiBaseUrl(),
-  clientOptions,
+  webApiClientOptions,
 );
 const linkIconsEden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
   browserApiBaseUrl(),
   {
-    ...clientOptions,
+    ...webApiClientOptions,
     async onResponse(response) {
-      await clientOptions.onResponse(response);
+      await webApiClientOptions.onResponse(response);
       const mime = response.headers.get("content-type")?.split(";").at(0);
       if (response.ok && (mime === "image/png" || mime === "image/x-icon")) {
         return await response.blob();
@@ -81,14 +86,14 @@ const linkIconsEden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
 );
 const memoriesEden = createStellaEdenClient<EdenRoutesApp<MemoriesRoutes>>(
   browserApiBaseUrl(),
-  clientOptions,
+  webApiClientOptions,
 );
 const correspondenceEden = createStellaEdenClient<
   EdenRoutesApp<CorrespondenceRoutes>
->(browserApiBaseUrl(), clientOptions);
+>(browserApiBaseUrl(), webApiClientOptions);
 const myTimeEntriesEden = createStellaEdenClient<
   EdenRoutesApp<MyTimeEntriesRoutes>
->(browserApiBaseUrl(), clientOptions);
+>(browserApiBaseUrl(), webApiClientOptions);
 
 export const api = eden.v1;
 export const linkIconsApi = linkIconsEden.v1.chat["link-icons"];

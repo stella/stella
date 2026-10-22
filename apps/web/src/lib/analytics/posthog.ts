@@ -456,7 +456,7 @@ const templateUrl = (
   return { url: `${parsed.origin}${template}`, pathname: template };
 };
 
-const sanitizeExceptionEvent = (
+export const sanitizeExceptionEvent = (
   event: CaptureResult,
   history: RouteTemplateHistory,
 ): CaptureResult => {
