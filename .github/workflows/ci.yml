@@ -124,7 +124,7 @@ jobs:
       api_test_durations_key: ${{ steps.api-test-durations.outputs.key }}
       api_test_durations_hash: ${{ steps.api-test-durations.outputs.hash }}
       postgres_test_durations_hash: ${{ steps.postgres-test-durations.outputs.hash }}
-      postgres_test_selection_encoded: ${{ steps.postgres-test-plan.outputs.postgres_test_selection_encoded || 'Q1bKzU9JVbJSSszJUaoFAA==' }}
+      postgres_test_selection_encoded: ${{ steps.postgres-test-plan.outputs.postgres_test_selection_encoded }}
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
       postgres_service_suites_required: ${{ (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true') && steps.changed-files.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (steps.depth.outputs.suite_depth == 'full' || (steps.depth.outputs.suite_depth == 'fast' && steps.changed-files.outputs.service_suites_pr_required == 'true')) }}
@@ -957,7 +957,7 @@ jobs:
             timeout --kill-after=10s 120s bun scripts/ci-postgres-test-plan.ts
           ); then
             {
-              printf 'postgres_test_selection_encoded=%s\n' "$(bun scripts/plan-output-codec.ts encode-postgres-all)"
+              echo 'postgres_test_selection_encoded='
               echo 'postgres_selection_reason=Runtime generation or selection unavailable; full suite retained.'
             } >> "$GITHUB_OUTPUT"
           fi
@@ -965,7 +965,7 @@ jobs:
       - name: Summarize Postgres test selection
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         env:
-          CI_POSTGRES_TEST_SELECTION_ENCODED: ${{ steps.postgres-test-plan.outputs.postgres_test_selection_encoded || 'Q1bKzU9JVbJSSszJUaoFAA==' }}
+          CI_POSTGRES_TEST_SELECTION_ENCODED: ${{ steps.postgres-test-plan.outputs.postgres_test_selection_encoded }}
           REASON: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
         run: |
           SELECTION=$(bun scripts/plan-output-codec.ts decode-postgres)
@@ -3522,7 +3522,7 @@ jobs:
           POSTGRES_TEST_DURATIONS_FILE: ${{ runner.temp }}/postgres-test-durations.json
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
-          CI_POSTGRES_TEST_SELECTION_ENCODED: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection_encoded || 'Q1bKzU9JVbJSSszJUaoFAA==' }}
+          CI_POSTGRES_TEST_SELECTION_ENCODED: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection_encoded }}
         # The full volume benchmark runs in nightly postgres-suites; this job
         # retains its bounded correctness slice alongside every other suite.
         run: bun run test:postgres --workers=4 --test-name-pattern='^(?!.*sanctions monitoring full-volume)' --reporter=junit --reporter-outfile="$RUNNER_TEMP/postgres-tests.xml"

@@ -17,8 +17,13 @@ import {
 import { selectedTestJobs } from "./ci-affected-selection";
 import { encodePlanFileList } from "./plan-output-codec";
 
-export const serializeApiTestFilesOutput = (files: readonly string[]): string =>
-  encodePlanFileList(files);
+/**
+ * An empty selection stays an empty output: readers treat "" as "no explicit
+ * selection" and run every file, as the raw newline list did.
+ */
+export const serializeApiTestFilesOutput = (
+  files: readonly string[],
+): string => (files.length === 0 ? "" : encodePlanFileList(files));
 
 const ImpactSchema = v.strictObject({
   mode: v.picklist(["all", "selected", "none"]),

@@ -56,18 +56,14 @@ export const decodePostgresTestSelection = (
 };
 
 if (import.meta.main) {
-  const command = Bun.argv.at(2);
-  if (command === "encode-postgres-all") {
-    process.stdout.write(encodePostgresTestSelection({ mode: "all" }));
-  } else if (command === "decode-postgres") {
-    process.stdout.write(
-      JSON.stringify(
-        decodePostgresTestSelection(
-          process.env["CI_POSTGRES_TEST_SELECTION_ENCODED"] ?? "",
-        ),
-      ),
-    );
-  } else {
-    panic("Expected encode-postgres-all or decode-postgres");
+  if (Bun.argv.at(2) !== "decode-postgres") {
+    panic("Expected decode-postgres");
   }
+  // An empty selection is no explicit selection: the full suite runs.
+  const encoded = process.env["CI_POSTGRES_TEST_SELECTION_ENCODED"] ?? "";
+  process.stdout.write(
+    JSON.stringify(
+      encoded === "" ? { mode: "all" } : decodePostgresTestSelection(encoded),
+    ),
+  );
 }

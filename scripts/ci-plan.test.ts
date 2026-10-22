@@ -6646,9 +6646,7 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
           event !== EVENT.pullRequest || prSwitch === "on",
         );
         expect(evaluate(runnerSelection, { values })).toBe(
-          event === EVENT.mergeGroup || enabled
-            ? selection
-            : encodePostgresTestSelection({ mode: "all" }),
+          event === EVENT.mergeGroup || enabled ? selection : "",
         );
         expect(
           evaluate(runnerSelection, {
@@ -6657,11 +6655,11 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
               "needs.ci-plan.outputs.postgres_test_selection_encoded": "",
             },
           }),
-        ).toBe(encodePostgresTestSelection({ mode: "all" }));
+        ).toBe("");
       }
     }
   }
-  expect(planner?.run).toContain("encode-postgres-all");
+  expect(planner?.run).toContain("echo 'postgres_test_selection_encoded='");
   for (const result of ["success", "skipped", "failure"]) {
     expect(
       evaluateResult({
@@ -6700,9 +6698,6 @@ test("Postgres planning generates ignored runtime inputs and widens when any sta
 bun() {
   printf '%s\\n' "$*" >> "$TRACE"
   if [[ "$*" == "$FAILED_COMMAND" ]]; then return 1; fi
-  if [[ "$*" == "scripts/plan-output-codec.ts encode-postgres-all" ]]; then
-    printf '%s' '${encodePostgresTestSelection({ mode: "all" })}'
-  fi
   if [[ "$*" == scripts/ci-postgres-test-plan.ts ]]; then
     printf '%s\\n' 'postgres_test_selection_encoded=selected-fixture' >> "$GITHUB_OUTPUT"
   fi
@@ -6723,15 +6718,12 @@ ${planner?.run ?? panic("Missing Postgres planner")}`,
       expect(invoked).toEqual(
         failedCommand === ""
           ? commands
-          : [
-              ...commands.slice(0, commands.indexOf(failedCommand) + 1),
-              "scripts/plan-output-codec.ts encode-postgres-all",
-            ],
+          : commands.slice(0, commands.indexOf(failedCommand) + 1),
       );
       expect(readFileSync(output, "utf-8")).toContain(
         failedCommand === ""
           ? "postgres_test_selection_encoded=selected-fixture"
-          : `postgres_test_selection_encoded=${encodePostgresTestSelection({ mode: "all" })}`,
+          : "postgres_test_selection_encoded=\n",
       );
     }
   } finally {
