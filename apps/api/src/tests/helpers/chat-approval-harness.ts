@@ -206,6 +206,11 @@ const CUT_SHORT_REASONS: ReadonlySet<string> = new Set([
   "user-stop",
 ]);
 
+/** The approval-gated tool's run failing (`failingApprovalNames`). */
+class ApprovalToolFailure extends TaggedError("ApprovalToolFailure")<{
+  message: string;
+}> {}
+
 /** The page's connection dropping because the process serving it died. */
 class ChatConnectionLostError extends TaggedError("ChatConnectionLostError")<{
   message: string;
@@ -250,6 +255,7 @@ export type HarnessModel = Pick<
 export const createApprovalHarness = ({
   beforeTurnSettles,
   boundaryAnonymizer,
+  failingApprovalNames = [],
   ids,
   model,
   organizationAIConfig = orgAIConfig,
@@ -278,6 +284,12 @@ export const createApprovalHarness = ({
         threadId: SafeId<"chatThread">;
       }) => Promise<void>)
     | undefined;
+  /**
+   * Names the approval-gated tool fails on once approved: its run throws,
+   * as a write that the far side rejects does. It still counts in
+   * `executions`. None by default.
+   */
+  failingApprovalNames?: readonly string[] | undefined;
   ids: TestIds;
   /**
    * Who sends, and the profile their page sends with each message
@@ -354,6 +366,11 @@ export const createApprovalHarness = ({
     needsApproval: true,
   }).server(async ({ name }) => {
     executions.push(name);
+    if (failingApprovalNames.includes(name)) {
+      throw new ApprovalToolFailure({
+        message: `The external service could not delete ${name}`,
+      });
+    }
     return await Promise.resolve({ deleted: name });
   });
   const refLedger = createRefStabilityLedger();

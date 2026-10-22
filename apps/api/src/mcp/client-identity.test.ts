@@ -2,7 +2,7 @@ import {
   EXTENSION_ID,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   MCP_APP_EXTENSION_ID,
@@ -10,6 +10,14 @@ import {
 } from "@stll/api-contract";
 
 import {
+  resetAnalyticsForTesting,
+  setAnalyticsForTesting,
+} from "@/api/lib/analytics/client";
+import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
+import { SYNTHETIC_PRINCIPAL } from "@/api/lib/synthetic-principal/constants";
+import type { McpSession } from "@/api/mcp/auth";
+import {
+  createRecordMcpSessionInitialized,
   sanitizeMcpClientIdentity,
   sanitizeMcpUiCapabilities,
 } from "@/api/mcp/client-identity";
@@ -132,5 +140,90 @@ describe("MCP App capability telemetry", () => {
         uiAppsMimeTypes: [],
       });
     }
+  });
+});
+
+describe("MCP session telemetry audience", () => {
+  const reviewAccount = {
+    email: "restricted@example.test",
+    organizationId: "org_review",
+  };
+  const record = createRecordMcpSessionInitialized(() => reviewAccount);
+  const recording = () => {
+    const captured: ServerAnalyticsCaptureParams[] = [];
+    setAnalyticsForTesting({
+      capture: (params) => {
+        captured.push(params);
+      },
+      identifyOrganizationGroup: () => undefined,
+      flush: async () => await Promise.resolve(),
+    });
+    return captured;
+  };
+  const handshake = (session: McpSession) => {
+    record({
+      capabilities: {},
+      clientInfo: { name: "claude-ai", version: "1.0.0" },
+      mode: "default",
+      session,
+    });
+  };
+
+  afterEach(() => {
+    resetAnalyticsForTesting();
+  });
+
+  test("counts a customer's handshake", () => {
+    const captured = recording();
+
+    handshake({
+      credential: { clientId: "client_1", type: "oauth_client" },
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toMatchObject({
+      distinctId: "user_1",
+      event: "mcp_session_initialized",
+      groups: { organization: "org_1" },
+    });
+  });
+
+  test("leaves out the review account's handshakes under every credential", () => {
+    const captured = recording();
+
+    for (const credential of [
+      {
+        id: "key_1",
+        name: "automation",
+        permissions: { workspace: ["read"] },
+        type: "machine_api_key",
+      },
+      { clientId: "client_1", type: "oauth_client" },
+    ] satisfies McpSession["credential"][]) {
+      handshake({
+        credential,
+        organizationId: reviewAccount.organizationId,
+        scopes: ["stella:read"],
+        userId: "user_review",
+      });
+    }
+
+    expect(captured).toEqual([]);
+  });
+
+  test("leaves out the synthetic principal", () => {
+    const captured = recording();
+
+    handshake({
+      credential: { type: "delegated_user" },
+      organizationId: SYNTHETIC_PRINCIPAL.org.id,
+      scopes: ["stella:read"],
+      userId: SYNTHETIC_PRINCIPAL.user.id,
+    });
+
+    expect(captured).toEqual([]);
   });
 });
