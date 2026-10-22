@@ -79,13 +79,17 @@ pub fn spawn_sse_listener(
                 match probe_remote_session_status(&manager, &session_id).await {
                   RemoteSessionStatus::Open | RemoteSessionStatus::Retry => {}
                   RemoteSessionStatus::Closed(message) => {
-                    let mut mgr = manager.lock().await;
-                    mgr.close_remote_session_public(&session_id, &message).await;
+                    manager
+                      .lock()
+                      .await
+                      .close_remote_session_public(&session_id, &message)
+                      .await;
                     return;
                   }
                   RemoteSessionStatus::TakenOver(message) => {
-                    let mut mgr = manager.lock().await;
-                    mgr
+                    manager
+                      .lock()
+                      .await
                       .mark_session_taken_over_public(&session_id, &message)
                       .await;
                     return;
@@ -274,14 +278,16 @@ async fn handle_sse_event(
       let message = event.data["message"]
         .as_str()
         .unwrap_or("Desktop editing moved to another device.");
-      let mut mgr = manager.lock().await;
-      mgr
+      manager
+        .lock()
+        .await
         .mark_session_taken_over_public(session_id, message)
         .await;
     }
     "session-closed" => {
-      let mut mgr = manager.lock().await;
-      mgr
+      manager
+        .lock()
+        .await
         .close_remote_session_public(session_id, "Desktop edit session was closed.")
         .await;
     }
