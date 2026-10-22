@@ -31,6 +31,7 @@ import { useSignOut } from "@/hooks/use-sign-out";
 import { createErrorReference } from "@/lib/analytics/error-reference";
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
@@ -156,7 +157,9 @@ export const DefaultErrorComponent = ({
     }
 
     if (retriesAtLimit) {
-      analytics.captureError(error);
+      reportErrorOnce(error, (caughtError) => {
+        analytics.captureError(caughtError);
+      });
     }
   }, [
     error,

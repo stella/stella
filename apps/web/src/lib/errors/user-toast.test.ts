@@ -4,6 +4,7 @@ import { sleep } from "@stll/concurrency/sleep";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
+import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import { toAPIError } from "@/lib/errors/api";
 import {
   detachedUserAction,
@@ -64,6 +65,43 @@ describe("detachedUserAction", () => {
 });
 
 describe("notifyUserError", () => {
+  test("reports two different notices without errors", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+
+    notifyUserError(undefined, "First notice");
+    notifyUserError(undefined, "Second notice");
+
+    expect(capture).toHaveBeenCalledTimes(2);
+  });
+
+  test("reports the same notice without an error once", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+
+    notifyUserError(undefined, FAILURE);
+    notifyUserError(undefined, FAILURE);
+
+    expect(capture).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not report a boundary error again at the root", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const failure = new Error("render failed");
+    const report = (error: unknown) => capture(error);
+
+    reportErrorOnce(failure, report);
+    reportErrorOnce(failure, report);
+
+    expect(capture).toHaveBeenCalledTimes(1);
+  });
+
   test("reports a visible error once with explicit route metadata", () => {
     const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
       () => undefined,

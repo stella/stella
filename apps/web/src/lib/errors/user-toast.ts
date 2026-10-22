@@ -9,9 +9,11 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
 import { getTranslator } from "@/i18n/translator";
-import { fingerprintTelemetryError } from "@/lib/analytics/error-fingerprint";
+import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { resetReportedErrorsForTests } from "@/lib/analytics/reported-error";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+import { APIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -27,9 +29,12 @@ type UserErrorToastOptions = Omit<
 
 let currentRouteTemplate = "unknown";
 const reportedFingerprints = new Set<string>();
+const reportedApiErrorsWithoutNotice = new Set<string>();
 
 export const resetUserErrorReportDedupeForTests = (): void => {
   reportedFingerprints.clear();
+  reportedApiErrorsWithoutNotice.clear();
+  resetReportedErrorsForTests();
 };
 
 const featureFromRoute = (routeTemplate: string): string => {
@@ -48,14 +53,45 @@ export const reportUserVisibleError = (
   error: unknown,
   feature: string | undefined,
   routeTemplate: string | undefined,
+  notice?: string,
 ): void => {
   const reportable = error ?? new Error("UserVisibleError");
-  const fingerprint = fingerprintTelemetryError(reportable);
+  const template =
+    (routeTemplate ?? currentRouteTemplate).split(/[?#]/u).at(0) ?? "unknown";
+  const isApiError = APIError.is(error);
+  const apiIdentity = isApiError
+    ? `${error.status}:${error.code ?? "unknown"}`
+    : "not-api";
+  const noticeIdentity =
+    notice ??
+    actionAdmissionOutcome(error)?.messageKey ??
+    userErrorFromThrown(error, "user-visible");
+  const fingerprint = [
+    noticeIdentity,
+    template,
+    telemetryErrorType(reportable),
+    apiIdentity,
+  ].join("|");
+  const apiOccurrence = [
+    template,
+    telemetryErrorType(reportable),
+    apiIdentity,
+  ].join("|");
   if (reportedFingerprints.has(fingerprint)) {
     return;
   }
+  if (
+    notice !== undefined &&
+    isApiError &&
+    reportedApiErrorsWithoutNotice.delete(apiOccurrence)
+  ) {
+    reportedFingerprints.add(fingerprint);
+    return;
+  }
   reportedFingerprints.add(fingerprint);
-  const template = routeTemplate ?? currentRouteTemplate;
+  if (notice === undefined && isApiError) {
+    reportedApiErrorsWithoutNotice.add(apiOccurrence);
+  }
   getAnalytics().captureError(reportable, {
     type: "user-visible",
     routeTemplate: template,
@@ -68,10 +104,16 @@ export const notifyUserError = (
   fallback: string,
   { feature, routeTemplate, toastId, ...options }: UserErrorToastOptions = {},
 ): boolean => {
-  reportUserVisibleError(error, feature, routeTemplate);
   // The stable refusal id coalesces Eden's observer and local error handlers;
   // raw fetch and SDK errors also need to emit the same notice here.
   const refusal = actionAdmissionOutcome(error);
+  const title = userErrorFromThrown(error, fallback);
+  reportUserVisibleError(
+    error,
+    feature,
+    routeTemplate,
+    refusal?.messageKey ?? title,
+  );
   if (refusal) {
     const t = getTranslator();
     stellaToast.add({
@@ -103,7 +145,7 @@ export const notifyUserError = (
     ...options,
     title:
       diagnostic === undefined
-        ? userErrorFromThrown(error, fallback)
+        ? title
         : createElement(ProviderDiagnosticToast, {
             diagnostic,
             onCopy: async () => {

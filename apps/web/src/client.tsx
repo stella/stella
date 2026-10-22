@@ -9,6 +9,7 @@ import { bootHydratedClient } from "@stll/ssr-kit/hydration";
 import { RenderStormCanary } from "@/components/render-storm-canary";
 import { initializeI18n } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import { detached } from "@/lib/detached";
 import { installPreloadErrorRecovery } from "@/lib/preload-error-recovery";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
@@ -44,7 +45,9 @@ const hydrate = async () => {
           if (error instanceof CancelledError) {
             return;
           }
-          getAnalytics().captureError(error);
+          reportErrorOnce(error, (caughtError) => {
+            getAnalytics().captureError(caughtError);
+          });
         },
       },
     );
