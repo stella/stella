@@ -585,6 +585,50 @@ export const TWO_FACTOR_SESSION_PATHS = {
   "/two-factor/send-otp": "challenge",
 } as const satisfies Record<`/two-factor/${string}`, "manage" | "challenge">;
 
+/**
+ * Every HTTP endpoint registered by the OAuth provider, classified by whether
+ * it reads the caller's browser session. The registry test deliberately also
+ * includes server-only endpoints: an upstream endpoint cannot start trusting
+ * a browser session without an explicit decision here.
+ */
+export const OAUTH_PROVIDER_SESSION_PATHS = {
+  "/.well-known/oauth-authorization-server": "no-browser-session",
+  "/.well-known/openid-configuration": "no-browser-session",
+  "/admin/oauth2/create-client": "no-browser-session",
+  "/admin/oauth2/resources": "no-browser-session",
+  "/admin/oauth2/resources/:identifier": "no-browser-session",
+  "/admin/oauth2/resources/:identifier/clients/:client_id":
+    "no-browser-session",
+  "/admin/oauth2/update-client": "no-browser-session",
+  "/oauth2/authorize": "browser-session",
+  "/oauth2/client/rotate-secret": "browser-session",
+  "/oauth2/consent": "browser-session",
+  "/oauth2/continue": "browser-session",
+  "/oauth2/create-client": "browser-session",
+  "/oauth2/delete-client": "browser-session",
+  "/oauth2/delete-consent": "browser-session",
+  "/oauth2/end-session": "browser-session",
+  "/oauth2/end-session/confirm": "browser-session",
+  "/oauth2/get-client": "browser-session",
+  "/oauth2/get-clients": "browser-session",
+  "/oauth2/get-consent": "browser-session",
+  "/oauth2/get-consents": "browser-session",
+  "/oauth2/introspect": "no-browser-session",
+  "/oauth2/public-client": "browser-session",
+  "/oauth2/public-client-prelogin": "no-browser-session",
+  "/oauth2/register": "browser-session",
+  "/oauth2/revoke": "no-browser-session",
+  "/oauth2/token": "no-browser-session",
+  "/oauth2/update-client": "browser-session",
+  "/oauth2/update-consent": "browser-session",
+  "/oauth2/userinfo": "no-browser-session",
+} as const satisfies Record<string, "browser-session" | "no-browser-session">;
+
+const isOAuthProviderSessionPath = (
+  path: string,
+): path is keyof typeof OAUTH_PROVIDER_SESSION_PATHS =>
+  Object.hasOwn(OAUTH_PROVIDER_SESSION_PATHS, path);
+
 const isTwoFactorSessionPath = (
   path: string,
 ): path is keyof typeof TWO_FACTOR_SESSION_PATHS =>
@@ -603,8 +647,9 @@ export const TWO_FACTOR_MANAGE_PATHS: ReadonlySet<string> = new Set(
  */
 export const AUTHORITATIVE_SESSION_PATHS: ReadonlySet<string> = new Set([
   ...Object.keys(TWO_FACTOR_SESSION_PATHS),
-  "/oauth2/authorize",
-  "/oauth2/consent",
+  ...Object.entries(OAUTH_PROVIDER_SESSION_PATHS).flatMap(([path, use]) =>
+    use === "browser-session" ? [path] : [],
+  ),
 ]);
 const SIX_DIGIT_OTP_PATTERN = /^\d{6}$/u;
 
@@ -624,17 +669,58 @@ type RequireTwoFactorManageOtpArgs = {
 
 type SensitiveAuthPathContext = {
   body?: unknown;
+  context?:
+    | {
+        authCookies?:
+          | {
+              sessionData: { name: string };
+              sessionToken: { name: string };
+            }
+          | undefined;
+      }
+    | undefined;
+  headers?: Headers | undefined;
   path?: string | undefined;
   query?: Record<string, unknown> | undefined;
   request?: Request | undefined;
 };
 type AuthoritativeSessionPathContext = SensitiveAuthPathContext & {
   path: string;
-  request: Request;
 };
 /** A `before` hook result whose context Better Auth merges into the endpoint's. */
 type StorageSessionHookResult = {
   context: { query: Record<string, unknown> };
+};
+
+const removeSessionCookies = (ctx: SensitiveAuthPathContext): void => {
+  const headers = ctx.headers;
+  const authCookies = ctx.context?.authCookies;
+  if (!headers || !authCookies) {
+    panic("Authoritative-session hook is missing the auth cookie context");
+  }
+  const sessionCookieNames = new Set([
+    authCookies.sessionToken.name,
+    authCookies.sessionData.name,
+  ]);
+  // Better Auth splits a large session-data cookie into `<name>.<index>`
+  // chunks and reassembles them on read, so the chunks go too.
+  const sessionDataChunkPrefix = `${authCookies.sessionData.name}.`;
+  const isSessionDataChunk = (name: string): boolean =>
+    name.startsWith(sessionDataChunkPrefix) &&
+    /^\d+$/u.test(name.slice(sessionDataChunkPrefix.length));
+  const remainingCookies = (headers.get("cookie") ?? "")
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .filter((cookie) => {
+      const separator = cookie.indexOf("=");
+      const name = separator === -1 ? cookie : cookie.slice(0, separator);
+      return !sessionCookieNames.has(name) && !isSessionDataChunk(name);
+    });
+  if (remainingCookies.length === 0) {
+    headers.delete("cookie");
+    return;
+  }
+  headers.set("cookie", remainingCookies.join("; "));
 };
 /**
  * Establish database-backed session state before a sensitive plugin endpoint
@@ -664,11 +750,29 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
   if (path === undefined || !AUTHORITATIVE_SESSION_PATHS.has(path)) {
     return Result.ok(undefined);
   }
-  const request = ctx.request;
-  if (request === undefined) {
+  if (isOAuthProviderSessionPath(path)) {
+    // HTTP requests and server-side `auth.api.*` calls alike: whenever the
+    // call carries cookies, the endpoint could read the cookie snapshot, so
+    // resolve the session from storage. A call without cookies has no
+    // snapshot to fall back to.
+    if (
+      OAUTH_PROVIDER_SESSION_PATHS[path] === "browser-session" &&
+      (ctx.headers?.get("cookie") ?? "") !== ""
+    ) {
+      const session = await resolveSession({ ...ctx, path });
+      if (!session) {
+        // OAuth authorization queries are signed and survive the login
+        // redirect, so pin the absent result by removing only Better Auth's
+        // session cookies from the headers the endpoint's middleware reads.
+        removeSessionCookies(ctx);
+      }
+    }
+    return Result.ok(undefined);
+  }
+  if (ctx.request === undefined) {
     panic("Authoritative-session hook ran outside HTTP dispatch");
   }
-  const session = await resolveSession({ ...ctx, path, request });
+  const session = await resolveSession({ ...ctx, path });
   if (!isTwoFactorSessionPath(path)) {
     return Result.ok(undefined);
   }
@@ -2325,8 +2429,8 @@ export const createAuth = (
           async () =>
             await resolveAuthoritativeSessionForSensitiveAuthPath({
               ctx,
-              resolveSession: async ({ path, request }) =>
-                await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
+              resolveSession: async ({ path }) =>
+                await getAuthoritativeSessionFromCtx({ ...ctx, path }),
             }),
         );
         // Better Auth rejects a request from a `before` hook by the APIError
