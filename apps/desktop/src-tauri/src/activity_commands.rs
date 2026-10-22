@@ -181,7 +181,11 @@ pub fn activity_copy_text(
   let manager = state.lock().map_err(|_| lock_error())?;
   caller.require_current(&app)?;
   manager.require_caller(&caller)?;
-  crate::clipboard::write_plain_text(text)
+  // The lock is held through the write: an account switch takes it, so the
+  // account check stays true until the text is on the clipboard.
+  let written = crate::clipboard::write_plain_text(text);
+  drop(manager);
+  written
 }
 
 #[tauri::command]

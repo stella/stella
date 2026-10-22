@@ -110,6 +110,12 @@ import { cn } from "@stll/ui/utils";
 import { RegistrySearch } from "../registry/RegistrySearch";
 import type { DesktopConnectionStatus } from "../registry/RegistrySearch";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { formatShortcut } from "../shared/shortcut-keys";
+import {
+  DESKTOP_PLATFORM,
+  useClipboardShortcut,
+  useKeyboardLayout,
+} from "../shared/use-clipboard-shortcut";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
@@ -159,6 +165,7 @@ import {
   observeClipboardReopens,
 } from "./clipboard-startup-timing";
 import {
+  CLIPBOARD_HISTORY_CHANGED_EVENT,
   CLIPBOARD_RETENTIONS,
   isClipboardCopyError,
   isClipboardSnapshot,
@@ -235,9 +242,6 @@ const CLIPBOARD_SCOPE_PRESENTATION = {
 const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘"
   : "Ctrl+";
-const CLIPBOARD_SHORTCUT_LABEL = navigator.userAgent.includes("Mac")
-  ? "⌘⇧V"
-  : "Ctrl+Shift+V";
 // Only macOS gives the window a native material; elsewhere the page paints the
 // surface its rounded corners clip.
 const CLIPBOARD_WINDOW_CLASS = navigator.userAgent.includes("Mac")
@@ -1240,6 +1244,14 @@ const ClipboardContextMenu = ({
   );
 };
 
+function reportShortcutReadFailure() {
+  reportDesktopError({
+    code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+    operation: DESKTOP_TELEMETRY_OPERATIONS.shortcutUpdate,
+    window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+  });
+}
+
 type ClipboardWelcomeDialogProps = {
   onClose: () => void;
   connectionStatus: DesktopConnectionStatus;
@@ -1281,6 +1293,25 @@ const ClipboardWelcomeDialog = ({
   const [autostartChoice, setAutostartChoice] = useState<AutostartChoiceState>({
     status: "loading",
   });
+  const [shortcut] = useClipboardShortcut(reportShortcutReadFailure);
+  const locale = useLocale();
+  const layout = useKeyboardLayout();
+  const shortcutFeatures = shortcut
+    ? [
+        {
+          description: t("welcomeShortcutDescription", {
+            shortcut: formatShortcut({
+              keys: shortcut.keys,
+              layout,
+              locale,
+              platform: DESKTOP_PLATFORM,
+            }),
+          }),
+          icon: KeyboardIcon,
+          title: t("welcomeShortcutTitle"),
+        },
+      ]
+    : [];
   const features = [
     {
       description: t(
@@ -1291,13 +1322,7 @@ const ClipboardWelcomeDialog = ({
       icon: ClipboardIcon,
       title: t("welcomeCaptureTitle"),
     },
-    {
-      description: t("welcomeShortcutDescription", {
-        shortcut: CLIPBOARD_SHORTCUT_LABEL,
-      }),
-      icon: KeyboardIcon,
-      title: t("welcomeShortcutTitle"),
-    },
+    ...shortcutFeatures,
     {
       description: t("welcomeLocalDescription"),
       icon: LockKeyholeIcon,
@@ -1660,7 +1685,7 @@ const ClipboardApp = () => {
     };
     readSnapshot();
     const stopListening = subscribeDesktopEvent({
-      event: "clipboard-history-changed",
+      event: CLIPBOARD_HISTORY_CHANGED_EVENT,
       handler: readSnapshot,
       onError: () => {
         reportDesktopError({
