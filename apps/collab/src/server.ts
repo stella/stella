@@ -632,6 +632,28 @@ export const createCollabServer = async (
     }
   };
 
+  /**
+   * Gives back one join's count on its token state. Only the last join of a
+   * token state stops that state's heartbeat and refresh; the room's other
+   * token states keep theirs.
+   */
+  const releaseRoomTokenClaim = (tokenState: CollabRoomTokenState) => {
+    tokenState.activeConnections = Math.max(
+      0,
+      tokenState.activeConnections - 1,
+    );
+    if (tokenState.activeConnections > 0) {
+      return;
+    }
+    // A token state without joins renews nothing: stop its activity lease
+    // and its refresh so the room reads as idle.
+    clearRoomHeartbeat(tokenState);
+    clearRoomTokenRefresh(tokenState);
+    if (tokenStates.get(tokenState.token) === tokenState) {
+      tokenStates.delete(tokenState.token);
+    }
+  };
+
   const releaseRoomJoin = ({
     context,
     documentName,
@@ -641,20 +663,7 @@ export const createCollabServer = async (
       return;
     }
     context.join.released = true;
-    const { tokenState } = context;
-    tokenState.activeConnections = Math.max(
-      0,
-      tokenState.activeConnections - 1,
-    );
-    if (tokenState.activeConnections === 0) {
-      // A token state without joins renews nothing: stop its activity lease
-      // and its refresh so the room reads as idle.
-      clearRoomHeartbeat(tokenState);
-      clearRoomTokenRefresh(tokenState);
-      if (tokenStates.get(tokenState.token) === tokenState) {
-        tokenStates.delete(tokenState.token);
-      }
-    }
+    releaseRoomTokenClaim(context.tokenState);
     tokenStatesBySocketId.delete(socketId);
     const managedConnection = managedConnectionsBySocketId.get(socketId);
     const connectionCount =
@@ -1150,46 +1159,45 @@ export const createCollabServer = async (
       }
 
       cancelRoomCleanup(documentName);
+      const tokenState = upsertRoomToken({
+        canEdit: authorized.canEdit,
+        generation: authorized.generation,
+        roomId: authorized.roomId,
+        roomName: authorized.roomName,
+        token,
+        tokenExpiresAt: authorized.tokenExpiresAt,
+      });
+      // From here a failed join gives back only its own claim; the room's
+      // other joins keep their heartbeat and token refresh.
+      tokenState.activeConnections += 1;
       try {
-        const tokenState = upsertRoomToken({
-          canEdit: authorized.canEdit,
-          generation: authorized.generation,
-          roomId: authorized.roomId,
-          roomName: authorized.roomName,
-          token,
-          tokenExpiresAt: authorized.tokenExpiresAt,
-        });
-        tokenState.activeConnections += 1;
-        try {
-          await ensureRoomHeartbeat(tokenState);
-        } catch (error) {
-          tokenState.activeConnections -= 1;
-          throw error;
-        }
-        connectionConfig.readOnly = !authorized.canEdit;
-        const managedConnection = managedConnectionsByRequest.get(request);
-        if (managedConnection === undefined) {
-          panic("Collaboration socket ownership is missing.");
-        }
-        managedConnection.roomConnectionCounts.set(
-          documentName,
-          (managedConnection.roomConnectionCounts.get(documentName) ?? 0) + 1,
-        );
-        managedConnection.socketIds.add(socketId);
-        managedConnectionsBySocketId.set(socketId, managedConnection);
-        tokenStatesBySocketId.set(socketId, tokenState);
-
-        return {
-          join: { released: false },
-          roomId: authorized.roomId,
-          tokenState,
-          userId: authorized.userId,
-          userName: authorized.userName,
-        };
+        await ensureRoomHeartbeat(tokenState);
       } catch (error) {
-        clearRoomTokens(documentName);
+        releaseRoomTokenClaim(tokenState);
         throw error;
       }
+      // The socket can close while the join awaits its heartbeat.
+      const managedConnection = managedConnectionsByRequest.get(request);
+      if (managedConnection === undefined) {
+        releaseRoomTokenClaim(tokenState);
+        panic("Collaboration socket ownership is missing.");
+      }
+      connectionConfig.readOnly = !authorized.canEdit;
+      managedConnection.roomConnectionCounts.set(
+        documentName,
+        (managedConnection.roomConnectionCounts.get(documentName) ?? 0) + 1,
+      );
+      managedConnection.socketIds.add(socketId);
+      managedConnectionsBySocketId.set(socketId, managedConnection);
+      tokenStatesBySocketId.set(socketId, tokenState);
+
+      return {
+        join: { released: false },
+        roomId: authorized.roomId,
+        tokenState,
+        userId: authorized.userId,
+        userName: authorized.userName,
+      };
     },
     async onDisconnect({ context, documentName, socketId }) {
       await Promise.resolve();

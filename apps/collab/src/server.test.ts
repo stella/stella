@@ -376,6 +376,123 @@ const createProvider = ({
     url,
   });
 
+type ParticipantStellaApi = {
+  authorizeRequests: (token: string) => number;
+  destroy: () => Promise<void>;
+  heartbeatRequests: (token: string) => number;
+  holdAuthorize: (token: string) => () => void;
+  revoke: (token: string) => void;
+  url: string;
+};
+
+/**
+ * A room shared by several participants, each with its own room token, so
+ * one participant's join, heartbeat and revocation stay observable apart
+ * from the others'.
+ */
+const createParticipantStellaApi = ({
+  refusedHeartbeatTokens = new Set<string>(),
+  tokens,
+}: {
+  refusedHeartbeatTokens?: ReadonlySet<string>;
+  tokens: readonly string[];
+}): ParticipantStellaApi => {
+  const authorizeCounts = new Map<string, number>();
+  const heartbeatCounts = new Map<string, number>();
+  const heldAuthorizations = new Map<string, Promise<void>>();
+  const revokedTokens = new Set<string>();
+  const accepts = (token: unknown): token is string =>
+    typeof token === "string" &&
+    tokens.includes(token) &&
+    !revokedTokens.has(token);
+
+  const server = Bun.serve({
+    fetch: async (request) => {
+      const url = new URL(request.url);
+      const body = await requestBody(request);
+      const token = body["token"];
+
+      if (url.pathname === "/v1/folio-collab-rooms/authorize") {
+        if (typeof token === "string") {
+          authorizeCounts.set(token, (authorizeCounts.get(token) ?? 0) + 1);
+          await heldAuthorizations.get(token);
+        }
+        if (!accepts(token) || body["roomName"] !== TEST_ROOM_NAME) {
+          return Response.json({ message: "Forbidden" }, { status: 403 });
+        }
+        return Response.json({
+          canEdit: true,
+          generation: 0,
+          roomId: TEST_ROOM_ID,
+          roomName: TEST_ROOM_NAME,
+          tokenExpiresAt: farFutureTokenExpiresAt(),
+          userId: `user_${token}`,
+          userName: `Participant ${token}`,
+        });
+      }
+
+      if (url.pathname === "/v1/folio-collab-rooms/heartbeat") {
+        if (typeof token === "string") {
+          heartbeatCounts.set(token, (heartbeatCounts.get(token) ?? 0) + 1);
+        }
+        if (!accepts(token)) {
+          return Response.json({ message: "Forbidden" }, { status: 403 });
+        }
+        if (refusedHeartbeatTokens.has(token)) {
+          return Response.json({ message: "Unavailable" }, { status: 503 });
+        }
+        return Response.json({ activeAt: new Date().toISOString() });
+      }
+
+      if (url.pathname === "/v1/folio-collab-rooms/snapshot/load") {
+        return Response.json({
+          generation: 0,
+          loadOutcome: "loaded",
+          snapshotBase64: null,
+          snapshotRevision: 0,
+        } satisfies FolioCollabSnapshotLoadResponse);
+      }
+
+      return Response.json({ message: "Not found" }, { status: 404 });
+    },
+    port: 0,
+  });
+
+  const port = server.port;
+  if (port === undefined) {
+    throw new Error("Fake stella API did not expose a listening port.");
+  }
+  const releases: (() => void)[] = [];
+
+  return {
+    authorizeRequests: (token) => authorizeCounts.get(token) ?? 0,
+    destroy: async () => {
+      for (const release of releases) {
+        release();
+      }
+      await server.stop(true);
+    },
+    heartbeatRequests: (token) => heartbeatCounts.get(token) ?? 0,
+    holdAuthorize: (token) => {
+      const gate = Promise.withResolvers<undefined>();
+      heldAuthorizations.set(
+        token,
+        gate.promise.then(() => undefined),
+      );
+      const release = () => {
+        heldAuthorizations.delete(token);
+        gate.resolve(undefined);
+      };
+      releases.push(release);
+      return release;
+    },
+    revoke: (token) => {
+      revokedTokens.add(token);
+    },
+    url: `http://127.0.0.1:${port}`,
+  };
+};
+
 const redisTestUrl = process.env["STELLA_COLLAB_TEST_REDIS_URL"];
 const redisContainerId = process.env["STELLA_COLLAB_TEST_REDIS_CONTAINER_ID"];
 
@@ -1480,6 +1597,122 @@ describe("collaboration server", () => {
       await fakeApi.destroy();
     }
   });
+
+  test.each([
+    { join: "its first heartbeat is refused", refusesHeartbeat: true },
+    {
+      join: "its socket closes while authorization is in flight",
+      refusesHeartbeat: false,
+    },
+  ])(
+    "a join that fails because $join keeps revocation checks for the room's other participants",
+    async ({ refusesHeartbeat }) => {
+      const fakeApi = createParticipantStellaApi({
+        refusedHeartbeatTokens: new Set(refusesHeartbeat ? ["token_c"] : []),
+        tokens: ["token_a", "token_b", "token_c"],
+      });
+      const collabServer = await createCollabServer({
+        apiUrl: fakeApi.url,
+        debounceMs: 10_000,
+        maxDebounceMs: 10_000,
+        port: 0,
+        roomHeartbeatIntervalMs: 20,
+        serviceToken: TEST_SERVICE_TOKEN,
+      });
+      const docs = [new Doc(), new Doc(), new Doc()] as const;
+      let removedParticipantClosed = false;
+      let failedJoinSettled = false;
+      const participantA = createProvider({
+        name: TEST_ROOM_NAME,
+        token: "token_a",
+        url: collabServer.websocketUrl,
+        ydoc: docs[0],
+      });
+      const participantB = createProvider({
+        name: TEST_ROOM_NAME,
+        onClose: () => {
+          removedParticipantClosed = true;
+        },
+        token: "token_b",
+        url: collabServer.websocketUrl,
+        ydoc: docs[1],
+      });
+      let participantC: HocuspocusProvider | undefined;
+
+      try {
+        await waitFor(
+          () => participantA.isAuthenticated && participantB.isAuthenticated,
+          "Participants A and B did not join the room.",
+        );
+        await waitFor(
+          () => fakeApi.heartbeatRequests("token_b") >= 2,
+          "Participant B's heartbeat did not run.",
+        );
+
+        const releaseAuthorize = refusesHeartbeat
+          ? null
+          : fakeApi.holdAuthorize("token_c");
+        participantC = new HocuspocusProvider({
+          document: docs[2],
+          name: TEST_ROOM_NAME,
+          onAuthenticationFailed: () => {
+            failedJoinSettled = true;
+          },
+          token: "token_c",
+          url: collabServer.websocketUrl,
+        });
+        if (releaseAuthorize === null) {
+          await waitFor(
+            () => failedJoinSettled,
+            "Participant C's join was not refused.",
+          );
+          participantC.destroy();
+        } else {
+          await waitFor(
+            () => fakeApi.authorizeRequests("token_c") === 1,
+            "Participant C did not request authorization.",
+          );
+          participantC.destroy();
+          // Let the server observe the closed socket before C's join resumes.
+          await Bun.sleep(50);
+          releaseAuthorize();
+          await waitFor(
+            () => fakeApi.heartbeatRequests("token_c") >= 1,
+            "Participant C's join did not resume after its socket closed.",
+          );
+        }
+        // C's join reached the room's token states before it failed.
+        const heartbeatsOfC = fakeApi.heartbeatRequests("token_c");
+        expect(heartbeatsOfC).toBeGreaterThan(0);
+        const heartbeatsOfB = fakeApi.heartbeatRequests("token_b");
+        // Five heartbeat intervals.
+        await Bun.sleep(100);
+        // The failed join released only its own claim: nothing renews C's
+        // token while B's revocation checks keep running.
+        expect(fakeApi.heartbeatRequests("token_c")).toBe(heartbeatsOfC);
+        expect(removedParticipantClosed).toBe(false);
+
+        fakeApi.revoke("token_b");
+
+        await waitFor(
+          () =>
+            fakeApi.heartbeatRequests("token_b") > heartbeatsOfB &&
+            removedParticipantClosed &&
+            !participantB.isAuthenticated,
+          "Participant B stayed connected after its access was revoked.",
+        );
+      } finally {
+        participantA.destroy();
+        participantB.destroy();
+        participantC?.destroy();
+        for (const doc of docs) {
+          doc.destroy();
+        }
+        await collabServer.destroy();
+        await fakeApi.destroy();
+      }
+    },
+  );
 
   test.each([
     { reason: "an unavailable API", status: 503 },
