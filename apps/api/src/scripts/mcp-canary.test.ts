@@ -895,7 +895,8 @@ describe("restricted review-account journey", () => {
           ],
         },
       },
-      code: "unrecognized",
+      // A secret-like code never reaches the log; only its length does.
+      code: `unrecognized (redacted, ${String(REVIEW_PASSWORD.length)} chars)`,
     },
     {
       step: "read",
@@ -1687,6 +1688,42 @@ describe("OAuth client journeys", () => {
           return new Response(null, {
             status: 429,
             headers: { "Retry-After": "1" },
+          });
+        }
+      }
+      return await baseFetcher(input, init);
+    };
+
+    const results = await runOAuthJourneys(
+      {
+        baseUrl: "https://api.example",
+        frontendUrl: "https://app.example",
+        mode: "frequent",
+      },
+      fetcher,
+    );
+
+    expect(authorizeRequests).toBe(
+      CANARY_CLIENT_IDS.length * LOOPBACK_REDIRECTS.length + 1,
+    );
+    expect(results.some(({ status }) => status === "rate_limited")).toBe(false);
+  });
+
+  test("retries a 429 once when Retry-After is a near HTTP-date", async () => {
+    const { fetcher: baseFetcher } = fakeOAuth();
+    let authorizeRequests = 0;
+    const fetcher: CanaryFetcher = async (input, init) => {
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
+      if (url.pathname === "/oauth/authorize") {
+        authorizeRequests += 1;
+        if (authorizeRequests === 1) {
+          return new Response(null, {
+            status: 429,
+            headers: {
+              "Retry-After": new Date(Date.now() + 1000).toUTCString(),
+            },
           });
         }
       }

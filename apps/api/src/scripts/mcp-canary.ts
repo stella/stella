@@ -92,18 +92,63 @@ class CanaryRateLimitError extends TaggedError("CanaryRateLimitError")<{
   message: string;
 }> {}
 
+// Retry-After is either delay-seconds or an HTTP-date (IMF-fixdate).
+const HTTP_DATE =
+  /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$/u;
+const HTTP_DATE_MONTHS = new Map(
+  [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ].map((name, index) => [name, index + 1] as const),
+);
+
+const httpDateEpochMilliseconds = (value: string): number | undefined => {
+  const match = HTTP_DATE.exec(value);
+  if (!match) {
+    return undefined;
+  }
+  const [, day, monthName, year, hour, minute, second] = match;
+  const month =
+    monthName === undefined ? undefined : HTTP_DATE_MONTHS.get(monthName);
+  if (month === undefined) {
+    return undefined;
+  }
+  const instant = Result.try(() =>
+    Temporal.PlainDateTime.from({
+      year: Number(year),
+      month,
+      day: Number(day),
+      hour: Number(hour),
+      minute: Number(minute),
+      second: Number(second),
+    })
+      .toZonedDateTime("UTC")
+      .toInstant(),
+  );
+  return instant.isOk() ? instant.value.epochMilliseconds : undefined;
+};
+
 const retryAfterMilliseconds = (value: string | null): number | undefined => {
   if (!value) {
     return undefined;
   }
-  const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0) {
-    return seconds * 1000;
+  if (/^\d+$/u.test(value)) {
+    return Number(value) * 1000;
   }
-  const date = Result.try(() => Temporal.Instant.from(value).epochMilliseconds);
-  return date.isOk()
-    ? Math.max(0, date.value - Temporal.Now.instant().epochMilliseconds)
-    : undefined;
+  const epochMilliseconds = httpDateEpochMilliseconds(value);
+  return epochMilliseconds === undefined
+    ? undefined
+    : Math.max(0, epochMilliseconds - Temporal.Now.instant().epochMilliseconds);
 };
 
 const fetchWithRateLimitRetry = async (
@@ -1581,7 +1626,24 @@ const reviewEnvelopeCode = (body: unknown): string => {
   } else {
     code = envelope.output.code;
   }
-  return String(code);
+  // The code comes from a response body: only known public codes are logged
+  // verbatim; anything else could carry secrets, so only its length is kept.
+  if (typeof code === "number") {
+    return [-32_700, -32_600, -32_601, -32_602, -32_603].includes(code)
+      ? String(code)
+      : "unrecognized";
+  }
+  return REVIEW_KNOWN_ERROR_CODES.has(code) ||
+    [
+      "invalid_request",
+      "invalid_scope",
+      "invalid_grant",
+      "access_denied",
+      "account_access_unavailable",
+      "TOO_MANY_REQUESTS",
+    ].includes(code)
+    ? code
+    : `unrecognized (redacted, ${String(code.length)} chars)`;
 };
 
 const reviewToolPayload = (body: unknown): unknown => {
