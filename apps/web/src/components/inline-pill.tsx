@@ -7,6 +7,7 @@ import type {
 
 import { cn } from "@stll/ui/utils";
 
+import { CHIP_HEIGHT_CLASS } from "@/components/chip-scale";
 import Tooltip from "@/components/tooltip";
 
 /**
@@ -79,13 +80,14 @@ const TONE_FOCUS_RING: Record<InlinePillTone, string> = {
   success: "focus-visible:ring-success/50",
 };
 
+// A chip takes its height from the chip scale it shares with every
+// attachment chip; an inherit pill follows the line it sits in.
 const SIZE: Record<InlinePillSize, string> = {
-  chip: "text-xs font-medium",
-  inherit: "font-[inherit] text-[inherit] leading-[inherit]",
+  chip: cn("text-xs font-medium", CHIP_HEIGHT_CLASS),
+  inherit: "font-[inherit] text-[inherit] leading-[inherit] py-0.5",
 };
 
-const BASE =
-  "inline-flex items-center gap-0.5 align-middle rounded px-1 py-0.5";
+const BASE = "inline-flex items-center gap-0.5 align-middle rounded px-1";
 
 const INTERACTIVE_RESET =
   "appearance-none border-0 bg-clip-padding cursor-pointer focus-visible:outline-none focus-visible:ring-2";
@@ -104,6 +106,7 @@ export const InlinePill = ({
   ...dataAttrs
 }: InlinePillProps): ReactElement => {
   const clickable = onActivate !== undefined;
+  const chipKind = size === "chip" ? "reference" : undefined;
   // A tooltip-bearing pill must be keyboard-focusable so screen-
   // reader users (and tab users) can pop the placeholder content,
   // even when the pill itself doesn't trigger an action. Base UI's
@@ -145,6 +148,7 @@ export const InlinePill = ({
     <button
       aria-label={ariaLabel}
       className={sharedClass}
+      data-chip-kind={chipKind}
       onClick={onActivate}
       style={style}
       type="button"
@@ -156,6 +160,7 @@ export const InlinePill = ({
     <span
       aria-label={ariaLabel}
       className={sharedClass}
+      data-chip-kind={chipKind}
       role="group"
       style={style}
       {...dataAttrs}
