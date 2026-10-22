@@ -1083,7 +1083,7 @@ describe("a failed call", () => {
       orgAIConfig: null,
       state,
       questions: { signed: signedQuestion },
-      timeoutMs: 1,
+      timeoutMs: 1, // timeout under test
       client: decisionModel(fetcher),
     });
 

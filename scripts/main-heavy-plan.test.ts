@@ -428,6 +428,26 @@ test("main heavy scheduling equals the gated jobs minus thin checks", () => {
   expect(planner?.run).toContain(
     'git show "$WORKFLOW_SHA:scripts/main-heavy-plan.ts"',
   );
+  // The copied planner runs from packages/scripts, so every script it reaches
+  // through a relative import must be copied beside it.
+  const pending = ["main-heavy-plan"];
+  for (const seen = new Set<string>(); pending.length > 0;) {
+    const name = pending.pop() ?? "";
+    if (seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    const script = readFileSync(
+      path.resolve(import.meta.dirname, `${name}.ts`),
+      "utf-8",
+    );
+    for (const [, imported = ""] of script.matchAll(/from "\.\/([\w.-]+)"/gu)) {
+      expect(planner?.run).toContain(
+        `git show "$WORKFLOW_SHA:scripts/${imported}.ts" > packages/scripts/${imported}.ts`,
+      );
+      pending.push(imported);
+    }
+  }
   expect(planner?.env?.["WORKFLOW_SHA"]).toBe(`\${{ github.workflow_sha }}`);
 });
 

@@ -855,7 +855,6 @@
         "unavailable": "AI analýza není pro toto rozhodnutí k dispozici."
       },
       "generate": "Sestavit právní věty pomocí AI",
-      "holdingAnchor": "Přejít na odstavec",
       "invitation": "S bezplatným účtem vám AI k rozhodnutí připraví pracovní poznámky.",
       "topics": "Témata",
       "treatment": "Pozdější judikatura"
@@ -1111,6 +1110,8 @@
         "hint": "Zrušte nebo rozšiřte filtr a hledejte znovu.",
         "message": "Zvoleným filtrům nic neodpovídá."
       },
+      "partialMatch": "Částečná shoda",
+      "partialMatches": "Částečné shody pro: <bdi>{query}</bdi>",
       "resultsFor": "Výsledky pro: <bdi>{query}</bdi>",
       "searchEveryWord": "Hledat všechna slova"
     },
@@ -1148,6 +1149,7 @@
       "judges": "Soudci",
       "legalArea": "Oblast práva",
       "legalSentence": "Právní věta",
+      "paragraphReference": "Odstavec {number}",
       "popularName": "Populární název",
       "portraitCredit": "Zdroj portrétů: {source}",
       "provisionMentions": "{count, number}×",
@@ -1394,6 +1396,7 @@
     "credentialSendDescription": "Odešlete ji pouze tehdy, pokud chcete tuto hodnotu sdílet v konverzaci.",
     "credentialSendTitle": "Tato zpráva může obsahovat přístupový údaj",
     "deleteThread": "Smazat konverzaci",
+    "diagramUnavailable": "Diagram se nepodařilo vykreslit. Níže je jeho zdrojový kód.",
     "editMode": {
       "autoDirect": "Automaticky · přepsat",
       "autoDirectDescription": "Úpravy od AI se použijí ihned přímým přepsáním dokumentu (bez sledování změn).",
@@ -2706,6 +2709,7 @@
       "aiConfigModelInvalid": "Konfigurace modelu AI je neplatná. Zkontrolujte vybrané modely.",
       "aiConfigProviderInvalid": "Konfigurace poskytovatele AI je neplatná. Zkontrolujte nastavení poskytovatele.",
       "aiConfigProviderValidationFailed": "Poskytovatel AI konfiguraci odmítl. Zkontrolujte klíč API a model.",
+      "aiDeadlineExceeded": "AI neodpověděla včas. Zkuste to za chvíli znovu.",
       "aiOutputInvalid": "Odpověď AI měla neočekávaný formát. Zkuste to znovu.",
       "aiOutputModerated": "Poskytovatel AI výstup zablokoval. Přeformulujte požadavek nebo zvolte jiný model.",
       "aiProviderTaskUnsupported": "Nastavený poskytovatel AI tuto úlohu nezvládá. Zvolte poskytovatele, který ji zvládá.",
