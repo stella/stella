@@ -2495,11 +2495,8 @@ test("a call segment reads as a call in the timeline and its tooltip", async ({
 test("call recording is on by default and changes only on explicit choice", async ({
   page,
 }) => {
+  // The boundary opens settings for a recording day.
   await installNativeBoundary({ page });
-  await page
-    .locator("summary")
-    .filter({ hasText: enMessages.activity.settings })
-    .click();
   const calls = page.getByRole("checkbox", {
     name: enMessages.activity.detectCalls,
   });
