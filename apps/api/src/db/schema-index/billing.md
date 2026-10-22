@@ -148,190 +148,190 @@ seller_profiles.created_at        timestamptz         default,not null  billing.
 seller_profiles.updated_at        timestamptz         default,not null  billing.ts:650
 ```
 
-## number_series · `numberSeries` · billing.ts:682 · rls
+## number_series · `numberSeries` · billing.ts:688 · rls
 
 ```text
-number_series.id                 pUuid               pk,not null       billing.ts:685
-number_series.organization_id    safeOrganizationId  fk,not null       billing.ts:686
-number_series.seller_profile_id  safeUuid            null              billing.ts:689
-number_series.document_type      text                not null          billing.ts:690
-number_series.name               varchar             not null          billing.ts:693
-number_series.pattern            varchar             not null          billing.ts:694
-number_series.padding            integer             not null          billing.ts:695
-number_series.is_default         boolean             default,not null  billing.ts:696
-number_series.archived_at        timestamptz         null              billing.ts:697
-number_series.created_at         timestamptz         default,not null  billing.ts:698
-number_series.updated_at         timestamptz         default,not null  billing.ts:699
+number_series.id                 pUuid               pk,not null       billing.ts:691
+number_series.organization_id    safeOrganizationId  fk,not null       billing.ts:692
+number_series.seller_profile_id  safeUuid            null              billing.ts:695
+number_series.document_type      text                not null          billing.ts:696
+number_series.name               varchar             not null          billing.ts:699
+number_series.pattern            varchar             not null          billing.ts:700
+number_series.padding            integer             not null          billing.ts:701
+number_series.is_default         boolean             default,not null  billing.ts:702
+number_series.archived_at        timestamptz         null              billing.ts:703
+number_series.created_at         timestamptz         default,not null  billing.ts:704
+number_series.updated_at         timestamptz         default,not null  billing.ts:705
 ```
 
-## number_series_counters · `numberSeriesCounters` · billing.ts:744 · rls
+## number_series_counters · `numberSeriesCounters` · billing.ts:756 · rls
 
 ```text
-number_series_counters.organization_id  safeOrganizationId  not null  billing.ts:747
-number_series_counters.series_id        safeUuid            not null  billing.ts:748
-number_series_counters.period_key       varchar             not null  billing.ts:749
-number_series_counters.last_value       integer             not null  billing.ts:750
+number_series_counters.organization_id  safeOrganizationId  not null  billing.ts:759
+number_series_counters.series_id        safeUuid            not null  billing.ts:760
+number_series_counters.period_key       varchar             not null  billing.ts:761
+number_series_counters.last_value       integer             not null  billing.ts:762
 ```
 
-## number_series_allocations · `numberSeriesAllocations` · billing.ts:770 · rls
+## number_series_allocations · `numberSeriesAllocations` · billing.ts:788 · rls
 
 ```text
-number_series_allocations.organization_id  safeOrganizationId  not null  billing.ts:773
-number_series_allocations.series_id        safeUuid            not null  billing.ts:774
-number_series_allocations.document_type    text                not null  billing.ts:775
-number_series_allocations.number           varchar             not null  billing.ts:778
-number_series_allocations.issued_at        timestamptz         not null  billing.ts:779
+number_series_allocations.organization_id  safeOrganizationId  not null  billing.ts:791
+number_series_allocations.series_id        safeUuid            not null  billing.ts:792
+number_series_allocations.document_type    text                not null  billing.ts:793
+number_series_allocations.number           varchar             not null  billing.ts:796
+number_series_allocations.issued_at        timestamptz         not null  billing.ts:797
 ```
 
-## rate_tables · `rateTables` · billing.ts:802
+## rate_tables · `rateTables` · billing.ts:826
 
 ```text
-rate_tables.id               pUuid               pk,not null       billing.ts:805
-rate_tables.organization_id  safeOrganizationId  fk,not null       billing.ts:806
-rate_tables.workspace_id     safeWorkspaceId     fk,not null       billing.ts:809
-rate_tables.name             varchar             not null          billing.ts:812
-rate_tables.currency         varchar             not null          billing.ts:813
-rate_tables.is_default       boolean             default,not null  billing.ts:814
-rate_tables.client_id        safeUuid            null              billing.ts:815
-rate_tables.created_at       timestamptz         default,not null  billing.ts:816
-rate_tables.updated_at       timestamptz         default,not null  billing.ts:817
+rate_tables.id               pUuid               pk,not null       billing.ts:829
+rate_tables.organization_id  safeOrganizationId  fk,not null       billing.ts:830
+rate_tables.workspace_id     safeWorkspaceId     fk,not null       billing.ts:833
+rate_tables.name             varchar             not null          billing.ts:836
+rate_tables.currency         varchar             not null          billing.ts:837
+rate_tables.is_default       boolean             default,not null  billing.ts:838
+rate_tables.client_id        safeUuid            null              billing.ts:839
+rate_tables.created_at       timestamptz         default,not null  billing.ts:840
+rate_tables.updated_at       timestamptz         default,not null  billing.ts:841
 ```
 
-## rate_entries · `rateEntries` · billing.ts:835
+## rate_entries · `rateEntries` · billing.ts:859
 
 ```text
-rate_entries.id              pUuid            pk,not null       billing.ts:838
-rate_entries.workspace_id    safeWorkspaceId  fk,not null       billing.ts:839
-rate_entries.rate_table_id   safeUuid         fk,not null       billing.ts:842
-rate_entries.user_id         text             fk,null           billing.ts:845
-rate_entries.role            text             null              billing.ts:848
-rate_entries.hourly_rate     centsColumn      not null          billing.ts:849
-rate_entries.effective_from  date             not null          billing.ts:850
-rate_entries.effective_to    date             null              billing.ts:851
-rate_entries.created_at      timestamptz      default,not null  billing.ts:852
+rate_entries.id              pUuid            pk,not null       billing.ts:862
+rate_entries.workspace_id    safeWorkspaceId  fk,not null       billing.ts:863
+rate_entries.rate_table_id   safeUuid         fk,not null       billing.ts:866
+rate_entries.user_id         text             fk,null           billing.ts:869
+rate_entries.role            text             null              billing.ts:872
+rate_entries.hourly_rate     centsColumn      not null          billing.ts:873
+rate_entries.effective_from  date             not null          billing.ts:874
+rate_entries.effective_to    date             null              billing.ts:875
+rate_entries.created_at      timestamptz      default,not null  billing.ts:876
 ```
 
-## expenses · `expenses` · billing.ts:877
+## expenses · `expenses` · billing.ts:901
 
 ```text
-expenses.id                   pUuid               pk,not null       billing.ts:880
-expenses.organization_id      safeOrganizationId  fk,not null       billing.ts:881
-expenses.workspace_id         safeWorkspaceId     fk,not null       billing.ts:884
-expenses.user_id              text                fk,null           billing.ts:887
-expenses.matter_id            safeUuid            fk,not null       billing.ts:890
-expenses.date_incurred        date                not null          billing.ts:893
-expenses.amount               centsColumn         not null          billing.ts:894
-expenses.currency             varchar             not null          billing.ts:895
-expenses.category             text                not null          billing.ts:896
-expenses.description          text                not null          billing.ts:897
-expenses.invoice_description  text                null              billing.ts:898
-expenses.billable             boolean             default,not null  billing.ts:899
-expenses.markup               integer             default,not null  billing.ts:900
-expenses.status               text                default,not null  billing.ts:901
-expenses.invoice_id           safeUuid            fk,null           billing.ts:905
-expenses.receipt_file_id      safeUuid            null              billing.ts:908
-expenses.created_at           timestamptz         default,not null  billing.ts:909
-expenses.updated_at           timestamptz         default,null      billing.ts:910
+expenses.id                   pUuid               pk,not null       billing.ts:904
+expenses.organization_id      safeOrganizationId  fk,not null       billing.ts:905
+expenses.workspace_id         safeWorkspaceId     fk,not null       billing.ts:908
+expenses.user_id              text                fk,null           billing.ts:911
+expenses.matter_id            safeUuid            fk,not null       billing.ts:914
+expenses.date_incurred        date                not null          billing.ts:917
+expenses.amount               centsColumn         not null          billing.ts:918
+expenses.currency             varchar             not null          billing.ts:919
+expenses.category             text                not null          billing.ts:920
+expenses.description          text                not null          billing.ts:921
+expenses.invoice_description  text                null              billing.ts:922
+expenses.billable             boolean             default,not null  billing.ts:923
+expenses.markup               integer             default,not null  billing.ts:924
+expenses.status               text                default,not null  billing.ts:925
+expenses.invoice_id           safeUuid            fk,null           billing.ts:929
+expenses.receipt_file_id      safeUuid            null              billing.ts:932
+expenses.created_at           timestamptz         default,not null  billing.ts:933
+expenses.updated_at           timestamptz         default,null      billing.ts:934
 ```
 
-## invoices · `invoices` · billing.ts:944
+## invoices · `invoices` · billing.ts:968
 
 ```text
-invoices.id                     pUuid               pk,not null       billing.ts:947
-invoices.organization_id        safeOrganizationId  fk,not null       billing.ts:948
-invoices.workspace_id           safeWorkspaceId     fk,not null       billing.ts:951
-invoices.invoice_number         varchar             null              billing.ts:954
-invoices.document_type          text                default,not null  billing.ts:955
-invoices.original_invoice_id    safeUuid            null              billing.ts:959
-invoices.billing_mode           text                default,not null  billing.ts:960
-invoices.flat_fee_amount        centsColumn         null              billing.ts:964
-invoices.finalized_at           timestamptz         null              billing.ts:966   Retained on revert to draft so document type and original stay frozen.
-invoices.reference              varchar             null              billing.ts:967
-invoices.status                 text                default,not null  billing.ts:968
-invoices.invoice_date           date                not null          billing.ts:973   The issue date.
-invoices.taxable_supply_date    date                null              billing.ts:974
-invoices.due_date               date                null              billing.ts:975
-invoices.currency               varchar             not null          billing.ts:976
-invoices.seller_profile_id      safeUuid            fk,null           billing.ts:977
-invoices.buyer_name             varchar             null              billing.ts:982   Buyer as it should read on the document, copied when set so a later contact edit does not rewrite an invoice.
-invoices.buyer_registration_id  varchar             null              billing.ts:983
-invoices.buyer_vat_id           varchar             null              billing.ts:984
-invoices.buyer_address_line_1   varchar             null              billing.ts:985
-invoices.buyer_address_line_2   varchar             null              billing.ts:986
-invoices.buyer_city             varchar             null              billing.ts:987
-invoices.buyer_postal_code      varchar             null              billing.ts:988
-invoices.buyer_country          varchar             null              billing.ts:989
-invoices.net_amount             centsColumn         null              billing.ts:995   Totals over the invoice lines, from `calculateDocumentTotals` (`@stll/invoicing`); `totalAmount` is the gross.
-invoices.vat_amount             centsColumn         null              billing.ts:996
-invoices.total_amount           centsColumn         default,not null  billing.ts:998   SAFETY: literal zero is a valid minor-unit integer default.
-invoices.notes                  text                null              billing.ts:999
-invoices.paid_at                timestamptz         null              billing.ts:1000
-invoices.created_at             timestamptz         default,not null  billing.ts:1001
-invoices.updated_at             timestamptz         default,not null  billing.ts:1002
+invoices.id                     pUuid               pk,not null       billing.ts:971
+invoices.organization_id        safeOrganizationId  fk,not null       billing.ts:972
+invoices.workspace_id           safeWorkspaceId     fk,not null       billing.ts:975
+invoices.invoice_number         varchar             null              billing.ts:978
+invoices.document_type          text                default,not null  billing.ts:979
+invoices.original_invoice_id    safeUuid            null              billing.ts:983
+invoices.billing_mode           text                default,not null  billing.ts:984
+invoices.flat_fee_amount        centsColumn         null              billing.ts:988
+invoices.finalized_at           timestamptz         null              billing.ts:990   Retained on revert to draft so document type and original stay frozen.
+invoices.reference              varchar             null              billing.ts:991
+invoices.status                 text                default,not null  billing.ts:992
+invoices.invoice_date           date                not null          billing.ts:997   The issue date.
+invoices.taxable_supply_date    date                null              billing.ts:998
+invoices.due_date               date                null              billing.ts:999
+invoices.currency               varchar             not null          billing.ts:1000
+invoices.seller_profile_id      safeUuid            fk,null           billing.ts:1001
+invoices.buyer_name             varchar             null              billing.ts:1006  Buyer as it should read on the document, copied when set so a later contact edit does not rewrite an invoice.
+invoices.buyer_registration_id  varchar             null              billing.ts:1007
+invoices.buyer_vat_id           varchar             null              billing.ts:1008
+invoices.buyer_address_line_1   varchar             null              billing.ts:1009
+invoices.buyer_address_line_2   varchar             null              billing.ts:1010
+invoices.buyer_city             varchar             null              billing.ts:1011
+invoices.buyer_postal_code      varchar             null              billing.ts:1012
+invoices.buyer_country          varchar             null              billing.ts:1013
+invoices.net_amount             centsColumn         null              billing.ts:1019  Totals over the invoice lines, from `calculateDocumentTotals` (`@stll/invoicing`); `totalAmount` is the gross.
+invoices.vat_amount             centsColumn         null              billing.ts:1020
+invoices.total_amount           centsColumn         default,not null  billing.ts:1022  SAFETY: literal zero is a valid minor-unit integer default.
+invoices.notes                  text                null              billing.ts:1023
+invoices.paid_at                timestamptz         null              billing.ts:1024
+invoices.created_at             timestamptz         default,not null  billing.ts:1025
+invoices.updated_at             timestamptz         default,not null  billing.ts:1026
 ```
 
-## invoice_lines · `invoiceLines` · billing.ts:1064
+## invoice_lines · `invoiceLines` · billing.ts:1088 · rls
 
 One line of an invoice.
 
 ```text
-invoice_lines.id               pUuid               pk,not null       billing.ts:1067
-invoice_lines.organization_id  safeOrganizationId  fk,not null       billing.ts:1068
-invoice_lines.workspace_id     safeWorkspaceId     fk,not null       billing.ts:1071
-invoice_lines.invoice_id       safeUuid            fk,not null       billing.ts:1074
-invoice_lines.billing_purpose  text                default,not null  billing.ts:1077
-invoice_lines.position         integer             not null          billing.ts:1083
-invoice_lines.description      text                not null          billing.ts:1084
-invoice_lines.quantity         numeric             not null          billing.ts:1085
-invoice_lines.unit             varchar             null              billing.ts:1086
-invoice_lines.unit_price       centsColumn         not null          billing.ts:1087
-invoice_lines.vat_rate_bps     integer             not null          billing.ts:1088
-invoice_lines.vat_treatment    text                not null          billing.ts:1089
-invoice_lines.net_amount       centsColumn         not null          billing.ts:1090
-invoice_lines.vat_amount       centsColumn         not null          billing.ts:1091
-invoice_lines.gross_amount     centsColumn         not null          billing.ts:1092
-invoice_lines.source           text                not null          billing.ts:1093
-invoice_lines.time_entry_id    safeUuid            fk,null           billing.ts:1096  A released line outlives its source: once the entry is back in the ledger it may be deleted, and the voided document keeps the line.
-invoice_lines.expense_id       safeUuid            fk,null           billing.ts:1100
-invoice_lines.released_at      timestamptz         null              billing.ts:1103
-invoice_lines.created_at       timestamptz         default,not null  billing.ts:1104
-invoice_lines.updated_at       timestamptz         default,not null  billing.ts:1105
+invoice_lines.id               pUuid               pk,not null       billing.ts:1091
+invoice_lines.organization_id  safeOrganizationId  fk,not null       billing.ts:1092
+invoice_lines.workspace_id     safeWorkspaceId     fk,not null       billing.ts:1095
+invoice_lines.invoice_id       safeUuid            fk,not null       billing.ts:1098
+invoice_lines.billing_purpose  text                default,not null  billing.ts:1101
+invoice_lines.position         integer             not null          billing.ts:1107
+invoice_lines.description      text                not null          billing.ts:1108
+invoice_lines.quantity         numeric             not null          billing.ts:1109
+invoice_lines.unit             varchar             null              billing.ts:1110
+invoice_lines.unit_price       centsColumn         not null          billing.ts:1111
+invoice_lines.vat_rate_bps     integer             not null          billing.ts:1112
+invoice_lines.vat_treatment    text                not null          billing.ts:1113
+invoice_lines.net_amount       centsColumn         not null          billing.ts:1114
+invoice_lines.vat_amount       centsColumn         not null          billing.ts:1115
+invoice_lines.gross_amount     centsColumn         not null          billing.ts:1116
+invoice_lines.source           text                not null          billing.ts:1117
+invoice_lines.time_entry_id    safeUuid            fk,null           billing.ts:1120  A released line outlives its source: once the entry is back in the ledger it may be deleted, and the voided document keeps the line.
+invoice_lines.expense_id       safeUuid            fk,null           billing.ts:1124
+invoice_lines.released_at      timestamptz         null              billing.ts:1127
+invoice_lines.created_at       timestamptz         default,not null  billing.ts:1128
+invoice_lines.updated_at       timestamptz         default,not null  billing.ts:1129
 ```
 
-## vat_rates · `vatRates` · billing.ts:1168 · rls
+## vat_rates · `vatRates` · billing.ts:1198 · rls
 
 ```text
-vat_rates.id               pUuid               pk,not null       billing.ts:1171
-vat_rates.organization_id  safeOrganizationId  fk,not null       billing.ts:1172
-vat_rates.code             varchar             not null          billing.ts:1175
-vat_rates.name             varchar             not null          billing.ts:1176
-vat_rates.rate_bps         integer             not null          billing.ts:1177
-vat_rates.valid_from       date                not null          billing.ts:1178
-vat_rates.valid_to         date                null              billing.ts:1179
-vat_rates.archived_at      timestamptz         null              billing.ts:1180
-vat_rates.created_at       timestamptz         default,not null  billing.ts:1181
-vat_rates.updated_at       timestamptz         default,not null  billing.ts:1182
+vat_rates.id               pUuid               pk,not null       billing.ts:1201
+vat_rates.organization_id  safeOrganizationId  fk,not null       billing.ts:1202
+vat_rates.code             varchar             not null          billing.ts:1205
+vat_rates.name             varchar             not null          billing.ts:1206
+vat_rates.rate_bps         integer             not null          billing.ts:1207
+vat_rates.valid_from       date                not null          billing.ts:1208
+vat_rates.valid_to         date                null              billing.ts:1209
+vat_rates.archived_at      timestamptz         null              billing.ts:1210
+vat_rates.created_at       timestamptz         default,not null  billing.ts:1211
+vat_rates.updated_at       timestamptz         default,not null  billing.ts:1212
 ```
 
-## time_entry_timer_states · `timeEntryTimerStates` · billing.ts:1245 · rls
+## time_entry_timer_states · `timeEntryTimerStates` · billing.ts:1281 · rls
 
 ```text
-time_entry_timer_states.entry_id         safeUuid            pk,fk,not null  billing.ts:1248
-time_entry_timer_states.organization_id  safeOrganizationId  fk,not null     billing.ts:1251
-time_entry_timer_states.user_id          text                fk,not null     billing.ts:1254
-time_entry_timer_states.state            text                not null        billing.ts:1258
+time_entry_timer_states.entry_id         safeUuid            pk,fk,not null  billing.ts:1284
+time_entry_timer_states.organization_id  safeOrganizationId  fk,not null     billing.ts:1287
+time_entry_timer_states.user_id          text                fk,not null     billing.ts:1290
+time_entry_timer_states.state            text                not null        billing.ts:1294
 ```
 
-## desktop_time_entry_batches · `desktopTimeEntryBatches` · billing.ts:1290 · rls
+## desktop_time_entry_batches · `desktopTimeEntryBatches` · billing.ts:1326 · rls
 
 Receipts survive edits or deletion of individual drafts so a network retry cannot recreate a reviewed batch.
 
 ```text
-desktop_time_entry_batches.organization_id      safeOrganizationId  fk,not null       billing.ts:1293
-desktop_time_entry_batches.user_id              text                fk,not null       billing.ts:1296
-desktop_time_entry_batches.idempotency_key      varchar             not null          billing.ts:1300
-desktop_time_entry_batches.request_fingerprint  varchar             null              billing.ts:1301
-desktop_time_entry_batches.status               text                default,not null  billing.ts:1302
-desktop_time_entry_batches.result               jsonb               null              billing.ts:1306
-desktop_time_entry_batches.created_at           timestamptz         default,not null  billing.ts:1307
+desktop_time_entry_batches.organization_id      safeOrganizationId  fk,not null       billing.ts:1329
+desktop_time_entry_batches.user_id              text                fk,not null       billing.ts:1332
+desktop_time_entry_batches.idempotency_key      varchar             not null          billing.ts:1336
+desktop_time_entry_batches.request_fingerprint  varchar             null              billing.ts:1337
+desktop_time_entry_batches.status               text                default,not null  billing.ts:1338
+desktop_time_entry_batches.result               jsonb               null              billing.ts:1342
+desktop_time_entry_batches.created_at           timestamptz         default,not null  billing.ts:1343
 ```

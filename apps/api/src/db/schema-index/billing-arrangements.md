@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## billing_arrangements · `billingArrangements` · billing-arrangements.ts:24
+## billing_arrangements · `billingArrangements` · billing-arrangements.ts:24 · rls
 
 ```text
 billing_arrangements.workspace_id         safeWorkspaceId     pk,not null       billing-arrangements.ts:27
