@@ -1,5 +1,6 @@
 mod account;
 mod activity;
+mod activity_calls;
 mod activity_commands;
 mod activity_details;
 mod activity_store;
@@ -40,6 +41,7 @@ mod keychain;
 mod local_store;
 mod local_window;
 mod logging;
+mod managed_policy;
 mod marker_file;
 mod onboarding;
 mod pdf_signing;
@@ -147,7 +149,9 @@ pub fn run() {
     .manage::<onboarding::OnboardingState>(std::sync::Mutex::new(
       onboarding::Onboarding::load(),
     ))
-    .manage(feature_gate::FeatureGates::default())
+    .manage(feature_gate::FeatureGates::blocking(
+      managed_policy::current().blocked_features(),
+    ))
     .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
     .manage(crash_monitor)
     .manage(desktop_telemetry.clone())
@@ -337,6 +341,9 @@ pub fn run() {
                   }
                   updater::CheckOutcome::Failed(msg) => {
                     tracing::warn!(error = %msg, "tray-triggered updater check failed");
+                  }
+                  updater::CheckOutcome::Disabled => {
+                    tracing::debug!("tray updater check skipped: updates are managed");
                   }
                 }
               }
