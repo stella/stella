@@ -26,7 +26,6 @@ import {
   count,
   eq,
   exists,
-  gt,
   inArray,
   isNotNull,
   or,
@@ -51,11 +50,7 @@ import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { isUuid } from "@stll/uuid-codec";
 
-import {
-  member,
-  session as authSession,
-  user as authUser,
-} from "@/api/db/auth-schema";
+import { member, user as authUser } from "@/api/db/auth-schema";
 import {
   authorizeOwnerSyntheticSession,
   bindOwnerSyntheticSessionAuthorityReader,
@@ -2515,24 +2510,24 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
       // The signed snapshot may outlive its stored session for its cache
       // lifetime; one indexed read confirms the session still exists. Signing
       // out elsewhere deletes the row, and deleting the account cascades.
-      const liveResult = await Result.tryPromise(
-        async () =>
-          await rootDb
-            .select({ id: authSession.id })
-            .from(authSession)
-            .where(
-              and(
-                eq(authSession.id, session.id),
-                eq(authSession.userId, user.id),
-                gt(authSession.expiresAt, new Date()),
-              ),
-            )
-            .limit(1),
-      );
+      // The read goes through the auth layer's own database adapter, which
+      // only reaches auth tables.
+      const liveResult = await Result.tryPromise(async () => {
+        const { adapter } = await getAuth().$context;
+        return await adapter.findOne<{ id: string }>({
+          model: "session",
+          where: [
+            { field: "id", value: session.id },
+            { field: "userId", value: user.id },
+            { field: "expiresAt", operator: "gt", value: new Date() },
+          ],
+          select: ["id"],
+        });
+      });
       if (Result.isError(liveResult)) {
         return status(500, AUTH_REJECTION_BODY[500]);
       }
-      if (liveResult.value.length === 0) {
+      if (liveResult.value === null) {
         return status(401, AUTH_REJECTION_BODY[401]);
       }
 
