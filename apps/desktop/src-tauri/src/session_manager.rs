@@ -3106,6 +3106,8 @@ mod tests {
     assert_eq!(parsed["sessions"]["pendingFinalize"], 1);
     assert_eq!(parsed["sessions"]["takeoverDetected"], 1);
     assert_eq!(parsed["cleanupPathsQueued"], 1);
+    assert!(parsed["managedPolicy"]["updatesDisabled"].is_boolean());
+    assert!(parsed["managedPolicy"]["serverConfigured"].is_boolean());
   }
 
   #[test]
