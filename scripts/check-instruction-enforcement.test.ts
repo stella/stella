@@ -5,8 +5,7 @@ import {
   checkSources,
   ciReach,
   enumerateSources,
-  lintProblem,
-  lintScopes,
+  LINT_TAG_MESSAGE,
   parseLedger,
   parseRuleItems,
   readTag,
@@ -23,7 +22,6 @@ const EMPTY_LEDGER: Ledger = {
 };
 
 const ACCEPTING: Resolvers = {
-  lint: () => undefined,
   check: () => undefined,
   test: () => undefined,
 };
@@ -34,7 +32,7 @@ const messagesFor = (
   resolvers: Resolvers = ACCEPTING,
 ): string[] =>
   checkSources(
-    [{ file: "RULES.md", scope: "" }],
+    [{ file: "RULES.md" }],
     () => text,
     ledger,
     resolvers,
@@ -135,7 +133,7 @@ describe("readTag", () => {
 describe("checkSources", () => {
   test("an untagged rule fails with its line", () => {
     expect(messagesFor("## Rules\n\n- an untagged rule\n")).toEqual([
-      "3 rule has no enforcement tag ([lint: …], [check: …], [test: …] or [review])",
+      "3 rule has no enforcement tag ([check: …], [test: …] or [review])",
     ]);
   });
 
@@ -152,21 +150,16 @@ describe("checkSources", () => {
     ]);
   });
 
-  test("each tag value goes to its resolver with the source scope", () => {
+  test("each check and test value goes to its resolver", () => {
     const seen: string[] = [];
     const report = checkSources(
-      [{ file: "apps/api/AGENTS.md", scope: "apps/api/" }],
-      () =>
-        "- a [lint: x/y, x/z]\n- b [check: verify]\n- c [test: t.test.ts]\n",
-      EMPTY_LEDGER,
+      [{ file: "apps/api/AGENTS.md" }],
+      () => "- b [check: verify, gone]\n- c [test: t.test.ts]\n- d [review]\n",
+      { ...EMPTY_LEDGER, reviewOnlyRules: 1 },
       {
-        lint: (id, scope) => {
-          seen.push(`lint ${id} ${scope}`);
-          return id === "x/z" ? "off" : undefined;
-        },
         check: (target) => {
           seen.push(`check ${target}`);
-          return undefined;
+          return target === "gone" ? "no such root package script" : undefined;
         },
         test: (testPath) => {
           seen.push(`test ${testPath}`);
@@ -174,16 +167,17 @@ describe("checkSources", () => {
         },
       },
     );
-    expect(seen).toEqual([
-      "lint x/y apps/api/",
-      "lint x/z apps/api/",
-      "check verify",
-      "test t.test.ts",
-    ]);
+    expect(seen).toEqual(["check verify", "check gone", "test t.test.ts"]);
     expect(report.problems.map(({ message }) => message)).toEqual([
-      "[lint: x/z] off",
+      "[check: gone] no such root package script",
     ]);
-    expect(report.census).toEqual({ lint: 1, check: 1, test: 1, review: 0 });
+    expect(report.census).toEqual({ lint: 0, check: 1, test: 1, review: 1 });
+  });
+
+  test("a rule a lint enforces fails: the rule belongs in the lint", () => {
+    expect(messagesFor("- a rule [lint: plugin/rule]\n")).toEqual([
+      `1 ${LINT_TAG_MESSAGE}`,
+    ]);
   });
 
   test("an excluded section is skipped and a stale exclusion fails", () => {
@@ -201,7 +195,7 @@ describe("checkSources", () => {
 
   test("an excluded source is skipped and one that is no source fails", () => {
     const report = checkSources(
-      [{ file: "PROCEDURE.md", scope: "" }],
+      [{ file: "PROCEDURE.md" }],
       () => "- step one\n",
       {
         ...EMPTY_LEDGER,
@@ -230,59 +224,6 @@ describe("parseLedger", () => {
         }),
       ),
     ).toThrow("must hold reviewOnlyRules and reasoned");
-  });
-});
-
-describe("lintProblem", () => {
-  const config = {
-    extends: [
-      {
-        rules: { "preset/rule": "error" },
-        overrides: [
-          { files: ["apps/web/**"], rules: { "preset/rule": "off" } },
-        ],
-      },
-    ],
-    rules: { "root/rule": "error", "root/warned": "warn" },
-    overrides: [
-      { files: ["apps/api/**"], rules: { "scoped/rule": ["error", {}] } },
-      { files: ["apps/api/src/legacy/**"], rules: { "root/rule": "off" } },
-    ],
-  };
-  const inputs = {
-    scopes: lintScopes(config),
-    files: [
-      "apps/api/src/legacy/a.ts",
-      "apps/api/src/b.ts",
-      "apps/web/src/c.tsx",
-    ],
-  };
-
-  test("a rule at error for some file in scope passes", () => {
-    expect(lintProblem(inputs, "root/rule", "")).toBeUndefined();
-    expect(lintProblem(inputs, "scoped/rule", "apps/api/")).toBeUndefined();
-    expect(lintProblem(inputs, "preset/rule", "apps/api/")).toBeUndefined();
-  });
-
-  test("a rule off, warned, unknown or out of scope fails", () => {
-    expect(lintProblem(inputs, "root/warned", "")).toBe(
-      "not at error for any linted file",
-    );
-    expect(lintProblem(inputs, "missing/rule", "")).toBe(
-      "not configured in oxlint.config.ts",
-    );
-    expect(lintProblem(inputs, "scoped/rule", "apps/web/")).toBe(
-      "not at error for any linted file under apps/web/",
-    );
-    expect(lintProblem(inputs, "root/rule", "apps/api/src/legacy/")).toBe(
-      "not at error for any linted file under apps/api/src/legacy/",
-    );
-  });
-
-  test("a preset override outranks the root base rules", () => {
-    expect(lintProblem(inputs, "preset/rule", "apps/web/")).toBe(
-      "not at error for any linted file under apps/web/",
-    );
   });
 });
 
@@ -404,11 +345,11 @@ describe("enumerateSources", () => {
     expect(
       enumerateSources(manifest, [".ai/local-skills/conventions-db/SKILL.md"]),
     ).toEqual([
-      { file: ".ai/local-skills/conventions-db/SKILL.md", scope: "" },
-      { file: ".ai/local/agents.md", scope: "" },
-      { file: ".ai/local/api-agents.md", scope: "apps/api/" },
-      { file: ".ai/shared/modules/database.md", scope: "" },
-      { file: ".ai/shared/modules/engineering.md", scope: "" },
+      { file: ".ai/local-skills/conventions-db/SKILL.md" },
+      { file: ".ai/local/agents.md" },
+      { file: ".ai/local/api-agents.md" },
+      { file: ".ai/shared/modules/database.md" },
+      { file: ".ai/shared/modules/engineering.md" },
     ]);
   });
 });

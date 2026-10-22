@@ -6,7 +6,6 @@
 // item (a top-level `-`, `*` or `1.` list item) in an instruction source ends
 // with exactly one enforcement tag:
 //
-//   [lint: <plugin/rule>, ...]   an oxlint rule at error for files in scope
 //   [check: <target>, ...]       something a workflow runs: a root package
 //                                script or repository path a pull-request or
 //                                merge-queue job reaches, `ratchet:<metric-id>`,
@@ -16,6 +15,11 @@
 //                                root `scripts/` test must also be named by
 //                                a CI command, since no package task runs it
 //   [review]                     a reader is the only control
+//
+// A rule a lint enforces lives in the lint: its message names the fix and an
+// agent meets it when it runs lint, so a `[lint: ...]` item is an error. Keep
+// a `[check]` or `[test]` item only where the failure output cannot carry the
+// guidance (a process, an authoring shape, a ratchet that reports a count).
 //
 // Sources are enumerated from their owners: the local AGENTS fragments that
 // `.ai/manifest.json` names, the shared modules it selects, and every local
@@ -35,14 +39,10 @@ import path from "node:path";
 
 import {
   isRecord,
-  lintedRepoFiles,
-  readScopes,
   repoRoot,
-  scopeMatches,
   stringArray,
   trackedRepoFiles,
 } from "./oxlint-config-scopes.ts";
-import type { ScopeConfig } from "./oxlint-config-scopes.ts";
 import { flattenWorkflowSteps } from "./workflow-steps.ts";
 
 export const LEDGER_PATH = "scripts/instruction-enforcement-ledger.json";
@@ -190,66 +190,6 @@ export const readTag = (text: string): TagReading => {
 
 // --- Resolution -------------------------------------------------------------
 
-/** The oxlint scopes in precedence order: base layers, then overrides. */
-export const lintScopes = (config: unknown): ScopeConfig[] => {
-  if (!isRecord(config)) {
-    return [];
-  }
-  const parents = Array.isArray(config["extends"]) ? config["extends"] : [];
-  const layers = [...parents, config].map(readScopes);
-  return [
-    ...layers.flatMap((scopes) =>
-      scopes.filter((scope) => scope.scope === "<base>"),
-    ),
-    ...layers.flatMap((scopes) =>
-      scopes.filter((scope) => scope.scope !== "<base>"),
-    ),
-  ];
-};
-
-const severity = (value: unknown): string => {
-  const raw = Array.isArray(value) ? value.at(0) : value;
-  if (raw === "error" || raw === "deny" || raw === 2) {
-    return "error";
-  }
-  if (raw === "warn" || raw === 1) {
-    return "warn";
-  }
-  return "off";
-};
-
-export type LintInputs = {
-  readonly scopes: readonly ScopeConfig[];
-  readonly files: readonly string[];
-};
-
-/** Why a lint id does not block anything under `prefix`, if it does not. */
-export const lintProblem = (
-  { scopes, files }: LintInputs,
-  ruleId: string,
-  prefix: string,
-): string | undefined => {
-  const naming = scopes.filter((scope) => ruleId in scope.rules).toReversed();
-  if (naming.length === 0) {
-    return "not configured in oxlint.config.ts";
-  }
-  for (const file of files) {
-    if (!file.startsWith(prefix)) {
-      continue;
-    }
-    const decisive = naming.find((scope) => scopeMatches(scope, file));
-    if (
-      decisive !== undefined &&
-      severity(decisive.rules[ruleId]) === "error"
-    ) {
-      return undefined;
-    }
-  }
-  return prefix === ""
-    ? "not at error for any linted file"
-    : `not at error for any linted file under ${prefix}`;
-};
-
 export type CiInputs = {
   /** Every command a pull-request or merge-queue workflow runs. */
   readonly commands: readonly string[];
@@ -382,11 +322,7 @@ export const testProblem = (
 
 // --- Sources and ledger -----------------------------------------------------
 
-export type Source = {
-  readonly file: string;
-  /** Path prefix a lint tag must cover; "" means anywhere. */
-  readonly scope: string;
-};
+export type Source = { readonly file: string };
 
 export type LedgerEntry = { readonly file: string; readonly reason: string };
 export type SectionEntry = LedgerEntry & { readonly heading: string };
@@ -404,9 +340,9 @@ const isLedgerEntry = (value: unknown): value is LedgerEntry =>
   value["reason"].trim().length > 0;
 
 const isSectionEntry = (value: unknown): value is SectionEntry =>
-  isLedgerEntry(value) &&
   isRecord(value) &&
-  typeof value["heading"] === "string";
+  typeof value["heading"] === "string" &&
+  isLedgerEntry(value);
 
 export const parseLedger = (raw: string): Ledger => {
   const parsed: unknown = JSON.parse(raw);
@@ -444,19 +380,21 @@ export type Report = {
 };
 
 export type Resolvers = {
-  readonly lint: (ruleId: string, scope: string) => string | undefined;
   readonly check: (target: string) => string | undefined;
   readonly test: (testPath: string) => string | undefined;
 };
 
-const resolverFor = (resolvers: Resolvers, tag: Tag, scope: string) => {
+export const LINT_TAG_MESSAGE =
+  "a lint enforces this rule, so the rule lives in the lint: delete the item, " +
+  "and make the lint message name the fix if it only names the fault";
+
+const resolverFor = (resolvers: Resolvers, tag: Tag) => {
   switch (tag.kind) {
-    case "lint":
-      return (value: string) => resolvers.lint(value, scope);
     case "check":
       return resolvers.check;
     case "test":
       return resolvers.test;
+    case "lint":
     case "review":
       return undefined;
     default:
@@ -466,8 +404,7 @@ const resolverFor = (resolvers: Resolvers, tag: Tag, scope: string) => {
 };
 
 const READING_MESSAGES = {
-  missing:
-    "rule has no enforcement tag ([lint: …], [check: …], [test: …] or [review])",
+  missing: "rule has no enforcement tag ([check: …], [test: …] or [review])",
   "not-trailing": "the enforcement tag must end the rule",
   empty: "the enforcement tag names nothing",
 } as const;
@@ -529,7 +466,15 @@ export const checkSources = (
         continue;
       }
       tagged.push(reading.tag.kind);
-      const resolve = resolverFor(resolvers, reading.tag, source.scope);
+      if (reading.tag.kind === "lint") {
+        problems.push({
+          file: source.file,
+          line: item.line,
+          message: LINT_TAG_MESSAGE,
+        });
+        continue;
+      }
+      const resolve = resolverFor(resolvers, reading.tag);
       if (resolve === undefined || reading.tag.kind === "review") {
         continue;
       }
@@ -604,31 +549,28 @@ export const enumerateSources = (
   if (!isRecord(agents)) {
     return panic(`${MANIFEST_PATH} has no agents section`);
   }
-  const sources = new Map<string, Source>();
-  const add = (file: string, scope: string): void => {
-    if (!sources.has(file)) {
-      sources.set(file, { file, scope });
+  const files = new Set<string>();
+  const addEntry = (entry: unknown): void => {
+    if (!isRecord(entry)) {
+      return;
     }
-  };
-  const addScope = (entry: Record<string, unknown>, scope: string): void => {
     for (const module of stringArray(entry["modules"])) {
-      add(`${SHARED_MODULES_DIRECTORY}/${module}.md`, "");
+      files.add(`${SHARED_MODULES_DIRECTORY}/${module}.md`);
     }
     if (typeof entry["local"] === "string") {
-      add(entry["local"], scope);
+      files.add(entry["local"]);
     }
   };
-  addScope(agents, "");
-  const scopes = Array.isArray(agents["scopes"]) ? agents["scopes"] : [];
-  for (const scope of scopes) {
-    if (isRecord(scope) && typeof scope["path"] === "string") {
-      addScope(scope, `${scope["path"]}/`);
-    }
+  addEntry(agents);
+  for (const scope of Array.isArray(agents["scopes"]) ? agents["scopes"] : []) {
+    addEntry(scope);
   }
   for (const skill of localSkills) {
-    add(skill, "");
+    files.add(skill);
   }
-  return [...sources.values()].toSorted((a, b) => (a.file < b.file ? -1 : 1));
+  return [...files]
+    .toSorted((a, b) => (a < b ? -1 : 1))
+    .map((file) => ({ file }));
 };
 
 const PULL_REQUEST_TRIGGERS = [
@@ -735,7 +677,7 @@ const ratchetMetricIds = (): Set<string> => {
   );
 };
 
-const runCheck = async (): Promise<number> => {
+const runCheck = (): number => {
   const tracked = trackedRepoFiles();
   const trackedSet = new Set(tracked);
   const directories = new Set<string>();
@@ -760,12 +702,6 @@ const runCheck = async (): Promise<number> => {
     .toSorted();
   const sources = enumerateSources(readJson(MANIFEST_PATH), localSkills);
   const ledger = parseLedger(readRepoFile(LEDGER_PATH));
-
-  const { default: config } = await import("../oxlint.config.ts");
-  const lintInputs: LintInputs = {
-    scopes: lintScopes(config),
-    files: lintedRepoFiles(),
-  };
 
   const rootPackage = readJson("package.json");
   const triggers = triggeredWorkflows(tracked);
@@ -802,7 +738,6 @@ const runCheck = async (): Promise<number> => {
     (file) => (existsSync(path.join(repoRoot, file)) ? readRepoFile(file) : ""),
     ledger,
     {
-      lint: (ruleId, scope) => lintProblem(lintInputs, ruleId, scope),
       check: (target) => checkProblem(ciInputs, reach, target),
       test: (testPath) =>
         testProblem(
@@ -821,7 +756,7 @@ const runCheck = async (): Promise<number> => {
     );
   }
   const { census } = report;
-  const summary = `lint ${String(census.lint)}, check ${String(census.check)}, test ${String(census.test)}, review ${String(census.review)}`;
+  const summary = `check ${String(census.check)}, test ${String(census.test)}, review ${String(census.review)}`;
   if (report.problems.length > 0) {
     console.error(
       `\ncheck-instruction-enforcement: ${String(report.problems.length)} problem(s) (${summary}). ` +
@@ -841,5 +776,5 @@ if (import.meta.main) {
     panic(`Usage: bun scripts/check-instruction-enforcement.ts --check`);
   }
   // Set exitCode rather than process.exit() so stdout/stderr flush before exit.
-  process.exitCode = await runCheck();
+  process.exitCode = runCheck();
 }
