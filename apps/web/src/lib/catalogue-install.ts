@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 
 /**
@@ -52,11 +53,11 @@ export const installCatalogueEntry = async (
     return data;
   }
 
-  const response = await api.catalogue["install-skill"].post({
-    slug: entry.slug,
+  return await invokeCapability("catalogue.install", async (request) => {
+    const response = await api.catalogue["install-skill"].post(
+      { slug: entry.slug },
+      request,
+    );
+    return unwrapEden(response);
   });
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-  return response.data;
 };

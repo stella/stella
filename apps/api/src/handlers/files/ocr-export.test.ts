@@ -13,6 +13,7 @@ const workspaceId = toSafeId<"workspace">("ws_ocr_export");
 const fieldId = toSafeId<"field">("field_ocr_export");
 const entityId = toSafeId<"entity">("entity_ocr_export");
 const runId = toSafeId<"documentProcessingRun">("run_ocr_export");
+const userId = toSafeId<"user">("user_ocr_export");
 
 describe("OCR text export", () => {
   test("returns the current projection as UTF-8 text and audits the download", async () => {
@@ -44,8 +45,11 @@ describe("OCR text export", () => {
     };
 
     const response = await readOcrExport({
+      source: { kind: "request", sessionId: "fixture-session" },
+      readSessionAuthority: async () => null,
       fieldId,
       format: "text",
+      userId,
       organizationId,
       recordAuditEvent,
       scopedDb,
@@ -78,8 +82,11 @@ describe("OCR text export", () => {
     const scopedDb = asTestRaw<ScopedDb>(async () => []);
 
     const response = await readOcrExport({
+      source: { kind: "request", sessionId: "fixture-session" },
+      readSessionAuthority: async () => null,
       fieldId,
       format: "text",
+      userId,
       organizationId,
       recordAuditEvent: async () => {
         audited = true;

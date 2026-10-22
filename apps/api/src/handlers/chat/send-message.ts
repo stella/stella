@@ -128,7 +128,7 @@ import {
   chatMessageExistsForThread,
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
-import { corpusScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-corpus-scopes";
+import { sourceScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-source-scopes";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import { loadClientMessages } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
@@ -207,6 +207,7 @@ import {
   chatToolNamesForSkills,
   type ChatSkillToolContext,
 } from "@/api/handlers/chat/tools/skill-tool-availability";
+import { scopedExternalConnectors } from "@/api/handlers/chat/tools/source-scope";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import {
   type ChatToolScope,
@@ -2092,7 +2093,8 @@ type AssembleTurnSystemPromptOptions = {
     systemSafe: ChatSafePromptLayers;
     systemUntrusted: ChatUntrustedPromptSuffix;
   };
-  externalMcpTools: LoadedExternalMcpTools | undefined;
+  /** The connectors the turn may call, after its source chips. */
+  externalMcpConnectors: readonly LoadedExternalMcpConnector[];
   requestedSkillsPrompt: string;
   sendMode: ChatSendMode;
 };
@@ -2105,7 +2107,7 @@ type AssembleTurnSystemPromptOptions = {
 // in anonymized mode.
 const assembleTurnSystemPrompt = ({
   chatContext,
-  externalMcpTools,
+  externalMcpConnectors,
   requestedSkillsPrompt,
   sendMode,
 }: AssembleTurnSystemPromptOptions) => ({
@@ -2116,9 +2118,7 @@ const assembleTurnSystemPrompt = ({
   systemUntrusted: extendChatUntrustedPromptSuffix(
     chatContext.systemUntrusted,
     [
-      buildExternalMcpSystemHint(
-        externalMcpTools === undefined ? [] : externalMcpTools.connectors,
-      ),
+      buildExternalMcpSystemHint(externalMcpConnectors),
       requestedSkillsPrompt,
     ].map(chatVolatilePromptSection),
   ),
@@ -2981,14 +2981,20 @@ export const createSendMessage = (
         // folio-agents `read_document`/`find_text` tools are narrower
         // still — `hasActiveDocxFileClient` only, since Template Studio
         // mounts no watcher to resolve them.
+        // Source chips on the latest user message (corpora, registries,
+        // connectors) limit this turn to the sources they name. Read from
+        // history (which holds the incoming message once accepted) so an
+        // approval continuation stays scoped.
+        const sourceScopes = sourceScopesOfLatestUserMessage(
+          latestMessagePlan.messages,
+        );
         const chatTools = applyChatToolGrants({
           externalConnectors,
           grants: chatToolGrants,
           tools: getChatTools({
             ...chatToolContext,
-            corpusScopes: corpusScopesOfLatestUserMessage(
-              latestMessagePlan.messages,
-            ),
+            sourceScopes,
+            externalConnectors,
             modelAdmission,
             externalTools: externalMcpTools?.tools ?? {},
             skillMetadata: chatContext.skillMetadata,
@@ -3049,7 +3055,10 @@ export const createSendMessage = (
         }
         const { systemSafe, systemUntrusted } = assembleTurnSystemPrompt({
           chatContext,
-          externalMcpTools,
+          externalMcpConnectors: scopedExternalConnectors(
+            sourceScopes,
+            externalConnectors,
+          ),
           requestedSkillsPrompt: requestedSkillsPrompt.value,
           sendMode: body.sendMode,
         });

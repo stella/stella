@@ -19,3 +19,9 @@ services and allowed output paths. Supported IDs:
 The workflow rejects changes outside the selected generator's outputs, verifies
 the head again before handoff, and uses the existing autofix App to sign and push
 the generated commit. This generator requires no external services.
+
+Repository-wide rule inputs are declared in
+`.github/global-rule-inputs.json`. Keep its sorted globs and change-scoped script
+exceptions current when changing lint configuration, classification policy, or a
+static-check guard; the declaration lets the merge queue require those changes to
+be tested against a fresh main branch.

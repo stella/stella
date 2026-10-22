@@ -11,7 +11,7 @@
 // opaque. This detector is shared by oxlint and the baseline counter.
 
 import { panic } from "better-result";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables.ts";
 import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "../apps/api/src/lib/public-law-relations.ts";

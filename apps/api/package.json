@@ -150,6 +150,7 @@
     "@stll/legal-atlas": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/mcp-apps": "workspace:*",
+    "@stll/mcp-kit": "workspace:^",
     "@stll/mojibake": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
@@ -166,7 +167,7 @@
     "@stll/template-conditions": "workspace:*",
     "@stll/template-packs": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/time": "0.4.1",
     "@stll/transactional": "workspace:*",
     "@stll/user-agent": "workspace:*",
     "@stll/uuid-codec": "workspace:*",
@@ -206,6 +207,8 @@
     "micromark-extension-gfm": "3.0.0",
     "nodemailer": "^10.0.15",
     "onnxruntime-node": "1.30.0",
+    "parse5": "catalog:",
+    "parse5-htmlparser2-tree-adapter": "catalog:",
     "pkijs": "3.4.1",
     "postal-mime": "4.0.4",
     "posthog-node": "^5.55.0",
@@ -244,7 +247,7 @@
     "@standard-schema/spec": "^1.1.0",
     "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
-    "@stll/test-kit": "workspace:*",
+    "@stll/test-kit": "0.3.0",
     "@stll/typescript-config": "workspace:*",
     "@types/d3-scale": "catalog:",
     "@types/emscripten": "1.41.6",
@@ -254,7 +257,8 @@
     "drizzle-kit": "catalog:",
     "fast-check": "catalog:",
     "openai": "6.49.0",
-    "pdfjs-dist": "^6.4.299"
+    "pdfjs-dist": "^6.4.299",
+    "saxes": "catalog:"
   },
   "ciGateTestRunners": {
     "test:corpus": {
