@@ -156,8 +156,10 @@ const createFixture = async ({
   });
   expect(refreshed.status).toBe(200);
   cookie = mergeCookies(cookie, refreshed);
+  // Codes come from the registered plugin's typed server API, so they use the
+  // same TOTP settings the endpoints verify against.
   const totpCode = async () => {
-    const generated = await auth.api.generateTOTP({
+    const generated = await getAuth().api.generateTOTP({
       body: { secret: TOTP_SECRET },
     });
     return generated.code;
