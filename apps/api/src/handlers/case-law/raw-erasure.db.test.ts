@@ -356,6 +356,7 @@ const seedLinkedPair = async () => {
             createdAt: new Date("2026-01-02"),
             id: retiredId,
           },
+          disposition: "link",
         },
       ],
       async () => undefined,

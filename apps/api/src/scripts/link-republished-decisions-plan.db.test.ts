@@ -313,6 +313,262 @@ test("apply resolves the retired id and reverse restores identity ownership", as
   expect(reconciled).toContain(`reverse:${retiredId}`);
 });
 
+test("a survivor cannot be retired into a later publication", async () => {
+  const firstSource = createSafeId<"caseLawSource">();
+  const firstId = createSafeId<"caseLawDecision">();
+  const survivorId = createSafeId<"caseLawDecision">();
+  const laterId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawSources).values({
+    id: firstSource,
+    adapterKey: ADAPTER_KEYS.AT_COURTS,
+    name: "First republisher",
+  });
+  const common = {
+    country: "POL",
+    court: "Chained repair fixture court",
+    language: "pl",
+    caseNumber: "C 1/26",
+    docketFamilyKey: "c:1:26",
+    decisionDate: "2026-06-01",
+    decisionType: "wyrok",
+  };
+  await db.insert(caseLawDecisions).values([
+    {
+      ...common,
+      id: firstId,
+      sourceId: firstSource,
+      sourceDocumentId: "chain-first",
+      createdAt: new Date("2026-06-02"),
+    },
+    {
+      ...common,
+      id: survivorId,
+      sourceId: republisherSource,
+      sourceDocumentId: "chain-survivor",
+      createdAt: new Date("2026-06-01"),
+    },
+  ]);
+  await db.insert(caseLawDecisionSourceIdentities).values([
+    {
+      sourceId: firstSource,
+      sourceDocumentId: "chain-first",
+      decisionId: firstId,
+    },
+    {
+      sourceId: republisherSource,
+      sourceDocumentId: "chain-survivor",
+      decisionId: survivorId,
+    },
+  ]);
+  const firstCandidate = (
+    await selectRepublishedDecisionCandidates(db, 100)
+  ).find(({ duplicate }) => duplicate.id === firstId);
+  expect(firstCandidate).toBeDefined();
+  if (!firstCandidate) {
+    panic("Initial chain fixture must be selected");
+  }
+  await db.transaction(
+    async (tx) =>
+      await applyRepublishedDecisionBatch(
+        tx,
+        [firstCandidate],
+        async () => undefined,
+      ),
+  );
+
+  // Keep the retired row out of the next exact-match component. The later
+  // court publication would otherwise retire the lower-authority survivor.
+  await db
+    .update(caseLawDecisions)
+    .set({ docketFamilyKey: "retired:c:1:26" })
+    .where(eq(caseLawDecisions.id, firstId));
+  await db.insert(caseLawDecisions).values({
+    ...common,
+    id: laterId,
+    sourceId: courtSource,
+    sourceDocumentId: "chain-later",
+    createdAt: new Date("2026-06-03"),
+  });
+  await db.insert(caseLawDecisionSourceIdentities).values({
+    sourceId: courtSource,
+    sourceDocumentId: "chain-later",
+    decisionId: laterId,
+  });
+  const refused = (await selectRepublishedDecisionCandidates(db, 100)).find(
+    ({ duplicate }) => duplicate.id === survivorId,
+  );
+  expect(refused).toMatchObject({
+    canonical: { id: laterId },
+    disposition: "separate_alias_group_survivor",
+    duplicate: { id: survivorId },
+  });
+  if (!refused) {
+    panic("Successive chain fixture must be reported");
+  }
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await applyRepublishedDecisionBatch(tx, [refused], async () =>
+          panic("A refused chain must not be reconciled"),
+        ),
+    ),
+  ).toEqual([{ type: "separate_alias_group_survivor", retiredId: survivorId }]);
+  expect(
+    await db
+      .select({ id: canonicalDecisionIdSql(caseLawDecisions.id) })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, firstId)),
+  ).toEqual([{ id: survivorId }]);
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await reverseRepublishedDecisionBatch(tx, 1, async () => undefined),
+    ),
+  ).toEqual([{ type: "reversed", retiredId: firstId }]);
+  const fixtureIds = [firstId, survivorId, laterId];
+  await db
+    .delete(caseLawDecisionSourceIdentities)
+    .where(inArray(caseLawDecisionSourceIdentities.decisionId, fixtureIds));
+  await db
+    .delete(caseLawDecisions)
+    .where(inArray(caseLawDecisions.id, fixtureIds));
+  await db.delete(caseLawSources).where(eq(caseLawSources.id, firstSource));
+});
+
+test("selection refuses a decision that is already retired", async () => {
+  const ids = [
+    createSafeId<"caseLawDecision">(),
+    createSafeId<"caseLawDecision">(),
+    createSafeId<"caseLawDecision">(),
+  ];
+  const [retired, survivor, later] = ids;
+  if (!retired || !survivor || !later) {
+    panic("Retired selection fixture requires three ids");
+  }
+  const common = {
+    country: "POL",
+    court: "Retired selection fixture court",
+    language: "pl",
+    caseNumber: "RS 1/26",
+    docketFamilyKey: "rs:1:26",
+    decisionDate: "2026-06-02",
+    decisionType: "wyrok",
+  };
+  await db.insert(caseLawDecisions).values([
+    {
+      ...common,
+      id: retired,
+      sourceId: republisherSource,
+      sourceDocumentId: "retired-selection",
+    },
+    {
+      ...common,
+      id: survivor,
+      sourceId: republisherSource,
+      sourceDocumentId: "retired-survivor",
+    },
+  ]);
+  await db.insert(caseLawDecisionAliases).values({
+    retiredDecisionId: retired,
+    canonicalDecisionId: survivor,
+  });
+  await db
+    .update(caseLawDecisions)
+    .set({ docketFamilyKey: "survivor:rs:1:26" })
+    .where(eq(caseLawDecisions.id, survivor));
+  await db.insert(caseLawDecisions).values({
+    ...common,
+    id: later,
+    sourceId: courtSource,
+    sourceDocumentId: "retired-later",
+  });
+  const candidate = (await selectRepublishedDecisionCandidates(db, 100)).find(
+    ({ duplicate }) => duplicate.id === retired,
+  );
+  expect(candidate?.disposition).toBe("separate_already_retired");
+  await db
+    .delete(caseLawDecisionAliases)
+    .where(eq(caseLawDecisionAliases.retiredDecisionId, retired));
+  await db.delete(caseLawDecisions).where(inArray(caseLawDecisions.id, ids));
+});
+
+test("apply rechecks retirement after candidate selection", async () => {
+  const selectedRetiredId = createSafeId<"caseLawDecision">();
+  const selectedCanonicalId = createSafeId<"caseLawDecision">();
+  const concurrentCanonicalId = createSafeId<"caseLawDecision">();
+  const common = {
+    country: "POL",
+    court: "Concurrent repair fixture court",
+    language: "pl",
+    caseNumber: "CR 1/26",
+    docketFamilyKey: "cr:1:26",
+    decisionDate: "2026-06-03",
+    decisionType: "wyrok",
+  };
+  await db.insert(caseLawDecisions).values([
+    {
+      ...common,
+      id: selectedRetiredId,
+      sourceId: republisherSource,
+      sourceDocumentId: "concurrent-retired",
+    },
+    {
+      ...common,
+      id: selectedCanonicalId,
+      sourceId: courtSource,
+      sourceDocumentId: "concurrent-selected",
+    },
+    {
+      ...common,
+      id: concurrentCanonicalId,
+      sourceId: republisherSource,
+      sourceDocumentId: "concurrent-winner",
+      docketFamilyKey: "concurrent:winner",
+    },
+  ]);
+  await db.insert(caseLawDecisionSourceIdentities).values({
+    sourceId: republisherSource,
+    sourceDocumentId: "concurrent-retired",
+    decisionId: selectedRetiredId,
+  });
+  const candidate = (await selectRepublishedDecisionCandidates(db, 100)).find(
+    ({ duplicate }) => duplicate.id === selectedRetiredId,
+  );
+  expect(candidate?.disposition).toBe("link");
+  if (!candidate) {
+    panic("Concurrent fixture must be selected before retirement");
+  }
+  await db.insert(caseLawDecisionAliases).values({
+    retiredDecisionId: selectedRetiredId,
+    canonicalDecisionId: concurrentCanonicalId,
+  });
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await applyRepublishedDecisionBatch(tx, [candidate], async () =>
+          panic("A concurrently retired candidate must not be reconciled"),
+        ),
+    ),
+  ).toEqual([
+    { type: "separate_already_retired", retiredId: selectedRetiredId },
+  ]);
+  await db
+    .delete(caseLawDecisionAliases)
+    .where(eq(caseLawDecisionAliases.retiredDecisionId, selectedRetiredId));
+  await db
+    .delete(caseLawDecisionSourceIdentities)
+    .where(eq(caseLawDecisionSourceIdentities.decisionId, selectedRetiredId));
+  await db
+    .delete(caseLawDecisions)
+    .where(
+      inArray(caseLawDecisions.id, [
+        selectedRetiredId,
+        selectedCanonicalId,
+        concurrentCanonicalId,
+      ]),
+    );
+});
+
 test("report counts missing dates and ambiguous matches from the corpus", async () => {
   const ambiguityIds = [
     createSafeId<"caseLawDecision">(),

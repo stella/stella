@@ -68,6 +68,8 @@ type PlanTransaction = {
 export type RepublishedDecisionReport = {
   outcomes: {
     linked: number;
+    separateAliasGroupSurvivor: number;
+    separateAlreadyRetired: number;
     separateAmbiguous: number;
     separatePartial: {
       dateAbsent: number;
@@ -83,10 +85,24 @@ export type RepublishedDecisionReport = {
 export type RepublishedDecisionCandidate = {
   canonical: CandidateSide;
   duplicate: CandidateSide;
+  disposition: CandidateDisposition;
 };
+
+type CandidateDisposition =
+  | "link"
+  | "separate_alias_group_survivor"
+  | "separate_already_retired";
 
 export type ApplyRepublishedDecisionOutcome =
   | { type: "linked"; retiredId: SafeId<"caseLawDecision"> }
+  | {
+      type: "separate_alias_group_survivor";
+      retiredId: SafeId<"caseLawDecision">;
+    }
+  | {
+      type: "separate_already_retired";
+      retiredId: SafeId<"caseLawDecision">;
+    }
   | { type: "skipped_erased"; retiredId: SafeId<"caseLawDecision"> };
 
 export type ReverseRepublishedDecisionOutcome =
@@ -142,6 +158,24 @@ const canonicalFirst = (left: CandidateSide, right: CandidateSide): boolean => {
   return stored === 0 ? left.id < right.id : stored < 0;
 };
 
+const candidateDisposition = ({
+  canonicalRetired,
+  duplicateRetired,
+  duplicateSurvivor,
+}: {
+  canonicalRetired: boolean;
+  duplicateRetired: boolean;
+  duplicateSurvivor: boolean;
+}): CandidateDisposition => {
+  if (duplicateSurvivor) {
+    return "separate_alias_group_survivor";
+  }
+  if (duplicateRetired || canonicalRetired) {
+    return "separate_already_retired";
+  }
+  return "link";
+};
+
 /** One bounded, stable page. A complete identity requires date, type and docket. */
 export const selectRepublishedDecisionCandidatesStatement = (
   limit: number,
@@ -170,7 +204,6 @@ export const selectRepublishedDecisionCandidatesStatement = (
        AND b.created_at <= ${until}::timestamptz
        AND a.decision_date IS NOT NULL
        AND a.decision_type IS NOT NULL
-       AND NOT EXISTS (SELECT 1 FROM case_law_decision_aliases x WHERE x.retired_decision_id IN (a.id, b.id))
   ), singles AS (
     SELECT p.*
       FROM pairs p
@@ -180,7 +213,11 @@ export const selectRepublishedDecisionCandidatesStatement = (
      LIMIT ${limit}
   )
   SELECT l.id AS "leftId", ls.adapter_key AS "leftAdapterKey", l.created_at AS "leftCreatedAt",
-         r.id AS "rightId", rs.adapter_key AS "rightAdapterKey", r.created_at AS "rightCreatedAt"
+         EXISTS (SELECT 1 FROM case_law_decision_aliases a WHERE a.canonical_decision_id = l.id) AS "leftSurvivor",
+         EXISTS (SELECT 1 FROM case_law_decision_aliases a WHERE a.retired_decision_id = l.id) AS "leftRetired",
+         r.id AS "rightId", rs.adapter_key AS "rightAdapterKey", r.created_at AS "rightCreatedAt",
+         EXISTS (SELECT 1 FROM case_law_decision_aliases a WHERE a.canonical_decision_id = r.id) AS "rightSurvivor",
+         EXISTS (SELECT 1 FROM case_law_decision_aliases a WHERE a.retired_decision_id = r.id) AS "rightRetired"
     FROM singles p
     JOIN case_law_decisions l ON l.id = p.left_id
     JOIN case_law_sources ls ON ls.id = l.source_id
@@ -205,9 +242,24 @@ export const selectRepublishedDecisionCandidates = async (
     }
     const left = side(value, "left");
     const right = side(value, "right");
-    return canonicalFirst(left, right)
-      ? { canonical: left, duplicate: right }
-      : { canonical: right, duplicate: left };
+    const leftSurvivor = value["leftSurvivor"] === true;
+    const rightSurvivor = value["rightSurvivor"] === true;
+    const keepLeft = canonicalFirst(left, right);
+    const canonical = keepLeft ? left : right;
+    const duplicate = keepLeft ? right : left;
+    const duplicateSurvivor = keepLeft ? rightSurvivor : leftSurvivor;
+    const duplicateRetired = keepLeft
+      ? value["rightRetired"] === true
+      : value["leftRetired"] === true;
+    const canonicalRetired = keepLeft
+      ? value["leftRetired"] === true
+      : value["rightRetired"] === true;
+    const disposition = candidateDisposition({
+      canonicalRetired,
+      duplicateRetired,
+      duplicateSurvivor,
+    });
+    return { canonical, disposition, duplicate };
   });
 
 const reportCount = (row: Record<string, unknown>, key: string): number => {
@@ -227,7 +279,10 @@ export const selectRepublishedDecisionReport = async (
     2_147_483_647,
   );
   const bySource = new Map<string, number>();
-  for (const { duplicate } of candidates) {
+  for (const { disposition, duplicate } of candidates) {
+    if (disposition !== "link") {
+      continue;
+    }
     bySource.set(
       duplicate.adapterKey,
       (bySource.get(duplicate.adapterKey) ?? 0) + 1,
@@ -277,7 +332,14 @@ export const selectRepublishedDecisionReport = async (
   }
   return {
     outcomes: {
-      linked: candidates.length,
+      linked: candidates.filter(({ disposition }) => disposition === "link")
+        .length,
+      separateAliasGroupSurvivor: candidates.filter(
+        ({ disposition }) => disposition === "separate_alias_group_survivor",
+      ).length,
+      separateAlreadyRetired: candidates.filter(
+        ({ disposition }) => disposition === "separate_already_retired",
+      ).length,
       separateAmbiguous: reportCount(row, "separateAmbiguous"),
       separatePartial: {
         dateAbsent: reportCount(row, "dateAbsent"),
@@ -315,6 +377,7 @@ export const applyRepublishedDecisionBatch = async (
     return [];
   }
   await lockCaseLawRepublication({ tx, mode: "exclusive" });
+  // sql-perf-allow: bounded by the caller's repair page and indexed alias IDs
   const rows = executedRows(
     await tx.execute(sql`
       WITH requested AS MATERIALIZED (
@@ -325,7 +388,12 @@ export const applyRepublishedDecisionBatch = async (
           ) AS pair(retired_id, canonical_id)
       ), pairs AS MATERIALIZED (
         SELECT requested.retired_id, requested.canonical_id,
-               retired.redacted_at IS NOT NULL OR canonical.redacted_at IS NOT NULL AS erased
+               retired.redacted_at IS NOT NULL OR canonical.redacted_at IS NOT NULL AS erased,
+               EXISTS (SELECT 1 FROM case_law_decision_aliases alias
+                        WHERE alias.canonical_decision_id = requested.retired_id) AS survivor,
+               EXISTS (SELECT 1 FROM case_law_decision_aliases alias
+                        WHERE alias.retired_decision_id IN
+                          (requested.retired_id, requested.canonical_id)) AS already_retired
           FROM requested
           JOIN case_law_decisions retired ON retired.id = requested.retired_id
           JOIN case_law_decisions canonical ON canonical.id = requested.canonical_id
@@ -334,6 +402,8 @@ export const applyRepublishedDecisionBatch = async (
            SET decision_id = pair.canonical_id
           FROM pairs pair
          WHERE NOT pair.erased
+           AND NOT pair.survivor
+           AND NOT pair.already_retired
            AND identity.decision_id = pair.retired_id
         RETURNING pair.retired_id, pair.canonical_id,
                   identity.source_id, identity.source_document_id
@@ -351,11 +421,13 @@ export const applyRepublishedDecisionBatch = async (
           JOIN aliases ON aliases.retired_decision_id = moved.retired_id
         RETURNING retired_decision_id
       )
-      SELECT pairs.retired_id AS "retiredId", pairs.erased AS "skippedErased"
+      SELECT pairs.retired_id AS "retiredId", pairs.erased AS "skippedErased",
+             pairs.survivor AS "survivor", pairs.already_retired AS "alreadyRetired"
         FROM pairs
         LEFT JOIN aliases ON aliases.retired_decision_id = pairs.retired_id
        WHERE (SELECT count(*) FROM moved_identities) >= 0
-         AND (pairs.erased OR aliases.retired_decision_id IS NOT NULL)
+         AND (pairs.erased OR pairs.survivor OR pairs.already_retired
+              OR aliases.retired_decision_id IS NOT NULL)
        ORDER BY pairs.retired_id
     `),
   );
@@ -370,6 +442,14 @@ export const applyRepublishedDecisionBatch = async (
       return panic("Republished-decision apply returned an invalid row");
     }
     const retiredId = brandPersistedCaseLawDecisionId(row["retiredId"]);
+    if (row["survivor"] === true) {
+      outcomes.push({ type: "separate_alias_group_survivor", retiredId });
+      continue;
+    }
+    if (row["alreadyRetired"] === true) {
+      outcomes.push({ type: "separate_already_retired", retiredId });
+      continue;
+    }
     if (row["skippedErased"]) {
       outcomes.push({ type: "skipped_erased", retiredId });
       continue;
@@ -507,7 +587,7 @@ export const reverseRepublishedDecisionBatch = async (
       },
       "left",
     );
-    reversed.push({ canonical, duplicate: retired });
+    reversed.push({ canonical, disposition: "link", duplicate: retired });
     outcomes.push({ type: "reversed", retiredId });
   }
   if (reversed.length > 0) {

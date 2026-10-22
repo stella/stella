@@ -122,6 +122,14 @@ await runScriptWithErrorOutput(async () => {
   const before = await selectRepublishedDecisionReport(rootDb);
   console.info("outcome linked", before.outcomes.linked);
   console.info(
+    "outcome separate_alias_group_survivor",
+    before.outcomes.separateAliasGroupSurvivor,
+  );
+  console.info(
+    "outcome separate_already_retired",
+    before.outcomes.separateAlreadyRetired,
+  );
+  console.info(
     "outcome separate_partial/date_absent",
     before.outcomes.separatePartial.dateAbsent,
   );
@@ -169,5 +177,11 @@ await runScriptWithErrorOutput(async () => {
   }
   console.info(
     `linked=${String(outcomes.filter(({ type }) => type === "linked").length)}`,
+  );
+  console.info(
+    `separate_alias_group_survivor=${String(outcomes.filter(({ type }) => type === "separate_alias_group_survivor").length)}`,
+  );
+  console.info(
+    `separate_already_retired=${String(outcomes.filter(({ type }) => type === "separate_already_retired").length)}`,
   );
 });

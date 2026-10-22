@@ -52,6 +52,7 @@ if (!databaseUrl || !enabled) {
             createdAt: new Date("2026-10-02"),
             id: retiredId,
           },
+          disposition: "link" as const,
         };
         const common = {
           country: "POL",
