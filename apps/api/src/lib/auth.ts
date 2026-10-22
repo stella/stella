@@ -682,7 +682,6 @@ type SensitiveAuthPathContext = {
 };
 type AuthoritativeSessionPathContext = SensitiveAuthPathContext & {
   path: string;
-  request: Request;
 };
 /** A `before` hook result whose context Better Auth merges into the endpoint's. */
 type StorageSessionHookResult = {
@@ -747,27 +746,29 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
   if (path === undefined || !AUTHORITATIVE_SESSION_PATHS.has(path)) {
     return Result.ok(undefined);
   }
-  const request = ctx.request;
-  if (request === undefined) {
-    // A server-side `auth.api.*` call carries no browser request and runs
-    // after its caller authenticated; the browser cookie snapshot this step
-    // guards against only arrives over HTTP.
-    if (isOAuthProviderSessionPath(path)) {
-      return Result.ok(undefined);
+  if (isOAuthProviderSessionPath(path)) {
+    // HTTP requests and server-side `auth.api.*` calls alike: whenever the
+    // call carries cookies, the endpoint could read the cookie snapshot, so
+    // resolve the session from storage. A call without cookies has no
+    // snapshot to fall back to.
+    if (
+      OAUTH_PROVIDER_SESSION_PATHS[path] === "browser-session" &&
+      (ctx.headers?.get("cookie") ?? "") !== ""
+    ) {
+      const session = await resolveSession({ ...ctx, path });
+      if (!session) {
+        // OAuth authorization queries are signed and survive the login
+        // redirect, so pin the absent result by removing only Better Auth's
+        // session cookies from the headers the endpoint's middleware reads.
+        removeSessionCookies(ctx);
+      }
     }
+    return Result.ok(undefined);
+  }
+  if (ctx.request === undefined) {
     panic("Authoritative-session hook ran outside HTTP dispatch");
   }
-  const session = await resolveSession({ ...ctx, path, request });
-  if (
-    !session &&
-    isOAuthProviderSessionPath(path) &&
-    OAUTH_PROVIDER_SESSION_PATHS[path] === "browser-session"
-  ) {
-    // OAuth authorization queries are signed and survive the login redirect,
-    // so pin the absent result by removing only Better Auth's session cookies
-    // from the headers read by the endpoint's session middleware.
-    removeSessionCookies(ctx);
-  }
+  const session = await resolveSession({ ...ctx, path });
   if (!isTwoFactorSessionPath(path)) {
     return Result.ok(undefined);
   }
@@ -2424,8 +2425,8 @@ export const createAuth = (
           async () =>
             await resolveAuthoritativeSessionForSensitiveAuthPath({
               ctx,
-              resolveSession: async ({ path, request }) =>
-                await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
+              resolveSession: async ({ path }) =>
+                await getAuthoritativeSessionFromCtx({ ...ctx, path }),
             }),
         );
         // Better Auth rejects a request from a `before` hook by the APIError

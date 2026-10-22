@@ -101,8 +101,8 @@ const createFixture = async () => {
         const authoritative =
           await resolveAuthoritativeSessionForSensitiveAuthPath({
             ctx,
-            resolveSession: async ({ path, request }) =>
-              await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
+            resolveSession: async ({ path }) =>
+              await getAuthoritativeSessionFromCtx({ ...ctx, path }),
           });
         if (Result.isError(authoritative)) {
           throw authoritative.error;

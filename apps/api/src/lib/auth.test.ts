@@ -599,6 +599,39 @@ describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
     expect(ctx.headers.get("cookie")).toBe("preference=compact");
   });
 
+  test("treats a server-side OAuth call carrying a revoked session's cookies as signed out", async () => {
+    const resolvedPaths: string[] = [];
+    const { request: _request, ...serverCall } =
+      sensitiveCtx("/oauth2/consent");
+
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: serverCall,
+      resolveSession: async (sessionContext) => {
+        resolvedPaths.push(sessionContext.path);
+        return null;
+      },
+    });
+
+    expect(Result.isOk(handled) && handled.value).toBeUndefined();
+    expect(resolvedPaths).toEqual(["/oauth2/consent"]);
+    expect(serverCall.headers.get("cookie")).toBe("preference=compact");
+  });
+
+  test("reads no session for an OAuth call without cookies", async () => {
+    let resolved = false;
+
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: { path: "/oauth2/consent", headers: new Headers() },
+      resolveSession: async () => {
+        resolved = true;
+        return null;
+      },
+    });
+
+    expect(Result.isOk(handled) && handled.value).toBeUndefined();
+    expect(resolved).toBe(false);
+  });
+
   test("refuses two-factor management when storage holds no session", async () => {
     const resolvedPaths: string[] = [];
 
