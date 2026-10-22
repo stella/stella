@@ -7,7 +7,10 @@ import { isGrantableChatTool } from "@stll/api-contract/chat-tool-grants";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { encryptMicrosoft365Secret } from "@/api/handlers/microsoft365/crypto";
+import {
+  MICROSOFT365_TOKEN_PURPOSE,
+  encryptMicrosoft365Secret,
+} from "@/api/handlers/microsoft365/crypto";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -104,7 +107,7 @@ test("calendar executions use stored grants, shared result provenance and execut
   const encrypted = await encryptMicrosoft365Secret({
     organizationId,
     userId,
-    purpose: "microsoft365_access_token",
+    purpose: MICROSOFT365_TOKEN_PURPOSE.access,
     secret: "calendar-token",
   });
   let calendarEnabled = true;

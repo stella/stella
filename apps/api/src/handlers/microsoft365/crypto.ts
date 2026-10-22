@@ -18,14 +18,19 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { Secret, SecretKind } from "@/api/lib/secret-brands";
 import { secretSchema } from "@/api/lib/secret-brands";
 
+// Frozen ciphertext context: these persisted purpose values must never change.
+export const MICROSOFT365_TOKEN_PURPOSE = {
+  access: "sharepoint_access_token",
+  refresh: "sharepoint_refresh_token",
+} as const;
+
 type Microsoft365SecretPurpose =
-  | "microsoft365_access_token"
-  | "microsoft365_refresh_token";
+  (typeof MICROSOFT365_TOKEN_PURPOSE)[keyof typeof MICROSOFT365_TOKEN_PURPOSE];
 
 type DecryptedKind<P extends Microsoft365SecretPurpose> =
-  P extends "microsoft365_access_token"
+  P extends typeof MICROSOFT365_TOKEN_PURPOSE.access
     ? "AccessToken"
-    : P extends "microsoft365_refresh_token"
+    : P extends typeof MICROSOFT365_TOKEN_PURPOSE.refresh
       ? "RefreshToken"
       : never;
 
@@ -36,14 +41,8 @@ type DecryptedFor<P extends Microsoft365SecretPurpose> = Secret<
 const toDecryptedSecret = <K extends SecretKind>(value: string): Secret<K> =>
   v.parse(secretSchema, value);
 
-// Persisted purpose values remain stable across the connection API rename.
-const STORED_SECRET_PURPOSE = {
-  microsoft365_access_token: "sharepoint_access_token",
-  microsoft365_refresh_token: "sharepoint_refresh_token",
-} as const satisfies Record<Microsoft365SecretPurpose, string>;
-
 type SecretEnvelope = {
-  purpose: (typeof STORED_SECRET_PURPOSE)[Microsoft365SecretPurpose];
+  purpose: Microsoft365SecretPurpose;
   secret: string;
   userId: SafeId<"user">;
 };
@@ -67,7 +66,7 @@ export const encryptMicrosoft365Secret = async ({
   await encryptContent(
     organizationId,
     JSON.stringify({
-      purpose: STORED_SECRET_PURPOSE[purpose],
+      purpose,
       // oxlint-disable-next-line no-secret-in-log-sink/no-secret-in-log-sink -- envelope passed directly to encryptContent; only ciphertext is stored
       secret,
       userId,
@@ -109,7 +108,7 @@ export const decryptMicrosoft365Secret = async <
       !("purpose" in parsed) ||
       !("secret" in parsed) ||
       !("userId" in parsed) ||
-      parsed.purpose !== STORED_SECRET_PURPOSE[purpose] ||
+      parsed.purpose !== purpose ||
       parsed.userId !== userId ||
       typeof parsed.secret !== "string"
     ) {

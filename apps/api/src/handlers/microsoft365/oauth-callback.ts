@@ -10,7 +10,10 @@ import {
   microsoft365OAuthState,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { encryptMicrosoft365Secret } from "@/api/handlers/microsoft365/crypto";
+import {
+  MICROSOFT365_TOKEN_PURPOSE,
+  encryptMicrosoft365Secret,
+} from "@/api/handlers/microsoft365/crypto";
 import { assertMicrosoft365ConnectionEnabled } from "@/api/handlers/microsoft365/enablement";
 import { fetchAccountLabel } from "@/api/handlers/microsoft365/graph-client";
 import {
@@ -202,14 +205,14 @@ export const createMicrosoft365OAuthCallback = (
             }
             const accountLabel = account.value;
             const encryptedAccess = await encryptMicrosoft365Secret({
-              purpose: "microsoft365_access_token",
+              purpose: MICROSOFT365_TOKEN_PURPOSE.access,
               secret: token.value.access_token,
               organizationId: row.organizationId,
               userId: rowUserId,
             });
             const encryptedRefresh = token.value.refresh_token
               ? await encryptMicrosoft365Secret({
-                  purpose: "microsoft365_refresh_token",
+                  purpose: MICROSOFT365_TOKEN_PURPOSE.refresh,
                   secret: token.value.refresh_token,
                   organizationId: row.organizationId,
                   userId: rowUserId,

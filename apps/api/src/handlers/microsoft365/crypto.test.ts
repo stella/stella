@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  MICROSOFT365_TOKEN_PURPOSE,
   decryptMicrosoft365Secret,
   encryptMicrosoft365Secret,
 } from "@/api/handlers/microsoft365/crypto";
@@ -19,7 +20,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
   test("roundtrips on an exact purpose/user match", async () => {
     const { ciphertext, iv } = await encryptMicrosoft365Secret({
       organizationId,
-      purpose: "microsoft365_access_token",
+      purpose: MICROSOFT365_TOKEN_PURPOSE.access,
       secret,
       userId,
     });
@@ -28,7 +29,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
       ciphertext,
       iv,
       organizationId,
-      purpose: "microsoft365_access_token",
+      purpose: MICROSOFT365_TOKEN_PURPOSE.access,
       userId,
     });
 
@@ -46,7 +47,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
     for (const payload of payloads) {
       const { ciphertext, iv } = await encryptMicrosoft365Secret({
         organizationId,
-        purpose: "microsoft365_refresh_token",
+        purpose: MICROSOFT365_TOKEN_PURPOSE.refresh,
         secret: payload,
         userId,
       });
@@ -54,7 +55,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
         ciphertext,
         iv,
         organizationId,
-        purpose: "microsoft365_refresh_token",
+        purpose: MICROSOFT365_TOKEN_PURPOSE.refresh,
         userId,
       });
       expect(String(decrypted.unwrap())).toBe(payload);
@@ -64,7 +65,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
   test("rejects a purpose mismatch (access token read back as refresh)", async () => {
     const { ciphertext, iv } = await encryptMicrosoft365Secret({
       organizationId,
-      purpose: "microsoft365_access_token",
+      purpose: MICROSOFT365_TOKEN_PURPOSE.access,
       secret,
       userId,
     });
@@ -73,7 +74,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
       ciphertext,
       iv,
       organizationId,
-      purpose: "microsoft365_refresh_token",
+      purpose: MICROSOFT365_TOKEN_PURPOSE.refresh,
       userId,
     });
 
@@ -86,7 +87,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
   test("rejects a userId mismatch", async () => {
     const { ciphertext, iv } = await encryptMicrosoft365Secret({
       organizationId,
-      purpose: "microsoft365_access_token",
+      purpose: MICROSOFT365_TOKEN_PURPOSE.access,
       secret,
       userId,
     });
@@ -95,7 +96,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
       ciphertext,
       iv,
       organizationId,
-      purpose: "microsoft365_access_token",
+      purpose: MICROSOFT365_TOKEN_PURPOSE.access,
       userId: toSafeId<"user">("0191d14d-9a63-7d2e-a021-06053e542c99"),
     });
 
@@ -108,14 +109,14 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
   test("stores ciphertext rather than the plaintext envelope", async () => {
     const { ciphertext, iv } = await encryptMicrosoft365Secret({
       organizationId,
-      purpose: "microsoft365_access_token",
+      purpose: MICROSOFT365_TOKEN_PURPOSE.access,
       secret,
       userId,
     });
 
     expect(ciphertext.toString("utf-8")).not.toContain(secret);
     expect(ciphertext.toString("utf-8")).not.toContain(
-      "microsoft365_access_token",
+      MICROSOFT365_TOKEN_PURPOSE.access,
     );
     // A zero IV is the no-op plaintext envelope; real AES-GCM never mints one.
     expect(iv.every((byte) => byte === 0)).toBe(false);
@@ -124,7 +125,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
   test("rejects an organization mismatch (per-org key separation)", async () => {
     const { ciphertext, iv } = await encryptMicrosoft365Secret({
       organizationId,
-      purpose: "microsoft365_access_token",
+      purpose: MICROSOFT365_TOKEN_PURPOSE.access,
       secret,
       userId,
     });
@@ -135,7 +136,7 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
       organizationId: toSafeId<"organization">(
         "0191d14d-9a63-7d2e-a021-06053e542c9a",
       ),
-      purpose: "microsoft365_access_token",
+      purpose: MICROSOFT365_TOKEN_PURPOSE.access,
       userId,
     });
 
@@ -148,8 +149,8 @@ describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
 
 test("existing delegated token envelopes remain readable with their original purposes", async () => {
   for (const [storedPurpose, purpose] of [
-    ["sharepoint_access_token", "microsoft365_access_token"],
-    ["sharepoint_refresh_token", "microsoft365_refresh_token"],
+    ["sharepoint_access_token", MICROSOFT365_TOKEN_PURPOSE.access],
+    ["sharepoint_refresh_token", MICROSOFT365_TOKEN_PURPOSE.refresh],
   ] as const) {
     const encrypted = await encryptContent(
       organizationId,
@@ -163,4 +164,11 @@ test("existing delegated token envelopes remain readable with their original pur
     });
     expect(String(decrypted.unwrap())).toBe(secret);
   }
+});
+
+test("delegated token ciphertext purposes remain the complete frozen storage contract", () => {
+  expect(MICROSOFT365_TOKEN_PURPOSE).toEqual({
+    access: "sharepoint_access_token",
+    refresh: "sharepoint_refresh_token",
+  });
 });

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -16,11 +16,16 @@ import {
   organizationSettings,
 } from "@/api/db/schema";
 import { grantedCapabilities } from "@/api/handlers/microsoft365/capabilities";
-import { encryptMicrosoft365Secret } from "@/api/handlers/microsoft365/crypto";
+import {
+  MICROSOFT365_TOKEN_PURPOSE,
+  decryptMicrosoft365Secret,
+  encryptMicrosoft365Secret,
+} from "@/api/handlers/microsoft365/crypto";
 import { ensureMicrosoft365AccessToken } from "@/api/handlers/microsoft365/graph-client";
 import { createMicrosoft365OAuthCallback } from "@/api/handlers/microsoft365/oauth-callback";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { encryptContent } from "@/api/lib/content-encryption";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -306,13 +311,13 @@ test("a token refresh preserves a newer consent grant", async () => {
   const access = await encryptMicrosoft365Secret({
     organizationId: ids.orgA,
     userId: ids.userA1,
-    purpose: "microsoft365_access_token",
+    purpose: MICROSOFT365_TOKEN_PURPOSE.access,
     secret: "expired-access",
   });
   const refresh = await encryptMicrosoft365Secret({
     organizationId: ids.orgA,
     userId: ids.userA1,
-    purpose: "microsoft365_refresh_token",
+    purpose: MICROSOFT365_TOKEN_PURPOSE.refresh,
     secret: "refresh",
   });
   await testDb
@@ -378,4 +383,91 @@ test("a token refresh preserves a newer consent grant", async () => {
   });
   expect(current?.scope).toBe(upgraded);
   expect(current?.accessTokenEncrypted).toEqual(Buffer.from("newer-consent"));
+});
+
+test("an existing delegated connection refreshes its original ciphertext and retains granted scopes", async () => {
+  const access = await encryptContent(
+    ids.orgA,
+    JSON.stringify({
+      purpose: "sharepoint_access_token",
+      secret: "legacy-access",
+      userId: ids.userA1,
+    }),
+  );
+  const refresh = await encryptContent(
+    ids.orgA,
+    JSON.stringify({
+      purpose: "sharepoint_refresh_token",
+      secret: "legacy-refresh",
+      userId: ids.userA1,
+    }),
+  );
+  const scope = "User.Read Files.Read.All Sites.Read.All";
+  await testDb
+    .update(microsoft365Connections)
+    .set({
+      accessTokenEncrypted: access.ciphertext,
+      accessTokenIv: access.iv,
+      refreshTokenEncrypted: refresh.ciphertext,
+      refreshTokenIv: refresh.iv,
+      status: "connected",
+      scope,
+      expiresAt: new Date(0),
+    })
+    .where(eq(microsoft365Connections.id, connOrgAUserA1));
+  const connection = await testDb.query.microsoft365Connections.findFirst({
+    where: { id: { eq: connOrgAUserA1 } },
+  });
+  if (!connection) {
+    panic("Expected existing delegated connection fixture");
+  }
+  const safeDb: SafeDb = async (run) =>
+    Result.ok(
+      await scopedQuery(
+        noWorkspaces,
+        ids.orgA,
+        async (tx) => await run(asTestRaw(tx)),
+        ids.userA1,
+      ),
+    );
+  const renewed = await ensureMicrosoft365AccessToken(
+    {
+      connection: { ...connection, userId: ids.userA1 },
+      safeDb,
+      capability: "files.read",
+    },
+    {
+      getMicrosoft365OAuthConfig: () =>
+        Result.ok({
+          clientId: "client",
+          clientSecret: "secret",
+          tenantId: "tenant",
+        }),
+      refreshAccessToken: async ({ refreshToken }) => {
+        expect(String(refreshToken)).toBe("legacy-refresh");
+        return Result.ok({
+          access_token: "renewed-access",
+          refresh_token: "renewed-refresh",
+          expires_in: 3600,
+        });
+      },
+    },
+  );
+  expect(String(renewed.unwrap())).toBe("renewed-access");
+  const current = await testDb.query.microsoft365Connections.findFirst({
+    where: { id: { eq: connOrgAUserA1 } },
+  });
+  if (!current?.refreshTokenEncrypted || !current.refreshTokenIv) {
+    panic("Expected refreshed delegated credentials");
+  }
+  expect(current.scope).toBe(scope);
+  expect(grantedCapabilities(current.scope)).toEqual(["files.read"]);
+  const storedRefresh = await decryptMicrosoft365Secret({
+    ciphertext: current.refreshTokenEncrypted,
+    iv: current.refreshTokenIv,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    purpose: MICROSOFT365_TOKEN_PURPOSE.refresh,
+  });
+  expect(String(storedRefresh.unwrap())).toBe("renewed-refresh");
 });

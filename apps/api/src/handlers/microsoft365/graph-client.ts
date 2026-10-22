@@ -26,6 +26,7 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { microsoft365Connections } from "@/api/db/schema";
 import type { Microsoft365ConnectionStatus } from "@/api/db/schema";
 import {
+  MICROSOFT365_TOKEN_PURPOSE,
   decryptMicrosoft365Secret,
   encryptMicrosoft365Secret,
 } from "@/api/handlers/microsoft365/crypto";
@@ -143,7 +144,7 @@ export const ensureMicrosoft365AccessToken = async (
     if (stillValid) {
       const accessToken = yield* Result.await(
         decryptMicrosoft365Secret({
-          purpose: "microsoft365_access_token",
+          purpose: MICROSOFT365_TOKEN_PURPOSE.access,
           ciphertext: connection.accessTokenEncrypted,
           iv: connection.accessTokenIv,
           organizationId: connection.organizationId,
@@ -165,7 +166,7 @@ export const ensureMicrosoft365AccessToken = async (
 
     const refreshToken = yield* Result.await(
       decryptMicrosoft365Secret({
-        purpose: "microsoft365_refresh_token",
+        purpose: MICROSOFT365_TOKEN_PURPOSE.refresh,
         ciphertext: connection.refreshTokenEncrypted,
         iv: connection.refreshTokenIv,
         organizationId: connection.organizationId,
@@ -187,14 +188,14 @@ export const ensureMicrosoft365AccessToken = async (
 
     const token = refreshed.value;
     const encryptedAccess = await encryptMicrosoft365Secret({
-      purpose: "microsoft365_access_token",
+      purpose: MICROSOFT365_TOKEN_PURPOSE.access,
       secret: token.access_token,
       organizationId: connection.organizationId,
       userId: connection.userId,
     });
     const encryptedRefresh = token.refresh_token
       ? await encryptMicrosoft365Secret({
-          purpose: "microsoft365_refresh_token",
+          purpose: MICROSOFT365_TOKEN_PURPOSE.refresh,
           secret: token.refresh_token,
           organizationId: connection.organizationId,
           userId: connection.userId,
@@ -260,7 +261,7 @@ export const ensureMicrosoft365AccessToken = async (
     // the single brand boundary, rather than casting the raw string here.
     const accessToken = yield* Result.await(
       decryptMicrosoft365Secret({
-        purpose: "microsoft365_access_token",
+        purpose: MICROSOFT365_TOKEN_PURPOSE.access,
         ciphertext: encryptedAccess.ciphertext,
         iv: encryptedAccess.iv,
         organizationId: connection.organizationId,

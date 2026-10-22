@@ -29,7 +29,7 @@ export type Microsoft365ConnectionStatus =
 // the same per-org AES-256-GCM envelope the MCP connection tokens use. There
 // is no service account: every stored token is the user's own delegated
 // grant, so Microsoft enforces the ACLs on every downstream read.
-// Keep persisted SQL identities stable while the API adds read capabilities.
+// Physical names are frozen storage identifiers across API renames.
 export const microsoft365Connections = p.pgTable(
   "sharepoint_connections",
   {
