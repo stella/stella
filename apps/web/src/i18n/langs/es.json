@@ -2048,7 +2048,6 @@
       "viewDocumentation": "Ver documentación"
     },
     "enterKey": "↵",
-    "error": "Error",
     "expenses": "Gastos",
     "export": {
       "citations": "Citas",
@@ -2121,6 +2120,7 @@
     },
     "lastUpdated": "Última actualización",
     "legalDatabase": "Base de datos jurídica",
+    "loadFailed": "No se ha podido cargar.",
     "loadMore": "Cargar más",
     "loading": "Cargando",
     "logTime": "Registrar tiempo",
@@ -2207,7 +2207,7 @@
     "showMore": "Mostrar más",
     "showSecretValue": "Mostrar valor secreto",
     "signOut": "Cerrar sesión",
-    "somethingWentWrong": "Algo salió mal",
+    "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "sort": "Ordenar",
     "source": "Fuente",
     "stale": "Obsoleto",
@@ -2677,7 +2677,7 @@
       "notEnabled": "Esta acción no está habilitada para su organización.",
       "periodExhausted": "Esta acción está pausada para su organización."
     },
-    "actionFailed": "Acción fallida",
+    "actionFailed": "No ha funcionado. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "api": {
       "badRequest": "No se pudo completar la solicitud.",
       "caseLawCountryUnavailable": "La jurisprudencia de este país no está disponible. Elige otro país.",
@@ -3228,7 +3228,7 @@
     "saveSerializeFailedTitle": "No se pudo crear el DOCX",
     "savingDocument": "Guardando...",
     "showDetails": "Mostrar detalles",
-    "somethingWentWrong": "Algo salió mal",
+    "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "synced": "Sincronizado",
     "syncing": "Sincronizando",
     "tableBordersAll": "Todos los bordes",

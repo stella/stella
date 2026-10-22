@@ -2048,7 +2048,6 @@
       "viewDocumentation": "Skatīt dokumentāciju"
     },
     "enterKey": "↵",
-    "error": "Kļūda",
     "expenses": "Izdevumi",
     "export": {
       "citations": "Atsauces",
@@ -2121,6 +2120,7 @@
     },
     "lastUpdated": "Pēdējoreiz atjaunināts",
     "legalDatabase": "Juridiskā datubāze",
+    "loadFailed": "Neizdevās ielādēt.",
     "loadMore": "Ielādēt vairāk",
     "loading": "Ielādē",
     "logTime": "Reģistrēt laiku",
@@ -2207,7 +2207,7 @@
     "showMore": "Rādīt vairāk",
     "showSecretValue": "Rādīt slepeno vērtību",
     "signOut": "Atslēgties",
-    "somethingWentWrong": "Kaut kas nogāja greizi",
+    "somethingWentWrong": "Kaut kas nogāja greizi. Mēģiniet vēlreiz vai, ja tas atkārtojas, pārlādējiet lapu.",
     "sort": "Kārtot",
     "source": "Avots",
     "stale": "Novecojis",
@@ -2677,7 +2677,7 @@
       "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
       "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
     },
-    "actionFailed": "Darbība neizdevās",
+    "actionFailed": "Tas neizdevās. Mēģiniet vēlreiz vai, ja tas atkārtojas, pārlādējiet lapu.",
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
       "caseLawCountryUnavailable": "Šīs valsts judikatūra nav pieejama. Izvēlieties citu valsti.",
@@ -3228,7 +3228,7 @@
     "saveSerializeFailedTitle": "Neizdevās izveidot DOCX",
     "savingDocument": "Saglabā...",
     "showDetails": "Rādīt detaļas",
-    "somethingWentWrong": "Kaut kas nogāja greizi",
+    "somethingWentWrong": "Kaut kas nogāja greizi. Mēģiniet vēlreiz vai, ja tas atkārtojas, pārlādējiet lapu.",
     "synced": "Sinhronizēts",
     "syncing": "Sinhronizē",
     "tableBordersAll": "Visas apmales",

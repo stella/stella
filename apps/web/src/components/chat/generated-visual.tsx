@@ -231,7 +231,7 @@ const GeneratedVisualFrame = ({
           })(),
           {
             context: "generated-visual.open-decision",
-            failureMessage: t("common.error"),
+            failureMessage: t("errors.actionFailed"),
           },
         );
         return;

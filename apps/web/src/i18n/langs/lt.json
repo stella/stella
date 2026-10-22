@@ -2048,7 +2048,6 @@
       "viewDocumentation": "Peržiūrėti dokumentaciją"
     },
     "enterKey": "↵",
-    "error": "Klaida",
     "expenses": "Išlaidos",
     "export": {
       "citations": "Citatos",
@@ -2121,6 +2120,7 @@
     },
     "lastUpdated": "Paskutinis atnaujinimas",
     "legalDatabase": "Teisinė duomenų bazė",
+    "loadFailed": "Nepavyko įkelti.",
     "loadMore": "Įkelti daugiau",
     "loading": "Įkeliama",
     "logTime": "Registruoti laiką",
@@ -2207,7 +2207,7 @@
     "showMore": "Rodyti daugiau",
     "showSecretValue": "Rodyti slaptą reikšmę",
     "signOut": "Atsijungti",
-    "somethingWentWrong": "Kažkas nepavyko",
+    "somethingWentWrong": "Kažkas nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "sort": "Rūšiuoti",
     "source": "Šaltinis",
     "stale": "Pasenusi",
@@ -2677,7 +2677,7 @@
       "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
       "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
     },
-    "actionFailed": "Veiksmas nepavyko",
+    "actionFailed": "Nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "api": {
       "badRequest": "Užklausos nepavyko užbaigti.",
       "caseLawCountryUnavailable": "Šios šalies teismų praktika nepasiekiama. Pasirinkite kitą šalį.",
@@ -3228,7 +3228,7 @@
     "saveSerializeFailedTitle": "Nepavyko sukurti DOCX",
     "savingDocument": "Įrašoma...",
     "showDetails": "Rodyti detales",
-    "somethingWentWrong": "Kažkas nepavyko",
+    "somethingWentWrong": "Kažkas nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "synced": "Sinchronizuota",
     "syncing": "Sinchronizuojama",
     "tableBordersAll": "Visos kraštinės",

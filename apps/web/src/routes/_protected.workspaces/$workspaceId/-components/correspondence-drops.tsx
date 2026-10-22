@@ -182,7 +182,7 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
       </Table>
       {isError && (
         <div role="alert" className="flex items-center gap-2 text-sm">
-          <span>{t("common.error")}</span>
+          <span>{t("common.loadFailed")}</span>
           <Button
             variant="ghost"
             size="sm"

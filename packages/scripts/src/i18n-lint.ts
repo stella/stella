@@ -14,9 +14,8 @@
  *  - terminology: per-locale renderings marked `forbidden` in glossary.json
  *    do not appear (keeps canonical terms consistent across the product).
  *  - bare errors: no en message says only that something failed ("Error",
- *    "Something went wrong"). Never grandfathered; keys still being swept
- *    are listed in i18n-bare-error-pending.json beside the catalog, which
- *    may only shrink.
+ *    "Something went wrong") without telling the person what to do next.
+ *    Never grandfathered.
  *
  * Existing debt is grandfathered in i18n-lint-baseline.json so the gate
  * catches only NEW regressions. Burn the baseline down over time.
@@ -602,11 +601,9 @@ export const findForbiddenTerms = (
   return hits;
 };
 
-// --- baseline ---
-
 /**
- * Whole messages that say something failed but never what. Nobody can act on
- * them and support cannot trace them, so every failure names what failed.
+ * Whole messages that say something failed and nothing else. Nobody can act
+ * on them, so a failure message says what to do next (try again, reload).
  */
 const BARE_ERROR_MESSAGES = new Set([
   "action failed",
@@ -622,8 +619,6 @@ const BARE_ERROR_MESSAGES = new Set([
   "operation failed",
   "request failed",
   "something went wrong",
-  "something went wrong, please try again",
-  "something went wrong. please try again",
   "unexpected error",
   "unknown error",
 ]);
@@ -640,39 +635,14 @@ const bareErrorForm = (value: string): string =>
 export const isBareErrorMessage = (value: string): boolean =>
   BARE_ERROR_MESSAGES.has(bareErrorForm(value));
 
-/**
- * Bare en messages outside `pending`, and `pending` entries that are gone or
- * no longer bare. Both fail, so the pending list can only shrink.
- */
-export const findBareErrors = (
-  source: Record<string, string>,
-  pending: ReadonlySet<string>,
-): { bare: string[]; stale: string[] } => ({
-  bare: Object.entries(source)
-    .filter(([key, value]) => isBareErrorMessage(value) && !pending.has(key))
+/** Keys of the en messages that only say something failed. */
+export const findBareErrors = (source: Record<string, string>): string[] =>
+  Object.entries(source)
+    .filter(([, value]) => isBareErrorMessage(value))
     .map(([key]) => key)
-    .toSorted(),
-  stale: [...pending]
-    .filter((key) => {
-      const value = source[key];
-      return value === undefined || !isBareErrorMessage(value);
-    })
-    .toSorted(),
-});
+    .toSorted();
 
-export const parseBareErrorPending = (
-  text: string,
-  filePath: string,
-): ReadonlySet<string> => {
-  const parsed: unknown = JSON.parse(text);
-  if (
-    !Array.isArray(parsed) ||
-    !parsed.every((key): key is string => typeof key === "string")
-  ) {
-    return panic(`${filePath} is not a list of message keys`);
-  }
-  return new Set(parsed);
-};
+// --- baseline ---
 
 export type LintCategory = "placeholder" | "icu" | "plural" | "terminology";
 
@@ -900,27 +870,13 @@ if (import.meta.main) {
       }
 
       // A bare failure message is never grandfathered either.
-      const pendingPath = path.resolve(
-        langsDir,
-        "..",
-        "i18n-bare-error-pending.json",
-      );
-      const pendingFile = Bun.file(pendingPath);
-      const pending = (await pendingFile.exists())
-        ? parseBareErrorPending(await pendingFile.text(), pendingPath)
-        : new Set<string>();
-      const { bare, stale } = findBareErrors(source, pending);
-      if (bare.length > 0 || stale.length > 0) {
+      const bare = findBareErrors(source);
+      if (bare.length > 0) {
         hasIssues = true;
         console.log(`\n${path.resolve(langsDir, "en.json")}:`);
         for (const key of bare) {
           console.log(
-            `  bare-error (source): ${key} says only that something failed; name what failed`,
-          );
-        }
-        for (const key of stale) {
-          console.log(
-            `  bare-error (pending): ${key} is gone or no longer bare; remove it from ${pendingPath}`,
+            `  bare-error (source): ${key} says only that something failed; say what to do next`,
           );
         }
       }

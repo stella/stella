@@ -62,7 +62,7 @@ export const useUpdateCorrespondence = () => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      notifyUserError(error, t("common.error"));
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
@@ -90,7 +90,7 @@ export const useRotateCorrespondenceAddress = () => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      notifyUserError(error, t("common.error"));
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
@@ -118,7 +118,7 @@ export const useRevokeCorrespondenceAddress = () => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      notifyUserError(error, t("common.error"));
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };

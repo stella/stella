@@ -422,7 +422,7 @@ const GenericExternalReferencePanel = ({
     const copied = await copyToClipboard(confirmHref);
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error);
-      notifyUserError(copied.error, t("common.error"));
+      notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }
     stellaToast.success(t("common.copied"));
