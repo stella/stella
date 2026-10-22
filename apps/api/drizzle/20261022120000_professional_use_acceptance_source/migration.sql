@@ -26,7 +26,10 @@ SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '30s';--> statement-breakpoint
 ALTER TABLE "user_professional_use_acceptances"
   ADD CONSTRAINT "user_professional_use_acceptances_source_values"
-  CHECK ("source" IN ('interactive', 'registration', 'recorded_before_provenance', 'owner_backfill_2026_10_22')) NOT VALID;
+  CHECK (
+    "source" IS NOT NULL
+    AND "source" IN ('interactive', 'registration', 'recorded_before_provenance', 'owner_backfill_2026_10_22')
+  ) NOT VALID;
 --> statement-breakpoint
 
 -- Validation scans under a weaker lock in its own transaction.

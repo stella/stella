@@ -151,11 +151,14 @@ describe("professional-use provenance migrations", () => {
       INSERT INTO "user" (id, name, email) VALUES
         ('existing', 'Existing', 'existing@example.test'),
         ('human', 'Human', 'human@example.test'),
-        ('agent', 'Agent', 'agent@example.test'),
+        ('delegating-human', 'Delegating Human', 'delegating-human@example.test'),
+        ('registered-human', 'Registered Human', 'registered-human@example.test'),
+        ('smoke-ai-user-stella', 'Synthetic Agent', 'agent@example.test'),
         ('reviewer', 'Reviewer', 'reviewer@example.test');
       INSERT INTO user_professional_use_acceptances VALUES
         ('existing', '1999-01', '1999-02', '2000-01-02T03:04:05Z');
-      INSERT INTO agent_delegation VALUES ('delegation', 'agent');
+      INSERT INTO agent_delegation VALUES ('delegation', 'delegating-human');
+      INSERT INTO agent_registration VALUES ('registration', 'registered-human');
       INSERT INTO organization VALUES
         ('review-org', 'Sample law firm', 'review-review-org');
       INSERT INTO member VALUES
@@ -179,6 +182,13 @@ describe("professional-use provenance migrations", () => {
     );
     expect(once.rows).toEqual([
       {
+        user_id: "delegating-human",
+        statement_version: PROFESSIONAL_USE_STATEMENT_VERSION,
+        terms_version: PROFESSIONAL_USE_TERMS_VERSION,
+        accepted_at: expect.any(Date),
+        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.ownerBackfill20261022,
+      },
+      {
         ...before.rows[0],
         source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.recordedBeforeProvenance,
       },
@@ -189,12 +199,19 @@ describe("professional-use provenance migrations", () => {
         accepted_at: expect.any(Date),
         source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.ownerBackfill20261022,
       },
+      {
+        user_id: "registered-human",
+        statement_version: PROFESSIONAL_USE_STATEMENT_VERSION,
+        terms_version: PROFESSIONAL_USE_TERMS_VERSION,
+        accepted_at: expect.any(Date),
+        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.ownerBackfill20261022,
+      },
     ]);
     expect(
       (
         await db.query(
           `SELECT user_id FROM user_professional_use_acceptances
-           WHERE user_id IN ('agent', 'reviewer')`,
+           WHERE user_id IN ('smoke-ai-user-stella', 'reviewer')`,
         )
       ).rows,
     ).toEqual([]);

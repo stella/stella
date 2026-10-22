@@ -2,7 +2,7 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '30s';--> statement-breakpoint
 
--- stella-migration-safety: reviewed insert-select - inserts at most one acceptance per human account, excludes durable agent and system identities, and converges through both the anti-join and primary-key conflict guard.
+-- stella-migration-safety: reviewed insert-select - inserts at most one acceptance per eligible account, excludes fixed synthetic principals and the review organization, and converges through both the anti-join and primary-key conflict guard.
 INSERT INTO user_professional_use_acceptances
   (user_id, statement_version, terms_version, source)
 SELECT u.id, '2026-10', '2026-10', 'owner_backfill_2026_10_22'
@@ -14,12 +14,6 @@ WHERE NOT EXISTS (
     'smoke-user-stella',
     'smoke-ai-user-stella',
     'synthetic-prod-user'
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM agent_registration r WHERE r.bound_user_id = u.id
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM agent_delegation d WHERE d.user_id = u.id
   )
   AND NOT EXISTS (
     SELECT 1
