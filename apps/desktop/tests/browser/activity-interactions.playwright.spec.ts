@@ -27,6 +27,7 @@ const SNAPSHOT = {
   excludedApps: [],
   otherAccountHistoryDays: 0,
   captureDetails: false,
+  detectCalls: true,
   appNameOnlyApps: [],
   browserApps: [],
   sourceAppVisuals: [],
