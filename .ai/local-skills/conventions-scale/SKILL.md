@@ -1,6 +1,6 @@
 ---
 name: conventions-scale
-description: 'Apply when making architectural decisions, designing endpoints or workers, adding database tables, or changing data-volume behavior.'
+description: "Apply when making architectural decisions, designing endpoints or workers, adding database tables, or changing data-volume behavior."
 ---
 
 # Scalability Conventions
