@@ -196,34 +196,34 @@ scheduler_jobs.created_at       timestamptz  default,not null  contacts.ts:770
 scheduler_jobs.updated_at       timestamptz  default,not null  contacts.ts:771
 ```
 
-## scheduler_job_runs · `schedulerJobRuns` · contacts.ts:799 · rls
+## scheduler_job_runs · `schedulerJobRuns` · contacts.ts:808 · rls
 
 ```text
-scheduler_job_runs.id           pUuid        pk,not null       contacts.ts:802
-scheduler_job_runs.job_id       varchar      fk,not null       contacts.ts:803
-scheduler_job_runs.task         varchar      not null          contacts.ts:807
-scheduler_job_runs.runner_id    varchar      not null          contacts.ts:808
-scheduler_job_runs.status       text         default,not null  contacts.ts:809
-scheduler_job_runs.started_at   timestamptz  default,not null  contacts.ts:813
-scheduler_job_runs.finished_at  timestamptz  null              contacts.ts:814
-scheduler_job_runs.duration_ms  integer      null              contacts.ts:815
-scheduler_job_runs.error        text         null              contacts.ts:816
+scheduler_job_runs.id           pUuid        pk,not null       contacts.ts:811
+scheduler_job_runs.job_id       varchar      fk,not null       contacts.ts:812
+scheduler_job_runs.task         varchar      not null          contacts.ts:816
+scheduler_job_runs.runner_id    varchar      not null          contacts.ts:817
+scheduler_job_runs.status       text         default,not null  contacts.ts:818
+scheduler_job_runs.started_at   timestamptz  default,not null  contacts.ts:822
+scheduler_job_runs.finished_at  timestamptz  null              contacts.ts:823
+scheduler_job_runs.duration_ms  integer      null              contacts.ts:824
+scheduler_job_runs.error        text         null              contacts.ts:825
 ```
 
-## infosoud_tracked_cases · `infoSoudTrackedCases` · contacts.ts:836
+## infosoud_tracked_cases · `infoSoudTrackedCases` · contacts.ts:845
 
 -- InfoSoud Tracking --
 
 ```text
-infosoud_tracked_cases.id                    pUuid            pk,not null       contacts.ts:839
-infosoud_tracked_cases.workspace_id          safeWorkspaceId  fk,not null       contacts.ts:840
-infosoud_tracked_cases.court_code            varchar          not null          contacts.ts:843
-infosoud_tracked_cases.spis_zn               varchar          not null          contacts.ts:844
-infosoud_tracked_cases.enabled               boolean          default,not null  contacts.ts:845
-infosoud_tracked_cases.created_by            text             fk,null           contacts.ts:846
-infosoud_tracked_cases.last_sync_attempt_at  timestamptz      null              contacts.ts:849
-infosoud_tracked_cases.last_synced_at        timestamptz      null              contacts.ts:850
-infosoud_tracked_cases.last_sync_error       text             null              contacts.ts:851
-infosoud_tracked_cases.created_at            timestamptz      default,not null  contacts.ts:852
-infosoud_tracked_cases.updated_at            timestamptz      default,not null  contacts.ts:853
+infosoud_tracked_cases.id                    pUuid            pk,not null       contacts.ts:848
+infosoud_tracked_cases.workspace_id          safeWorkspaceId  fk,not null       contacts.ts:849
+infosoud_tracked_cases.court_code            varchar          not null          contacts.ts:852
+infosoud_tracked_cases.spis_zn               varchar          not null          contacts.ts:853
+infosoud_tracked_cases.enabled               boolean          default,not null  contacts.ts:854
+infosoud_tracked_cases.created_by            text             fk,null           contacts.ts:855
+infosoud_tracked_cases.last_sync_attempt_at  timestamptz      null              contacts.ts:858
+infosoud_tracked_cases.last_synced_at        timestamptz      null              contacts.ts:859
+infosoud_tracked_cases.last_sync_error       text             null              contacts.ts:860
+infosoud_tracked_cases.created_at            timestamptz      default,not null  contacts.ts:861
+infosoud_tracked_cases.updated_at            timestamptz      default,not null  contacts.ts:862
 ```
