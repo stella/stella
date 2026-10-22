@@ -7,8 +7,8 @@ import postcss from "postcss";
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 import { repoRelativePath } from "@stll/portable-path";
 import {
-  REACT_COMPILER_OPTIONS,
   REACT_COMPILER_EXCLUDE,
+  REACT_COMPILER_OPTIONS,
 } from "@stll/scripts/src/react-compiler-options";
 
 import { formattedArtifactsLikeRepository } from "../../../scripts/generated-artifacts";

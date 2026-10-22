@@ -21,13 +21,13 @@ import {
 import {
   CASE_LAW_TOTAL_REPORTER,
   type CaseLawCountryCompleteness,
-  type CaseLawCoverageHealth,
-  type CaseLawSourceCompleteness,
-  type CaseLawTotalReporter,
   caseLawCountryCompleteness,
   caseLawCountryHealth,
+  type CaseLawCoverageHealth,
+  type CaseLawSourceCompleteness,
   caseLawSourceCompleteness,
   caseLawSourceHealth,
+  type CaseLawTotalReporter,
 } from "@/api/handlers/case-law/decisions/coverage-health";
 import { readBrowseFacetsUnderPolicy } from "@/api/handlers/case-law/decisions/facets";
 import {

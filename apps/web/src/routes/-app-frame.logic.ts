@@ -31,10 +31,7 @@ export type AppFrame =
  *  session and an active organization; anyone else is anonymous, and a
  *  session that could not be read is `unavailable`. */
 export type AppFrameAudience =
-  | "checking"
-  | "anonymous"
-  | "unavailable"
-  | "member";
+  "checking" | "anonymous" | "unavailable" | "member";
 
 // Pages that show the same to every visitor: published catalogue entries.
 const VISITOR_INDEPENDENT_ROUTE_IDS: readonly string[] = [

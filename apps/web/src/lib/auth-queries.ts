@@ -1,4 +1,4 @@
-import { queryOptions, type QueryClient } from "@tanstack/react-query";
+import { type QueryClient, queryOptions } from "@tanstack/react-query";
 
 import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
 

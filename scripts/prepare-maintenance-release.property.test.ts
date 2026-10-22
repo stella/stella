@@ -20,14 +20,14 @@ import { parseChangesetEntry } from "./changeset-entry";
 import {
   changesetVersionEnv,
   foldSupersededChangelog,
-  MaintenanceReleaseError,
   maintenanceChangelog,
+  MaintenanceReleaseError,
   nextPatchVersion,
   parseMaintenanceReleaseOptions,
   parseStableVersion,
   prepareMaintenanceReleaseFiles,
-  readPreviousRelease,
   readPendingChangesets,
+  readPreviousRelease,
   resolveGitHubToken,
   withFileRollback,
 } from "./prepare-maintenance-release";

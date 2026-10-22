@@ -14,9 +14,9 @@ import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
   CHECK_POOL_STEP_NAMES,
   checkPoolRegistryPath,
+  type ReadCheckPool,
   readCheckPool,
   readWorkingTreeCheckPool,
-  type ReadCheckPool,
 } from "./ci-check-pool-registry";
 import { CI_GATES, CONTINUE_ON_ERROR } from "./ci-gate-classes";
 import { rootCheckGate } from "./ci-root-check-gate";

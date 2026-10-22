@@ -16,21 +16,21 @@ import {
   scopeOutputLines,
 } from "./ci-plan-scope";
 import {
-  BUDGET_MS,
-  MAX_CHANGED_TEST_FILES,
-  REPEATS,
   annotationData,
   annotationProperty,
+  BUDGET_MS,
   executeGate,
   failureAnnotation,
+  MAX_CHANGED_TEST_FILES,
   planRepeats,
   renderReport,
+  REPEATS,
+  type Report,
   reportExitCode,
   runOnce,
   selectTargets,
-  trialCommand,
-  type Report,
   type Target,
+  trialCommand,
 } from "./flake-gate";
 
 // Markdown reads consume temporary CLI output only.

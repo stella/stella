@@ -6,12 +6,12 @@ import path from "node:path";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  type Advisory,
   AuditCommandError,
+  type Baseline,
   check,
   collectGatedAdvisories,
   readBaseline,
-  type Advisory,
-  type Baseline,
 } from "./dependency-audit";
 import {
   expiringAcceptances,

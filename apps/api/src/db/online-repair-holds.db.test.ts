@@ -2,9 +2,9 @@ import type { ReservedSQL, SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   getTableConfig,
   PgDialect,
-  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
@@ -20,8 +20,8 @@ import {
   assertOnlineMigrationsApplied,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
-  runOnlineMigrations,
   type OnlineRepairOptions,
+  runOnlineMigrations,
 } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import {

@@ -11,6 +11,7 @@
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   canonicalModuleId,
   everyNode,
   getImportedName,
@@ -18,9 +19,9 @@ import {
   invokedCallee,
   isAstNode,
   isCallTo,
+  isFileIn,
   isIdentifier,
   isIdentifierReference,
-  isFileIn,
   isStringLiteral,
   memberPropertyName,
   repoRelativeFilename,
@@ -28,7 +29,6 @@ import {
   resolveVariable,
   stableInitializer,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 // ── Rule 1: no-raw-filename-write ──────────────────────────────

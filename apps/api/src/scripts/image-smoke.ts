@@ -21,7 +21,7 @@ import {
   loadNativeAnonymizeBinding,
 } from "@stll/anonymize";
 import { validateIco } from "@stll/business-registries/ares";
-import { DEFAULT_CUTOFF, buildScreeningIndex, screen } from "@stll/sanctions";
+import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "@stll/sanctions";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { yaraRuleFileCount, yaraScanner } from "@/api/lib/file-scan/yara";

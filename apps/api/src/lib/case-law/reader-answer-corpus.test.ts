@@ -8,10 +8,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 import {
-  readReaderAnswerDecision,
-  readReaderAnswerRelated,
   READER_ANSWER_RELATED_LIMITS,
   ReaderAnswerCorpusError,
+  readReaderAnswerDecision,
+  readReaderAnswerRelated,
 } from "./reader-answer-corpus";
 
 type FixtureOptions = {

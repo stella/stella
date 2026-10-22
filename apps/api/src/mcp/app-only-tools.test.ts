@@ -36,10 +36,7 @@ const requestContext = () =>
 type CallOptions = {
   toolName: string;
   access:
-    | "granted"
-    | "missing-scope"
-    | "unauthenticated"
-    | "organization-denied";
+    "granted" | "missing-scope" | "unauthenticated" | "organization-denied";
 };
 const call = async ({ toolName, access }: CallOptions) => {
   let calls = 0;

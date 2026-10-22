@@ -14,8 +14,8 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import {
-  RESOURCE_PATH_PATTERN,
   RESOURCE_PATH_MAX_CHARS,
+  RESOURCE_PATH_PATTERN,
 } from "@/api/lib/agent-skills/resource-path";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { readCommittedMigrations } from "@/api/tests/stella-table-privileges";

@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,

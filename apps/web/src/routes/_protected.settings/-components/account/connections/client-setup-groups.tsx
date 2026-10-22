@@ -23,8 +23,8 @@ import {
   DownloadIcon,
   EyeOffIcon,
   KeyRoundIcon,
-  ServerIcon,
   type LucideIcon,
+  ServerIcon,
 } from "@stll/ui/icons";
 import {
   List,

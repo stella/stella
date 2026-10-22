@@ -9,8 +9,8 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
-  ChevronDownIcon,
   BrainIcon,
+  ChevronDownIcon,
   FlaskConicalIcon,
   KeyboardIcon,
   MonitorIcon,

@@ -15,8 +15,7 @@ type OptionalUpdateBag = {
 };
 
 type ExplicitUpdate =
-  | { type: "color"; value: string }
-  | { type: "name"; value: string };
+  { type: "color"; value: string } | { type: "name"; value: string };
 
 export const useInlineOptionalBag = () =>
   useMutation({

@@ -1,6 +1,5 @@
 export type TableRetention =
-  | { ttlColumn: string; sweeper: string }
-  | { boundedBy: string };
+  { ttlColumn: string; sweeper: string } | { boundedBy: string };
 
 export const TABLE_RETENTION = {
   desktop_time_entry_batches: {

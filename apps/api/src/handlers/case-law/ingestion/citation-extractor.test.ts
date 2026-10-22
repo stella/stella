@@ -6,8 +6,8 @@ import {
   DECISION_IDENTIFIER_TYPES,
 } from "@stll/legal-ast/decision-identifier";
 import type {
-  DecisionIdentifierType,
   DecisionIdentifiers,
+  DecisionIdentifierType,
 } from "@stll/legal-ast/decision-identifier";
 import { propertyConfig } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -20,10 +20,10 @@ import {
 import { plUokikDecisionIdentifiers } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import {
   bareCitationKey,
+  citationKeyOf,
   decisionCitationKeyOf,
   decisionIdentifiersFromMetadata,
   decisionIdentifiersFromStoredMetadata,
-  citationKeyOf,
   extractCitations,
   hungarianCitationForm,
   isSelfCitation,

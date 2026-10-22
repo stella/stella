@@ -7,13 +7,13 @@
 
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import * as bun from "bun";
-import { S3Client, s3 as defaultClient } from "bun";
+import { s3 as defaultClient, S3Client } from "bun";
 
 import * as storage from "@/api/lib/s3";
 import {
   getCorpusS3,
-  getS3,
   getS3 as documentsBucket,
+  getS3,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
 

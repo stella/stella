@@ -31,8 +31,8 @@ import {
 import type {
   McpToolDefinition,
   McpToolHandler,
-  RuntimeMcpToolOutputContract,
   McpToolSet,
+  RuntimeMcpToolOutputContract,
   ToolScope,
 } from "@/api/mcp/tool-types";
 

@@ -5,7 +5,7 @@
 // If the rule regresses, the matching disable becomes unused and
 // `--report-unused-disable-directives-severity=error` fails CI.
 
-import { randomUUID, randomUUID as mint } from "node:crypto";
+import { randomUUID as mint, randomUUID } from "node:crypto";
 
 type Branded<T extends string> = string & { readonly __brand: T };
 type AuthProviderIdType = "organization" | "user";

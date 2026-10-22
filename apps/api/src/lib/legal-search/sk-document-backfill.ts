@@ -63,8 +63,8 @@ import { corpusStorageMode } from "@/api/env-base";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
@@ -109,8 +109,8 @@ import {
   withDeferredDocumentSourceOwnership,
 } from "@/api/lib/legal-search/deferred-document-source-ownership";
 import {
-  withDocumentStageObserver,
   recordDocumentStageError,
+  withDocumentStageObserver,
 } from "@/api/lib/legal-search/document-stage-observation";
 import {
   ADAPTER_KEYS,
@@ -184,8 +184,7 @@ export type SkDocumentFetch = (
 
 /** What one gated download established. */
 export type SkDocumentRead =
-  | ReadOutcome<Response>
-  | { type: "refused-target"; reason: string };
+  ReadOutcome<Response> | { type: "refused-target"; reason: string };
 
 export type FetchPdfBytesOptions = {
   documentUrl: string;

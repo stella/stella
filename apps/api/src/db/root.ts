@@ -19,12 +19,12 @@ import { instrumentRootPoolTransactions } from "@/api/lib/db/root-pool-reservati
 import { readRootPoolSnapshot } from "@/api/lib/db/root-pool-snapshot";
 import { readOAuthClientBinding } from "@/api/lib/db/service-client-binding";
 import {
-  createServiceOAuthClientInTransaction,
   changeServiceOAuthClientInTransaction,
+  createServiceOAuthClientInTransaction,
 } from "@/api/lib/db/service-client-operator";
 import type {
-  CreateServiceOAuthClientOptions,
   ChangeServiceOAuthClientOptions,
+  CreateServiceOAuthClientOptions,
 } from "@/api/lib/db/service-client-operator";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";

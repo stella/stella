@@ -27,8 +27,8 @@ import {
 import sparqlFixture from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/eu-ecj-sparql.json";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import {
-  withPublisherGateFixture,
   abortableSleep,
+  withPublisherGateFixture,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { ecjCompletionFingerprint } from "@/api/handlers/case-law/ingestion/eu-completion-protection";

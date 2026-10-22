@@ -4,8 +4,8 @@ import { drizzle } from "drizzle-orm/bun-sql";
 
 import {
   caseLawDecisions,
-  caseLawSources,
   caseLawProvisionCitations,
+  caseLawSources,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

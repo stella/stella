@@ -17,8 +17,8 @@ import type { S3Client } from "@aws-sdk/client-s3";
 import { fetchLocalCache } from "unrelated-cache";
 
 import {
-  fetchWithTimeout,
   fetchWithTimeout as aliasedFetch,
+  fetchWithTimeout,
 } from "@stll/fetch";
 
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";

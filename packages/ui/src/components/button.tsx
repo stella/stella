@@ -7,9 +7,9 @@ import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import {
-  BUTTON_DISPOSITION,
   blockDisabledActivation,
   blockDisabledKeyActivation,
+  BUTTON_DISPOSITION,
   resolveButtonDisposition,
 } from "../lib/button-disposition";
 import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";

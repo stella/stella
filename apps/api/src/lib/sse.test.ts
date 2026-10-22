@@ -1,9 +1,9 @@
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
+  RESOURCE_TYPE,
   resourceRef,
   resourceUpdatedRealtimeEvent,
-  RESOURCE_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 

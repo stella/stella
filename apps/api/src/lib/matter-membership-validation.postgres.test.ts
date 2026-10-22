@@ -39,14 +39,16 @@ describePostgres("matter membership validation (postgres)", () => {
         // LIKE derives the fixture's column types and defaults from the
         // migrated schema; a private search path keeps the repair isolated.
         await session
-          .unsafe(`
+          .unsafe(
+            `
           CREATE SCHEMA ${schema};
           SET search_path TO ${schema}, public;
           CREATE TABLE workspaces (LIKE public.workspaces INCLUDING DEFAULTS);
           CREATE TABLE workspace_members (LIKE public.workspace_members INCLUDING DEFAULTS);
           CREATE TABLE member (LIKE public.member INCLUDING DEFAULTS);
           CREATE TABLE audit_logs (LIKE public.audit_logs INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES);
-        `)
+        `,
+          )
           .simple();
         await session`INSERT INTO workspaces (id, organization_id, name, reference)
           VALUES (${workspaceId}, 'validation-org', 'Matter', ${workspaceId})`;

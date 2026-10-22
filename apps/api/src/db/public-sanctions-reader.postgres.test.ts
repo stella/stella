@@ -7,10 +7,10 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { stellaPublicSanctionsReader } from "@/api/db/rls";
 import {
-  sanctionsSources,
+  sanctionsEditionEntries,
   sanctionsEditions,
   sanctionsEntryPayloads,
-  sanctionsEditionEntries,
+  sanctionsSources,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";

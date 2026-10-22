@@ -26,13 +26,13 @@ import {
   EllipsisVerticalIcon,
   EyeIcon,
   FileDownIcon,
-  FilePenLineIcon,
   FileOutputIcon,
+  FilePenLineIcon,
   FileTextIcon,
   FolderPlusIcon,
   FolderSyncIcon,
-  LaptopIcon,
   LanguagesIcon,
+  LaptopIcon,
   LockOpenIcon,
   Maximize2Icon,
   MessageSquareIcon,
@@ -63,9 +63,9 @@ import { DownloadRenditionMenuItems } from "@/components/inspector/download-rend
 import { downloadTabFile } from "@/components/inspector/file-download-service";
 import {
   canDownloadScrubbed,
-  getDownloadRenditions,
   type DownloadRendition,
   type DownloadVariant,
+  getDownloadRenditions,
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import {
@@ -82,8 +82,8 @@ import {
 import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
 import {
   buildSelectionParentLookup,
-  resolveAncestorIds,
   type CopyToMatterEntity,
+  resolveAncestorIds,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import {
   getEntityName,
@@ -125,8 +125,8 @@ import {
   type OpenFileInDesktopResult,
 } from "@/lib/desktop-bridge";
 import {
-  DESKTOP_EDIT_FILE_TYPE_DETAILS,
   canOpenDesktopEdit,
+  DESKTOP_EDIT_FILE_TYPE_DETAILS,
   getDesktopEditFileType,
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
@@ -171,8 +171,7 @@ type RowActionsProps = {
   onOpenChange?: ((open: boolean) => void) | undefined;
   onRename?: (() => void) | undefined;
   onSubfolderCreated?:
-    | ((entityId: string, parentId: string) => void)
-    | undefined;
+    ((entityId: string, parentId: string) => void) | undefined;
   triggerClassName?: string | undefined;
   triggerTabIndex?: number | undefined;
   anchor?: VirtualAnchor | null | undefined;
@@ -202,8 +201,7 @@ type GetRowFileTargetOptions = {
 };
 
 type TranslationDialogState =
-  | { type: "closed" }
-  | { target: TranslationTarget; type: "open" };
+  { type: "closed" } | { target: TranslationTarget; type: "open" };
 
 /** What a confirmed deletion removes, captured when it was requested. */
 type DeleteRequest = {

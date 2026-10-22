@@ -18,9 +18,9 @@ import type {
 } from "@stll/auth-model";
 
 import {
+  account,
   AUTH_USER_STELLA_SELECT_COLUMN_NAMES,
   AUTH_USER_STELLA_SELECT_COLUMNS,
-  account,
   authSchema,
   invitation,
   jwks,

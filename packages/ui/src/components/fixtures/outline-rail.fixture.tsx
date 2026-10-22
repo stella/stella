@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { panic } from "better-result";
 
 import { publishDocumentPanelInset } from "../../lib/panel-inset";
-import { OutlineRail, type OutlineItem } from "../outline-rail";
+import { type OutlineItem, OutlineRail } from "../outline-rail";
 
 const presentation = (() => {
   const value = new URLSearchParams(window.location.search).get("presentation");

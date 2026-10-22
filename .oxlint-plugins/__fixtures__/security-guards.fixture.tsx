@@ -5,17 +5,17 @@ import { sanitizeHref as foreignSanitizeHref } from "unrelated-href";
 
 import * as hrefs from "@stll/decision-reader/sanitize-href";
 import {
-  sanitizeHref,
   sanitizeHref as cleanHref,
+  sanitizeHref,
 } from "@stll/decision-reader/sanitize-href";
 import { readerHref } from "@stll/decision-reader/source-link-policy";
 
 import * as authSchema from "@/api/db/auth-schema";
-import { member, user, user as authUser } from "@/api/db/auth-schema";
+import { member, user as authUser, user } from "@/api/db/auth-schema";
 import * as filenames from "@/api/lib/sanitize-filename";
 import {
-  sanitizeFilename,
   sanitizeFilename as cleanFilename,
+  sanitizeFilename,
 } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 // oxlint-disable-next-line security-guards/require-secure-document-response -- fixture: handlers must not assemble the document security policy manually

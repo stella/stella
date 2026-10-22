@@ -11,8 +11,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/ingestion/outbound-urls";
 import {
-  LegislationRevision,
   LEGISLATION_CORPUS_DEPENDENCIES,
+  LegislationRevision,
 } from "@/api/handlers/legislation/revision";
 import type {
   LegislationAmendmentObservation,

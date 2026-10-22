@@ -7,8 +7,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawCitationDoctrineReviews,
-  caseLawDecisionSupplements,
   caseLawDecisions,
+  caseLawDecisionSupplements,
   caseLawIndexJobs,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";

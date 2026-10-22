@@ -18,16 +18,16 @@ import { testFailures } from "./ci-failure-digest";
 import { parseBunTestScript } from "./flake-gate-command";
 import {
   cleanupCapability,
-  runFlakeProcess,
-  type FlakeProcessOutcome,
   type FlakeCleanup,
+  type FlakeProcessOutcome,
+  runFlakeProcess,
 } from "./flake-gate-process";
 import {
   createRustTestListing,
   rustExactCommand,
   rustListCommand,
-  selectRustTargets,
   type RustTarget,
+  selectRustTargets,
 } from "./flake-gate-rust";
 
 export const REPEATS = 5;

@@ -7,10 +7,10 @@ import ts from "typescript6";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
-  SOURCE_FILE,
   lexShell,
   parseBunFlags,
   programWords,
+  SOURCE_FILE,
 } from "./install-free-ci";
 import { parseSource } from "./parse-memo";
 import { flattenWorkflowSteps } from "./workflow-steps";
@@ -28,8 +28,7 @@ export type OfflineImportAllowance = {
   reason: string;
 };
 export type OfflineCheckCommand = { command: string } & (
-  | { protected: true; entry: string }
-  | { protected: false }
+  { protected: true; entry: string } | { protected: false }
 );
 const root = path.resolve(import.meta.dir, "..");
 const preload = path.join(root, "scripts/offline-network-preload.ts");

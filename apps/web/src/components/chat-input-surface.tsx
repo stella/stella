@@ -32,8 +32,8 @@ import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-optio
 import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import {
-  ComposerPlusMenu,
   type ComposerContextMenuProps,
+  ComposerPlusMenu,
 } from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";

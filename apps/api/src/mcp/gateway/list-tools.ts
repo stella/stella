@@ -50,9 +50,9 @@ import {
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpAnonymizedPolicy,
+  McpToolAnnotations,
   McpToolDefinition,
   McpToolInputSchema,
-  McpToolAnnotations,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
 import {

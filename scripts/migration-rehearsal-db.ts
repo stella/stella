@@ -35,9 +35,9 @@ import { SQL } from "bun";
 
 import {
   CONTENDERS,
+  contendSession,
   CONTENTION_HELD_LINE,
   CONTENTION_HOLD_MS,
-  contendSession,
 } from "./migration-rehearsal-contender";
 import { formatWriterEvent } from "./migration-rehearsal-writer-gap";
 

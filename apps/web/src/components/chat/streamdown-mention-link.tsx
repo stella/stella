@@ -4,8 +4,8 @@ import { Fragment, isValidElement } from "react";
 import { useTranslations } from "use-intl";
 
 import {
-  parseCanonicalChatSourceCitationHref,
   type ChatSourceCitationTarget,
+  parseCanonicalChatSourceCitationHref,
 } from "@stll/api-contract";
 import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";

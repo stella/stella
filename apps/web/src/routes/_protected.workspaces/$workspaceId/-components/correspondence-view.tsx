@@ -17,9 +17,9 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  correspondenceAddressOptions,
   CORRESPONDENCE_PAGE_SIZE,
   CORRESPONDENCE_STATE_LABEL_KEYS,
+  correspondenceAddressOptions,
   correspondenceInfiniteOptions,
   uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";

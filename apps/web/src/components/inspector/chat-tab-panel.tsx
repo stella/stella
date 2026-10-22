@@ -110,9 +110,9 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import {
+  type ChatThreadRef,
   createChatThreadId,
   getChatThreadKey,
-  type ChatThreadRef,
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";

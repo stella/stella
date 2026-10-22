@@ -1,12 +1,12 @@
 import { TaggedError } from "better-result";
 
 import {
+  type DesktopEditSessionRealtimeEvent,
+  type OrganizationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
   parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
-  type DesktopEditSessionRealtimeEvent,
-  type OrganizationRealtimeEvent,
   type UserRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";

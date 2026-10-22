@@ -58,8 +58,7 @@ export type GenerateBatchProps = {
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
   onPartialAnswer?:
-    | ((update: PartialAnswerUpdate) => Promise<void> | void)
-    | undefined;
+    ((update: PartialAnswerUpdate) => Promise<void> | void) | undefined;
 };
 
 export type GenerateBatchResult = Result<

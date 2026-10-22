@@ -46,12 +46,12 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag, unredactedErrorFields } from "@/api/lib/errors/utils";
 import {
-  isFeatureEnabled,
   isFeatureAccessSnapshotForPrincipal,
+  isFeatureEnabled,
 } from "@/api/lib/feature-access/policy";
 import type {
-  FeatureAccessSnapshot,
   FeatureAccessProof,
+  FeatureAccessSnapshot,
 } from "@/api/lib/feature-access/policy";
 import {
   getContentDeliveryReceiptError,
@@ -812,8 +812,7 @@ type SafeStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
 type SafeHandlerPayload = NonNullable<unknown>;
 
 type SafeHandlerResult<TResult> =
-  | TResult
-  | SafeStatusResponse<HandlerErrorStatusCode>;
+  TResult | SafeStatusResponse<HandlerErrorStatusCode>;
 
 /**
  * The async-generator a safe handler runs: it may `yield*` intermediate
@@ -2246,8 +2245,7 @@ const toBoundedPublicErrorStatus = (
 
 /** What a handler answers with a 200: its result minus statuses and raw bodies. */
 type SuccessPayload<TResult> = TResult extends
-  | ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status>
-  | Response
+  ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status> | Response
   ? never
   : TResult;
 

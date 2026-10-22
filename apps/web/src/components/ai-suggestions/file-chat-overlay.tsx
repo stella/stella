@@ -140,8 +140,8 @@ import type {
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import {
-  getCreateDocumentDraftPersistence,
   type CreateDocumentDraftPersistence,
+  getCreateDocumentDraftPersistence,
 } from "@/components/chat/create-document-draft-runtime";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
@@ -177,8 +177,8 @@ import {
 } from "@/lib/chat-anonymized-store";
 import {
   CHAT_EDIT_MODE_OPTION_ID,
-  type DocxEditSafety,
   docxEditRepresentationForSelection,
+  type DocxEditSafety,
   resolveActiveDocxEditModeState,
 } from "@/lib/chat-edit-mode";
 import {
@@ -186,10 +186,10 @@ import {
   useChatEditModeStore,
 } from "@/lib/chat-edit-mode-store";
 import {
-  createChatThreadId,
-  getChatThreadKey,
   type ChatThreadId,
   type ChatThreadRef,
+  createChatThreadId,
+  getChatThreadKey,
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";

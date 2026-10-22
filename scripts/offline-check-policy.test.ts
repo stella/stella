@@ -1,25 +1,25 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
-  writeFileSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  OfflineCheckPolicyError,
   catalogGeneratorNetworkViolations,
   enumerateOfflineChecks,
   offlineCheckExceptionGrowth,
-  offlineImportGraphViolations,
+  OfflineCheckPolicyError,
   offlineCheckViolations,
-  parseOfflineImportAllowances,
+  offlineImportGraphViolations,
   parseOfflineCheckExceptions,
+  parseOfflineImportAllowances,
   usesOfflineCheckPreload,
 } from "./offline-check-policy";
 

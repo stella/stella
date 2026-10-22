@@ -16,12 +16,15 @@ import {
 } from "./ci-check-pool";
 import {
   annotations,
+  type ApiStep,
   BARE_EXIT_CAUSE,
   buildDigest,
   classify,
   dedupe,
   escapeMarkdown,
+  failedTests,
   failureLines,
+  type FailureRecord,
   findLocation,
   frameLocation,
   inert,
@@ -39,9 +42,6 @@ import {
   stripAnsi,
   summaryMarkdown,
   testFailures,
-  type ApiStep,
-  type FailureRecord,
-  failedTests,
 } from "./ci-failure-digest";
 
 const ROOT = path.resolve(import.meta.dir, "..");

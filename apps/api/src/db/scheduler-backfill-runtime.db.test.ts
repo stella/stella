@@ -4,8 +4,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   type backfillHeartbeat,
-  combine,
   type BatchState,
+  combine,
 } from "@stll/db-load-gate/health";
 import { ebsBalance } from "@stll/db-load-gate/indicators";
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";

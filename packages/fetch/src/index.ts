@@ -7,8 +7,7 @@ export type Fetcher = (
 ) => Promise<Response>;
 
 export type FetchTimeout =
-  | { type: "headers"; ms: number }
-  | { type: "idle"; ms: number };
+  { type: "headers"; ms: number } | { type: "idle"; ms: number };
 
 export type FetchWithTimeoutInit = Omit<RequestInit, "signal"> & {
   signal?: AbortSignal | undefined;

@@ -4,9 +4,9 @@ import { useCallback as useStableCallback } from "react";
 // Each suppressed violation must report, or unused-directive checking fails.
 import {
   type DataTag as TaggedKey,
+  infiniteQueryOptions,
   type QueryClient,
   type QueryKey,
-  infiniteQueryOptions,
   queryOptions,
 } from "@tanstack/react-query";
 

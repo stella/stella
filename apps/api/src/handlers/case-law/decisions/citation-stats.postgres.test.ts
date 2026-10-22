@@ -11,8 +11,8 @@ import { assertProperty } from "@stll/property-testing";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import {
-  caseLawDecisions,
   caseLawDecisionCitationStatsState,
+  caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -25,8 +25,8 @@ import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 import {
   CITATION_TIMELINE_MAX_YEARS,
-  exactDecisionCitationSummaryQuery,
   EXACT_CITATION_SUMMARY_MAX_ROWS,
+  exactDecisionCitationSummaryQuery,
 } from "./citation-graph";
 import {
   compareDecisionCitationStats,

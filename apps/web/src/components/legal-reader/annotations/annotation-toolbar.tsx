@@ -10,12 +10,12 @@ import type { ReaderCopyMode } from "@stll/api-contract/legal-reader-annotations
 import { copyRichToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
+  AddCommentIcon,
   Building2Icon,
   ChevronDownIcon,
   CopyIcon,
   HighlighterIcon,
   LockIcon,
-  AddCommentIcon,
   SparklesIcon,
   StrikethroughIcon,
   Trash2Icon,

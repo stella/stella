@@ -10,7 +10,7 @@ import { panic } from "better-result";
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
 import { beforeAll, describe, expect, test } from "bun:test";
-import { inArray, eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";

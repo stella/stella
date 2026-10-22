@@ -37,7 +37,7 @@ import {
   CommandList,
 } from "@stll/ui/command";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { ChevronRightIcon, PanelRightIcon, AiActionIcon } from "@stll/ui/icons";
+import { AiActionIcon, ChevronRightIcon, PanelRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -52,8 +52,8 @@ import { CompanyRegistryPreview } from "@/components/company-registry-preview";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { SavedSearches } from "@/components/saved-searches";
 import {
-  toSearchFilters,
   type SavedSearchCriteria,
+  toSearchFilters,
 } from "@/components/saved-searches.logic";
 import { SearchCaseLawGroup } from "@/components/search-case-law-group";
 import {
@@ -89,14 +89,14 @@ import {
   getCaseLawHitRoute,
   getChatHitRoute,
   getCompanySearchQuery,
-  isLazySearchGroupActive,
-  resolveRegistryResultsPane,
   getEntityHitLocation,
   getEntityLocation,
   getRecentFileLocation,
   getRecentFileRoute,
+  isLazySearchGroupActive,
   resolveEagerSearchTypes,
   resolveEntityDocumentRoute,
+  resolveRegistryResultsPane,
   toAskAIMessageHtml,
 } from "@/components/search-dialog.logic";
 import type { EntityLocation } from "@/components/search-dialog.logic";
@@ -296,8 +296,7 @@ const filtersForMode = (
     : filters;
 
 type SearchFiltersUpdate =
-  | SearchFilters
-  | ((filters: SearchFilters) => SearchFilters);
+  SearchFilters | ((filters: SearchFilters) => SearchFilters);
 
 type SearchResultsStatus =
   | { type: "hidden" }

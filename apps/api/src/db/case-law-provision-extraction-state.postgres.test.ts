@@ -19,8 +19,8 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
@@ -609,11 +609,7 @@ if (!databaseUrl || !runPostgresTests) {
             execute: async (
               query: string,
               params: readonly (
-                | string
-                | number
-                | bigint
-                | boolean
-                | null
+                string | number | bigint | boolean | null
               )[] = [],
             ) => {
               await reserved.unsafe(query, [...params]);
@@ -621,11 +617,7 @@ if (!databaseUrl || !runPostgresTests) {
             query: async (
               query: string,
               params: readonly (
-                | string
-                | number
-                | bigint
-                | boolean
-                | null
+                string | number | bigint | boolean | null
               )[] = [],
             ): Promise<readonly unknown[]> =>
               await reserved.unsafe(query, [...params]),

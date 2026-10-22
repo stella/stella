@@ -12,17 +12,17 @@ import path from "node:path";
 
 import {
   boundedInstallProblems,
-  installWorkflowPolicy,
   compositeInstallProblems,
+  installWorkflowPolicy,
 } from "./ci-install-policy";
 import {
+  type Classification,
   conditionOperands,
   impliesCondition,
   importProblems,
+  type InstallFreeInvocation,
   installFreeInvocations,
   lexShell,
-  type Classification,
-  type InstallFreeInvocation,
 } from "./install-free-ci";
 import { flattenWorkflowSteps, workflowJobSteps } from "./workflow-steps";
 

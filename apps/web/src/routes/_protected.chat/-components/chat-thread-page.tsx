@@ -11,7 +11,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { Minimize2Icon, NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -81,10 +81,10 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import {
+  type ChatThreadRef,
   createChatThreadId,
   getChatThreadKey,
   resolveChatContextMatterIds,
-  type ChatThreadRef,
 } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";

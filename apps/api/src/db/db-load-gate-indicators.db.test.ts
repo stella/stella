@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { defaultConfig } from "../../../../packages/db-load-gate/src/health";
 import {
   AUTOVACUUM_SQL,
-  LONG_TRANSACTION_SQL,
   autovacuumOnTarget,
+  LONG_TRANSACTION_SQL,
   longTransaction,
 } from "../../../../packages/db-load-gate/src/indicators";
 import { withGatedTestClients } from "../tests/gated-test-database";

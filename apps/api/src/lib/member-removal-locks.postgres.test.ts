@@ -26,8 +26,8 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

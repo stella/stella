@@ -10,10 +10,10 @@ import {
 } from "@/api/lib/analytics/capture";
 import { setAnalyticsForTesting } from "@/api/lib/analytics/client";
 import {
-  extractionWorkerErrorCode,
   ExtractionWorkerError,
-  HandlerError,
+  extractionWorkerErrorCode,
   type ExtractionWorkerTermination,
+  HandlerError,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
 import {

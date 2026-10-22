@@ -133,12 +133,12 @@ import {
   reconcileListVerificationRuns,
 } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
 import {
-  MEMORY_CURATOR_TASK,
   curateAiMemories,
+  MEMORY_CURATOR_TASK,
 } from "@/api/lib/scheduler/tasks/memory-curator";
 import {
-  MEMORY_EXTRACTOR_TASK,
   extractMemoriesFromCompactions,
+  MEMORY_EXTRACTOR_TASK,
 } from "@/api/lib/scheduler/tasks/memory-extractor";
 import {
   RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
@@ -201,8 +201,8 @@ import {
   cleanTemplateDeletionObjects,
 } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import {
-  WORK_ATTENTION_SCOUT_TASK,
   runWorkAttentionScoutTask,
+  WORK_ATTENTION_SCOUT_TASK,
 } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import {
   BACKFILL_WORK_OBLIGATIONS_TASK,

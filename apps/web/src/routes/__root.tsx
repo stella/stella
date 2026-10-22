@@ -5,11 +5,11 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   ClientOnly,
   createRootRouteWithContext,
+  type ErrorComponentProps,
   HeadContent,
   Outlet,
   Scripts,
   useRouterState,
-  type ErrorComponentProps,
 } from "@tanstack/react-router";
 
 import { AppProviders } from "@/app-providers";
@@ -31,8 +31,8 @@ import "@/fonts.css";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import {
-  isPublicKnowledgeEnabled,
   isPublicKnowledgeCrawlAllowed,
+  isPublicKnowledgeEnabled,
 } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";

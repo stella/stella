@@ -8,7 +8,7 @@
 // scheduled lint run forces another check.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {

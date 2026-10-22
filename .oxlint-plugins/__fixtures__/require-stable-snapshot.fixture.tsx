@@ -9,8 +9,8 @@
 // fails CI.
 
 import React, {
-  useSyncExternalStore,
   useSyncExternalStore as useRenamedSyncExternalStore,
+  useSyncExternalStore,
 } from "react";
 
 const subscribe = () => () => undefined;

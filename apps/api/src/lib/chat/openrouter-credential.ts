@@ -504,8 +504,7 @@ export const createManagedOpenRouterCredentialProvider = (
 ) => new ManagedOpenRouterCredentialProvider(options);
 
 let provider:
-  | ReturnType<typeof createManagedOpenRouterCredentialProvider>
-  | undefined;
+  ReturnType<typeof createManagedOpenRouterCredentialProvider> | undefined;
 export const getManagedOpenRouterCredentialProvider = () =>
   (provider ??= createManagedOpenRouterCredentialProvider({
     configuration: getManagedOpenRouterConfiguration,

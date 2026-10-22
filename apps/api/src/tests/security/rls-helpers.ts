@@ -10,6 +10,7 @@ import { stella, stellaIngestion } from "@/api/db/rls";
 import {
   aiMemories,
   anonymizationBlacklistEntries,
+  bilingualTranslationRuns,
   billingCodes,
   caseLawDecisions,
   caseLawMatterLinks,
@@ -24,7 +25,6 @@ import {
   contacts,
   documentCounters,
   documentReferenceCounters,
-  bilingualTranslationRuns,
   docxSuggestions,
   entities,
   entityVersionAiSummaries,

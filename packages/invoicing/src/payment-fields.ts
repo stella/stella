@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { cents, currencyMinorUnitDigits, type CentsAmount } from "@stll/money";
+import { cents, type CentsAmount, currencyMinorUnitDigits } from "@stll/money";
 
 import { invalidInput, type InvoicingResult } from "./errors";
 import { parseIban } from "./iban";

@@ -1,7 +1,7 @@
 import { Generator, getConfig } from "@tanstack/router-generator";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,

@@ -47,8 +47,7 @@ type RunningLockReservationInput = {
 };
 
 type RunningLockReservation =
-  | { status: "reserve"; expectedRunningValue: string }
-  | { status: "skip" };
+  { status: "reserve"; expectedRunningValue: string } | { status: "skip" };
 
 /**
  * A candidate workspace (one holding a `running` lock or owning `pending`

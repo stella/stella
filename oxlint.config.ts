@@ -19,13 +19,13 @@ import {
 import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
+  designLintBacklogOverrides,
   SHADCN_LINT_JS_PLUGINS,
   SHADCN_LINT_POLICY_OVERRIDES,
   SHADCN_LINT_RULES,
   SHADCN_LINT_SETTINGS,
   SIZE_LINT_POLICY_OVERRIDES,
   SIZE_LINT_RULES,
-  designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP, STATUS_TRANSITION_OWNERSHIP } from "./scripts/ownership.ts";
 import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.ts";

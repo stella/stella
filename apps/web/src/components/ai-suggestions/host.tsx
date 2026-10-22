@@ -39,13 +39,13 @@ import {
 } from "@stll/ui/composer";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  AiActionIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   MessageSquareIcon,
   UserIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";

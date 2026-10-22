@@ -11,9 +11,9 @@
 import {
   // oxlint-disable-next-line no-legal-cliche-glyph/no-legal-cliche-glyph -- the banned import itself
   GavelIcon,
-  Scale3dIcon,
   // oxlint-disable-next-line no-legal-cliche-glyph/no-legal-cliche-glyph -- an alias hides nothing
   Scale as JusticeIcon,
+  Scale3dIcon,
 } from "lucide-react";
 
 // oxlint-disable-next-line no-legal-cliche-glyph/no-legal-cliche-glyph -- through the shared icon module

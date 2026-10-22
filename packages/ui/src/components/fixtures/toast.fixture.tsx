@@ -1,8 +1,8 @@
 import { createRoot } from "react-dom/client";
 
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
-import { ToastProvider, stellaToast } from "../toast";
+import { stellaToast, ToastProvider } from "../toast";
 
 const REASON = `Anthropic: The complete provider rejection must remain available. ${"UnbrokenProviderDiagnostic".repeat(
   20,

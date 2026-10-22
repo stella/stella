@@ -295,8 +295,7 @@ export type McpRequestContext = {
   createOperationDatabaseScope?: (() => McpOperationDatabaseScope) | undefined;
   /** Pin one workspace only after an MCP access/status gate proves it. */
   pinServerValidatedWorkspaceId?:
-    | ((workspaceId: SafeId<"workspace">) => boolean)
-    | undefined;
+    ((workspaceId: SafeId<"workspace">) => boolean) | undefined;
   /**
    * The originating gateway HTTP request. Present on the MCP transport path
    * (set by `resolveMcpSessionContext`); absent on the session-authed chat

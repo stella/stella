@@ -1,6 +1,6 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql, getColumns } from "drizzle-orm";
+import { eq, getColumns, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -8,10 +8,10 @@ import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   featureEnrolments,
-  legalListClaims,
   legalListClaimReviewEvents,
-  legalListVerificationRuns,
+  legalListClaims,
   legalListVerificationBlocks,
+  legalListVerificationRuns,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";

@@ -2,7 +2,7 @@
 // migrated to explicit leaf modules. These aliases hide side effects, obscure
 // ownership, and turn small leaf changes into high-fanout dependency edges.
 
-import { eslintCompatPlugin, type Context, type Node } from "@oxlint/plugins";
+import { type Context, eslintCompatPlugin, type Node } from "@oxlint/plugins";
 
 import { canonicalModuleId } from "./module-id.ts";
 import { repoRelativeFilename } from "./utils.ts";

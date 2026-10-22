@@ -36,9 +36,9 @@ import {
 } from "@/api/lib/pagination";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
-  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
-  isServiceClassification,
   type CatalogServiceClassification,
+  isServiceClassification,
+  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
 } from "@/api/lib/rate-limit/service-classification";
 import {
   HANDLER_KINDS,
@@ -109,8 +109,8 @@ import {
   oauthScopeRecoveryHint,
   quoteToolName,
   searchIndexUnavailableResult,
-  structuredErrorResult,
   structuredEgressPlan,
+  structuredErrorResult,
   untypedStructuredEgressPlan,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -1377,8 +1377,7 @@ const CAPABILITY_ARGUMENT_SCHEMAS = {
  * Both directions come from `INTERNAL_FIELD_NAME`'s one table.
  */
 type FieldProjection =
-  | { ok: true; value: unknown }
-  | { ok: false; issues: McpValidationIssue[] };
+  { ok: true; value: unknown } | { ok: false; issues: McpValidationIssue[] };
 
 const internalNameRefusal = (
   path: string,

@@ -14,8 +14,8 @@ import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-
 import { env } from "@/api/env";
 import {
   DESKTOP_PROOF_HEADER,
-  VerifiedDesktopDeviceProof,
   desktopProofRequestUrl,
+  VerifiedDesktopDeviceProof,
 } from "@/api/lib/business-registries/desktop/proof";
 import { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

@@ -1,7 +1,7 @@
 import {
-  EventType,
   type ChatMiddleware,
   type ChatMiddlewareContext,
+  EventType,
   type TokenUsage,
 } from "@tanstack/ai";
 import { Result } from "better-result";
@@ -43,8 +43,8 @@ import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-m
 import {
   getTanStackTextModelInfoById,
   getTanStackTextModelInfoForTask,
-  resolveEffectiveServiceTierForProvider,
   type ResolvedTanStackTextModelInfo,
+  resolveEffectiveServiceTierForProvider,
 } from "@/api/lib/tanstack-ai-models";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
@@ -57,12 +57,12 @@ import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
 
 import { getServerAnalytics } from "./client";
 import {
-  SERVER_ANALYTICS_EVENTS,
-  type ServerAnalytics,
   type AnalyticsPrimitive,
   type CountBucket,
   type LatencyBucket,
   type SafeAIAnalyticsMetadata,
+  SERVER_ANALYTICS_EVENTS,
+  type ServerAnalytics,
   type TokenBucket,
 } from "./server-analytics";
 

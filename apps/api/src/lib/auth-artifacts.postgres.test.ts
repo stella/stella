@@ -12,16 +12,16 @@ import {
   session,
 } from "@/api/db/auth-schema";
 import {
+  bufferObjectCleanupIntents,
   desktopEditHandoffs,
   desktopEditSessions,
   entities,
   entityVersions,
-  properties,
-  bufferObjectCleanupIntents,
   folioCollabRoomTokens,
   mcpOAuthState,
   mcpUserConnections,
   pdfSigningSessions,
+  properties,
   sharepointConnections,
   sharepointOAuthState,
   workspaceMembers,

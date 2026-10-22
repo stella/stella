@@ -4,8 +4,8 @@ import {
 } from "@better-auth/core/context";
 import type { AuthContext, BetterAuthPlugin, Session } from "better-auth";
 import {
-  createAuthMiddleware,
   createAuthEndpoint,
+  createAuthMiddleware,
   sensitiveSessionMiddleware,
 } from "better-auth/api";
 import { parseSessionOutput, parseUserOutput } from "better-auth/db";

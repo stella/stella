@@ -13,7 +13,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { PG_ERROR, getPgErrorCode } from "@/api/lib/pg-error";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";

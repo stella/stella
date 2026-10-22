@@ -10,9 +10,9 @@ import { PROVISION_LINK_CAPABILITIES } from "@stll/api-contract/provision-link-c
 
 import {
   caseLawDecisions,
-  publishedCaseLawDecisions,
   caseLawSearchDocuments,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {

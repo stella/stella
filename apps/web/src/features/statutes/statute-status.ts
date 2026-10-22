@@ -1,6 +1,6 @@
 import {
-  LEGISLATION_DOCUMENT_STATUSES,
   isLegislationDocumentStatus,
+  LEGISLATION_DOCUMENT_STATUSES,
 } from "@stll/api-contract/legislation-status";
 import type { LegislationDocumentStatus } from "@stll/api-contract/legislation-status";
 import { parsePlainDate, Temporal } from "@stll/time";

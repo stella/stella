@@ -113,6 +113,8 @@ ignorePatterns = [
   ".claude/skills/**/SKILL.md",
   "apps/api/src/db/schema.ts",
   "packages/template-packs/content/**",
+  # Submodule; its own repository formats it.
+  ".ai/shared/**",
   "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts",
   "apps/api/src/handlers/visual-sandbox/generated/**",
   "apps/api/src/mcp/generated/capability-dispatch/*.ts",

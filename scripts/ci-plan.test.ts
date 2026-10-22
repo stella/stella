@@ -58,9 +58,9 @@ import {
 } from "./github-expression";
 import {
   mainHeavyJobs,
+  MERGE_GROUP_EXCEPTIONS,
   prDepthJobs,
   queueAdmittedJobs,
-  MERGE_GROUP_EXCEPTIONS,
   thinJobs,
 } from "./main-heavy-plan";
 import { unlistedTests } from "./run-unlisted-script-tests";
@@ -631,11 +631,7 @@ type EvaluateResultOptions = {
   liveDraft?: boolean;
   suiteResults?: Record<string, string>;
   cancellationEvidence?:
-    | "superseded"
-    | "timeout"
-    | "step-timeout"
-    | "missing"
-    | "wrong-group";
+    "superseded" | "timeout" | "step-timeout" | "missing" | "wrong-group";
   apiFailure?: "current-run" | "runs" | "jobs" | "annotations";
   newerRun?:
     | "same-group"
@@ -654,12 +650,7 @@ type EvaluateResultOptions = {
   heavyOnly?: boolean;
   outcomeScript?: string;
   metadataCodeRun?:
-    | "green"
-    | "red"
-    | "missing"
-    | "other-head"
-    | "running-green"
-    | "running";
+    "green" | "red" | "missing" | "other-head" | "running-green" | "running";
 };
 
 const mainHeavyJobNames = mainHeavyJobs({ jobs: ciJobs });

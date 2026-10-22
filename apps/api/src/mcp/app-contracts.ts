@@ -7,8 +7,8 @@ import type { PresentationApp } from "@stll/mcp-apps/manifest";
 import { READ_CASE_LAW_CITATIONS_PROJECTION } from "../lib/chat/case-law-citation-projection";
 import { SEARCH_CASE_LAW_PROJECTION } from "../lib/chat/case-law-result-projections";
 import {
-  openDecisionOutput,
   blocksDecisionOutput,
+  openDecisionOutput,
   provisionPreviewOutput,
 } from "../lib/chat/decision-reader-projections";
 import { READ_PROVISION_HISTORY_PROJECTION } from "../lib/chat/legislation-result-projections";

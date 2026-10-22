@@ -14,16 +14,16 @@ import {
   authFixtureResponse,
 } from "@/__fixtures__/route-shell/route-shell-auth-fixtures";
 import {
-  knowledgeFixtureResponse,
+  KNOWLEDGE_FIXTURE_TOOL_SLUG,
   knowledgeFixtureLoaderData,
   knowledgeFixtureReadyText,
-  KNOWLEDGE_FIXTURE_TOOL_SLUG,
+  knowledgeFixtureResponse,
 } from "@/__fixtures__/route-shell/route-shell-knowledge-fixtures";
 import {
   publicFixtureLoaderData,
-  publicFixtureResponse,
-  publicFixtureReadyText,
   publicFixtureReadySelector,
+  publicFixtureReadyText,
+  publicFixtureResponse,
   publicRouteExceptions,
 } from "@/__fixtures__/route-shell/route-shell-public-fixtures";
 import type { api } from "@/lib/api";

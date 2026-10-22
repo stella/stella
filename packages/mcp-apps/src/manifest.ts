@@ -5,10 +5,10 @@ import {
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import {
-  STATUTE_TIMELINE_RESOURCE_URI,
   CASE_LAW_RESULTS_RESOURCE_URI,
   CITATION_GRAPH_RESOURCE_URI,
   DECISION_READER_RESOURCE_URI,
+  STATUTE_TIMELINE_RESOURCE_URI,
 } from "./resource-uri";
 
 export const MCP_APPS = [

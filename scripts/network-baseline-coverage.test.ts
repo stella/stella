@@ -1,4 +1,4 @@
-import { expect, test, beforeAll, afterAll } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import {
   existsSync,
   mkdirSync,
@@ -18,8 +18,8 @@ import {
 import {
   assertSmokeRouteCoverage,
   authenticatedRouteTemplates,
-  networkBaselineKey,
   networkBaselineCoverageProblem,
+  networkBaselineKey,
 } from "../apps/web/e2e/helpers/smoke-route-coverage";
 import { SMOKE_ROUTE_DEFS } from "../apps/web/e2e/helpers/smoke-route-defs";
 import { generateRouteTree } from "../apps/web/scripts/generate-route-tree";

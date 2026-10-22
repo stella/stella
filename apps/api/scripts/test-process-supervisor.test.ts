@@ -1,11 +1,11 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -15,8 +15,8 @@ import path from "node:path";
 
 import { buildApiTestCommand } from "./api-test-command";
 import {
-  TestProcessSupervisor,
   testProcessBudgets,
+  TestProcessSupervisor,
 } from "./test-process-supervisor";
 
 const createFixture = (

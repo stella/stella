@@ -26,12 +26,12 @@ import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdiction
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
-  SEARCH_PAGE_REACH,
-  SEARCH_PAGINATION_COMPLETE,
-  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   countedSearchTotal,
   FACET_COUNT_TYPE,
   LEGISLATION_SEARCH_MATCH_TYPES,
+  SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
@@ -139,8 +139,8 @@ import {
 } from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
-  CASE_LAW_COVERAGE_FIXTURE,
   CASE_LAW_COVERAGE_EXPECTED,
+  CASE_LAW_COVERAGE_FIXTURE,
 } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";

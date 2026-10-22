@@ -20,7 +20,7 @@ import {
   parseDocumentAst,
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
-import { OutlineRail, outlineEntryText } from "@stll/ui/outline-rail";
+import { outlineEntryText, OutlineRail } from "@stll/ui/outline-rail";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 

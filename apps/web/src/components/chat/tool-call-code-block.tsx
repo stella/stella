@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { Prism, useTokenize } from "prism-react-renderer";
 import type { PrismTheme, Token } from "prism-react-renderer";
 import { useTranslations } from "use-intl";

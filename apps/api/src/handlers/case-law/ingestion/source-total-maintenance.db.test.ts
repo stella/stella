@@ -25,8 +25,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { withFreshIndicatorDatabase } from "@/api/tests/database-load-indicator-fixture";
 import {
   copyIngestionTablePrivileges,
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 
 import { czNsAdapter } from "./adapters/cz-ns";

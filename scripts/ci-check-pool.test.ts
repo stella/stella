@@ -9,9 +9,12 @@ import { assertProperty } from "@stll/property-testing";
 import {
   blockingFailures,
   checkLogText,
+  type CheckResult,
   continueOnErrorHolds,
   failedCheckAnnotation,
+  type Launched,
   planChecks,
+  type PlannedCheck,
   POOL_CONTEXT_ROOTS,
   poolContext,
   processLauncher,
@@ -19,17 +22,14 @@ import {
   runChecks,
   selectChecks,
   summaryTable,
-  type CheckResult,
-  type Launched,
-  type PlannedCheck,
 } from "./ci-check-pool";
 import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
   checkPoolJob,
   parseCheckPool,
-  readCheckPool,
   type PoolCheck,
+  readCheckPool,
 } from "./ci-check-pool-registry";
 import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
 import { evaluate, type Value } from "./github-expression";

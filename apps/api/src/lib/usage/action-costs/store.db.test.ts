@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/bun-sql";
-import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 
 import { actionCostCalls, actionCostRecords } from "@/api/db/schema";

@@ -237,9 +237,7 @@ export const findNewerGenerationModels = ({
  *   it.
  */
 type ReviewedExclusionCategory =
-  | "floating alias"
-  | "duplicate alias"
-  | "third-party relay";
+  "floating alias" | "duplicate alias" | "third-party relay";
 type DatedReviewReason =
   `${number}-${number}-${number}: ${ReviewedExclusionCategory}; ${string}`;
 

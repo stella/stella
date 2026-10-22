@@ -26,16 +26,16 @@ import path from "node:path";
 
 import {
   CHECK_POOL_JOBS,
-  checkPoolResultsPath,
-  readCheckPool,
   type CheckPoolJob,
+  checkPoolResultsPath,
   type PoolCheck,
+  readCheckPool,
 } from "./ci-check-pool-registry";
 import {
+  type Context,
   evaluate,
   toValue,
   UNKNOWN,
-  type Context,
   type Value,
 } from "./github-expression";
 
@@ -550,9 +550,11 @@ const writeOut = (text: string) => {
       offset += writeSync(1, bytes, offset);
     } catch (error) {
       // A non-blocking pipe that is full: wait briefly and retry.
-      if (
-        !(error instanceof Error && "code" in error && error.code === "EAGAIN")
-      ) {
+      if (!(
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "EAGAIN"
+      )) {
         throw error;
       }
       Atomics.wait(pause, 0, 0, 5);

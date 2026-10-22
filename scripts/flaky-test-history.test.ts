@@ -9,31 +9,31 @@ import type { FailureRecord } from "./ci-failure-digest";
 import {
   buildHistory,
   collectEvidence,
+  type Evidence,
   fetchLatestHistory,
   findFlakyChecks,
+  type Gh,
   GhCommandError,
   HISTORY_ARTIFACT,
   HISTORY_FILE,
   HISTORY_WINDOW_DAYS,
   jobSummary,
+  type Observation,
   PROPOSAL_THRESHOLD,
-  PROPOSED_QUARANTINE_DAYS,
   proposalBody,
+  PROPOSED_QUARANTINE_DAYS,
   proposeQuarantine,
   quarantineArtifactName,
   quarantineCandidates,
   resolveOwners,
   resolveTestFile,
-  type Evidence,
-  type Gh,
-  type Observation,
 } from "./flaky-test-history";
 import {
   DAY_MS,
   parseRegistry,
-  serializeRegistry,
   type QuarantineEntry,
   type Registry,
+  serializeRegistry,
 } from "./flaky-test-quarantine";
 
 const NOW = new Date("2026-10-17T12:00:00.000Z");

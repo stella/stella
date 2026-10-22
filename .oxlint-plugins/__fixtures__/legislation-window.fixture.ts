@@ -6,7 +6,7 @@
 
 import { gt, gte, lt, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { pgTable, date as pgDate, check } from "drizzle-orm/pg-core";
+import { check, date as pgDate, pgTable } from "drizzle-orm/pg-core";
 
 import { vatRates as importedVatRates } from "@/api/db/schema";
 

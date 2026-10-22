@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 import { isUuid } from "@stll/uuid-codec";
 
-import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
