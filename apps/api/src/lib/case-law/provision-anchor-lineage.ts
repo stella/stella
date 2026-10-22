@@ -30,7 +30,11 @@ for (const grammar of Object.values(PROVISION_CITATION_GRAMMARS)) {
     continue;
   }
   // The subtree read bounds its range by the code point after the separator.
-  if ([...grammar.anchorSeparator].length !== 1) {
+  const codePoint = grammar.anchorSeparator.codePointAt(0);
+  if (
+    codePoint === undefined ||
+    String.fromCodePoint(codePoint) !== grammar.anchorSeparator
+  ) {
     panic(
       `The ${grammar.jurisdiction} anchor separator must be one code point`,
     );
