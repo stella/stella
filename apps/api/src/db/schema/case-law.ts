@@ -2126,20 +2126,10 @@ export const caseLawProvisionCitations = p.pgTable(
         t.spanStart.desc(),
         t.anchor.desc(),
       ),
-    p
-      .index("case_law_provision_citations_work_anchor_idx")
-      .on(
-        t.jurisdiction,
-        t.workIdentifier,
-        t.anchor,
-        sql`(coalesce(${t.decisionDate}, '0001-01-01'::date)) DESC`,
-        t.decisionId.desc(),
-        t.spanStart.desc(),
-      ),
-    // The same two walks keyed by the work's identifier instead of its
-    // display citation, for a reader arriving from the act itself. Partial:
-    // a reference to a work the corpus does not hold carries no ELI, and
-    // those rows are never a starting point for this walk.
+    // The same walk keyed by the work's identifier instead of its display
+    // citation, for a reader arriving from the act itself. Partial: a
+    // reference to a work the corpus does not hold carries no ELI, and those
+    // rows are never a starting point for this walk.
     p
       .index("case_law_provision_citations_eli_idx")
       .on(
@@ -2151,16 +2141,16 @@ export const caseLawProvisionCitations = p.pgTable(
         t.anchor.desc(),
       )
       .where(isNotNull(t.workEli)),
+    // One provision with every subdivision under it, for either work key.
+    // The anchor compares byte-wise so a subtree is one contiguous range
+    // (`provisionAnchorSubtreeSql`); under the database collation `par_510`
+    // sorts between `par_51` and `par_51-odst_1`.
     p
-      .index("case_law_provision_citations_eli_anchor_idx")
-      .on(
-        t.jurisdiction,
-        t.workEli,
-        t.anchor,
-        sql`(coalesce(${t.decisionDate}, '0001-01-01'::date)) DESC`,
-        t.decisionId.desc(),
-        t.spanStart.desc(),
-      )
+      .index("case_law_provision_citations_work_subtree_idx")
+      .on(t.jurisdiction, t.workIdentifier, sql`${t.anchor} COLLATE "C"`),
+    p
+      .index("case_law_provision_citations_eli_subtree_idx")
+      .on(t.jurisdiction, t.workEli, sql`${t.anchor} COLLATE "C"`)
       .where(isNotNull(t.workEli)),
     p.check(
       "provision_citations_work_number_shape",
