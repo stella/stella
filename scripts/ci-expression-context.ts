@@ -237,6 +237,7 @@ const NEEDS = [
   "ci-tests",
   "e2e-production-shard",
   "e2e-vite-canary",
+  "generated-sources",
   "heavy-web-build",
   "postgres-service-suites",
   "pr-heavy-gate",
