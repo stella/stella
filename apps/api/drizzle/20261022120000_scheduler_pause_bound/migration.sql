@@ -5,13 +5,14 @@ ALTER TABLE "scheduler_jobs"
   ADD COLUMN "paused_since" timestamp with time zone;
 --> statement-breakpoint
 
--- Bound existing open-ended pauses before the check: a row that keeps
--- 'infinity' would fail every later update of that row, including the boot
--- upsert. An indefinite pause becomes the 72-hour maximum (its start stays
--- NULL, so the audit reports it at once); '-infinity' never paused anything.
+-- Bound existing pauses before the check: a row that keeps 'infinity' would
+-- fail every later update of that row, including the boot upsert, and the
+-- trigger below only sees future writes. Any pause ending beyond the 72-hour
+-- maximum, 'infinity' included, ends at the maximum (its start stays NULL, so
+-- the audit reports it at once); '-infinity' never paused anything.
 UPDATE "scheduler_jobs"
   SET paused_until = CURRENT_TIMESTAMP + interval '72 hours'
-  WHERE paused_until = 'infinity';
+  WHERE paused_until > CURRENT_TIMESTAMP + interval '72 hours';
 --> statement-breakpoint
 
 UPDATE "scheduler_jobs"
@@ -23,6 +24,16 @@ ALTER TABLE "scheduler_jobs"
   ADD CONSTRAINT "scheduler_jobs_pause_finite_check" CHECK (
     paused_until IS NULL OR isfinite(paused_until)
   );
+--> statement-breakpoint
+
+-- The pause audit watches every pause, so it can never be paused itself.
+ALTER TABLE "scheduler_jobs"
+  ADD CONSTRAINT "scheduler_jobs_pause_audit_unpausable_check" CHECK (
+    id <> 'scheduler.pauseAudit.hourly' OR paused_until IS NULL
+  );
+--> statement-breakpoint
+
+CREATE INDEX "scheduler_jobs_paused_until_idx" ON "scheduler_jobs" USING btree ("paused_until") WHERE "paused_until" IS NOT NULL;
 --> statement-breakpoint
 
 CREATE FUNCTION public.scheduler_job_pause_bound() RETURNS trigger

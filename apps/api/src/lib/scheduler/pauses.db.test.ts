@@ -149,6 +149,30 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
+    test("the pause audit job can never be paused, by insert or update", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { sql: client } = openClient();
+        // An upsert reaches the check on both paths: a fresh row is inserted
+        // paused, an existing (declared) row is updated to paused.
+        const pausedAudit = await client`INSERT INTO scheduler_jobs
+          (id, task, schedule, enabled, paused_by, pause_reason, paused_until, next_run_at)
+          VALUES ('scheduler.pauseAudit.hourly', 'scheduler.auditPauses',
+            ${JSON.stringify({ type: "interval", everyMs: 3_600_000 })}::text::jsonb, true,
+            ${PAUSED_BY}, ${PAUSE_REASON}, now() + interval '1 hour', now())
+          ON CONFLICT (id) DO UPDATE SET paused_until = EXCLUDED.paused_until,
+            paused_by = EXCLUDED.paused_by, pause_reason = EXCLUDED.pause_reason`
+          .execute()
+          .then(
+            () => "accepted",
+            (error: unknown) =>
+              error instanceof Error ? error.message : String(error),
+          );
+        expect(pausedAudit).toContain(
+          "scheduler_jobs_pause_audit_unpausable_check",
+        );
+      });
+    });
+
     test("the suite uses PostgreSQL 18", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { sql: client } = openClient();

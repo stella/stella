@@ -8,7 +8,10 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import { auditSchedulerPauses } from "./scheduler-pause-audit";
+import {
+  auditSchedulerPauses,
+  PAUSE_AUDIT_LOG_LIMIT,
+} from "./scheduler-pause-audit";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -75,6 +78,64 @@ describe.skipIf(!enabled)("scheduler pause audit (postgres)", () => {
       } finally {
         logs.restore();
         await db.delete(schedulerJobs).where(inArray(schedulerJobs.id, allIds));
+      }
+    });
+  });
+
+  test("logs at most the limit, oldest first, and reports the cut", async () => {
+    if (databaseUrl === undefined) {
+      throw new TypeError("DATABASE_URL required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db, sql: client } = openClient();
+      const prefix = `test.pause-audit-limit.${Bun.randomUUIDv7()}`;
+      const ids = Array.from(
+        { length: PAUSE_AUDIT_LOG_LIMIT + 1 },
+        (_, index) => `${prefix}.${String(index).padStart(3, "0")}`,
+      );
+      const logs = installRecordingLogger();
+      try {
+        await db.insert(schedulerJobs).values(
+          ids.map((id) => ({
+            id,
+            task: "scheduler.noop",
+            description: "Pause audit limit fixture",
+            schedule: { type: "interval" as const, everyMs: 60_000 },
+            nextRunAt: new Date(),
+          })),
+        );
+        await client`UPDATE scheduler_jobs SET
+            paused_by = ${PAUSED_BY}, pause_reason = ${PAUSE_REASON},
+            paused_until = now() + interval '48 hours'
+            WHERE id LIKE ${`${prefix}.%`}`;
+        // The last fixture has no recorded start, so it sorts first.
+        await client`UPDATE scheduler_jobs SET paused_since = CASE
+            WHEN id = ${ids.at(-1)} THEN NULL
+            ELSE now() - interval '2 days' END
+            WHERE id LIKE ${`${prefix}.%`}`;
+
+        await auditSchedulerPauses(
+          asTestRaw<SchedulerTaskContext>({ db, logger }),
+        );
+
+        const errors = logs.at("ERROR");
+        const overdue = errors.filter(
+          ({ message }) => message === "scheduler.job.pause_overdue",
+        );
+        expect(overdue).toHaveLength(PAUSE_AUDIT_LOG_LIMIT);
+        expect(
+          overdue.map(({ attributes }) => attributes?.["jobId"]),
+        ).toContain(ids.at(-1));
+        const cut = errors.filter(
+          ({ message }) => message === "scheduler.job.pause_overdue_truncated",
+        );
+        expect(cut).toHaveLength(1);
+        expect(String(cut.at(0)?.attributes?.["logged"])).toBe(
+          String(PAUSE_AUDIT_LOG_LIMIT),
+        );
+      } finally {
+        logs.restore();
+        await db.delete(schedulerJobs).where(inArray(schedulerJobs.id, ids));
       }
     });
   });
