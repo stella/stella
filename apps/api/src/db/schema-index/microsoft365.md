@@ -36,5 +36,6 @@ sharepoint_oauth_state.organization_id  safeOrganizationId  fk,not null       mi
 sharepoint_oauth_state.user_id          text                fk,not null       microsoft365.ts:86
 sharepoint_oauth_state.code_verifier    text                not null          microsoft365.ts:90
 sharepoint_oauth_state.redirect_uri     text                not null          microsoft365.ts:91
-sharepoint_oauth_state.created_at       timestamptz         default,not null  microsoft365.ts:92
+sharepoint_oauth_state.requested_scope  text                null              microsoft365.ts:93  Server-bound scopes for this consent attempt; older attempts expire.
+sharepoint_oauth_state.created_at       timestamptz         default,not null  microsoft365.ts:94
 ```
