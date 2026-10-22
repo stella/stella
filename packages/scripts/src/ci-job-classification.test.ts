@@ -93,6 +93,25 @@ test("committed classifications cover the repository and its pinned metadata cal
   // Parses every reachable workflow and action document in a child process.
 }, 60_000);
 
+test("the classification CLI accepts an explicit check flag and source directory", () => {
+  const result = Bun.spawnSync(
+    [
+      process.execPath,
+      path.join(repositoryRoot, "scripts/check-ci-job-classification.ts"),
+      "--check",
+      repositoryRoot,
+      "--base",
+      "HEAD",
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  expect(new TextDecoder().decode(result.stderr)).toBe("");
+  expect(result.exitCode).toBe(0);
+  expect(new TextDecoder().decode(result.stdout)).toMatch(
+    /^Classified \d+ workflows\n$/u,
+  );
+}, 60_000);
+
 test("the consolidated quick checks retain the support classification of the jobs they replace", () => {
   const { decisions } = readClassificationInputs(repositoryRoot);
   expect(

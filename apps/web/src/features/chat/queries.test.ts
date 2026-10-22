@@ -3692,6 +3692,57 @@ describe("acquireChatRuntime reconcile", () => {
     expect(reattached).toBe(runtime);
   });
 
+  test("keeps a route handoff's turn streaming while its only view remounts", async () => {
+    const queryClient = new QueryClient();
+    const responseRequested = Promise.withResolvers<undefined>();
+    const releaseResponse = Promise.withResolvers<undefined>();
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      responseRequested.resolve(undefined);
+      await releaseResponse.promise;
+      return createSseResponse(
+        createApprovalSseChunks(parseChatRequestRunId(init)),
+      );
+    });
+    const context = { allowMissingThread: true };
+    const preSendData = buildThreadData();
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: preSendData,
+      key: threadRef,
+      queryClient,
+    });
+    const started = await runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c5"),
+    );
+    await responseRequested.promise;
+
+    // The destination page mounts, unmounts and mounts again (StrictMode,
+    // a move between surfaces) while the first turn is still running.
+    runtime.subscribe(() => undefined)();
+    const unsubscribe = runtime.subscribe(() => undefined);
+    try {
+      releaseResponse.resolve(undefined);
+      await started.stream;
+
+      expect(runtime.getSnapshot().messages.at(-1)?.parts.at(0)).toMatchObject({
+        state: "approval-requested",
+        type: "tool-call",
+      });
+      expect(
+        acquireChatRuntime({
+          activeOrganizationId,
+          context,
+          data: preSendData,
+          key: threadRef,
+          queryClient,
+        }),
+      ).toBe(runtime);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   test("keeps a resolved continuation while acknowledged approval data is stale", async () => {
     const queryClient = new QueryClient();
     let responseIndex = 0;
