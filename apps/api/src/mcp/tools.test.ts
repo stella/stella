@@ -852,6 +852,7 @@ type MockProcessingRunQueryInput = {
 };
 
 type MockMcpTransaction = {
+  selectDistinct: () => ReturnType<typeof createSelectBuilder>;
   query: {
     entities: {
       findFirst: (input?: MockEntityFindFirstInput) => Promise<{
@@ -888,6 +889,7 @@ type MockMcpTransaction = {
     };
     extractedContent: {
       findFirst: () => Promise<ExtractedContentRow | null>;
+      findMany: () => Promise<unknown[]>;
     };
     fields: {
       findMany: () => Promise<
@@ -1047,6 +1049,83 @@ const createScopedDb = (
             },
             extractedContent: {
               findFirst: async () => extractedContentRow,
+              findMany: async () =>
+                extractedContentRow
+                  ? [
+                      {
+                        ...extractedContentRow,
+                        entity: {
+                          ...extractedContentRow.entity,
+                          workspace: { status: "active" },
+                          versions: [
+                            {
+                              id:
+                                processingState.latestVersionId ??
+                                "entity_version_1",
+                            },
+                          ],
+                          currentVersion: {
+                            createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                            deletedAt: null,
+                            id: "entity_version_1",
+                            fields: currentVersionFields.map(
+                              (content, index) => ({
+                                id: `field_${index + 1}`,
+                                content,
+                              }),
+                            ),
+                          },
+                        },
+                      },
+                    ]
+                  : rows.flatMap((row) => {
+                      if (
+                        typeof row !== "object" ||
+                        row === null ||
+                        !("entityId" in row) ||
+                        typeof row.entityId !== "string" ||
+                        !("workspaceId" in row) ||
+                        typeof row.workspaceId !== "string" ||
+                        !("fieldId" in row) ||
+                        typeof row.fieldId !== "string"
+                      ) {
+                        return [];
+                      }
+                      const sourceFileId = `file_${row.entityId}`;
+                      const sourceSha256Hex = "a".repeat(64);
+                      return [
+                        {
+                          ...createExtractedContentRow({
+                            entityId: row.entityId,
+                            workspaceId: row.workspaceId,
+                            sourceEntityVersionId: "entity_version_1",
+                            sourceFieldId: row.fieldId,
+                            sourceFileId,
+                            sourceSha256Hex,
+                          }),
+                          entity: {
+                            name: "Document",
+                            workspace: { status: "active" },
+                            versions: [{ id: "entity_version_1" }],
+                            currentVersion: {
+                              createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                              deletedAt: null,
+                              id: "entity_version_1",
+                              fields: [
+                                {
+                                  id: row.fieldId,
+                                  content: {
+                                    type: "file",
+                                    id: sourceFileId,
+                                    sha256Hex: sourceSha256Hex,
+                                  },
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      ];
+                    }),
             },
             documentProcessingRuns: {
               findFirst: findNoDocumentProcessingRun,
@@ -1111,6 +1190,7 @@ const createScopedDb = (
             },
           },
           select: () => createSelectBuilder(rows),
+          selectDistinct: () => createSelectBuilder([{ id: WORKSPACE_ID }]),
         }),
     ),
   );
