@@ -95,6 +95,7 @@ export const startExecutionAdmission = async ({
       // Minted while still acquiring: a failed tier read refuses the execution.
       await admitModelDispatch({
         organizationId,
+        userId,
         actionKind: mode === "action" ? periodIdentity.actionKind : actionKind,
         organizationStateDb,
         signal,

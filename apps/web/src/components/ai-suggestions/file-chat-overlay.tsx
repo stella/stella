@@ -1554,6 +1554,7 @@ const FileChatOverlayInner = ({
     turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
+    confirmStoredApprovalGrant,
     handleApprove,
     handleAllowInConversation,
     handleDeny,
@@ -1574,6 +1575,7 @@ const FileChatOverlayInner = ({
     approvalPendingMessageId,
   } = useChatSession({
     chat,
+    timingSurface: "document-chat",
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getDocxEditRepresentation,
@@ -2512,6 +2514,7 @@ const FileChatOverlayInner = ({
           activeOrganizationId,
           alwaysApprovedTools,
           conversationApprovedTools,
+          confirmStoredApprovalGrant,
           handleAllowInConversation:
             handleAllowInConversationWithFolioAgentCommentExecution,
           handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,

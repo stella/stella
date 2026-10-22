@@ -470,6 +470,7 @@ describe("managed model tier", () => {
       // A minted proof carries the tier admission read for its organization.
       const modelTier = await admitModelDispatch({
         organizationId: expiredOrgId,
+        userId: null,
         actionKind: "chat.send",
         organizationStateDb: requestScope(expiredOrgId),
         signal: new AbortController().signal,

@@ -202,7 +202,6 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
           env: { XDG_CACHE_HOME: `/tmp/stella-refusal-${Bun.randomUUIDv7()}` },
           force: true,
           fetchRaw: async () => Result.err(error),
-          fetchLatestVersion: async () => undefined,
         });
         expect(refresh).toEqual({ status: "admission-refused", refusal });
       }

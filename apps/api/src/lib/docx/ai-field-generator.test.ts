@@ -281,6 +281,7 @@ describe("buildAiFieldGenerator admitted action", () => {
     const model = blockingModel(reached);
     const generation = admitModelDispatch({
       organizationId,
+      userId: null,
       actionKind: "report-export.background",
       organizationStateDb: testOrganizationStateDb,
       signal: lease.signal,
@@ -903,6 +904,7 @@ describe("buildAiConditionDecider decision tier", () => {
         skillContext: { organizationId, userId, safeDb: skillDb },
         generation: {
           dataClass: "customer",
+          userId,
           task: "classify",
           serviceTier: "standard",
           orgAIConfig,
