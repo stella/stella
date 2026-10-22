@@ -567,6 +567,13 @@ const HELP_FORMATTING = {
 } as const;
 
 const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
+  const updateCommand = buildCommand<Record<never, never>, [], Context>({
+    docs: { brief: "Print the command for installing the latest CLI" },
+    func(this: Context): void {
+      this.process.stdout.write("npm i -g @stll/cli@latest\n");
+    },
+    parameters: { flags: buildServerFlag() },
+  });
   const toolsListCommand = buildCommand<
     { readonly server: string | undefined },
     [],
@@ -600,6 +607,7 @@ const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
       auth: authRoute,
       compatibility: compatibilityRoute,
       upload: uploadCommand,
+      update: updateCommand,
       tools: toolsRoute,
       reference: buildResourceRoutes(generatedResourceTree),
       ...buildGeneratedRoutes(tree),

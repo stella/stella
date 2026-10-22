@@ -1,8 +1,15 @@
-import { panic, Result, TaggedError } from "better-result";
-import { SQL } from "bun";
+import { panic, Result } from "better-result";
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
+import { buildApiTestCommand } from "./api-test-command";
+import {
+  mergeJunitReports,
+  missingBatchReport,
+  planBatchReporterArguments,
+} from "./junit-batch-report";
 import { loadTestEnv } from "./load-test-env";
 import { spawnPostgresTestProcess } from "./postgres-lock-diagnostics";
 import {
@@ -15,6 +22,11 @@ import {
   planPostgresTestShards,
   selectPostgresTestShard,
 } from "./postgres-test-shards";
+import {
+  parsePostgresWorkerCount,
+  runPostgresWorkers,
+} from "./postgres-test-workers";
+import { preparePostgresTests } from "./prepare-postgres-tests";
 import { runGatedTests } from "./run-gated-tests";
 import { parseApiTestShard } from "./test-file-shards";
 import { durationSeconds } from "./test-timings";
@@ -34,14 +46,7 @@ if (measured === undefined || measured.isErr()) {
 const durations = measured?.unwrapOr({}) ?? {};
 
 loadTestEnv(path.resolve(import.meta.dir, "../.env.test"));
-
-const quoteIdentifier = (identifier: string) =>
-  `"${identifier.replaceAll('"', '""')}"`;
-
-class MigratedTemplateError extends TaggedError("MigratedTemplateError")<{
-  message: string;
-  cause: unknown;
-}> {}
+const parsedWorkers = parsePostgresWorkerCount(Bun.argv.slice(2));
 
 const withMigratedTemplate = async (
   testPaths: readonly string[],
@@ -53,57 +58,21 @@ const withMigratedTemplate = async (
 
   const databaseUrl = process.env["DATABASE_URL"];
   if (databaseUrl === undefined) {
-    panic("DATABASE_URL required for migrated template creation");
+    panic("DATABASE_URL required for migrated template selection");
   }
   const sourceUrl = new URL(databaseUrl);
   const sourceDatabase = decodeURIComponent(sourceUrl.pathname.slice(1));
   if (sourceDatabase.length === 0) {
     panic("DATABASE_URL must name the migrated database");
   }
-  const templateDatabase = `${sourceDatabase}_migrated_template`;
-  const maintenanceUrl = new URL(sourceUrl);
-  maintenanceUrl.pathname = "/postgres";
-  const admin = new SQL({ url: maintenanceUrl.toString(), max: 1 });
-  const quotedTemplate = quoteIdentifier(templateDatabase);
-  const quotedSource = quoteIdentifier(sourceDatabase);
-
+  // The worker runner keeps this migrated source idle and connects tests
+  // only to worker clones. Repair scratch databases must use the same source,
+  // never the worker database whose setup has already opened connections.
+  process.env["STELLA_TEST_TEMPLATE_DATABASE"] = sourceDatabase;
   try {
-    await admin.unsafe(`DROP DATABASE IF EXISTS ${quotedTemplate}`);
-    const creation = await admin
-      .unsafe(`CREATE DATABASE ${quotedTemplate} TEMPLATE ${quotedSource}`)
-      .then(
-        () => ({ type: "created" }) as const,
-        (error: unknown) => ({ type: "failed", error }) as const,
-      );
-    if (creation.type === "failed") {
-      const sessions = await admin<
-        { pid: number; application_name: string; usename: string }[]
-      >`SELECT pid, application_name, usename FROM pg_stat_activity WHERE datname = ${sourceDatabase} ORDER BY pid`;
-      const detail = sessions
-        .map(
-          ({ pid, application_name, usename }) =>
-            `pid=${String(pid)} application_name=${JSON.stringify(application_name)} usename=${JSON.stringify(usename)}`,
-        )
-        .join("\n");
-      throw new MigratedTemplateError({
-        message: `Could not clone migrated database ${sourceDatabase}: ${String(creation.error)}${
-          detail.length === 0
-            ? "\nNo connected sessions were reported by pg_stat_activity."
-            : `\nConnected sessions (none were terminated):\n${detail}`
-        }`,
-        cause: creation.error,
-      });
-    }
-
-    process.env["STELLA_TEST_TEMPLATE_DATABASE"] = templateDatabase;
     return await run();
   } finally {
     delete process.env["STELLA_TEST_TEMPLATE_DATABASE"];
-    try {
-      await admin.unsafe(`DROP DATABASE IF EXISTS ${quotedTemplate}`);
-    } finally {
-      await admin.close();
-    }
   }
 };
 
@@ -113,7 +82,9 @@ process.exitCode = await runGatedTests({
   preload: "./src/tests/setup-postgres.ts",
   selection: process.env["CI_POSTGRES_TEST_SELECTION"],
   exclusiveTestPaths: EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+  runnerArguments: parsedWorkers.arguments,
   spawnTestProcess: spawnPostgresTestProcess,
+  prepare: preparePostgresTests,
   validateTestPlan: async (apiRoot, files) => {
     assertTemplateDatabaseTestsAreExclusive();
     await assertSharedTableDdlIsolated(apiRoot, files);
@@ -126,4 +97,95 @@ process.exitCode = await runGatedTests({
     ? (files) => selectPostgresTestShard({ files, durations, shardValue })
     : undefined,
   withTestRun: withMigratedTemplate,
+  runTestFiles: async ({ bunArguments, files, gate, gateValue, preload }) => {
+    const databaseUrl = process.env["DATABASE_URL"] ?? "";
+    const templateUrl = new URL(databaseUrl);
+    const adminUrl = new URL(templateUrl);
+    adminUrl.pathname = "/postgres";
+    adminUrl.searchParams.set(
+      "application_name",
+      `stella-postgres-runner-${process.pid}`,
+    );
+    const sql = new Bun.SQL({ url: adminUrl.toString(), max: 1 });
+    const temporaryDirectory = await mkdtemp(
+      path.join(os.tmpdir(), "stella-postgres-junit-"),
+    );
+    const reporterPlan = planBatchReporterArguments(
+      bunArguments,
+      files.length,
+      temporaryDirectory,
+    );
+    let invocation = 0;
+    try {
+      const status = await runPostgresWorkers({
+        files,
+        durations,
+        exclusivePaths: EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+        workers: parsedWorkers.workers,
+        databaseUrl,
+        admin: {
+          query: async (query, parameters = []) =>
+            sql.unsafe(query, [...parameters]),
+          close: async () => {
+            await sql.close();
+          },
+        },
+        runWorker: ({ files: workerFiles, databaseUrl: workerUrl }) => {
+          const reporterArguments =
+            reporterPlan.argumentsByBatch.at(invocation++) ?? [];
+          return spawnPostgresTestProcess({
+            cmd: buildApiTestCommand({
+              bunExecutable: process.execPath,
+              bunRuntimeArguments: [],
+              testArguments: [
+                "--max-concurrency=1",
+                "--preload",
+                "./src/tests/setup-env.ts",
+                ...(preload ? ["--preload", preload] : []),
+                ...reporterArguments,
+              ],
+              testFiles: workerFiles,
+            }),
+            cwd: path.resolve(import.meta.dir, ".."),
+            env: {
+              ...process.env,
+              [gate]: gateValue,
+              DATABASE_URL: workerUrl,
+            },
+            stdin: "inherit",
+            stdout: "inherit",
+            stderr: "inherit",
+          });
+        },
+      });
+      let missingReport = false;
+      if (reporterPlan.type === "file") {
+        const reports = await Promise.all(
+          reporterPlan.batchOutfiles
+            .slice(0, invocation)
+            .map(async (source) => {
+              const report = Bun.file(source);
+              if (await report.exists()) {
+                return { source, xml: await report.text(), missing: false };
+              }
+              return {
+                source,
+                xml: missingBatchReport(source),
+                missing: true,
+              };
+            }),
+        );
+        missingReport = reports.some(({ missing }) => missing);
+        await Bun.write(
+          path.resolve(import.meta.dir, "..", reporterPlan.requestedOutfile),
+          mergeJunitReports(reports),
+        );
+      }
+      // A batch without a report failed even if its process exited cleanly.
+      return status === 0 && missingReport ? 1 : status;
+    } finally {
+      await sql.close();
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  },
 });

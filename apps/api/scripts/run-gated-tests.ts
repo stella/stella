@@ -29,6 +29,16 @@ type RunGatedTestsOptions = {
   selection?: string | undefined;
   exclusiveTestPaths?: ReadonlySet<string> | undefined;
   spawnTestProcess?: RunTestBatchesOptions["spawn"];
+  runnerArguments?: readonly string[] | undefined;
+  runTestFiles?:
+    | ((options: {
+        bunArguments: readonly string[];
+        files: readonly string[];
+        gate: string;
+        gateValue: string;
+        preload?: string | undefined;
+      }) => Promise<number>)
+    | undefined;
   shardTestFiles?:
     | ((testFiles: readonly string[]) => readonly string[])
     | undefined;
@@ -41,6 +51,7 @@ type RunGatedTestsOptions = {
         run: () => Promise<number>,
       ) => Promise<number>)
     | undefined;
+  prepare?: (() => Promise<void>) | undefined;
 };
 
 const apiRoot = path.resolve(import.meta.dir, "..");
@@ -182,7 +193,10 @@ export const runGatedTests = async ({
   selection,
   exclusiveTestPaths = new Set(),
   spawnTestProcess,
+  runnerArguments = Bun.argv.slice(2),
+  runTestFiles,
   validateTestPlan,
+  prepare,
   shardTestFiles,
   withTestRun,
 }: RunGatedTestsOptions): Promise<number> => {
@@ -208,9 +222,7 @@ export const runGatedTests = async ({
     plan.mode === "selected" ? plan.files : discoveredGatedFiles;
   await validateTestPlan?.(apiRoot, discoveredGatedFiles);
 
-  const { bunArguments, patterns } = partitionRunnerArguments(
-    Bun.argv.slice(2),
-  );
+  const { bunArguments, patterns } = partitionRunnerArguments(runnerArguments);
   const selectedPaths = selectTestPaths(
     plannedFiles,
     normalizeAbsoluteTestPatterns(patterns, apiRoot),
@@ -233,6 +245,8 @@ export const runGatedTests = async ({
     );
     return 0;
   }
+
+  await prepare?.();
 
   // The same derived sources the package `test` script generates first: the
   // suites import the capability runtime, which is never committed.
@@ -257,12 +271,21 @@ export const runGatedTests = async ({
     }
   }
 
-  const batches = isolateSharedTableDdlTests(testFiles, exclusiveTestPaths);
-  console.log(
-    `Running ${String(testFiles.length)} ${runner.gate} test files in ${String(batches.length)} process batches.`,
-  );
-  const run = async () =>
-    await runTestBatches({
+  const run = async () => {
+    if (runTestFiles !== undefined) {
+      return await runTestFiles({
+        bunArguments,
+        files: testFiles,
+        gate: runner.gate,
+        gateValue: runner.gateValue,
+        preload,
+      });
+    }
+    const batches = isolateSharedTableDdlTests(testFiles, exclusiveTestPaths);
+    console.log(
+      `Running ${String(testFiles.length)} ${runner.gate} test files in ${String(batches.length)} process batches.`,
+    );
+    return await runTestBatches({
       batches,
       bunArguments,
       cwd: apiRoot,
@@ -271,6 +294,7 @@ export const runGatedTests = async ({
       ...(spawnTestProcess === undefined ? {} : { spawn: spawnTestProcess }),
       preload,
     });
+  };
   return withTestRun === undefined
     ? await run()
     : await withTestRun(testFiles, run);

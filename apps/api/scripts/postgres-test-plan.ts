@@ -25,7 +25,7 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/lib/scheduler/tasks/registration-retention.postgres.test.ts",
   ]);
 
-/** Suites that clone the runner-owned copy of the fully migrated test database. */
+/** Suites that clone the worker runner’s idle, fully migrated source database. */
 export const TEMPLATE_DATABASE_TEST_PATHS: ReadonlySet<string> = new Set([
   "src/db/online-repairs-beside-writer.postgres.test.ts",
 ]);

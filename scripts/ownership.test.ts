@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { lintSingleRule } from "../.oxlint-plugins/__tests__/lint-single-rule.ts";
 import {
