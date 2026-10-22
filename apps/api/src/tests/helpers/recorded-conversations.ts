@@ -842,11 +842,13 @@ return { id: document.entityId, name: document.name };`;
           }
         }
       }
+      // Only orphans fail here: each scenario's own test requires its file,
+      // and a scenario of a suite that has not run yet has none to compare.
       expect(
-        readdirSync(FIXTURE_DIR)
-          .filter((name) => name.endsWith(RECORDING_EXTENSION))
-          .toSorted(),
-      ).toEqual(recordedFilenames.toSorted());
+        readdirSync(FIXTURE_DIR).filter(
+          (name) => name.endsWith(RECORDING_EXTENSION) && !recordings.has(name),
+        ),
+      ).toEqual([]);
     });
   });
 };
