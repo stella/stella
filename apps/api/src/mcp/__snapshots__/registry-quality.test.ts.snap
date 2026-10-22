@@ -190,7 +190,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -6471,6 +6471,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to describe, as returned by list_capabilities (e.g. \\"time-entries.create\\")."
         }
       }
@@ -6502,6 +6503,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to invoke. Use an id list_capabilities returned."
         },
         "input": {
@@ -6561,6 +6563,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to invoke. Use an id list_capabilities returned."
         },
         "input": {
@@ -6822,7 +6825,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -14007,6 +14010,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to invoke."
         },
         "input": {
@@ -14236,7 +14240,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -16251,7 +16255,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,

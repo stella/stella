@@ -24,6 +24,10 @@ import {
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
 import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
+import {
+  caseLawCanariesEnvSchema,
+  caseLawDailyBandsEnvSchema,
+} from "@/api/lib/observability/data-invariants/config-schema";
 import { rateLimitBudgetEnvSchema } from "@/api/lib/rate-limit/budget-config-schema";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
@@ -93,6 +97,10 @@ const originVerifyValue = v.pipe(
 export const envApiServerSchema = {
   ...rateLimitBudgetEnvSchema,
   ...verificationRunCapEnvSchema,
+  // Data invariants: each adapter's expected published decisions per day, and
+  // case-law queries the corpus must answer. Unset skips that invariant.
+  DATA_INVARIANT_CASE_LAW_DAILY_BANDS: caseLawDailyBandsEnvSchema,
+  DATA_INVARIANT_CASE_LAW_CANARIES: caseLawCanariesEnvSchema,
   VISUAL_PREVIEW_FUNCTION_NAME: v.optional(
     v.pipe(
       v.string(),

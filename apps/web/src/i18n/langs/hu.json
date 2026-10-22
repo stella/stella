@@ -859,7 +859,6 @@
         "unavailable": "Ehhez a határozathoz nem érhető el AI-elemzés."
       },
       "generate": "AI jogi tételek elkészítése",
-      "holdingAnchor": "Ugrás a bekezdésre",
       "invitation": "Ingyenes fiókkal az AI munkajegyzeteket készít ehhez a határozathoz.",
       "topics": "Témák",
       "treatment": "Későbbi megítélés"
@@ -1115,6 +1114,8 @@
         "hint": "Töröljön vagy bővítsen egy szűrőt, és keressen újra.",
         "message": "Semmi nem felel meg a beállított szűrőknek."
       },
+      "partialMatch": "Részleges találat",
+      "partialMatches": "Részleges találatok erre: <bdi>{query}</bdi>",
       "resultsFor": "Találatok erre: <bdi>{query}</bdi>",
       "searchEveryWord": "Minden szó keresése"
     },
@@ -1152,6 +1153,7 @@
       "judges": "Bírák",
       "legalArea": "Jogterület",
       "legalSentence": "Elvi bírósági határozat",
+      "paragraphReference": "{number}. bekezdés",
       "popularName": "Népszerű név",
       "portraitCredit": "A portrék forrása: {source}",
       "provisionMentions": "{count, number}×",
@@ -1398,6 +1400,7 @@
     "credentialSendDescription": "Csak akkor küldd el, ha meg szeretnéd osztani ezt az értéket a beszélgetésben.",
     "credentialSendTitle": "Ez az üzenet hitelesítő adatot tartalmazhat",
     "deleteThread": "Beszélgetés törlése",
+    "diagramUnavailable": "Ezt a diagramot nem sikerült megjeleníteni. A forráskódja alább látható.",
     "editMode": {
       "autoDirect": "Automatikus · átírás",
       "autoDirectDescription": "Az AI módosításai azonnal, a dokumentum közvetlen átírásával lépnek életbe (változáskövetés nélkül).",
@@ -2710,6 +2713,7 @@
       "aiConfigModelInvalid": "Az AI-modell beállítása érvénytelen. Ellenőrizze a kiválasztott modelleket.",
       "aiConfigProviderInvalid": "Az AI-szolgáltató beállítása érvénytelen. Ellenőrizze a szolgáltató beállításait.",
       "aiConfigProviderValidationFailed": "Az AI-szolgáltató elutasította a beállítást. Ellenőrizze az API-kulcsot és a modellt.",
+      "aiDeadlineExceeded": "Az AI nem válaszolt időben. Próbálja újra egy pillanat múlva.",
       "aiOutputInvalid": "Az AI válasza váratlan formátumú volt. Próbálja újra.",
       "aiOutputModerated": "Az AI-szolgáltató moderálta a kimenetet. Fogalmazza át a kérést, vagy válasszon másik modellt.",
       "aiProviderTaskUnsupported": "A beállított AI-szolgáltató nem képes erre a feladatra. Válasszon olyat, amelyik képes rá.",

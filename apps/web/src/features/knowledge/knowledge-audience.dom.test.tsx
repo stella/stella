@@ -261,6 +261,8 @@ const messages = (await import("@/i18n/langs/en.json")).default;
 const { professionalUseOptions, refreshAuthQueries } =
   await import("@/lib/auth-queries");
 const { AppFrameHost } = await import("@/routes/-app-frame-host");
+const { RouteProviderScopeBoundary } =
+  await import("@/components/route-provider-scope/route-provider-scope");
 const { Route: KnowledgeLayoutRoute } =
   await import("@/routes/knowledge/route");
 const { Route: TemplatesRoute } = await import("@/routes/knowledge/templates");
@@ -317,12 +319,15 @@ const createApp = (initialEntry = "/knowledge/templates") => {
   const rootRoute = router.createRootRouteWithContext<{
     queryClient: InstanceType<typeof QueryClient>;
   }>()({
+    // The root shell bounds every page by its declared provider scopes.
     component: () => (
-      <ApiVersionMismatchProvider>
-        <AppFrameHost>
-          <router.Outlet />
-        </AppFrameHost>
-      </ApiVersionMismatchProvider>
+      <RouteProviderScopeBoundary>
+        <ApiVersionMismatchProvider>
+          <AppFrameHost>
+            <router.Outlet />
+          </AppFrameHost>
+        </ApiVersionMismatchProvider>
+      </RouteProviderScopeBoundary>
     ),
   });
   // The member frame navigates from the signed-in pages' layout, which the
@@ -334,6 +339,8 @@ const createApp = (initialEntry = "/knowledge/templates") => {
   const knowledgeRoute = router.createRoute({
     getParentRoute: () => rootRoute,
     path: "/knowledge",
+    // The frame and provider scopes the real layout declares pick the frame.
+    staticData: { ...KnowledgeLayoutRoute.options.staticData },
     component: componentOf(KnowledgeLayoutRoute.options.component),
   });
   const templatesRoute = router.createRoute({

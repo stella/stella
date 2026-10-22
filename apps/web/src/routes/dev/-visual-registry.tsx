@@ -82,6 +82,13 @@ const visualLoaders = {
       return { default: ReaderAnswersPlayground };
     },
   },
+  "reader-selection": {
+    load: async () => {
+      const { ReaderSelectionPlayground } =
+        await import("./-components/reader-selection-playground");
+      return { default: ReaderSelectionPlayground };
+    },
+  },
   "chat-history-decision": {
     load: async () => {
       const { ChatHistoryDecisionPlayground } =

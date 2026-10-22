@@ -21,16 +21,17 @@ import {
   DefaultErrorComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
-import { useMountEffect, useExternalSyncEffect } from "@/hooks/use-effect";
+import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import {
   applyDocumentLanguage,
   pageDocumentLanguage,
   resolveDocumentLanguage,
 } from "@/i18n/page-language";
-import "@/fonts.css";
 import { loadMcpHandoff, pendingHandoffPath } from "@/lib/account/mcp-handoff";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
+import "@/fonts.css";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
@@ -45,6 +46,7 @@ import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
 import { requireFreshDocument } from "@/lib/session-cache-guard";
 import { documentResponsePolicyHeaders } from "@/route-response-policy";
 import { AppFrameHost } from "@/routes/-app-frame-host";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { createRootHead } from "@/routes/-root-head";
 import "@/styles/app.css";
 
@@ -58,6 +60,7 @@ export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
   routeErrorLifecycle: RouteErrorLifecycleController;
 }>()({
+  staticData: { appFrame: APP_FRAME_SCOPE.none },
   ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname),
   beforeLoad: async ({ context, location }) => {
     const handoffRedirect = await loadMcpHandoff();
@@ -186,7 +189,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       </head>
       <body>
         <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
-          {children}
+          <RouteProviderScopeBoundary>{children}</RouteProviderScopeBoundary>
         </RouteErrorLifecycleProvider>
         <Scripts />
       </body>

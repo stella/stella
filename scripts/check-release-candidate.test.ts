@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import fc from "fast-check";
 import {
   mkdirSync,
   mkdtempSync,
@@ -10,6 +11,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
+
+import { drawPropertySamples } from "@stll/property-testing";
 
 import { evaluate } from "./github-expression";
 
@@ -105,6 +108,12 @@ const assertIdentity = (script = subject) => {
     expect(mismatch.stderr.toString()).toContain(
       "does not match pending VERSION",
     );
+    git(repo, "commit", "--allow-empty", "-qm", "later");
+    const later = git(repo, "rev-parse", "HEAD");
+    git(repo, "update-ref", "refs/remotes/origin/main", later);
+    const unrelated = check(repo, later);
+    expect(unrelated.exitCode, "later main commit must fail").toBe(1);
+    expect(unrelated.stderr.toString()).toContain(`version commit ${sha}`);
     git(repo, "tag", "v1.2.4", sha);
     const tagged = check(repo, sha);
     expect(tagged.exitCode, "tagged VERSION must fail").toBe(1);
@@ -160,7 +169,7 @@ const assertDispatch = (
 
 test("only untagged candidates matching the pending main VERSION pass before gate statuses exist", () =>
   assertIdentity());
-test("removing tagged or pending VERSION refusals violates the candidate identity contract", () => {
+test("removing tagged or version commit refusals violates the candidate identity contract", () => {
   for (const [before, after, failure] of [
     [
       'git show-ref --verify --quiet "refs/tags/$tag"',
@@ -168,9 +177,9 @@ test("removing tagged or pending VERSION refusals violates the candidate identit
       "tagged VERSION must fail",
     ],
     [
-      '"$version" != "$main_version"',
+      '"$sha" != "$version_commit"',
       '"pending" != "pending"',
-      "pending VERSION mismatch must fail",
+      "later main commit must fail",
     ],
   ]) {
     const mutant = subject.replace(
@@ -276,8 +285,106 @@ test("tag preparation delegates the candidate identity checks to the same owner"
     "utf-8",
   );
   expect(prepare).toContain(
-    'candidate=$(bash "$script_dir/check-release-candidate.sh" "$sha")',
+    'candidate=$(RELEASE_PROOF_REPOSITORY= bash "$script_dir/check-release-candidate.sh" "$sha")',
   );
   expect(prepare).not.toContain("git show-ref");
   expect(prepare).not.toContain("main_version=");
 });
+
+const historyEdits = fc.array(
+  fc.record({
+    version: fc.option(fc.integer({ min: 0, max: 6 }), { nil: undefined }),
+    content: fc.nat(),
+  }),
+  { minLength: 1, maxLength: 6 },
+);
+test("only the version commit is accepted across generated main histories", () => {
+  // Each sample spawns the release scripts, so the histories are drawn once
+  // and run as a batch rather than inside a property predicate.
+  for (const { value: edits, label } of drawPropertySamples(historyEdits, {
+    numRuns: 12,
+  })) {
+    const { directory, repo, sha, previous } = fixture();
+    try {
+      writeFileSync(
+        path.join(repo, "scripts/prepare-release-tag.sh"),
+        readFileSync(
+          new URL("prepare-release-tag.sh", import.meta.url),
+          "utf-8",
+        ),
+      );
+      for (const name of [
+        "verify-release-tree-proof.sh",
+        "check-release-main-health.sh",
+      ]) {
+        writeFileSync(
+          path.join(repo, "scripts", name),
+          "#!/bin/bash\nexit 0\n",
+        );
+      }
+      writeFileSync(
+        path.join(repo, "scripts/gh-retry.sh"),
+        `#!/bin/bash
+printf '%s\\n' '[[{"context":"staging/verified","state":"success"},{"context":"main/heavy","state":"success"},{"context":"main/pr-depth","state":"success"}]]'
+`,
+      );
+      const commits = [previous, sha];
+      let version = "1.2.4";
+      let versionCommit = sha;
+      // Always include a later unchanged VERSION commit, even after shrinking.
+      for (const edit of [...edits, { version: undefined, content: 0 }]) {
+        const nextVersion =
+          edit.version === undefined ? version : `1.2.${edit.version}`;
+        writeFileSync(path.join(repo, "VERSION"), `${nextVersion}\n`);
+        writeFileSync(path.join(repo, "content"), String(edit.content));
+        git(repo, "add", ".");
+        git(repo, "commit", "--allow-empty", "-qm", "history edit");
+        const commit = git(repo, "rev-parse", "HEAD");
+        commits.push(commit);
+        if (nextVersion !== version) {
+          versionCommit = commit;
+        }
+        version = nextVersion;
+      }
+      git(repo, "update-ref", "refs/remotes/origin/main", "HEAD");
+      for (const commit of commits) {
+        const candidate = check(repo, commit);
+        const prepared = Bun.spawnSync(
+          [
+            "bash",
+            "scripts/prepare-release-tag.sh",
+            "--repo",
+            "stella/stella",
+            "--sha",
+            commit,
+          ],
+          { cwd: repo },
+        );
+        for (const result of [candidate, prepared]) {
+          expect(
+            result.exitCode,
+            `${label} identity ${commit}: ${result.stderr.toString()}`,
+          ).toBe(commit === versionCommit ? 0 : 1);
+          if (commit === versionCommit) {
+            expect(result.stdout.toString()).toContain(
+              `sha=${versionCommit}\n`,
+            );
+          } else {
+            expect(result.stdout.toString()).toBe("");
+            expect(result.stderr.toString()).toContain(versionCommit);
+          }
+        }
+      }
+      const selected = Bun.spawnSync(
+        ["bash", "scripts/prepare-release-tag.sh", "--repo", "stella/stella"],
+        { cwd: repo },
+      );
+      expect(selected.exitCode, `${label} ${selected.stderr.toString()}`).toBe(
+        0,
+      );
+      expect(selected.stdout.toString()).toContain(`sha=${versionCommit}\n`);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }
+}, 60_000);
