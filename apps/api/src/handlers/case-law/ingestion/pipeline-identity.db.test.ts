@@ -2299,9 +2299,7 @@ if (!databaseUrl || !runPostgresTests) {
         ).toMatchObject({
           cause: {
             message: expect.stringContaining(
-              "canonicalDecisionId" in patch
-                ? "Conflicting decision alias target"
-                : "Decision alias identity is immutable",
+              "Decision alias identity is immutable",
             ),
           },
         });
