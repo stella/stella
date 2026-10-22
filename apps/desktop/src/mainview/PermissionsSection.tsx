@@ -14,9 +14,9 @@ import type { PermissionsSnapshot } from "../shared/permissions";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
-  DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
+import type { DesktopTelemetryWindow } from "../telemetry/desktop-telemetry";
 import { PermissionRow } from "./PermissionRow";
 
 /**
@@ -24,7 +24,11 @@ import { PermissionRow } from "./PermissionRow";
  * re-reads while visible because the changes happen in system settings,
  * which notify no one.
  */
-export const PermissionsSection = () => {
+export const PermissionsSection = ({
+  window: telemetryWindow,
+}: {
+  window: DesktopTelemetryWindow;
+}) => {
   const t = useTranslations("settings");
   const [snapshot, setSnapshot] = useState<PermissionsSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
@@ -56,7 +60,7 @@ export const PermissionsSection = () => {
         return;
       }
       if (Result.isError(result) || !isPermissionsSnapshot(result.value)) {
-        reportPermissionsFailure();
+        reportPermissionsFailure(telemetryWindow);
         setFailed(true);
         return;
       }
@@ -77,12 +81,12 @@ export const PermissionsSection = () => {
       window.removeEventListener("focus", onVisible);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [telemetryWindow]);
 
   const apply = async (run: () => Promise<unknown>) => {
     const result = await Result.tryPromise(run);
     if (Result.isError(result)) {
-      reportPermissionsFailure();
+      reportPermissionsFailure(telemetryWindow);
       setFailed(true);
       return;
     }
@@ -144,10 +148,10 @@ export const PermissionsSection = () => {
   );
 };
 
-function reportPermissionsFailure() {
+function reportPermissionsFailure(window: DesktopTelemetryWindow) {
   reportDesktopError({
     code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
     operation: DESKTOP_TELEMETRY_OPERATIONS.permissionsUpdate,
-    window: DESKTOP_TELEMETRY_WINDOWS.main,
+    window,
   });
 }
