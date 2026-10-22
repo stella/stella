@@ -1,10 +1,9 @@
-import type { EditorView } from "@tiptap/pm/view";
+import type { Node as PMNode } from "@tiptap/pm/model";
 
 import type { AnonymizationTerm } from "@stll/folio-react";
 
 import { useInspectorAnonymizationStore } from "@/components/inspector/inspector-anonymization-store";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 
 import {
   buildAnonymizationDetectionKey,
@@ -14,25 +13,49 @@ import {
 } from "./docx-edit-mode.logic";
 
 type StartAnonymizationDetectionOptions = {
+  detect: (input: {
+    text: string;
+    workspaceId: string;
+    excludedCanonicals: readonly string[];
+  }) => Promise<{ pairs: readonly { original: string; label: string }[] }>;
   fieldId: string;
   onDetected: (terms: AnonymizationTerm[]) => void;
   /** Read on every run so allowlist changes apply without a restart. */
   readExcludedCanonicals: () => readonly string[];
-  view: EditorView;
+  /** The live editor view; only its current document is read. */
+  view: { readonly state: { readonly doc: PMNode } };
   workspaceId: string;
 };
 
 type AnonymizationDetection = {
-  /** Kicks a detection run now instead of waiting for the heartbeat. */
+  /**
+   * Reports that the document may have changed. A new document schedules
+   * one detection run after edits settle; the same document is a no-op.
+   */
+  noteDocChanged: () => void;
+  /** Runs detection now, e.g. after the allowlist changed. */
   run: () => void;
   stop: () => void;
 };
 
 /**
- * Runs the wasm anonymization pipeline against the live doc text on a slow
- * heartbeat and reports each detected entity as a Folio decoration term.
+ * Quiet period after the last edit before the whole document is detected
+ * again, so a burst of keystrokes costs one worker run.
+ */
+const DETECTION_SETTLE_MS = 300;
+
+/**
+ * Runs the wasm anonymization pipeline against the live doc text and reports
+ * each detected entity as a Folio decoration term. Work is event-driven: one
+ * run at start, one per settled edit (`noteDocChanged`) or allowlist change
+ * (`run`), and nothing while the document stays unchanged.
+ *
+ * Every run covers the whole document because detection uses cross-paragraph
+ * context (coreference), and a result is only shown when it was computed for
+ * the current text and allowlist.
  */
 export const startAnonymizationDetection = ({
+  detect,
   fieldId,
   onDetected,
   readExcludedCanonicals,
@@ -53,10 +76,7 @@ export const startAnonymizationDetection = ({
     .getState()
     .markAnonymizationPipelineStarted(fieldId);
   // Track the text+exclusions we received *results* for (not
-  // just dispatched). The worker can occasionally drop a
-  // request across dev HMR (the singleton's pending map loses
-  // entries when the client module re-evaluates); the next tick
-  // simply re-dispatches until results actually land.
+  // just dispatched).
   //
   // Exclusions are part of the cache key: when the user marks
   // a detected entity as a false positive, the doc text is
@@ -67,17 +87,31 @@ export const startAnonymizationDetection = ({
   // The worker client owns the deadline. Keep one request pending until
   // it settles so slow scans never accumulate duplicate document jobs.
   let requestStatus: "idle" | "running" = "idle";
+  // ProseMirror documents are immutable, so the same node always has the
+  // same text: serialize each document once, however often it is checked.
+  let lastRead: { doc: PMNode; text: string } | null = null;
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
+  const clearSettleTimer = () => {
+    if (settleTimer !== null) {
+      clearTimeout(settleTimer);
+      settleTimer = null;
+    }
+  };
   const markRan = () =>
     useInspectorAnonymizationStore
       .getState()
       .markAnonymizationPipelineRan(fieldId);
+  const readText = (): string => {
+    const { doc } = view.state;
+    if (lastRead !== null && lastRead.doc === doc) {
+      return lastRead.text;
+    }
+    const text = doc.textBetween(0, doc.content.size, "\n", "\n");
+    lastRead = { doc, text };
+    return text;
+  };
   const readDetectionInput = () => {
-    const text = view.state.doc.textBetween(
-      0,
-      view.state.doc.content.size,
-      "\n",
-      "\n",
-    );
+    const text = readText();
     const excludedCanonicals = readExcludedCanonicals();
     return {
       text,
@@ -92,12 +126,13 @@ export const startAnonymizationDetection = ({
     if (cancelled) {
       return;
     }
-    // Cheap in-flight short-circuit before serializing the doc:
-    // `view.state.doc.textBetween` walks the whole ProseMirror
-    // tree, so on large DOCX files we must not pay it every 2s
-    // tick while a worker request is still pending. The decision
-    // helper repeats this guard for its own correctness, but the
-    // expensive read has to stay behind it.
+    // This run reads the latest document, so a pending settle run is
+    // redundant. While a request is in flight, its completion re-reads the
+    // document and reruns when the text moved on.
+    clearSettleTimer();
+    // Cheap in-flight short-circuit before serializing the doc. The
+    // decision helper repeats this guard for its own correctness, but the
+    // read has to stay behind it.
     if (requestStatus === "running") {
       return;
     }
@@ -135,7 +170,7 @@ export const startAnonymizationDetection = ({
     useInspectorAnonymizationStore
       .getState()
       .markAnonymizationPipelineStarted(fieldId);
-    anonymizeChatTextInWorker({
+    detect({
       text,
       workspaceId,
       excludedCanonicals,
@@ -182,19 +217,25 @@ export const startAnonymizationDetection = ({
           .markAnonymizationPipelineFailed(fieldId);
       });
   };
-  // The doc text isn't always populated when the view first
-  // captures (lazy DOCX load, async paged rendering). Slow
-  // heartbeat catches it shortly after, and also picks up
-  // edits without per-keystroke pipeline runs. The same-text
-  // guard above no-ops re-runs once the doc is steady.
-  const initialTimer = setTimeout(run, 300);
-  const heartbeat = setInterval(run, 2000);
+  const scheduleRun = () => {
+    clearSettleTimer();
+    settleTimer = setTimeout(run, DETECTION_SETTLE_MS);
+  };
+  // The doc text isn't always populated when the view first captures (lazy
+  // DOCX load, async paged rendering); the load itself is a document change
+  // and reaches `noteDocChanged`.
+  scheduleRun();
   return {
+    noteDocChanged: () => {
+      if (cancelled || view.state.doc === lastRead?.doc) {
+        return;
+      }
+      scheduleRun();
+    },
     run,
     stop: () => {
       cancelled = true;
-      clearTimeout(initialTimer);
-      clearInterval(heartbeat);
+      clearSettleTimer();
     },
   };
 };

@@ -176,7 +176,7 @@ type AnonymizationFacetProps = {
    * tab. Inactive document tabs stay mounted (just hidden), so
    * without this gate every parked Anonymization facet would
    * keep the global active counter bumped and the worker
-   * heartbeat firing even after the user switched away.
+   * detection running even after the user switched away.
    * Sidepeek leaves this defaulted (always visible).
    */
   isVisible?: boolean;
