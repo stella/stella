@@ -2529,6 +2529,12 @@ const VALIDATE_AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
+/**
+ * Account routes read the session from storage. Organization routes may
+ * serve the cached cookie snapshot because their member lookup runs live on
+ * every request; an account route has no such lookup, so the stored session
+ * is the only thing that ends when the session or the account does.
+ */
 export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" })
   .macro({
     validateSession: {
@@ -2536,6 +2542,7 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" })
         const sessionResult = await Result.tryPromise(async () => {
           const resolved = await getAuth().api.getSession({
             headers: request.headers,
+            query: { disableCookieCache: true },
             returnHeaders: true,
           });
           forwardAuthResponseCookies(set.headers, resolved.headers);

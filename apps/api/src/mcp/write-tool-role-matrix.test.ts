@@ -620,7 +620,6 @@ const accountAccessMismatches = (definitions: readonly WriteTool[]): string[] =>
 
 const mcpContextFor = (role: MemberRole): McpRequestContext =>
   asTestRaw<McpRequestContext>({
-    enabledRegistrySlugs: undefined,
     grantedScopes: [],
     accessibleWorkspaceIds: ["workspace_1"],
     memberRole: role,

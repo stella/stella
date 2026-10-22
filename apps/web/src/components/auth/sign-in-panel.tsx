@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
@@ -35,7 +35,9 @@ import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
 import { useQueryView } from "@/lib/use-query-view";
 
 import {
-  LastUsedSignInFrame,
+  LAST_USED_BADGE_PILL_CLASS_NAME,
+  LAST_USED_BADGE_POSITION_CLASS_NAME,
+  LastUsedFieldBadge,
   readLastUsedLoginMethod,
 } from "./last-used-sign-in";
 import {
@@ -290,7 +292,7 @@ const SignInOptionsPanel = ({
         >
           <form.Field name="email">
             {(field) => (
-              <Field name={field.name}>
+              <Field className="relative" name={field.name}>
                 <Input
                   autoFocus={!showSocialProviders && !showLocalPassword}
                   onBlur={field.handleBlur}
@@ -300,6 +302,7 @@ const SignInOptionsPanel = ({
                   type="email"
                   value={field.state.value}
                 />
+                {lastUsed === SIGN_IN_METHOD.emailOtp && <LastUsedFieldBadge />}
                 <FieldError />
               </Field>
             )}
@@ -312,26 +315,19 @@ const SignInOptionsPanel = ({
             })}
           >
             {({ isSubmitting, canSubmit, email }) => (
-              <LastUsedSignInFrame
-                lastUsed={lastUsed === SIGN_IN_METHOD.emailOtp}
+              <Button
+                className="w-full"
+                disabled={!canSubmit || email.trim().length === 0}
+                loading={isSubmitting}
+                type="submit"
+                variant={signInMethodVariant({
+                  method: SIGN_IN_METHOD.emailOtp,
+                  lastUsed,
+                  fallback: "default",
+                })}
               >
-                {(describedBy) => (
-                  <Button
-                    aria-describedby={describedBy}
-                    className="w-full"
-                    disabled={!canSubmit || email.trim().length === 0}
-                    loading={isSubmitting}
-                    type="submit"
-                    variant={signInMethodVariant({
-                      method: SIGN_IN_METHOD.emailOtp,
-                      lastUsed,
-                      fallback: "default",
-                    })}
-                  >
-                    {t("auth.continueWithEmail")}
-                  </Button>
-                )}
-              </LastUsedSignInFrame>
+                {t("auth.continueWithEmail")}
+              </Button>
             )}
           </form.Subscribe>
         </Form>
@@ -419,6 +415,7 @@ const BootstrapSignUpForm = ({
             <EmailCredentialField
               autoFocus={!hasSocialProviders}
               field={field}
+              lastUsed={false}
             />
           )}
         </form.Field>
@@ -524,6 +521,39 @@ const signUpWithSelfhostBootstrap = async (
       message: parsedPayload.success ? parsedPayload.output.message : undefined,
     },
   };
+};
+
+/**
+ * Wraps a one-click sign-in action (a social provider button) and, when it
+ * is the last-used method, pins a "Last used" badge to its corner and links
+ * it as the action's description. Methods typed into a form mark their email
+ * field with `LastUsedFieldBadge` instead; a submit button never carries it.
+ */
+const LastUsedSignInFrame = ({
+  lastUsed,
+  children,
+}: {
+  lastUsed: boolean;
+  children: (describedBy: string | undefined) => ReactNode;
+}) => {
+  const t = useTranslations();
+  const badgeId = useId();
+  return (
+    <div className="relative">
+      {children(lastUsed ? badgeId : undefined)}
+      {lastUsed && (
+        <span
+          className={cn(
+            LAST_USED_BADGE_POSITION_CLASS_NAME,
+            LAST_USED_BADGE_PILL_CLASS_NAME,
+          )}
+          id={badgeId}
+        >
+          {t("auth.lastUsed")}
+        </span>
+      )}
+    </div>
+  );
 };
 
 const SocialButton = ({
