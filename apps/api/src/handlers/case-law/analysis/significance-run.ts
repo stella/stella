@@ -25,6 +25,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { analysisStore } from "@/api/lib/case-law/analysis-store";
+import type { AnalysisStore } from "@/api/lib/case-law/analysis-store";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
@@ -41,6 +42,7 @@ import {
   significanceUserMessage,
   SIGNIFICANCE_PROMPT_VERSION,
 } from "./significance";
+import type { CitationGraphFacts } from "./significance";
 
 /**
  * Runs in flight in this process, keyed by the decision and the graph they
@@ -68,7 +70,17 @@ type RefreshSignificanceOptions = {
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
+  /** Reads the decision's cited-by graph; tests answer it without a database. */
+  readGraphFacts?: (
+    decisionId: SafeId<"caseLawDecision">,
+  ) => Promise<CitationGraphFacts | null>;
+  store?: AnalysisStore;
 };
+
+const readPublicGraphFacts = async (decisionId: SafeId<"caseLawDecision">) =>
+  await caseLawPublicReadDb(
+    async (tx) => await readCitationGraphFacts({ decisionId, tx }),
+  );
 
 /** Only a version 3 analysis has a slot to write the statement into. */
 const asV3 = (analysis: DecisionAnalysis): DecisionAnalysisV3 | null =>
@@ -84,6 +96,8 @@ export const refreshSignificance = async ({
   orgAIConfigStatus,
   organizationId,
   promptCachingEnabled,
+  readGraphFacts = readPublicGraphFacts,
+  store = analysisStore(),
 }: RefreshSignificanceOptions): Promise<void> => {
   // First, before the graph is read: a deployment that may not ask a model
   // pays for nothing here.
@@ -109,13 +123,47 @@ export const refreshSignificance = async ({
     return;
   }
 
-  const facts = await caseLawPublicReadDb(
-    async (tx) => await readCitationGraphFacts({ decisionId, tx }),
-  );
+  const facts = await readGraphFacts(decisionId);
   if (facts === null) {
     return;
   }
   const graphFingerprint = graphFingerprintOf(facts);
+  // No later decision cites this one: the graph already says so, so `none` is
+  // stored without asking a model, and a statement an earlier run wrote over
+  // the empty graph is replaced by it.
+  if (facts.citedByCount === 0) {
+    if (
+      current.significance?.kind === "none" &&
+      current.significance.graphFingerprint === graphFingerprint
+    ) {
+      return;
+    }
+    const saved = await Result.tryPromise(
+      async () =>
+        await store.save({
+          analysis: {
+            ...current,
+            significance: {
+              kind: "none",
+              graphFingerprint,
+              generatedAt: Temporal.Now.instant().toString({
+                fractionalSecondDigits: 3,
+              }),
+            },
+          },
+          contentHash,
+          decisionId,
+          expected: analysis,
+        }),
+    );
+    if (Result.isError(saved)) {
+      captureError(saved.error, {
+        source: "case-law-analysis-significance",
+        decisionId,
+      });
+    }
+    return;
+  }
   if (
     isSignificanceCurrent({
       analysis: current,
@@ -194,7 +242,7 @@ export const refreshSignificance = async ({
     // began on an older graph and finished last would otherwise overwrite
     // the newer statement and put the decision back in the queue. Here it
     // simply loses.
-    await analysisStore().save({
+    await store.save({
       analysis: {
         ...current,
         significance: {

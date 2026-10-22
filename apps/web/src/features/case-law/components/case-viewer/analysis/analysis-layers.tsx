@@ -4,7 +4,10 @@ import { useTranslations } from "use-intl";
 
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
-import { analysisLayersOf } from "@stll/legal-ast/analysis";
+import {
+  analysisLayersOf,
+  significanceStatementOf,
+} from "@stll/legal-ast/analysis";
 import { BidiText } from "@stll/ui/bidi-text";
 
 type AnalysisLayersProps = {
@@ -50,7 +53,10 @@ const Layer = ({
  */
 export const AnalysisLayers = ({ analysis }: AnalysisLayersProps) => {
   const t = useTranslations();
-  const { significance, topics } = analysisLayersOf(analysis);
+  const layers = analysisLayersOf(analysis);
+  const { topics } = layers;
+  // `none`: no later decision cites this one, so the section is not drawn.
+  const significance = significanceStatementOf(layers.significance);
 
   if (significance === null && topics.length === 0) {
     return null;
