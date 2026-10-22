@@ -1080,7 +1080,14 @@ const walkPublisherRedirects = async <Target extends PublisherTarget>(
     );
     if (Result.isError(fetched)) {
       if (!signal?.aborted) {
-        return await Promise.reject(fetched.error.cause);
+        const cause = fetched.error.cause;
+        // The fetcher's own failure propagates unchanged; a non-Error throw
+        // is wrapped so callers always receive an Error with the original.
+        return await Promise.reject(
+          cause instanceof Error
+            ? cause
+            : new Error("Publisher fetch failed", { cause }),
+        );
       }
       return Result.err(
         new PublisherRequestAbortedError({

@@ -1406,6 +1406,26 @@ describe("publisher scheduler", () => {
     ).toBe(transportError);
   });
 
+  test("a non-Error transport failure rejects with an Error that keeps it", async () => {
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        if (input.url.pathname === "/robots.txt") {
+          return new Response(null, { status: 404 });
+        }
+        // oxlint-disable-next-line no-throw-literal -- Fixture: a fetcher that throws a non-Error value.
+        throw "socket closed";
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const rejection = await rejectionOf(
+      request("https://publisher.example/resource"),
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection instanceof Error && rejection.cause).toBe("socket closed");
+  });
+
   test("a redirect body whose cancel never settles still ends at the caller deadline", async () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
