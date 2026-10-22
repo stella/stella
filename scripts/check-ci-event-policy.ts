@@ -33,6 +33,54 @@ const policySchema = v.object({
     {},
   ),
 });
+
+const WHOLE_CONTEXT_BUDGET_TEST =
+  "whole workflow contexts stay below the per-variable environment budget";
+const WHOLE_CONTEXT_ENV_ALLOWLIST = new Set([
+  "ci.yml/ci-checks-policy/Run policy checks/CI_CHECK_POOL_NEEDS",
+  "ci.yml/ci-checks-policy/Run policy checks/CI_CHECK_POOL_STEPS",
+  "ci.yml/ci-checks-policy/Run policy checks/CI_CHECK_POOL_INPUTS",
+  "ci.yml/ci-checks-policy/Record static check receipts/CHECK_OUTCOMES",
+  "ci.yml/ci-checks-rest/Run repository checks/CI_CHECK_POOL_NEEDS",
+  "ci.yml/ci-checks-rest/Run repository checks/CI_CHECK_POOL_STEPS",
+  "ci.yml/ci-checks-rest/Run repository checks/CI_CHECK_POOL_INPUTS",
+  "ci.yml/ci-checks-rest/Record static check receipts/CHECK_OUTCOMES",
+  "ci.yml/ci-result/Evaluate CI outcome/NEEDS",
+  "ci.yml/ci-result/Evaluate CI outcome/PLAN",
+  "main-heavy.yml/status/Classify failed heavy jobs/RESULTS",
+  "main-heavy.yml/status/Publish heavy conclusion/RESULTS",
+  "main-pr-depth.yml/status/Publish PR-depth conclusion/RESULTS",
+]);
+const WHOLE_CONTEXT_EXPRESSION =
+  /toJSON\((?:needs|steps|inputs|github|needs\.[A-Za-z0-9_-]+\.outputs)\)/u;
+
+const checkWholeContextEnvironment = (
+  file: string,
+  workflow: v.InferOutput<typeof workflowSchema>,
+) => {
+  const problems: string[] = [];
+  for (const [id, job] of Object.entries(workflow.jobs)) {
+    for (const step of job.steps ?? []) {
+      const stepName =
+        typeof step["name"] === "string" ? step["name"] : "<unnamed step>";
+      for (const [name, value] of Object.entries(step.env ?? {})) {
+        if (
+          typeof value !== "string" ||
+          !WHOLE_CONTEXT_EXPRESSION.test(value)
+        ) {
+          continue;
+        }
+        const consumer = `${file}/${id}/${stepName}/${name}`;
+        if (!WHOLE_CONTEXT_ENV_ALLOWLIST.has(consumer)) {
+          problems.push(
+            `${consumer}: whole-context env is not covered by ${WHOLE_CONTEXT_BUDGET_TEST}`,
+          );
+        }
+      }
+    }
+  }
+  return problems;
+};
 export const workflowSchema = v.looseObject({
   on: v.record(v.string(), v.unknown()),
   permissions: v.optional(v.unknown()),
@@ -516,6 +564,7 @@ export const checkCiEventPolicies = ({
   }
   for (const [file, raw] of Object.entries(workflows)) {
     const workflow = v.parse(workflowSchema, raw);
+    problems.push(...checkWholeContextEnvironment(file, workflow));
     if (file === "codeql.yml") {
       problems.push(...checkCodeqlWorkflow(workflow));
     }

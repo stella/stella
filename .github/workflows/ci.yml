@@ -115,7 +115,7 @@ jobs:
       variables: ${{ format('{{"CI_POSTGRES_PR_SELECTION":{0}}}', toJSON(vars.CI_POSTGRES_PR_SELECTION)) }}
       ci_tests_required: ${{ steps.api-tests.outputs.ci_tests_required }}
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
-      api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
+      api_test_files_encoded: ${{ steps.api-tests.outputs.api_test_files_encoded }}
       changed_files: ${{ steps.changed-files.outputs.changed_files }}
       test_scope: ${{ steps.api-tests.outputs.test_scope }}
       comparison_base: ${{ steps.changed-files.outputs.comparison_base }}
@@ -124,7 +124,7 @@ jobs:
       api_test_durations_key: ${{ steps.api-test-durations.outputs.key }}
       api_test_durations_hash: ${{ steps.api-test-durations.outputs.hash }}
       postgres_test_durations_hash: ${{ steps.postgres-test-durations.outputs.hash }}
-      postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
+      postgres_test_selection_encoded: ${{ steps.postgres-test-plan.outputs.postgres_test_selection_encoded }}
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
       postgres_service_suites_required: ${{ (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true') && steps.changed-files.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (steps.depth.outputs.suite_depth == 'full' || (steps.depth.outputs.suite_depth == 'fast' && steps.changed-files.outputs.service_suites_pr_required == 'true')) }}
@@ -936,7 +936,7 @@ jobs:
               echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}'
               echo 'api_test_shards=3'
               echo 'test_scope='
-              echo 'api_test_files='
+              echo 'api_test_files_encoded='
             } >> "$GITHUB_OUTPUT"
           fi
 
@@ -957,7 +957,7 @@ jobs:
             timeout --kill-after=10s 120s bun scripts/ci-postgres-test-plan.ts
           ); then
             {
-              echo 'postgres_test_selection={"mode":"all"}'
+              echo 'postgres_test_selection_encoded='
               echo 'postgres_selection_reason=Runtime generation or selection unavailable; full suite retained.'
             } >> "$GITHUB_OUTPUT"
           fi
@@ -965,9 +965,10 @@ jobs:
       - name: Summarize Postgres test selection
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         env:
-          SELECTION: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
+          CI_POSTGRES_TEST_SELECTION_ENCODED: ${{ steps.postgres-test-plan.outputs.postgres_test_selection_encoded }}
           REASON: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
         run: |
+          SELECTION=$(bun scripts/plan-output-codec.ts decode-postgres)
           {
             printf '### Postgres test selection\n\n'
             printf '%s\n\n' "$REASON"
@@ -1132,7 +1133,7 @@ jobs:
           PACKAGE_CHECKS_REQUIRED: ${{ steps.changed-files.outputs.package_checks_required }}
           SELECTED_REQUIRED: ${{ steps.api-test-selection.outputs.ci_tests_required }}
           SELECTED_MATRIX: ${{ steps.api-test-selection.outputs.ci_tests_matrix }}
-          SELECTED_FILES: ${{ steps.api-test-selection.outputs.api_test_files }}
+          SELECTED_FILES: ${{ steps.api-test-selection.outputs.api_test_files_encoded }}
           SELECTED_SHARDS: ${{ steps.api-test-selection.outputs.api_test_shards }}
           SELECTED_SCOPE: ${{ steps.api-test-selection.outputs.test_scope }}
         run: |
@@ -1144,9 +1145,7 @@ jobs:
               echo "test_scope=$SELECTED_SCOPE"
             } >> "$GITHUB_OUTPUT"
             {
-              echo 'api_test_files<<API_TEST_FILES_END'
-              printf '%s\n' "$SELECTED_FILES"
-              echo 'API_TEST_FILES_END'
+              printf 'api_test_files_encoded=%s\n' "$SELECTED_FILES"
             } >> "$GITHUB_OUTPUT"
           # ci_tests_required is the one gate of ci-tests: without package
           # checks no API or web-rest test runs, whatever the event or scope.
@@ -1156,14 +1155,14 @@ jobs:
               echo 'ci_tests_matrix={"shard":["rest-web"]}'
               echo 'api_test_shards=0'
               echo 'test_scope='
-              echo 'api_test_files='
+              echo 'api_test_files_encoded='
             } >> "$GITHUB_OUTPUT"
           else
             {
               echo 'ci_tests_required=true'
               bun scripts/api-test-shard-plan.ts
               echo 'test_scope='
-              echo 'api_test_files='
+              echo 'api_test_files_encoded='
             } >> "$GITHUB_OUTPUT"
           fi
 
@@ -2569,7 +2568,7 @@ jobs:
           SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}
           API_TEST_ARTIFACT_DIR: ${{ runner.temp }}/api-test-${{ matrix.shard }}
-          API_TEST_FILES: ${{ needs.ci-plan.outputs.api_test_files }}
+          API_TEST_FILES_ENCODED: ${{ needs.ci-plan.outputs.api_test_files_encoded }}
           API_TEST_SHARD_COUNT: ${{ needs.ci-plan.outputs.api_test_shards }}
           API_TEST_DURATIONS_HASH: ${{ needs.ci-plan.outputs.api_test_durations_hash }}
           API_TEST_DURATIONS_FILE: ${{ runner.temp }}/api-test-durations.json
@@ -3523,7 +3522,7 @@ jobs:
           POSTGRES_TEST_DURATIONS_FILE: ${{ runner.temp }}/postgres-test-durations.json
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
-          CI_POSTGRES_TEST_SELECTION: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
+          CI_POSTGRES_TEST_SELECTION_ENCODED: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection_encoded }}
         # The full volume benchmark runs in nightly postgres-suites; this job
         # retains its bounded correctness slice alongside every other suite.
         run: bun run test:postgres --workers=4 --test-name-pattern='^(?!.*sanctions monitoring full-volume)' --reporter=junit --reporter-outfile="$RUNNER_TEMP/postgres-tests.xml"
