@@ -21,6 +21,7 @@ import {
   generateClassification,
   readClassificationInputs,
 } from "../../../scripts/ci-job-classification/generate";
+import { CLASSIFICATION_INPUT_PATHS } from "../../../scripts/ci-job-classification/inputs";
 import {
   PUBLIC_METADATA,
   createCandidateMetadataReader,
@@ -92,6 +93,25 @@ test("committed classifications cover the repository and its pinned metadata cal
   // Parses every reachable workflow and action document in a child process.
 }, 60_000);
 
+test("the classification CLI accepts an explicit check flag and source directory", () => {
+  const result = Bun.spawnSync(
+    [
+      process.execPath,
+      path.join(repositoryRoot, "scripts/check-ci-job-classification.ts"),
+      "--check",
+      repositoryRoot,
+      "--base",
+      "HEAD",
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  expect(new TextDecoder().decode(result.stderr)).toBe("");
+  expect(result.exitCode).toBe(0);
+  expect(new TextDecoder().decode(result.stdout)).toMatch(
+    /^Classified \d+ workflows\n$/u,
+  );
+}, 60_000);
+
 test("the consolidated quick checks retain the support classification of the jobs they replace", () => {
   const { decisions } = readClassificationInputs(repositoryRoot);
   expect(
@@ -131,7 +151,7 @@ test("the quick checks invoke classification after a successful install", () => 
   const check = policy.findIndex(
     (step) =>
       step.run ===
-      "trap 'rm -rf .workflow-tooling' EXIT\nbun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling\n",
+      `trap 'rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"' EXIT\ncd .workflow-tooling\nbun scripts/check-ci-job-classification.ts\n`,
   );
   expect(install).toBeGreaterThanOrEqual(0);
   expect(check).toBeGreaterThan(install);
@@ -148,6 +168,10 @@ test("the quick checks invoke classification after a successful install", () => 
   );
   expect(policy.at(checkout)?.with?.["persist-credentials"]).toBe(false);
   expect(policy.at(checkout)?.with?.["fetch-depth"]).toBe(0);
+  // The tooling checkout holds exactly what the classification reads.
+  expect(
+    String(policy.at(checkout)?.with?.["sparse-checkout"]).trim().split("\n"),
+  ).toEqual([...CLASSIFICATION_INPUT_PATHS]);
   for (const index of [checkout, check]) {
     const step = policy.at(index);
     expect(step?.if).toBe(

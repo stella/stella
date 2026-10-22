@@ -737,17 +737,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
                       })()}
                     </SidebarMenuItem>
                   </NavContextMenu>
-                  {item.id === "matters" && canCreateMatter ? (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        onClick={handleCreateWorkspace}
-                        tooltip={t("common.newMatter")}
-                      >
-                        <PlusIcon />
-                        <span>{t("common.newMatter")}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ) : null}
                 </Fragment>
               );
             })}

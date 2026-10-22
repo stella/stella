@@ -13,6 +13,7 @@ mod clipboard_commands;
 #[cfg(target_os = "macos")]
 mod clipboard_image_export;
 mod clipboard_screen_capture;
+mod clipboard_shortcut;
 mod clipboard_store;
 mod clipboard_welcome;
 mod clipboard_window;
@@ -22,6 +23,7 @@ mod deep_link;
 mod desktop_crash;
 mod desktop_crash_native;
 mod desktop_telemetry;
+mod device_preference;
 mod device_proof;
 mod diagnostics;
 #[cfg(test)]
@@ -39,7 +41,9 @@ mod local_store;
 mod local_window;
 mod logging;
 mod marker_file;
+mod onboarding;
 mod pdf_signing;
+mod permissions;
 mod presence;
 mod registry;
 mod relaunch;
@@ -137,6 +141,12 @@ pub fn run() {
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
+    .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
+      clipboard_shortcut::ClipboardShortcut::load(),
+    ))
+    .manage::<onboarding::OnboardingState>(std::sync::Mutex::new(
+      onboarding::Onboarding::load(),
+    ))
     .manage(feature_gate::FeatureGates::default())
     .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
     .manage(crash_monitor)
@@ -185,25 +195,16 @@ pub fn run() {
       }
 
       // Registration is intentionally non-fatal: the shortcut may already be
-      // taken, and the timeline stays reachable from the tray.
+      // taken, and the clipboard stays reachable from the tray.
+      if clipboard_shortcut::register_at_launch(&handle)
+        != clipboard_shortcut::ShortcutRegistration::Active
       {
-        use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-        if let Err(error) = app.global_shortcut().on_shortcut(
-          "CommandOrControl+Shift+V",
-          |app, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-              clipboard_window::toggle(app);
-            }
-          },
-        ) {
-          tracing::warn!(error = %error, "clipboard shortcut is unavailable");
-          desktop_telemetry.capture(desktop_telemetry::DesktopErrorReport {
-            window: desktop_telemetry::DesktopTelemetryWindow::Clipboard,
-            operation:
-              desktop_telemetry::DesktopTelemetryOperation::ClipboardShortcutRegister,
-            code: desktop_telemetry::DesktopTelemetryErrorCode::ShortcutUnavailable,
-          });
-        }
+        desktop_telemetry.capture(desktop_telemetry::DesktopErrorReport {
+          window: desktop_telemetry::DesktopTelemetryWindow::Clipboard,
+          operation:
+            desktop_telemetry::DesktopTelemetryOperation::ClipboardShortcutRegister,
+          code: desktop_telemetry::DesktopTelemetryErrorCode::ShortcutUnavailable,
+        });
       }
 
       if reveal_clipboard_on_launch {
@@ -432,6 +433,13 @@ pub fn run() {
         app.set_activation_policy(tauri::ActivationPolicy::Accessory);
       }
 
+      onboarding::show_if_pending(
+        &handle,
+        launch_args
+          .iter()
+          .any(|arg| arg == app_lifecycle::BACKGROUND_LAUNCH_ARGUMENT),
+      );
+
       // Register deep link handler
       {
         let manager_for_deep_link = Arc::clone(&manager);
@@ -502,7 +510,7 @@ pub fn run() {
     });
 }
 
-fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
+pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
   // Accessory apps must explicitly activate to bring windows to front.
   #[cfg(target_os = "macos")]
   let _ = handle.show();
@@ -530,7 +538,15 @@ fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
     .hidden_title(true);
 
   match builder.build() {
-    Ok(_window) => {
+    Ok(window) => {
+      // A shortcut paused for recording must not stay released after the
+      // window that recorded it is gone.
+      let resume_handle = handle.clone();
+      window.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::Destroyed) {
+          clipboard_shortcut::resume_after_window_closed(&resume_handle);
+        }
+      });
       // Emit tab activation after a short delay to let the webview load
       let handle = handle.clone();
       let tab = tab.to_string();

@@ -491,9 +491,9 @@ describe("sanctions screening service", () => {
         reason: "load-failed",
       });
       expect(listOf(screening.lists, "eu").status).toBe("clear");
-      expect(reports).toEqual([
-        { stage: "list-screening", reason: "index-load", source: "uk" },
-      ]);
+      // The index cache owns and reports a failed load; the screening that
+      // meets it adds no report of its own.
+      expect(reports).toEqual([]);
     },
     DB_TEST_TIMEOUT_MS,
   );
@@ -536,6 +536,9 @@ describe("sanctions screening service", () => {
       let failing = true;
       const builds = new Map<SanctionsSource, number>();
       const reported: { source: SanctionsSource; editionId: string }[] = [];
+      const screeningReports: Parameters<
+        typeof reportSanctionsScreeningFailure
+      >[0][] = [];
       const indexCache = createSanctionsIndexCache({
         nowMs: () => clock,
         build: (lists) => {
@@ -565,10 +568,15 @@ describe("sanctions screening service", () => {
             practiceJurisdictions: ["CH"],
             now: FRESH_NOW,
             indexCache,
+            reportFailure: (report) => {
+              screeningReports.push(report);
+            },
           })
         ).unwrap();
 
-      const first = await run();
+      // Two screenings wait on the same failing load.
+      const [first, concurrent] = await Promise.all([run(), run()]);
+      expect(listOf(concurrent.lists, "ch").reason).toBe("load-failed");
       expect(first.status).toBe("unavailable");
       expect(listOf(first.lists, "ch")).toMatchObject({
         status: "unavailable",
@@ -589,6 +597,9 @@ describe("sanctions screening service", () => {
       expect(listOf(second.lists, "ch").reason).toBe("load-failed");
       expect(builds.get("ch")).toBe(1);
       expect(reported).toHaveLength(1);
+      // One failed load is one report, the cache's: neither the screening
+      // waiting on it nor one inside the pause reports it again.
+      expect(screeningReports).toEqual([]);
 
       // After it, the next screening tries again.
       failing = false;
