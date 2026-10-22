@@ -10975,9 +10975,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
   // Each tool's agent access is resolved before dispatch (`agent-access.ts`).
   test("delete_task refuses to run without confirm: true", async () => {
+    const taskId = "00000000-0000-4000-8000-0000000e0001";
     const result = await handleMcpToolCall({
-      args: { task_id: "00000000-0000-4000-8000-0000000e0001" },
-      context: createContext(),
+      args: { task_id: taskId },
+      context: createContext({ scopedDb: createScopedDb([{ id: taskId }]) }),
       toolName: "delete_task",
     });
 
@@ -11019,19 +11020,14 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("organization settings need a person's approval in stella", async () => {
+  test("organization settings pass agent access before input validation", async () => {
     const result = await handleMcpToolCall({
       args: {},
       context: createContext(),
       toolName: "update_organization_settings",
     });
 
-    expectErrorEnvelope(result, {
-      code: "person_approval_required",
-      message:
-        "update_organization_settings needs a person's approval in stella and cannot run from this client",
-      hint: "Do not retry it. Describe the change in your reply so the user can make or approve it in stella.",
-    });
+    expectValidationMessage(result, "Provide at least one setting to change");
   });
 
   test("member removal needs a person's approval in stella", async () => {

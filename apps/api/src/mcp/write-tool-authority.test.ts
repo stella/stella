@@ -581,7 +581,6 @@ describe("write tools whose input selects the operation", () => {
     const document = await handleMcpToolCall({
       args: {
         entity_id: "00000000-0000-4000-8000-000000000001",
-        confirm: true,
       },
       context: updateOnly,
       toolName: "delete_document",
@@ -594,7 +593,6 @@ describe("write tools whose input selects the operation", () => {
       args: {
         entity_id: "00000000-0000-4000-8000-000000000001",
         version_id: "00000000-0000-4000-8000-000000000002",
-        confirm: true,
       },
       context: updateOnly,
       toolName: "delete_document",

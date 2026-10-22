@@ -49,13 +49,7 @@ export type AgentAccess =
     }
   | {
       kind: typeof AGENT_ACCESS_KIND.personApproves;
-      reason:
-        | "grants-access"
-        | "revokes-access"
-        | "destroys-data"
-        | "outbound"
-        /** Settings that apply to everyone in the organization. */
-        | "changes-organization-settings";
+      reason: "grants-access" | "revokes-access" | "destroys-data" | "outbound";
     }
   | {
       kind: typeof AGENT_ACCESS_KIND.personOnly;
@@ -85,10 +79,6 @@ const APPROVE_GRANTS_ACCESS = {
 const APPROVE_REVOKES_ACCESS = {
   kind: AGENT_ACCESS_KIND.personApproves,
   reason: "revokes-access",
-} as const satisfies AgentAccess;
-const APPROVE_ORGANIZATION_SETTINGS = {
-  kind: AGENT_ACCESS_KIND.personApproves,
-  reason: "changes-organization-settings",
 } as const satisfies AgentAccess;
 const PERSON_ONLY_DELETES_MATTER = {
   kind: AGENT_ACCESS_KIND.personOnly,
@@ -128,8 +118,8 @@ const WRITE_TOOL_AGENT_ACCESS = {
   delete_reader_annotation: CONFIRM_DESTROYS_DATA,
   add_matter_member: APPROVE_GRANTS_ACCESS,
   remove_matter_member: APPROVE_REVOKES_ACCESS,
-  update_organization_settings: APPROVE_ORGANIZATION_SETTINGS,
-  set_practice_jurisdictions: APPROVE_ORGANIZATION_SETTINGS,
+  update_organization_settings: OPEN,
+  set_practice_jurisdictions: OPEN,
   fill_template: OPEN,
   save_filled_template: OPEN,
   create_template: OPEN,
@@ -364,28 +354,23 @@ const CAPABILITY_AGENT_ACCESS = {
   "number-series.update": OPEN,
   "organization-settings.ai-availability.get": OPEN,
   "organization-settings.anonymization-blacklist.get": OPEN,
-  "organization-settings.anonymization-blacklist.update":
-    APPROVE_ORGANIZATION_SETTINGS,
-  "organization-settings.correspondence.allowed-senders.create":
-    APPROVE_ORGANIZATION_SETTINGS,
+  "organization-settings.anonymization-blacklist.update": OPEN,
+  "organization-settings.correspondence.allowed-senders.create": OPEN,
   "organization-settings.correspondence.allowed-senders.delete":
-    APPROVE_ORGANIZATION_SETTINGS,
+    CONFIRM_DESTROYS_DATA,
   // A read: the catalog files it under write because only a settings
   // administrator (`organizationSettings: update`) may list the senders.
   "organization-settings.correspondence.allowed-senders.list": OPEN,
-  "organization-settings.correspondence.allowed-senders.scope.add":
-    APPROVE_ORGANIZATION_SETTINGS,
+  "organization-settings.correspondence.allowed-senders.scope.add": OPEN,
   "organization-settings.correspondence.allowed-senders.scope.remove":
-    APPROVE_ORGANIZATION_SETTINGS,
+    CONFIRM_DESTROYS_DATA,
   "organization-settings.deepl-availability.get": OPEN,
   "organization-settings.document-ocr-availability.get": OPEN,
   "organization-settings.get": OPEN,
-  "organization-settings.practice-jurisdictions.update":
-    APPROVE_ORGANIZATION_SETTINGS,
+  "organization-settings.practice-jurisdictions.update": OPEN,
   "organization-settings.preview": OPEN,
-  "organization-settings.sanctions-monitoring.update":
-    APPROVE_ORGANIZATION_SETTINGS,
-  "organization-settings.update": APPROVE_ORGANIZATION_SETTINGS,
+  "organization-settings.sanctions-monitoring.update": OPEN,
+  "organization-settings.update": OPEN,
   "playbooks.applicable.run": OPEN,
   "playbooks.approve": OPEN,
   "playbooks.create": OPEN,

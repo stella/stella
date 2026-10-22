@@ -494,6 +494,7 @@ describe("handleMcpHttpRequest", () => {
       }),
     );
     resolveMcpSessionContextMock.mockResolvedValue({
+      memberRole: "owner",
       organizationId: "org_1",
       userId: "user_1",
     });
@@ -501,8 +502,10 @@ describe("handleMcpHttpRequest", () => {
       name: "delete_matter",
       scope: "stella:write",
       access: "write",
+      accountAccess: "sandbox",
       description: "Delete a matter",
       inputSchema: { type: "object", properties: {} },
+      permissions: { type: "all", permissions: { workspace: ["delete"] } },
     });
     const admitAction = mock(async () => Result.err(new Error("unreachable")));
     const handler = createMcpHttpRequestHandler({
