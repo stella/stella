@@ -163,6 +163,7 @@ export const refusedCredentialIssuerProbes = {
       subscribe({
         userId,
         organizationId,
+        sessionId: "synthetic-session-probe",
         workspaceId,
         signal: new AbortController().signal,
       }),
@@ -171,6 +172,7 @@ export const refusedCredentialIssuerProbes = {
       subscribeUser({
         userId,
         organizationId,
+        sessionId: "synthetic-session-probe",
         signal: new AbortController().signal,
       }),
     );
