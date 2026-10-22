@@ -192,7 +192,7 @@ const relationStats = async (
       SELECT c.relpages, c.reltuples, c.relallvisible
         FROM pg_class AS c
         JOIN pg_namespace AS n ON n.oid = c.relnamespace
-       WHERE n.nspname = 'public' AND c.relname = ${table}
+       WHERE n.nspname = current_schema() AND c.relname = ${table}
     `),
   );
   const row = rows.at(0);
@@ -231,7 +231,7 @@ export const injectScaleProfile = async (
     restored(
       await db.execute(sql`
         SELECT pg_restore_relation_stats(
-          'schemaname', 'public', 'relname', ${table}::text,
+          'schemaname', current_schema()::text, 'relname', ${table}::text,
           'reltuples', ${tableProfile.reltuples}::real,
           'relallvisible', ${Math.round(stats.relpages * tableProfile.allVisibleFraction)}::integer
         ) AS restored
@@ -244,7 +244,7 @@ export const injectScaleProfile = async (
     // ANALYZE's physical-seed MCVs would otherwise survive a partial restore.
     await db.execute(sql`
       SELECT pg_clear_attribute_stats(
-        'public', ${attribute.table}::text, ${attribute.column}::text, false
+        current_schema()::text, ${attribute.table}::text, ${attribute.column}::text, false
       )
     `);
     const commonStats =
@@ -261,7 +261,7 @@ export const injectScaleProfile = async (
     restored(
       await db.execute(sql`
         SELECT pg_restore_attribute_stats(
-          'schemaname', 'public', 'relname', ${attribute.table}::text,
+          'schemaname', current_schema()::text, 'relname', ${attribute.table}::text,
           'attname', ${attribute.column}::text, 'inherited', false,
           'null_frac', ${attribute.nullFraction}::real,
           'n_distinct', ${attribute.distinctValues}::real
@@ -287,6 +287,8 @@ export const scaleTableToProfile = async <Table extends string>(
   profile: {
     tables: Record<Table, TableScale>;
     attributes: readonly AttributeScale[];
+    /** Scale heap pages when the fixture must model the table-to-index size ratio. */
+    scaleRelationPages?: boolean;
   },
 ): Promise<void> => {
   const scale = profile.tables[table];
@@ -295,6 +297,10 @@ export const scaleTableToProfile = async <Table extends string>(
     panic(`Scale profile requires physical rows before scaling: ${table}`);
   }
   const growth = scale.reltuples / stats.reltuples;
+  const scaledPages = Math.ceil(stats.relpages * growth);
+  const relationPages = profile.scaleRelationPages
+    ? sql`, 'relpages', ${scaledPages}::integer`
+    : sql``;
   const indexes = executedRows(
     await db.execute(sql`
       SELECT c.relname, c.relpages, c.reltuples
@@ -318,7 +324,7 @@ export const scaleTableToProfile = async <Table extends string>(
     restored(
       await db.execute(sql`
         SELECT pg_restore_relation_stats(
-          'schemaname', 'public', 'relname', ${index["relname"]}::text,
+          'schemaname', current_schema()::text, 'relname', ${index["relname"]}::text,
           'relpages', ${Math.ceil(index["relpages"] * growth)}::integer,
           'reltuples', ${Math.max(index["reltuples"], 0) * growth}::real
         ) AS restored
@@ -329,9 +335,13 @@ export const scaleTableToProfile = async <Table extends string>(
   restored(
     await db.execute(sql`
       SELECT pg_restore_relation_stats(
-        'schemaname', 'public', 'relname', ${table}::text,
+        'schemaname', current_schema()::text, 'relname', ${table}::text,
         'reltuples', ${scale.reltuples}::real,
-        'relallvisible', ${Math.round(stats.relpages * scale.allVisibleFraction)}::integer
+        'relallvisible', ${Math.round(
+          (profile.scaleRelationPages ? scaledPages : stats.relpages) *
+            scale.allVisibleFraction,
+        )}::integer
+        ${relationPages}
       ) AS restored
     `),
     table,
@@ -343,13 +353,13 @@ export const scaleTableToProfile = async <Table extends string>(
     // The fixture's own distribution would otherwise survive the restore.
     await db.execute(sql`
       SELECT pg_clear_attribute_stats(
-        'public', ${table}::text, ${attribute.column}::text, false
+        current_schema()::text, ${table}::text, ${attribute.column}::text, false
       )
     `);
     restored(
       await db.execute(sql`
         SELECT pg_restore_attribute_stats(
-          'schemaname', 'public', 'relname', ${table}::text,
+          'schemaname', current_schema()::text, 'relname', ${table}::text,
           'attname', ${attribute.column}::text, 'inherited', false,
           'null_frac', ${attribute.nullFraction}::real,
           'n_distinct', ${attribute.distinctValues}::real

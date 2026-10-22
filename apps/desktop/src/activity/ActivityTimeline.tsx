@@ -9,6 +9,7 @@ import type {
 } from "@stll/api-contract/desktop-time-entries";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import { PhoneIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { resolveMatterColor } from "@stll/ui/matter-colors";
@@ -164,7 +165,7 @@ export const ActivityTimeline = ({
                   width: `${pct(segment.endMs) - pct(segment.startMs)}%`,
                   animationDelay: `${Math.min(index, 8) * 70}ms`,
                 }}
-                aria-label={`${time(segment.startMs)} – ${time(segment.endMs)} · ${segment.appName}`}
+                aria-label={`${time(segment.startMs)} – ${time(segment.endMs)} · ${segmentLabel(segment, t)}`}
                 onClick={(event) => {
                   if (
                     !disabled &&
@@ -185,6 +186,12 @@ export const ActivityTimeline = ({
                     sourceAppVisuals={snapshot.sourceAppVisuals}
                   />
                 )}
+                {segment.call ? (
+                  <PhoneIcon
+                    aria-hidden="true"
+                    className="text-muted-foreground size-3 shrink-0"
+                  />
+                ) : null}
               </TooltipTrigger>
             ))}
             {selected ? (
@@ -414,9 +421,7 @@ const SegmentTooltip = ({
             minutes: Math.ceil((segment.endMs - segment.startMs) / 60_000),
           })}
         </span>
-        <bdi>
-          {segment.type === "idle" ? t("awayNotCounted") : segment.appName}
-        </bdi>
+        <bdi>{segmentLabel(segment, t)}</bdi>
         {snapshot.captureDetails &&
         (segment.document || segment.windowTitle) ? (
           <bdi className="text-muted-foreground wrap-break-word">
@@ -510,3 +515,16 @@ const RangeTimeField = ({
     </fieldset>
   );
 };
+
+function segmentLabel(
+  segment: TimelineSegment,
+  t: ReturnType<typeof useTranslations<"activity">>,
+) {
+  if (segment.type === "idle") {
+    return t("awayNotCounted");
+  }
+  if (segment.call) {
+    return t("callIn", { app: segment.appName });
+  }
+  return segment.appName;
+}
