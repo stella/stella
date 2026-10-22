@@ -321,23 +321,28 @@ export const inverseOfRemove = (
   }
 };
 
-/** The write that takes a step, and the step that would take it back. */
+/**
+ * The write that takes a step. A write that removes or updates carries the
+ * step that would take it back; a create learns its opposite from the rows
+ * the store gives the mark.
+ */
 export type ReaderAnnotationStepPlan =
   | { status: "gone" }
   | { status: "changed" }
   | {
-      opposite: ReaderAnnotationInverse | null;
       status: "ready";
-      write: { id: string; kind: "remove" };
-    }
-  | {
-      opposite: ReaderAnnotationInverse;
-      status: "ready";
-      write: { input: UpdateAnnotationInput; kind: "update" };
-    }
-  | {
-      status: "ready";
-      write: { input: CreateAnnotationInput; kind: "create" };
+      write:
+        | {
+            id: string;
+            kind: "remove";
+            opposite: ReaderAnnotationInverse | null;
+          }
+        | {
+            input: UpdateAnnotationInput;
+            kind: "update";
+            opposite: ReaderAnnotationInverse;
+          }
+        | { input: CreateAnnotationInput; kind: "create" };
     };
 
 /**
@@ -359,9 +364,12 @@ export const planReaderAnnotationStep = (
         return { status: "gone" };
       }
       return {
-        opposite: inverseOfRemove(rows, present),
         status: "ready",
-        write: { id: present, kind: "remove" },
+        write: {
+          id: present,
+          kind: "remove",
+          opposite: inverseOfRemove(rows, present),
+        },
       };
     }
     case "restore": {
@@ -382,15 +390,18 @@ export const planReaderAnnotationStep = (
         return { status: "changed" };
       }
       return {
-        opposite: {
-          expected: inverse.restore,
-          op: "revert",
-          restore: inverse.expected,
-          rowIds: inverse.rowIds,
-          subject: inverse.subject,
-        },
         status: "ready",
-        write: { input: { id: present, ...inverse.restore }, kind: "update" },
+        write: {
+          input: { id: present, ...inverse.restore },
+          kind: "update",
+          opposite: {
+            expected: inverse.restore,
+            op: "revert",
+            restore: inverse.expected,
+            rowIds: inverse.rowIds,
+            subject: inverse.subject,
+          },
+        },
       };
     }
     default: {
@@ -456,13 +467,13 @@ export const performReaderAnnotationStep = async (
       const removed = await writes.remove(plan.write.id);
       return Result.isError(removed)
         ? { status: "failed" }
-        : { opposite: plan.opposite, status: "done" };
+        : { opposite: plan.write.opposite, status: "done" };
     }
     case "update": {
       const updated = await writes.update(plan.write.input);
       return Result.isError(updated)
         ? { status: "failed" }
-        : { opposite: plan.opposite, status: "done" };
+        : { opposite: plan.write.opposite, status: "done" };
     }
     default: {
       plan.write satisfies never;
