@@ -10,6 +10,12 @@ no_auto_install: true
 pre-commit:
   parallel: false
   commands:
+    # Runs first (priority) and installs only the root workspace when this
+    # checkout has no dependencies yet, so a fresh worktree can commit without
+    # a full install.
+    deps:
+      priority: 1
+      run: bash scripts/ensure-hook-deps.sh
     secrets:
       run: bun run secrets:check:staged
     lint:
@@ -26,7 +32,8 @@ pre-commit:
       stage_fixed: true
     i18n:
       glob: "apps/web/src/i18n/langs/*.{json,ts}"
-      run: bun run i18n:sync
+      # The sync runs packages/scripts tools and an apps/web script.
+      run: bash scripts/ensure-hook-deps.sh packages/scripts apps/web && bun run i18n:sync
       stage_fixed: true
     ai-skills:
       glob: "{.agents/skills,.ai/local-skills,.ai/shared/skills,.claude/skills}/**"
@@ -64,3 +71,9 @@ pre-push:
     # quarantine, a Dependabot cooldown and a frozen install.
     lockfiles:
       run: bun run check:standalone-lockfiles
+    # One git diff, then nothing unless the pushed commits touch a job
+    # classification input. It refreshes digests that only need a mechanical
+    # update (commit them and push again) and fails on any job that still
+    # needs review. CI rechecks at the workflow revision.
+    job-classification:
+      run: bun scripts/check-ci-job-classification.ts --pre-push
