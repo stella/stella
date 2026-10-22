@@ -6565,7 +6565,16 @@ jobs:
           }
           trap 'record_required_jobs "$?" || echo "::error::The required-jobs record could not be written."' EXIT
           mirror_metadata_code_run() {
-            local poll_seconds=30 max_wait_seconds=5400 waited=0 runs candidates candidate jobs plan_name result status conclusion running code_found
+            local poll_seconds=30 max_wait_seconds=5400 waited=0 runs candidates candidate run_status jobs plan_name result status conclusion running code_found
+            # Evidence a run has not produced yet is a wait while that run is
+            # still going; only a completed run is judged on what it lacks.
+            wait_for_running_run() {
+              if ((waited >= max_wait_seconds)); then
+                echo "::error::Metadata mirror: code run $candidate still running after 90 min."
+                return 1
+              fi
+              running=true
+            }
             while ((waited <= max_wait_seconds)); do
               runs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$HEAD_SHA&per_page=100") || {
                 echo "::error::Metadata mirror could not list CI code runs."
@@ -6575,14 +6584,14 @@ jobs:
                 [.[].workflow_runs[]
                   | select(.id != $current and .head_sha == $head)
                   | select(any(.pull_requests[]?; .number == $pr))]
-                | sort_by(.run_number, .id) | reverse | .[].id
+                | sort_by(.run_number, .id) | reverse | .[] | "\(.id) \(.status)"
                 ' <<< "$runs") || {
                 echo "::error::Metadata mirror received invalid CI run data."
                 return 1
               }
               running=false
               code_found=false
-              while IFS= read -r candidate; do
+              while read -r candidate run_status; do
                 [[ -n "$candidate" ]] || continue
                 jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$candidate/jobs?per_page=100") || {
                   echo "::error::Metadata mirror could not inspect code run $candidate."
@@ -6594,20 +6603,26 @@ jobs:
                 if [[ "$plan_name" == ci-metadata-plan ]] || jq -e 'any(.[].jobs[]; .name == "ci-metadata-result")' <<< "$jobs" >/dev/null; then
                   continue
                 fi
-                [[ "$plan_name" == ci-plan ]] || continue
+                if [[ "$plan_name" != ci-plan ]]; then
+                  # A run that has not started its plan yet may still be the code run.
+                  [[ "$run_status" == completed ]] && continue
+                  wait_for_running_run || return 1
+                  break
+                fi
                 code_found=true
-                result=$(jq -cer '[.[].jobs[] | select(.name == "ci-result")] | sort_by(.id) | last // null' <<< "$jobs") || {
-                  echo "::error::Code run $candidate has no ci-result job."
-                  return 1
-                }
+                result=$(jq -c '[.[].jobs[] | select(.name == "ci-result")] | sort_by(.id) | last' <<< "$jobs") || return 1
+                if [[ "$result" == null ]]; then
+                  if [[ "$run_status" == completed ]]; then
+                    echo "::error::Code run $candidate completed without a ci-result job."
+                    return 1
+                  fi
+                  wait_for_running_run || return 1
+                  break
+                fi
                 status=$(jq -er '.status | select(type == "string")' <<< "$result") || return 1
                 conclusion=$(jq -er '.conclusion // "" | select(type == "string")' <<< "$result") || return 1
                 if [[ "$status" != completed ]]; then
-                  if ((waited == max_wait_seconds)); then
-                    echo "::error::Metadata mirror: code run still running after 90 min."
-                    return 1
-                  fi
-                  running=true
+                  wait_for_running_run || return 1
                   break
                 fi
                 if [[ "$conclusion" == success ]]; then
@@ -6619,15 +6634,18 @@ jobs:
                 echo "::error::Metadata mirror: code run $candidate completed with ${conclusion:-no conclusion}."
                 return 1
               done <<< "$candidates"
+              if [[ "$running" == true ]]; then
+                sleep "$poll_seconds"
+                waited=$((waited + poll_seconds))
+                continue
+              fi
               if [[ "$code_found" == false ]]; then
                 echo "::error::Metadata mirror: no code run exists for pull request $PR_NUMBER at head $HEAD_SHA."
                 return 1
               fi
-              if [[ "$running" == true ]]; then
-                sleep "$poll_seconds"
-                waited=$((waited + poll_seconds))
-              fi
             done
+            echo "::error::Metadata mirror reached no verdict."
+            return 1
           }
           if [[ "$EVENT" == pull_request && "$METADATA_ONLY" == true ]]; then
             mirror_metadata_code_run

@@ -659,7 +659,11 @@ type EvaluateResultOptions = {
     | "missing"
     | "other-head"
     | "running-green"
-    | "running";
+    | "running"
+    | "pending-result-green"
+    | "running-no-result"
+    | "running-no-plan"
+    | "completed-no-result";
 };
 
 const mainHeavyJobNames = mainHeavyJobs({ jobs: ciJobs });
@@ -682,25 +686,55 @@ const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
           },
         ];
   const conclusion = state === "red" ? "failure" : "success";
-  const jobs = (status: "completed" | "in_progress") => [
-    {
-      jobs: [
-        { id: 1, name: "ci-plan", status: "completed", conclusion: "success" },
-        {
-          id: 2,
-          name: "ci-result",
-          status,
-          conclusion: status === "completed" ? conclusion : null,
-        },
-      ],
-    },
-  ];
+  const planJob = {
+    id: 1,
+    name: "ci-plan",
+    status: "completed",
+    conclusion: "success",
+  };
+  const ciResultJob = (status: "completed" | "in_progress") => ({
+    id: 2,
+    name: "ci-result",
+    status,
+    conclusion: status === "completed" ? conclusion : null,
+  });
+  const jobList = (...jobs: unknown[]) => [{ jobs }];
+  const finalJobs = () => {
+    switch (state) {
+      case "running-no-plan":
+        return jobList();
+      case "running-no-result":
+      case "completed-no-result":
+        return jobList(planJob);
+      case "running":
+        return jobList(planJob, ciResultJob("in_progress"));
+      default:
+        return jobList(planJob, ciResultJob("completed"));
+    }
+  };
+  // States that change once: the first jobs read sees the earlier state.
+  const firstJobs = () => {
+    switch (state) {
+      case "running-green":
+        return JSON.stringify(jobList(planJob, ciResultJob("in_progress")));
+      case "pending-result-green":
+        return JSON.stringify(jobList(planJob));
+      default:
+        return "";
+    }
+  };
+  const completedRun =
+    state === undefined ||
+    ["green", "red", "other-head", "completed-no-result"].includes(state);
   return {
     enabled: state === undefined ? "false" : "true",
     runRequired: state === undefined ? "true" : "false",
-    finalJobs: jobs(state === "running" ? "in_progress" : "completed"),
-    jobs,
-    runs,
+    finalJobs: finalJobs(),
+    firstJobs: firstJobs(),
+    runs: runs.map((run) => ({
+      ...run,
+      status: completedRun ? "completed" : "in_progress",
+    })),
     state: state ?? "",
   };
 };
@@ -736,10 +770,10 @@ case "$endpoint" in
     echo "$FAKE_CODE_RUNS"
     ;;
   "repos/${PULL_REQUEST.repo}/actions/runs/200/jobs?per_page=100")
-    state="${nodePath.join(fakeGhDirectory, "metadata-counter")}"
-    if [[ "$FAKE_CODE_STATE" == running-green && ! -e "$state" ]]; then
+    state="${nodePath.join(fakeGhDirectory, "metadata-counter")}-$FAKE_CODE_STATE"
+    if [[ -n "$FAKE_CODE_JOBS_FIRST" && ! -e "$state" ]]; then
       : > "$state"
-      echo "$FAKE_CODE_JOBS_RUNNING"
+      echo "$FAKE_CODE_JOBS_FIRST"
     else
       echo "$FAKE_CODE_JOBS"
     fi
@@ -949,7 +983,7 @@ const resultGateCase = ({
       FAKE_CODE_STATE: codeRun.state,
       FAKE_CODE_RUNS: JSON.stringify([{ workflow_runs: codeRun.runs }]),
       FAKE_CODE_JOBS: JSON.stringify(codeRun.finalJobs),
-      FAKE_CODE_JOBS_RUNNING: JSON.stringify(codeRun.jobs("in_progress")),
+      FAKE_CODE_JOBS_FIRST: codeRun.firstJobs,
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       FOLDED_SUITES: resultStep.env["FOLDED_SUITES"] ?? "",
       NEEDS: JSON.stringify(needs),
@@ -2764,35 +2798,57 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
     expect(`${outcome.stdout}\n${outcome.stderr}`, state).toContain(message);
   }
 
-  const runningThenGreen = onlyOutcome(
-    evaluateResults(["running-green"], () => ({
-      event: EVENT.pullRequest,
-      results: {},
-      metadataCodeRun: "running-green",
-      outcomeScript: resultStep.run.replace(
-        "local poll_seconds=30 max_wait_seconds=5400",
-        "local poll_seconds=0 max_wait_seconds=5400",
-      ),
-    })),
-  );
-  expect(runningThenGreen.exitCode).toBe(0);
-  expect(runningThenGreen.stdout).toContain("succeeded for head");
+  // A running code run is waited on, whatever evidence it lacks so far.
+  for (const state of ["running-green", "pending-result-green"] as const) {
+    const runningThenGreen = onlyOutcome(
+      evaluateResults([state], () => ({
+        event: EVENT.pullRequest,
+        results: {},
+        metadataCodeRun: state,
+        outcomeScript: resultStep.run.replace(
+          "local poll_seconds=30 max_wait_seconds=5400",
+          "local poll_seconds=0 max_wait_seconds=5400",
+        ),
+      })),
+    );
+    expect(runningThenGreen.exitCode, state).toBe(0);
+    expect(runningThenGreen.stdout, state).toContain("succeeded for head");
+  }
 
-  const timedOut = onlyOutcome(
-    evaluateResults(["running"], () => ({
+  for (const state of [
+    "running",
+    "running-no-result",
+    "running-no-plan",
+  ] as const) {
+    const timedOut = onlyOutcome(
+      evaluateResults([state], () => ({
+        event: EVENT.pullRequest,
+        results: {},
+        metadataCodeRun: state,
+        outcomeScript: resultStep.run.replace(
+          "local poll_seconds=30 max_wait_seconds=5400",
+          "local poll_seconds=0 max_wait_seconds=0",
+        ),
+      })),
+    );
+    expect(timedOut.exitCode, state).toBe(1);
+    expect(`${timedOut.stdout}\n${timedOut.stderr}`, state).toContain(
+      "code run 200 still running after 90 min",
+    );
+  }
+
+  // Only a completed code run fails for lacking a ci-result job.
+  const completedWithoutResult = onlyOutcome(
+    evaluateResults(["completed-no-result"], () => ({
       event: EVENT.pullRequest,
       results: {},
-      metadataCodeRun: "running",
-      outcomeScript: resultStep.run.replace(
-        "local poll_seconds=30 max_wait_seconds=5400",
-        "local poll_seconds=0 max_wait_seconds=0",
-      ),
+      metadataCodeRun: "completed-no-result",
     })),
   );
-  expect(timedOut.exitCode).toBe(1);
-  expect(`${timedOut.stdout}\n${timedOut.stderr}`).toContain(
-    "code run still running after 90 min",
-  );
+  expect(completedWithoutResult.exitCode).toBe(1);
+  expect(
+    `${completedWithoutResult.stdout}\n${completedWithoutResult.stderr}`,
+  ).toContain("Code run 200 completed without a ci-result job");
 }, 20_000);
 
 test("required checks retain PR and merge-group coverage", async () => {
