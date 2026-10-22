@@ -38,6 +38,10 @@ jobs:
   testflight:
     name: TestFlight ${{ inputs.variant }}
     if: github.ref == 'refs/heads/main'
+    # The signing secrets live only in this environment, which needs a
+    # reviewer's approval and deploys from main alone, so a dispatch of an
+    # edited workflow on another branch cannot read them.
+    environment: mobile-release
     runs-on: macos-15
     timeout-minutes: 60
     permissions:
@@ -123,13 +127,10 @@ jobs:
             $(security list-keychains -d user | tr -d '"')
           echo "MOBILE_SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
 
-      - name: Archive and upload to TestFlight
+      # The archive runs third-party build phases, so its environment carries
+      # no upload key; only the next step authenticates to App Store Connect.
+      - name: Archive
         working-directory: apps/mobile/ios
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          API_ISSUER_ID: ${{ secrets.MOBILE_ASC_API_ISSUER_ID }}
-          API_KEY_ID: ${{ secrets.MOBILE_ASC_API_KEY_ID }}
-          API_KEY_BASE64: ${{ secrets.MOBILE_ASC_API_KEY_P8 }}
         run: |
           set -euo pipefail
           workspaces=(*.xcworkspace)
@@ -150,7 +151,17 @@ jobs:
             -destination "generic/platform=iOS" \
             -archivePath "$archive" \
             OTHER_CODE_SIGN_FLAGS="--keychain $MOBILE_SIGNING_KEYCHAIN"
+          echo "MOBILE_ARCHIVE=$archive" >> "$GITHUB_ENV"
 
+      - name: Upload to TestFlight
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          API_ISSUER_ID: ${{ secrets.MOBILE_ASC_API_ISSUER_ID }}
+          API_KEY_ID: ${{ secrets.MOBILE_ASC_API_KEY_ID }}
+          API_KEY_BASE64: ${{ secrets.MOBILE_ASC_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          archive="$MOBILE_ARCHIVE"
           export_options="$RUNNER_TEMP/export-options.plist"
           plutil -create xml1 "$export_options"
           plutil -insert method -string app-store-connect "$export_options"
@@ -177,4 +188,6 @@ jobs:
 
       - name: Remove the signing keychain
         if: always() && env.MOBILE_SIGNING_KEYCHAIN != ''
-        run: security delete-keychain "$MOBILE_SIGNING_KEYCHAIN"
+        run: |
+          set -euo pipefail
+          security delete-keychain "$MOBILE_SIGNING_KEYCHAIN"
