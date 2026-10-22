@@ -115,6 +115,39 @@ export const useMoveEntity = () => {
   });
 };
 
+type CreateFolderFromSelectionVars = {
+  workspaceId: string;
+  name: string;
+  parentId: string | null;
+  entityIds: readonly string[];
+};
+
+export const useCreateFolderFromSelection = () => {
+  const analytics = useAnalytics();
+
+  return useMutation({
+    mutationFn: async ({
+      workspaceId,
+      name,
+      parentId,
+      entityIds,
+    }: CreateFolderFromSelectionVars) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        ["folder-from-selection"].post({
+          name,
+          parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+          entityIds: entityIds.map((entityId) => toSafeId<"entity">(entityId)),
+        });
+
+      return unwrapEden(response);
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+};
+
 type RenameEntityVars = {
   workspaceId: string;
   entityId: string;

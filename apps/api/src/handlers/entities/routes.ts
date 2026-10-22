@@ -7,6 +7,7 @@ import clipEndpoint from "@/api/handlers/entities/clip";
 import copyToWorkspace from "@/api/handlers/entities/copy";
 import createEntities from "@/api/handlers/entities/create";
 import createDocumentFromStyleSet from "@/api/handlers/entities/create-document-from-style-set";
+import createFolderFromSelection from "@/api/handlers/entities/create-folder-from-selection";
 import deleteEntities from "@/api/handlers/entities/delete";
 import createDesktopEditHandoff, {
   readDesktopEditHandoffStatus,
@@ -233,6 +234,10 @@ export const entitiesRoute = new Elysia({
   .patch("/move", moveEntity.handler, {
     body: moveEntity.config.body,
     permissions: moveEntity.config.permissions,
+  })
+  .post("/folder-from-selection", createFolderFromSelection.handler, {
+    body: createFolderFromSelection.config.body,
+    permissions: createFolderFromSelection.config.permissions,
   })
   .patch("/rename", renameEntity.handler, {
     body: renameEntity.config.body,
