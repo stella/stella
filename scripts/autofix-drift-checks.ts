@@ -28,6 +28,11 @@ type DriftCheck = {
 };
 
 export const AUTOFIX_DRIFT_CHECKS = [
+  {
+    job: "ci-quick-checks",
+    name: "Check workflow job classifications",
+    signal: "outcome",
+  },
   { job: "ci-checks-policy", name: "Format", signal: "pool" },
   {
     job: "ci-checks-rest",

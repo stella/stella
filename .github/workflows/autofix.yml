@@ -25,17 +25,11 @@ on:
         required: false
         type: string
         default: ""
+  # Workflow files are never fixed (the App cannot push them), but every one
+  # feeds the job classification digests, so no path is filtered out. A test
+  # derives this from the generators and the Tauri alignment.
   pull_request:
     types: [opened, synchronize, reopened]
-    # Workflow files are never fixed (the App cannot push them); only those a
-    # generator or the Tauri alignment reads stay in scope. A test derives
-    # this list from both.
-    paths:
-      - "**"
-      - "!.github/workflows/**"
-      - ".github/workflows/autofix.yml"
-      - ".github/workflows/ci.yml"
-      - ".github/workflows/release.yml"
 
 # A newer push supersedes a pending changed-file autofix for the same pull
 # request; regeneration dispatches stay isolated.
