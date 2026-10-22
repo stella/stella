@@ -315,6 +315,13 @@ export const CZ_PROFILE = {
       identifier: CZE.civilProcedure.work,
     },
     { spellings: ["NOZ"], identifier: CZE.civilCode.work },
+    {
+      // Cost decisions cite the tariff by initials: `§ 11 odst. 1 písm. g)
+      // a. t.`. The title entry below holds the same window.
+      spellings: ["a. t.", "a.t.", "a. t"],
+      identifier: sb(177, 1996),
+      citedFrom: "1996-07-01",
+    },
     ...succession({
       spellings: ["OZ", "o. z.", "o.z."],
       older: sb(40, 1964),
