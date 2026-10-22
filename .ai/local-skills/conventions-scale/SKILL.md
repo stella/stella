@@ -17,12 +17,6 @@ contract so callers do not depend on its limitations.
 
 ## Required Shape
 
-- **Bounded reads.** Never return or scan an unbounded growing collection in a
-  request or repair job. List endpoints accept a normalized limit and opaque
-  cursor and return `Page<T>` from `apps/api/src/lib/pagination.ts`:
-  `{ items, nextCursor, limit }`. Offset pagination, `totalCount`, and unbounded
-  lists require explicit justification.
-  [lint: require-query-limit/require-query-limit, no-offset-pagination/no-offset-pagination]
 - **Tenant isolation.** Stella already uses PostgreSQL RLS plus query-level
   authorization. Workspace reads and writes go through authorized `scopedDb`
   and include the tenant boundary in the query. `SafeId` and handler permission
@@ -38,15 +32,6 @@ contract so callers do not depend on its limitations.
   job identity, bounded concurrency, backpressure, and per-item failure records.
   A retry or overlapping run must converge instead of duplicating effects.
   [review]
-- **Streaming and batching.** Stream large files and exports; do not buffer them
-  entirely in memory. Batch database and remote operations and avoid per-row
-  network/query fan-out. Put explicit ceilings on batch size, payload size,
-  parallelism, retries, and execution time.
-  [lint: no-unbounded-response-body/no-unbounded-response-body, no-network-await-in-loop/no-network-await-in-loop]
-- **Configuration-owned limits.** Growing-domain limits live in the owning
-  slice's named configuration or shared limit primitives, not as scattered magic
-  numbers. Defaults, hard ceilings, and normalized server-applied values must be
-  distinguishable. [lint: require-contract-domains/require-contract-domains]
 - **Indexes and access paths.** Add an index with every new request-path filter,
   sort, or join; lead composite indexes with tenant scope. Check the query plan
   for large-table or high-frequency paths rather than inferring performance from
@@ -80,14 +65,13 @@ new store cannot appear without review; and
 `apps/api/src/lib/redis-outage.test.ts` pins each facade's degraded behavior
 against a real client aimed at a closed port.
 
-2. **Every usage is cluster-legal.** Keys carry a `{hashtag}` naming the
-   colocation unit; a multi-key command or Lua script may only touch keys that
-   share one hashtag. No `KEYS`, no numbered databases, no `SELECT`. `SCAN` is
-   per-node, so it may only ever be an optimization over a durable source of
-   truth, never the only way to find something. Pub/sub carries no durability
-   guarantee: a subscriber must tolerate lost, duplicated, and out-of-order
-   messages, and reconcile from the database on reconnect.
-   [lint: require-coordination-key/require-coordination-key]
+2. **Every usage is cluster-legal.** A multi-key command or Lua script may only
+   touch keys that share one hashtag. No `KEYS`, no numbered databases, no
+   `SELECT`. `SCAN` is per-node, so it may only ever be an optimization over a
+   durable source of truth, never the only way to find something. Pub/sub
+   carries no durability guarantee: a subscriber must tolerate lost,
+   duplicated, and out-of-order messages, and reconcile from the database on
+   reconnect. [review]
 
 Enforced by: `apps/api/src/lib/redis-keys.ts` builds every non-queue key and
 brands the result, so a raw string cannot reach a key position; and the

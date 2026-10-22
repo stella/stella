@@ -68,7 +68,7 @@ whether a contract change helped.
 ## Every Error Is A Next Step
 
 10. **Structured envelope, closed codes.** Failures return `{ code, message, hint,
-issues[] }` with codes from a closed set. `hint` names the corrective action,
+    issues[] }` with codes from a closed set. `hint` names the corrective action,
     the tool to call, and where to go (a deep link when the fix is in the UI).
     "Disabled" without "enable it here" is a dead end. [review]
 11. **Never leak the substrate.** A malformed id is a validation issue at the

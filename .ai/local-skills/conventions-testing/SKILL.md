@@ -54,17 +54,6 @@ through the owning package script so preloads and setup survive:
 - Avoid hidden shared mutable state. Prefer per-test setup; use
   `beforeEach` only for deterministic reset, and use expensive
   shared fixtures only when explicit and isolated [review]
-- Do not `mock.module` a workspace module (`@/...`, `@stll/...`, a
-  relative path), and always name the target with a string literal. The
-  fabricated module never drifts with the real one, so the test keeps passing
-  after the contract it depends on changes, and Bun's mock registry is
-  process-wide. Inject the collaborator instead (handler context, an options
-  parameter) and pass a plain fake; if the module wraps an external boundary,
-  mock the npm package it calls or expose a test seam.
-  `no-internal-module-mock` enforces this; existing pairs are grandfathered
-  in `scripts/internal-module-mock-ledger.json`, which only shrinks: delete a
-  line when you remove its mock, never add one.
-  [lint: no-internal-module-mock/no-internal-module-mock]
 - Assert observable behavior or an invariant, not the implementation sequence.
   A test that only proves "does not throw" or re-encodes the production algorithm
   needs a stronger assertion. [review]
@@ -95,11 +84,6 @@ through the owning package script so preloads and setup survive:
 - Keep time, randomness, network, filesystem, and database ownership explicit
   in tests. Pin or inject them rather than relying on ambient machine state.
   [review]
-- Name the error a throw assertion expects. `expect(...).toThrow()` with no
-  argument passes for every error, so it keeps passing once the code fails for
-  an unrelated reason; pass a message substring, a regex, or the error class.
-  `no-vacuous-throw-assertion` enforces this.
-  [lint: no-vacuous-throw-assertion/no-vacuous-throw-assertion]
 
 ## Mutation check
 

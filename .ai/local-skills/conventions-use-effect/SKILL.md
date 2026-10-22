@@ -27,11 +27,9 @@ first match:
    [review]
 4. **Does it reset state when an id/prop changes?** Remount with `key`. (Rule 5)
    [review]
-5. **Is it genuine external-system synchronization?** Use `useMountEffect`
-   or `useExternalSyncEffect`. (Rule 4)
-   [lint: no-raw-use-effect/no-raw-use-effect]
 
-If none match, you almost certainly do not need an effect.
+If none match and it is not genuine external-system synchronization (Rule 4),
+you almost certainly do not need an effect.
 
 ## Rule 1 — derive state, do not sync it
 

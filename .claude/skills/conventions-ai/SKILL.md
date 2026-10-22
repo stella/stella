@@ -25,17 +25,9 @@ fix at one layer is incomplete if another layer can discard the same state.
   an exhaustive `switch` or `satisfies Record<UpstreamUnion, ...>`. An upstream
   addition, removal, or rename must fail Stella's typecheck and force an explicit
   boundary decision. [review]
-- Handle SDK and boundary states with an exhaustive `switch` plus a `never`
-  check, or a `satisfies Record<SdkState, ...>` table.
-  [lint: typescript/switch-exhaustiveness-check, no-partial-record-satisfies/no-partial-record-satisfies]
-- Never use an untyped partial allowlist, truthiness check, or permissive default
-  branch for SDK states. A new SDK member must fail typecheck until its behavior is
-  chosen explicitly. [lint: typescript/switch-exhaustiveness-check]
-- Treat values crossing a process, stream, persistence, or browser boundary as
-  untrusted. Reject malformed or unknown wire values deliberately; accept and
-  preserve every documented state, including partial, approval, error, and terminal
-  variants.
-  [lint: no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast]
+- Accept and preserve every documented SDK state at a boundary, including
+  partial, approval, error, and terminal variants; reject only malformed or
+  unknown wire values. [review]
 - Keep success, recoverable failure, incomplete input, and impossible internal
   invariants distinct. A valid failed tool call is turn data, not malformed chat.
   [review]

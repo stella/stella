@@ -31,61 +31,34 @@ protection from stale work.
    [check: ratchet:unsignalled-skip]
 4. **Checkpoint last.** Advance a cursor, watermark, or checkpoint only after
    every earlier item is terminal or has a durable retry record. On an
-   ambiguous failure, hold the old checkpoint and replay.
-   [lint: no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write]
-5. **Atomic database batches.** For database-only work, persist the items and
-   checkpoint in one short transaction with
-   `commitReplaySafeIngestionBatch` from
-   `apps/api/src/lib/replay-safe-ingestion.ts`.
-   [lint: no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write]
-6. **External side effects.** Object storage, search indexes, email, and remote
+   ambiguous failure, hold the old checkpoint and replay. [review]
+5. **External side effects.** Object storage, search indexes, email, and remote
    APIs cannot join the database transaction. Make the database record the
    source identity/fingerprint and retry state first; use deterministic object
    keys or provider idempotency keys. Persist the cursor only after all page
    work is durable. [review]
-7. **Compare-and-set cursors.** Capture the cursor loaded at run start and
-   require it in the checkpoint update. A stale run must return the persisted
-   winner, never overwrite newer progress. Public corpus ingestion uses
-   `advanceCorpusIngestionCheckpoint` from
-   `apps/api/src/lib/corpus-ingestion-checkpoint.ts`.
-   [lint: no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write]
-8. **Stale-work protection.** Mutable inputs need a source version or content
+6. **Stale-work protection.** Mutable inputs need a source version or content
    fingerprint. A late worker must compare the claimed version before
    overwriting newer state. AI outputs also include schema, model, prompt, and
    parser versions in their identity/provenance. [review]
-9. **Durable execution.** Do not rely on detached promises or process memory
+7. **Durable execution.** Do not rely on detached promises or process memory
    for required work. Use a durable queue/outbox and deterministic job
    identity. Add a bounded repair scan when enqueue and commit cannot be
    atomic. [check: ratchet:detached-promise-review-sites]
-10. **Bounded recovery.** Repair scans and list reads use cursor pagination and
-    configured limits. Workers remain stateless and safe under concurrency.
-    [lint: require-query-limit/require-query-limit, no-offset-pagination/no-offset-pagination]
-11. **Owned schema.** The vertical slice owns its source, item, attempt, and
-    failure tables. Shared code provides transaction and identity primitives,
-    not a cross-domain ingestion framework. [review]
-12. **Bounded external calls.** Every remote request has an explicit timeout,
-    bounded retry policy with jitter, provider-aware rate limiting, and a
-    maximum concurrency. Persist retry state; do not hold a database
-    transaction while waiting on the provider.
-    [lint: require-fetch-timeout/require-fetch-timeout]
-13. **Poison-item isolation.** One malformed or permanently rejected item must
+8. **Owned schema.** The vertical slice owns its source, item, attempt, and
+   failure tables. Shared code provides transaction and identity primitives,
+   not a cross-domain ingestion framework. [review]
+9. **Bounded external calls.** Every remote request has a bounded retry
+   policy with jitter, provider-aware rate limiting, and a maximum
+   concurrency. Persist retry state; do not hold a database transaction while
+   waiting on the provider. [review]
+10. **Poison-item isolation.** One malformed or permanently rejected item must
     not stall an entire source forever. Persist the item identity, classified
     terminal/retryable outcome, sanitized error context, and operator-visible
     repair path before allowing later progress. [review]
-14. **Accounted-for source fields.** Every field a source states on a page the
+11. **Accounted-for source fields.** Every field a source states on a page the
     adapter already fetches is stored, or excluded with the reason. See below.
     [test: apps/api/src/handlers/case-law/ingestion/adapters/source-field-inventory.test.ts]
-15. **A publisher is not a court.** The deciding court comes from the record:
-    the court code in its ECLI first, then the record's own court field,
-    resolved through the shared resolver
-    (`apps/api/src/lib/case-law/cz-ecli-courts.ts` for Czech sources). Never a
-    per-adapter constant, even where the portal is believed to serve one
-    court's decisions: portals republish other courts, and the court name is
-    what authority weighting is read off. An inventory declaration must name
-    the field the value is read from, and a value produced from a literal
-    satisfies no declaration. `no-literal-decision-court` rejects a literal
-    `court` in a case-law adapter.
-    [lint: no-literal-decision-court/no-literal-decision-court]
 
 ## Checkpoint Boundary
 

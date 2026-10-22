@@ -1,11 +1,3 @@
-## Handler Scope
-
-- Use `createSafeSessionHandler` for session-scoped endpoints,
-  `createSafeTokenHandler` for endpoints that authorize their own token, and
-  `createSafePublicHandler` for intentionally public endpoints. Public handlers
-  must not receive authenticated workspace or root context.
-  [lint: require-safe-route-handlers/require-safe-route-handlers]
-
 ## Database Domain Values
 
 Table definitions live in `apps/api/src/db/schema/`; `schema.ts` is the shared

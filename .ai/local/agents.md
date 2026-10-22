@@ -31,14 +31,10 @@ rules.
 - Search before you write. Before adding a helper, module, schema, or validation
   step, check `docs/module-ownership.md` and `packages/*` for the capability.
   Extend the owner; if a second implementation is right, say why in the PR.
-  [lint: confine-owner/confine-owner]
+  [review]
 - Make abstractions earn their keep. Avoid pass-through wrappers, single-use
   helpers, and interfaces with one implementation unless they establish a real
   ownership boundary, contract, or test seam. [review]
-- Defensive code belongs at real trust and failure boundaries. Do not add null
-  checks, silent fallbacks, or catch-and-log blocks for states already excluded by
-  types, validation, or framework guarantees.
-  [lint: typescript/no-unnecessary-condition]
 - No forward-compatibility placeholders: never ship a flag, option, field, or
   export that is accepted but has no effect "for later" (a `--keychain` that
   always falls back, a `setDefault` helper nothing calls). Add it in the PR that
@@ -54,8 +50,6 @@ and keep feature-specific behavior at its canonical owner.
 code. Commands use scoped workspace filters, for example
 `bun --filter @stll/web dev`.
 
-- Every direct child of `apps/` and `packages/` must be a workspace package named
-  `@stll/<directory>`. [check: lint:ws]
 - Create a package with `bun run new-package <name> --description "…"`; copying a
   helper between apps is not an option when a package can own it.
   [check: ratchet:cross-app-lib-path-copies]

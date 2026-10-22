@@ -20,22 +20,13 @@ the current list of target languages (add translations to every
 
 ## Translation Flow
 
-1. Add or modify keys in
-   `apps/web/src/i18n/langs/en.json`. [check: i18n:check]
-2. Add corresponding translations to **all target language files**
-   found in `apps/web/src/i18n/langs/` (every `.json` file
-   except `en.json`). Write natural, idiomatic translations;
-   avoid literal/robotic phrasing. [check: i18n:check]
-3. Run `bun run i18n:sync` from `apps/web`. This synchronizes locale
-   structure, regenerates typed messages, and updates generated glossary
-   output. Never edit `messages.gen.ts` or generated terminology tables by
-   hand. [check: i18n:check]
-4. Run `bun run i18n:check` from `apps/web`. Typecheck does not regenerate or
-   validate the catalogs, so a clean typecheck is not evidence that i18n is in
-   sync. [check: i18n:check]
-5. Read the rendered sentence in context, including interpolation and plural
-   branches. Passing key parity is not proof that a translation is natural or
-   that placeholders remain grammatically valid. [review]
+Add keys to `apps/web/src/i18n/langs/en.json`; `bun run i18n:check` (from
+`apps/web`) names every structural fix.
+
+- Write natural, idiomatic translations into every target language file, then
+  read the rendered sentence in context, including interpolation and plural
+  branches. Passing key parity is not proof that a translation is natural or
+  that placeholders remain grammatically valid. [review]
 
 ## Key Naming
 

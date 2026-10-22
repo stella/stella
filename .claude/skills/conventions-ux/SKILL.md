@@ -55,23 +55,11 @@ in doubt, simpler is better, or skip it.
 
 ## Icon Semantics
 
-- Every icon comes from `@stll/ui/icons` (`packages/ui/src/icons.ts`),
-  the only module that imports `lucide-react`
-  (`no-direct-lucide-import` enforces it). Reuse an entry first; a
-  product concept gets a semantic entry with a one-line reason, and
-  `bun scripts/codemod-icons.ts` rewrites any direct import.
-  [lint: no-direct-lucide-import/no-direct-lucide-import]
 - A skill or saved prompt is `SkillIcon` (the open book) everywhere it
   appears: menus, composer chip, sent message, landing. [review]
 - `AiActionIcon` (the magic wand) is for AI actions: rewrite, refine,
   redraft, search query refinement, prompt editing, AI rename. Do not
   use generic sparkles for this function, and never for a skill. [review]
-- Never draw scales of justice or a gavel (lucide `Scale`, `Gavel`).
-  Legal cliché is decoration every product in the category already
-  uses; name the concept instead — a court is `Landmark`, a decision
-  `FileText` (`Library` for a collection of them), and the case-law
-  section is `CaseLawIcon`. `no-legal-cliche-glyph` enforces it.
-  [lint: no-legal-cliche-glyph/no-legal-cliche-glyph]
 
 ## Review chrome
 
@@ -120,43 +108,8 @@ padding between them. Depth comes from layered semi-transparent `box-shadow`;
 `border` marks semantic boundaries (inputs, dividers). Images on light
 backgrounds get a subtle `outline: 1px solid rgb(0 0 0 / 0.06)` edge.
 
-- **The chrome owns the divider under the breadcrumb bar.** A page
-  root, or a nested layout's first pane, never draws its own top
-  border (`border-t`, `border-y`, `border`) on that line; it stacks
-  on the header's `border-b` as one 2px rule. The shell's content
-  slot (`WorkspaceShell`) strips the top border off its first child,
-  and route smoke fails any route that still paints one there
-  (`findDoubledChromeDividers`, `apps/web/e2e/helpers/chrome-divider.ts`).
-  [test: apps/web/e2e/specs/route-smoke.spec.ts]
-- **App chrome scrolls through `ScrollArea`** (`@stll/ui/scroll-area`),
-  not a raw `overflow-auto`/`overflow-scroll` utility, so every
-  scrollbar in the shell matches; `viewportRef` hands the scrolling
-  element to a virtualizer or scroll restoration. Textareas, `<pre>`
-  blocks, editor canvases and wide tables keep their native scroller.
-  `no-raw-overflow-scroll` enforces it.
-  [lint: no-raw-overflow-scroll/no-raw-overflow-scroll]
-
 ## Interactions & Animations
 
-- **Never use `transition: all`.** Always specify exact properties
-  (e.g., `transition: opacity 150ms, transform 150ms`). `all`
-  triggers unnecessary repaints and can animate properties you
-  didn't intend. (enforced by
-  no-layout-motion-classes/no-layout-motion-classes and stylelint)
-  [lint: no-layout-motion-classes/no-layout-motion-classes]
-- **GPU-friendly properties only.** Animate `transform` and
-  `opacity` exclusively. Do not animate `width`, `height`, `top`, `left`,
-  `padding`, or `margin`; these trigger layout recalc. Use
-  `scale`/`translate` instead. One exemption: a surface that
-  changes its own box (a disclosure panel or accordion, a
-  collapsible rail, a popup positioner repositioning on collision,
-  a progress bar) may transition the box property it owns, because
-  a transform moves the paint but not what siblings lay out
-  against. Each retained layout utility is listed in the rule's allowance with
-  its file and reason. (the layout-motion prohibition is enforced by
-  no-layout-motion-classes/no-layout-motion-classes and stylelint; existing
-  paint-property utilities and CSS declarations are decrease-only ratchets)
-  [lint: no-layout-motion-classes/no-layout-motion-classes]
 - **Interruptible animations:** use CSS `transition` for
   interactive state changes (hover, press) so the browser can
   interrupt mid-animation. Reserve `@keyframes` for staged
@@ -165,21 +118,6 @@ backgrounds get a subtle `outline: 1px solid rgb(0 0 0 / 0.06)` edge.
   times a day (keyboard shortcuts, command palette open/close, list
   keyboard navigation) gets no animation; occasional surfaces (dialogs,
   sheets, toasts) get the standard one. [review]
-- **Easing:** entering and exiting UI uses `ease-out`, movement on
-  screen `ease-in-out`; both are strong curves in the theme and
-  `ease-out` is the default. Never `ease-in` for UI.
-  [lint: no-layout-motion-classes/no-layout-motion-classes]
-- **Duration ≤ 300ms:** press 100–160ms, tooltip or small popover
-  125–200ms, dropdown 150–250ms, dialog or sheet up to 300ms; exits
-  run faster than enters. Decorative or teaching motion is listed in
-  the rule's allowance with a reason.
-  [lint: no-layout-motion-classes/no-layout-motion-classes]
-- **Never enter from `scale-0`:** start near full size (`scale-95`
-  to `scale-98`) with opacity 0. Popovers, menus and tooltips scale
-  from their trigger (`origin-(--transform-origin)`); dialogs stay
-  centred. (easing, duration and scale enforced by
-  no-layout-motion-classes)
-  [lint: no-layout-motion-classes/no-layout-motion-classes]
 - **Tooltips open instantly once one is open:** the app-level
   `TooltipProvider` groups them; do not mount another provider. [review]
 - **Pressable controls give feedback on press.** The shared `Button`
@@ -200,10 +138,6 @@ geometrically.
   breadcrumbs is styled as current and carries `aria-current`. A tab
   shows its selected state through `aria-selected`, which
   `@stll/ui/tabs` supplies; never add `aria-current` to it. [review]
-- **No native `alert`, `confirm` or `prompt`.** Confirm a destructive
-  action with `@stll/ui/destructive-confirm-dialog`, report an outcome
-  with `@stll/ui/toast`, and put a field error next to the field.
-  [lint: no-alert]
 - **A dialog only when the work has to stop.** A small edit happens
   inline; a side task that needs the page behind it opens in a
   `@stll/ui/sheet`. [review]
@@ -214,6 +148,9 @@ geometrically.
   accessible name, and reports `aria-expanded`. A control that is
   visually hidden until focus reveals it (a skip link, the data
   table's keyboard row action) stays in the tab order by design. [review]
+
+Confirm a destructive action with `@stll/ui/destructive-confirm-dialog`, report
+an outcome with `@stll/ui/toast`, and put a field error next to the field.
 
 ## Lists, Settings Pages & Search
 
@@ -255,10 +192,6 @@ geometrically.
   state: server URLs, CLI commands, keys. No stacks of paragraphs and
   read-only inputs. Copy confirms in place (the icon turns into a check).
   [review]
-- **Pick the primitive whose anatomy fits; don't bend one.** Squeezing
-  `FramePanel` to `p-1` so a heading fits inside it produced text flush
-  against the border. If a primitive needs its padding overridden to
-  work, it is the wrong one. [lint: shadcn/no-restyle]
 
 ## Empty States & Inline Help
 
@@ -305,15 +238,6 @@ geometrically.
   only the leaves). For scaffolds that cannot share a source, mirror
   the real layout faithfully. [review]
 
-## Viewport & Responsive
-
-- **Use `min-h-dvh`, not `h-screen`.** `h-screen` and `vh` ignore
-  the mobile browser chrome and cause scroll/overlap bugs. `dvh`
-  adapts to the dynamic viewport; use `svh` for a length that must
-  not move while the toolbar collapses. (enforced by
-  no-layout-motion-classes/no-layout-motion-classes and stylelint)
-  [lint: no-layout-motion-classes/no-layout-motion-classes]
-
 ## Mobile
 
 - A surface fixed to a screen edge pads that edge with the
@@ -327,10 +251,6 @@ geometrically.
 - Stella targets a minimum 44×44 CSS-pixel touch area for interactive
   controls. If the visible element is smaller, extend its hit area without
   changing the visual size or colliding with adjacent controls. [review]
-- Use native interactive elements and preserve keyboard activation, focus
-  order, accessible names, and visible focus. A clickable `div` with ARIA is
-  not a substitute for a button or link.
-  [lint: jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events]
 - Respect reduced-motion preferences. Meaning and completion feedback must not
   depend on animation, hover, colour alone, or pointer precision. [review]
 
@@ -340,12 +260,6 @@ Stella ships an Arabic (RTL) UI; every surface must mirror correctly
 and stay locale-aware. Test new UI in `ar` (not just `en`) before
 shipping — flipping `documentElement.dir` is not enough on its own.
 
-- **Logical properties only.** Use `ps-/pe-`, `ms-/me-`, `start-/end-`,
-  `border-s/-e`, `text-start/-end` — never physical `pl-/pr-`, `ml-/mr-`,
-  `left-/right-`, `text-left/right`, `border-l/-r`, `rounded-l/-r`.
-  Physical directional classes do not flip under `dir="rtl"`. Enforced by
-  the `no-physical-properties` oxlint rule.
-  [lint: no-physical-properties/no-physical-properties]
 - **Mirror direction, not identity.** Render directional glyphs (chevrons,
   arrows, back/forward, next/prev, breadcrumb separators, pagination, drawer
   toggles) through `<DirectionalIcon icon={...} />` (`@stll/ui`), which
@@ -355,34 +269,14 @@ shipping — flipping `documentElement.dir` is not enough on its own.
   `flip={!isExpanded}` so the mirror applies only while collapsed — an
   always-on mirror composes with the rotation and points the expanded state
   the wrong way. [review]
-- **Format through the central locale.** Route all numbers, dates, and
-  relative times through `useFormatter()`/`getFormatter()` (or pass
-  `getFormattingLocale()`); never a bare `Intl.*` / `.toLocale*String()`
-  with the base `lang` or no locale — that drops the user's numbering-system
-  preference (e.g. Eastern Arabic-Indic digits). Enforced by the
-  `no-raw-locale-format` oxlint rule.
-  [lint: no-raw-locale-format/no-raw-locale-format]
 - **Isolate embedded Latin & numerals.** Wrap Latin runs inside RTL text
   (case numbers, ECLI, citations, file names, emails) in `<bdi>` so bidi
   reordering doesn't scramble neighbouring punctuation; keep `tel`/`email`/`url`
   and code fields LTR. [review]
-- **Free-text inputs take their direction from the shared field.** `@stll/ui`
-  `Input` and `Textarea` resolve it from their content; a literal `dir="auto"`
-  on a form control strands the caret on the left of an empty field under an
-  RTL UI. [lint: no-input-dir-auto/no-input-dir-auto]
-- **Panels mirror as a unit.** A panel on the inline-end in LTR (right)
-  docks to the inline-start in RTL (left); its internal rail + content keep
-  their relative order automatically via flex + logical props — never pin
-  with physical `right-0`/`left-0`.
-  [lint: no-physical-properties/no-physical-properties]
 - **Document surfaces stay LTR-based.** The editor/document canvas (folio)
   keeps an LTR base direction even under an RTL UI; only the app chrome
   mirrors. Brand wordmark/logo is never mirrored or transliterated.
   [review]
-- **No untranslated LTR islands.** Don't leave English strings (suggested
-  prompts, labels, empty-state copy) inside an otherwise-Arabic surface;
-  route them through i18n. A Latin island reads as "unfinished," not "global."
-  [lint: no-untranslated-jsx-literal/no-untranslated-jsx-literal]
 
 ## Look at the Render
 
@@ -468,8 +362,3 @@ ornament.
   is sufficient affordance. [review]
 - **No custom cursors or pointer overrides** beyond the standard
   `pointer` for interactive elements. [review]
-- **No restyling `@stll/ui` components through `className`.** A component
-  owns its spacing and typography (`shadcn(no-restyle)`): pick a variant or
-  size, and add one to the component when the design needs a treatment none
-  provides. Margin around it and gap on its parent stay yours.
-  [lint: shadcn/no-restyle]

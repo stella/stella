@@ -1,6 +1,6 @@
 ---
 name: conventions-use-effect
-description: 'Apply when writing or reviewing React effects in apps/web. Direct useEffect is banned; use the sanctioned wrappers or a better primitive.'
+description: "Apply when writing or reviewing React effects in apps/web. Direct useEffect is banned; use the sanctioned wrappers or a better primitive."
 ---
 
 # useEffect Conventions
@@ -27,11 +27,9 @@ first match:
    [review]
 4. **Does it reset state when an id/prop changes?** Remount with `key`. (Rule 5)
    [review]
-5. **Is it genuine external-system synchronization?** Use `useMountEffect`
-   or `useExternalSyncEffect`. (Rule 4)
-   [lint: no-raw-use-effect/no-raw-use-effect]
 
-If none match, you almost certainly do not need an effect.
+If none match and it is not genuine external-system synchronization (Rule 4),
+you almost certainly do not need an effect.
 
 ## Rule 1 — derive state, do not sync it
 
@@ -51,7 +49,9 @@ other state/props.
 
 ```tsx
 // ❌ race conditions, hand-rolled caching
-useEffect(() => { fetchProduct(id).then(setProduct); }, [id]);
+useEffect(() => {
+  fetchProduct(id).then(setProduct);
+}, [id]);
 
 // ✅ cancellation/caching/staleness handled for you
 const { data: product } = useQuery(productOptions(id));
@@ -64,10 +64,15 @@ retries/cancellation/staleness.
 
 ```tsx
 // ❌ effect as an action relay
-useEffect(() => { if (liked) { postLike(); setLiked(false); } }, [liked]);
+useEffect(() => {
+  if (liked) {
+    postLike();
+    setLiked(false);
+  }
+}, [liked]);
 
 // ✅ do the work where the event happens
-<button onClick={() => postLike()}>Like</button>
+<button onClick={() => postLike()}>Like</button>;
 ```
 
 Smell: state used as a flag so an effect can run the real action

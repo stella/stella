@@ -16,20 +16,11 @@ search the generated index first: `rg <word> apps/api/src/db/schema-index` gives
 one line per column with its builder, flags, `file:line` and the first sentence
 of its comment, so lead a column's comment with what the column means.
 
-- For closed persisted domain values, define one named `as const` value list
-  and pass it to Drizzle with `text({ enum: VALUES })`. Add a database `CHECK`
-  when invalid values could compromise lifecycle, authorization, audit, or
-  workflow invariants; Drizzle's enum option is compile-time-only.
-  [lint: require-derived-check-enum/require-derived-check-enum]
 - Reserve `.$type<T>()` for branded or structured types. Use a native
   PostgreSQL enum only when the value set is genuinely permanent. [review]
 - Use cascade deletes for workspace-owned dependants and restrict deletes for
   shared file references. Trace the full FK graph before multi-resource
   deletion. [review]
-- Timestamp columns use the `timestamptz` helper from
-  `apps/api/src/db/columns.ts`. Never introduce a naive PostgreSQL timestamp or
-  `::timestamp` cast without explicitly anchoring its time zone.
-  [lint: require-timestamptz-column/require-timestamptz-column, no-naive-timestamp-cast/no-naive-timestamp-cast]
 - Add indexes for columns used in `WHERE`, `ORDER BY`, or `JOIN`; lead
   composite indexes with the tenant-scoping columns. Treat changes to large
   tables as lock-sensitive. [review]
@@ -47,25 +38,13 @@ replace committed migrations.
   compatible with the migrated schema, and a failed rollout must have a safe
   forward-fix path. [review]
 - Keep irreversible schema operations out of the same release as risky
-  application changes. Destructive, bulk-backfill, and access-control SQL
-  requires a statement-scoped acknowledgement enforced by
-  `scripts/check-migration-safety.ts`, placed in the comment block directly
-  above the statement:
-  `-- stella-migration-safety: reviewed <rule-id> - <why this is safe>`.
-  An acknowledgement that clears nothing is an error. Every migration sets
-  `lock_timeout` and `statement_timeout` first.
-  [check: scripts/check-migration-safety.ts]
+  application changes. [review]
 - For large live tables, follow the repository's guarded concurrent-index
   protocol: either split and reopen the migrator transaction exactly as
   enforced by `migration-concurrent-index.test.ts`, or put repairable work in
   `online-migrations.ts`. Keep long backfills outside schema migrations and
   checkpoint them durably.
   [test: apps/api/src/db/migration-concurrent-index.test.ts]
-- A migration directory's name is its identity: the migrator applies every
-  directory whose name the database has not recorded, in name order. The
-  timestamp prefix does not need to sort after the base branch, but never
-  rename or delete a merged migration; add a new one instead.
-  [check: scripts/check-migration-order.ts]
 - Validate migration history two ways: apply every committed migration to a
   fresh database, then confirm
   `bun --filter @stll/api db:push -- --explain` reports no schema drift. Do not
@@ -82,34 +61,9 @@ aggregation, locking, unions, mutations).
   PostgreSQL RLS and query-level scope reinforce each other. Raw/root database
   access needs a demonstrated system-level reason and a deny-by-default RLS
   posture. [check: ratchet:direct-root-connection-imports]
-- Ownership IDs come from server-validated context, never request bodies. Keep
-  tenant predicates in the database query even when a preceding authorization
-  check exists. [lint: no-body-ownership-ids/no-body-ownership-ids]
-- Every list query uses a bounded `limit` and cursor and returns the standard
-  `Page<T>` envelope from `apps/api/src/lib/pagination.ts`. Offset pagination,
-  `totalCount`, and unbounded `findMany` require explicit justification.
-  [lint: require-query-limit/require-query-limit, no-offset-pagination/no-offset-pagination]
 - Do not filter unindexed JSONB in request paths. Fetch through indexed tenant
   columns, then narrow structured content with a type guard rather than a cast.
   [review]
-- Batch relation reads and writes. Never issue a query per item when a join,
-  relation preload, `IN` query, or bulk mutation can express the same work.
-  [check: check:db-await-in-loop]
-
-## Public Corpus Boundary
-
-- Case-law and legislation corpora are read through their own public
-  connections (`apps/api/src/lib/case-law-public-read-db.ts`,
-  `legislation-public-read-db.ts`). Importing one puts the file inside the
-  public SQL boundary (`public-case-law-db-boundary`): it may name only
-  public-law relations. Put corpus reads in `apps/api/src/lib/case-law/` (or
-  the legislation owner) and call them from tenant handlers; never import the
-  connection into a module that names tenant tables.
-  [lint: public-case-law-db-boundary/public-case-law-db-boundary]
-- A read that fails returns a typed failure (a `Result` error or a
-  `ReadOutcome`), never an empty value (`no-failure-as-empty`). The caller
-  decides how to degrade and says so in its own response type.
-  [lint: no-failure-as-empty/no-failure-as-empty]
 
 ## Concurrency and Transactions
 
