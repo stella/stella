@@ -1,12 +1,14 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 const apiRoot = path.resolve(import.meta.dir, "../..");
 
 // These lifecycle boundaries cannot retain a scoped JSON replay receipt.
 const IDEMPOTENCY_EXCEPTIONS = {
+  "src/handlers/account-exports/create.ts":
+    "Retains native account-scoped request serialization and durable queue handoff.",
   "src/handlers/api-keys/create.ts":
     "The one-time response contains credential material that must not be retained.",
   "src/handlers/api-keys/personal/create.ts":
@@ -15,6 +17,8 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "Writes an export object to S3 outside the database transaction.",
   "src/handlers/chat/fork/create.ts":
     "Copies S3 objects and retains its native fork deduplication and cleanup lifecycle.",
+  "src/handlers/chat/tool-grants/create.ts":
+    "Retains native grant deduplication by subject and scope.",
   "src/handlers/document-translations/runs/create.ts":
     "Retains durable run admission and worker handoff outside the request transaction.",
   "src/handlers/entities/bilingual/create.ts":

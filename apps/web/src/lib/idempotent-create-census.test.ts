@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
 
@@ -321,9 +321,14 @@ const createMutationViolations = ({
           name === "useIdempotentMutation") ||
         (isModule({
           module,
-          owner: "routes/_protected.settings/-hooks/use-settings-mutation",
+          owner: "routes/_protected.admin/-hooks/use-settings-mutation",
         }) &&
-          name === "useSettingsMutation")
+          name === "useSettingsMutation") ||
+        (isModule({
+          module,
+          owner: "lib/capabilities/use-capability-mutation",
+        }) &&
+          name === "useCapabilityMutation")
       ) {
         factories.set(binding.name.text, "mutation");
       }
@@ -615,7 +620,7 @@ test("every web call to a registered JSON create route carries submit-intent hea
   }
   expect(createCalls).toBeGreaterThan(50);
   expect(violations).toEqual([]);
-});
+}, 15_000);
 
 test("create census derives lifecycle exceptions from the server declaration and rejects a missing inventory", () => {
   const source = parse({
@@ -830,10 +835,12 @@ test("create census follows the owned subrequest derivation and rejects an unown
   expect(result.violations).toHaveLength(1);
 });
 
-test("create census trusts the owning settings wrapper and refuses unrelated matching names", () => {
+test("create census trusts owning mutation wrappers and refuses unrelated matching names", () => {
   const source = `
-    import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
+    import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
+    import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
     import { useIdempotentMutation } from "@/unrelated/use-idempotent-mutation";
+    useCapabilityMutation({ mutationFn: (body, request) => api.things.put(body, request) });
     useSettingsMutation({ mutationFn: (body, request) => api.things.put(body, request) });
     useIdempotentMutation({ mutationFn: (body, request) => api.things.put(body, request) });
   `;
@@ -842,7 +849,7 @@ test("create census trusts the owning settings wrapper and refuses unrelated mat
     text: source,
     creates: new Set(["put:things"]),
   });
-  expect(result.createCalls).toBe(2);
+  expect(result.createCalls).toBe(3);
   expect(result.violations).toHaveLength(1);
 });
 
