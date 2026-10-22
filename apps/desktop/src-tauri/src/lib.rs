@@ -41,6 +41,7 @@ mod local_store;
 mod local_window;
 mod logging;
 mod marker_file;
+mod onboarding;
 mod pdf_signing;
 mod permissions;
 mod presence;
@@ -142,6 +143,9 @@ pub fn run() {
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
+    ))
+    .manage::<onboarding::OnboardingState>(std::sync::Mutex::new(
+      onboarding::Onboarding::load(),
     ))
     .manage(feature_gate::FeatureGates::default())
     .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
@@ -429,6 +433,13 @@ pub fn run() {
         app.set_activation_policy(tauri::ActivationPolicy::Accessory);
       }
 
+      onboarding::show_if_pending(
+        &handle,
+        launch_args
+          .iter()
+          .any(|arg| arg == app_lifecycle::BACKGROUND_LAUNCH_ARGUMENT),
+      );
+
       // Register deep link handler
       {
         let manager_for_deep_link = Arc::clone(&manager);
@@ -499,7 +510,7 @@ pub fn run() {
     });
 }
 
-fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
+pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
   // Accessory apps must explicitly activate to bring windows to front.
   #[cfg(target_os = "macos")]
   let _ = handle.show();

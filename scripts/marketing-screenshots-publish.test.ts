@@ -243,13 +243,17 @@ describe("publish selection", () => {
     } })()`,
   );
   type Scenario = {
+    runId: string;
     run: Record<string, unknown>;
     pulls: Record<string, unknown>[];
     artifacts: { name: string; expired: boolean }[];
   };
   const scenario = (): Scenario => ({
+    runId: "7",
     run: {
       id: 7,
+      status: "completed",
+      conclusion: "success",
       path: ".github/workflows/marketing-screenshots-capture.yml",
       event: "workflow_dispatch",
       head_branch: "feat/ui",
@@ -272,10 +276,8 @@ describe("publish selection", () => {
     const failures: string[] = [];
     const notices: string[] = [];
     await select.runInNewContext({
-      context: {
-        repo: { owner: "stella", repo: "stella" },
-        payload: { workflow_run: input.run },
-      },
+      process: { env: { CAPTURE_RUN_ID: input.runId } },
+      context: { repo: { owner: "stella", repo: "stella" } },
       core: {
         setOutput: (name: string, value: string) => {
           outputs[name] = value;
@@ -297,6 +299,10 @@ describe("publish selection", () => {
         rest: {
           pulls: { list: "pulls.list" },
           actions: {
+            getWorkflowRun: async (params: Record<string, unknown>) => {
+              expect(params["run_id"]).toBe(Number(input.runId));
+              return { data: input.run };
+            },
             listWorkflowRunArtifacts: async (
               params: Record<string, unknown>,
             ) => {
@@ -346,6 +352,25 @@ describe("publish selection", () => {
   });
 
   const refused: { name: string; change: (input: Scenario) => void }[] = [
+    ...["", "0", "7x", "-7", "1".repeat(16)].map((runId) => ({
+      name: `the run id ${JSON.stringify(runId)}`,
+      change: (input: Scenario) => {
+        input.runId = runId;
+      },
+    })),
+    {
+      name: "a failed capture",
+      change: (input) => {
+        input.run["conclusion"] = "failure";
+      },
+    },
+    {
+      name: "a capture still running",
+      change: (input) => {
+        input.run["status"] = "in_progress";
+        input.run["conclusion"] = null;
+      },
+    },
     {
       name: "another workflow's run",
       change: (input) => {
@@ -558,5 +583,193 @@ describe("regenerated baseline validation", () => {
         symlinkSync("/etc/hosts", path.join(root, target, "ok.png")),
     );
     expect(result.exitCode, result.output).toBe(1);
+  });
+});
+
+describe("update follows the capture to its publish", () => {
+  const update = new Script(
+    `(async () => { ${
+      v.parse(
+        v.object({ script: v.string() }),
+        workflowStepByName(
+          workflowJobSteps(updateWorkflow, "update"),
+          "Capture on the branch and publish",
+        )["with"],
+      ).script
+    } })()`,
+  );
+  const CAPTURE = 101;
+  const PUBLISH = 202;
+  type Run = { status: string; conclusion: string | null };
+  const done = (conclusion: string): Run => ({
+    status: "completed",
+    conclusion,
+  });
+  const running: Run = { status: "in_progress", conclusion: null };
+  type Scenario = {
+    // States each run reports on successive polls; the last one repeats.
+    polls: Record<number, Run[]>;
+    runIds: Record<string, number | undefined>;
+  };
+  const scenario = (): Scenario => ({
+    polls: {
+      [CAPTURE]: [running, running, done("success")],
+      [PUBLISH]: [running, done("success")],
+    },
+    runIds: {
+      "marketing-screenshots-capture.yml": CAPTURE,
+      "marketing-screenshots-publish.yml": PUBLISH,
+    },
+  });
+  const updateFor = async (input: Scenario) => {
+    const dispatches: Record<string, unknown>[] = [];
+    const failures: string[] = [];
+    const reads = new Map<number, number>();
+    let sleeps = 0;
+    let thrown: unknown;
+    try {
+      await update.runInNewContext({
+        process: { env: { BRANCH: "feat/ui" } },
+        setTimeout: (resolve: () => void) => {
+          sleeps += 1;
+          resolve();
+        },
+        context: { repo: { owner: "stella", repo: "stella" } },
+        core: {
+          notice: () => {},
+          setFailed: (message: string) => {
+            failures.push(message);
+          },
+        },
+        github: {
+          rest: {
+            actions: {
+              createWorkflowDispatch: async (
+                request: Record<string, unknown>,
+              ) => {
+                dispatches.push(request);
+                const id = input.runIds[String(request["workflow_id"])];
+                return {
+                  data:
+                    id === undefined
+                      ? undefined
+                      : { workflow_run_id: id, html_url: `run/${String(id)}` },
+                };
+              },
+              getWorkflowRun: async (params: Record<string, unknown>) => {
+                const id = Number(params["run_id"]);
+                const states = input.polls[id] ?? [];
+                const polled = reads.get(id) ?? 0;
+                reads.set(id, polled + 1);
+                return {
+                  data: {
+                    id,
+                    html_url: `run/${String(id)}`,
+                    ...states[Math.min(polled, states.length - 1)],
+                  },
+                };
+              },
+            },
+          },
+        },
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    return { dispatches, failures, sleeps, error: thrown };
+  };
+
+  test("publishes exactly the capture run it started, from main", async () => {
+    const result = await updateFor(scenario());
+    expect(result.error).toBeUndefined();
+    expect(result.failures).toEqual([]);
+    expect(result.dispatches).toEqual([
+      {
+        owner: "stella",
+        repo: "stella",
+        workflow_id: "marketing-screenshots-capture.yml",
+        ref: "feat/ui",
+      },
+      {
+        owner: "stella",
+        repo: "stella",
+        workflow_id: "marketing-screenshots-publish.yml",
+        ref: "main",
+        inputs: { capture_run_id: String(CAPTURE) },
+      },
+    ]);
+  });
+
+  test("a failed capture fails the update and publishes nothing", async () => {
+    const input = scenario();
+    input.polls[CAPTURE] = [done("failure")];
+    const result = await updateFor(input);
+    expect(result.dispatches).toHaveLength(1);
+    expect(result.failures).toHaveLength(1);
+  });
+
+  test("a capture that never finishes fails the update in bounded time", async () => {
+    const input = scenario();
+    input.polls[CAPTURE] = [running];
+    const result = await updateFor(input);
+    expect(result.dispatches).toHaveLength(1);
+    expect(result.failures).toHaveLength(1);
+    expect(result.sleeps).toBe(80);
+  });
+
+  // The failure this guards against: a capture that succeeded while no
+  // publish ever ran, and the update still finished green.
+  for (const [name, states] of [
+    ["a failed publish", [done("failure")]],
+    ["a publish that never finishes", [running]],
+  ] as const) {
+    test(`${name} fails the update`, async () => {
+      const input = scenario();
+      input.polls[PUBLISH] = [...states];
+      const result = await updateFor(input);
+      expect(result.dispatches).toHaveLength(2);
+      expect(result.failures).toHaveLength(1);
+    });
+  }
+
+  for (const workflow of [
+    "marketing-screenshots-capture.yml",
+    "marketing-screenshots-publish.yml",
+  ]) {
+    test(`a ${workflow} dispatch without a run id fails the update`, async () => {
+      const input = scenario();
+      input.runIds[workflow] = undefined;
+      const result = await updateFor(input);
+      // The script's Error belongs to the script's realm.
+      expect(result.error).toMatchObject({
+        message: `Dispatching ${workflow} returned no run id`,
+      });
+    });
+  }
+
+  test("publish takes its capture from the dispatch input, on main only", () => {
+    expect(jobsOf(publishWorkflow)["publish"]?.if).toBe(
+      "github.ref == 'refs/heads/main'",
+    );
+    expect(
+      v.parse(
+        v.looseObject({ on: v.record(v.string(), v.unknown()) }),
+        publishWorkflow,
+      ).on,
+    ).toEqual({
+      workflow_dispatch: {
+        inputs: {
+          capture_run_id: expect.objectContaining({
+            required: true,
+            type: "string",
+          }),
+        },
+      },
+    });
+    expect(
+      stepsOf(publishWorkflow, "publish").find(
+        (step) => step.name === "Select the branch",
+      )?.env,
+    ).toEqual({ CAPTURE_RUN_ID: githubExpression("inputs.capture_run_id") });
   });
 });
