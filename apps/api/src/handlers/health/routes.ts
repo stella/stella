@@ -9,12 +9,14 @@ import { createProbeCache } from "@/api/lib/health/probe-cache";
 import type { ProbeOutcome } from "@/api/lib/health/probe-cache";
 import {
   probeApiReadiness,
+  probeApiStartupReadiness,
   type ReadinessOutcome,
 } from "@/api/lib/health/readiness";
 import {
   createStartupGate,
   STARTUP_STATE,
 } from "@/api/lib/health/startup-gate";
+import { sanctionsStartupWarmup } from "@/api/lib/lists/sanctions/public-read-owner";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 const BUILD_METADATA = {
@@ -27,6 +29,7 @@ const PROBE_CACHE_TTL_MS = 5000;
 
 type HealthRouteOptions = {
   probeReadiness?: () => Promise<ReadinessOutcome>;
+  probeSanctionsStartup?: () => "warming" | "terminal";
 };
 
 const readinessOutcome = async (
@@ -57,19 +60,19 @@ const readinessOutcome = async (
 
 export const createHealthRoute = ({
   probeReadiness = probeApiReadiness,
+  probeSanctionsStartup = () => sanctionsStartupWarmup.status().status,
 }: HealthRouteOptions = {}) => {
   const probeCache = createProbeCache(
     async () => await readinessOutcome(probeReadiness),
     { ttlMs: PROBE_CACHE_TTL_MS },
   );
   const startupGate = createStartupGate();
-  const readinessResponse = async () => {
-    const outcome = await probeCache.run();
-    if (outcome.ok) {
-      startupGate.markStarted();
-    }
-    return outcome;
-  };
+  const probeStartupReadiness = async () =>
+    await probeApiStartupReadiness({
+      probeReadiness,
+      probeSanctions: probeSanctionsStartup,
+    });
+  const readinessResponse = async () => await probeCache.run();
   const livenessHandler = () => ({
     status: "ok" as const,
     ...BUILD_METADATA,
@@ -91,11 +94,12 @@ export const createHealthRoute = ({
     if (startupGate.startup() === STARTUP_STATE.started) {
       return { status: STARTUP_STATE.started, ...BUILD_METADATA };
     }
-    const outcome = await readinessResponse();
+    const outcome = await readinessOutcome(probeStartupReadiness);
     if (!outcome.ok) {
       set.status = 503;
       return { status: STARTUP_STATE.starting, ...BUILD_METADATA };
     }
+    startupGate.markStarted();
     return { status: STARTUP_STATE.started, ...BUILD_METADATA };
   };
 

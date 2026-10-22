@@ -40,6 +40,7 @@ const {
   createRawSourceErasureReadinessProbe,
   probeObjectStorageReadiness,
   probeRedis,
+  probeApiStartupReadiness,
   runReadinessProbes,
 } = await import("@/api/lib/health/readiness");
 
@@ -82,6 +83,20 @@ describe("the Redis readiness probe", () => {
 });
 
 describe("API dependency readiness", () => {
+  test("startup readiness accepts sanctions warmup terminal failures", async () => {
+    expect(
+      await probeApiStartupReadiness({
+        probeReadiness: async () => ({ status: "ready" }),
+        probeSanctions: () => "terminal",
+      }),
+    ).toEqual({ status: "ready" });
+    expect(
+      await probeApiStartupReadiness({
+        probeReadiness: async () => ({ status: "ready" }),
+        probeSanctions: () => "warming",
+      }),
+    ).toEqual({ status: "not-ready", failed: [] });
+  });
   test("provisions a readable marker without requiring bucket listing", async () => {
     const calls: string[] = [];
     let markerExists = false;
