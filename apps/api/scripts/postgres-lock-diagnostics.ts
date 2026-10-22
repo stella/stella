@@ -165,8 +165,9 @@ export const observePostgresTestProcess = async ({
     write: (chunk: Uint8Array) => void,
   ) => {
     let suffix = "";
+    const decoder = new TextDecoder();
     for await (const chunk of stream) {
-      const text = suffix + new TextDecoder().decode(chunk);
+      const text = suffix + decoder.decode(chunk, { stream: true });
       diagnostics.lockTimeoutObserved ||= text.includes("55P03");
       suffix = text.slice(-4);
       write(chunk);
@@ -252,6 +253,11 @@ export const spawnPostgresTestProcess = (
     },
     get signalCode() {
       return child.signalCode;
+    },
+    // A runner's interrupt must reach the test process, or it keeps its
+    // database connections open after the run.
+    kill: (signal?: NodeJS.Signals) => {
+      child.kill(signal);
     },
   };
 };

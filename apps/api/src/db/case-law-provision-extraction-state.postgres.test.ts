@@ -11,6 +11,7 @@ import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
@@ -118,6 +119,122 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("provision extraction state (postgres)", () => {
+    test("EU identity expansion preserves old national writers and nullable primary identities", async () => {
+      await withFixture(async ({ observer, fixture }) => {
+        const decisionId = await insertDecision(
+          observer,
+          fixture,
+          uniqueLanguage(),
+        );
+        const nationalId = createSafeId<"caseLawProvisionCitation">();
+        const primaryId = createSafeId<"caseLawProvisionCitation">();
+        const secondaryId = createSafeId<"caseLawProvisionCitation">();
+        // The old national writer names only the pre-expansion columns.
+        await observer`
+          INSERT INTO case_law_provision_citations
+            (id, decision_id, jurisdiction, work_identifier, work_number, work_year,
+             work_collection, unit, section, anchor, sentence_text, span_start,
+             span_end, confidence)
+          VALUES (${nationalId}::uuid, ${decisionId}::uuid, 'CZE', '89/2012 Sb.',
+            89, 2012, 'Sb.', 'section', 1, 'section-1', '§ 1', 0, 3, 1)`;
+        // New EU writers omit the old integer columns, including for primary
+        // law, whose canonical identity has no act number or year.
+        await observer`
+          INSERT INTO case_law_provision_citations
+            (id, decision_id, jurisdiction, work_identifier, eu_work_number,
+             eu_work_year, work_collection, work_eli, unit, section, anchor,
+             sentence_text, span_start, span_end, confidence)
+          VALUES
+            (${primaryId}::uuid, ${decisionId}::uuid, 'EU', '12016M/TXT', NULL,
+             NULL, 'EUR-Lex', 'http://data.europa.eu/eli/treaty/teu_2016/oj',
+             'article', 5, 'article-5', 'Article 5 TEU', 10, 23, 1),
+            (${secondaryId}::uuid, ${decisionId}::uuid, 'EU', '32016R0679', 679,
+             2016, 'EUR-Lex', 'http://data.europa.eu/eli/reg/2016/679/oj',
+             'article', 6, 'article-6', 'Article 6 GDPR', 30, 44, 1)`;
+        expect(
+          Array.from(
+            await observer`
+          SELECT jurisdiction, work_identifier, work_number, work_year,
+            eu_work_number, eu_work_year FROM case_law_provision_citations
+          WHERE decision_id = ${decisionId}::uuid ORDER BY work_identifier
+        `,
+          ),
+        ).toEqual([
+          {
+            jurisdiction: "EU",
+            work_identifier: "12016M/TXT",
+            work_number: 0,
+            work_year: 0,
+            eu_work_number: null,
+            eu_work_year: null,
+          },
+          {
+            jurisdiction: "EU",
+            work_identifier: "32016R0679",
+            work_number: 0,
+            work_year: 0,
+            eu_work_number: 679,
+            eu_work_year: 2016,
+          },
+          {
+            jurisdiction: "CZE",
+            work_identifier: "89/2012 Sb.",
+            work_number: 89,
+            work_year: 2012,
+            eu_work_number: null,
+            eu_work_year: null,
+          },
+        ]);
+        expect(
+          Array.from(
+            await observer`
+          SELECT attname, attnotnull FROM pg_attribute
+          WHERE attrelid = 'case_law_provision_citations'::regclass
+            AND attname IN ('work_number', 'work_year', 'eu_work_number', 'eu_work_year')
+          ORDER BY attname
+        `,
+          ),
+        ).toEqual([
+          { attname: "eu_work_number", attnotnull: false },
+          { attname: "eu_work_year", attnotnull: false },
+          { attname: "work_number", attnotnull: true },
+          { attname: "work_year", attnotnull: true },
+        ]);
+        for (const id of [primaryId, nationalId]) {
+          expect(
+            await rejectionOf(observer`
+            UPDATE case_law_provision_citations SET eu_work_number = 1
+            WHERE id = ${id}::uuid
+          `),
+          ).toMatchObject({
+            message: expect.stringContaining(
+              "provision_citations_work_number_shape",
+            ),
+          });
+        }
+        expect(
+          await rejectionOf(observer`
+          UPDATE case_law_provision_citations SET eu_work_year = NULL
+          WHERE id = ${secondaryId}::uuid
+        `),
+        ).toMatchObject({
+          message: expect.stringContaining(
+            "provision_citations_work_number_shape",
+          ),
+        });
+        expect(
+          await rejectionOf(observer`
+          UPDATE case_law_provision_citations SET work_number = DEFAULT,
+            work_year = DEFAULT WHERE id = ${nationalId}::uuid
+        `),
+        ).toMatchObject({
+          message: expect.stringContaining(
+            "provision_citations_work_number_shape",
+          ),
+        });
+      });
+    });
+
     /**
      * The trigger's scope insert waits for a concurrent insert of the same
      * key, and routes on the row that won, read in a later statement: here

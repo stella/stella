@@ -530,6 +530,7 @@ const skillFixtureRow = ({
   description,
   displayName: name,
   id: toSafeId<"agentSkill">(`skill_${slug}`),
+  invocation: "auto",
   license: null,
   metadata: {},
   name: slug,
@@ -1799,7 +1800,7 @@ const runModelTurn = async ({
 }): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "chat",
+    task: "chat",
     scopeKey: null,
   });
   let finalText = "";
@@ -2644,11 +2645,12 @@ const resolveModels = async (
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "chat",
+        task: "chat",
         organizationId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),

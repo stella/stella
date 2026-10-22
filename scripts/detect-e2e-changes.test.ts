@@ -14,6 +14,13 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import {
+  computeChangedFileScope,
+  DEFAULT_DETECTORS,
+  MODEL_CATALOG_DRIFT_INPUTS,
+  STACK_REDACTION_BROWSER_INPUTS,
+  type ChangedFileScopeDetectors,
+} from "./ci-plan-scope";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
@@ -23,6 +30,30 @@ const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
 // Built, not written literally: a `${...}` in a plain string reads as a
 // broken template literal to the linter.
 const shellExpansion = (value: string) => ["$", "{", value, "}"].join("");
+const changedFileScope = (
+  file: string,
+  eventName = "pull_request",
+  detectorOverrides: Partial<ChangedFileScopeDetectors> = {},
+) =>
+  computeChangedFileScope(
+    {
+      changedFiles: [file],
+      comparisonBase: "base",
+      scopeUnknown: false,
+      eventName,
+      suiteDepth: "fast",
+      heavyOnly: false,
+      prTitle: "",
+    },
+    {
+      ...DEFAULT_DETECTORS,
+      packageChecks: () => true,
+      landingBuild: () => false,
+      landingDeploy: () => false,
+      desktopBrowser: () => false,
+      ...detectorOverrides,
+    },
+  );
 const workflow = readFileSync(
   path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
   "utf-8",
@@ -207,6 +238,22 @@ const marketingCheckout = (job: string) => {
   return requiredExpression(checkout.with?.["ref"]);
 };
 
+// Job bodies are sliced from the workflow text for text assertions, while
+// their steps come from the whole parsed workflow: a step may be a YAML alias
+// whose anchor sits in another job, which the slice alone cannot resolve.
+const parsedWorkflows = new Map<string, Record<string, unknown>>();
+const jobSlices = new Map<string, { source: string; jobId: string }>();
+
+const parsedJobs = (source: string): Record<string, unknown> => {
+  const cached = parsedWorkflows.get(source);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const jobs = contractRecord(contractRecord(Bun.YAML.parse(source))["jobs"]);
+  parsedWorkflows.set(source, jobs);
+  return jobs;
+};
+
 const jobOf = (source: string, jobId: string): string => {
   const marker = `\n  ${jobId}:\n`;
   const start = source.indexOf(marker);
@@ -215,9 +262,12 @@ const jobOf = (source: string, jobId: string): string => {
   }
   const bodyStart = start + marker.length;
   const nextJob = source.slice(bodyStart).search(/\n {2}[a-z][\w-]*:\n/u);
-  return nextJob === -1
-    ? source.slice(bodyStart)
-    : source.slice(bodyStart, bodyStart + nextJob);
+  const slice =
+    nextJob === -1
+      ? source.slice(bodyStart)
+      : source.slice(bodyStart, bodyStart + nextJob);
+  jobSlices.set(slice, { source, jobId });
+  return slice;
 };
 
 const workflowJob = (jobId: string): string => jobOf(workflow, jobId);
@@ -241,8 +291,12 @@ const stepOf = (source: string, stepName: string, indent: number): string => {
 };
 
 const workflowStepValue = (job: string, stepName: string) => {
-  const parsed = contractRecord(Bun.YAML.parse(`job:\n${job}`));
-  const parsedJob = contractRecord(parsed["job"]);
+  const origin = jobSlices.get(job);
+  const parsedJob = contractRecord(
+    origin === undefined
+      ? contractRecord(Bun.YAML.parse(`job:\n${job}`))["job"]
+      : parsedJobs(origin.source)[origin.jobId],
+  );
   return workflowStepByName(parsedJob["steps"], stepName);
 };
 
@@ -462,7 +516,11 @@ describe("detect-e2e-changes", () => {
       "apps/api/src/lib/folio-collab-*",
       "packages/api-contract/src/folio-collab*",
     ]) {
-      expect(plan).toContain(collaborationPath);
+      expect(
+        changedFileScope(collaborationPath.replaceAll("*", "fixture"))
+          .collab_redis_required,
+        collaborationPath,
+      ).toBe("true");
     }
     expect(plan).toContain(
       `service_suites_required: ${githubExpression("steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true'")}`,
@@ -550,9 +608,20 @@ describe("detect-e2e-changes", () => {
       workflowJob("ci-plan"),
       "Plan changed PR e2e shards",
     );
-    const fullMatrix = '{"shard":["full"]}';
+    const fullMatrix = '{"shard":["full","network-baseline"]}';
+    // A merge group that runs route-smoke drops the duplicate network leg.
+    const fullWithoutNetwork = '{"shard":["full"]}';
     const selectedMatrix = '{"shard":["selected"]}';
     const selectedSpecs = '["e2e/specs/selected.spec.ts"]';
+    const planEnv = workflowStepByName(
+      workflowJobSteps(ciWorkflow, "ci-plan"),
+      "Plan changed PR e2e shards",
+    )["env"];
+    const declaredEnv =
+      typeof planEnv === "object" && planEnv !== null
+        ? Object.keys(planEnv)
+        : [];
+    expect(declaredEnv).toContain("ROUTE_SMOKE_REQUIRED");
     const root = mkdtempSync(path.join(tmpdir(), "e2e-plan-outputs-"));
     const output = path.join(root, "outputs");
     try {
@@ -563,8 +632,30 @@ describe("detect-e2e-changes", () => {
       ]) {
         for (const outcome of ["success", "failure", "skipped"]) {
           for (const matrix of ["", '{"shard":[]}', selectedMatrix]) {
-            for (const required of ["true", "false"]) {
+            for (const [required, routeSmoke] of [
+              ["true", "true"],
+              ["true", "false"],
+              ["false", "true"],
+              ["false", "false"],
+            ] as const) {
               writeFileSync(output, "fixture=preserved\n");
+              const env = {
+                PATH: "/usr/bin:/bin",
+                GITHUB_OUTPUT: output,
+                EVENT_NAME: event,
+                SELECTOR_OUTCOME: outcome,
+                SELECTED_MATRIX: matrix,
+                SELECTED_MODE: "selected",
+                SELECTED_SPECS: selectedSpecs,
+                E2E_PRODUCTION_REQUIRED: required,
+                ROUTE_SMOKE_REQUIRED: routeSmoke,
+                FULL_MATRIX: fullMatrix,
+              };
+              // The harness supplies every variable the step declares, so a
+              // new step input fails here instead of as an unbound variable.
+              expect(Object.keys(env)).toEqual(
+                expect.arrayContaining(declaredEnv),
+              );
               const result = Bun.spawnSync(
                 [
                   "/bin/bash",
@@ -576,17 +667,7 @@ describe("detect-e2e-changes", () => {
                 ],
                 {
                   cwd: root,
-                  env: {
-                    PATH: "/usr/bin:/bin",
-                    GITHUB_OUTPUT: output,
-                    EVENT_NAME: event,
-                    SELECTOR_OUTCOME: outcome,
-                    SELECTED_MATRIX: matrix,
-                    SELECTED_MODE: "selected",
-                    SELECTED_SPECS: selectedSpecs,
-                    E2E_PRODUCTION_REQUIRED: required,
-                    FULL_MATRIX: fullMatrix,
-                  },
+                  env,
                   stdout: "pipe",
                   stderr: "pipe",
                 },
@@ -597,9 +678,15 @@ describe("detect-e2e-changes", () => {
                 outcome === "success" &&
                 matrix !== "";
               const emptySelection = usesSelection && matrix === '{"shard":[]}';
+              let expectedMatrix = fullMatrix;
+              if (usesSelection) {
+                expectedMatrix = matrix;
+              } else if (event === "merge_group" && routeSmoke === "true") {
+                expectedMatrix = fullWithoutNetwork;
+              }
               expect(readFileSync(output, "utf-8").trim().split("\n")).toEqual([
                 "fixture=preserved",
-                `matrix=${usesSelection ? matrix : fullMatrix}`,
+                `matrix=${expectedMatrix}`,
                 `mode=${usesSelection ? "selected" : "full"}`,
                 `specs=${usesSelection ? selectedSpecs : "[]"}`,
                 `selection_required=${String(!emptySelection)}`,
@@ -645,17 +732,18 @@ describe("detect-e2e-changes", () => {
     expect(marketingCapture).toContain("extra-services: gotenberg");
   });
 
-  test("skips browser execution only for an explicit Docker Hub pull rate limit", () => {
-    expect(e2eStackSetup).toContain(
-      `value: ${githubExpression("steps.stack.outputs.status")}`,
+  test("a Docker Hub pull rate limit fails the job with a typed infrastructure reason", () => {
+    const rateLimit = e2eStackSetup.slice(
+      e2eStackSetup.indexOf("grep -Eqi 'toomanyrequests:.*pull rate limit'"),
     );
-    expect(e2eStackSetup).toContain(
-      "grep -Eqi 'toomanyrequests:.*pull rate limit'",
-    );
-    expect(e2eStackSetup).toContain(
-      'echo "status=rate-limited" >> "$GITHUB_OUTPUT"',
-    );
-    expect(e2eStackSetup).toContain('echo "status=ready" >> "$GITHUB_OUTPUT"');
+    expect(rateLimit).not.toBe(e2eStackSetup);
+    const branch = rateLimit.slice(0, rateLimit.indexOf("\n          fi"));
+    expect(branch).toContain("kind=infra class=e2e-stack-rate-limited");
+    expect(branch.trimEnd()).toEndWith("exit 1");
+    // No readiness output: a stack that is not ready fails the setup step.
+    expect(e2eStackSetup).not.toContain("outputs.status");
+    expect(e2eStackSetup).not.toContain("status=");
+    expect(productionE2eSetup).not.toContain("outputs.status");
     const action: unknown = Bun.YAML.parse(e2eStackSetup);
     if (
       !isRecord(action) ||
@@ -702,9 +790,7 @@ describe("detect-e2e-changes", () => {
     expect(afterStack.length).toBeGreaterThan(0);
     const assertReady = (steps: typeof afterStack) => {
       for (const step of steps) {
-        expect(step.if, step.name).toBe(
-          "steps.stack.outputs.status == 'ready'",
-        );
+        expect(step.if, step.name).toBe("steps.stack.outcome == 'success'");
       }
     };
     assertReady(afterStack);
@@ -713,7 +799,7 @@ describe("detect-e2e-changes", () => {
         position === index ? { ...entry, if: "always()" } : entry,
       );
       expect(mutation.at(index)?.if).not.toBe(step.if);
-      expect(() => assertReady(mutation)).toThrow("steps.stack.outputs.status");
+      expect(() => assertReady(mutation)).toThrow("steps.stack.outcome");
     }
 
     for (const stepName of [
@@ -724,7 +810,7 @@ describe("detect-e2e-changes", () => {
       "Wait for production web server",
     ]) {
       expect(actionStep(productionE2eSetup, stepName)).toContain(
-        "steps.stack.outputs.status == 'ready'",
+        "steps.stack.outcome == 'success'",
       );
     }
     expect(
@@ -737,12 +823,17 @@ describe("detect-e2e-changes", () => {
     for (const stepName of [
       "Run Playwright shard",
       "Upload Playwright blob report",
-      "Upload server logs",
     ]) {
       expect(
         requiredExpression(workflowStepValue(productionJob, stepName)["if"]),
-      ).toContain("steps.e2e-stack.outputs.status == 'ready'");
+      ).toContain("steps.e2e-stack.outcome == 'success'");
     }
+    // A setup that fails after starting its servers still leaves logs.
+    expect(
+      requiredExpression(
+        workflowStepValue(productionJob, "Upload server logs")["if"],
+      ),
+    ).toBe("failure() && steps.e2e-stack.outcome != 'skipped'");
     const canary = workflowJob("e2e-vite-canary");
     expect(
       workflowStepValue(canary, "Start docker stack and API server")["id"],
@@ -755,16 +846,24 @@ describe("detect-e2e-changes", () => {
       "Guard against mid-test Vite re-optimize",
       "Stop web dev server",
       "Upload Playwright blob report",
-      "Upload server logs",
     ]) {
       expect(
         requiredExpression(workflowStepValue(canary, stepName)["if"]),
-      ).toContain("steps.e2e-stack.outputs.status == 'ready'");
+      ).toContain("steps.e2e-stack.outcome == 'success'");
     }
   });
 
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
-    const plan = workflowJob("ci-plan");
+    expect(
+      changedFileScope("docs/development.md", "pull_request", {
+        packageChecks: () => false,
+      }).package_checks_required,
+    ).toBe("false");
+    expect(
+      changedFileScope("docs/development.md", "workflow_dispatch", {
+        packageChecks: () => false,
+      }).package_checks_required,
+    ).toBe("true");
     for (const { leg, job, name } of [
       { leg: "api", job: "code-quality-api", name: "Code quality" },
       { leg: "web", job: "code-quality-web-rest", name: "Code quality (web)" },
@@ -776,10 +875,6 @@ describe("detect-e2e-changes", () => {
     ]) {
       const step = workflowStepByName(workflowJobSteps(ciWorkflow, job), name);
       const env = contractRecord(step["env"]);
-      expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
-      expect(plan).toContain(
-        "bun scripts/ci-package-scope.ts --package-checks",
-      );
       expect(env["EVENT_NAME"]).toBe(githubExpression("github.event_name"));
       expect(env["CHECK_BASE_REF"]).toBe(
         githubExpression("format('origin/{0}', github.base_ref || 'main')"),
@@ -795,21 +890,25 @@ describe("detect-e2e-changes", () => {
         ].join("\n"),
       );
     }
-  });
+  }, 15_000);
 
   test("runs the full native compiler only at the release boundary", () => {
     const plan = workflowJob("ci-plan");
     expect(plan).toContain(
       `release_typecheck_required: ${githubExpression("steps.changed-files.outputs.release_typecheck_required")}`,
     );
-    expect(plan).toContain('if [[ "$file" == "VERSION" ]]');
-    expect(plan).toContain("release_typecheck_required=true");
+    expect(changedFileScope("VERSION").release_typecheck_required).toBe("true");
+    expect(
+      changedFileScope("apps/web/src/main.tsx").release_typecheck_required,
+    ).toBe("false");
 
     const releaseTypecheck = workflowJob("release-typecheck");
     expect(releaseTypecheck).toContain(
       "needs.ci-plan.outputs.release_typecheck_required == 'true'",
     );
-    expectPullRequestAndMergeGroup(releaseTypecheck);
+    // Release compiles gate merge groups (and heavy runs), never pull requests.
+    expect(releaseTypecheck).toContain("github.event_name != 'pull_request'");
+    expect(releaseTypecheck).toContain("(github.event_name == 'merge_group'");
     expect(releaseTypecheck).toContain(
       "run: bun run typecheck --concurrency=1 && bun run typecheck:repo",
     );
@@ -836,15 +935,7 @@ describe("detect-e2e-changes", () => {
     expect(plan).toContain(
       `model_catalog_drift_required: ${githubExpression("steps.changed-files.outputs.model_catalog_drift_required")}`,
     );
-    expect(plan).toContain('echo "model_catalog_drift_required=true"');
-    expect(plan).toContain('echo "model_catalog_drift_required=false"');
-
-    const selector =
-      /\n *([^\n)]+)\)\n *model_catalog_drift_required=true\n/u.exec(plan)?.[1];
-    if (selector === undefined) {
-      throw new Error("ci-plan has no model-catalog drift path selector");
-    }
-    expect(new Set(selector.split("|"))).toEqual(
+    expect(new Set(MODEL_CATALOG_DRIFT_INPUTS)).toEqual(
       new Set([
         ".github/workflows/ci.yml",
         "packages/ai-catalog/package.json",
@@ -860,6 +951,11 @@ describe("detect-e2e-changes", () => {
         "packages/scripts/src/model-catalog-rates-gen.ts",
       ]),
     );
+    for (const input of MODEL_CATALOG_DRIFT_INPUTS) {
+      expect(changedFileScope(input).model_catalog_drift_required, input).toBe(
+        "true",
+      );
+    }
 
     const driftGuard = ciChecksRestStep("Model catalog snapshot drift check");
     const driftGuardCondition = requiredExpression(
@@ -1211,22 +1307,173 @@ describe("detect-e2e-changes", () => {
     );
   });
 
+  // A setup action that reports "not ready" through an output and exits 0
+  // lets every test gated on that output skip while the job stays green.
+  // Setup actions fail instead, so no step may gate on their outputs.
+  const setupReadinessViolations = (
+    files: readonly { path: string; source: string }[],
+  ) =>
+    files.flatMap(({ path: file, source }) => {
+      const document: unknown = Bun.YAML.parse(source);
+      if (!isRecord(document)) {
+        return [`${file}: not a YAML mapping`];
+      }
+      const problems: string[] = [];
+      if (
+        /^\.github\/actions\/setup-[^/]+\/action\.ya?ml$/u.test(file) &&
+        document["outputs"] !== undefined
+      ) {
+        problems.push(`${file}: setup action declares outputs`);
+      }
+      const jobs = isRecord(document["jobs"])
+        ? Object.values(document["jobs"])
+        : [document["runs"]];
+      for (const job of jobs) {
+        if (!isRecord(job) || !Array.isArray(job["steps"])) {
+          continue;
+        }
+        const steps = job["steps"].filter(isRecord);
+        const setupIds = new Set(
+          steps
+            .filter(
+              (step) =>
+                typeof step["uses"] === "string" &&
+                step["uses"].startsWith("./.github/actions/setup-") &&
+                typeof step["id"] === "string",
+            )
+            .map((step) => String(step["id"])),
+        );
+        for (const step of steps) {
+          const condition = step["if"];
+          if (typeof condition !== "string") {
+            continue;
+          }
+          for (const id of setupIds) {
+            if (condition.includes(`steps.${id}.outputs.`)) {
+              problems.push(
+                `${file}: ${String(step["name"])} is gated on setup output steps.${id}.outputs`,
+              );
+            }
+          }
+        }
+      }
+      return problems;
+    });
+
+  test("no step is gated on a setup action's readiness output", () => {
+    const root = path.join(import.meta.dirname, "..");
+    const files = [".github/workflows/*.yml", ".github/actions/*/action.yml"]
+      .flatMap((pattern) => [
+        ...new Bun.Glob(pattern).scanSync({ cwd: root, dot: true }),
+      ])
+      .map((file) => ({
+        path: file,
+        source: readFileSync(path.join(root, file), "utf-8"),
+      }));
+    expect(files.length).toBeGreaterThan(10);
+    expect(setupReadinessViolations(files)).toEqual([]);
+  });
+
+  test("failure diagnostics run whenever the stack setup was attempted", () => {
+    const root = path.join(import.meta.dirname, "..");
+    const conditions = [
+      ...new Bun.Glob(".github/workflows/*.yml").scanSync({
+        cwd: root,
+        dot: true,
+      }),
+    ].flatMap((file) =>
+      [
+        ...readFileSync(path.join(root, file), "utf-8").matchAll(
+          /if: (failure\(\) && steps\.e2e-stack\.outcome [!=]= '\w+')/gu,
+        ),
+      ].map((match) => `${file}: ${match.at(1) ?? ""}`),
+    );
+    expect(conditions.length).toBeGreaterThan(0);
+    for (const condition of conditions) {
+      expect(condition).toEndWith("outcome != 'skipped'");
+    }
+  });
+
+  test("the setup readiness guard rejects a status-gated test step", () => {
+    const gatedWorkflow = [
+      "jobs:",
+      "  e2e:",
+      "    steps:",
+      "      - id: stack",
+      "        uses: ./.github/actions/setup-e2e-stack",
+      "      - name: Run browser tests",
+      "        if: steps.stack.outputs.status == 'ready'",
+      "        run: bun test:e2e",
+    ].join("\n");
+    const action = [
+      "outputs:",
+      "  status:",
+      "    value: ready",
+      "runs:",
+      "  using: composite",
+      "  steps: []",
+    ].join("\n");
+    expect(
+      setupReadinessViolations([
+        { path: ".github/workflows/ci.yml", source: gatedWorkflow },
+        { path: ".github/actions/setup-example/action.yml", source: action },
+      ]),
+    ).toEqual([
+      ".github/workflows/ci.yml: Run browser tests is gated on setup output steps.stack.outputs",
+      ".github/actions/setup-example/action.yml: setup action declares outputs",
+    ]);
+  });
+
+  test("the landing browser specs run in a gating collector", () => {
+    const job = workflowJob("e2e-landing");
+    const collector = workflowStepValue(job, "Check landing islands");
+    // Default success() gating, no pipe that could hide the exit status.
+    expect(collector["if"]).toBeUndefined();
+    const run = requiredExpression(collector["run"]);
+    expect(run).toEndWith("bun --filter @stll/landing test:e2e");
+    expect(run).not.toContain("|");
+    const landingPackage: unknown = JSON.parse(
+      readFileSync(
+        path.join(import.meta.dirname, "../apps/landing/package.json"),
+        "utf-8",
+      ),
+    );
+    const scripts = isRecord(landingPackage) ? landingPackage["scripts"] : {};
+    const command = isRecord(scripts) ? scripts["test:e2e"] : undefined;
+    // Playwright fails when no test matches unless told otherwise.
+    expect(command).toBe(
+      "playwright test --config e2e/playwright.config.ts --project landing",
+    );
+    const config = readFileSync(
+      path.join(
+        import.meta.dirname,
+        "../apps/landing/e2e/playwright.config.ts",
+      ),
+      "utf-8",
+    );
+    expect(config).toContain('testDir: "."');
+    for (const spec of [
+      "landing-anonymize-demo.spec.ts",
+      "landing-navigation.spec.ts",
+    ]) {
+      expect(
+        existsSync(path.join(import.meta.dirname, "../apps/landing/e2e", spec)),
+        spec,
+      ).toBe(true);
+    }
+    // Parse the whole workflow: the job reuses anchors defined in other jobs.
+    const result = contractRecord(parsedJobs(workflow)["ci-result"]);
+    expect(result["needs"]).toContain("e2e-landing");
+  });
+
   test("never passes the screenshot check without comparing a PNG", () => {
-    // setup-e2e-stack exits 0 with `status=rate-limited`, which the e2e suites
-    // treat as a skip. Here it would report success on assets nothing looked
-    // at, so the stack is mandatory.
-    const requireStack = actionStep(marketingCapture, "Require the stack");
-    expect(requireStack).toContain("steps.e2e-stack.outputs.status != 'ready'");
-    expect(requireStack).toContain("::error::");
-    expect(requireStack).toContain("exit 1");
-    expect(marketingCapture.indexOf("- name: Require the stack")).toBeLessThan(
-      marketingCapture.indexOf("- name: Start production web server"),
+    // The shared stack setup fails the job when the stack is not ready, so
+    // the capture needs no readiness gate of its own and no step may carry
+    // one that turns a missing stack into a skip.
+    expect(marketingCapture).toContain(
+      "uses: ./.github/actions/setup-e2e-stack",
     );
-    // No capture, upload, or push step may still carry the skip that step
-    // makes fatal; only `always()` cleanup and `failure()` diagnostics test it.
-    expect(marketingCapture).not.toContain(
-      "if: steps.e2e-stack.outputs.status == 'ready'",
-    );
+    expect(marketingCapture).not.toContain("outputs.status");
     expect(marketingWorkflow).not.toContain("steps.e2e-stack");
   });
 
@@ -1258,17 +1505,12 @@ describe("detect-e2e-changes", () => {
   });
 
   test("builds the production web artifact once per workflow run", () => {
-    const plan = workflowJob("ci-plan");
-    expect(plan).toContain(
-      [
-        'if [[ "$e2e_core_required" == "true" || "$route_smoke_required" == "true" ]]; then',
-        "            web_build_required=true",
-        "          fi",
-      ].join("\n"),
-    );
+    const scope = changedFileScope("apps/api/src/server.ts");
+    expect(scope.e2e_core_required).toBe("true");
+    expect(scope.web_build_required).toBe("true");
 
     const webBuild = workflowJob("web-build");
-    expect(webBuild).toContain("needs: ci-plan");
+    expect(webBuild).toContain("needs: [ci-plan, pr-heavy-gate]");
     expect(webBuild).toContain("Upload production E2E web build");
     expect(webBuild).toContain("uses: ./.github/actions/build-e2e-web");
 
@@ -1496,18 +1738,11 @@ describe("detect-e2e-changes", () => {
     const result = workflowJob("ci-result");
 
     expect(plan).toContain("stack_redaction_browsers_required:");
-    // The selector is the complete owner set of the Firefox/WebKit guard:
+    // The exported inputs are the complete owner set of the Firefox/WebKit guard:
     // production redaction, the harness, and everything that shapes how the
     // harness is built or installed. Set equality in both directions, so a
     // dropped owner fails here instead of silently skipping the job.
-    const selector =
-      /\n *([^\n)]+)\)\n *stack_redaction_browsers_required=true\n/u.exec(
-        plan,
-      )?.[1];
-    if (selector === undefined) {
-      throw new Error("ci-plan has no stack-redaction path selector");
-    }
-    expect(new Set(selector.split("|"))).toEqual(
+    expect(new Set(STACK_REDACTION_BROWSER_INPUTS)).toEqual(
       new Set([
         "apps/web/src/lib/analytics/posthog.ts",
         "apps/web/src/lib/analytics/stack-redaction.ts",
@@ -1526,6 +1761,13 @@ describe("detect-e2e-changes", () => {
         ".github/workflows/ci.yml",
       ]),
     );
+    for (const input of STACK_REDACTION_BROWSER_INPUTS) {
+      expect(
+        changedFileScope(input.replaceAll("*", "fixture"))
+          .stack_redaction_browsers_required,
+        input,
+      ).toBe("true");
+    }
     expect(stackRedaction).toContain(
       "needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'",
     );

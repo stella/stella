@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { DataTag } from "@tanstack/react-query";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
 const React = await import("react");
@@ -14,7 +16,7 @@ const { useShortcutOverrides } = await import("@/lib/use-effective-shortcuts");
 
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type SessionData =

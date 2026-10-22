@@ -2,16 +2,16 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { toSafeId } from "@/api/lib/branded-types";
-import {
-  containsRawUuid,
-  projectForChat,
-} from "@/api/lib/chat/projection-schema";
+import { projectForChat } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { containsRawUuid, MASKED_CONTENT_ID } from "@/api/lib/chat/uuid-mask";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -72,7 +72,7 @@ const buildContext = ({
 describe("runRegistryWriteTool (orchestration)", () => {
   test("checks account eligibility before dispatching restricted operations", async () => {
     for (const toolName of [
-      "manage_organization",
+      "update_organization_settings",
       "set_practice_jurisdictions",
     ] as const) {
       for (const email of ["limited@example.test", "standard@example.test"]) {
@@ -225,7 +225,8 @@ describe("runRegistryWriteTool (orchestration)", () => {
 
   test("executes create_template through the chat projection", async () => {
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/document.xml",
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>',
     );
@@ -352,14 +353,12 @@ describe("runRegistryWriteTool (orchestration)", () => {
     expect(
       applyChatApprovalConfirmation({
         args: {
-          action: "remove_member",
           matter_id: WS_UUID,
           user_id: "user_2",
         },
-        toolName: "manage_organization",
+        toolName: "remove_matter_member",
       }),
     ).toEqual({
-      action: "remove_member",
       matter_id: WS_UUID,
       user_id: "user_2",
       confirm: true,
@@ -421,10 +420,10 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
     );
   });
 
-  test("the UUID invariant drops a raw uuid in a declared plain field", () => {
-    // manage_organization's settings echo declares `matterNumberPattern` as an
-    // ordinary string, which no annotation licenses to carry a UUID: the leaf
-    // is dropped rather than leaked, with only the path (never the value)
+  test("the UUID invariant masks a raw uuid in a declared plain field", () => {
+    // update_organization_settings's settings echo declares `matterNumberPattern` as an
+    // ordinary string, which no annotation licenses to carry a UUID: the id
+    // is masked rather than leaked, with only the path (never the value)
     // reaching telemetry.
     const result = projectForChat({
       dehydration: {
@@ -435,12 +434,12 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
       },
       payload: { matterNumberPattern: OTHER_WS_UUID },
       refRegistry: createChatRefRegistry(),
-      schema: WRITE_TOOL_REF_FIELD_MAP.manage_organization.projection,
+      schema: WRITE_TOOL_REF_FIELD_MAP.update_organization_settings.projection,
       source: "run-registry-write-tool",
-      toolName: "manage_organization",
+      toolName: "update_organization_settings",
     });
 
-    expect(result.unwrap()).toEqual({});
+    expect(result.unwrap()).toEqual({ matterNumberPattern: MASKED_CONTENT_ID });
     expect(
       analytics.exceptions().map((event) => event.properties),
     ).toMatchObject([
@@ -449,7 +448,7 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
         "error.class": "ToolOutputContractDegradedError",
         paths: "matterNumberPattern",
         source: "run-registry-write-tool",
-        toolName: "manage_organization",
+        toolName: "update_organization_settings",
       },
     ]);
     expect(JSON.stringify(analytics.exceptions())).not.toContain(OTHER_WS_UUID);

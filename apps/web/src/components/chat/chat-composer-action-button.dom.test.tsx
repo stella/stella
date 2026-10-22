@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act, useSyncExternalStore } = await import("react");
@@ -21,7 +22,7 @@ afterEach(() => {
   globalThis.fetch = previousFetch;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("a reattached Stop becomes disabled Send on the same element when its delayed probe finds a settled turn", async () => {

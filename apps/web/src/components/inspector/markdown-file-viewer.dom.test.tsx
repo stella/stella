@@ -8,6 +8,7 @@ import { assertProperty } from "@stll/property-testing";
 import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
 import englishMessages from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { FileTab } from "./inspector-store-types";
 
@@ -269,7 +270,7 @@ afterAll(async () => {
   await new Promise<void>((resolve) => {
     setImmediate(resolve);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("publication captures the displayed source inside the debounce interval", async () => {

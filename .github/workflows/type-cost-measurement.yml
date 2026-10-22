@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
       matrix: ${{ steps.projects.outputs.matrix }}
@@ -44,10 +44,11 @@ jobs:
           matrix=$(python3 scripts/type-cost-projects.py)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -56,8 +57,11 @@ jobs:
           bun test scripts/type-cost-measurement.test.ts
           mkdir -p "$RUNNER_TEMP/type-cost-inputs"
           bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/type-cost-inputs/generated"
-          bun --cwd=apps/extension x --no-install wxt prepare
-          tar -czf "$RUNNER_TEMP/type-cost-inputs/declarations.tar.gz" apps/api/.cache/typecheck-declarations apps/extension/.wxt
+      - name: Prepare extension types
+        working-directory: apps/extension
+        run: bunx --no-install wxt prepare
+      - name: Package compiler inputs
+        run: tar -czf "$RUNNER_TEMP/type-cost-inputs/declarations.tar.gz" apps/api/.cache/typecheck-declarations apps/extension/.wxt
       - name: Upload compiler inputs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -68,7 +72,7 @@ jobs:
 
   measure:
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -81,10 +85,11 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""

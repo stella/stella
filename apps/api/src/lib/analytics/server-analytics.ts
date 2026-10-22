@@ -1,10 +1,14 @@
+import type { AIErrorKind } from "@stll/api-contract";
 import type {
   FeedbackArea,
   FeedbackKind,
   FeedbackVia,
 } from "@stll/api-contract/feedback";
 
+import type { CustomerDistinctId } from "@/api/lib/auth/principal-audience";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ReleaseFailureEventProperties } from "@/api/lib/observability/release-failure-contract";
+import { RELEASE_FAILURE_EVENT } from "@/api/lib/observability/release-failure-contract";
 import type { ResolvedTanStackTextModelInfo } from "@/api/lib/tanstack-ai-models";
 import type { McpCredentialType } from "@/api/mcp/auth";
 import type { McpMode } from "@/api/mcp/constants";
@@ -16,6 +20,7 @@ export const SERVER_ANALYTICS_EVENTS = {
   exception: "$exception",
   feedbackReportSubmitted: "feedback_report_submitted",
   mcpSessionInitialized: "mcp_session_initialized",
+  releaseFailureWindow: RELEASE_FAILURE_EVENT,
 } as const;
 
 export type AnalyticsPrimitive = boolean | number | string;
@@ -72,6 +77,14 @@ type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
   error_message_kind?: "non_standard";
   error_type: string;
   failure_reason: AIFailureReason;
+  /**
+   * The classified kind (`classifyAIError`): what the failure was, where
+   * `failure_reason` only says which side it came from. Typed, so it survives
+   * the message sanitizer that drops provider text.
+   */
+  failure_kind: AIErrorKind;
+  /** The provider's HTTP status, when the failure carried one. */
+  provider_status?: string;
   feature: string;
   latency_bucket?: LatencyBucket;
   model?: string;
@@ -175,8 +188,15 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
         properties: FeedbackReportSubmittedProperties;
       }
     | {
+        // Product usage: only a principal classified as a customer may send
+        // it (`principal-audience.ts`).
+        distinctId: CustomerDistinctId;
         event: typeof SERVER_ANALYTICS_EVENTS.mcpSessionInitialized;
         properties: McpSessionInitializedProperties;
+      }
+    | {
+        event: typeof SERVER_ANALYTICS_EVENTS.releaseFailureWindow;
+        properties: ReleaseFailureEventProperties;
       }
   );
 

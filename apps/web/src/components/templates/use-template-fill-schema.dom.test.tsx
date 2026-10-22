@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/template-fill" });
 
 const TEMPLATE_ID = "00000000-0000-4000-8000-000000000001";
@@ -109,7 +111,7 @@ const { useTemplateFillSchema } = await import("./use-template-fill-schema");
 afterAll(async () => {
   cleanup();
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("saved-template discovery supplies a required clause-only input to the mounted fill form", async () => {

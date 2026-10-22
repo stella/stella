@@ -10,6 +10,7 @@ import {
 
 import messages from "@/i18n/langs/en.json";
 import { browserStorage, deviceStorage } from "@/lib/account/browser-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ChatTurnPhase } from "./turn-notifications.logic";
 
@@ -66,7 +67,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const mount = (initial: { conversationId: string; phase: ChatTurnPhase }) =>

@@ -217,7 +217,7 @@ describe("CIMD connections use only vetted addresses within one fetch budget", (
     const result = await probe({
       addresses: [...addresses, { address: "8.8.8.8", family: 4 }],
       outcomes: ["stall", "stall", "success"],
-      timeoutMs: 1300,
+      timeoutMs: 1300, // timeout under test
     });
     expect(result).toMatchObject({
       error: "overall deadline",
@@ -233,7 +233,7 @@ describe("CIMD connections use only vetted addresses within one fetch budget", (
       addresses,
       outcomes: [],
       stallDns: true,
-      timeoutMs: 30,
+      timeoutMs: 30, // timeout under test
     });
     expect(result).toMatchObject({
       error: "overall deadline",

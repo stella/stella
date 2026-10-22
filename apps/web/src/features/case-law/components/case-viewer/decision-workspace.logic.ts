@@ -45,10 +45,12 @@ export const resolveVisitorOffer = ({
  */
 const NOTE_KIND_OPENS_VISITOR_OFFER = {
   annotation: false,
+  answer: false,
   card: false,
   comment: false,
   composer: false,
   example: true,
+  provision: false,
 } as const satisfies Record<MarginItem["kind"], boolean>;
 
 const isMarginNoteKind = (

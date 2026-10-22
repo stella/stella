@@ -109,7 +109,9 @@ const onlineConnection = (transaction: TestDatabaseTransaction) => {
   };
 };
 
-const captureRejection = async (operation: Promise<void>): Promise<unknown> =>
+const captureRejection = async (
+  operation: Promise<unknown>,
+): Promise<unknown> =>
   await operation.then(
     () => null,
     (error: unknown) => error,
@@ -477,6 +479,19 @@ test("the deploy repair takes a released policy to the configured scopes", async
       expect(await linkedResourceIds(transaction)).toContainEqual({
         resourceId: advanced.identifier,
       });
+
+      // A name an earlier release stored is carried to the configured name.
+      const names = (
+        await transaction.execute(sql`
+          SELECT identifier, name FROM oauth_resource
+        `)
+      ).rows;
+      for (const resource of getBetterAuthOAuthResources()) {
+        expect(names).toContainEqual({
+          identifier: resource.identifier,
+          name: resource.name,
+        });
+      }
 
       // Whoever approved the moved scope keeps it where it now lives, without
       // being asked again; nobody else gains an audience.

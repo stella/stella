@@ -21,8 +21,6 @@ import {
   scopeGranted,
   setExit,
   writersFor,
-  requestIdLine,
-  readRequestReceipt,
 } from "../run-leaf-command.js";
 import {
   createUploadDocumentDependencies,
@@ -244,15 +242,10 @@ export const uploadCommand: Command<Context> = buildCommand<
       },
     });
     if (Result.isOk(uploaded)) {
-      // The finalize capability wraps its outcome in `{ finalizedResult, meta }`;
+      // The finalize capability wraps its outcome in `{ finalizedResult }`;
       // the outcome alone is the command's result, shaped like every other
-      // save (`{ type, entityId, ... }`), and the receipt goes to stderr like
-      // any other write's request id.
+      // save (`{ type, entityId, ... }`).
       const envelope = isRecord(uploaded.value) ? uploaded.value : {};
-      const requestId = readRequestReceipt(uploaded.value);
-      if (requestId !== undefined) {
-        writers.stderr(requestIdLine(requestId, this.process.stderr.isTTY));
-      }
       const finalizedResult = envelope["finalizedResult"];
       renderResult({
         width: terminalWidth(this),

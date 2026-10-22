@@ -1,19 +1,18 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::Serialize;
-use std::{
-  sync::{Arc, Mutex},
-  time::Instant,
-};
+use std::time::Instant;
 use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 use crate::{
   clipboard::{
     ClipboardAppState, ClipboardCaptureStatus, ClipboardCopyFormat, ClipboardGroup,
     ClipboardGroupColor, ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention,
-    ClipboardSnapshot,
+    ClipboardSnapshot, HISTORY_EVENT,
   },
   clipboard_screen_capture::ClipboardScreenCapture,
-  clipboard_window::{self, ClipboardStartupTrace},
+  clipboard_window::{
+    self, ClipboardEditorSessions, ClipboardStartupTrace, EditorRead,
+  },
   desktop_telemetry::{
     DesktopTelemetry, DesktopTelemetrySpan, DesktopTelemetryWindow, DesktopTimingReport,
   },
@@ -21,12 +20,9 @@ use crate::{
   local_window::ClipboardCaller,
 };
 
-const HISTORY_EVENT: &str = "clipboard-history-changed";
 const STELLA_WEB_APP_URL: &str = "https://my.stll.app";
 const ITEM_NOT_FOUND_ERROR: &str = "clipboard item no longer exists";
 const GROUP_NOT_FOUND_ERROR: &str = "clipboard group no longer exists";
-
-pub type ClipboardEditorState = Arc<Mutex<Option<String>>>;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -370,42 +366,52 @@ pub fn clipboard_open_editor(
   _caller: ClipboardCaller,
   id: String,
   app: AppHandle,
-  editor_state: State<'_, ClipboardEditorState>,
   state: State<'_, ClipboardAppState>,
 ) -> Result<(), String> {
-  if clipboard_window::editor_is_open(&app) {
-    return clipboard_window::show_editor(&app);
-  }
   if state.lock().map_err(|_| lock_error())?.item(&id).is_none() {
     return Err(ITEM_NOT_FOUND_ERROR.to_string());
   }
-  *editor_state.lock().map_err(|_| lock_error())? = Some(id);
-  clipboard_window::show_editor(&app)
+  clipboard_window::open_editor(&app, id)
 }
 
+/// The open clip, or `None` while the editor window is idle (prewarmed or
+/// closed).
 #[tauri::command]
 pub fn clipboard_get_editor_context(
   caller: ClipboardCaller,
-  editor_state: State<'_, ClipboardEditorState>,
+  sessions: State<'_, ClipboardEditorSessions>,
   state: State<'_, ClipboardAppState>,
-) -> Result<ClipboardEditorContext, String> {
-  let id = editor_state
-    .lock()
-    .map_err(|_| lock_error())?
-    .clone()
-    .ok_or_else(|| "no clipboard item is open for editing".to_string())?;
+  telemetry: State<'_, DesktopTelemetry>,
+) -> Result<Option<ClipboardEditorContext>, String> {
+  let Some(EditorRead {
+    item_id,
+    first_read,
+  }) = sessions.read()?
+  else {
+    return Ok(None);
+  };
+  if let Some((duration, open_kind)) = first_read {
+    telemetry.capture_timing(DesktopTimingReport {
+      window: DesktopTelemetryWindow::ClipboardEditor,
+      span: DesktopTelemetrySpan::ClipboardEditorOpen,
+      duration,
+      open_kind: Some(open_kind),
+      item_count: None,
+      payload_bytes: None,
+    });
+  }
   let mut manager = state.lock().map_err(|_| lock_error())?;
   manager.prune_expired(chrono::Utc::now())?;
   let item = manager
-    .item_for_webview(&id, &caller)
+    .item_for_webview(&item_id, &caller)
     .ok_or_else(|| ITEM_NOT_FOUND_ERROR.to_string())?;
   let source_app_visual = manager.source_app_visual(&item);
-  Ok(ClipboardEditorContext {
+  Ok(Some(ClipboardEditorContext {
     group_limit: crate::clipboard::ClipboardManager::group_limit(),
     groups: manager.groups().to_vec(),
     item,
     source_app_visual,
-  })
+  }))
 }
 
 #[tauri::command]
@@ -450,10 +456,7 @@ pub fn clipboard_close_editor(
   _caller: ClipboardCaller,
   window: WebviewWindow,
 ) -> Result<(), String> {
-  window.destroy().map_err(|error| {
-    tracing::warn!(error = %error, "clipboard editor could not be closed");
-    format!("clipboard editor could not be closed: {error}")
-  })
+  clipboard_window::close_editor(&window)
 }
 
 /// Copying a clip is two steps the user perceives separately: the write to
@@ -485,6 +488,7 @@ fn write_history_item(
       .then(|| manager.image(id))
       .transpose()
       .map_err(copy_error)?;
+    drop(manager);
     (image, item)
   };
   let image = image
@@ -521,6 +525,31 @@ pub fn clipboard_copy_item(
   clipboard_window::hide(&window)
     .map_err(|message| ClipboardCopyError::Hide { message })?;
   history
+}
+
+#[tauri::command]
+pub fn clipboard_copy_items(
+  caller: ClipboardCaller,
+  format: ClipboardCopyFormat,
+  ids: Vec<String>,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<(), ClipboardCopyError> {
+  if let [id] = ids.as_slice() {
+    return clipboard_copy_item(caller, format, id.clone(), state, window);
+  }
+  let copy_error = |message| ClipboardCopyError::Copy { message };
+  {
+    let mut manager = state.lock().map_err(|_| copy_error(lock_error()))?;
+    let combined = manager.compose_items(&ids, format).map_err(copy_error)?;
+    if let Err(message) = manager.write_item(&combined, None, format) {
+      manager.clear_suppression();
+      drop(manager);
+      return Err(copy_error(message));
+    }
+  }
+  clipboard_window::hide(&window)
+    .map_err(|message| ClipboardCopyError::Hide { message })
 }
 
 #[tauri::command]

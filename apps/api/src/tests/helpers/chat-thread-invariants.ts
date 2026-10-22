@@ -7,13 +7,13 @@ import {
   getAwaitingUserInteractions,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
-  CLIENT_ANSWERABLE_TOOL_CALL_STATE,
   findUnsettledStoredToolCalls,
+  isClientAnswerableToolCall,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ToolCallState } from "@/api/handlers/chat/chat-turn-settlement";
-import type { ChatTurnStatus } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 /**
@@ -114,8 +114,7 @@ const unownedPendingInteractionsOf = ({
     .filter(({ id }) => !ownedMessageIds.has(id))
     .flatMap(({ id, parts }) =>
       parts.flatMap((part) =>
-        part.type === "tool-call" &&
-        CLIENT_ANSWERABLE_TOOL_CALL_STATE[part.state]
+        part.type === "tool-call" && isClientAnswerableToolCall(part)
           ? [{ messageId: id, state: part.state, toolCallId: part.id }]
           : [],
       ),

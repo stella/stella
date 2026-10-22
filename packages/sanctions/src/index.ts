@@ -42,11 +42,14 @@ export type {
   ScreeningIndex,
   ScreeningQuery,
   ScreeningResult,
+  ScreeningWorkUsage,
 } from "./screening";
 export { parseUnList, readUnListVersion } from "./un";
 export { parseUkList, readUkListVersion } from "./uk";
 export { parseSecoList, readSecoListVersion } from "./seco";
 
-export { MAX_QUERY_TOKENS, hasExcessQueryTokens } from "./normalise";
-
-export { MAX_SCREENING_WORK } from "./name-match";
+export {
+  MAX_QUERY_CHARACTERS,
+  MAX_QUERY_TOKENS,
+  hasExcessQueryTokens,
+} from "./normalise";

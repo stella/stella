@@ -15,10 +15,11 @@ import {
 } from "@/api/mcp/gateway/list-tools";
 import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import { handleMcpToolCall } from "@/api/mcp/tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
-// Only `enabledRegistrySlugs` and `memberRole` drive static visibility here.
+// Only the registry loader and `memberRole` drive static visibility here.
 // `scopes: ["stella:read"]` grants the read-scoped lookup tool while
 // withholding stella:external_mcps / stella:skills, so the dynamic gateway
 // loaders never run and no DB is touched.
@@ -27,7 +28,12 @@ const contextWith = (
   memberRole: McpRequestContext["memberRole"] = "owner",
 ): McpRequestContext =>
   asTestRaw<McpRequestContext>({
-    enabledRegistrySlugs,
+    ...(enabledRegistrySlugs === undefined
+      ? {}
+      : {
+          loadEnabledRegistrySlugs: async () =>
+            await Promise.resolve(Result.ok(enabledRegistrySlugs)),
+        }),
     grantedScopes: [],
     memberRole,
     // Billing tools are gated by enrolment; this caller is enrolled so role
@@ -213,6 +219,77 @@ describe("external gateway mode boundary", () => {
   }
 });
 
+describe("skill gateway mode boundary", () => {
+  test("a direct default-surface skill call returns unknown_tool", async () => {
+    const result = await handleMcpToolCall({
+      args: {},
+      context: contextWith(undefined),
+      mode: "default",
+      toolName: "skill__alpha",
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content.at(0);
+    expect(text?.type).toBe("text");
+    if (text?.type !== "text") {
+      throw new TypeError("Expected the unknown-tool text envelope");
+    }
+    expect(JSON.parse(text.text)).toMatchObject({
+      error: { code: "unknown_tool" },
+    });
+  });
+
+  for (const mode of ["default", "advanced"] as const) {
+    test(`${mode} skill discovery agrees with exact-name resolution`, async () => {
+      const builder = {
+        from: () => builder,
+        where: () => builder,
+        orderBy: () => builder,
+        limit: async () => [
+          {
+            id: toSafeId<"agentSkill">("skill_alpha"),
+            scope: "private",
+            userId: "user_test",
+            slug: "alpha",
+            name: "Alpha",
+            description: "Fixture skill",
+            version: "1.0.0",
+            license: null,
+            compatibility: null,
+            metadata: {},
+            body: "Fixture body",
+            invocation: "auto",
+            origin: "authored",
+          },
+        ],
+      };
+      const safeDb: McpRequestContext["safeDb"] = async (callback) =>
+        Result.ok(
+          await callback(asTestRaw<Transaction>({ select: () => builder })),
+        );
+      const context = asTestRaw<McpRequestContext>({
+        ...contextWith(undefined),
+        userId: "user_test",
+        grantedScopes: ["stella:skills"],
+        safeDb,
+      });
+      const definitions = await listGatewayMcpToolDefinitions({
+        context,
+        mode,
+        scopes: ["stella:skills"],
+      });
+      const exact = await getGatewayMcpToolDefinition({
+        context,
+        mode,
+        toolName: "skill__alpha",
+      });
+      expect(definitions.some(({ name }) => name === "skill__alpha")).toBe(
+        mode === "advanced",
+      );
+      expect(exact?.name === "skill__alpha").toBe(mode === "advanced");
+    });
+  }
+});
+
 describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
   test("narrows the default-surface enum to the org's enabled registries", async () => {
     const definitions = await listGatewayMcpToolDefinitions({
@@ -244,6 +321,34 @@ describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
     const registryEnum = registryEnumOf(definitions);
     expect(registryEnum).toContain("ares");
     expect(registryEnum).toContain("vies");
+  });
+
+  test("loads the reachable registries only for a projection that offers the registry tool", async () => {
+    let loads = 0;
+    const context = asTestRaw<McpRequestContext>({
+      ...contextWith(undefined),
+      loadEnabledRegistrySlugs: async () => {
+        loads += 1;
+        return await Promise.resolve(Result.ok(["orsr"]));
+      },
+    });
+
+    // No scope grants the registry tool, and the anonymized projection never
+    // narrows: neither reads the organization's registries.
+    await listGatewayMcpToolDefinitions({
+      context,
+      mode: "default",
+      scopes: [],
+    });
+    await listGatewayMcpToolDefinitions({ context, mode: "anonymized" });
+    expect(loads).toBe(0);
+
+    await listGatewayMcpToolDefinitions({
+      context,
+      mode: "default",
+      scopes: ["stella:read"],
+    });
+    expect(loads).toBe(1);
   });
 
   test("never narrows the tenant-neutral anonymized projection", async () => {

@@ -11,11 +11,15 @@ const slugifyCommand = (name: string): string =>
     .replace(/^-/u, "")
     .replace(/-$/u, "");
 
+/** Whether the assistant may pick the skill by itself or waits to be asked. */
+export type SkillInvocation = "auto" | "manual";
+
 type SkillMetadataSnapshot = {
   command: string | null;
   description: string;
   enabled: boolean;
   id: string;
+  invocation: SkillInvocation;
   name: string;
 };
 
@@ -24,6 +28,7 @@ export type SkillMetadataDraft = {
   command: string;
   description: string;
   enabled: boolean;
+  invocation: SkillInvocation;
   name: string;
 };
 
@@ -34,6 +39,7 @@ export const skillMetadataDraft = (
   command: snapshot.command ?? slugifyCommand(snapshot.name),
   description: snapshot.description,
   enabled: snapshot.enabled,
+  invocation: snapshot.invocation,
   name: snapshot.name,
 });
 
@@ -67,6 +73,10 @@ export const rebaseSkillMetadataDraft = ({
         ? incoming.description
         : draft.description,
     enabled: draft.enabled === shown.enabled ? incoming.enabled : draft.enabled,
+    invocation:
+      draft.invocation === shown.invocation
+        ? incoming.invocation
+        : draft.invocation,
     name: draft.name === shown.name ? incoming.name : draft.name,
   };
 };

@@ -12,7 +12,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import type { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
@@ -62,6 +62,8 @@ const EXPECTED_SITES: Record<string, string> = {
   "src/handlers/files/email-attachment/create.ts:createEntityFromBuffer:0":
     "encryption",
   "src/handlers/files/update-document-properties.ts:createEntityVersionFromBuffer:0":
+    "serverBuiltFileEncryption()",
+  "src/handlers/lists/sample-case/create.ts:createDocument:0":
     "serverBuiltFileEncryption()",
   "src/handlers/reports/report-export-queue.ts:createEntityFromBuffer:0":
     "serverBuiltFileEncryption()",

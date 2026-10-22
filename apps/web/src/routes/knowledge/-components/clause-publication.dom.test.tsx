@@ -19,6 +19,7 @@ import {
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
 import arabicMessages from "@/i18n/langs/ar.json";
 import englishMessages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ClauseDetailTransport, ClauseHead } from "./clause-detail";
 import type { ClauseBodyWrite } from "./use-clause-body-save";
@@ -113,7 +114,7 @@ afterEach(() => {
 afterAll(async () => {
   fetchBoundary.mockRestore();
   jest.restoreAllMocks();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const mountDetail = (locale: "en" | "ar" = "en") => {

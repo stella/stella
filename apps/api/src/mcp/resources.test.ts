@@ -20,7 +20,11 @@ import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
-import { MCP_MODES } from "@/api/mcp/constants";
+import {
+  getMcpResourceScopes,
+  getMcpResourceUrl,
+  MCP_MODES,
+} from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import {
   buildLegislationWorkflowReference,
@@ -589,9 +593,17 @@ describe("MCP resources", () => {
       homepage: "https://stll.app",
       documentation: "https://stll.app/product/cli-mcp",
       source: "https://github.com/stella/stella",
-      support: "https://github.com/stella/stella/issues",
+      support: "https://stll.app/support/",
       description:
         "Open-source legal workspace for matters, documents, review, and AI-assisted legal work.",
+      connection: {
+        endpoint: getMcpResourceUrl("default"),
+        oauth_scopes: getMcpResourceScopes("default"),
+        install: {
+          claude: `claude mcp add --transport http stella ${getMcpResourceUrl("default")}`,
+          codex: `codex mcp add stella --url ${getMcpResourceUrl("default")}`,
+        },
+      },
     });
   });
 

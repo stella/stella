@@ -10,6 +10,7 @@ import {
 
 import { DocxArchiveError, loadDocxArchive } from "./archive";
 import { extractBinary, extractText, loadDocx, repackZip } from "./zip";
+import { writeZipEntry } from "./zip-entry";
 
 const part = fc.record({
   path: fc
@@ -26,7 +27,7 @@ const buildZip = async (
 ): Promise<ArrayBuffer> => {
   const zip = new JSZip();
   for (const { path, bytes } of entries) {
-    zip.file(path, bytes, { createFolders: false });
+    writeZipEntry(zip, path, bytes, { createFolders: false });
   }
   return await zip.generateAsync({ type: "arraybuffer", compression: "STORE" });
 };
@@ -50,7 +51,7 @@ test(
         fc.string({ maxLength: 256 }),
         async (entries, text) => {
           const zip = await loadDocx(await buildZip(entries));
-          zip.file("word/document.xml", text);
+          writeZipEntry(zip, "word/document.xml", text);
           const first = await loadDocx(await repackZip(zip));
           const second = await loadDocx(await repackZip(first));
           expect(Object.keys(second.files).toSorted()).toEqual(
@@ -166,7 +167,7 @@ test(
 
 test("rejects archives whose end records are ambiguous", async () => {
   const zip = new JSZip();
-  zip.file("part.txt", "text", { createFolders: false });
+  writeZipEntry(zip, "part.txt", "text", { createFolders: false });
   const bytes = await zip.generateAsync({
     type: "uint8array",
     comment: String.fromCodePoint(80, 75, 5, 6),

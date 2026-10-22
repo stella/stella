@@ -107,7 +107,6 @@ const createContext = ({
   userId?: TestIds["userA1"];
 } = {}): McpRequestContext =>
   asTestRaw<McpRequestContext>({
-    enabledRegistrySlugs: undefined,
     grantedScopes: [],
     memberRole: "owner",
     organizationId,
@@ -137,7 +136,7 @@ const MALFORMED_SLUG = `malformed-${RUN}`;
 const COLLIDING_NAME = `skill__data_report_${RUN}`;
 
 const listSkillTools = async () =>
-  (await listMcpTools(createContext(), "default", ["stella:skills"])).filter(
+  (await listMcpTools(createContext(), "advanced", ["stella:skills"])).filter(
     (tool) => tool.name.startsWith("skill__") && tool.name.includes(RUN),
   );
 
@@ -179,7 +178,7 @@ describe("skill tool output contract", () => {
 
   test("the served listing, colliding skills included, passes the CLI's listing check", async () => {
     // One name outside the contract makes the CLI drop the whole listing.
-    const tools = await listMcpTools(createContext(), "default", undefined);
+    const tools = await listMcpTools(createContext(), "advanced", undefined);
     const names = tools.map((tool) => tool.name);
     expect(names).toContain(COLLIDING_NAME);
     expect(new Set(names).size).toBe(names.length);
@@ -210,6 +209,7 @@ describe("skill tool output contract", () => {
     }
 
     const result = await handleMcpToolCall({
+      mode: "advanced",
       args: {},
       context: createContext(),
       toolName: suffixed.name,
@@ -236,6 +236,7 @@ describe("skill tool output contract", () => {
 
   test("a stored skill whose projection violates the contract fails through the internal_error envelope", async () => {
     const result = await handleMcpToolCall({
+      mode: "advanced",
       args: {},
       context: createContext(),
       toolName: `skill__malformed_${RUN}`,
@@ -264,10 +265,17 @@ describe("built-in skill guidance", () => {
     "%s is not exposed as a tool",
     async (name) => {
       const listed = (
-        await listMcpTools(builtInContext(), "default", builtInScopes)
+        await listMcpTools(builtInContext(), "advanced", builtInScopes)
       ).find((tool) => tool.name === namespaceSkillToolName(name));
 
       expect(listed).toBeUndefined();
+      const result = await handleMcpToolCall({
+        mode: "advanced",
+        args: {},
+        context: builtInContext(),
+        toolName: namespaceSkillToolName(name),
+      });
+      expect(result.isError).toBe(true);
     },
   );
 });

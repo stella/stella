@@ -12,6 +12,7 @@ import { panic, Result } from "better-result";
 import type JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import type { NamedCondition } from "@stll/template-conditions";
 import { scanMarkers, substitutionKey } from "@stll/template-conditions";
 
@@ -93,7 +94,7 @@ const fillTemplateWithValues = async (
       const xml = await entry.async("string");
       const patched = patchXmlPart(xml, values);
       if (patched.changed) {
-        zip.file(partName, patched.xml);
+        writeZipEntry(zip, partName, patched.xml);
       }
     }),
   );
@@ -307,7 +308,7 @@ const preProcessTemplateDirectives = async (
     if (container.getElementsByTagNameNS(W_NS, "numPr").length > 0) {
       pruneDanglingNumPr(container, validNumIds);
     }
-    zip.file(path, slimdom.serializeToWellFormedString(doc));
+    writeZipEntry(zip, path, slimdom.serializeToWellFormedString(doc));
   }
 
   const modifiedBuf = await zip.generateAsync({
@@ -534,7 +535,11 @@ export const fillTemplate = async (
     }
     for (const [partName, doc] of numberingDocs) {
       resolveRefsInDoc(doc, numbers);
-      numberingZip.file(partName, slimdom.serializeToWellFormedString(doc));
+      writeZipEntry(
+        numberingZip,
+        partName,
+        slimdom.serializeToWellFormedString(doc),
+      );
     }
     data = Buffer.from(
       await numberingZip.generateAsync({ type: "nodebuffer" }),

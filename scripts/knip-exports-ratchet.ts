@@ -34,6 +34,7 @@ import path from "node:path";
 import { compareCodeUnit } from "@stll/collation";
 
 import { BASELINE_PATHS } from "./baseline-paths";
+import { validateKnipGeneratedEntries } from "./knip-generated-entries";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const BASELINE_REL = BASELINE_PATHS.knipExports;
@@ -172,17 +173,25 @@ export const collectIssueSymbols = (
 
 type WorkspaceStatus = "ok" | "regressed" | "dropped";
 
+type FileDelta = {
+  readonly file: string;
+  readonly from: number;
+  readonly to: number;
+};
+
 export type WorkspaceDiff = {
   readonly workspace: string;
   readonly status: WorkspaceStatus;
   readonly current: number;
   readonly baseline: number;
-  readonly regressedFiles: readonly {
-    readonly file: string;
-    readonly from: number;
-    readonly to: number;
-  }[];
+  readonly changedFiles: readonly FileDelta[];
+  readonly regressedFiles: readonly FileDelta[];
 };
+
+export const formatFileDeltas = (deltas: readonly FileDelta[]): string =>
+  deltas
+    .map(({ file, from, to }) => `      ${file}: ${from} -> ${to}`)
+    .join("\n");
 
 const workspaceStatus = (
   current: number,
@@ -208,10 +217,13 @@ export const diffSummaries = (
   return workspaces.map((workspace) => {
     const now = current[workspace] ?? { count: 0, files: {} };
     const before = baseline[workspace] ?? { count: 0, files: {} };
-    const regressedFiles = Object.entries(now.files)
-      .flatMap(([file, to]) => {
+    const changedFiles = [
+      ...new Set([...Object.keys(before.files), ...Object.keys(now.files)]),
+    ]
+      .flatMap((file) => {
         const from = before.files[file] ?? 0;
-        return to > from ? [{ file, from, to }] : [];
+        const to = now.files[file] ?? 0;
+        return to !== from ? [{ file, from, to }] : [];
       })
       .toSorted((a, b) => compareCodeUnit(a.file, b.file));
 
@@ -220,7 +232,8 @@ export const diffSummaries = (
       status: workspaceStatus(now.count, before.count),
       current: now.count,
       baseline: before.count,
-      regressedFiles,
+      changedFiles,
+      regressedFiles: changedFiles.filter(({ from, to }) => to > from),
     };
   });
 };
@@ -401,7 +414,7 @@ const runCheck = (): number => {
       status === "dropped" && regressedFiles.length === 0,
   )) {
     console.log(
-      `knip dead exports: ${diff.workspace} dropped ${diff.baseline} -> ${diff.current}. Nice — run \`${WRITE_HINT}\` and commit ${BASELINE_REL} to lock it in.`,
+      `knip dead exports: ${diff.workspace} dropped ${diff.baseline} -> ${diff.current}. Nice — run \`${WRITE_HINT}\` and commit ${BASELINE_REL} to lock it in.\n${formatFileDeltas(diff.changedFiles)}`,
     );
   }
 
@@ -437,9 +450,42 @@ const runCheck = (): number => {
   return 1;
 };
 
-if (import.meta.main) {
-  if (process.argv.includes("--write")) {
-    process.exit(runWrite());
+type RatchetRunners = {
+  readonly report: () => number;
+  readonly write: () => number;
+  readonly check: () => number;
+};
+
+type RunKnipExportsRatchetOptions = {
+  readonly args: readonly string[];
+  readonly repoRoot?: string;
+  readonly fileExists?: (file: string) => boolean;
+  readonly runners?: RatchetRunners;
+  readonly reportError?: (message: string) => void;
+};
+
+export const runKnipExportsRatchet = ({
+  args,
+  repoRoot = REPO_ROOT,
+  fileExists = existsSync,
+  runners = {
+    report: runReport,
+    write: runWrite,
+    check: runCheck,
+  },
+  reportError = console.error,
+}: RunKnipExportsRatchetOptions): number => {
+  const error = validateKnipGeneratedEntries(repoRoot, fileExists);
+  if (error !== undefined) {
+    reportError(`${error._tag}: ${error.message}`);
+    return 1;
   }
-  process.exit(process.argv.includes("--check") ? runCheck() : runReport());
+  if (args.includes("--write")) {
+    return runners.write();
+  }
+  return args.includes("--check") ? runners.check() : runners.report();
+};
+
+if (import.meta.main) {
+  process.exit(runKnipExportsRatchet({ args: process.argv }));
 }

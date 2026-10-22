@@ -10,166 +10,109 @@ import {
 } from "@/api/lib/observability/route-latency-class";
 import api from "@/api/server";
 
-const SEARCH_SHAPED_PATH =
-  /\/(?:search|sitemap|citing-decisions|citation-counts|citations\/(?:summary|leading))(?:\/|$)/u;
-
-/**
- * Search-shaped routes deliberately left undeclared, so they complete as
- * `ai` (a model call marks them at runtime) or `crud`.
- */
-const UNDECLARED_SEARCH_SHAPED_ROUTES = {
-  "POST /v1/case/decisions/search/refine":
-    "Calls a model, so it completes as ai.",
-  "POST /v1/case/decisions/search/expand":
-    "Calls a model, so it completes as ai.",
-  "POST /v1/search/refine": "Calls a model, so it completes as ai.",
-  "POST /v1/search/summary": "Calls a model, so it completes as ai.",
-  "GET /v1/contacts/search":
-    "A name picker over one organization's contacts, capped at 20 rows.",
-  "POST /v1/search/":
-    "Interactive search over the caller's own matters; held to the crud SLO.",
-  "POST /v1/search/facets":
-    "Facet counts for the interactive matter search; held to the crud SLO.",
-  "POST /v1/search/preview":
-    "Hit preview for the interactive matter search; held to the crud SLO.",
-  "POST /v1/search/summary/chat":
-    "Saves an already generated summary as a chat thread; no model call.",
-} as const satisfies Record<string, string>;
-
-type RegisteredRoute = { method: string; path: string };
-
-type RouteClassCensusInput = {
-  routes: readonly RegisteredRoute[];
-  declared: Readonly<Record<string, string>>;
-  undeclared: Readonly<Record<string, string>>;
-};
-
-type RouteClassCensus = {
-  /** Declared keys no registered route answers to. */
-  staleDeclared: string[];
-  /** Exclusion keys no registered route answers to. */
-  staleUndeclared: string[];
-  /** Search-shaped routes neither declared nor excluded. */
-  unclassified: string[];
-};
-
-const routeClassCensus = ({
-  routes,
-  declared,
-  undeclared,
-}: RouteClassCensusInput): RouteClassCensus => {
-  const registered = new Set(
-    routes.map(({ method, path }) => `${method} ${path}`),
-  );
-  const unclassified: string[] = [];
-  for (const key of registered) {
-    if (!SEARCH_SHAPED_PATH.test(key.slice(key.indexOf(" ") + 1))) {
-      continue;
-    }
-    if (Object.hasOwn(declared, key) || Object.hasOwn(undeclared, key)) {
-      continue;
-    }
-    unclassified.push(key);
-  }
-  return {
-    staleDeclared: Object.keys(declared).filter((key) => !registered.has(key)),
-    staleUndeclared: Object.keys(undeclared).filter(
-      (key) => !registered.has(key),
-    ),
-    unclassified,
-  };
-};
-
-const EMPTY_CENSUS = {
-  staleDeclared: [],
-  staleUndeclared: [],
-  unclassified: [],
-} as const satisfies RouteClassCensus;
-
 describe("the route latency class census", () => {
-  test("binds every declaration to a registered route and every search-shaped route to a decision", () => {
-    // The census reaches the real route table and the search-shaped routes
-    // in it, so a green run is not vacuous.
-    expect(api.routes.length).toBeGreaterThan(100);
-    expect(
-      api.routes.some(({ path }) => SEARCH_SHAPED_PATH.test(path)),
-    ).toBeTrue();
-
-    expect(
-      routeClassCensus({
-        routes: api.routes,
-        declared: ROUTE_LATENCY_CLASSES,
-        undeclared: UNDECLARED_SEARCH_SHAPED_ROUTES,
-      }),
-    ).toEqual(EMPTY_CENSUS);
-  });
-
-  test("reports an unclassified search-shaped route, and stale keys on both lists", () => {
-    expect(
-      routeClassCensus({
-        routes: [
-          { method: "GET", path: "/v1/widgets/search" },
-          { method: "GET", path: "/v1/widgets/:widgetId/citations/leading" },
-          { method: "GET", path: "/v1/widgets/sitemap/shards" },
-          { method: "GET", path: "/v1/widgets/search-history" },
-          { method: "GET", path: "/v1/widgets/declared/search" },
-          { method: "GET", path: "/v1/widgets/excluded/search" },
-        ],
-        declared: {
-          "GET /v1/widgets/declared/search": "search",
-          "GET /v1/widgets/renamed/search": "search",
-        },
-        undeclared: {
-          "GET /v1/widgets/excluded/search": "Cheap.",
-          "GET /v1/widgets/removed/search": "Cheap.",
-        },
-      }),
-    ).toEqual({
-      staleDeclared: ["GET /v1/widgets/renamed/search"],
-      staleUndeclared: ["GET /v1/widgets/removed/search"],
-      unclassified: [
-        "GET /v1/widgets/search",
-        "GET /v1/widgets/:widgetId/citations/leading",
-        "GET /v1/widgets/sitemap/shards",
-      ],
-    });
+  test("every registered route has exactly one explicit class with no stale declarations", () => {
+    const registered = api.routes
+      .map(({ method, path }) => `${method} ${path}`)
+      .toSorted();
+    expect(registered.length).toBeGreaterThan(100);
+    expect(Object.keys(ROUTE_LATENCY_CLASSES).toSorted()).toEqual(registered);
   });
 });
 
 describe("the class a completed request is measured under", () => {
-  const search = {
-    method: "POST",
-    route: "/v1/case/decisions/search",
-  } as const;
-  const batch = { method: "GET", route: "/v1/case/sitemap/shards" } as const;
-
-  test("is the route's declared class", () => {
+  test("uses each explicit decision, including ALL transport handlers", () => {
     runWithRequestIdScope(() => {
-      expect(requestClassAtCompletion(search)).toBe("search");
-      expect(requestClassAtCompletion(batch)).toBe("batch");
+      for (const [key, declared] of Object.entries(ROUTE_LATENCY_CLASSES)) {
+        const split = key.indexOf(" ");
+        const method = key.slice(0, split);
+        const route = key.slice(split + 1);
+        expect(requestClassAtCompletion({ method, route })).toBe(declared);
+        if (method === "ALL") {
+          for (const actualMethod of ["GET", "POST", "DELETE", "OPTIONS"]) {
+            expect(
+              requestClassAtCompletion({ method: actualMethod, route }),
+            ).toBe(declared);
+          }
+        }
+      }
     });
   });
 
-  test("is ai once the request reached a model, whatever the route declares", () => {
-    for (const route of [search, batch]) {
-      runWithRequestIdScope(() => {
-        markAiRequest();
-        expect(requestClassAtCompletion(route)).toBe("ai");
-      });
-    }
+  test("keeps tool transports and stream setup outside CRUD before any model call", () => {
+    runWithRequestIdScope(() => {
+      for (const route of [
+        "/mcp",
+        "/mcp/advanced",
+        "/mcp-law",
+        "/mcp-documents",
+        "/mcp-anonymized",
+      ]) {
+        expect(requestClassAtCompletion({ method: "POST", route })).toBe(
+          "search",
+        );
+      }
+      for (const route of [
+        "/v1/notifications/events",
+        "/v1/workspaces/:workspaceId/events",
+        "/v1/desktop-edit-sessions/:sessionId/events",
+        "/v1/chat/threads/:threadId/turns/:turnId/join",
+      ]) {
+        expect(requestClassAtCompletion({ method: "GET", route })).toBe(
+          "stream",
+        );
+      }
+      expect(
+        requestClassAtCompletion({ method: "POST", route: "/v1/chat/" }),
+      ).toBe("stream");
+    });
   });
 
-  test("is crud for an undeclared route, an unmatched request, or another method", () => {
+  test("keeps paginated event reads under the CRUD SLO", () => {
     runWithRequestIdScope(() => {
       expect(
-        requestClassAtCompletion({ method: "GET", route: "/v1/contacts" }),
+        requestClassAtCompletion({
+          method: "GET",
+          route: "/v1/contacts/sanctions/events",
+        }),
       ).toBe("crud");
+    });
+  });
+
+  test("is ai once the request reached a model for every declared class", () => {
+    runWithRequestIdScope(() => {
+      markAiRequest();
+      for (const key of Object.keys(ROUTE_LATENCY_CLASSES)) {
+        const split = key.indexOf(" ");
+        expect(
+          requestClassAtCompletion({
+            method: key.slice(0, split),
+            route: key.slice(split + 1),
+          }),
+        ).toBe("ai");
+      }
+    });
+  });
+
+  test("measures a route outside the served API without failing the request", () => {
+    // Only a sub-application mounted on its own reaches this: the census above
+    // fails CI for any route the API itself registers without a declaration.
+    runWithRequestIdScope(() => {
+      expect(
+        requestClassAtCompletion({ method: "POST", route: "/search" }),
+      ).toBe("crud");
+      markAiRequest();
+      expect(
+        requestClassAtCompletion({ method: "POST", route: "/search" }),
+      ).toBe("ai");
+    });
+  });
+
+  test("measures unmatched requests separately from registered decisions", () => {
+    runWithRequestIdScope(() => {
       expect(
         requestClassAtCompletion({ method: "GET", route: "unmatched" }),
       ).toBe("crud");
-      expect(requestClassAtCompletion({ ...search, method: "GET" })).toBe(
-        "crud",
-      );
     });
   });
 });

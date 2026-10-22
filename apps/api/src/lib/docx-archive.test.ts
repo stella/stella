@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 
 const buildArchive = async (
@@ -8,7 +10,7 @@ const buildArchive = async (
 ): Promise<ArrayBuffer> => {
   const zip = new JSZip();
   for (const file of files) {
-    zip.file(file.path, file.content);
+    writeZipEntry(zip, file.path, file.content);
   }
   return await zip.generateAsync({
     type: "arraybuffer",

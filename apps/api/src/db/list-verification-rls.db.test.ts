@@ -36,6 +36,7 @@ import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundarie
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { addEntityFeatureFixtureColumns } from "@/api/tests/helpers/entity-feature-fixture-columns";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
+import { matterAccessFunctionStatements } from "@/api/tests/helpers/matter-access-functions";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -113,6 +114,12 @@ describe.skipIf(!enabled)("list verification row security", () => {
         await client.unsafe(
           `GRANT SELECT ON "user", member, workspace_members, workspaces, feature_enrolments TO stella, ${ownerRole}; GRANT INSERT, SELECT ON audit_logs TO stella, ${ownerRole}`,
         );
+        for (const statement of matterAccessFunctionStatements(schema, [
+          "stella",
+          ownerRole,
+        ])) {
+          await client.unsafe(statement);
+        }
         for (const migration of [
           "20260925220000_legal_list_verifications",
           "20260928132500_legal_list_verification_blocks",

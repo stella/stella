@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
@@ -26,7 +28,7 @@ const TBL = (...rows: string[]) => `<w:tbl>${rows.join("")}</w:tbl>`;
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
+  writeZipEntry(zip, "word/document.xml", documentXml);
   return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 

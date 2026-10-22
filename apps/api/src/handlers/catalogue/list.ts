@@ -15,7 +15,10 @@ import {
   mcpConnectors,
   mcpUserConnections,
 } from "@/api/db/schema";
-import type { McpConnectorAuthType } from "@/api/db/schema";
+import type {
+  AgentSkillInvocation,
+  McpConnectorAuthType,
+} from "@/api/db/schema";
 import {
   computeCatalogueInstallState,
   type CatalogueInstallState,
@@ -117,6 +120,12 @@ type CatalogueEntryResponse = LoadedCatalogueEntry extends infer Entry
          * surfaced via the dedicated MCP detail flow.
          */
         enabled: boolean | null;
+        /**
+         * Whether the assistant may use an installed skill on its own
+         * (`auto`) or only when the user invokes it (`manual`); `null` for
+         * any entry that is not an installed skill.
+         */
+        invocation: AgentSkillInvocation | null;
       }
     : never
   : never;
@@ -174,6 +183,7 @@ const listCatalogue = createSafeRootHandler(
                   slug: agentSkills.slug,
                   scope: agentSkills.scope,
                   enabled: agentSkills.enabled,
+                  invocation: agentSkills.invocation,
                   origin: agentSkills.origin,
                   userId: agentSkills.userId,
                 })
@@ -201,6 +211,7 @@ const listCatalogue = createSafeRootHandler(
             slug: agentSkills.slug,
             scope: agentSkills.scope,
             enabled: agentSkills.enabled,
+            invocation: agentSkills.invocation,
             name: agentSkills.name,
             description: agentSkills.description,
             license: agentSkills.license,
@@ -389,9 +400,11 @@ const listCatalogue = createSafeRootHandler(
           ? (connectorSlugByUrl.get(entry.url) ?? null)
           : null;
       let enabled: boolean | null = null;
+      let invocation: AgentSkillInvocation | null = null;
       if (installState === "installed") {
         if (entry.kind === "skill") {
           enabled = skillHandles.enabledBySlug.get(entry.slug) ?? null;
+          invocation = skillHandles.invocationBySlug.get(entry.slug) ?? null;
         } else if (entry.kind === "native-tool") {
           // Native-tools encode the enabled decision into install-state
           // already (jurisdiction default + overrides). Installed ⇒ on.
@@ -408,6 +421,7 @@ const listCatalogue = createSafeRootHandler(
         chatSkillId,
         installedConnectorSlug,
         enabled,
+        invocation,
       });
     }
 
@@ -535,6 +549,7 @@ const buildCustomMcpCatalogueEntry = (
     chatSkillId: null,
     installedConnectorSlug: connector.slug,
     enabled: null,
+    invocation: null,
   };
 };
 
@@ -543,6 +558,7 @@ type CustomSkillRow = {
   slug: string;
   scope: "team" | "private";
   enabled: boolean;
+  invocation: AgentSkillInvocation;
   name: string;
   description: string;
   license: string | null;
@@ -629,6 +645,7 @@ const buildCustomSkillCatalogueEntry = ({
       : null,
   installedConnectorSlug: null,
   enabled: skill.enabled,
+  invocation: skill.invocation,
 });
 
 export default listCatalogue;

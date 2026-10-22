@@ -8,7 +8,7 @@ import {
   statuteSitemapBucket,
 } from "@/api/db/schema";
 import { groupableSql } from "@/api/lib/groupable-sql";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   legislationVersionRef,
   notWithdrawn,
@@ -56,7 +56,7 @@ export const statuteWorksQuery = (
         // A withdrawn version is a tombstone: it neither lists its Work nor
         // owns the Work's canonical slug.
         notWithdrawn(legislationVersionRef(legislationDocuments)),
-        publishedLegislationDocument,
+        publishedLegislationDocumentFor("pages"),
       ),
     )
     .groupBy(

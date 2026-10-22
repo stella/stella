@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 const originalFetch = globalThis.fetch;
 GlobalRegistrator.register({ url: "http://localhost:3000/auth/error" });
 // Auth plugins subscribe to session state during initialization. Keep those
@@ -16,7 +18,7 @@ afterEach(() => {
   globalThis.fetch = backgroundFetch;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
   globalThis.fetch = originalFetch;
 });
 

@@ -7,6 +7,7 @@ import { testChatApprovalContextValue } from "@/components/chat/chat-approval-co
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { Analytics } from "@/lib/analytics/types";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 const originalFetch = globalThis.fetch;
@@ -32,7 +33,7 @@ const { ClientTelemetryError } = await import("@/lib/errors/telemetry");
 afterEach(cleanup);
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const activityMessage = (activityType: string) =>

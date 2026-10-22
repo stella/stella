@@ -1,11 +1,10 @@
+import { panic, Result } from "better-result";
 /**
  * The compactor summarizes a thread for its owner under the owner's current
  * organization and matter membership, so nothing from a matter the owner can
  * no longer open reaches the model. Driven against a real (PGlite) database;
  * the model, the AI settings and the budget are fakes.
  */
-
-import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -27,6 +26,7 @@ import {
   workspaceMembers,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import * as aiConfigLoader from "@/api/lib/ai-config-loader";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -103,7 +103,7 @@ const SUMMARY_MARKDOWN = [
 
 const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
 const budgetSpy = spyOn(compactionBudget, "resolveChatCompactionBudget");
-const modelSpy = spyOn(modelTransport, "generateTanStackTextForRole");
+const modelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
 const logs = installRecordingLogger();
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
@@ -174,10 +174,11 @@ const seedDueThread = async (
       userId: ids.userA1,
       workspaceId,
       role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
-      content: {
-        version: 1 as const,
-        data: [{ type: "text" as const, text: `${threadId} message ${index}` }],
-      },
+      content: toPersistedChatMessageContentV3({
+        data: [
+          { type: "text" as const, content: `${threadId} message ${index}` },
+        ],
+      }),
       createdAt: new Date(base + index),
     })),
   );

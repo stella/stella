@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assembleAtFindokDecision,
@@ -47,7 +49,7 @@ const manifestResponse = (
 
 const detailResponse = async (): Promise<Response> => {
   const zip = new JSZip();
-  zip.file("Gesamt/152257.Entscheidungstext.xml", await xmlFixture());
+  writeZipEntry(zip, "Gesamt/152257.Entscheidungstext.xml", await xmlFixture());
   return new Response(await zip.generateAsync({ type: "uint8array" }));
 };
 
@@ -199,7 +201,7 @@ describe("Austrian Findok adapter", () => {
   ]) {
     it(`isolates malformed or unexpected decision XML ${xml}`, async () => {
       const zip = new JSZip();
-      zip.file("Gesamt/152257.Entscheidungstext.xml", xml);
+      writeZipEntry(zip, "Gesamt/152257.Entscheidungstext.xml", xml);
       const bytes = await zip.generateAsync({ type: "uint8array" });
       let requests = 0;
       const adapter = createAtFindokAdapter({
@@ -239,7 +241,7 @@ describe("Austrian Findok adapter", () => {
 
   it("retains the listing when a complete archive has no decision XML", async () => {
     const zip = new JSZip();
-    zip.file("Gesamt/152257.Rechtssaetze.xml", "<root/>");
+    writeZipEntry(zip, "Gesamt/152257.Rechtssaetze.xml", "<root/>");
     const responses = [
       manifestResponse(),
       new Response(await zip.generateAsync({ type: "uint8array" })),

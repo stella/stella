@@ -1,8 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/statutes" });
 
@@ -43,6 +46,7 @@ globalThis.fetch = Object.assign(
   { preconnect: originalFetch.preconnect },
 );
 
+const { Editor } = await import("@tiptap/core");
 const { act, cleanup, render, screen, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -73,7 +77,7 @@ afterAll(async () => {
     await sleep(50);
   });
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 // The statute and decision readers, in the main view and in their inspector
@@ -148,6 +152,32 @@ test.each([
     expect(screen.getByText(READER_CONTENT)).toBeDefined();
     expect(screen.queryByText(messages.common.somethingWentWrong)).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
+    const composer = await screen.findByRole("textbox", undefined, {
+      timeout: 15_000,
+    });
+    if (!("editor" in composer) || !(composer.editor instanceof Editor)) {
+      panic("Expected the reader overlay's mounted TipTap composer");
+    }
+    const editor = composer.editor;
+    expect(editor.isEditable).toBe(true);
+    const originalText = editor.getText();
+    await act(async () => {
+      editor.commands.insertContentAt(
+        editor.state.doc.content.size - 1,
+        "www.stll.app",
+      );
+    });
+    expect(
+      composer
+        .querySelector("a[data-chat-composer-link]")
+        ?.getAttribute("href"),
+    ).toBe("https://www.stll.app/");
+    expect(
+      composer.querySelector("a[data-chat-composer-link]")?.textContent,
+    ).toBe("www.stll.app");
+    expect(editor.getText()).toBe(`${originalText}www.stll.app`);
+    expect(editor.getHTML()).not.toContain("data-chat-composer-link");
+    expect(editor.getHTML()).toContain("www.stll.app");
     queryClient.clear();
   },
   // The overlay host is a lazy chunk; its first load under a busy runner

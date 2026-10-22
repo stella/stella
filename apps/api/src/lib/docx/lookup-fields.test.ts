@@ -10,6 +10,7 @@ import {
 import type { EdgarCompany } from "@stll/business-registries/edgar";
 import { KrsValidationError } from "@stll/business-registries/krs";
 import type { OrsrCompany } from "@stll/business-registries/orsr";
+import { writeZipEntry } from "@stll/docx-utils";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -1354,8 +1355,9 @@ describe("named-format lookup — end-to-end fill", () => {
 
   const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
     const zip = new JSZip();
-    zip.file("word/document.xml", documentXml);
-    zip.file(
+    writeZipEntry(zip, "word/document.xml", documentXml);
+    writeZipEntry(
+      zip,
       "[Content_Types].xml",
       `<?xml version="1.0" encoding="UTF-8"?>` +
         `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -1512,8 +1514,9 @@ describe("lookup formats are addressed by their keys", () => {
 
   const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
     const zip = new JSZip();
-    zip.file("word/document.xml", documentXml);
-    zip.file(
+    writeZipEntry(zip, "word/document.xml", documentXml);
+    writeZipEntry(
+      zip,
       "[Content_Types].xml",
       `<?xml version="1.0" encoding="UTF-8"?>` +
         `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +

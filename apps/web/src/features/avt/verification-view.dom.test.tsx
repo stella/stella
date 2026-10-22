@@ -1,10 +1,30 @@
+import * as React from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { panic } from "better-result";
+import { plugin } from "bun";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+import type { OriginalDocxHostProps } from "./original-docx-host";
 import type { ClaimState, VerificationRun } from "./types";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
+
+// The build turns a `?worker&url` import into the emitted worker's URL; the
+// original view's chunk only holds on to the file viewer's.
+plugin({
+  name: "worker-url",
+  setup(build) {
+    build.onLoad({ filter: /\?worker&url$/u }, () => ({
+      contents: 'export default "/worker.js";',
+      loader: "js",
+    }));
+  },
+});
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 type RecordedRequest = { method: string; path: string; body: unknown };
 // Background auth reads are answered and ignored; every other request must be
@@ -38,8 +58,72 @@ const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
     { preconnect: () => undefined },
   ),
 );
-const { cleanup, fireEvent, render, screen, waitFor, within } =
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
+const { EditorState } = await import("@tiptap/pm/state");
+const { EditorView } = await import("@tiptap/pm/view");
+const { schema } = await import("@stll/folio-core/prosemirror");
+const { createFolioAIEditSnapshot } = await import("@stll/folio-core/ai-edits");
+
+const { OriginalDocxHostContext } = await import("./original-docx-host");
+const { FOLIO_SCROLL_EVENT } = await import("@/lib/folio-scroll-event");
+
+// Folio's host, faked where the original view takes its file viewer: it
+// delivers the test's document to the `docxPlugins` the view hands the
+// viewer, as Folio does on load, and paints the document's text as body runs
+// carrying their ProseMirror positions. Real Folio pages neither load nor lay
+// out under happy-dom.
+let hostDocument: ProseMirrorNode | null = null;
+// While set, the host is still loading its file, as the real viewer is
+// before its query resolves.
+let hostLoading: Promise<void> | null = null;
+// The blocks the host was asked to scroll to. Like the real viewer, it hears
+// scroll requests only once it is mounted.
+const hostScrolls: FolioScrollEventDetail[] = [];
+const FakeFolioHost = ({ docxPlugins, fieldId }: OriginalDocxHostProps) => {
+  if (hostLoading !== null) {
+    React.use(hostLoading);
+  }
+  const doc = hostDocument ?? panic("No document for the fake Folio host.");
+  const plugins =
+    docxPlugins ?? panic("The original view must hand Folio its plugins.");
+  const paint = (node: HTMLDivElement | null) => {
+    if (node === null) {
+      return undefined;
+    }
+    const onScroll = (event: CustomEvent<FolioScrollEventDetail>) => {
+      if (event.detail.fieldId === fieldId) {
+        hostScrolls.push(event.detail);
+      }
+    };
+    window.addEventListener(FOLIO_SCROLL_EVENT, onScroll);
+    const content = document.createElement("div");
+    content.className = "layout-page-content";
+    doc.descendants((child, pos) => {
+      if (child.isText && child.text !== undefined) {
+        const run = document.createElement("span");
+        run.dataset["pmStart"] = String(pos);
+        run.dataset["pmEnd"] = String(pos + child.text.length);
+        run.textContent = child.text;
+        content.append(run);
+      }
+    });
+    node.replaceChildren(content);
+    // A real editor view over the document, which hands it to the host
+    // plugins as Folio's does.
+    const view = new EditorView(document.createElement("div"), {
+      state: EditorState.create({ doc, plugins: [...plugins] }),
+    });
+    return () => {
+      view.destroy();
+      window.removeEventListener(FOLIO_SCROLL_EVENT, onScroll);
+    };
+  };
+  return <div ref={paint} />;
+};
+const renderFakeFolioHost = (props: OriginalDocxHostProps) => (
+  <FakeFolioHost {...props} />
+);
 const {
   createMemoryHistory,
   createRootRoute,
@@ -67,6 +151,8 @@ const {
   noCover,
   notVerifiable,
   recordConflict,
+  WITNESS_STATEMENT_MARKED_TEXT,
+  witnessStatementRun,
 } = await import("./avt.test-fixtures");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const workspaceId = "0199a3c4-5b6d-7e8f-9a0b-000000009099";
@@ -75,6 +161,9 @@ const at = "2026-09-01T10:00:00Z";
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(() => {
   cleanup();
+  hostDocument = null;
+  hostLoading = null;
+  hostScrolls.length = 0;
   for (const client of clients) {
     client.clear();
   }
@@ -87,7 +176,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   fetchBoundary.mockRestore();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const claimFixtures = {
@@ -180,8 +269,7 @@ const SeededVerification = ({ runId }: { runId: string }) => {
   );
 };
 
-const mount = async () => {
-  const run = seededRun();
+const mount = async (run: VerificationRun = seededRun()) => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { enabled: false, retry: false },
@@ -215,7 +303,9 @@ const mount = async () => {
     <IntlProvider locale="en" messages={messages}>
       <FormattingProvider locale="en" timeZone="UTC">
         <QueryClientProvider client={client}>
-          <RouterProvider router={router} />
+          <OriginalDocxHostContext value={renderFakeFolioHost}>
+            <RouterProvider router={router} />
+          </OriginalDocxHostContext>
         </QueryClientProvider>
       </FormattingProvider>
     </IntlProvider>,
@@ -235,6 +325,52 @@ const claimButton = (suffix: number) => {
   });
 };
 const selectClaim = (suffix: number) => fireEvent.click(claimButton(suffix));
+
+test("the reader draws each stored block with its claims marked on the stored words", async () => {
+  const { run } = await mount(witnessStatementRun());
+  const marks = run.claims.map((claim) => {
+    const mark = document.querySelector<HTMLElement>(`#avt-claim-${claim.id}`);
+    if (mark === null) {
+      return panic(`Missing claim mark ${claim.id}`);
+    }
+    return mark;
+  });
+  // The reader paragraph is keyed by the stored block id, and its text is the
+  // stored text, so a claim's mark covers exactly the words it was anchored on.
+  for (const stored of run.blocks) {
+    const paragraph = document.querySelector<HTMLElement>(
+      `[data-anchor="${stored.blockId}"]`,
+    );
+    expect(paragraph?.tagName).toBe("P");
+    expect(
+      paragraph?.textContent.startsWith(stored.text.slice(0, 20)) === true,
+    ).toBe(true);
+  }
+  expect(
+    marks.map((mark) =>
+      [...mark.childNodes]
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent)
+        .join(""),
+    ),
+  ).toEqual([...WITNESS_STATEMENT_MARKED_TEXT]);
+  // The first claim in reading order starts selected; clicking another
+  // selects it and opens its detail.
+  expect(marks.at(0)?.getAttribute("aria-pressed")).toBe("true");
+  const opinion = marks.at(5);
+  if (opinion === undefined) {
+    panic("Missing opinion claim mark");
+  }
+  fireEvent.click(opinion);
+  expect(opinion.getAttribute("aria-pressed")).toBe("true");
+  expect(marks.at(0)?.getAttribute("aria-pressed")).toBe("false");
+  expect(
+    screen
+      .getAllByText("In my view the lender acted unfairly.")
+      .some((node) => node.tagName === "BLOCKQUOTE"),
+  ).toBe(true);
+  expect(requests).toEqual([]);
+});
 
 test("all verdicts expose their evidence and score explanations in the real detail panel", async () => {
   const { run } = await mount();
@@ -486,4 +622,209 @@ test("a rejected review restores the claim and attention queue and surfaces the 
       .getByRole("button", { name: messages.avt.confirm.verdict })
       .hasAttribute("disabled"),
   ).toBe(false);
+});
+
+test("a DOCX verification offers its original beside the reading view; a PDF one does not", async () => {
+  await mount();
+  const views = messages.avt.verification.documentView;
+  expect(
+    screen
+      .getByRole("tablist", { name: views.label })
+      .textContent.includes(views.original),
+  ).toBe(true);
+  expect(
+    screen
+      .getByRole("tab", { name: views.reading })
+      .getAttribute("aria-selected"),
+  ).toBe("true");
+  cleanup();
+
+  const docx = seededRun();
+  await mount({
+    ...docx,
+    claims: docx.claims.map((claim) => ({
+      ...claim,
+      anchor: {
+        type: "pdf-page" as const,
+        pageNumber: claim.position,
+        start: claim.anchor.start,
+        end: claim.anchor.end,
+      },
+    })),
+    blocks: docx.blocks.map((block) => ({
+      ...block,
+      kind: "pdf-page" as const,
+      pageNumber: block.ordinal,
+    })),
+  });
+  expect(screen.queryByRole("tablist", { name: views.label })).toBeNull();
+  expect(claimButton(1).getAttribute("aria-pressed")).toBe("true");
+});
+
+const nextFrame = async () => {
+  await act(
+    async () =>
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      }),
+  );
+};
+
+const paintedRun = (text: string) =>
+  [...document.querySelectorAll<HTMLElement>(".layout-page-content span")].find(
+    (span) => span.textContent === text,
+  ) ?? panic(`Missing painted run: ${text}`);
+
+test("the original locates claims in the document Folio loads, and a click on a claim's painted words selects it", async () => {
+  const doc = schema.node("doc", undefined, [
+    schema.node("paragraph", { paraId: "1A2B3C4D" }, [
+      schema.text("The lease was signed on 3 March 2021."),
+    ]),
+    schema.node("paragraph", { paraId: "5E6F7A8B" }, [
+      schema.text("Rent fell due monthly."),
+    ]),
+  ]);
+  const blocks = createFolioAIEditSnapshot(doc).blocks.map(
+    (block, ordinal): VerificationRun["blocks"][number] => ({
+      ordinal,
+      blockId: block.id,
+      kind: "docx-block",
+      pageNumber: null,
+      text: block.text,
+    }),
+  );
+  const lease = blocks[0] ?? panic("Expected two stored blocks");
+  const rent = blocks[1] ?? panic("Expected two stored blocks");
+  const anchored = (
+    suffix: number,
+    verdict: VerificationRun["claims"][number]["verdict"],
+    block: VerificationRun["blocks"][number],
+  ) => ({
+    ...makeClaim({
+      suffix,
+      verdict,
+      anchor: {
+        type: "docx-block",
+        blockId: block.blockId,
+        start: 0,
+        end: block.text.length,
+      },
+    }),
+    text: block.text,
+  });
+  const unplaced = {
+    ...makeClaim({
+      suffix: 3,
+      verdict: noCover,
+      anchor: { type: "docx-block", blockId: "absent", start: 0, end: 6 },
+    }),
+    text: "Notice was never served.",
+  };
+  hostDocument = doc;
+  await mount({
+    ...makeRun([
+      anchored(1, supported(), lease),
+      anchored(2, contradicted(), rent),
+      unplaced,
+    ]),
+    blocks,
+  });
+  const views = messages.avt.verification.documentView;
+  const readingClaim = (text: string) =>
+    screen.getByRole("button", { name: (name) => name.startsWith(text) });
+
+  fireEvent.click(screen.getByRole("tab", { name: views.original }));
+  // Claims are resolved only once the plugin has the loaded document: the
+  // one anchored outside it is then listed under the pages.
+  const unplacedButton = await screen.findByRole("button", {
+    name: (name) => name.startsWith(unplaced.text),
+  });
+  expect(
+    screen.getByText("1 claim was not located in the original"),
+  ).toBeTruthy();
+  expect(unplacedButton.getAttribute("aria-pressed")).toBe("false");
+
+  // happy-dom lays nothing out: each claim's words report one box.
+  const getClientRects = spyOn(
+    Range.prototype,
+    "getClientRects",
+  ).mockImplementation(function (this: Range) {
+    const box = this.toString().startsWith("Rent")
+      ? new DOMRect(100, 80, 120, 16)
+      : new DOMRect(100, 40, 120, 16);
+    return Object.assign([box], { item: () => box });
+  });
+  try {
+    // The ranges are rebuilt on the frame after the claims are placed.
+    await nextFrame();
+    // A click beside the words selects nothing.
+    fireEvent.click(paintedRun(rent.text), { clientX: 10, clientY: 88 });
+    fireEvent.click(screen.getByRole("tab", { name: views.reading }));
+    expect(readingClaim(lease.text).getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(screen.getByRole("tab", { name: views.original }));
+    await screen.findByText("1 claim was not located in the original");
+    await nextFrame();
+    // A click on a claim's painted words selects that claim.
+    fireEvent.click(paintedRun(rent.text), { clientX: 150, clientY: 88 });
+  } finally {
+    getClientRects.mockRestore();
+  }
+  fireEvent.click(screen.getByRole("tab", { name: views.reading }));
+  expect(readingClaim(rent.text).getAttribute("aria-pressed")).toBe("true");
+  expect(readingClaim(lease.text).getAttribute("aria-pressed")).toBe("false");
+});
+
+test("a step taken while the original is still loading scrolls the viewer once it has the document", async () => {
+  hostDocument = schema.node("doc", undefined, [
+    schema.node("paragraph", undefined, [schema.text("The deed.")]),
+  ]);
+  let finishLoading = () => {};
+  hostLoading = new Promise<void>((resolve) => {
+    finishLoading = resolve;
+  });
+  const claims = [1, 2].map((suffix) =>
+    makeClaim({ suffix, verdict: contradicted() }),
+  );
+  const run = {
+    ...makeRun(claims, []),
+    blocks: claims.map((claim): VerificationRun["blocks"][number] => ({
+      ordinal: claim.position,
+      blockId: `b${String(claim.position)}`,
+      kind: "docx-block",
+      pageNumber: null,
+      text: claim.text,
+    })),
+  };
+  await mount(run);
+  const contradictedTile =
+    screen
+      .getAllByRole("button")
+      .find(
+        (button) =>
+          button.textContent === `2${claimFixtures.contradicted.label}`,
+      ) ?? panic("Missing the contradicted tile");
+  fireEvent.click(contradictedTile);
+  fireEvent.click(
+    screen.getByRole("tab", {
+      name: messages.avt.verification.documentView.original,
+    }),
+  );
+
+  // The viewer is still loading; the stepper already moves the selection.
+  const [nextMatch] = await screen.findAllByRole("button", {
+    name: messages.common.nextMatch,
+  });
+  fireEvent.click(nextMatch ?? panic("Missing the next-match button"));
+  expect(hostScrolls).toEqual([]);
+
+  await act(async () => {
+    finishLoading();
+    await hostLoading;
+  });
+  await waitFor(() => {
+    expect(hostScrolls).toEqual([{ blockId: "b2", fieldId: run.fileFieldId }]);
+  });
 });

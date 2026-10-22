@@ -32,6 +32,21 @@ type InspectorFindOptions = {
   panelRef: RefObject<HTMLElement | null>;
 };
 
+/**
+ * Moving the reader is something the reader asks for: a new query, Next or
+ * Previous, or opening the bar with terms. The text changing under an open
+ * bar (a provision card unfolds, a disclosure opens, a note arrives) repaints
+ * the marks and may move the active index, but never the view.
+ */
+const FIND_SCROLL_INTENT = {
+  /** Take the reader to the active match once, then settle. */
+  reveal: "reveal",
+  /** Repaint in place. */
+  stay: "stay",
+} as const;
+type FindScrollIntent =
+  (typeof FIND_SCROLL_INTENT)[keyof typeof FIND_SCROLL_INTENT];
+
 type FindBarState =
   | { open: false }
   | {
@@ -44,6 +59,8 @@ type FindBarState =
        * the bar is already open still returns the caret to the query.
        */
       focusRequest: number;
+      /** Whether the next match collection takes the reader to the active match. */
+      scrollIntent: FindScrollIntent;
       /** A citation can request the same search passage again after the reader moved away. */
       landingRequest: number;
     };
@@ -55,12 +72,14 @@ const FIND_OPENED: FindBarState = {
   matchCount: 0,
   activeIndex: 0,
   focusRequest: 0,
+  scrollIntent: FIND_SCROLL_INTENT.reveal,
   landingRequest: 0,
 };
 
 /** What a match collection reads from the bar. */
 type FindInputs = {
   activeIndex: number;
+  scrollIntent: FindScrollIntent;
   enabled: boolean;
   findQuery: string;
   /** Keys reapplication even when a citation's query and active index stay the same. */
@@ -119,7 +138,14 @@ export const useInspectorFind = ({
 
   const setFindQuery = useCallback((query: string) => {
     setFindState((prev) =>
-      prev.open ? { ...prev, query, activeIndex: 0 } : prev,
+      prev.open
+        ? {
+            ...prev,
+            query,
+            activeIndex: 0,
+            scrollIntent: FIND_SCROLL_INTENT.reveal,
+          }
+        : prev,
     );
   }, []);
 
@@ -135,6 +161,7 @@ export const useInspectorFind = ({
         activeIndex: 0,
         focusRequest: prev.open ? prev.focusRequest : 0,
         landingRequest: prev.open ? prev.landingRequest + 1 : 1,
+        scrollIntent: FIND_SCROLL_INTENT.reveal,
       }));
     },
     [enabled],
@@ -148,6 +175,7 @@ export const useInspectorFind = ({
       return {
         ...prev,
         activeIndex: (prev.activeIndex + 1) % prev.matchCount,
+        scrollIntent: FIND_SCROLL_INTENT.reveal,
       };
     });
   }, []);
@@ -160,6 +188,7 @@ export const useInspectorFind = ({
       return {
         ...prev,
         activeIndex: (prev.activeIndex - 1 + prev.matchCount) % prev.matchCount,
+        scrollIntent: FIND_SCROLL_INTENT.reveal,
       };
     });
   }, []);
@@ -169,6 +198,9 @@ export const useInspectorFind = ({
   const matchCount = findState.open ? findState.matchCount : 0;
   const activeIndex = findState.open ? findState.activeIndex : 0;
   const focusRequest = findState.open ? findState.focusRequest : 0;
+  const scrollIntent = findState.open
+    ? findState.scrollIntent
+    : FIND_SCROLL_INTENT.stay;
   const landingRequest = findState.open ? findState.landingRequest : 0;
 
   // The DOCX pane and a table view's toolbar are candidates for the same
@@ -215,6 +247,7 @@ export const useInspectorFind = ({
       activeIndex: index,
       enabled: isEnabled,
       findQuery: queryInput,
+      scrollIntent: intent,
     }: FindInputs) => {
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
       CSS.highlights?.delete(allHighlightName);
@@ -241,8 +274,14 @@ export const useInspectorFind = ({
 
       if (ranges.length === 0) {
         setFindState((prev) =>
-          prev.open && prev.activeIndex !== 0
-            ? { ...prev, activeIndex: 0 }
+          prev.open &&
+          (prev.activeIndex !== 0 ||
+            prev.scrollIntent !== FIND_SCROLL_INTENT.stay)
+            ? {
+                ...prev,
+                activeIndex: 0,
+                scrollIntent: FIND_SCROLL_INTENT.stay,
+              }
             : prev,
         );
         return undefined;
@@ -262,7 +301,14 @@ export const useInspectorFind = ({
       if (activeRange) {
         // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
         CSS.highlights?.set(activeHighlightName, new Highlight(activeRange));
-        scrollRangeIntoView(activeRange);
+        if (intent === FIND_SCROLL_INTENT.reveal) {
+          scrollRangeIntoView(activeRange);
+          setFindState((prev) =>
+            prev.open && prev.scrollIntent === FIND_SCROLL_INTENT.reveal
+              ? { ...prev, scrollIntent: FIND_SCROLL_INTENT.stay }
+              : prev,
+          );
+        }
       }
 
       return () => {
@@ -275,15 +321,28 @@ export const useInspectorFind = ({
   );
 
   useLayoutEffect(
-    () => applyFind({ activeIndex, enabled, findQuery, landingRequest }),
-    [activeIndex, applyFind, enabled, findQuery, landingRequest],
+    () =>
+      applyFind({
+        activeIndex,
+        enabled,
+        findQuery,
+        landingRequest,
+        scrollIntent,
+      }),
+    [activeIndex, applyFind, enabled, findQuery, landingRequest, scrollIntent],
   );
 
   // The reader fills in after the bar can be open: citations, provision
   // history and "load more" insert text later. Each insertion is a new
   // document to match against, so the collection runs again on it.
   const reapplyFind = useLatestCallback(() => {
-    applyFind({ activeIndex, enabled, findQuery, landingRequest });
+    applyFind({
+      activeIndex,
+      enabled,
+      findQuery,
+      landingRequest,
+      scrollIntent,
+    });
   });
   useExternalSyncEffect(() => {
     const root = contentRef.current;

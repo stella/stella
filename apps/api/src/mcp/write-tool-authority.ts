@@ -70,19 +70,6 @@ export type McpWriteToolPermissions =
     }
   | { type: "delegated"; reason: string };
 
-/**
- * A `value` selector whose keys are checked against the enum the input
- * schema is built from, so adding an enum value without a grant does not
- * compile.
- */
-export const selectOperationByValue = <const TValue extends string>(
-  property: string,
-  values: Readonly<Record<TValue, McpWriteToolOperation>>,
-): McpWriteToolPermissions => ({
-  type: "input",
-  select: { by: "value", property, values },
-});
-
 /** A `presence` selector: `property` set selects `present`, else `absent`. */
 export const selectOperationByPresence = (
   property: string,

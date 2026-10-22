@@ -58,7 +58,7 @@ export const summarizeVersionChange = async ({
       workspaceId,
     },
     feature,
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: { organization_id: organizationId },

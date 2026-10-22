@@ -6,11 +6,13 @@ import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { LanguagePicker } from "@/components/language-picker";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { ThemePicker } from "@/components/theme-picker";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 const landingUrl = "https://stll.app";
 
 export const Route = createFileRoute("/auth")({
+  staticData: { appFrame: APP_FRAME_SCOPE.none },
   beforeLoad: async ({ context }) => await loadAuthContext(context.queryClient),
   component: AuthLayout,
 });
@@ -51,7 +53,7 @@ function AuthLayout() {
           </div>
         </header>
         <div className="flex flex-1 flex-col items-center min-[70rem]:flex-row min-[70rem]:items-baseline">
-          <div className="hidden flex-1 pt-[18vh] min-[70rem]:block">
+          <div className="hidden flex-1 pt-[18svh] min-[70rem]:block">
             <h1 className="text-foreground max-w-xl text-[2.75rem] leading-[1.15] font-light tracking-tight">
               {t("auth.headline")}
             </h1>
@@ -59,7 +61,7 @@ function AuthLayout() {
               {t("auth.subtitle")}
             </p>
           </div>
-          <div className="flex w-full min-w-0 flex-1 items-start justify-center pt-12 min-[70rem]:justify-start min-[70rem]:pt-[18vh]">
+          <div className="flex w-full min-w-0 flex-1 items-start justify-center pt-12 min-[70rem]:justify-start min-[70rem]:pt-[18svh]">
             <Outlet />
           </div>
         </div>

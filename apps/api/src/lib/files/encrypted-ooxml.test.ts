@@ -3,6 +3,7 @@ import fc from "fast-check";
 import JSZip from "jszip";
 import path from "node:path";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { assertProperty } from "@stll/property-testing";
 
 import { scanFile } from "@/api/lib/file-scan/scan";
@@ -224,13 +225,13 @@ const ooxmlZip = fc
   })
   .map(async ({ parts, withDecoyNames }) => {
     const zip = new JSZip();
-    zip.file("[Content_Types].xml", "<Types/>");
+    writeZipEntry(zip, "[Content_Types].xml", "<Types/>");
     for (const [name, content] of Object.entries(parts)) {
-      zip.file(name, content);
+      writeZipEntry(zip, name, content);
     }
     if (withDecoyNames) {
-      zip.file("EncryptionInfo", "decoy");
-      zip.file("EncryptedPackage", "decoy");
+      writeZipEntry(zip, "EncryptionInfo", "decoy");
+      writeZipEntry(zip, "EncryptedPackage", "decoy");
     }
     return await zip.generateAsync({
       type: "uint8array",

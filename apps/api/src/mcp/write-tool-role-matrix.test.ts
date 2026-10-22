@@ -396,11 +396,6 @@ const REST_ENDPOINTS_BY_OPERATION: Readonly<
     delete: ["entities.delete"],
     delete_version: ["entities.versions.delete"],
   },
-  manage_organization: {
-    add_member: ["matters.members.add"],
-    remove_member: ["matters.members.remove"],
-    update_org_settings: ["organization-settings.update"],
-  },
   save_clause: { create: ["clauses.create"], update: ["clauses.update"] },
   save_contact: {
     create: ["contacts.create", "contacts.import"],
@@ -615,7 +610,6 @@ const accountAccessMismatches = (definitions: readonly WriteTool[]): string[] =>
 
 const mcpContextFor = (role: MemberRole): McpRequestContext =>
   asTestRaw<McpRequestContext>({
-    enabledRegistrySlugs: undefined,
     grantedScopes: [],
     accessibleWorkspaceIds: ["workspace_1"],
     memberRole: role,

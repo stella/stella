@@ -1,7 +1,9 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
+import { SaxesParser } from "saxes";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
@@ -46,7 +48,8 @@ const makeDocx = async (opts?: {
 }): Promise<ArrayBuffer> => {
   const zip = new JSZip();
 
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     opts?.documentXml ??
       [
@@ -60,28 +63,32 @@ const makeDocx = async (opts?: {
       ].join("\n"),
   );
 
-  zip.file("[Content_Types].xml", opts?.contentTypes ?? CONTENT_TYPES_XML);
+  writeZipEntry(
+    zip,
+    "[Content_Types].xml",
+    opts?.contentTypes ?? CONTENT_TYPES_XML,
+  );
 
   if (opts?.docRels) {
-    zip.file("word/_rels/document.xml.rels", opts.docRels);
+    writeZipEntry(zip, "word/_rels/document.xml.rels", opts.docRels);
   }
   if (opts?.footerXml) {
-    zip.file("word/footer1.xml", opts.footerXml);
+    writeZipEntry(zip, "word/footer1.xml", opts.footerXml);
   }
   if (opts?.footerRels) {
-    zip.file("word/_rels/footer1.xml.rels", opts.footerRels);
+    writeZipEntry(zip, "word/_rels/footer1.xml.rels", opts.footerRels);
   }
   if (opts?.customXml) {
-    zip.file("docProps/custom.xml", opts.customXml);
+    writeZipEntry(zip, "docProps/custom.xml", opts.customXml);
   }
   if (opts?.coreXml) {
-    zip.file("docProps/core.xml", opts.coreXml);
+    writeZipEntry(zip, "docProps/core.xml", opts.coreXml);
   }
   if (opts?.appXml) {
-    zip.file("docProps/app.xml", opts.appXml);
+    writeZipEntry(zip, "docProps/app.xml", opts.appXml);
   }
   for (const [path, contents] of Object.entries(opts?.additionalFiles ?? {})) {
-    zip.file(path, contents);
+    writeZipEntry(zip, path, contents);
   }
 
   return zip.generateAsync({ type: "arraybuffer" });
@@ -98,6 +105,9 @@ const readZipFile = async (
   }
   return file.async("string");
 };
+
+const isWellFormedXml = (xml: string): boolean =>
+  Result.try(() => new SaxesParser().write(xml).close()).isOk();
 
 // ── Tests ───────────────────────────────────────────────
 
@@ -228,6 +238,68 @@ describe("injectStamp", () => {
     expect(footer).toContain("Existing footer");
     expect(footer).toContain("stella_dms_ref");
     expect(footer).toContain(stamp);
+  });
+
+  test("updates a footer paragraph containing commented markup", async () => {
+    const relNs =
+      "http://schemas.openxmlformats.org/package/2006/relationships";
+    const footerRelType =
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer";
+    const docx = await makeDocx({
+      footerXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<w:ftr xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        '<w:p><!-- <w:p> --><w:bookmarkStart w:id="0" w:name="stella_dms_ref"/><w:r><w:t>old stamp</w:t></w:r></w:p>',
+        "</w:ftr>",
+      ].join(""),
+      docRels: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<Relationships xmlns="${relNs}">`,
+        `<Relationship Id="rId1" Type="${footerRelType}" Target="footer1.xml"/>`,
+        "</Relationships>",
+      ].join(""),
+    });
+
+    const stamped = await injectStamp(docx, stamp, code, baseUrl);
+    const footer = await readZipFile(stamped, "word/footer1.xml");
+
+    expect(isWellFormedXml(footer ?? "")).toBe(true);
+    expect(isWellFormedXml(`${footer ?? ""}</w:p>`)).toBe(false);
+    expect(footer).not.toContain("old stamp");
+    expect(footer).toContain(stamp);
+  });
+
+  test("replaces an outer footer paragraph containing the stamp bookmark", async () => {
+    const relNs =
+      "http://schemas.openxmlformats.org/package/2006/relationships";
+    const footerRelType =
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer";
+    const docx = await makeDocx({
+      footerXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<w:ftr xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        '<w:p w:rsidR="outer"><w:pPr/><w:r><w:txbxContent>',
+        '<w:p><w:bookmarkStart w:id="0" w:name="stella_dms_ref"/><w:r><w:t>old stamp</w:t></w:r></w:p>',
+        "</w:txbxContent></w:r></w:p>",
+        "</w:ftr>",
+      ].join(""),
+      docRels: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<Relationships xmlns="${relNs}">`,
+        `<Relationship Id="rId1" Type="${footerRelType}" Target="footer1.xml"/>`,
+        "</Relationships>",
+      ].join(""),
+    });
+
+    const stamped = await injectStamp(docx, stamp, code, baseUrl);
+    const footer = await readZipFile(stamped, "word/footer1.xml");
+
+    expect(isWellFormedXml(footer ?? "")).toBe(true);
+    expect(isWellFormedXml(`${footer ?? ""}</w:p>`)).toBe(false);
+    expect(footer).not.toContain('w:rsidR="outer"');
+    expect(footer).not.toContain("old stamp");
+    expect(footer).toContain(stamp);
+    expect(footer?.match(/<w:p(?:\s|>)/gu)).toHaveLength(1);
   });
 
   test("stamps every footer variant referenced across document sections once", async () => {
@@ -784,7 +856,8 @@ describe("stripStamp", () => {
     const { mainPartContentType, mainPartPath } =
       DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx;
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "[Content_Types].xml",
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -793,8 +866,9 @@ describe("stripStamp", () => {
         "</Types>",
       ].join("\n"),
     );
-    zip.file(mainPartPath, "<workbook/>");
-    zip.file(
+    writeZipEntry(zip, mainPartPath, "<workbook/>");
+    writeZipEntry(
+      zip,
       "docProps/custom.xml",
       [
         '<?xml version="1.0" encoding="UTF-8"?>',

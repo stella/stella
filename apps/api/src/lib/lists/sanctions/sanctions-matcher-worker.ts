@@ -6,6 +6,7 @@ import type {
   SanctionsEntry,
   SanctionsSource,
   ScreeningIndex,
+  ScreeningWorkUsage,
 } from "@stll/sanctions";
 
 import type {
@@ -93,9 +94,14 @@ port.on("message", (request: SanctionsMatcherMessage) => {
     indexes.set(request.source, cached);
   }
   assembly = null;
+  let work: ScreeningWorkUsage | undefined;
   const result = screen(cached.index, request.query, {
     cutoff: request.cutoff,
     limit: request.limit,
+    ...(request.maxWork === undefined ? {} : { maxWork: request.maxWork }),
+    onWork: (usage) => {
+      work = usage;
+    },
   });
   if (result.isErr()) {
     if (result.error.code !== "work-limit") {
@@ -107,5 +113,6 @@ port.on("message", (request: SanctionsMatcherMessage) => {
   port.postMessage({
     status: "screened",
     result: result.value,
+    work: work ?? panic("A completed sanctions screening reported no work"),
   } satisfies SanctionsMatcherReply);
 });

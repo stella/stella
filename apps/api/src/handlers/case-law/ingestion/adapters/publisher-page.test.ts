@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { PublisherPageError, validatePublisherPage } from "./publisher-page";
 
 const context = { adapterKey: "cz-regional", cursor: "2026-01-01:0" };
@@ -192,7 +194,7 @@ describe("publisher response contracts", () => {
   });
   test("accepts a complete publisher archive", async () => {
     const zip = new JSZip();
-    zip.file("decision.xml", "<r/>");
+    writeZipEntry(zip, "decision.xml", "<r/>");
     const bytes = await zip.generateAsync({ type: "uint8array" });
     expect(
       validatePublisherPage({

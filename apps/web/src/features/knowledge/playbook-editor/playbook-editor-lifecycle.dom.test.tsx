@@ -10,6 +10,7 @@ import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
 import messages from "@/i18n/langs/en.json";
 import type { api } from "@/lib/api";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 type PlaybookDetailData = Exclude<
   NonNullable<
@@ -267,7 +268,7 @@ afterEach(async () => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("a failed real editor autosave and failed close-save keep the tab and its draft recoverable", async () => {

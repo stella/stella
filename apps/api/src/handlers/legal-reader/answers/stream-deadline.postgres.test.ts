@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { READER_ANSWER_ERROR_CODES } from "@stll/api-contract/reader-answers";
+import {
+  READER_ANSWER_DEADLINE_MS,
+  READER_ANSWER_ERROR_CODES,
+} from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -13,10 +16,7 @@ import {
   legalReaderAnswers,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
-import {
-  READER_ANSWER_DEADLINE_MS,
-  readerAnswerDeadlineAt,
-} from "@/api/handlers/legal-reader/answers/operation";
+import { readerAnswerDeadlineAt } from "@/api/handlers/legal-reader/answers/operation";
 import type { PreparedReaderAnswer } from "@/api/handlers/legal-reader/answers/operation";
 import { streamReaderAnswer } from "@/api/handlers/legal-reader/answers/stream";
 import {

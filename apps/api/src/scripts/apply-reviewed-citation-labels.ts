@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 /**
  * Store reviewed citation polarities and apply them to the current citation
- * rows.
+ * rows, independently of doctrinal treatment. Entries with `kind: "doctrine"`
+ * carry `doctrinalTreatment`, `passage` and `evidenceQuote`; distinguishes and
+ * limits require a verbatim quote from that passage. Model provenance hashes
+ * that same passage. Both axes may appear in one file and commit together.
  *
  * The file is a JSON array of entries naming a citation either as
  * `{ citingDecisionId, citationKey }` or as `{ citationId }` (resolved to its
@@ -42,6 +45,7 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
+import { DOCTRINE_LABEL_DOMAIN } from "@/api/scripts/apply-reviewed-citation-labels-doctrine";
 import {
   REVIEWED_LABEL_OUTCOME,
   applyReviewedCitationLabels,
@@ -90,10 +94,11 @@ await runScriptWithErrorOutput(async () => {
     : await openCaseLawReadOnlySession();
 
   const recordPlan = async () => {
-    const planned = await planReviewedCitationLabels(
-      rootDb.transaction.bind(rootDb),
-      parsed.output,
-    );
+    const planned = await planReviewedCitationLabels({
+      transact: rootDb.transaction.bind(rootDb),
+      input: parsed.output,
+      domain: DOCTRINE_LABEL_DOMAIN,
+    });
     const written = await Result.tryPromise(
       async () =>
         await Bun.write(
@@ -113,6 +118,7 @@ await runScriptWithErrorOutput(async () => {
       transact: rootDb.transaction.bind(rootDb),
       input: parsed.output,
       resultsPath,
+      domain: DOCTRINE_LABEL_DOMAIN,
     });
     if (applied.isErr()) {
       printError(applied.error);

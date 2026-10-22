@@ -34,6 +34,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/lib/auth/**/*.ts",
+  "apps/api/src/handlers/account-exports/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
   "apps/api/src/handlers/audit-logs/**/*.ts",
@@ -85,6 +86,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/user-files/**/*.ts",
   "apps/api/src/handlers/verify/**/*.ts",
   "apps/api/src/handlers/work-obligations/**/*.ts",
+  "apps/api/src/lib/account-export/**/*.ts",
   "apps/api/src/lib/bbox/**/*.ts",
   "apps/api/src/lib/billing/**/*.ts",
   "apps/api/src/lib/clauses/**/*.ts",
@@ -104,6 +106,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
   "apps/api/src/lib/machine-api-keys/**/*.ts",
+  "apps/api/src/lib/synthetic-principal/**/*.ts",
   "apps/api/src/lib/markdown/**/*.ts",
   "apps/api/src/lib/mcp-connectors/**/*.ts",
   "apps/api/src/lib/memory/**/*.ts",
@@ -122,6 +125,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/views/**/*.ts",
   "apps/api/src/lib/work-obligations/**/*.ts",
   "apps/api/src/lib/workspaces/**/*.ts",
+  "apps/desktop/src/onboarding/**/*.{ts,tsx}",
   "apps/desktop/src/registry/**/*.{ts,tsx}",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
   "apps/web/src/components/ai-prompt-input/**/*.{ts,tsx}",
@@ -140,6 +144,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/billing/**/*.{ts,tsx}",
   "apps/web/src/components/public-law-table/**/*.{ts,tsx}",
   "apps/web/src/components/references/**/*.{ts,tsx}",
+  "apps/web/src/components/route-provider-scope/**/*.{ts,tsx}",
   "apps/web/src/components/viewer/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
@@ -149,6 +154,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/knowledge/**/*.{ts,tsx}",
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/features/workspaces/**/*.{ts,tsx}",
+  "apps/web/src/lib/capabilities/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
   "apps/web/src/lib/drag-and-drop/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
@@ -159,6 +165,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",
   "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
+  "apps/web/src/routes/_protected.admin/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
@@ -194,13 +201,14 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
-  "packages/time/src/**/*.ts",
   "packages/uuid-codec/src/**/*.ts",
   "packages/workspace-model/src/**/*.ts",
   "packages/workspace-ui/src/**/*.{ts,tsx}",
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // MCP request handlers translate typed gateway failures into SDK protocol errors.
+  "apps/api/src/mcp/server-core.ts",
   // Process startup consumes login refusals through Promise rejection before accepting work.
   "apps/api/src/lib/db/assert-database-login-posture.ts",
   // Elysia consumes prevalidation feature denials through its error pipeline.
@@ -223,6 +231,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/handlers/**/*route.ts",
   "apps/api/src/server.ts",
   "apps/api/src/lib/account-deletion-cleanup-queue.ts",
+  // The ZIP async iterator and Node pipeline propagate failures to the worker.
+  "apps/api/src/lib/account-export/archive.ts",
+  "apps/api/src/lib/account-export/queue.ts",
   "apps/api/src/lib/bilingual/run-queue.ts",
   "apps/api/src/lib/document-processing-queue.ts",
   "apps/api/src/lib/document-review/run-queue.ts",
@@ -234,6 +245,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
   "apps/api/src/lib/email/inbound/upload-queue.ts",
   "apps/api/src/lib/tanstack-ai-generate.ts",
+  // All model engines consume this dispatch proof through a signal or rejection.
+  "apps/api/src/lib/rate-limit/model-dispatch-admission.ts",
+  // Credential SDKs accept a typed rejection when issuance is unavailable.
+  "apps/api/src/lib/synthetic-principal/credential-policy.ts",
   // TanStack consumes this adapter through its Promise rejection contract;
   // structuredOutput cannot return a Result to the SDK.
   "apps/api/src/lib/stella-openrouter-text-adapter.ts",
@@ -312,7 +327,6 @@ export const RESULT_CONVENTION_EXCLUDE_GLOBS = [
   ...RESULT_BOUNDARY_GLOBS,
   "apps/api/evals/**",
   "apps/api/src/tests/**",
-  "apps/api/src/mcp/generated/**",
   "**/*.test.*",
   "**/*.spec.*",
   "**/__tests__/**",

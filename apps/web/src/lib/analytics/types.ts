@@ -1,6 +1,11 @@
 import type { FeedbackArea, FeedbackKind } from "@stll/api-contract/feedback";
+import type {
+  ProvisionPlacementFailureKind,
+  ProvisionPlacementFailureReason,
+} from "@stll/api-contract/provision-placement";
 
 import type { ErrorReference } from "@/lib/analytics/error-reference";
+import type { KeyActionDurationBucketMs } from "@/lib/analytics/key-action-timing";
 
 export const WEB_ANALYTICS_EVENTS = {
   exception: "$exception",
@@ -19,13 +24,31 @@ export const WEB_ANALYTICS_EVENTS = {
   routeErrorRecovery: "route_error_recovery",
   feedbackDialogOpened: "feedback_dialog_opened",
   feedbackReportSubmitted: "feedback_report_submitted",
+  provisionPlacementGaps: "provision_placement_gaps",
+  inspectorRestoreRecovered: "inspector_restore_recovered",
+  followupShown: "followup_shown",
+  followupSelected: "followup_selected",
+  keyActionTimed: "key_action_timed",
 } as const;
 
 export type WebAnalyticsEvent =
   (typeof WEB_ANALYTICS_EVENTS)[keyof typeof WEB_ANALYTICS_EVENTS];
 
+// An Eden treaty error envelope carries the API status and body unparsed;
+// captured raw, analytics loses both. Callers convert it with `toAPIError`.
+type EdenErrorEnvelope = { status: number; value: unknown };
+
+export type NotEdenErrorEnvelope<E> = E extends Error
+  ? E
+  : E extends EdenErrorEnvelope
+    ? never
+    : E;
+
 export type Analytics = {
-  captureError: (error: unknown, context?: ErrorCaptureContext) => void;
+  captureError: <E>(
+    error: E & NotEdenErrorEnvelope<E>,
+    context?: ErrorCaptureContext,
+  ) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
   captureGuideStepSkipped: (properties: GuideStepSkippedProperties) => void;
   captureFeedbackDialogOpened: (
@@ -34,11 +57,64 @@ export type Analytics = {
   captureFeedbackReportSubmitted: (
     properties: FeedbackDialogSubmittedProperties,
   ) => void;
+  captureProvisionPlacementGaps: (
+    properties: ProvisionPlacementGapsProperties,
+  ) => void;
+  captureInspectorRestoreRecovered: (
+    properties: InspectorRestoreRecoveredProperties,
+  ) => void;
+  captureFollowupShown: (properties: FollowupShownProperties) => void;
+  captureFollowupSelected: (properties: FollowupSelectedProperties) => void;
+  captureKeyActionTiming: (properties: KeyActionTiming) => void;
   captureRouteErrorLifecycle: (
     properties: RouteErrorLifecycleProperties,
   ) => Promise<void>;
   identifyUser: (user: AnalyticsUserIdentity) => void;
   reset: (options?: AnalyticsResetOptions) => void;
+};
+
+export type FollowupSurface =
+  | "chat-thread"
+  | "document-chat"
+  | "inspector-chat";
+
+// Click-through needs where and how a suggestion was used, never which
+// conversation it came from.
+type FollowupProperties = {
+  source: "generated";
+  surface: FollowupSurface;
+};
+
+type FollowupShownProperties = FollowupProperties & {
+  count: number;
+};
+
+type FollowupSelectedProperties = FollowupProperties & {
+  index: number;
+  via: "chip" | "ghost-tab";
+};
+
+export type DocumentTimingSurface = "full-view" | "inspector";
+
+export type SearchTimingSurface = "case-law" | "legislation";
+
+export type ChatTimingSurface = FollowupSurface | "template-studio";
+
+/** One user-visible action and where it ran. The surface is the only
+ *  context a timing carries: no document, query, thread or message
+ *  identifies what the action touched. */
+export type KeyActionMeasure =
+  // Click on a document until its editor accepts input.
+  | { action: "document-open"; surface: DocumentTimingSurface }
+  // A checkpoint save from snapshot to the server's confirmation.
+  | { action: "document-save"; surface: DocumentTimingSurface }
+  // A changed search query until its first result page is on screen.
+  | { action: "search-results"; surface: SearchTimingSurface }
+  // A sent chat message until the reply starts streaming, and until it ends.
+  | { action: "chat-first-token" | "chat-total"; surface: ChatTimingSurface };
+
+export type KeyActionTiming = KeyActionMeasure & {
+  durationBucketMs: KeyActionDurationBucketMs;
 };
 
 // Why a guide step could not be shown against the live app surface. Emitted so
@@ -78,6 +154,22 @@ type FeedbackDialogSubmittedProperties = {
 export type ErrorCaptureContext =
   | { type: "detached"; operation: string }
   | { type: "recovery"; reference: ErrorReference };
+
+// Stored citations a decision reader could not place: one event per decision,
+// reader surface and reason, counting the rows. A placement gap is a data
+// outcome (corpus coverage or linker drift), not an exception.
+/** The inspector restored its tabs minimized because the previous load never
+ *  settled after restoring them. Counts only, never tab content. */
+type InspectorRestoreRecoveredProperties = {
+  tabCount: number;
+};
+
+type ProvisionPlacementGapsProperties = {
+  surface: string;
+  kind: ProvisionPlacementFailureKind;
+  reason: ProvisionPlacementFailureReason;
+  count: number;
+};
 
 type AnalyticsResetOptions = {
   onlyIfIdentified?: boolean;

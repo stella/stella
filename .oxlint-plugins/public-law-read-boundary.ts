@@ -34,6 +34,7 @@ const ALTERNATE_READERS = new Set([
 const SEARCH_FUNCTIONS = new Set([
   "searchPostgresDecisions",
   "searchCorpusIndexDecisions",
+  "listCaseLawProvisionDecisions",
 ]);
 
 const FUNCTION_TYPES = new Set([

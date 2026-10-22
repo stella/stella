@@ -8,6 +8,8 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
 
 import { runAnonymizeDemo } from "../anonymize-demo-worker-client";
 
+import type { AhoCorasick } from "#aho-corasick";
+
 /**
  * Live, in-browser run of stella's real anonymization engine (the same
  * WASM pipeline the workspace runs off the main thread for chat and
@@ -128,55 +130,71 @@ type Segment = {
   sourceEnd: number;
 };
 
-const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/gu;
-const escapeRegExp = (value: string): string =>
-  value.replaceAll(REGEX_SPECIAL, "\\$&");
+/** One highlighted span of the text, in UTF-16 source positions. */
+type HighlightMatch = { start: number; end: number; bucket: Bucket };
 
 /**
- * Splits `text` into plain/highlighted segments by locating each detected
- * pair's raw span. Pairs are deduplicated by original text (the pipeline
- * already collapses repeat occurrences of the same entity into one
- * placeholder), longest-first, so a highlight for "Edison Bank plc"
- * takes priority over one for "Edison" alone.
+ * Where {@link PRECOMPUTED_SAMPLE_PAIRS} occur in {@link INITIAL_TEXT}, so the
+ * first paint needs no matcher: in the browser the matcher is wasm, loaded
+ * with the engine. A test pins these to what the matcher finds.
  */
-const buildSegments = (
+export const PRECOMPUTED_SAMPLE_MATCHES = [
+  { start: 47, end: 62, bucket: "person" },
+  { start: 67, end: 91, bucket: "address" },
+  { start: 97, end: 126, bucket: "organization" },
+  { start: 158, end: 173, bucket: "organization" },
+  { start: 175, end: 190, bucket: "person" },
+  { start: 209, end: 226, bucket: "phone" },
+  { start: 230, end: 269, bucket: "email" },
+  { start: 297, end: 311, bucket: "id" },
+] as const satisfies readonly HighlightMatch[];
+
+/** The matcher class, loaded with the engine rather than with this module. */
+export type Matcher = typeof AhoCorasick;
+
+let cachedSegmentMatcher:
+  | { key: string; Matcher: Matcher; matcher: AhoCorasick }
+  | undefined;
+
+const segmentMatcher = (Matcher: Matcher, originals: string[]): AhoCorasick => {
+  const key = JSON.stringify(originals);
+  if (
+    cachedSegmentMatcher?.key !== key ||
+    cachedSegmentMatcher.Matcher !== Matcher
+  ) {
+    cachedSegmentMatcher = {
+      key,
+      Matcher,
+      matcher: new Matcher(originals, { matchKind: "leftmost-longest" }),
+    };
+  }
+  return cachedSegmentMatcher.matcher;
+};
+
+/** Splits `text` into plain and highlighted segments at known matches. */
+export const segmentsFromMatches = (
   text: string,
-  pairs: readonly HighlightPair[],
+  matches: readonly HighlightMatch[],
 ): Segment[] => {
-  if (text.length === 0 || pairs.length === 0) {
-    return [{ text, sourceStart: 0, sourceEnd: text.length }];
-  }
-  const bucketByOriginal = new Map<string, Bucket>();
-  for (const pair of pairs) {
-    if (!bucketByOriginal.has(pair.original)) {
-      bucketByOriginal.set(pair.original, bucketOf(pair.label));
-    }
-  }
-  const originals = [...bucketByOriginal.keys()].toSorted(
-    (a, b) => b.length - a.length,
-  );
-  const pattern = new RegExp(originals.map(escapeRegExp).join("|"), "gu");
   const segments: Segment[] = [];
   let lastIndex = 0;
-  for (const match of text.matchAll(pattern)) {
-    const index = match.index;
-    const matched = match[0];
-    if (index > lastIndex) {
+  for (const { start, end, bucket } of matches) {
+    if (start > lastIndex) {
       segments.push({
-        text: text.slice(lastIndex, index),
+        text: text.slice(lastIndex, start),
         sourceStart: lastIndex,
-        sourceEnd: index,
+        sourceEnd: start,
       });
     }
     segments.push({
-      text: matched,
-      bucket: bucketByOriginal.get(matched),
-      sourceStart: index,
-      sourceEnd: index + matched.length,
+      text: text.slice(start, end),
+      bucket,
+      sourceStart: start,
+      sourceEnd: end,
     });
-    lastIndex = index + matched.length;
+    lastIndex = end;
   }
-  if (lastIndex < text.length) {
+  if (lastIndex < text.length || segments.length === 0) {
     segments.push({
       text: text.slice(lastIndex),
       sourceStart: lastIndex,
@@ -186,10 +204,86 @@ const buildSegments = (
   return segments;
 };
 
+/**
+ * Splits `text` into plain/highlighted segments by locating each detected
+ * pair's raw span. Pairs are deduplicated by original text (the pipeline
+ * already collapses repeat occurrences of the same entity into one
+ * placeholder), longest-first, so a highlight for "Edison Bank plc"
+ * takes priority over one for "Edison" alone.
+ */
+export const buildSegments = (
+  rawText: string,
+  pairs: readonly HighlightPair[],
+  Matcher: Matcher,
+): Segment[] => {
+  const text = rawText.toWellFormed();
+  if (text.length === 0 || pairs.length === 0) {
+    return [{ text, sourceStart: 0, sourceEnd: text.length }];
+  }
+  const bucketByOriginal = new Map<string, Bucket>();
+  for (const pair of pairs) {
+    const original = pair.original.toWellFormed();
+    if (original === "") {
+      continue;
+    }
+    if (!bucketByOriginal.has(original)) {
+      bucketByOriginal.set(original, bucketOf(pair.label));
+    }
+  }
+  if (bucketByOriginal.size === 0) {
+    return [{ text, sourceStart: 0, sourceEnd: text.length }];
+  }
+  const originals = [...bucketByOriginal.keys()].toSorted(
+    (a, b) => b.length - a.length,
+  );
+  const matches = segmentMatcher(Matcher, originals)
+    .findIter(text)
+    .map(({ start, text: matched }): HighlightMatch => ({
+      start,
+      end: start + matched.length,
+      bucket: bucketByOriginal.get(matched) ?? "misc",
+    }));
+  return segmentsFromMatches(text, matches);
+};
+
+let matcherLoad: Promise<Matcher> | undefined;
+
+/**
+ * The matcher loads with the engine, never with this module: in the browser
+ * it is wasm, and a failed download must surface as an engine error instead
+ * of stopping the demo from hydrating at all. The browser keeps a module
+ * that failed to load, so only a page reload can load it again.
+ */
+const loadMatcher = async (): Promise<Matcher> => {
+  matcherLoad ??= import("#aho-corasick").then((module) => module.AhoCorasick);
+  return matcherLoad;
+};
+
 type EngineState =
   | { status: "warming" }
-  | { status: "ready"; pairs: readonly HighlightPair[] }
-  | { status: "error" };
+  | { status: "ready"; pairs: readonly HighlightPair[]; Matcher: Matcher }
+  | { status: "error"; recovery: "retry" | "reload" };
+
+/** Starts one engine run: the anonymization pass and the matcher together. */
+export const startEngine = async (
+  value: string,
+  dependencies: {
+    run: (value: string) => Promise<{ pairs: readonly HighlightPair[] }>;
+    loadMatcher: () => Promise<Matcher>;
+  },
+): Promise<EngineState> => {
+  const [run, matcher] = await Promise.allSettled([
+    dependencies.run(value),
+    dependencies.loadMatcher(),
+  ]);
+  if (matcher.status === "rejected") {
+    return { status: "error", recovery: "reload" };
+  }
+  if (run.status === "rejected") {
+    return { status: "error", recovery: "retry" };
+  }
+  return { status: "ready", pairs: run.value.pairs, Matcher: matcher.value };
+};
 
 /**
  * Which detection the backdrop renders. `precomputed` only ever applies to the
@@ -229,10 +323,10 @@ export const AnonymizeLiveDemo = () => {
   const run = (value: string) => {
     latestRequestRef.current += 1;
     const requestId = latestRequestRef.current;
-    runAnonymizeDemo(value)
-      .then((result) => {
+    startEngine(value, { run: runAnonymizeDemo, loadMatcher })
+      .then((state) => {
         if (requestId === latestRequestRef.current) {
-          setEngine({ status: "ready", pairs: result.pairs });
+          setEngine(state);
         }
         return;
       })
@@ -240,7 +334,7 @@ export const AnonymizeLiveDemo = () => {
         if (requestId !== latestRequestRef.current) {
           return;
         }
-        setEngine({ status: "error" });
+        setEngine({ status: "error", recovery: "retry" });
       });
   };
 
@@ -251,10 +345,15 @@ export const AnonymizeLiveDemo = () => {
   }, [runDebounced, text]);
 
   const highlights = highlightsFor(engine, text);
-  const segments = useMemo(
-    () => buildSegments(text, highlights.pairs),
-    [text, highlights.pairs],
-  );
+  const segments = useMemo(() => {
+    if (engine.status === "ready") {
+      return buildSegments(text, engine.pairs, engine.Matcher);
+    }
+    return segmentsFromMatches(
+      text.toWellFormed(),
+      highlights.source === "precomputed" ? PRECOMPUTED_SAMPLE_MATCHES : [],
+    );
+  }, [text, engine, highlights.source]);
 
   const legend = useMemo(() => {
     const buckets = new Set<Bucket>();
@@ -265,6 +364,10 @@ export const AnonymizeLiveDemo = () => {
   }, [highlights.pairs]);
 
   const retry = () => {
+    if (engine.status === "error" && engine.recovery === "reload") {
+      window.location.reload();
+      return;
+    }
     setEngine({ status: "warming" });
     run(text);
   };
@@ -345,7 +448,7 @@ export const AnonymizeLiveDemo = () => {
               }}
               onClick={retry}
             >
-              Retry
+              {engine.recovery === "reload" ? "Reload" : "Retry"}
             </button>
           )}
         </div>
@@ -393,7 +496,9 @@ const describeEngineStatus = (
         : "Reading your text…";
     }
     case "error": {
-      return "Something went wrong.";
+      return engine.recovery === "reload"
+        ? "Something went wrong. Reload the page to try again."
+        : "Something went wrong.";
     }
     case "ready": {
       if (highlights.pairs.length === 0) {

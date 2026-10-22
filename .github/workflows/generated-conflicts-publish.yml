@@ -4,34 +4,37 @@ defaults:
   run:
     shell: bash
 
-# Runs from main when a resolve run (generated-conflicts-resolve.yml)
-# completes. Nothing from the branch executes here, and no branch file is
-# checked out: the branch and main are fetched as git objects into a bare
-# repository, the merge is rebuilt there by main's rules, and the resolve
-# run's artifact is read as data. Only then is the push token minted. The
-# branch moves with a compare-and-swap on the head the resolution was built
-# on.
+# Runs on main for one successful resolve run
+# (generated-conflicts-resolve.yml), named by its run id;
+# autofix-generated-conflicts.yml starts it for each resolve run it started
+# that uploaded a resolution. Nothing from the branch executes here, and no
+# branch file is checked out: the branch and main are fetched as git objects
+# into a bare repository, the merge is rebuilt there by main's rules, and the
+# resolve run's artifact is read as data. Only then is the push token minted.
+# The branch moves with a compare-and-swap on the head the resolution was
+# built on.
 
 on:
-  workflow_run:
-    workflows: [Resolve generated-only conflicts (branch)]
-    types: [completed]
+  workflow_dispatch:
+    inputs:
+      resolve_run_id:
+        description: The id of the successful resolve run whose resolution to publish
+        required: true
+        type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  group: ${{ github.workflow }}-${{ inputs.resolve_run_id }}
   cancel-in-progress: false
 
 permissions: {}
 
 jobs:
   publish:
+    # Main's copy of this job, never a branch's.
     if: >-
       github.repository == 'stella/stella'
-      && github.event.workflow_run.conclusion == 'success'
-      && github.event.workflow_run.path == '.github/workflows/generated-conflicts-resolve.yml'
-      && github.event.workflow_run.event == 'workflow_dispatch'
-      && github.event.workflow_run.head_repository.full_name == github.repository
-    runs-on: ubuntu-latest
+      && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       # Reading the resolve run's artifact and fetching the branch.
@@ -46,10 +49,17 @@ jobs:
       - name: Select the pull request
         id: select
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          RESOLVE_RUN_ID: ${{ inputs.resolve_run_id }}
         with:
           script: |
             const { owner, repo } = context.repo;
-            const run = context.payload.workflow_run;
+            const runId = process.env.RESOLVE_RUN_ID ?? '';
+            if (!/^[1-9][0-9]{0,14}$/u.test(runId)) return;
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              owner, repo, run_id: Number(runId),
+            });
+            if (run.status !== 'completed' || run.conclusion !== 'success') return;
             // The path and event filter out unrelated runs; they are not a
             // trust boundary. A branch controls its own copy of the resolve
             // workflow, so its artifact is untrusted data either way, and

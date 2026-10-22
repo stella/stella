@@ -8,6 +8,7 @@ import {
   sanitizeAttachedTemplateRelationships,
   sanitizeAttachedTemplateSource,
   type AttachedTemplateTargetKind,
+  writeZipEntry,
 } from "@stll/docx-utils";
 
 import { isDocxFile } from "@/lib/consts";
@@ -107,7 +108,7 @@ export const prepareAttachedTemplateFile = async (
         ) {
           return null;
         }
-        zip.file(entry.name, sanitized.xml);
+        writeZipEntry(zip, entry.name, sanitized.xml);
         for (const finding of sanitized.findings) {
           targetKinds.add(finding.targetKind);
         }
@@ -146,7 +147,7 @@ export const prepareAttachedTemplateFile = async (
           ...relationshipIds,
         ]);
         if (sanitized.removed > 0) {
-          zip.file(sourcePartPath, sanitized.xml);
+          writeZipEntry(zip, sourcePartPath, sanitized.xml);
         }
       }
 

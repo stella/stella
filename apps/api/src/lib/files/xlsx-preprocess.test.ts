@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { DOCX_MAX_ENTRIES } from "@/api/lib/docx-archive";
 
 import { applyFitToPage, patchSheetXml } from "./xlsx-preprocess";
@@ -21,7 +23,7 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
+    const out = patchSheetXml(xml).unwrap();
 
     expect(out).toContain(EXPECTED_FIT_TO_PAGE);
     expect(out).toContain(EXPECTED_FIT_TO_WIDTH);
@@ -36,7 +38,7 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
+    const out = patchSheetXml(xml).unwrap();
     expect(out).toContain(EXPECTED_FIT_TO_PAGE);
     expect(out).toMatch(REGEX_WORKSHEET_WITH_SHEET_PR);
   });
@@ -50,7 +52,7 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
+    const out = patchSheetXml(xml).unwrap();
 
     expect(out).not.toContain('scale="75"');
     expect(out).toContain(EXPECTED_FIT_TO_WIDTH);
@@ -68,7 +70,7 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
+    const out = patchSheetXml(xml).unwrap();
 
     // Verify exactly one fitToPage was inserted
     expect(out.match(/fitToPage="1"/gu)?.length).toBe(1);
@@ -88,12 +90,20 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
+    const out = patchSheetXml(xml).unwrap();
 
     expect(out.match(/fitToPage="1"/gu)?.length).toBe(1);
     expect(out).toContain(
       '<sheetPr codeName="Sheet1"><pageSetUpPr fitToPage="1"/></sheetPr>',
     );
+  });
+
+  it("refuses an incomplete sheet property element", () => {
+    const result = patchSheetXml(
+      "<worksheet><sheetPr><sheetData/></worksheet>",
+    );
+
+    expect(result.isErr()).toBe(true);
   });
 
   it("updates existing pageSetUpPr fitToPage attribute", () => {
@@ -106,7 +116,7 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
+    const out = patchSheetXml(xml).unwrap();
 
     // Should flip fitToPage to 1
     expect(out).toContain(EXPECTED_FIT_TO_PAGE);
@@ -124,8 +134,8 @@ describe("patchSheetXml", () => {
       "</worksheet>",
     ].join("\n");
 
-    const out = patchSheetXml(xml);
-    const out2 = patchSheetXml(out);
+    const out = patchSheetXml(xml).unwrap();
+    const out2 = patchSheetXml(out).unwrap();
 
     expect(out2).toContain(EXPECTED_FIT_TO_PAGE);
     expect(out2).toContain(EXPECTED_FIT_TO_WIDTH);
@@ -140,11 +150,12 @@ describe("patchSheetXml", () => {
 /** Build a minimal in-memory XLSX (OOXML ZIP) with 1 sheet. */
 const makeXlsx = async (sheetXml: string): Promise<ArrayBuffer> => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "xl/workbook.xml",
     '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"></workbook>',
   );
-  zip.file("xl/worksheets/sheet1.xml", sheetXml);
+  writeZipEntry(zip, "xl/worksheets/sheet1.xml", sheetXml);
   return zip.generateAsync({ type: "arraybuffer" });
 };
 
@@ -182,10 +193,10 @@ describe("applyFitToPage", () => {
     // The patch is optional print styling, so an archive the bounded reader
     // refuses is forwarded untouched rather than inflated in-process.
     const zip = new JSZip();
-    zip.file("xl/workbook.xml", "<workbook/>");
-    zip.file("xl/worksheets/sheet1.xml", sheetXmlWithNoPageSetup);
+    writeZipEntry(zip, "xl/workbook.xml", "<workbook/>");
+    writeZipEntry(zip, "xl/worksheets/sheet1.xml", sheetXmlWithNoPageSetup);
     for (let index = 0; index < DOCX_MAX_ENTRIES; index += 1) {
-      zip.file(`filler/${index}.txt`, "x");
+      writeZipEntry(zip, `filler/${index}.txt`, "x");
     }
     const buf = await zip.generateAsync({ type: "arraybuffer" });
 
@@ -196,7 +207,7 @@ describe("applyFitToPage", () => {
   it("returns unchanged when ZIP has no xl/workbook.xml (e.g. a DOCX)", async () => {
     // Build a DOCX-like ZIP without xl/workbook.xml
     const zip = new JSZip();
-    zip.file("word/document.xml", "<document/>");
+    writeZipEntry(zip, "word/document.xml", "<document/>");
     const buf = await zip.generateAsync({ type: "arraybuffer" });
 
     const out = await applyFitToPage(buf);

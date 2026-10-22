@@ -5,6 +5,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import type { WebApiRoutes } from "@/lib/eden-client";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 // Match Vite's worker asset import without replacing the page or its runtime.
@@ -120,7 +121,7 @@ afterAll(async () => {
   await testing.act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const ANSWER = "Which clauses should the playbook cover?";
@@ -147,6 +148,9 @@ const serveSavedBuilder = () => {
       if (pathname.endsWith(`/chat/threads/${threadRef.threadId}/messages`)) {
         requests.push(request);
         return Response.json(savedThread);
+      }
+      if (pathname.endsWith("/chat/tool-grants")) {
+        return Response.json({ grants: [] });
       }
       if (pathname.endsWith("/chat") && request.method === "POST") {
         const body: unknown = await request.json();

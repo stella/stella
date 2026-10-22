@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import ts from "typescript";
+import ts from "typescript6";
 
 const srcRoot = new URL("../../", import.meta.url);
 const propertyName = (name: ts.PropertyName) =>
@@ -169,6 +169,7 @@ describe("period identity coverage", () => {
       "handlers/case-law/research/columns-suggest-prompt.ts",
       "handlers/chat/improve-prompt.ts",
       "handlers/chat/messages/revisions/span-edit.ts",
+      "handlers/chat/table-chart.ts",
       "handlers/clauses/rewrite.ts",
       "handlers/clauses/versions/summarize.ts",
       "handlers/contacts/extract-procuracao.ts",

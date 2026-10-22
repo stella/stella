@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
   CropPanelPage,
@@ -23,7 +24,7 @@ const en = (await import("@/i18n/langs/en.json")).default;
 
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type ViewportOptions = {

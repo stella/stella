@@ -73,6 +73,8 @@ import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header"
 import type { ChatTab } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
+import { dockNewChatArgs } from "@/components/inspector/new-chat-scope";
+import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import {
   AIUnavailableDialogTrigger,
   useAIKeyGate,
@@ -91,6 +93,12 @@ import { legalDocumentChatContext } from "@/features/chat/legal-document-chat-co
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import { chatThreadOptions } from "@/features/chat/queries";
+import {
+  claimQueuedChatSend,
+  hasQueuedChatSend,
+  settleQueuedChatSend,
+  subscribeQueuedChatSend,
+} from "@/features/chat/queued-chat-sends";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -129,6 +137,15 @@ const chatTabThreadRef = (tab: ChatTab): ChatThreadRef =>
         threadId: tab.id,
         workspaceId: tab.workspaceId,
       };
+
+/** What one prompt submission did. */
+const PROMPT_SUBMIT_OUTCOME = {
+  SENT: "sent",
+  UNAVAILABLE: "unavailable",
+  FAILED: "failed",
+} as const;
+type PromptSubmitOutcome =
+  (typeof PROMPT_SUBMIT_OUTCOME)[keyof typeof PROMPT_SUBMIT_OUTCOME];
 
 export const ChatTabPanel = ({
   tab,
@@ -263,6 +280,7 @@ export const ChatTabPanel = ({
     turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
+    confirmStoredApprovalGrant,
     handleApprove,
     handleAllowInConversation,
     handleDeny,
@@ -282,6 +300,7 @@ export const ChatTabPanel = ({
     approvalPendingMessageId,
   } = useChatSession({
     chat,
+    timingSurface: "inspector-chat",
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,
@@ -297,10 +316,10 @@ export const ChatTabPanel = ({
     }: {
       prompt: string;
       files: ChatDraftAttachment[];
-    }) => {
+    }): Promise<PromptSubmitOutcome> => {
       try {
         if (!(await ensureAIAvailable())) {
-          return;
+          return PROMPT_SUBMIT_OUTCOME.UNAVAILABLE;
         }
 
         // PromptBar emits the raw editor HTML; the backend parses
@@ -308,14 +327,17 @@ export const ChatTabPanel = ({
         await sendMessage(
           await buildChatRequestMessage({ files, html: prompt }),
         );
+        return PROMPT_SUBMIT_OUTCOME.SENT;
       } catch (submitError) {
         capturePromptSubmitError(submitError);
+        return PROMPT_SUBMIT_OUTCOME.FAILED;
       }
     },
   );
 
   const {
     handleAskUserEditingChange,
+    lastMessageId,
     suggestedFollowupPrompt,
     suggestedPrompts,
   } = useSuggestedFollowupPrompts({
@@ -332,6 +354,7 @@ export const ChatTabPanel = ({
   // chat. Thread ref is shared with `chatThreadOptions` above so
   // drafts persist across tab close/open.
   const editorController = useChatEditor({
+    followupAnalytics: { surface: "inspector-chat" },
     placeholder: t("chat.contextPlaceholder", { context: contextLabel }),
     suggestedFollowupPrompt,
     threadRef,
@@ -449,20 +472,12 @@ export const ChatTabPanel = ({
   };
 
   // New-chat lives in the composer's status row (the dock), not the
-  // pane header: opens a fresh tab with the same scope + context.
+  // pane header: opens a fresh tab scoped to the route's matter.
+  const routeWorkspaceId = useRouteWorkspaceId();
   const startNewThread = () => {
-    openChat({
-      // Named explicitly: a chat about a legal document otherwise continues
-      // that document's one conversation, and this button asks for a fresh
-      // one. Naming it also makes it the document's conversation, so the
-      // reader's floating composer follows rather than staying on the thread
-      // left here.
-      id: createChatThreadId(),
-      workspaceId: tabWorkspaceId,
-      contextMatterIds: tab.contextMatterIds,
-      ...(tab.activeLegalKey ? { activeLegalKey: tab.activeLegalKey } : {}),
-      ...(tab.activeSkill ? { activeSkill: tab.activeSkill } : {}),
-    });
+    openChat(
+      dockNewChatArgs({ id: createChatThreadId(), routeWorkspaceId, tab }),
+    );
   };
 
   // The shared tab context menu (right-click on rail icon or
@@ -479,6 +494,46 @@ export const ChatTabPanel = ({
   useMountEffect(() => {
     consumeRenameRequest();
     return useInspectorCommandStore.subscribe(consumeRenameRequest);
+  });
+
+  // A surface that opened this tab with its question queued ("Ask in chat"):
+  // send it once, through the same AI check and session a typed message takes.
+  // The question is claimed only once that check passes: while it fails (no
+  // key yet, or the check itself failed) the question stays queued, and asking
+  // again retries here instead of losing it.
+  const queuedSendInFlight = useRef(false);
+  const sendQueuedQuestion = useLatestCallback(async () => {
+    if (queuedSendInFlight.current || !hasQueuedChatSend(threadRef)) {
+      return;
+    }
+    queuedSendInFlight.current = true;
+    try {
+      if (!(await ensureAIAvailable())) {
+        return;
+      }
+      const queuedHtml = claimQueuedChatSend(threadRef);
+      if (queuedHtml === null) {
+        return;
+      }
+      const outcome = await handlePromptSubmit({
+        prompt: queuedHtml,
+        files: [],
+      });
+      // A question that was not sent waits again, so the next attempt sends
+      // it instead of losing it.
+      settleQueuedChatSend(
+        threadRef,
+        outcome === PROMPT_SUBMIT_OUTCOME.SENT ? "sent" : "not-sent",
+      );
+    } finally {
+      queuedSendInFlight.current = false;
+    }
+  });
+  useMountEffect(() => {
+    detached(sendQueuedQuestion(), "chat-tab-panel.queued-send");
+    return subscribeQueuedChatSend(threadRef, () => {
+      detached(sendQueuedQuestion(), "chat-tab-panel.queued-send");
+    });
   });
 
   const handleComposerSubmit = useLatestCallback(
@@ -561,6 +616,7 @@ export const ChatTabPanel = ({
           activeOrganizationId,
           alwaysApprovedTools,
           conversationApprovedTools,
+          confirmStoredApprovalGrant,
           handleAllowInConversation,
           handleAlwaysAllow,
           handleApprove,
@@ -688,6 +744,8 @@ export const ChatTabPanel = ({
             }
             followupChips={
               <SuggestedFollowupChips
+                analyticsSurface="inspector-chat"
+                messageId={lastMessageId}
                 onSelect={(prompt) => {
                   editorController.setContent(composerStoredMarkdown(prompt));
                   detached(
@@ -701,6 +759,7 @@ export const ChatTabPanel = ({
                   );
                 }}
                 prompts={suggestedPrompts}
+                threadId={threadRef.threadId}
               />
             }
             layout="standalone"

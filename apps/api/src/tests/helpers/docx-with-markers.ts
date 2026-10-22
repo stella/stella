@@ -8,6 +8,8 @@
 
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 const paragraph = (text: string): string =>
   `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 
@@ -16,7 +18,8 @@ export const docxWithMarkers = async (
   markers: readonly string[],
 ): Promise<Buffer> => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +

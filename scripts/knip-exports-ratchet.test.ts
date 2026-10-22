@@ -1,13 +1,21 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import {
   checkRegressions,
   collectIssueSymbols,
   diffSummaries,
+  formatFileDeltas,
   increasedWorkspaces,
+  runKnipExportsRatchet,
   summarizeKnipReport,
   type Summary,
 } from "./knip-exports-ratchet";
+import {
+  generatedKnipConfigPaths,
+  KNIP_GENERATED_ENTRY_FILES,
+  validateKnipGeneratedEntries,
+} from "./knip-generated-entries";
 
 // One entry per file, shaped like knip's json reporter output.
 const REPORT = {
@@ -35,6 +43,43 @@ const REPORT = {
 };
 
 const CURRENT = summarizeKnipReport(REPORT);
+
+test("refuses to run when a generated knip entry is missing", () => {
+  const error = validateKnipGeneratedEntries("/fixture", () => false);
+
+  expect(error?._tag).toBe("KnipGeneratedEntriesMissingError");
+  expect(error?.missingFiles).toEqual(KNIP_GENERATED_ENTRY_FILES);
+  expect(error?.message).toContain("apps/web/src/routeTree.gen.ts");
+  expect(error?.message).toContain("bun run generate");
+
+  let modeRuns = 0;
+  const skippedMode = () => {
+    modeRuns += 1;
+    return 0;
+  };
+  const messages: string[] = [];
+  const status = runKnipExportsRatchet({
+    args: ["bun", "scripts/knip-exports-ratchet.ts", "--check"],
+    repoRoot: "/fixture",
+    fileExists: () => false,
+    runners: { report: skippedMode, write: skippedMode, check: skippedMode },
+    reportError: (message) => {
+      messages.push(message);
+    },
+  });
+
+  expect(status).toBe(1);
+  expect(modeRuns).toBe(0);
+  expect(messages).toEqual([
+    `KnipGeneratedEntriesMissingError: ${error?.message ?? ""}`,
+  ]);
+});
+
+test("generated knip entry census matches the generator-owned list", () => {
+  expect(generatedKnipConfigPaths(readFileSync("knip.json", "utf-8"))).toEqual(
+    KNIP_GENERATED_ENTRY_FILES,
+  );
+});
 
 const statusOf = (
   current: Summary,
@@ -159,6 +204,10 @@ test("check fails on a new unused export even when the workspace total has slack
       status: "dropped",
       current: 3,
       baseline: 5,
+      changedFiles: [
+        { file: "apps/web/src/lib/citations.ts", from: 0, to: 1 },
+        { file: "apps/web/src/lib/retired.ts", from: 3, to: 0 },
+      ],
       regressedFiles: [
         { file: "apps/web/src/lib/citations.ts", from: 0, to: 1 },
       ],
@@ -186,4 +235,40 @@ test("a move between files fails the check but records without a flag", () => {
 
 test("check passes when no file rose", () => {
   expect(checkRegressions(CURRENT, CURRENT)).toEqual([]);
+});
+
+test("diff diagnostics name reductions, removed files and increases in sorted order", () => {
+  const diffs = diffSummaries(
+    {
+      "apps/web": {
+        count: 4,
+        files: {
+          "apps/web/stable.ts": 1,
+          "apps/web/new.ts": 1,
+          "apps/web/changed.ts": 2,
+        },
+      },
+    },
+    {
+      "apps/web": {
+        count: 6,
+        files: {
+          "apps/web/stable.ts": 1,
+          "apps/web/removed.ts": 2,
+          "apps/web/changed.ts": 3,
+        },
+      },
+    },
+  );
+  const diff = diffs.at(0);
+  expect(diff).toBeDefined();
+  if (diff === undefined) {
+    throw new TypeError("Expected workspace diff");
+  }
+  expect(formatFileDeltas(diff.changedFiles)).toBe(
+    "      apps/web/changed.ts: 3 -> 2\n" +
+      "      apps/web/new.ts: 0 -> 1\n" +
+      "      apps/web/removed.ts: 2 -> 0",
+  );
+  expect(formatFileDeltas([])).toBe("");
 });

@@ -30,6 +30,15 @@ export type OutboundTransportCensusEntry = {
   transports: readonly string[];
 };
 
+/** Consumers of verified favicon byte transport, confined by ownership. */
+export const LINK_ICON_TRANSPORT_OWNERS = [
+  {
+    path: "apps/api/src/handlers/chat/link-icons/origin.ts",
+    reason:
+      "Fetches only bounded favicon bytes through safeOutboundFetchBytes, revalidating and pinning every redirect hop.",
+  },
+] as const;
+
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
     path: "packages/start-runtime/src/local-module-loader.ts",
@@ -76,6 +85,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Loads the selected archived engine inside the recorder's temporary directory.",
     transports: ["local:module-loader"],
+  },
+  {
+    path: "apps/api/scripts/run-postgres-tests.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Creates and drops per-worker test databases on the Postgres server DATABASE_URL names.",
+    transports: ["global:Bun.SQL"],
   },
   {
     path: "apps/api/scripts/ai-provider-cassette-probe.ts",
@@ -819,7 +835,8 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
   {
     path: "apps/api/src/db/online-index-observer.ts",
     class: "operator-configured-infrastructure",
-    reason: "Reads online index state through Bun SQL connections.",
+    reason:
+      "Reads online index state and runs operator online repairs through Bun SQL connections.",
     transports: ["module:bun"],
   },
   {
@@ -982,9 +999,9 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/features/avt/use-load-sample-case.ts",
+    path: "apps/web/src/features/case-law/components/case-viewer/reader-answers-query.ts",
     class: "operator-configured-infrastructure",
-    reason: "Downloads the bundled sample statement from the web app's origin.",
+    reason: "Streams reader answers from the configured API.",
     transports: ["module:@stll/fetch"],
   },
   {
@@ -1164,24 +1181,10 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:node:http"],
   },
   {
-    path: "packages/cli/src/auth/oauth-client-registration.ts",
+    path: "packages/cli/src/api-fetch.ts",
     class: "package-owned-client",
     reason:
-      "Standalone CLI owns OAuth client registration requests to discovered endpoints.",
-    transports: ["global:fetch"],
-  },
-  {
-    path: "packages/cli/src/auth/oauth-metadata.ts",
-    class: "package-owned-client",
-    reason:
-      "Standalone CLI owns OAuth authorization-server metadata discovery.",
-    transports: ["global:fetch"],
-  },
-  {
-    path: "packages/cli/src/auth/token-exchange.ts",
-    class: "package-owned-client",
-    reason:
-      "Standalone CLI owns OAuth token exchange and refresh requests to discovered endpoints.",
+      "Standalone CLI stamps its client identity on API requests through the shared fetch owner.",
     transports: ["global:fetch"],
   },
   {
@@ -1192,18 +1195,11 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
-    path: "packages/cli/src/compatibility.ts",
-    class: "package-owned-client",
-    reason:
-      "Standalone CLI owns compatibility discovery against the configured server.",
-    transports: ["global:fetch"],
-  },
-  {
     path: "packages/cli/src/mcp-client.ts",
     class: "package-owned-client",
     reason:
       "Standalone CLI owns MCP transport and observes response evidence and action-admission refusals.",
-    transports: ["global:fetch", "module:@modelcontextprotocol/client"],
+    transports: ["module:@modelcontextprotocol/client"],
   },
   {
     path: "packages/cli/src/upload-document.ts",
@@ -1283,6 +1279,10 @@ export type OutboundPermitGrantOwner = {
 
 /** Direct request boundaries allowed to create outbound permits. */
 export const OUTBOUND_PERMIT_GRANT_OWNERS = [
+  {
+    path: "apps/api/src/handlers/chat/link-icons/get.ts",
+    reason: "Authenticated direct boundary for verified public favicon bytes.",
+  },
   {
     path: "apps/api/src/handlers/chat/tools/secret-tools.ts",
     reason: "Native chat tool boundary for a scoped connector request.",
@@ -1383,6 +1383,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/mcp-connectors/create-connector.ts",
     reason: "Issues request authority for connector creation probes.",
+  },
+  {
+    path: "apps/api/src/handlers/mcp-connectors/delete-connection.ts",
+    reason:
+      "Issues request authority for token revocation after a user disconnect.",
   },
   {
     path: "apps/api/src/handlers/mcp-connectors/oauth-callback.ts",

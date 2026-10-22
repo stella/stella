@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { SKILL_REQUIRED_TOOLS_METADATA_KEY } from "@stll/skills";
 
 import type { Transaction } from "@/api/db/root";
+import { noModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -15,6 +16,7 @@ import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import type { GatewayDispatchDependencies } from "@/api/mcp/gateway/dispatch-call";
 import {
   exposeSkillTools,
+  loadSkillPrompts,
   loadVisibleSkillTools,
   resolveSkillTool,
 } from "@/api/mcp/gateway/skills";
@@ -35,6 +37,7 @@ type SkillRow = {
   compatibility: string | null;
   metadata: Record<string, string>;
   body: string;
+  invocation: "auto" | "manual";
   origin: "authored" | "bundled" | "upload" | "url";
 };
 
@@ -53,6 +56,7 @@ const skillRow = (
   compatibility: null,
   metadata: {},
   body: `body ${overrides.slug}`,
+  invocation: "auto",
   origin: "authored",
   ...overrides,
 });
@@ -99,6 +103,9 @@ const createContext = ({
   });
 };
 
+const installedOnly = (tools: readonly ResolvedSkillTool[]) =>
+  tools.filter((tool) => tool.source === CHAT_SKILL_SOURCE.installed);
+
 describe("MCP gateway skill tools", () => {
   let analytics: RecordingAnalytics;
 
@@ -115,7 +122,9 @@ describe("MCP gateway skill tools", () => {
       rows: [skillRow({ slug: "alpha" }), skillRow({ slug: "beta" })],
     });
 
-    const tools = await loadVisibleSkillTools({ context, mode: "default" });
+    const tools = installedOnly(
+      await loadVisibleSkillTools({ context, mode: "advanced" }),
+    );
 
     expect(tools.map((tool) => tool.exposedName)).toEqual([
       "skill__alpha",
@@ -142,7 +151,9 @@ describe("MCP gateway skill tools", () => {
       ],
     });
 
-    const tools = await loadVisibleSkillTools({ context, mode: "default" });
+    const tools = installedOnly(
+      await loadVisibleSkillTools({ context, mode: "advanced" }),
+    );
 
     expect(tools).toHaveLength(1);
     expect(tools.at(0)).toMatchObject({
@@ -161,7 +172,9 @@ describe("MCP gateway skill tools", () => {
       ],
     });
 
-    const tools = await loadVisibleSkillTools({ context, mode: "default" });
+    const tools = installedOnly(
+      await loadVisibleSkillTools({ context, mode: "advanced" }),
+    );
 
     const names = tools.map((tool) => tool.exposedName);
     expect(names).toHaveLength(2);
@@ -179,6 +192,7 @@ describe("MCP gateway skill tools", () => {
         description: `desc ${String(i)}`,
         displayName: `Skill ${String(i)}`,
         id: toSafeId<"agentSkill">(`skill_${String(i)}`),
+        invocation: "auto" as const,
         name: `skill-${String(i)}`,
         source: CHAT_SKILL_SOURCE.installed,
         version: null,
@@ -223,7 +237,7 @@ describe("MCP gateway skill tools", () => {
 
     const rejection: unknown = await loadVisibleSkillTools({
       context,
-      mode: "default",
+      mode: "advanced",
     }).then(
       () => null,
       (error: unknown) => error,
@@ -244,7 +258,7 @@ describe("MCP gateway skill tools", () => {
 
     const resolved = await resolveSkillTool({
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: "skill__beta",
     });
 
@@ -264,12 +278,12 @@ describe("MCP gateway skill tools", () => {
 
     const writer = await loadVisibleSkillTools({
       context,
-      mode: "default",
+      mode: "advanced",
       scopes: ["stella:skills", "stella:knowledge_write"],
     });
     const reader = await loadVisibleSkillTools({
       context,
-      mode: "default",
+      mode: "advanced",
       scopes: ["stella:skills"],
     });
 
@@ -358,14 +372,7 @@ describe("MCP gateway skill tools", () => {
       status: "unavailable",
       missingTools: ["read_capability"],
     });
-    expect(defaultResult?.type).toBe("internal");
-    if (defaultResult?.type !== "internal") {
-      throw new TypeError("expected the default skill refusal to be internal");
-    }
-    expect(defaultResult.result).toMatchObject({
-      status: "error",
-      error: { code: "feature_disabled" },
-    });
+    expect(defaultResult).toBeNull();
   });
 
   test("a compound tool counts only with every scope it needs", async () => {
@@ -382,16 +389,16 @@ describe("MCP gateway skill tools", () => {
 
     const withoutTemplates = await loadVisibleSkillTools({
       context,
-      mode: "default",
+      mode: "advanced",
       scopes: ["stella:skills", "stella:documents_write"],
     });
     const withTemplates = await loadVisibleSkillTools({
       context,
-      mode: "default",
+      mode: "advanced",
       scopes: ["stella:skills", "stella:documents_write", "stella:templates"],
     });
 
-    expect(withoutTemplates).toEqual([]);
+    expect(withoutTemplates).toEqual(noModelOfferedSkills<ResolvedSkillTool>());
     expect(withTemplates.map((tool) => tool.name)).toEqual(["fill-a-template"]);
   });
 
@@ -408,7 +415,7 @@ describe("MCP gateway skill tools", () => {
 
     const resolved = await resolveSkillTool({
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: "skill__playbook_builder",
     });
 
@@ -418,13 +425,55 @@ describe("MCP gateway skill tools", () => {
     });
   });
 
+  test("serves a manual skill as a prompt, never as a tool, and refuses a call to it", async () => {
+    const context = createContext({
+      rows: [
+        skillRow({ slug: "auto-skill" }),
+        skillRow({ invocation: "manual", slug: "manual-skill" }),
+      ],
+    });
+
+    expect(
+      installedOnly(
+        await loadVisibleSkillTools({ context, mode: "advanced" }),
+      ).map(({ name }) => name),
+    ).toEqual(["auto-skill"]);
+    expect(
+      installedOnly(await loadSkillPrompts({ context, mode: "advanced" })).map(
+        ({ exposedName }) => exposedName,
+      ),
+    ).toEqual(["skill__manual_skill"]);
+
+    let reads = 0;
+    const result = await dispatchGatewayToolCall({
+      args: {},
+      context,
+      dependencies: asTestRaw<GatewayDispatchDependencies>({
+        readSkillTool: async () => {
+          reads += 1;
+          return null;
+        },
+        recordSkillReadAudit: async () => undefined,
+        resolveSkillTool,
+      }),
+      mode: "advanced",
+      toolName: "skill__manual_skill",
+    });
+
+    expect(reads).toBe(0);
+    expect(result).toMatchObject({
+      type: "internal",
+      result: { status: "error", error: { code: "unknown_tool" } },
+    });
+  });
+
   test("resolveSkillTool returns null for an unknown exposed name", async () => {
     const context = createContext({ rows: [skillRow({ slug: "alpha" })] });
 
     expect(
       await resolveSkillTool({
         context,
-        mode: "default",
+        mode: "advanced",
         toolName: "skill__missing",
       }),
     ).toBeNull();

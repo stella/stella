@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { MAIN_ONLY_BUN_CACHE_SAVE } from "./workflow-cache-policy";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
@@ -79,12 +81,21 @@ describe("dispatch", () => {
   const run = async (
     nodes: Record<string, unknown>[],
     plannedHeads: string[] = [],
+    refusedRefs: string[] = [],
+    failingStatus?: number,
+    noRunId?: boolean,
   ) => {
     const dispatched: Record<string, unknown>[] = [];
+    const outputs: Record<string, string> = {};
     await dispatch.runInNewContext({
       setTimeout,
       context: { repo: { owner: "stella", repo: "stella" } },
-      core: { notice: () => {} },
+      core: {
+        notice: () => {},
+        setOutput: (name: string, value: string) => {
+          outputs[name] = value;
+        },
+      },
       github: {
         rest: {
           repos: {
@@ -104,7 +115,23 @@ describe("dispatch", () => {
             createWorkflowDispatch: async (
               request: Record<string, unknown>,
             ) => {
+              if (failingStatus !== undefined) {
+                throw Object.assign(new Error("Request failed"), {
+                  status: failingStatus,
+                });
+              }
+              if (refusedRefs.includes(String(request["ref"]))) {
+                throw Object.assign(new Error("Unprocessable Entity"), {
+                  status: 422,
+                });
+              }
               dispatched.push(request);
+              return {
+                data:
+                  noRunId === true
+                    ? undefined
+                    : { workflow_run_id: 1000 + dispatched.length },
+              };
             },
           },
         },
@@ -118,6 +145,10 @@ describe("dispatch", () => {
         }),
       },
     });
+    // Every accepted dispatch is followed by the publish step.
+    expect(JSON.parse(outputs["runs"] ?? "")).toEqual(
+      dispatched.map((_, index) => 1001 + index),
+    );
     return dispatched;
   };
   const sha = (index: number) => index.toString(16).padStart(40, "0");
@@ -184,6 +215,51 @@ describe("dispatch", () => {
     expect(dispatched.map((request) => request["ref"])).toEqual(["feat/late"]);
   });
 
+  test("a branch that refuses the dispatch never takes a slot", async () => {
+    const refused = Array.from({ length: 8 }, (_, index) =>
+      pull({
+        number: 30 + index,
+        headRefName: `old/${String(index)}`,
+        headRefOid: sha(30 + index),
+        updatedAt: updatedAt(20 + index),
+      }),
+    );
+    const dispatched = await run(
+      [
+        ...refused,
+        pull({
+          number: 2,
+          headRefName: "feat/conflicting",
+          headRefOid: sha(2),
+          updatedAt: updatedAt(1),
+        }),
+      ],
+      [],
+      refused.map((entry) => entry.headRefName),
+    );
+    expect(dispatched.map((request) => request["ref"])).toEqual([
+      "feat/conflicting",
+    ]);
+  });
+
+  test("a failure that is not a refused branch fails the run", async () => {
+    for (const status of [403, 429, 502]) {
+      expect(
+        await rejectionOf(
+          run([pull({ updatedAt: updatedAt(1) })], [], [], status),
+        ),
+      ).toMatchObject({ status });
+    }
+  });
+
+  test("a dispatch that names no run fails the run", async () => {
+    expect(
+      await rejectionOf(
+        run([pull({ updatedAt: updatedAt(1) })], [], [], undefined, true),
+      ),
+    ).toMatchObject({ message: "#1: the dispatch returned no run id" });
+  });
+
   test("unplanned heads go first, then the most recently updated", async () => {
     const stale = Array.from({ length: 8 }, (_, index) =>
       pull({
@@ -234,6 +310,162 @@ describe("dispatch", () => {
   });
 });
 
+describe("dispatch follows each resolve run to its publish", () => {
+  const follow = script(DISPATCH, "dispatch", "Publish each resolution");
+  type Run = { status: string; conclusion: string | null };
+  const done = (conclusion: string): Run => ({
+    status: "completed",
+    conclusion,
+  });
+  const running: Run = { status: "in_progress", conclusion: null };
+  type Scenario = {
+    resolves: number[];
+    // States each run reports on successive polls; the last one repeats.
+    polls: Map<number, Run[]>;
+    // Resolve runs that uploaded a resolution.
+    uploaded: Set<number>;
+  };
+  // Publish runs are numbered after the resolve run they publish.
+  const publishOf = (resolve: number) => resolve + 100;
+  const scenario = (): Scenario => ({
+    resolves: [1, 2, 3],
+    polls: new Map([
+      [1, [running, done("success")]],
+      [2, [done("success")]],
+      [3, [done("failure")]],
+      [101, [running, done("success")]],
+      [102, [done("success")]],
+    ]),
+    uploaded: new Set([1, 2, 3]),
+  });
+  const followFor = async (input: Scenario) => {
+    const dispatches: Record<string, unknown>[] = [];
+    const failures: string[] = [];
+    const warnings: string[] = [];
+    const reads = new Map<number, number>();
+    await follow.runInNewContext({
+      process: { env: { RUNS: JSON.stringify(input.resolves) } },
+      setTimeout: (resolve: () => void) => {
+        resolve();
+      },
+      context: { repo: { owner: "stella", repo: "stella" } },
+      core: {
+        warning: (message: string) => {
+          warnings.push(message);
+        },
+        setFailed: (message: string) => {
+          failures.push(message);
+        },
+      },
+      github: {
+        rest: {
+          actions: {
+            getWorkflowRun: async (params: Record<string, unknown>) => {
+              const id = Number(params["run_id"]);
+              const states = input.polls.get(id) ?? [running];
+              const polled = reads.get(id) ?? 0;
+              reads.set(id, polled + 1);
+              return {
+                data: {
+                  html_url: `run/${String(id)}`,
+                  ...states[Math.min(polled, states.length - 1)],
+                },
+              };
+            },
+            listWorkflowRunArtifacts: async (
+              params: Record<string, unknown>,
+            ) => {
+              expect(params["name"]).toBe("generated-conflicts");
+              return {
+                data: {
+                  artifacts: input.uploaded.has(Number(params["run_id"]))
+                    ? [{ name: "generated-conflicts", expired: false }]
+                    : [],
+                },
+              };
+            },
+            createWorkflowDispatch: async (
+              request: Record<string, unknown>,
+            ) => {
+              dispatches.push(request);
+              const inputs = v.parse(
+                v.object({ resolve_run_id: v.string() }),
+                request["inputs"],
+              );
+              return {
+                data: {
+                  workflow_run_id: publishOf(Number(inputs.resolve_run_id)),
+                },
+              };
+            },
+          },
+        },
+      },
+    });
+    return { dispatches, failures, warnings };
+  };
+
+  test("publishes exactly each successful resolve run, from main", async () => {
+    const result = await followFor(scenario());
+    expect(result.failures).toEqual([]);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.dispatches).toEqual(
+      [1, 2].map((id) => ({
+        owner: "stella",
+        repo: "stella",
+        workflow_id: PUBLISH,
+        ref: "main",
+        inputs: { resolve_run_id: String(id) },
+      })),
+    );
+  });
+
+  test("a run that uploaded no resolution starts no publish", async () => {
+    const input = scenario();
+    input.uploaded.delete(2);
+    const result = await followFor(input);
+    expect(result.failures).toEqual([]);
+    expect(result.dispatches.map((request) => request["inputs"])).toEqual([
+      { resolve_run_id: "1" },
+    ]);
+  });
+
+  // The failure this guards against: a resolution that was never published
+  // while the run that started it finished green.
+  for (const [name, change] of [
+    [
+      "a failed publish",
+      (input: Scenario) => input.polls.set(101, [done("failure")]),
+    ],
+    [
+      "a publish that never finishes",
+      (input: Scenario) => input.polls.set(102, [running]),
+    ],
+    [
+      "a resolve run that never finishes",
+      (input: Scenario) => input.polls.set(2, [running]),
+    ],
+  ] as const) {
+    test(`${name} fails the run`, async () => {
+      const input = scenario();
+      change(input);
+      expect((await followFor(input)).failures).toHaveLength(1);
+    });
+  }
+
+  test("runs only after resolve runs were started", () => {
+    const step = workflows.dispatch.jobs["dispatch"]?.steps.find(
+      (candidate) => candidate.name === "Publish each resolution",
+    );
+    expect(step?.if).toBe(
+      "steps.dispatch.outputs.runs != '' && steps.dispatch.outputs.runs != '[]'",
+    );
+    expect(step?.env).toEqual({
+      RUNS: githubExpression("steps.dispatch.outputs.runs"),
+    });
+  });
+});
+
 describe("resolve", () => {
   const job = workflows.resolve.jobs["resolve"];
 
@@ -264,13 +496,17 @@ describe("publish", () => {
   const select = script(PUBLISH, "publish", "Select the pull request");
 
   type Scenario = {
+    runId: string;
     run: Record<string, unknown>;
     pulls: Record<string, unknown>[];
     artifacts: { name: string; expired: boolean }[];
   };
   const scenario = (): Scenario => ({
+    runId: "9",
     run: {
       id: 9,
+      status: "completed",
+      conclusion: "success",
       path: ".github/workflows/generated-conflicts-resolve.yml",
       event: "workflow_dispatch",
       head_branch: "feat/a",
@@ -293,10 +529,8 @@ describe("publish", () => {
   const selectFor = async (input: Scenario) => {
     const outputs: Record<string, string> = {};
     await select.runInNewContext({
-      context: {
-        repo: { owner: "stella", repo: "stella" },
-        payload: { workflow_run: input.run },
-      },
+      process: { env: { RESOLVE_RUN_ID: input.runId } },
+      context: { repo: { owner: "stella", repo: "stella" } },
       core: {
         setOutput: (name: string, value: string) => {
           outputs[name] = value;
@@ -306,6 +540,10 @@ describe("publish", () => {
         rest: {
           pulls: { list: "pulls.list" },
           actions: {
+            getWorkflowRun: async (params: Record<string, unknown>) => {
+              expect(params["run_id"]).toBe(Number(input.runId));
+              return { data: input.run };
+            },
             listWorkflowRunArtifacts: async (
               params: Record<string, unknown>,
             ) => {
@@ -336,6 +574,25 @@ describe("publish", () => {
   });
 
   const refused: { name: string; change: (input: Scenario) => void }[] = [
+    ...["", "0", "9x", "-9", "1".repeat(16)].map((runId) => ({
+      name: `the run id ${JSON.stringify(runId)}`,
+      change: (input: Scenario) => {
+        input.runId = runId;
+      },
+    })),
+    {
+      name: "a failed resolve run",
+      change: (input) => {
+        input.run["conclusion"] = "failure";
+      },
+    },
+    {
+      name: "a resolve run still running",
+      change: (input) => {
+        input.run["status"] = "in_progress";
+        input.run["conclusion"] = null;
+      },
+    },
     {
       name: "another workflow's run",
       change: (input) => {
@@ -409,7 +666,31 @@ describe("publish", () => {
     });
   }
 
-  test("reads only the triggering run's artifact and never checks out the branch", () => {
+  test("takes its resolve run from the dispatch input, on main only", () => {
+    expect(job?.if).toBe(
+      "github.repository == 'stella/stella' && github.ref == 'refs/heads/main'",
+    );
+    expect(
+      v.parse(
+        v.looseObject({ on: v.record(v.string(), v.unknown()) }),
+        parse(PUBLISH),
+      ).on,
+    ).toEqual({
+      workflow_dispatch: {
+        inputs: {
+          resolve_run_id: expect.objectContaining({
+            required: true,
+            type: "string",
+          }),
+        },
+      },
+    });
+    expect(
+      job?.steps.find((step) => step.name === "Select the pull request")?.env,
+    ).toEqual({ RESOLVE_RUN_ID: githubExpression("inputs.resolve_run_id") });
+  });
+
+  test("reads only the dispatched run's artifact and never checks out the branch", () => {
     const steps = job?.steps ?? [];
     const download = steps.find(
       (step) => step.name === "Download the resolution",

@@ -4,6 +4,7 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { resolveActionCapabilities } from "./action-capabilities.logic";
 import type { Capability } from "./action-capabilities.logic";
@@ -118,7 +119,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const entity = {

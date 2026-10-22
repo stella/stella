@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
+import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS,
@@ -12,12 +13,28 @@ import {
   caseLawSearchDocuments,
   schedulerJobs,
 } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK =
   "caseLaw.backfillRedactionTombstones" as const;
 
 const BACKFILL_LIMIT = 100;
+
+const extendRepairedDecisions = async (
+  tx: Transaction,
+  rows: readonly { id: SafeId<"caseLawDecision"> }[],
+  offset = 0,
+): Promise<void> => {
+  const row = rows.at(offset);
+  if (row === undefined) {
+    return;
+  }
+  await runDecisionWriteExtension(tx, row.id);
+  await extendRepairedDecisions(tx, rows, offset + 1);
+};
 
 const parseCursor = (
   payload: Record<string, unknown> | null,
@@ -49,7 +66,7 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
     job.lockedBy ??
     panic("Case-law redaction tombstone backfill requires a scheduler lease");
 
-  const outcome = await db.transaction(async (tx) => {
+  const outcome = await withAggregateTransaction(db, async (tx) => {
     const page = await tx
       .selectDistinct({ decisionId: caseLawIndexJobs.decisionId })
       .from(caseLawIndexJobs)
@@ -182,6 +199,8 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
               ),
             )
             .returning({ id: caseLawDecisions.id });
+
+    await extendRepairedDecisions(tx, repaired);
 
     // Checkpoint last: replaying the same page is idempotent, while advancing
     // first could permanently skip a failed tombstone update.

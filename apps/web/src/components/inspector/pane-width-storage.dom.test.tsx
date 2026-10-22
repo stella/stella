@@ -10,6 +10,8 @@ import {
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 
 const { cleanup, fireEvent, render, screen } =
@@ -60,7 +62,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("one inspector width across sections", () => {

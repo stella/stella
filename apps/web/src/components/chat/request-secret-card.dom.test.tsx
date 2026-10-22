@@ -14,6 +14,7 @@ import type {
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
 import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 
@@ -92,6 +93,8 @@ const mountCard = ({
             activeOrganizationId: "sample-organization",
             alwaysApprovedTools: new Set(),
             conversationApprovedTools: new Set(),
+            confirmStoredApprovalGrant: async () =>
+              await Promise.resolve(false),
             handleAllowInConversation: () => {},
             handleAlwaysAllow: () => {},
             handleApprove: () => {},
@@ -116,7 +119,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("request secret card", () => {

@@ -23,7 +23,7 @@ import {
 import type { LegislationWorkNameDerivation } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { actNumberCondition } from "@/api/lib/legal-search/legislation-act-number";
-import { redistributableLegislationVersion } from "@/api/lib/legal-search/legislation-redistribution";
+import { redistributableLegislationVersionFor } from "@/api/lib/legal-search/legislation-redistribution";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 
 /**
@@ -517,7 +517,7 @@ export const readNamedLegislationWorks = async (
       .from(legislationDocuments)
       .where(
         and(
-          redistributableLegislationVersion,
+          redistributableLegislationVersionFor("search"),
           or(
             ...references.map((reference) => {
               const actCondition = actNumberCondition({

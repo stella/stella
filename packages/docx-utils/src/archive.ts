@@ -34,9 +34,9 @@ export type ArchiveOptions = {
 
 export type DocxArchive = {
   /**
-   * The underlying JSZip instance. Safe for write operations
-   * (`zip.file(path, value)`, `zip.generateAsync(...)`); for reads,
-   * prefer the bounded helpers on this object.
+   * The underlying JSZip instance. Write entries with `writeZipEntry`
+   * and repack with `zip.generateAsync(...)`; for reads, prefer the
+   * bounded helpers on this object.
    */
   zip: JSZip;
   /**

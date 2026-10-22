@@ -5,19 +5,20 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
-  AggregateLockBusy,
-  ROW_LOCK_MODES,
-  withAggregateLock,
-  withAggregateTransaction,
-} from "./aggregate-lock";
-import {
   aggregateExecutionRows,
   aggregateFences,
   aggregateRecorder,
   plantedDescendingBlockingAcquisition,
   plantedBlockingUpgradeAtHighWater,
   plantedWeakerHeldModeReuse,
-} from "./aggregate-lock-order.fixture";
+} from "@/api/tests/fixtures/aggregate-lock-order";
+
+import {
+  AggregateLockBusy,
+  ROW_LOCK_MODES,
+  withAggregateLock,
+  withAggregateTransaction,
+} from "./aggregate-lock";
 
 describe("blocking aggregate order regressions", () => {
   test("chat revision locks scope the thread to its principal and the message to its thread", async () => {

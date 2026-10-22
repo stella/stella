@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import {
   DOCUMENT_REFERENCE_EVIDENCE,
   readDocumentReference,
@@ -77,19 +79,21 @@ const buildDocx = async ({
   mimeType = DOCX_MIME_TYPE,
 }: DocxFixtureOptions = {}): Promise<File> => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     '<?xml version="1.0" encoding="UTF-8"?><Types/>',
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8"?><w:document><w:body/></w:document>',
   );
   if (customPropertiesXml !== undefined) {
-    zip.file("docProps/custom.xml", customPropertiesXml);
+    writeZipEntry(zip, "docProps/custom.xml", customPropertiesXml);
   }
   if (footerXml !== undefined) {
-    zip.file("word/footer1.xml", footerXml);
+    writeZipEntry(zip, "word/footer1.xml", footerXml);
   }
   const bytes = await zip.generateAsync({ type: "arraybuffer" });
   return new File([bytes], fileName, { type: mimeType });

@@ -7,6 +7,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
 
+import { AI_ERROR_KINDS, AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
@@ -373,6 +374,33 @@ describe("chat thread messages", () => {
 
     expect(html).toContain(messages.chat.sendErrorStreamIncomplete);
     expect(html).toContain(messages.chat.resend);
+  });
+
+  test.each(AI_ERROR_KINDS.filter((kind) => kind !== "unknown"))(
+    "a failed chat turn says what the REST failure says for %s",
+    (kind) => {
+      const restMessage = toAPIError({
+        status: 502,
+        value: {
+          code: AI_FAILURE_CODES[kind],
+          message: "Private provider detail",
+        },
+      }).message;
+      const html = renderWithProviders(
+        <ChatErrorMessage error={new Error(kind)} isGenerating={false} />,
+      );
+
+      expect(renderedText(html)).toContain(restMessage);
+      expect(renderedText(html)).not.toContain(messages.chat.sendError);
+    },
+  );
+
+  test("an unknown AI failure keeps the chat's own copy", () => {
+    const html = renderWithProviders(
+      <ChatErrorMessage error={new Error("unknown")} isGenerating={false} />,
+    );
+
+    expect(renderedText(html)).toContain(messages.chat.sendError);
   });
 
   test("shows a copy action at the end of assistant responses", () => {
@@ -875,11 +903,12 @@ describe("chat thread messages", () => {
       />,
     );
 
-    // The whole run sits behind one step-count summary, collapsed by
-    // default; a failed step reads as a short human line with the raw
-    // output tucked behind its own disclosure.
-    expect(html).toContain("3 steps");
-    expect(html).not.toContain(">1 step<");
+    // The whole run sits behind one summary of the work that landed,
+    // collapsed by default: the failed call is left out of it, and inside
+    // it reads as a short human line with the raw output tucked behind its
+    // own disclosure.
+    expect(html).toContain(">1 analysis<");
+    expect(html).not.toContain("3 steps");
     expect(html).not.toContain("<details open");
     expect(html).toContain("This step failed — stella will work around it.");
     expect(html).toContain(">Show details<");

@@ -94,6 +94,7 @@ export const FREE_WITHOUT_OWN_KEY = {
   // The automatic title of a counted chat send rides on that send.
   "chat.generate-thread-title": "counts",
   "chat.improve-prompt": "counts",
+  "chat.table-chart": "counts",
   "chat.suggest-thread-title": "off",
   "chat.suggested-prompts": "off",
   "chat.thread-recap": "off",

@@ -25,6 +25,7 @@ import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
+import { useDisplayElisionPolicy } from "./display-elision-policy";
 import { useReaderPresentation, useReaderMessages } from "./reader-adapters";
 import type { ReaderMessageKey } from "./reader-adapters";
 import type { ReaderMark, ReaderMarkRange, SearchPiece } from "./reader-search";
@@ -761,6 +762,7 @@ export const InlineContent = ({
   ranges: ReaderMarkRange[];
 }) => {
   const sourceLinks = useSourceLinkPolicy();
+  const elisionPolicy = useDisplayElisionPolicy();
   const offset: OffsetRef = { value: initialOffset };
   const text = inlinesToPlainText(inlines);
   const automaticLinks = bareUrlAnchors(
@@ -774,7 +776,8 @@ export const InlineContent = ({
     anchors: [...anchors, ...automaticLinks].toSorted(
       (left, right) => left.start - right.start,
     ),
-    elisions: shiftedElisions(text, initialOffset),
+    elisions:
+      elisionPolicy === "literal" ? [] : shiftedElisions(text, initialOffset),
     pieceId,
     ranges,
     activeMatchIndex,

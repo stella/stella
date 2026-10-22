@@ -9,8 +9,23 @@
  * own `LIMITS` so server call sites keep one lookup table.
  */
 
+/**
+ * Max length of a short required text field such as a matter or contact
+ * name. The API schema rejects longer input, and inputs bound to those
+ * fields cap typing at the same length.
+ */
+export const DEFAULT_VARCHAR_MAX_LENGTH = 256;
+
 /** Max input documents a single flow run may be launched against. */
 export const FLOW_RUN_INPUT_ENTITIES_MAX = 50;
+
+/**
+ * Zero-based list nesting levels a clause paragraph's numbering may carry.
+ * OOXML numbering defines nine levels (`w:ilvl` 0..8). The API rejects a level
+ * outside this range, so the clause editor keeps deeper nesting at the deepest
+ * supported level.
+ */
+export const CLAUSE_NUMBERING_LEVEL_LIMITS = { min: 0, max: 8 } as const;
 
 /**
  * Enabled skills an agent surface exposes: chat `load-skill`, template field

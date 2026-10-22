@@ -32,11 +32,21 @@ const listDecisionCitations = createSafePublicSubjectHandler({
   config,
   caseLawDb: caseLawPublicReadDb,
   locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
-  read: async (subject, { query }) =>
-    projectResponseText(
-      await listDecisionCitationsHandler({ subject, query }),
+  read: async (subject, { query }) => {
+    const result = await listDecisionCitationsHandler({ subject, query });
+    if (!("items" in result)) {
+      return result;
+    }
+    return projectResponseText(
+      {
+        ...result,
+        items: result.items.map(
+          ({ evidenceQuote: _evidenceQuote, ...item }) => item,
+        ),
+      },
       citationsResponseSchema,
-    ),
+    );
+  },
 });
 
 export default listDecisionCitations;

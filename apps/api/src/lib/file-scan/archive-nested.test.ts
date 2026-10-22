@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { assertProperty } from "@stll/property-testing";
 
 import { createArchiveContentScanner } from "./archive";
@@ -48,7 +49,8 @@ const scanner = createArchiveContentScanner({
 const packageOf = async (parts: readonly Buffer[]) => {
   const zip = new JSZip();
   for (const [index, part] of parts.entries()) {
-    zip.file(
+    writeZipEntry(
+      zip,
       index === 0 ? "word/document.xml" : `word/part${index}.xml`,
       part,
       { createFolders: false },
@@ -61,7 +63,7 @@ const packageOf = async (parts: readonly Buffer[]) => {
 };
 const wrap = async (bytes: Buffer) => {
   const zip = new JSZip();
-  zip.file("word/altChunk.docx", bytes, { createFolders: false });
+  writeZipEntry(zip, "word/altChunk.docx", bytes, { createFolders: false });
   return await zip.generateAsync({
     type: "nodebuffer",
     compression: "DEFLATE",
@@ -185,8 +187,8 @@ test("shares evidence limits between package levels", async () => {
     guard: { scan: async () => [] },
   });
   const zip = new JSZip();
-  zip.file("word/document.xml", MARKER, { createFolders: false });
-  zip.file("word/altChunk.docx", await packageOf([MARKER]), {
+  writeZipEntry(zip, "word/document.xml", MARKER, { createFolders: false });
+  writeZipEntry(zip, "word/altChunk.docx", await packageOf([MARKER]), {
     createFolders: false,
   });
   const bytes = await zip.generateAsync({

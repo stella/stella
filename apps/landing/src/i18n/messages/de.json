@@ -569,7 +569,7 @@
           "question": "Woher stammen die Daten?"
         },
         "1": {
-          "answer": "Zwei Listen, beide wachsend. Zu den angebundenen Registern zählen bereits ARES (Tschechien), Companies House (UK), SEC EDGAR (USA), KRS (Polen), PRH (Finnland) und VIES (EU-USt). Über Register hinaus kommen offizielle Quellen Jurisdiktion für Jurisdiktion hinzu; Tschechien, Spanien und Taiwan sind bereits angebunden, und in der Leseansicht für Rechtsprechung blättern und filtern Sie nach Jurisdiktion, während weitere offizielle Quellen dazukommen.",
+          "answer": "Der Reader für öffentliche Rechtsprechung bietet derzeit tschechische Entscheidungen. Angebundene Unternehmensregister sind ARES (Tschechien), Companies House (Vereinigtes Königreich), SEC EDGAR (USA), KRS (Polen), PRH (Finnland) und VIES (EU-Umsatzsteuer).",
           "question": "Welche Jurisdiktionen und Register sind abgedeckt?"
         },
         "2": {
@@ -892,9 +892,11 @@
     "bringWorkspaceToFront": "Arbeitsbereich von stella in den Vordergrund holen",
     "controlBody": "stella ist juristische <gh>Open-Source</gh>-Software, die Sie selbst hosten können: Prüfen Sie den Code, betreiben Sie sie auf Ihre Weise und exportieren Sie alles in Standardformaten.",
     "controlTitle": "Behalten Sie die Technik in der Hand.",
-    "dataBody": "Rechtsprechung und Handelsregister aus jeder Jurisdiktion, in der Sie arbeiten, direkt in die Akte geladen. Die Anonymisierung hält identifizierende Angaben von der KI fern.",
+    "dataBody": "Lesen Sie tschechische Rechtsprechung mit KI-Anmerkungen zu Rechtsfragen, Markierungen, Unterstreichungen, anwaltlichen Kommentaren und Antworten mit Fundstellen. Suchen Sie Unternehmen in angebundenen amtlichen Registern und verweisen Sie aus der Akte auf die Quellen.",
+    "dataConstitutionalAlt": "Entscheidung des tschechischen Verfassungsgerichts IV.ÚS 1394/24 mit nummerierten Absätzen, einer KI-Anmerkung zur Rechtsfrage, einer Markierung und Unterstreichung, einem anwaltlichen Kommentar und einem Chat mit zwei Fragen und Antworten mit Fundstellen.",
     "dataEyebrow": "Juristische Daten",
-    "dataMainAlt": "Eine offizielle Gerichtsentscheidung, geöffnet in stella",
+    "dataMainAlt": "Entscheidung des tschechischen Obersten Gerichts 27 Cdo 59/2022 mit nummerierten Absätzen, einer KI-Anmerkung zur Rechtsfrage, einer Markierung und Unterstreichung, einem anwaltlichen Kommentar und einem Chat mit zwei Fragen und Antworten mit Fundstellen.",
+    "dataSupremeAlt": "Entscheidung des tschechischen Obersten Gerichts 27 Cdo 1525/2025 mit nummerierten Absätzen, einer KI-Anmerkung zur Rechtsfrage, einer Markierung und Unterstreichung, einem anwaltlichen Kommentar und einem Chat mit zwei Fragen und Antworten mit Fundstellen.",
     "dataTitle": "Rechtsprechung und Register griffbereit.",
     "exploreAgent": "KI-Agent entdecken",
     "exploreAnonymization": "Anonymisierung entdecken",

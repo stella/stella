@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { discoverHandler } from "@/api/handlers/templates/discover";
@@ -30,8 +31,9 @@ const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", documentXml);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -87,7 +89,7 @@ const makeDocxWithParts = async (opts: {
     kind: "header" | "footer",
   ): void => {
     for (const [name, xml] of Object.entries(parts ?? {})) {
-      zip.file(`word/${name}`, xml);
+      writeZipEntry(zip, `word/${name}`, xml);
       const rId = `rId${nextRId++}`;
       relationships.push(
         `<Relationship Id="${rId}" Type="${REL_NS}/${kind}" Target="${name}"/>`,
@@ -106,14 +108,16 @@ const makeDocxWithParts = async (opts: {
         "</w:body>",
         () => `<w:sectPr>${sectionRefs.join("")}</w:sectPr></w:body>`,
       );
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/_rels/document.xml.rels",
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
         `<Relationships xmlns="${PKG_REL_NS}">${relationships.join("")}</Relationships>`,
     );
   }
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", documentXml);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',

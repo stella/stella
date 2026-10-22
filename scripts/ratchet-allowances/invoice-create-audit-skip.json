@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "The invoice insert in create.ts is audited by billCreatedDraft in the same transaction, and the shared expense-claim update in entries/add.ts is audited per expense by each caller in its transaction; a direct audit at either write would log the same change twice."
+}
