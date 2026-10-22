@@ -782,12 +782,12 @@
   "candidate:.github/workflows/release-tag.yml/tag": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "201ece5ff4efeab052a704d34a8215d0110962e197d0f1fb4b6d0e026962f43c"
+    "reviewedDigest": "50a36c640814bb9e69faf8c8324b87e6a5ddf17d9b4d9ca3ccee9d70df0df0e9"
   },
   "candidate:.github/workflows/release-tag.yml/marketing-freshness": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "de5b7d1f2f51aa00f2d88d9cfec34fd382249aa26062394166a352bcbef443dd"
+    "reviewedDigest": "e6a4ff7061a9cbba233b2bc7d4a0cef33d6c58d51c6aac3656131451bd0c4d31"
   },
   "candidate:.github/workflows/release.yml/resolve": {
     "kind": "support",
