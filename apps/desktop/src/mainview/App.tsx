@@ -419,7 +419,7 @@ const GeneralPane = ({
         <ShortcutSetting />
       </PanelGroup>
       <PanelGroup title={t("permissions")}>
-        <PermissionsSection />
+        <PermissionsSection window={DESKTOP_TELEMETRY_WINDOWS.main} />
       </PanelGroup>
       <PanelGroup>
         <div className="flex items-center justify-between gap-4 px-4 py-3">

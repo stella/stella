@@ -2,7 +2,7 @@ import { cn } from "@stll/ui/utils";
 
 type KeycapState = "idle" | "down" | "done" | "wrong";
 
-type Keycap = {
+export type Keycap = {
   /** Stable within one row: the modifier name, `key`, or `extra`. */
   id: string;
   label: string;
