@@ -618,10 +618,6 @@ return { id: document.entityId, name: document.name };`;
           },
         );
       },
-    },
-    // A turn that ends early: a failure, a stop, a newer message or a lost
-    // connection.
-    interruptions: {
       "error-before-first-chunk": async (recorder) => {
         await send(recorder, "Draft the NDA", [
           { message: "Scripted provider failure", type: "fail-before-output" },

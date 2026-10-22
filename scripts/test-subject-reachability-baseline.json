@@ -12,9 +12,6 @@
   "apps/api/src/handlers/chat/recorded-conversations.integration.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/api/src/handlers/chat/recorded-conversations.interruptions.integration.test.ts": [
-    "no-classified-reachability"
-  ],
   "apps/api/src/handlers/chat/recorded-conversations.lifecycle.integration.test.ts": [
     "no-classified-reachability"
   ],
