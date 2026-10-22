@@ -216,6 +216,8 @@ pub enum ShortcutRegistration {
   Paused,
   /// The OS refused it; the clipboard stays reachable from the tray.
   Unavailable,
+  /// Managed policy turned clipboard history off, so nothing registers.
+  Managed,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -322,7 +324,9 @@ pub fn register_at_launch(app: &AppHandle) -> ShortcutRegistration {
   let Ok(mut shortcut) = state.lock() else {
     return ShortcutRegistration::Unavailable;
   };
-  shortcut.registration = if register(app, shortcut.current) {
+  shortcut.registration = if crate::managed_policy::current().clipboard_disabled {
+    ShortcutRegistration::Managed
+  } else if register(app, shortcut.current) {
     ShortcutRegistration::Active
   } else {
     ShortcutRegistration::Unavailable
@@ -409,6 +413,9 @@ pub async fn shortcut_set(
   keys: ShortcutKeys,
 ) -> Result<ShortcutUpdate, String> {
   let mut shortcut = locked(&state)?;
+  if shortcut.registration == ShortcutRegistration::Managed {
+    return Err("clipboard history is turned off by managed policy".to_string());
+  }
   let next = match validate(&keys) {
     Ok(next) => next,
     Err(rejection) => {
