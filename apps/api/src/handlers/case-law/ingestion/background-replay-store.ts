@@ -1060,6 +1060,16 @@ type CompleteBatchOptions = {
   healthyEvidence?: "adjacent-row" | "none";
 };
 
+type ReplayBlockedReceipt = typeof caseLawReplayBlocked.$inferInsert;
+
+/** Writes the generation-specific terminal receipt inside its caller's transaction. */
+const recordReplayBlockedReceipt = async (
+  tx: Pick<Transaction, "insert">,
+  receipt: ReplayBlockedReceipt,
+) => {
+  await tx.insert(caseLawReplayBlocked).values(receipt).onConflictDoNothing();
+};
+
 type VerifiedProgressOptions = {
   sourceId: BackgroundReplaySource["id"];
   completedAt: Date;
@@ -1102,6 +1112,7 @@ type ReplayFailureOptions = {
   haltReason?: string;
   durationMs: number;
   verdict: Verdict;
+  replayedSourceHash?: string;
 };
 
 type ClassifyReplayFailureOptions = {
@@ -1299,18 +1310,16 @@ const recordFailure = async (
           completedAt: new Date(now()),
         })
         .where(eq(caseLawReplayBatches.id, batch.id));
-      await tx
-        .insert(caseLawReplayBlocked)
-        .values({
-          sourceId: batch.source.id,
-          decisionId: batch.decisionId,
-          sourceHash: decision.sourceHash ?? CASE_LAW_RAW_GENERATION_UNKNOWN,
-          parserVersionFrom: batch.parserVersionFrom,
-          parserVersionTo: batch.targetParserVersion,
-          outcome: "changed",
-          reason: null,
-        })
-        .onConflictDoNothing();
+      await recordReplayBlockedReceipt(tx, {
+        sourceId: batch.source.id,
+        decisionId: batch.decisionId,
+        sourceHash:
+          failure.replayedSourceHash ?? CASE_LAW_RAW_GENERATION_UNKNOWN,
+        parserVersionFrom: batch.parserVersionFrom,
+        parserVersionTo: batch.targetParserVersion,
+        outcome: "changed",
+        reason: null,
+      });
       await recordVerifiedProgress(tx, {
         sourceId: batch.source.id,
         completedAt: new Date(now()),
@@ -1423,7 +1432,7 @@ type CheckReplayCompletionOptions = {
   decision:
     | (Pick<
         typeof caseLawDecisions.$inferSelect,
-        "parserVersion" | "redactedAt" | "corpusMirrorStatus"
+        "parserVersion" | "sourceHash" | "redactedAt" | "corpusMirrorStatus"
       > & { updateToken: string })
     | undefined;
 };
@@ -1462,6 +1471,36 @@ const checkReplayCompletion = ({
     return { type: "retryable" };
   }
   return { type: "terminal", receipt };
+};
+
+type CompleteReplayReceiptOptions = CheckReplayCompletionOptions & {
+  recordReceipt: (receipt: ReplayBlockedReceipt) => Promise<void>;
+};
+
+/** Checks and records one terminal receipt against the raw generation replayed. */
+export const completeReplayReceipt = async ({
+  recordReceipt,
+  batch,
+  report,
+  decision,
+}: CompleteReplayReceiptOptions): Promise<CheckedReplayCompletion> => {
+  const completion = checkReplayCompletion({ batch, report, decision });
+  const terminal = completion.type === "terminal" ? completion.receipt : null;
+  if (terminal === null) {
+    return completion;
+  }
+  const reason = terminal.outcome === "rejected" ? terminal.reason : null;
+  await recordReceipt({
+    sourceId: batch.source.id,
+    decisionId: terminal.decisionId,
+    sourceHash: report.replayedSourceHash ?? CASE_LAW_RAW_GENERATION_UNKNOWN,
+    parserVersionFrom: batch.parserVersionFrom,
+    parserVersionTo: terminal.targetParserVersion,
+    outcome: terminal.outcome,
+    reason,
+    detail: reason,
+  });
+  return completion;
 };
 const completionDisposition = (receipt: ReplayRowResult | null) => {
   switch (receipt?.outcome) {
@@ -1558,27 +1597,17 @@ const completeBatch = async (
         .for("update")
         .limit(1)
     ).at(0);
-    const completion = checkReplayCompletion({ batch, report, decision });
+    const completion = await completeReplayReceipt({
+      recordReceipt: async (blocked) =>
+        await recordReplayBlockedReceipt(tx, blocked),
+      batch,
+      report,
+      decision,
+    });
     if (completion.type === "retryable") {
       return "retryable-completion";
     }
     const terminal = completion.type === "terminal" ? completion.receipt : null;
-    if (terminal !== null) {
-      const reason = terminal.outcome === "rejected" ? terminal.reason : null;
-      await tx
-        .insert(caseLawReplayBlocked)
-        .values({
-          sourceId: batch.source.id,
-          decisionId: terminal.decisionId,
-          sourceHash: decision?.sourceHash ?? CASE_LAW_RAW_GENERATION_UNKNOWN,
-          parserVersionFrom: batch.parserVersionFrom,
-          parserVersionTo: terminal.targetParserVersion,
-          outcome: terminal.outcome,
-          reason,
-          detail: reason,
-        })
-        .onConflictDoNothing();
-    }
     const rowDisposition = completionDisposition(terminal);
     const successful = rowDisposition !== "blocked";
     // A recovered write is applied even when the replay reports unchanged.

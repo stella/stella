@@ -290,9 +290,9 @@ const replayableRows = (
     isNull(caseLawDecisions.redactedAt),
   );
 
-const replaySelectionPredicate = (
+export const replaySelectionPredicate = (
   selection: ReplaySelection,
-  tx: Transaction,
+  tx: Pick<Transaction, "select">,
 ): SQL | undefined => {
   switch (selection.type) {
     case "operator":
@@ -339,9 +339,14 @@ const replaySelectionPredicate = (
             and(
               eq(caseLawReplayBlocked.sourceId, caseLawDecisions.sourceId),
               eq(caseLawReplayBlocked.decisionId, caseLawDecisions.id),
-              eq(
-                caseLawReplayBlocked.sourceHash,
-                sql`coalesce(${caseLawDecisions.sourceHash}, ${CASE_LAW_RAW_GENERATION_UNKNOWN})`,
+              // Legacy receipts remain generation-agnostic while the online
+              // receipt repair runs; the repair makes this column NOT NULL.
+              or(
+                isNull(caseLawReplayBlocked.sourceHash),
+                eq(
+                  caseLawReplayBlocked.sourceHash,
+                  sql`coalesce(${caseLawDecisions.sourceHash}, ${CASE_LAW_RAW_GENERATION_UNKNOWN})`,
+                ),
               ),
               eq(
                 caseLawReplayBlocked.parserVersionTo,
@@ -627,6 +632,8 @@ export type ReplayRowReport = {
   outcome: ReplayRowOutcome;
   /** Exact row revision inspected by the re-parse, for terminal receipt fencing. */
   checkedUpdateToken?: string;
+  /** Raw generation actually read, independent of later decision updates. */
+  replayedSourceHash?: string;
   /** Present on `rejected`, `retryable` and `missing-payload`. */
   detail?: string | undefined;
   rejection?: StoredRawReparseRejection | undefined;
@@ -1135,6 +1142,7 @@ const replayRow = async ({
     caseNumber: row.caseNumber,
     language: row.language,
     checkedUpdateToken: row.updateToken,
+    replayedSourceHash: row.sourceHash ?? CASE_LAW_RAW_GENERATION_UNKNOWN,
   };
 
   if (reparsed.type === "supplement") {
@@ -1359,6 +1367,7 @@ const replayOneRow = async ({
       id: row.id,
       caseNumber: row.caseNumber,
       language: row.language,
+      replayedSourceHash: row.sourceHash ?? CASE_LAW_RAW_GENERATION_UNKNOWN,
       outcome: REPLAY_ROW_OUTCOME.MISSING_PAYLOAD,
       detail: row.sourceRawS3Key,
     });
