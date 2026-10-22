@@ -610,6 +610,7 @@ describe("API deployment health receipt", () => {
       releaseDesktopWorkflow,
       stagingWorkflow,
       promoteAction,
+      tokenHelper,
     ] = await Promise.all([
       Bun.file(
         new URL("../.github/workflows/release.yml", import.meta.url),
@@ -626,6 +627,7 @@ describe("API deployment health receipt", () => {
           import.meta.url,
         ),
       ).text(),
+      Bun.file(new URL("github-app-token.sh", import.meta.url)).text(),
     ]);
     const promoteJobStart = releaseWorkflow.indexOf("\n  promote:\n");
     const stagingJobStart = releaseWorkflow.indexOf(
@@ -737,11 +739,14 @@ describe("API deployment health receipt", () => {
     );
     expect(promoteAction).toContain('"/installation/token"');
     expect(promoteAction).toContain('if ! token="$(mint_app_token)"');
-    expect(promoteAction).toContain(`echo "::add-mask::\${jwt}" >&2`);
-    expect(promoteAction).toContain(`printf '%s\\n' "$APP_PRIVATE_KEY"`);
-    expect(
-      promoteAction.match(/Authorization: Bearer \$\{jwt\}/gu),
-    ).toHaveLength(2);
+    expect(promoteAction).toContain(
+      'source "$GITHUB_ACTION_PATH/../../../scripts/github-app-token.sh"',
+    );
+    expect(tokenHelper).toContain(`echo "::add-mask::\${jwt}" >&2`);
+    expect(tokenHelper).toContain(`printf '%s\\n' "$APP_PRIVATE_KEY"`);
+    expect(tokenHelper.match(/Authorization: Bearer \$\{jwt\}/gu)).toHaveLength(
+      2,
+    );
     expect(promoteAction).not.toMatch(/(?:gh|gh-retry\.sh"?) run watch/u);
     expect(promoteAction).toContain(
       `run_url="https://github.com/\${INFRA_REPO}/actions/runs/\${run_id}"`,
