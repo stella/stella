@@ -240,12 +240,6 @@ export const AppBreadcrumbs = () => {
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
-      ["/admin/catalogue"],
-      <BreadcrumbLink to="/admin/catalogue">
-        {t("common.catalogue")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
       ["/chat"],
       <BreadcrumbLink to="/chat">{t("navigation.chat")}</BreadcrumbLink>,
     ),

@@ -50,7 +50,6 @@ describe("settingsNavSections", () => {
           "/admin/number-series",
           "/admin/vat-rates",
           "/admin/billing",
-          "/admin/catalogue",
         ],
       ],
     ]);
@@ -94,7 +93,6 @@ describe("settingsNavSections", () => {
       expect(shown).not.toContain(hidden);
     }
     expect(shown).toContain("/admin/matter-numbering");
-    expect(shown).toContain("/admin/catalogue");
     expect(shown).toContain("/settings/account/profile");
   });
 });

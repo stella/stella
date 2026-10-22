@@ -146,7 +146,6 @@ test.each(
       "/admin/number-series",
       "/admin/vat-rates",
       "/admin/billing",
-      "/admin/catalogue",
     ]);
     expect(
       view
