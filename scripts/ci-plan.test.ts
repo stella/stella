@@ -671,6 +671,11 @@ const mainHeavyJobNames = mainHeavyJobs({ jobs: ciJobs });
 const PULL_REQUEST = { repo: "stella/stella", number: "7" } as const;
 
 type MetadataCodeRun = NonNullable<EvaluateResultOptions["metadataCodeRun"]>;
+type CodeRunShape = {
+  run: "completed" | "in_progress";
+  final: unknown;
+  first?: unknown;
+};
 
 const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
   const head = state === "other-head" ? "b".repeat(40) : "a".repeat(40);
@@ -699,42 +704,39 @@ const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
     conclusion: status === "completed" ? conclusion : null,
   });
   const jobList = (...jobs: unknown[]) => [{ jobs }];
-  const finalJobs = () => {
-    switch (state) {
-      case "running-no-plan":
-        return jobList();
-      case "running-no-result":
-      case "completed-no-result":
-        return jobList(planJob);
-      case "running":
-        return jobList(planJob, ciResultJob("in_progress"));
-      default:
-        return jobList(planJob, ciResultJob("completed"));
-    }
-  };
-  // States that change once: the first jobs read sees the earlier state.
-  const firstJobs = () => {
-    switch (state) {
-      case "running-green":
-        return JSON.stringify(jobList(planJob, ciResultJob("in_progress")));
-      case "pending-result-green":
-        return JSON.stringify(jobList(planJob));
-      default:
-        return "";
-    }
-  };
-  const completedRun =
-    state === undefined ||
-    ["green", "red", "other-head", "completed-no-result"].includes(state);
+  const planned = jobList(planJob);
+  const resultRunning = jobList(planJob, ciResultJob("in_progress"));
+  const resultDone = jobList(planJob, ciResultJob("completed"));
+  // Per state: the code run's status, its jobs, and (for a state that changes
+  // once) the jobs the first read sees.
+  const shapes = {
+    none: { run: "completed", final: resultDone },
+    green: { run: "completed", final: resultDone },
+    red: { run: "completed", final: resultDone },
+    missing: { run: "completed", final: resultDone },
+    "other-head": { run: "completed", final: resultDone },
+    "running-green": {
+      run: "in_progress",
+      final: resultDone,
+      first: resultRunning,
+    },
+    running: { run: "in_progress", final: resultRunning },
+    "pending-result-green": {
+      run: "in_progress",
+      final: resultDone,
+      first: planned,
+    },
+    "running-no-result": { run: "in_progress", final: planned },
+    "running-no-plan": { run: "in_progress", final: jobList() },
+    "completed-no-result": { run: "completed", final: planned },
+  } satisfies Record<MetadataCodeRun | "none", CodeRunShape>;
+  const shape: CodeRunShape = shapes[state ?? "none"];
   return {
     enabled: state === undefined ? "false" : "true",
     runRequired: state === undefined ? "true" : "false",
-    finalJobs: finalJobs(),
-    firstJobs: firstJobs(),
-    runs: runs.map((run) => ({
-      ...run,
-      status: completedRun ? "completed" : "in_progress",
-    })),
+    finalJobs: shape.final,
+    firstJobs: shape.first === undefined ? "" : JSON.stringify(shape.first),
+    runs: runs.map((run) => ({ ...run, status: shape.run })),
     state: state ?? "",
   };
 };
