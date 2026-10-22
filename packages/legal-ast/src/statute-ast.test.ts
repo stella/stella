@@ -56,6 +56,41 @@ describe("statute AST", () => {
     expect(isStatuteAst(invalid)).toBe(false);
   });
 
+  test("rejects duplicate identities anywhere in the statute tree", () => {
+    const provision = statuteAst.body[0];
+    expect(provision?.type).toBe("provision");
+    if (provision?.type !== "provision") {
+      return;
+    }
+    const paragraph = provision.children[0];
+    expect(paragraph).toBeDefined();
+    if (paragraph === undefined) {
+      return;
+    }
+    expect(
+      isStatuteAst({
+        ...statuteAst,
+        body: [provision, { ...paragraph, anchorId: provision.anchorId }],
+      }),
+    ).toBe(false);
+    expect(
+      parseStatuteAst({
+        ...statuteAst,
+        body: [provision, { ...paragraph, eId: provision.eId }],
+      }),
+    ).toBeNull();
+  });
+
+  test("preserves Czech, Slovak and decomposed text through JSON", () => {
+    const text = "Příliš žluťoučký kůň; dôvera; Z\u030cluty\u0301";
+    const localized = {
+      ...statuteAst,
+      metadata: { ...statuteAst.metadata, title: text },
+    };
+    expect(text).toContain("Z\u030c");
+    expect(parseStatuteAst(JSON.stringify(localized))).toEqual(localized);
+  });
+
   test("allows top-level non-provision blocks and worldwide provision kinds", () => {
     const statuteWithIntro = {
       ...statuteAst,
