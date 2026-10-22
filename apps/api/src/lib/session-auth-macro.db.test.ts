@@ -68,6 +68,8 @@ describe("account-route session liveness", () => {
     await getAuth().api.revokeOtherSessions({ headers: otherDevice.headers() });
 
     await expectAuthRejection(await requestAccountRoute(browser), 401);
+    // The device that signed the others out keeps its own session.
+    expect((await requestAccountRoute(otherDevice)).status).toBe(200);
   });
 
   test("refuses a cached cookie after its stored session expires", async () => {
