@@ -1304,6 +1304,9 @@
     },
     "packages/sha256": {
       "name": "@stll/sha256",
+      "dependencies": {
+        "@noble/hashes": "2.2.0",
+      },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",

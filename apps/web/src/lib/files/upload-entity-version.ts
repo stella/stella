@@ -2,11 +2,10 @@ import { panic } from "better-result";
 
 import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
-import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 
 import { api } from "@/lib/api";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
-import { withActiveUpload } from "@/lib/files/active-uploads";
+import { hashUploadFile, withActiveUpload } from "@/lib/files/active-uploads";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
@@ -73,9 +72,9 @@ export const uploadEntityVersion = async ({
   }
 
   // The page holds the bytes until this settles, so a reload must prompt.
-  return await withActiveUpload(async () => {
+  return await withActiveUpload(async (active) => {
     signal?.throwIfAborted();
-    const sha256Hex = await hashSha256Hex(fileToUpload);
+    const sha256Hex = await hashUploadFile(active, fileToUpload);
     signal?.throwIfAborted();
 
     const wsClient = api.uploads({

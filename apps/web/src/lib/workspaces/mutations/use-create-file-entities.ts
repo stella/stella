@@ -8,7 +8,6 @@ import { useTranslations } from "use-intl";
 
 import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
-import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
@@ -22,7 +21,11 @@ import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { withActiveUpload } from "@/lib/files/active-uploads";
+import {
+  type ActiveUpload,
+  hashUploadFile,
+  withActiveUpload,
+} from "@/lib/files/active-uploads";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
@@ -70,6 +73,7 @@ type PreparedFileEntityUpload = FileEntityUploadGrant & {
 };
 
 type PrepareFolderTreeUploadOptions = {
+  active: ActiveUpload;
   workspaceId: string;
   parentId: string | null;
   propertyId: string | null;
@@ -83,6 +87,7 @@ type PreparedFolderTreeUpload = {
 };
 
 const prepareFolderTreeUpload = async ({
+  active,
   workspaceId,
   parentId,
   propertyId,
@@ -97,7 +102,7 @@ const prepareFolderTreeUpload = async ({
       name: placement.file.name,
       mimeType: placement.file.type || "application/octet-stream",
       size: placement.file.size,
-      sha256Hex: await hashSha256Hex(placement.file),
+      sha256Hex: await hashUploadFile(active, placement.file),
     });
   }
 
@@ -195,9 +200,9 @@ const abortUpload = async (
  * success) so the surrounding `UploadQueue` integration is
  * untouched.
  *
- *   1. Compute SHA-256 of the bytes in-thread. 50 MB takes
- *      ~200–500ms on modern hardware; a Web Worker is a phase-6
- *      optimisation, not a correctness requirement.
+ *   1. Compute SHA-256 of the bytes in one pass of bounded chunks
+ *      (`hashUploadFile`), inside the counted upload so a reload
+ *      during the read still prompts.
  *   2. POST `/uploads/:wsId/presign` with the declared metadata.
  *      The API records intent in `pending_uploads`, issues a
  *      5-minute URL bound to the exact size and checksum.
@@ -213,6 +218,7 @@ const abortUpload = async (
  *      replays the committed result instead of uploading again.
  */
 type UploadSingleFileOptions = {
+  active: ActiveUpload;
   file: File;
   workspaceId: string;
   propertyId: string;
@@ -223,6 +229,7 @@ type UploadSingleFileOptions = {
 type PrepareSingleFileEntityUploadOptions = UploadSingleFileOptions;
 
 const prepareSingleFileEntityUpload = async ({
+  active,
   file,
   workspaceId,
   propertyId,
@@ -232,7 +239,7 @@ const prepareSingleFileEntityUpload = async ({
   signal.throwIfAborted();
 
   // 1. SHA-256 of file bytes.
-  const sha256Hex = await hashSha256Hex(file);
+  const sha256Hex = await hashUploadFile(active, file);
 
   signal.throwIfAborted();
 
@@ -431,10 +438,15 @@ export const uploadFileEntitiesBatched = async (
     return [];
   }
 
-  return await withActiveUpload(async () => await runUploadBatch(options));
+  return await withActiveUpload(
+    async (active) => await runUploadBatch({ ...options, active }),
+  );
 };
 
+type RunUploadBatchOptions = BatchUploadOptions & { active: ActiveUpload };
+
 const runUploadBatch = async ({
+  active,
   files,
   workspaceId,
   propertyId,
@@ -443,7 +455,7 @@ const runUploadBatch = async ({
   preparedUploads,
   labels,
   onError,
-}: BatchUploadOptions): Promise<UploadResult[]> =>
+}: RunUploadBatchOptions): Promise<UploadResult[]> =>
   await new Promise<UploadResult[]>((resolve) => {
     const uploader = createFileEntityUploader<UploadResult>({
       reserve: async (file, signal) => {
@@ -454,6 +466,7 @@ const runUploadBatch = async ({
         }
         const fileParentId = parentIdForFile?.(file);
         return await prepareSingleFileEntityUpload({
+          active,
           file,
           workspaceId,
           propertyId,
@@ -737,26 +750,31 @@ export const useCreateFileEntities = (workspaceId: string) => {
         const plan = buildDroppedFolderUploadPlan(input.tree);
         const propertyId =
           plan.files.length > 0 ? await ensureFileProperty() : null;
-        const preparedTree = await prepareFolderTreeUpload({
-          workspaceId,
-          parentId,
-          propertyId,
-          plan,
-        });
+        // The folder is hashed and reserved before its batch starts; the
+        // page holds the bytes from here, so a reload must already prompt.
+        const uploaded = await withActiveUpload(async (active) => {
+          const preparedTree = await prepareFolderTreeUpload({
+            active,
+            workspaceId,
+            parentId,
+            propertyId,
+            plan,
+          });
 
-        if (preparedTree.files.length === 0 || propertyId === null) {
-          return;
-        }
+          if (preparedTree.files.length === 0 || propertyId === null) {
+            return [];
+          }
 
-        const uploaded = await uploadFileEntitiesBatched({
-          files: preparedTree.files,
-          workspaceId,
-          propertyId,
-          parentId,
-          parentIdForFile: (file) => preparedTree.parentIdByFile.get(file),
-          preparedUploads: preparedTree.preparedUploadByFile,
-          labels,
-          onError: (error) => analytics.captureError(error),
+          return await uploadFileEntitiesBatched({
+            files: preparedTree.files,
+            workspaceId,
+            propertyId,
+            parentId,
+            parentIdForFile: (file) => preparedTree.parentIdByFile.get(file),
+            preparedUploads: preparedTree.preparedUploadByFile,
+            labels,
+            onError: (error) => analytics.captureError(error),
+          });
         });
         startWorkflowForUploadedFiles(uploaded);
         return;

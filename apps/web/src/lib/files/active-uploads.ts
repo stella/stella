@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+import { sha256Hex } from "@stll/sha256/browser";
+
 type ActiveUploadState = {
   count: number;
 };
@@ -31,21 +33,45 @@ export const retainActiveUpload = (): (() => void) => {
   };
 };
 
+// Nominal through the private field, and the class stays private to this
+// module: only `withActiveUpload` hands one out.
+class ActiveUploadProof {
+  readonly #counted = true;
+
+  static readonly instance = new ActiveUploadProof();
+
+  get counted(): boolean {
+    return this.#counted;
+  }
+}
+
+/** Proof that the caller runs inside an upload counted as in flight. */
+export type ActiveUpload = ActiveUploadProof;
+
 /**
  * Run one upload whose bytes live only in this page, counted as in flight
  * until it settles. Every matter-file upload (new files and new versions)
  * goes through here so a reload cannot drop it without a prompt.
  */
 export const withActiveUpload = async <T>(
-  upload: () => Promise<T>,
+  upload: (active: ActiveUpload) => Promise<T>,
 ): Promise<T> => {
   const release = retainActiveUpload();
   try {
-    return await upload();
+    return await upload(ActiveUploadProof.instance);
   } finally {
     release();
   }
 };
+
+/**
+ * SHA-256 of a file about to be uploaded, read once in bounded chunks. It
+ * takes the upload's proof, so the whole read runs while a reload prompts.
+ */
+export const hashUploadFile = async (
+  _active: ActiveUpload,
+  file: Blob,
+): Promise<string> => await sha256Hex(file);
 
 /** Test seam. Production batches release themselves. */
 export const resetActiveUploadsForTests = (): void => {
