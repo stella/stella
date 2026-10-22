@@ -29,6 +29,8 @@ export const STATED_DECISION_TYPE_KINDS = {
   rozsudek: "judgment",
   "rozs.": "judgment",
   "rozs.část.": "judgment",
+  // Ministry of Justice decision-type code: rozsudek pro uznání.
+  "rozs.uzn": "judgment",
   usnesení: "order",
   "usn.": "order",
   nález: "finding",
@@ -52,8 +54,6 @@ export const STATED_DECISION_TYPE_KINDS = {
   none: DECISION_TYPE_KIND_OTHER,
   // Not a type: "otherwise", the publisher's catch-all.
   jinak: DECISION_TYPE_KIND_OTHER,
-  // Not a type: two types run together, which one is meant is not stated.
-  "rozs.uzn": DECISION_TYPE_KIND_OTHER,
   // Not decisions: a court's letter and its analytical materials.
   přípis: DECISION_TYPE_KIND_OTHER,
   "průzkum, rozbor a jiné materiály": DECISION_TYPE_KIND_OTHER,
