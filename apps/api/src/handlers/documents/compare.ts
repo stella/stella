@@ -9,6 +9,7 @@ import type {
 } from "@stll/folio-core";
 import { Temporal } from "@stll/time";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { documentVersionRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -41,7 +42,9 @@ import {
 } from "@/api/lib/files/read-file";
 import { LIMITS } from "@/api/lib/limits";
 import { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
+import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import {
   deliverTemporaryRedline,
   TEMPORARY_REDLINE_FAILURE_MESSAGE,
@@ -244,7 +247,10 @@ export type DocumentCompareProps = {
   workspaceId: SafeId<"workspace">;
   params: Static<typeof config.params>;
   body: Static<typeof config.body>;
-  session: { activeOrganizationId: SafeId<"organization"> };
+  session: {
+    activeOrganizationId: SafeId<"organization">;
+    id: string | null;
+  };
   user: { id: SafeId<"user"> };
   recordAuditEvent: AuditRecorder;
   /** Caller's cancellation, ANDed with this operation's own deadline. */
@@ -514,6 +520,7 @@ const comparisonSource = ({
  */
 export const createDocumentCompareGenerator = (
   dependencies: DocumentCompareDependencies = DEFAULT_DOCUMENT_COMPARE_DEPENDENCIES,
+  readSessionAuthority: SyntheticSessionAuthorityReader = ownerSyntheticSessionAuthorityReader,
 ) =>
   async function* ({
     safeDb,
@@ -526,6 +533,15 @@ export const createDocumentCompareGenerator = (
     recordAuditEvent,
     abortSignal,
   }: DocumentCompareProps): SafeHandlerGenerator<DocumentCompareResponse> {
+    const downloadSource = session.id
+      ? ({
+          kind: "request",
+          sessionId: session.id,
+        } satisfies SignedDownloadSource)
+      : ({
+          kind: "background",
+          reason: "document comparison without a request session",
+        } satisfies SignedDownloadSource);
     const comparisonSignal = AbortSignal.any([
       abortSignal,
       AbortSignal.timeout(DOCUMENT_COMPARE_DEADLINE_MS),
@@ -851,8 +867,10 @@ export const createDocumentCompareGenerator = (
         bytes: new Uint8Array(compared.buffer),
         fileName,
         organizationId: session.activeOrganizationId,
+        readSessionAuthority,
         scopedDb,
         signal: comparisonSignal,
+        source: downloadSource,
         userId: user.id,
       });
       if (Result.isError(delivered)) {
@@ -1092,8 +1110,11 @@ export const createDocumentCompareGenerator = (
           await dependencies.withTimeout(
             async () =>
               await dependencies.readFileHandler({
+                readSessionAuthority,
                 scopedDb,
                 fieldId: saved.fieldId,
+                userId: user.id,
+                source: downloadSource,
                 organizationId: session.activeOrganizationId,
                 workspaceId,
                 purpose: "download",
@@ -1145,8 +1166,12 @@ export const createDocumentCompareGenerator = (
 
 export const createDocumentCompareHandler = (
   dependencies: DocumentCompareDependencies = DEFAULT_DOCUMENT_COMPARE_DEPENDENCIES,
+  readSessionAuthority: SyntheticSessionAuthorityReader = ownerSyntheticSessionAuthorityReader,
 ) => {
-  const compare = createDocumentCompareGenerator(dependencies);
+  const compare = createDocumentCompareGenerator(
+    dependencies,
+    readSessionAuthority,
+  );
   return createSafeHandler(config, (ctx) =>
     compare({ ...ctx, abortSignal: ctx.request.signal }),
   );

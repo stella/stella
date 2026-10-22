@@ -230,6 +230,7 @@ const presignUpload = createSafeHandler(
     const purposeData = toPurposeData(purposeBody);
 
     const presign = await presignUploadUrl({
+      userId: user.id,
       key: tmpKey,
       expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
       contentType: resolvedMime,

@@ -3,6 +3,8 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { cachedForRepository } from "./ci-repository-cache";
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 export const ROUTE_SMOKE_SPEC_PATH = "apps/web/e2e/specs/route-smoke.spec.ts";
 const ENTRY_POINTS = [
@@ -27,6 +29,7 @@ const isSourceExtension = (extension: string): extension is SourceExtension =>
   Object.hasOwn(LOADERS, extension);
 const RUNTIME_FILES = new Set([
   ".github/workflows/ci.yml",
+  "scripts/ci-repository-cache.ts",
   "scripts/detect-route-smoke-changes.ts",
   "scripts/detect-route-smoke-changes.test.ts",
   "bun.lock",
@@ -97,11 +100,12 @@ const importCandidates = (importer: string, specifier: string): string[] => {
   return candidates;
 };
 
-export const routeSmokeImportClosure = (
-  root = REPO_ROOT,
+export const sourceImportClosure = (
+  entryPoints: readonly string[],
+  root: string,
 ): ReadonlySet<string> => {
   const visited = new Set<string>();
-  const pending: string[] = [...ENTRY_POINTS];
+  const pending = [...entryPoints];
   // Bun is already installed by ci-plan; no repository install is needed to
   // parse imports, re-exports and literal dynamic imports without regex drift.
   const parsers = new Map<SourceExtension, Bun.Transpiler>();
@@ -128,14 +132,20 @@ export const routeSmokeImportClosure = (
     ) {
       continue;
     }
+    // scanImports rejects a script's leading shebang line.
     for (const imported of parserFor(extension).scanImports(
-      readFileSync(absolute, "utf-8"),
+      readFileSync(absolute, "utf-8").replace(/^#![^\n]*/u, ""),
     )) {
       pending.push(...importCandidates(file, imported.path));
     }
   }
   return visited;
 };
+
+export const routeSmokeImportClosure = (root = REPO_ROOT) =>
+  sourceImportClosure(ENTRY_POINTS, root);
+
+const routeSmokeClosures = new Map<string, ReadonlySet<string>>();
 
 export const routeSmokeAffected = (
   changedFiles: readonly string[],
@@ -145,7 +155,11 @@ export const routeSmokeAffected = (
   if (files.some(runtimePath)) {
     return true;
   }
-  const imports = routeSmokeImportClosure(root);
+  const imports = cachedForRepository(
+    routeSmokeClosures,
+    { root, key: root },
+    () => routeSmokeImportClosure(root),
+  );
   return files.some((file) => imports.has(file));
 };
 

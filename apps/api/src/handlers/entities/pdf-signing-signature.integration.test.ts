@@ -129,7 +129,7 @@ const seedPreparedSession = async () => {
     .delete(pdfSigningSessions)
     .where(eq(pdfSigningSessions.workspaceId, ids.wsA1));
   const sessionId = createSafeId<"pdfSigningSession">();
-  const handoffToken = createPdfSigningToken();
+  const handoffToken = createPdfSigningToken({ userId: null });
   const expiresAt = new Date(Date.now() + 120_000);
   await testDb.insert(pdfSigningSessions).values({
     baseVersionId: ids.entityVersionA1,

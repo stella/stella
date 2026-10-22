@@ -225,18 +225,22 @@ for (const transport of [
               params: { ...input.params, workspaceId: matterId },
             },
           });
+          const synthesizedWithSessionId = {
+            ...synthesized,
+            session: { id: "fixture-session", ...synthesized.session },
+          };
           const execute = async () => {
             switch (capability) {
               case "lists.items.sources.list":
                 return await readSources.handler(
                   asTestRaw<Parameters<typeof readSources.handler>[0]>(
-                    synthesized,
+                    synthesizedWithSessionId,
                   ),
                 );
               case "lists.items.list":
                 return await readItems.handler(
                   asTestRaw<Parameters<typeof readItems.handler>[0]>(
-                    synthesized,
+                    synthesizedWithSessionId,
                   ),
                 );
               default:
@@ -252,7 +256,7 @@ for (const transport of [
             const app = new Elysia().derive(() => ({
               workspaceId: toSafeId<"workspace">(matterId),
               user: synthesized.user,
-              session: synthesized.session,
+              session: synthesizedWithSessionId.session,
               featureAccessSnapshot,
               safeDb: synthesized.safeDb,
               scopedDb: synthesized.scopedDb,

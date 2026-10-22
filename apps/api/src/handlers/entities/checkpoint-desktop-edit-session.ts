@@ -293,7 +293,9 @@ export const checkpointDesktopEditSessionHandler = async ({
     const checkpointedAt = new Date();
 
     // Rotate token on each successful checkpoint
-    const nextSessionToken = createDesktopEditSessionToken();
+    const nextSessionToken = createDesktopEditSessionToken({
+      userId: authorizedSession.value.userId,
+    });
     const nextSessionTokenHash = hashDesktopEditSessionToken(nextSessionToken);
     const nextTokenExpiresAt = computeTokenExpiresAt();
 

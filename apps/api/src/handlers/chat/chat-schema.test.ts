@@ -1932,6 +1932,77 @@ describe("validateMessage", () => {
     expect(Result.isOk(result)).toBe(true);
   });
 
+  // Resuming an approval hands an approved client call to the client, which
+  // answers it with the call's result. Nothing else answers an approved call.
+  test.each([
+    { approved: true, executor: "client", accepted: true },
+    { approved: true, executor: "server", accepted: false },
+    { approved: false, executor: "client", accepted: false },
+  ] as const)(
+    "the client answers an approved call only when it runs it ($executor, approved: $approved)",
+    async ({ accepted, approved, executor }) => {
+      const id = chatMessageId("msg_approved_client_call");
+      const callId = "call_approved_note";
+      const input = { note: null, query: "NDA" };
+      const output = { ok: true };
+      const approvedCall = {
+        approval: { approved, id: `approval_${callId}`, needsApproval: true },
+        arguments: JSON.stringify(input),
+        id: callId,
+        input,
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor },
+        name: "mcp__external__set_note",
+        state: "approval-responded",
+        type: "tool-call",
+      } satisfies ChatParts[number];
+      const result = await validateMessageWithPersistence({
+        message: {
+          id,
+          role: "assistant",
+          parts: [
+            { ...approvedCall, output, state: "complete" },
+            {
+              type: "tool-result",
+              toolCallId: callId,
+              content: JSON.stringify(output),
+              state: "complete",
+            },
+          ],
+        },
+        persistedMessage: {
+          role: "assistant",
+          content: chatMessageContentFromMessage(
+            toPersistableChatMessage({
+              id,
+              role: "assistant",
+              parts: [approvedCall],
+            }),
+          ),
+        },
+        resume: [
+          {
+            interruptId: `client_tool_${callId}`,
+            payload: output,
+            status: "resolved",
+          },
+        ],
+        safeDb: noDbReads,
+        threadId: chatThreadId("thread_approved_client_call"),
+        tools: noteTools,
+        userId: userId("user_approved_client_call"),
+      });
+
+      expect(Result.isOk(result)).toBe(accepted);
+      if (Result.isOk(result)) {
+        expect(result.value.message.parts.at(0)).toMatchObject({
+          approval: approvedCall.approval,
+          output,
+          state: "complete",
+        });
+      }
+    },
+  );
+
   describe("a continuation's input is folded by its tool's schema", () => {
     const continueSetNote = async ({
       canonicalInput,

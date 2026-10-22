@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { status } from "elysia";
 import type { ElysiaStatus } from "elysia";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   SafeHandlerGenerator,
@@ -47,11 +48,13 @@ export default createSafeHandler(
   config,
   async function* ({
     params: { fieldId },
-    session: { activeOrganizationId: organizationId },
+    session,
+    user,
     recordAuditEvent,
     scopedDb,
     workspaceId,
   }): SafeHandlerGenerator<Response | ElysiaStatus<404>> {
+    const organizationId = session.activeOrganizationId;
     const rows = yield* Result.await(
       Result.tryPromise(
         async () => await fileFieldQuery(scopedDb, fieldId, workspaceId),
@@ -73,10 +76,13 @@ export default createSafeHandler(
           await scopedDb(
             async (tx) =>
               await auditedPresignDownload({
+                readSessionAuthority: ownerSyntheticSessionAuthorityReader,
                 tx,
                 recordAuditEvent,
                 resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
                 resourceId: row.entityId,
+                userId: user.id,
+                source: { kind: "request", sessionId: session.id },
                 s3Key: createFileKey({
                   organizationId,
                   workspaceId,

@@ -219,6 +219,11 @@ const isEmptyContent = (content: FieldWriteContent): boolean => {
   }
 };
 
+const isCalendarDate = (value: string): boolean => {
+  const parsed = Result.try(() => Temporal.PlainDate.from(value));
+  return Result.isOk(parsed) && parsed.value.toString() === value;
+};
+
 export type WriteFieldValueProps = {
   safeDb: SafeDb;
   /** The caller's effective authority (role plus credential attenuation). */
@@ -286,6 +291,16 @@ export const writeFieldValue = async function* ({
         status: 400,
         message: "Property content type mismatch",
       }),
+    );
+  }
+
+  if (
+    content?.type === "date" &&
+    content.value !== null &&
+    !isCalendarDate(content.value)
+  ) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid calendar date" }),
     );
   }
 

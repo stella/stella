@@ -59,6 +59,7 @@ const presignProcuracao = createSafeRootHandler(
         PRESIGN_URL_EXPIRY_SECONDS * 1000,
     );
     const presign = await presignUploadUrl({
+      userId: user.id,
       key,
       expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
       contentType: mimeType,
