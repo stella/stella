@@ -28,6 +28,10 @@ inputs:
     description: Checkout containing the current renderer and workflow policy.
     required: false
     default: .
+  previous-web-image:
+    description: Immutable reference of the currently deployed web image; empty omits asset carry-forward.
+    required: false
+    default: ""
 
 outputs:
   digest:
@@ -186,9 +190,30 @@ runs:
         secrets: |
           posthog_cli_api_key=${{ inputs.posthog-cli-api-key }}
         build-args: |
+          PREVIOUS_WEB_IMAGE=${{ inputs.previous-web-image || 'oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288' }}
           STELLA_VERSION=${{ steps.args.outputs.version }}
           STELLA_COMMIT_SHA=${{ inputs.release-sha }}
           POSTHOG_SOURCEMAP_PUBLISH=true
           POSTHOG_SOURCEMAP_PROJECT_ID=${{ inputs.posthog-project-id }}
           ${{ steps.args.outputs.values }}
           ${{ steps.args.outputs.posthog-name }}=${{ inputs.posthog-key }}
+
+    - name: Report carried web asset and image sizes
+      if: inputs.previous-web-image != ''
+      shell: bash
+      env:
+        NEW_IMAGE: ghcr.io/${{ github.repository_owner }}/stella-web@${{ steps.build.outputs.digest }}
+        PREVIOUS_IMAGE: ${{ inputs.previous-web-image }}
+      run: |
+        set -euo pipefail
+        docker pull --platform linux/arm64 "$PREVIOUS_IMAGE" >/dev/null
+        docker pull --platform linux/arm64 "$NEW_IMAGE" >/dev/null
+        container="$(docker create --platform linux/arm64 "$PREVIOUS_IMAGE")"
+        trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+        mkdir -p "$RUNNER_TEMP/previous-web-assets"
+        docker cp "$container:/app/apps/web/dist/client/." "$RUNNER_TEMP/previous-web-assets"
+        previous_assets_bytes="$(du -sb "$RUNNER_TEMP/previous-web-assets" | cut -f1)"
+        previous_image_bytes="$(docker image inspect "$PREVIOUS_IMAGE" --format '{{.Size}}')"
+        new_image_bytes="$(docker image inspect "$NEW_IMAGE" --format '{{.Size}}')"
+        echo "Previous client assets: ${previous_assets_bytes} bytes"
+        echo "Image size difference: $((new_image_bytes - previous_image_bytes)) bytes"

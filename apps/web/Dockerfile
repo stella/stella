@@ -2,11 +2,27 @@
 # Run the JavaScript toolchain on the native build host. Cross-platform
 # installs select the target's optional native packages explicitly; the final
 # image alone belongs to the deployment target.
+ARG PREVIOUS_WEB_IMAGE=oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288
+
 FROM --platform=$BUILDPLATFORM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS build-base
 WORKDIR /app
 
 FROM --platform=$TARGETPLATFORM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS runtime-base
 WORKDIR /app
+
+# An omitted PREVIOUS_WEB_IMAGE resolves to the empty runtime base above. Official
+# release builds set it to the immutable digest currently deployed.
+FROM --platform=$TARGETPLATFORM ${PREVIOUS_WEB_IMAGE} AS previous-web-image
+USER root
+COPY scripts/merge-web-assets.sh /usr/local/bin/merge-web-assets
+RUN mkdir -p /previous-web-assets && : > /previous-web-assets.manifest && \
+    if [ -f /app/apps/web/dist/.stella-client-assets ]; then \
+      /usr/local/bin/merge-web-assets \
+        /app/apps/web/dist/client \
+        /app/apps/web/dist/.stella-client-assets \
+        /previous-web-assets && \
+      cp /app/apps/web/dist/.stella-client-assets /previous-web-assets.manifest; \
+    fi
 
 FROM build-base AS install-inputs
 # Preserve Bun's committed root lockfile and full workspace manifest map.
@@ -141,6 +157,9 @@ RUN --mount=type=secret,id=posthog_cli_api_key \
     POSTHOG_CLI_HOST="${PUBLIC_POSTHOG_UI_HOST}" \
     POSTHOG_CLI_PROJECT_ID="${POSTHOG_SOURCEMAP_PROJECT_ID}" \
     bun apps/web/scripts/publish-sourcemaps.ts
+# Record only this build's output before any previous-release files are added.
+RUN find apps/web/dist/client -type f -printf '%P\n' | LC_ALL=C sort \
+    > apps/web/dist/.stella-client-assets
 # Stage the workspace packages reached by externalized runtime dependencies
 # (closure derived from bun.lock) in their published dist shape. The runner
 # overlays this tree so it never resolves TypeScript source. Restore the
@@ -170,6 +189,14 @@ COPY --from=deps-prod /app/ .
 COPY --chown=stella:stella --from=pruner /app/out/json/ .
 COPY --chown=stella:stella --from=builder /app/web-runtime-stage/ .
 COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist
+COPY --chown=stella:stella scripts/merge-web-assets.sh /usr/local/bin/merge-web-assets
+COPY --chown=stella:stella --from=previous-web-image /previous-web-assets /tmp/previous-web-assets
+COPY --chown=stella:stella --from=previous-web-image /previous-web-assets.manifest /tmp/previous-web-assets.manifest
+RUN /usr/local/bin/merge-web-assets \
+      /tmp/previous-web-assets \
+      /tmp/previous-web-assets.manifest \
+      /app/apps/web/dist/client && \
+    rm -rf /tmp/previous-web-assets /tmp/previous-web-assets.manifest /usr/local/bin/merge-web-assets
 WORKDIR /app/apps/web
 USER stella
 EXPOSE 3002
