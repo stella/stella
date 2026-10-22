@@ -132,8 +132,8 @@ details unless they are already public in the repository.
   scripts, and AI agents alike.
 - No lock-in: standard formats, self-hosting is first-class.
 - AI is a tool, not a persona. No anthropomorphizing.
-- New and changed surfaces are measured by construction: use deterministic scaling
-  counts and census coverage from `.agents/skills/conventions-perf/SKILL.md`.
+- Performance is non-negotiable. Batch operations, minimize round-trips, lazy-load
+  aggressively.
 - **Vertical slices over horizontal layers.** Features have one owning end-to-end
   slice (routes, components, handlers). Keep cross-slice changes minimal; change
   existing code when the end-to-end contract requires it.

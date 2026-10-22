@@ -76,7 +76,7 @@ The performance coverage inventories are:
 
 | Census | Test or check | Ledger or coverage inventory |
 | --- | --- | --- |
-| Mounted API `/v1` routes | `apps/api/src/tests/read-scaling/census.test.ts` | `apps/api/src/tests/read-scaling/api-scaling-ledger.json` |
+| Mounted API v1 routes | `apps/api/src/tests/read-scaling/census.test.ts` | `apps/api/src/tests/read-scaling/api-scaling-ledger.json` |
 | Curated MCP tools | `apps/api/src/tests/read-scaling/census.test.ts` | `apps/api/src/tests/read-scaling/mcp-scaling-ledger.json` |
 | Repeated SQL fingerprints per request and call site | `apps/api/src/lib/db-query-counter.test.ts`; `scripts/check-repeated-sql-fingerprints-ledger.test.ts` | `apps/api/src/lib/repeated-sql-fingerprints.json` |
 | Web route smoke list | `apps/web/e2e/specs/route-smoke.spec.ts` (`assertSmokeRouteCoverage`) | `apps/web/e2e/helpers/smoke-route-defs.ts` (`INTENTIONALLY_NOT_SMOKED`) |
