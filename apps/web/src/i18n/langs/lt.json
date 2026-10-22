@@ -1396,6 +1396,7 @@
     "credentialSendDescription": "Siųskite tik jei norite bendrinti šią reikšmę pokalbyje.",
     "credentialSendTitle": "Šiame pranešime gali būti prisijungimo duomenų",
     "deleteThread": "Ištrinti pokalbį",
+    "diagramUnavailable": "Šios diagramos nepavyko atvaizduoti. Jos šaltinio kodas pateiktas žemiau.",
     "editMode": {
       "autoDirect": "Automatiškai · perrašyti",
       "autoDirectDescription": "DI pakeitimai pritaikomi iš karto tiesiogiai perrašant dokumentą (be pakeitimų sekimo).",
