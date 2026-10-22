@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { Queue } from "bullmq";
 import type { Job } from "bullmq";
 import { sleep } from "bun";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { drainFanOut } from "@stll/concurrency";
@@ -1199,7 +1199,12 @@ const markPendingPlannedFieldsErrored = async (
             tx
               .select({ id: entityVersions.id })
               .from(entityVersions)
-              .where(eq(entityVersions.entityId, entityId)),
+              .where(
+                and(
+                  eq(entityVersions.entityId, entityId),
+                  isNull(entityVersions.deletedAt),
+                ),
+              ),
           ),
           inArray(fields.propertyId, propertyIds),
           sql`${fields.content}->>'type' = 'pending'`,
