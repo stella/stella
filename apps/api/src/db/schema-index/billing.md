@@ -271,73 +271,73 @@ invoices.created_at             timestamptz         default,not null  billing.ts
 invoices.updated_at             timestamptz         default,not null  billing.ts:1008
 ```
 
-## invoice_lines · `invoiceLines` · billing.ts:1109
+## invoice_lines · `invoiceLines` · billing.ts:1110
 
 One line of an invoice.
 
 ```text
-invoice_lines.id                    pUuid               pk,not null       billing.ts:1112
-invoice_lines.organization_id       safeOrganizationId  fk,not null       billing.ts:1113
-invoice_lines.workspace_id          safeWorkspaceId     fk,not null       billing.ts:1116
-invoice_lines.invoice_id            safeUuid            fk,not null       billing.ts:1119
-invoice_lines.billing_purpose       text                default,not null  billing.ts:1122
-invoice_lines.position              integer             not null          billing.ts:1128
-invoice_lines.description           text                not null          billing.ts:1129
-invoice_lines.recorded_description  text                null              billing.ts:1130
-invoice_lines.recorded_quantity     numeric             null              billing.ts:1131
-invoice_lines.recorded_unit         varchar             null              billing.ts:1135
-invoice_lines.recorded_unit_price   centsColumn         null              billing.ts:1138
-invoice_lines.recorded_net_amount   centsColumn         null              billing.ts:1139
-invoice_lines.quantity              numeric             not null          billing.ts:1140
-invoice_lines.unit                  varchar             null              billing.ts:1146
-invoice_lines.unit_price            centsColumn         not null          billing.ts:1147
-invoice_lines.vat_rate_bps          integer             not null          billing.ts:1148
-invoice_lines.vat_treatment         text                not null          billing.ts:1149
-invoice_lines.net_amount            centsColumn         not null          billing.ts:1150
-invoice_lines.vat_amount            centsColumn         not null          billing.ts:1151
-invoice_lines.gross_amount          centsColumn         not null          billing.ts:1152
-invoice_lines.source                text                not null          billing.ts:1153
-invoice_lines.time_entry_id         safeUuid            fk,null           billing.ts:1156  A released line outlives its source: once the entry is back in the ledger it may be deleted, and the voided document keeps the line.
-invoice_lines.expense_id            safeUuid            fk,null           billing.ts:1160
-invoice_lines.released_at           timestamptz         null              billing.ts:1163
-invoice_lines.created_at            timestamptz         default,not null  billing.ts:1164
-invoice_lines.updated_at            timestamptz         default,not null  billing.ts:1165
+invoice_lines.id                    pUuid               pk,not null       billing.ts:1113
+invoice_lines.organization_id       safeOrganizationId  fk,not null       billing.ts:1114
+invoice_lines.workspace_id          safeWorkspaceId     fk,not null       billing.ts:1117
+invoice_lines.invoice_id            safeUuid            fk,not null       billing.ts:1120
+invoice_lines.billing_purpose       text                default,not null  billing.ts:1123
+invoice_lines.position              integer             not null          billing.ts:1129
+invoice_lines.description           text                not null          billing.ts:1130
+invoice_lines.recorded_description  text                null              billing.ts:1131
+invoice_lines.recorded_quantity     numeric             null              billing.ts:1132
+invoice_lines.recorded_unit         varchar             null              billing.ts:1136
+invoice_lines.recorded_unit_price   centsColumn         null              billing.ts:1139
+invoice_lines.recorded_net_amount   centsColumn         null              billing.ts:1140
+invoice_lines.quantity              numeric             not null          billing.ts:1141
+invoice_lines.unit                  varchar             null              billing.ts:1147
+invoice_lines.unit_price            centsColumn         not null          billing.ts:1148
+invoice_lines.vat_rate_bps          integer             not null          billing.ts:1149
+invoice_lines.vat_treatment         text                not null          billing.ts:1150
+invoice_lines.net_amount            centsColumn         not null          billing.ts:1151
+invoice_lines.vat_amount            centsColumn         not null          billing.ts:1152
+invoice_lines.gross_amount          centsColumn         not null          billing.ts:1153
+invoice_lines.source                text                not null          billing.ts:1154
+invoice_lines.time_entry_id         safeUuid            fk,null           billing.ts:1157  A released line outlives its source: once the entry is back in the ledger it may be deleted, and the voided document keeps the line.
+invoice_lines.expense_id            safeUuid            fk,null           billing.ts:1161
+invoice_lines.released_at           timestamptz         null              billing.ts:1164
+invoice_lines.created_at            timestamptz         default,not null  billing.ts:1165
+invoice_lines.updated_at            timestamptz         default,not null  billing.ts:1166
 ```
 
-## vat_rates · `vatRates` · billing.ts:1236 · rls
+## vat_rates · `vatRates` · billing.ts:1238 · rls
 
 ```text
-vat_rates.id               pUuid               pk,not null       billing.ts:1239
-vat_rates.organization_id  safeOrganizationId  fk,not null       billing.ts:1240
-vat_rates.code             varchar             not null          billing.ts:1243
-vat_rates.name             varchar             not null          billing.ts:1244
-vat_rates.rate_bps         integer             not null          billing.ts:1245
-vat_rates.valid_from       date                not null          billing.ts:1246
-vat_rates.valid_to         date                null              billing.ts:1247
-vat_rates.archived_at      timestamptz         null              billing.ts:1248
-vat_rates.created_at       timestamptz         default,not null  billing.ts:1249
-vat_rates.updated_at       timestamptz         default,not null  billing.ts:1250
+vat_rates.id               pUuid               pk,not null       billing.ts:1241
+vat_rates.organization_id  safeOrganizationId  fk,not null       billing.ts:1242
+vat_rates.code             varchar             not null          billing.ts:1245
+vat_rates.name             varchar             not null          billing.ts:1246
+vat_rates.rate_bps         integer             not null          billing.ts:1247
+vat_rates.valid_from       date                not null          billing.ts:1248
+vat_rates.valid_to         date                null              billing.ts:1249
+vat_rates.archived_at      timestamptz         null              billing.ts:1250
+vat_rates.created_at       timestamptz         default,not null  billing.ts:1251
+vat_rates.updated_at       timestamptz         default,not null  billing.ts:1252
 ```
 
-## time_entry_timer_states · `timeEntryTimerStates` · billing.ts:1313 · rls
+## time_entry_timer_states · `timeEntryTimerStates` · billing.ts:1315 · rls
 
 ```text
-time_entry_timer_states.entry_id         safeUuid            pk,fk,not null  billing.ts:1316
-time_entry_timer_states.organization_id  safeOrganizationId  fk,not null     billing.ts:1319
-time_entry_timer_states.user_id          text                fk,not null     billing.ts:1322
-time_entry_timer_states.state            text                not null        billing.ts:1326
+time_entry_timer_states.entry_id         safeUuid            pk,fk,not null  billing.ts:1318
+time_entry_timer_states.organization_id  safeOrganizationId  fk,not null     billing.ts:1321
+time_entry_timer_states.user_id          text                fk,not null     billing.ts:1324
+time_entry_timer_states.state            text                not null        billing.ts:1328
 ```
 
-## desktop_time_entry_batches · `desktopTimeEntryBatches` · billing.ts:1358 · rls
+## desktop_time_entry_batches · `desktopTimeEntryBatches` · billing.ts:1360 · rls
 
 Receipts survive edits or deletion of individual drafts so a network retry cannot recreate a reviewed batch.
 
 ```text
-desktop_time_entry_batches.organization_id      safeOrganizationId  fk,not null       billing.ts:1361
-desktop_time_entry_batches.user_id              text                fk,not null       billing.ts:1364
-desktop_time_entry_batches.idempotency_key      varchar             not null          billing.ts:1368
-desktop_time_entry_batches.request_fingerprint  varchar             null              billing.ts:1369
-desktop_time_entry_batches.status               text                default,not null  billing.ts:1370
-desktop_time_entry_batches.result               jsonb               null              billing.ts:1374
-desktop_time_entry_batches.created_at           timestamptz         default,not null  billing.ts:1375
+desktop_time_entry_batches.organization_id      safeOrganizationId  fk,not null       billing.ts:1363
+desktop_time_entry_batches.user_id              text                fk,not null       billing.ts:1366
+desktop_time_entry_batches.idempotency_key      varchar             not null          billing.ts:1370
+desktop_time_entry_batches.request_fingerprint  varchar             null              billing.ts:1371
+desktop_time_entry_batches.status               text                default,not null  billing.ts:1372
+desktop_time_entry_batches.result               jsonb               null              billing.ts:1376
+desktop_time_entry_batches.created_at           timestamptz         default,not null  billing.ts:1377
 ```
