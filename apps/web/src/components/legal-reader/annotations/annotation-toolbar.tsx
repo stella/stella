@@ -67,7 +67,7 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   CapabilityAction,
-  useCapabilityActionShown,
+  CapabilityActionChrome,
 } from "@/lib/organization/feature-access/capability-actions";
 
 type AnnotationToolbarProps = {
@@ -142,9 +142,6 @@ export const AnnotationToolbar = ({
   target,
 }: AnnotationToolbarProps) => {
   const t = useTranslations();
-  // The separator before the AI actions belongs to them: where the
-  // capability hides the actions, it goes too.
-  const aiActionsShown = useCapabilityActionShown({ capability: "ai" });
   const barRef = useRef<HTMLDivElement | null>(null);
   const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const attachBar = (node: HTMLDivElement | null) => {
@@ -795,7 +792,9 @@ export const AnnotationToolbar = ({
         </div>
         {mode === "authenticated" && (
           <>
-            {aiActionsShown && <span className="bg-border mx-1 h-4 w-px" />}
+            <CapabilityActionChrome action={{ capability: "ai" }}>
+              <span className="bg-border mx-1 h-4 w-px" />
+            </CapabilityActionChrome>
             <CapabilityAction action={{ capability: "ai" }} surface="control">
               {(capabilityProps) => (
                 <Button

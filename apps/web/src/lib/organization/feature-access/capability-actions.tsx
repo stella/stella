@@ -124,12 +124,21 @@ export const useActionCapabilities = (
 };
 
 /**
- * Whether `CapabilityAction` renders anything for `action`. Chrome that
- * belongs to the action but sits outside its render function (a separator
- * before it) follows the same answer, so it never outlives the action.
+ * Renders `children` only where `CapabilityAction` renders `action`. Chrome
+ * that belongs to the action but sits outside its render function (a
+ * separator before it) is rendered through this, so it never outlives the
+ * action and reads capabilities only where the action does.
  */
-export const useCapabilityActionShown = (action: ActionDescriptor): boolean =>
-  isCapabilityActionVisible(action, useActionCapabilities(action.capability));
+export const CapabilityActionChrome = ({
+  action,
+  children,
+}: {
+  action: ActionDescriptor;
+  children: ReactNode;
+}) =>
+  isCapabilityActionVisible(action, useActionCapabilities(action.capability))
+    ? children
+    : null;
 
 type CapabilityActionChildProps = {
   disabled?: boolean;
