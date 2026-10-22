@@ -35,7 +35,7 @@
     }
   },
   "apps/api/src/lib/auth.ts::owner-connection-workspace-set": {
-    "reason": "Builds the request matter set from the authorization view inside a scoped transaction; the set only ever holds ids the row policies admitted, and later reads still pass the policies.",
+    "reason": "Builds the request matter set from the authorization view inside a scoped transaction; the set only ever holds ids the row policies admitted, and later reads still pass the policies. The account-route session check reads only the session table (id, user, expiry) to confirm the stored session is live; it touches no matter rows.",
     "sites": {
       "<module>#rootDb": 1,
       "claimDesktopAccountGrant.db#rootDb": 1,
@@ -68,7 +68,8 @@
       "resolveValidateAuth.getActiveWorkspaceIds": 2,
       "resolveValidateAuth.getActiveWorkspaceIds.activeWorkspaceIds": 1,
       "resolveValidateAuth.getWorkspaceAccess#rootDb": 1,
-      "resolveValidateAuth.orgSettings#rootDb": 1
+      "resolveValidateAuth.orgSettings#rootDb": 1,
+      "sessionAuthMacro.validateSession.resolve.liveResult#rootDb": 1
     }
   },
   "apps/api/src/lib/db/member-access-hold.ts::names-matter-role-rule": {
