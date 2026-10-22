@@ -94,6 +94,7 @@ export function getRouter() {
     // threshold.
     defaultPendingMs: 500,
     defaultPendingMinMs: 300,
+    ssr: {},
   });
   readCaughtRouteTemplate = () =>
     resolveCaughtRouteTemplate(router.state.matches);

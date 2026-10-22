@@ -90,6 +90,11 @@ type SmokeRoute = {
   expectation?: RouteExpectation;
 };
 
+type ContentSecurityPolicyViolation = {
+  blockedURI: string;
+  effectiveDirective: string;
+};
+
 // Redirect targets for workspace-scoped aliases depend on the runtime view id,
 // so their `expectation.to` is resolved here rather than in the static table.
 const resolveExpectation = (
@@ -506,6 +511,16 @@ const measureRouteTarget = async ({
   route: SmokeRoute;
 }): Promise<RouteNetworkMetrics> => {
   const { context, page } = await openCleanPage(browser);
+  await context.addInitScript(() => {
+    const violations: ContentSecurityPolicyViolation[] = [];
+    Object.assign(globalThis, { __cspViolations: violations });
+    document.addEventListener("securitypolicyviolation", (event) => {
+      violations.push({
+        blockedURI: event.blockedURI,
+        effectiveDirective: event.effectiveDirective,
+      });
+    });
+  });
   const browserErrors = createBrowserErrorCollector({
     tolerateColdMountWarning: true,
   });
@@ -533,6 +548,17 @@ const measureRouteTarget = async ({
       `${route.template} must show exactly one divider under the app chrome`,
     ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
+    expect(
+      await page.evaluate(
+        () =>
+          (
+            globalThis as typeof globalThis & {
+              __cspViolations?: ContentSecurityPolicyViolation[];
+            }
+          ).__cspViolations ?? [],
+      ),
+      `content security policy violations on ${route.template}`,
+    ).toEqual([]);
     // Captured after the route shell and tracked API work are ready, so the
     // manifest reflects the fully-rendered route.
     return summarizeCapture(await network.capture());

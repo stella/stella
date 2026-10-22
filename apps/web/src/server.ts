@@ -4,8 +4,18 @@ import { defineHandlerCallback } from "@tanstack/react-router/ssr/server";
 import { createStartHandler, StartServer } from "@tanstack/react-start/server";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
+import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
+import {
+  browserApiBaseUrl,
+  browserApiRootUrl,
+  externalApiOrigin,
+} from "@/lib/api-origins";
 import { SSR_CACHE_CLASS_HEADER } from "@/route-response-policy";
+import {
+  buildContentSecurityPolicy,
+  createContentSecurityPolicyNonce,
+} from "@/security/content-security-policy";
 import { createSsrErrorReporter } from "@/ssr-error-reporter";
 import { renderSsrResponse } from "@/ssr-renderer";
 import { isSsrDocumentRequest } from "@/ssr-request";
@@ -34,12 +44,14 @@ const reportSsrError = createSsrErrorReporter({
 
 export default createServerEntry({
   async fetch(request) {
+    const nonce = createContentSecurityPolicyNonce();
     const response = isSsrDocumentRequest(request)
       ? await fetchBoundedSsrResponse({
           request,
           fetchResponse: async (renderRequest, rendererSignal) =>
             await createStartHandler(
               defineHandlerCallback(async ({ router, responseHeaders }) => {
+                router.options.ssr = { ...router.options.ssr, nonce };
                 const rendered = await renderSsrResponse({
                   request: renderRequest,
                   rendererSignal,
@@ -74,6 +86,21 @@ export default createServerEntry({
     const isHtml =
       headers.get("Content-Type")?.split(";").at(0)?.trim().toLowerCase() ===
       "text/html";
+    if (isHtml) {
+      headers.set(
+        "Content-Security-Policy",
+        buildContentSecurityPolicy(nonce, {
+          apiBase: externalApiOrigin(),
+          browserApiBase: browserApiBaseUrl(),
+          collabUrl: env.VITE_COLLAB_URL,
+          desktopBridgePort: env.VITE_DESKTOP_BRIDGE_PORT,
+          documentsBucket: env.VITE_DOCUMENTS_BUCKET,
+          documentsEndpoint: env.VITE_DOCUMENTS_ENDPOINT,
+          posthogHost: env.VITE_POSTHOG_HOST,
+          sandboxUrl: browserApiRootUrl("/v1/visual-sandbox/browser"),
+        }),
+      );
+    }
     if (
       cacheClass !== "public-anonymous" ||
       !isSuccessful ||
