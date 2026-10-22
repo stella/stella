@@ -81,6 +81,14 @@ type DesktopAccountChallenge = {
   protocol: string;
 };
 
+export const desktopAccountGrantRequest = (
+  challenge: DesktopAccountChallenge,
+) => ({
+  correlationId: challenge.correlationId,
+  verifierHash: challenge.verifierHash,
+  deviceJkt: challenge.deviceJkt,
+});
+
 type DesktopAccountAttempt =
   | {
       type: "challenge";
@@ -532,11 +540,9 @@ export const linkDesktopAccount = async ({
         });
       }
       const grant = unwrapEden(
-        await api["desktop-registry"].grant.post({
-          correlationId: challenge.correlationId,
-          verifierHash: challenge.verifierHash,
-          deviceJkt: challenge.deviceJkt,
-        }),
+        await api["desktop-registry"].grant.post(
+          desktopAccountGrantRequest(challenge),
+        ),
       );
       const matched = resolveDesktopAccountLink({
         browserAccount,
