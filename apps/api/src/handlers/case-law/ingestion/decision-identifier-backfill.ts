@@ -33,6 +33,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { assertCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   lockActiveCorpusProjectionSourceTx,
@@ -60,6 +61,8 @@ export const MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE = Math.floor(
 export const DEFAULT_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE =
   MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE;
 const MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS = 3;
+export const DECISION_IDENTIFIER_RECONCILIATION_COOLDOWN_MS = 6 * 60 * 60_000;
+export const DECISION_IDENTIFIER_RECONCILIATION_GRACE_MS = 60 * 60_000;
 
 type RunningBackfillPhase = Exclude<
   CaseLawDecisionIdentifierBackfillPhase,
@@ -230,6 +233,8 @@ type DecisionRow = {
   caseNumberType: DecisionPrimaryReferenceType;
   ecli: string | null;
   metadata: Record<string, unknown>;
+  court: string;
+  createdAt: Date;
 };
 
 /**
@@ -270,7 +275,9 @@ const readDecisionRows = (result: unknown): DecisionRow[] =>
     isRecord(row) &&
     typeof row["id"] === "string" &&
     typeof row["caseNumber"] === "string" &&
-    typeof row["country"] === "string"
+    typeof row["country"] === "string" &&
+    typeof row["court"] === "string" &&
+    (typeof row["createdAt"] === "string" || row["createdAt"] instanceof Date)
       ? [
           {
             id: row["id"],
@@ -281,6 +288,11 @@ const readDecisionRows = (result: unknown): DecisionRow[] =>
             ),
             ecli: typeof row["ecli"] === "string" ? row["ecli"] : null,
             metadata: isRecord(row["metadata"]) ? row["metadata"] : {},
+            court: row["court"],
+            createdAt:
+              row["createdAt"] instanceof Date
+                ? row["createdAt"]
+                : new Date(row["createdAt"]),
           },
         ]
       : [],
@@ -348,7 +360,8 @@ const decisionRowsSql = (
 ) => sql`
   SELECT decision.id::text AS id, decision.case_number AS "caseNumber",
          decision.case_number_type AS "caseNumberType",
-         decision.country, decision.ecli, decision.metadata
+         decision.country, decision.ecli, decision.metadata, decision.court,
+         decision.created_at AS "createdAt"
   FROM case_law_decisions decision
   ${cursorId === null ? sql`` : sql`WHERE decision.id > ${cursorId}::uuid`}
   ORDER BY decision.id
@@ -384,16 +397,22 @@ const resetCheckpoint = async (
         decisions_scanned = CASE
           WHEN ${phase} = ${CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS}
             THEN 0 ELSE decisions_scanned END,
-        citations_scanned = 0, completed_at = NULL,
+        citations_scanned = 0, completed_at = NULL, repaired_by_court = '{}'::jsonb,
         updated_at = clock_timestamp()
     WHERE version = ${DECISION_IDENTIFIER_BACKFILL_VERSION}
   `);
 };
 
+type BackfillPageOptions = {
+  batchSize: number;
+  /** When the page runs; the repair grace window is measured from it. */
+  now: Date;
+};
+
 const projectDecisionPage = async (
   tx: Transaction,
   checkpoint: RunningBackfillCheckpoint,
-  batchSize: number,
+  { batchSize, now }: BackfillPageOptions,
 ): Promise<DecisionIdentifierBackfillPageProgress> => {
   // audit: skip — rewrites derived public case-law identifiers; no workspace data
   const rows = readDecisionRows(
@@ -490,6 +509,43 @@ const projectDecisionPage = async (
     WHERE decision.id IN (SELECT decision_id FROM changed_decisions)
     RETURNING decision.id
   `);
+    const rewrittenIds = new Set(
+      executedRows(rewritten).flatMap((row) =>
+        isRecord(row) && typeof row["id"] === "string" ? [row["id"]] : [],
+      ),
+    );
+    const graceBoundary =
+      now.getTime() - DECISION_IDENTIFIER_RECONCILIATION_GRACE_MS;
+    const repairedByCourt = Object.fromEntries(
+      Map.groupBy(rows, (row) => row.court)
+        .entries()
+        .map(([court, courtRows]) => [
+          court,
+          courtRows.filter(
+            (row) =>
+              rewrittenIds.has(row.id) &&
+              row.createdAt.getTime() < graceBoundary,
+          ).length,
+        ]),
+    );
+    if (Object.keys(repairedByCourt).length > 0) {
+      await tx.execute(sql`
+        UPDATE case_law_decision_identifier_backfills checkpoint
+        SET repaired_by_court = (
+          SELECT jsonb_object_agg(key, total)
+          FROM (
+            SELECT key, sum(value)::int AS total
+            FROM (
+              SELECT key, value::int FROM jsonb_each_text(checkpoint.repaired_by_court)
+              UNION ALL
+              SELECT key, value::int FROM jsonb_each_text(${JSON.stringify(repairedByCourt)}::text::jsonb)
+            ) values
+            GROUP BY key
+          ) counts
+        ), updated_at = clock_timestamp()
+        WHERE version = ${DECISION_IDENTIFIER_BACKFILL_VERSION}
+      `);
+    }
     // Identifiers are projection fingerprint data, and `content_hash` covers
     // only the text payload, so an identifier-only rewrite is invisible to
     // anything keyed on that. Each rewritten decision's desired state is
@@ -766,6 +822,8 @@ const verifyCitationPage = async (
       UPDATE case_law_decision_identifier_backfills
       SET phase = ${CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE},
           cursor_id = NULL, completed_at = clock_timestamp(),
+          last_completed_repaired_by_court = repaired_by_court,
+          last_completed_at = clock_timestamp(),
           updated_at = clock_timestamp()
       WHERE version = ${DECISION_IDENTIFIER_BACKFILL_VERSION}
     `);
@@ -801,7 +859,7 @@ type BackfillPageResult =
 
 const runBackfillPage = async (
   rootDb: CaseLawRootHandle,
-  batchSize: number,
+  { batchSize, now }: BackfillPageOptions,
 ): Promise<BackfillPageResult> => {
   const selected = await rootDb.transaction(
     async (tx) => await loadCheckpoint(tx, "none"),
@@ -833,7 +891,10 @@ const runBackfillPage = async (
             case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS:
               return {
                 status: "progress",
-                progress: await projectDecisionPage(tx, checkpoint, batchSize),
+                progress: await projectDecisionPage(tx, checkpoint, {
+                  batchSize,
+                  now,
+                }),
               };
             case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS:
               return {
@@ -879,6 +940,66 @@ const runBackfillPage = async (
       selected satisfies never;
       return panic(`Unhandled checkpoint: ${String(selected)}`);
   }
+};
+
+export type DecisionIdentifierReconciliationStep =
+  | { status: "cooldown"; completedAt: string }
+  | { status: "advanced" }
+  | { status: "completed" };
+
+/** Advance one bounded checkpoint page, or begin the next perpetual pass. */
+type ReconcileDecisionIdentifiersStepOptions = {
+  now?: Date;
+  batchSize?: number;
+};
+
+export const reconcileDecisionIdentifiersStep = async (
+  rootDb: CaseLawRootHandle,
+  {
+    now = new Date(),
+    batchSize = DEFAULT_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE,
+  }: ReconcileDecisionIdentifiersStepOptions = {},
+): Promise<DecisionIdentifierReconciliationStep> => {
+  await ensureCheckpoint(rootDb);
+  const checkpoint = await withAggregateTransaction(
+    rootDb,
+    async (tx) => await loadCheckpoint(tx, "none"),
+  );
+  if (checkpoint === null) {
+    return panic(
+      "Decision identifier reconciliation checkpoint was not created",
+    );
+  }
+  if (
+    checkpoint.phase === CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE
+  ) {
+    if (
+      now.getTime() - new Date(checkpoint.completedAt).getTime() <
+      DECISION_IDENTIFIER_RECONCILIATION_COOLDOWN_MS
+    ) {
+      return { status: "cooldown", completedAt: checkpoint.completedAt };
+    }
+    await withAggregateTransaction(rootDb, async (tx) => {
+      const locked = await loadCheckpoint(tx, "for-update");
+      if (
+        locked?.phase ===
+          CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE &&
+        locked.completedAt === checkpoint.completedAt
+      ) {
+        await resetCheckpoint(
+          tx,
+          CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
+        );
+      }
+    });
+  }
+  const result = await runBackfillPage(rootDb, {
+    batchSize: normalizeBatchSize(batchSize),
+    now,
+  });
+  return result.status === "completed"
+    ? { status: "completed" }
+    : { status: "advanced" };
 };
 
 const normalizeBatchSize = (batchSize: number | undefined): number => {
@@ -1062,7 +1183,7 @@ const advanceBackfill = async (
   rootDb: CaseLawRootHandle,
   batchSize: number,
 ): Promise<BackfillIteration> => {
-  const result = await runBackfillPage(rootDb, batchSize);
+  const result = await runBackfillPage(rootDb, { batchSize, now: new Date() });
   if (result.status === "progress" || result.status === "phase-changed") {
     return result;
   }

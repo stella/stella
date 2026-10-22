@@ -16,6 +16,8 @@ import {
   buildCaseLawProjectionBacklogMetric,
   buildCaseLawProjectionConvergenceMetric,
   buildCaseLawSourceSyncAgeMetric,
+  buildCaseLawDecisionIdentifierPassAgeMetric,
+  buildCaseLawDecisionIdentifierRepairMetric,
   writeMetricLine,
 } from "@/api/lib/observability/request-metrics";
 import { isRecord } from "@/api/lib/type-guards";
@@ -32,6 +34,8 @@ type CaseLawFreshnessReport = {
     | "none";
   sourceAges: readonly { source: string; ageSeconds: number }[];
   convergence: string | null;
+  decisionIdentifierRepairs: Readonly<Record<string, number>>;
+  decisionIdentifierPassAgeSeconds: number;
 };
 const requiredNumber = (row: unknown, key: string): number => {
   if (!isRecord(row) || typeof row[key] !== "number") {
@@ -63,8 +67,9 @@ export const readCaseLawFreshnessReportTx = async (
   tx: Transaction,
 ): Promise<CaseLawFreshnessReport> => {
   const pendingState = sql`${corpusIndexProjectionStates.desiredEpoch} > coalesce(${corpusIndexProjectionStates.appliedEpoch}, -1)`;
-  const [stateRows, intentRows, sourceRows, serving] = await Promise.all([
-    tx.execute(sql`WITH pending AS (
+  const [stateRows, intentRows, sourceRows, serving, identifierRows] =
+    await Promise.all([
+      tx.execute(sql`WITH pending AS (
       SELECT coalesce(${corpusIndexProjectionStates.desiredAt}, ${corpusIndexProjectionStates.createdAt}) AS pending_since,
         CASE WHEN ${corpusIndexProjectionStates.desiredAt} IS NULL
           THEN 'state_created_at_fallback'
@@ -77,26 +82,33 @@ export const readCaseLawFreshnessReportTx = async (
       coalesce(extract(epoch FROM clock_timestamp() - min(pending_since)), 0)::float8 AS age,
       coalesce((array_agg(age_source ORDER BY pending_since))[1], 'none') AS age_source
     FROM pending`),
-    tx.execute(sql`SELECT count(*)::int AS count,
+      tx.execute(sql`SELECT count(*)::int AS count,
       coalesce(extract(epoch FROM clock_timestamp() - min(${corpusIndexProjectionIntents.createdAt})), 0)::float8 AS age
       FROM ${corpusIndexProjectionIntents}
       WHERE ${corpusIndexProjectionIntents.family} = 'case_law'
         AND ${ne(corpusIndexProjectionIntents.status, "settled")}
         AND ${ne(corpusIndexProjectionIntents.status, "cancelled")}`),
-    tx
-      .select({
-        source: caseLawSources.adapterKey,
-        ageSeconds: sql<number>`extract(epoch FROM clock_timestamp() - coalesce(${caseLawSources.lastSyncAt}, 'epoch'::timestamptz))::float8`,
-      })
-      .from(caseLawSources)
-      .where(
-        and(
-          eq(caseLawSources.enabled, true),
-          inArray(caseLawSources.adapterKey, SCHEDULED_SOURCE_KEYS),
+      tx
+        .select({
+          source: caseLawSources.adapterKey,
+          ageSeconds: sql<number>`extract(epoch FROM clock_timestamp() - coalesce(${caseLawSources.lastSyncAt}, 'epoch'::timestamptz))::float8`,
+        })
+        .from(caseLawSources)
+        .where(
+          and(
+            eq(caseLawSources.enabled, true),
+            inArray(caseLawSources.adapterKey, SCHEDULED_SOURCE_KEYS),
+          ),
         ),
-      ),
-    readServingCorpusIndexGenerationTx(tx, "case_law"),
-  ]);
+      readServingCorpusIndexGenerationTx(tx, "case_law"),
+      tx.execute(sql`
+      SELECT last_completed_repaired_by_court AS repairs,
+        coalesce(extract(epoch FROM clock_timestamp() - last_completed_at),
+          extract(epoch FROM clock_timestamp() - updated_at))::float8 AS age
+      FROM case_law_decision_identifier_backfills
+      WHERE version = 'typed-identifiers-v1'
+    `),
+    ]);
   const state = executedRows(stateRows).at(0);
   const intent = executedRows(intentRows).at(0);
   const stateCount = requiredNumber(state, "count");
@@ -118,12 +130,24 @@ export const readCaseLawFreshnessReportTx = async (
   const convergence = Result.isOk(serving)
     ? await readCorpusIndexProjectionConvergenceTx(tx, serving.value)
     : null;
+  const identifier = executedRows(identifierRows).at(0);
+  const repairs =
+    isRecord(identifier) && isRecord(identifier["repairs"])
+      ? Object.fromEntries(
+          Object.entries(identifier["repairs"]).flatMap(([court, count]) =>
+            typeof count === "number" ? [[court, count]] : [],
+          ),
+        )
+      : {};
   return {
     backlogItems: stateCount + intentCount,
     oldestUnpublishedAgeSeconds: oldestAge,
     oldestUnpublishedAgeSource,
     sourceAges: sourceRows,
     convergence,
+    decisionIdentifierRepairs: repairs,
+    decisionIdentifierPassAgeSeconds:
+      identifier === undefined ? 0 : requiredNumber(identifier, "age"),
   };
 };
 
@@ -139,6 +163,16 @@ export const emitCaseLawFreshnessReport = (
       buildCaseLawSourceSyncAgeMetric(source.source, source.ageSeconds),
     );
   }
+  for (const [court, count] of Object.entries(
+    report.decisionIdentifierRepairs,
+  )) {
+    writeMetricLine(buildCaseLawDecisionIdentifierRepairMetric(court, count));
+  }
+  writeMetricLine(
+    buildCaseLawDecisionIdentifierPassAgeMetric(
+      report.decisionIdentifierPassAgeSeconds,
+    ),
+  );
   if (report.convergence !== null) {
     writeMetricLine(
       buildCaseLawProjectionConvergenceMetric(report.convergence),
