@@ -191,6 +191,43 @@ describe("name screening", () => {
     expect(keys({ name: "Zwiad Charasischwili" })).toContain(KHARAZISHVILI);
   });
 
+  test("screens international person-name spellings and punctuation", () => {
+    const variants: ParsedList = {
+      version: EXTRA_VERSION,
+      entries: [
+        {
+          ...listedPerson("international-name", "Ľudovít Štúr"),
+          names: [
+            { name: "Ľudovít Štúr", quality: "strong" },
+            { name: "Александр Иванов", quality: "strong" },
+            { name: "محمد علي", quality: "strong" },
+            { name: "Muhammad Ali", quality: "strong" },
+          ],
+        },
+      ],
+    };
+    const internationalIndex = buildScreeningIndex([variants]);
+    const score = (name: string) =>
+      screen(internationalIndex, { name }, { cutoff: 0 })
+        .unwrap()
+        .possibleMatches.at(0)?.score ?? 0;
+
+    for (const name of [
+      "Ludovit Stur",
+      "Štúr Ľudovít",
+      "L. Stur",
+      "Ludovit-Stur",
+      "Dr Ludovit Stur",
+      "Aleksandr Ivanov",
+      "محمد علي",
+      "Muhammad Ali",
+      "Mohamed Aly",
+    ]) {
+      expect(score(name)).toBeGreaterThanOrEqual(DEFAULT_CUTOFF);
+    }
+    expect(score("Entirely Different")).toBe(0);
+  });
+
   test("tolerates a missing middle name or patronymic", () => {
     expect(scoreOf({ name: "Vladimir Putin" }, PUTIN)).toBeGreaterThanOrEqual(
       0.9,
