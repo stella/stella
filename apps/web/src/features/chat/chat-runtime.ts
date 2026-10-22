@@ -713,13 +713,58 @@ export const createChatRuntime = ({
   // The SDK rejoins a persisted in-flight run only while a view tails it, and
   // drops a resume that lands earlier. Read server truth once one is attached.
   const viewerAttached = Promise.withResolvers<undefined>();
+  /**
+   * The client's mount read of server truth, the only path that rejoins a
+   * turn this page did not start. TanStack drops the read, resume included,
+   * when the client's message list changes while it is pending. So until it
+   * settles, the page's own message writes stay in the snapshot
+   * (`showMessages`), and the read hands TanStack the messages shown then.
+   */
+  let mountRead: "pending" | "settled" = "pending";
+  let mountReadHeldMessages = false;
+  /** The read found a run with nothing to answer: TanStack rejoins it. */
+  let mountReadFoundRun = false;
   const attachedPersistence = {
     ...persistence,
     getItem: async (threadId: string) => {
       await viewerAttached.promise;
-      return await persistence.getItem(threadId);
+      const state = await persistence.getItem(threadId);
+      if (state === undefined) {
+        return undefined;
+      }
+      const resume: { pendingInterrupts?: readonly unknown[] } | undefined =
+        state.resume;
+      mountReadFoundRun =
+        resume !== undefined && (resume.pendingInterrupts?.length ?? 0) === 0;
+      return { ...state, messages: snapshot.messages };
     },
   } satisfies typeof persistence;
+
+  /**
+   * The mount read has settled: TanStack applied it, dropped it, or a request
+   * took the client over first. A request owns the turn from here. Otherwise
+   * the client takes the messages the page held back, and a run the read
+   * found but nothing rejoined (the last view left meanwhile) is reloaded
+   * from the server instead of staying "reconnecting".
+   */
+  const settleMountRead = (): void => {
+    if (mountRead === "settled") {
+      return;
+    }
+    mountRead = "settled";
+    const heldMessages = mountReadHeldMessages;
+    mountReadHeldMessages = false;
+    if (client.getIsLoading()) {
+      return;
+    }
+    if (heldMessages) {
+      client.setMessagesManually(snapshot.messages);
+    }
+    if (mountReadFoundRun) {
+      setSnapshot({ reconnecting: false, turnAbandoned: true });
+      reloadThread();
+    }
+  };
 
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
     threadId: key.threadId,
@@ -798,6 +843,11 @@ export const createChatRuntime = ({
       replayFloor = undefined;
       onFinish();
     },
+    onHydratingChange: (hydrating) => {
+      if (!hydrating) {
+        settleMountRead();
+      }
+    },
     onInterruptStateChange: observeInterruptSubmission,
     onLoadingChange: (isLoading) => {
       setSnapshot({
@@ -829,6 +879,16 @@ export const createChatRuntime = ({
     },
     tools: [browserTool.tool],
   });
+
+  /** Replace the shown messages; the one writer of the client's list. */
+  const showMessages = (messages: PersistedChatMessage[]): void => {
+    if (mountRead === "pending") {
+      mountReadHeldMessages = true;
+    } else {
+      client.setMessagesManually(messages);
+    }
+    setSnapshot({ messages });
+  };
 
   /**
    * Wait for the page's request to end before answering a card or an
@@ -1194,8 +1254,7 @@ export const createChatRuntime = ({
               ) {
                 // The turn had settled: the result was never stored, and the
                 // reload shows the turn as the server ended it.
-                client.setMessagesManually(messagesBeforeResult);
-                setSnapshot({ messages: messagesBeforeResult });
+                showMessages(messagesBeforeResult);
                 return;
               }
               if (
@@ -1216,8 +1275,7 @@ export const createChatRuntime = ({
                 // proof. A failure after a successful HTTP response is
                 // different: the server has already persisted the result, so
                 // the optimistic state is true.
-                client.setMessagesManually(messagesBeforeResult);
-                setSnapshot({ messages: messagesBeforeResult });
+                showMessages(messagesBeforeResult);
               }
               throw error;
             }
@@ -1245,10 +1303,7 @@ export const createChatRuntime = ({
         },
       );
     },
-    setMessages: (messages) => {
-      client.setMessagesManually(messages);
-      setSnapshot({ messages });
-    },
+    setMessages: showMessages,
     startRouteHandoffMessage: async (message, options) => {
       const started = startClientSend(message, options);
       if (started.status === "not_started") {
