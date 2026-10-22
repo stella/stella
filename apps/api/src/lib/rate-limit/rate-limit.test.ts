@@ -660,12 +660,12 @@ describe("RedisRateLimitContext", () => {
       expect(counter.count).toBe(
         failurePolicy === "fail_open_local" ? 1 : Number.MAX_SAFE_INTEGER,
       );
-      expect(operations).toEqual(["connect"]);
+      expect(operations).toEqual(["increment"]);
       expect(clientCreations).toBe(1);
       await context.increment("api:client", WINDOW_MS, 1000);
       expect(clientCreations).toBe(1);
       expect(sendCalls).toBe(1);
-      expect(operations).toEqual(["connect", "increment"]);
+      expect(operations).toEqual(["increment", "increment"]);
 
       context.kill();
     });
@@ -710,7 +710,7 @@ describe("RedisRateLimitContext", () => {
     expect(clientCreations).toBe(1);
     expect(sendCalls).toBe(0);
     expect(timeoutCalls).toBe(1);
-    expect(operations).toEqual(["connect"]);
+    expect(operations).toEqual(["increment"]);
 
     expect((await context.increment("api:client", WINDOW_MS, 1000)).count).toBe(
       2,
@@ -718,7 +718,7 @@ describe("RedisRateLimitContext", () => {
     expect(clientCreations).toBe(1);
     expect(sendCalls).toBe(1);
     expect(timeoutCalls).toBe(2);
-    expect(operations).toEqual(["connect", "increment"]);
+    expect(operations).toEqual(["increment", "increment"]);
 
     connected = true;
     expect((await context.increment("api:client", WINDOW_MS, 1000)).count).toBe(

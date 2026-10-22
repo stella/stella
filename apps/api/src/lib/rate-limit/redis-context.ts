@@ -91,7 +91,6 @@ type RedisRateLimitClient = {
 };
 
 type RedisRateLimitOperation =
-  | "connect"
   | "decrement"
   | "increment"
   | "read"
@@ -120,8 +119,12 @@ type RedisRateLimitBinding = Pick<RateLimitOptions, "context" | "generator">;
 
 type RedisConnection = {
   client: RedisRateLimitClient;
-  ready: Promise<void> | null;
+  ready: Promise<RedisConnectOutcome> | null;
 };
+
+type RedisConnectOutcome =
+  | { status: "connected" }
+  | { error: unknown; status: "failed" };
 
 type RateLimitCounter = {
   count: number;
@@ -149,13 +152,6 @@ type RefundProvenance = {
 class RedisRateLimitReplyError extends TaggedError("RedisRateLimitReplyError")<{
   message: string;
   reply: unknown;
-}> {}
-
-class ReportedRedisConnectError extends TaggedError(
-  "ReportedRedisConnectError",
-)<{
-  cause: unknown;
-  message: string;
 }> {}
 
 /** Replica-safe fixed-window context with a bounded, explicit outage policy. */
@@ -266,7 +262,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
     if (Result.isOk(result)) {
       return result.value;
     }
-    this.reportRedisOperationError(result.error, "read");
+    this.onRedisError(result.error, "read");
     if (this.failurePolicy === "fail_open_local") {
       this.onLocalFallback?.();
       const counter = this.fallback.read(counterKey);
@@ -316,7 +312,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
       catch: (error: unknown) => error,
     });
     if (Result.isError(redisResult)) {
-      this.reportRedisOperationError(redisResult.error, "increment");
+      this.onRedisError(redisResult.error, "increment");
       if (requestId !== null) {
         if (TimeoutError.is(redisResult.error)) {
           // The client gave up waiting, but the EVAL may already have
@@ -389,7 +385,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
         ]),
     );
     if (Result.isError(result)) {
-      this.reportRedisOperationError(result.error, "complete");
+      this.onRedisError(result.error, "complete");
     }
   }
 
@@ -418,7 +414,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
         ]),
     );
     if (Result.isError(result)) {
-      this.reportRedisOperationError(result.error, "decrement");
+      this.onRedisError(result.error, "decrement");
     }
   }
 
@@ -437,7 +433,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
         await this.sendCommand("DEL", [redisRateLimitKey(counterKey)]),
     );
     if (Result.isError(result)) {
-      this.reportRedisOperationError(result.error, "reset");
+      this.onRedisError(result.error, "reset");
     }
   }
 
@@ -483,34 +479,22 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
           commandTimeoutMs: this.commandTimeoutMs,
           label: "api-rate-limit-redis-connect",
           scheduleTimeout: this.scheduleTimeout,
-        }).catch((error: unknown) => {
-          if (this.redisConnection === createdConnection) {
-            createdConnection.ready = null;
-            this.onRedisError(error, "connect");
-          }
-          throw new ReportedRedisConnectError({
-            cause: error,
-            message: "The initial Redis connection failed",
-          });
-        });
+        }).then(
+          () => ({ status: "connected" }),
+          (error: unknown) => ({ error, status: "failed" }),
+        );
       }
     }
     if (connection.ready !== null) {
-      await connection.ready;
+      const outcome = await connection.ready;
       if (this.redisConnection === connection) {
         connection.ready = null;
       }
+      if (outcome.status === "failed") {
+        throw outcome.error;
+      }
     }
     return connection.client;
-  }
-
-  private reportRedisOperationError(
-    error: unknown,
-    operation: Exclude<RedisRateLimitOperation, "connect">,
-  ): void {
-    if (!ReportedRedisConnectError.is(error)) {
-      this.onRedisError(error, operation);
-    }
   }
 
   private async sendCommand(command: string, args: string[]): Promise<unknown> {
