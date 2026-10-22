@@ -14,6 +14,12 @@ import {
 } from "@stll/agent-input";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import { declareFailureClass } from "@stll/errors";
+import {
+  closestNames,
+  MAX_TOOL_NAME_CHARS,
+  toolNameDistance,
+  toolNameKey,
+} from "@stll/mcp-kit";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -871,65 +877,16 @@ export const internalFailureResult = (
   });
 };
 
-// A name's words in sorted order, so `widgets.delete-part` and
-// `widgets.parts.delete` compare as `delete part widgets` / `delete parts widgets`.
-const sortedWords = (name: string): string =>
-  name.split(/[._-]/u).toSorted().join(" ");
+export { MAX_TOOL_NAME_CHARS, toolNameDistance, toolNameKey };
 
 /**
- * A tool name as an agent may have meant it: lowercased, without separators
- * and without a leading `external` (the prefix chat scripts put on read
- * functions). `listMatters`, `LIST_MATTERS`, `list-matters` and
- * `external_list_matters` all share the key of `list_matters`.
- */
-export const toolNameKey = (name: string): string =>
-  name
-    .toLowerCase()
-    .replaceAll(/[-_.]/gu, "")
-    .replace(/^external/u, "");
-
-/**
- * How far `target` is from the tool name `name`: the smallest of the plain
- * edit distance, the word-order-insensitive one (`widgets.delete-part` against
- * `widgets.parts.delete`) and the distance between their keys (case,
- * separators and an `external_` prefix ignored).
- */
-export const toolNameDistance = (target: string, name: string): number =>
-  Math.min(
-    levenshtein(target, name),
-    levenshtein(sortedWords(target), sortedWords(name)),
-    levenshtein(toolNameKey(target), toolNameKey(name)),
-  );
-
-/**
- * Up to `limit` known tool names closest to `target` by
- * {@link toolNameDistance}, used to hint an agent that fat-fingered a tool
- * name. Only candidates within a lenient edit budget (roughly half the longer
- * name) are kept, so an unrelated miss returns nothing rather than a confusing
- * suggestion. No dependency: a tiny DP implementation is enough for the short,
- * small candidate set.
+ * Up to three known tool names closest to `target`, through the shared bounded
+ * suggestion owner.
  */
 export const closestToolNames = (
   target: string,
   candidates: readonly string[],
-  limit = 3,
-): string[] => {
-  const scored: { name: string; distance: number }[] = [];
-  for (const name of candidates) {
-    const distance = toolNameDistance(target, name);
-    if (distance <= Math.ceil(name.length / 2)) {
-      scored.push({ name, distance });
-    }
-  }
-
-  return scored
-    .toSorted(
-      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- tool names are machine identifiers (agent-facing "did you mean"), not display text
-      (a, b) => a.distance - b.distance || a.name.localeCompare(b.name),
-    )
-    .slice(0, limit)
-    .map(({ name }) => name);
-};
+): string[] => closestNames(target, candidates);
 
 /** A tool name as agent-facing text quotes it. */
 export const quoteToolName = (name: string): string => `\`${name}\``;
@@ -947,33 +904,6 @@ export const didYouMean = (labels: readonly string[]): string => {
   return rest.length === 0
     ? `Did you mean ${only}?`
     : `Did you mean one of ${labels.join(", ")}?`;
-};
-
-const levenshtein = (left: string, right: string): number => {
-  // Over Unicode scalar values, so an astral character is one edit.
-  const a = Array.from(left);
-  const b = Array.from(right);
-  // Rolling single-row DP. `previous` always holds `b.length + 1` entries and
-  // every read below is in range by construction; `panic` documents that as a
-  // hard invariant instead of masking an out-of-range read with a default.
-  const cell = (row: readonly number[], index: number): number =>
-    row[index] ?? panic("levenshtein: DP cell index out of range");
-
-  const previous = Array.from({ length: b.length + 1 }, (_unused, i) => i);
-  for (let i = 1; i <= a.length; i += 1) {
-    let diagonal = cell(previous, 0);
-    previous[0] = i;
-    for (let j = 1; j <= b.length; j += 1) {
-      const candidate = Math.min(
-        cell(previous, j) + 1,
-        cell(previous, j - 1) + 1,
-        diagonal + (a[i - 1] === b[j - 1] ? 0 : 1),
-      );
-      diagonal = cell(previous, j);
-      previous[j] = candidate;
-    }
-  }
-  return cell(previous, b.length);
 };
 
 export const isToolErrorResult = (

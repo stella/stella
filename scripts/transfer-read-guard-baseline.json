@@ -861,13 +861,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/templates/prefill.ts",
-    "function": "module/prefillTemplate/createSafeRootHandler[1]",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/time-entries/csv/export.ts",
     "function": "module/exportCsvHandler",
     "kind": "constant-limit",

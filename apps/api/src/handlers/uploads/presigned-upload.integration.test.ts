@@ -6,7 +6,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia";
 import JSZip from "jszip";
 
@@ -21,18 +21,32 @@ import {
 } from "@stll/docx-utils";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
-import { pendingUploads } from "@/api/db/schema";
+import {
+  documentProcessingRuns,
+  extractedContent,
+  fields,
+  pendingUploads,
+  searchDocuments,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { processDocumentProcessingRun } from "@/api/lib/document-processing-queue";
 import { LIMITS } from "@/api/lib/limits";
 import { admitWork, readWorkPoolMetrics } from "@/api/lib/load/work-admission";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { legacyTmpUploadKey } from "@/api/lib/uploads/runtime";
+import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
+import { docxWithMarkers } from "@/api/tests/helpers/docx-with-markers";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { largeDocx } from "@/api/tests/helpers/large-ooxml";
+import {
+  executeRowsDatabase,
+  executeRowsSafeDb,
+  executeRowsScopedDb,
+} from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -151,6 +165,153 @@ afterAll(async () => {
 });
 
 describe("presigned upload mutation flow", () => {
+  test("a DOCX uploaded through create and finalize is cited by chat after extraction", async () => {
+    const bytes = await docxWithMarkers([
+      "API upload citation proof: the renewal date is 20 October 2030",
+    ]);
+    const presignResult = await presignUpload.handler(
+      asTestRaw<PresignCtx>(
+        createContext({
+          body: {
+            purpose: "entity_version",
+            entityId: ids.entityA1,
+            name: "api-upload-citation-proof.docx",
+            mimeType: DOCX_MIME,
+            size: bytes.byteLength,
+            sha256Hex: hashSha256Hex(bytes),
+          },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    const uploadId = getUploadId(presignResult);
+    seededUploadIds.push(uploadId);
+    const grant = readPresignedUpload(presignResult);
+    expect(
+      await fetch(grant.url, {
+        method: "PUT",
+        body: bytes,
+        headers: grant.headers,
+      }),
+    ).toMatchObject({ status: 200 });
+
+    const finalized = await finalizeUpload.handler(
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    if (!("finalizedResult" in finalized)) {
+      throw new Error(`Upload did not finalize: ${JSON.stringify(finalized)}`);
+    }
+    const result = finalized.finalizedResult;
+    if (result.type !== "entity_version") {
+      throw new Error(`Expected an entity version, received ${result.type}`);
+    }
+
+    const run = (
+      await testDb
+        .select({ id: documentProcessingRuns.id })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.entityId, ids.entityA1),
+            eq(documentProcessingRuns.entityVersionId, result.entityVersionId),
+          ),
+        )
+        .orderBy(desc(documentProcessingRuns.createdAt))
+        .limit(1)
+    ).at(0);
+    expect(run).toBeDefined();
+    await processDocumentProcessingRun(
+      executeRowsDatabase(testDb),
+      run!.id,
+      new AbortController().signal,
+    );
+    expect(
+      await testDb
+        .select({ entityId: extractedContent.entityId })
+        .from(extractedContent)
+        .where(eq(extractedContent.entityId, ids.entityA1)),
+    ).toEqual([{ entityId: ids.entityA1 }]);
+    expect(
+      (
+        await testDb
+          .select({ text: searchDocuments.searchableText })
+          .from(searchDocuments)
+          .where(eq(searchDocuments.entityId, ids.entityA1))
+      ).at(0)?.text,
+    ).toContain("API upload citation proof");
+
+    const fileField = (
+      await testDb
+        .select({ id: fields.id })
+        .from(fields)
+        .where(eq(fields.entityVersionId, result.entityVersionId))
+        .limit(1)
+    ).at(0);
+    expect(fileField).toBeDefined();
+    const scopedDb = executeRowsScopedDb(
+      createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    );
+    const safeDb = executeRowsSafeDb(
+      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    );
+    const harness = createApprovalHarness({
+      ids,
+      safeDb,
+      scopedDb,
+      sources: { contextMatterIds: [ids.wsA1] },
+      testDb,
+    });
+    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    try {
+      harness.script(threadId, [
+        {
+          finishReason: "stop",
+          text: "The renewal date is [20 October 2030](#folio:api-upload-citation-proof).",
+          type: "text",
+        },
+      ]);
+      expect(
+        await harness.send(
+          harness.sendContext({
+            activeFile: {
+              entityId: ids.entityA1,
+              fileFieldId: fileField!.id,
+              fileName: result.fileName,
+              supportsDocxEdits: false,
+            },
+            message: {
+              id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+              parts: [{ content: "When is the renewal date?", type: "text" }],
+              role: "user",
+            },
+            runId: `run-${Bun.randomUUIDv7()}`,
+            threadId,
+          }),
+          { readAfterSettling: true },
+        ),
+      ).toEqual({ status: "streamed" });
+      const answer = await harness.lastAssistant(threadId);
+      expect(
+        answer.parts.some(
+          (part) =>
+            part.type === "text" &&
+            part.content.includes("[20 October 2030](#folio:"),
+        ),
+      ).toBe(true);
+    } finally {
+      await harness.close();
+    }
+  });
+
   test("presigns an agent skill for an authorized owner", async () => {
     const presignResult = await presignUpload.handler(
       asTestRaw<PresignCtx>(
