@@ -136,6 +136,15 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_decisions_parse_pending_idx" ON public."case_law_decisions" USING btree ("id") WHERE "parsed_source_hash" IS DISTINCT FROM "source_hash"',
+    definitionBody:
+      "ON public.case_law_decisions USING btree (id) WHERE ((parsed_source_hash)::text IS DISTINCT FROM (source_hash)::text)",
+    isUnique: false,
+    name: "case_law_decisions_parse_pending_idx",
+    tableName: "case_law_decisions",
+  },
   ...MONITORING_SESSION_INDEXES,
   ...Object.values(CHAT_CONTENT_V3_SOURCES).map(({ table: tableName }) => ({
     createSql: `CREATE INDEX CONCURRENTLY "${tableName}_content_v3_pending_idx" ON public."${tableName}" (id) WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb`,

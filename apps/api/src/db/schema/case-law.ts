@@ -643,6 +643,8 @@ export const caseLawDecisions = p.pgTable(
       .notNull(),
     metadata: jsonb().$type<Record<string, unknown>>().default({}),
     sourceHash: p.varchar("source_hash", { length: 64 }),
+    /** Raw generation from which the currently stored parsed payload was built. */
+    parsedSourceHash: p.varchar("parsed_source_hash", { length: 64 }),
     sourceObservedAt: timestamptz("source_observed_at"),
     sourceObservationOrder: p.bigint("source_observation_order", {
       mode: "bigint",
@@ -793,6 +795,10 @@ export const caseLawDecisions = p.pgTable(
       .on(t.languageGroupKey)
       .where(isNotNull(t.languageGroupKey)),
     p.index("case_law_decisions_created_at_idx").on(t.createdAt),
+    p
+      .index("case_law_decisions_parse_pending_idx")
+      .on(t.id)
+      .where(sql`${t.parsedSourceHash} IS DISTINCT FROM ${t.sourceHash}`),
     // The generation rebuild walks its snapshot in decision-date order, so the
     // documents one split receives cover a contiguous span of dates and a
     // timestamp-filtered query can skip the splits outside its window. The
