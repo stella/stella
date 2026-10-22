@@ -317,7 +317,8 @@ jobs:
           no-cache: true
 
       - name: Install dependencies
-        timeout-minutes: 5
+        # Windows installs run several times longer than macOS ones.
+        timeout-minutes: ${{ matrix.os == 'windows' && 20 || 5 }}
         # The pinned release checkout may predate retry.sh; the workflow
         # revision's copy is kept with the other release tooling.
         run: bash "$RELEASE_TOOLING/scripts/retry.sh" bun ci --ignore-scripts
