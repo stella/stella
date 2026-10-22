@@ -15,7 +15,7 @@ import type {
   Resource,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
   MCP_APP_EXTENSION_ID,
@@ -138,7 +138,7 @@ const createModernMcpRequest = ({
   params = {},
   token = "token",
 }: {
-  id: number;
+  id: number | string;
   method: string;
   params?: Record<string, unknown>;
   token?: string;
@@ -208,6 +208,13 @@ type McpJsonResponse<TResult> = {
 type McpJsonRpcError = {
   error: { code: number; message: string };
   id: null;
+  jsonrpc: "2.0";
+};
+
+/** An error that answers a request whose id was read. */
+type McpJsonRpcFailure = {
+  error: { code: number; message: string };
+  id: number | string | null;
   jsonrpc: "2.0";
 };
 
@@ -731,9 +738,9 @@ describe("handleMcpHttpRequest", () => {
         method: body.method,
         status: 403,
       });
-      expect(await readTestJson<McpJsonRpcError>(response)).toEqual({
+      expect(await readTestJson<McpJsonRpcFailure>(response)).toEqual({
         error: { code: -32_001, message: "Forbidden" },
-        id: null,
+        id: body.id,
         jsonrpc: "2.0",
       });
     }
@@ -792,11 +799,53 @@ describe("handleMcpHttpRequest", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe("2");
     expect(response.headers.get("WWW-Authenticate")).toBeNull();
+    expect(await readTestJson<McpJsonRpcFailure>(response)).toEqual({
+      error: { code: -32_000, message: "Service temporarily unavailable" },
+      id: 1,
+      jsonrpc: "2.0",
+    });
     expect(captureErrorMock).toHaveBeenCalledWith(error, {
       mode: "default",
       phase: "transport",
       source: "mcp",
     });
+  });
+
+  test("a server fault answers with the request's JSON-RPC id on both transports", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockRejectedValue(
+      new Error("database connection refused"),
+    );
+
+    for (const [protocol, id] of [
+      ["legacy", 7],
+      ["legacy", "request-7"],
+      ["modern", 7],
+      ["modern", "request-7"],
+    ] as const) {
+      const body = { id, jsonrpc: "2.0", method: "tools/list", params: {} };
+      const response = await handleMcpHttpRequest(
+        protocol === "modern"
+          ? createModernMcpRequest({ id, method: body.method })
+          : createMcpRequest(body),
+      );
+
+      expect({ protocol, status: response.status }).toEqual({
+        protocol,
+        status: 503,
+      });
+      expect(await readTestJson<McpJsonRpcFailure>(response)).toEqual({
+        error: { code: -32_000, message: "Service temporarily unavailable" },
+        id,
+        jsonrpc: "2.0",
+      });
+    }
   });
 
   test("builds a fresh modern server for each authenticated session", async () => {
@@ -2003,6 +2052,41 @@ describe("MCP transport conformance", () => {
     expect(responses.map((response) => response.status)).toEqual([
       406, 406, 406,
     ]);
+  });
+
+  test("parses a JSON-RPC body once on either transport", async () => {
+    authenticateSession();
+    const parse = spyOn(JSON, "parse");
+    try {
+      for (const protocol of ["legacy", "modern"] as const) {
+        const request =
+          protocol === "modern"
+            ? createModernMcpRequest({ id: 1, method: "tools/list" })
+            : createMcpRequest({
+                id: 1,
+                jsonrpc: "2.0",
+                method: "tools/list",
+                params: {},
+              });
+        const body = await request.clone().text();
+        parse.mockClear();
+
+        const response = await handleMcpHttpRequest(request);
+        const parses = parse.mock.calls.filter(([text]) => text === body);
+
+        expect({
+          protocol,
+          status: response.status,
+          parses: parses.length,
+        }).toEqual({
+          protocol,
+          status: 200,
+          parses: 1,
+        });
+      }
+    } finally {
+      parse.mockRestore();
+    }
   });
 
   test("reads no body before the token is accepted", async () => {

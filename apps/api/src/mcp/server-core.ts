@@ -3,6 +3,7 @@ import {
   ProtocolErrorCode,
   createMcpHandler,
   isInitializeRequest,
+  isJsonContentType,
   isLegacyRequest,
   Server,
   WebStandardStreamableHTTPServerTransport,
@@ -84,6 +85,7 @@ import {
 import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import {
+  jsonRpcRequestId,
   MCP_ACCESS_DENIED_ERROR_CODE,
   MCP_TRANSPORT_ERROR_CODE,
   mcpJsonRpcErrorResponse,
@@ -394,9 +396,11 @@ type McpAccessDenial = keyof typeof MCP_ACCESS_DENIALS;
 const accessDeniedResponse = ({
   denial,
   mode,
+  requestId,
 }: {
   denial: McpAccessDenial;
   mode: McpMode;
+  requestId: RequestId | null;
 }) => {
   const { challengeError, message, status } = MCP_ACCESS_DENIALS[denial];
   const headers = createMcpCorsHeaders();
@@ -408,15 +412,18 @@ const accessDeniedResponse = ({
   return mcpJsonRpcErrorResponse({
     code: MCP_ACCESS_DENIED_ERROR_CODE,
     headers,
+    id: requestId,
     message,
     status,
   });
 };
 
+// Refused from the frame alone, before the body is parsed.
 const payloadTooLargeResponse = () =>
   mcpJsonRpcErrorResponse({
     code: MCP_TRANSPORT_ERROR_CODE,
     headers: createMcpCorsHeaders(),
+    id: null,
     message: `Payload Too Large: a request body may not exceed ${MCP_MAX_REQUEST_BODY_BYTES} bytes.`,
     status: 413,
   });
@@ -619,17 +626,89 @@ const MCP_RETRY_AFTER_SECONDS = 2;
  * leak internals. A generic, retryable 5xx tells the client to back off and
  * retry; the real cause is captured for observability by the caller.
  */
-const retryableServerErrorResponse = () => {
+const retryableServerErrorResponse = (requestId: RequestId | null) => {
   const headers = createMcpCorsHeaders();
   headers.set("Retry-After", String(MCP_RETRY_AFTER_SECONDS));
 
   return mcpJsonRpcErrorResponse({
     code: MCP_TRANSPORT_ERROR_CODE,
     headers,
+    id: requestId,
     message: "Service temporarily unavailable",
     status: 503,
   });
 };
+
+/** JSON-RPC 2.0 parse error, answered when the body cannot be read at all. */
+const JSON_RPC_PARSE_ERROR_CODE = -32_700;
+
+type McpInboundMessage =
+  | {
+      /**
+       * The parsed JSON-RPC body, handed to both transports so the body is
+       * parsed once per exchange. `undefined` when it is not JSON: the
+       * transport then reads `request` and answers the parse error itself.
+       */
+      parsedBody: unknown;
+      request: Request;
+      /** The id every error answering this exchange carries. */
+      requestId: RequestId | null;
+      status: "read";
+    }
+  | { status: "unreadable" };
+
+const parseJsonBody = (text: string): unknown => {
+  if (text.length === 0) {
+    return undefined;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  return Result.isOk(parsed) ? parsed.value : undefined;
+};
+
+/**
+ * Read the JSON-RPC message once, so every response to it (the transports'
+ * own and this endpoint's refusals and faults alike) can echo its id. A body
+ * that does not parse is handed on as bytes for the transport to refuse.
+ */
+const readInboundMessage = async (
+  request: Request,
+): Promise<McpInboundMessage> => {
+  if (
+    request.method !== "POST" ||
+    request.body === null ||
+    !isJsonContentType(request.headers.get("content-type"))
+  ) {
+    return { parsedBody: undefined, request, requestId: null, status: "read" };
+  }
+  const text = await Result.tryPromise(async () => await request.text());
+  if (Result.isError(text)) {
+    return { status: "unreadable" };
+  }
+  const parsedBody = parseJsonBody(text.value);
+  return {
+    parsedBody,
+    request:
+      parsedBody === undefined
+        ? new Request(request.url, {
+            body: text.value,
+            headers: request.headers,
+            method: request.method,
+            signal: request.signal,
+          })
+        : request,
+    requestId: jsonRpcRequestId(parsedBody),
+    status: "read",
+  };
+};
+
+const unreadableBodyResponse = () =>
+  mcpJsonRpcErrorResponse({
+    code: JSON_RPC_PARSE_ERROR_CODE,
+    headers: createMcpCorsHeaders(),
+    id: null,
+    message: "Parse error: the request body could not be read",
+    status: 400,
+  });
 
 /**
  * Generic, retryable tool-error envelope for an unexpected failure while
@@ -1137,12 +1216,14 @@ export const createMcpHttpRequestHandler = ({
     authInfo,
     clientIp,
     mode,
+    parsedBody,
     request,
     session,
   }: {
     authInfo: AuthInfo;
     clientIp: string | null;
     mode: McpMode;
+    parsedBody: unknown;
     request: Request;
     session: McpSession;
   }): Promise<Response> => {
@@ -1223,7 +1304,10 @@ export const createMcpHttpRequestHandler = ({
 
     try {
       await server.connect(transport);
-      const response = await transport.handleRequest(request, { authInfo });
+      const response = await transport.handleRequest(request, {
+        authInfo,
+        parsedBody,
+      });
       if (response.body === null || !isEventStreamResponse(response)) {
         await teardown();
         return response;
@@ -1397,7 +1481,11 @@ export const createMcpHttpRequestHandler = ({
 
         const token = extractBearerToken(incomingRequest);
         if (!token) {
-          return accessDeniedResponse({ denial: "missing_credentials", mode });
+          return accessDeniedResponse({
+            denial: "missing_credentials",
+            mode,
+            requestId: null,
+          });
         }
 
         // Only a genuine token rejection gets a 401 + `WWW-Authenticate`. Anything
@@ -1405,10 +1493,25 @@ export const createMcpHttpRequestHandler = ({
         // `McpTokenVerificationError`, a bug in session resolution, or a transport
         // fault) is a server-side problem, not a bad token: capture it and return
         // a retryable 5xx so the client backs off instead of dropping into a
-        // re-consent loop.
-        const failureResponse = (error: unknown): Response => {
+        // re-consent loop. Every answer carries the id of the request once its
+        // body has been read.
+        const failureResponse = (
+          error: unknown,
+          requestId: RequestId | null,
+        ): Response => {
           if (error instanceof McpAuthenticationError) {
-            return accessDeniedResponse({ denial: "invalid_token", mode });
+            return accessDeniedResponse({
+              denial: "invalid_token",
+              mode,
+              requestId,
+            });
+          }
+          if (error instanceof McpOrganizationAccessError) {
+            return accessDeniedResponse({
+              denial: "organization_forbidden",
+              mode,
+              requestId,
+            });
           }
 
           captureError(error, {
@@ -1417,16 +1520,18 @@ export const createMcpHttpRequestHandler = ({
             source: "mcp",
           });
 
-          return retryableServerErrorResponse();
+          return retryableServerErrorResponse(requestId);
         };
 
+        // `null` until the body is read; the read message's id from then on.
+        let requestId: RequestId | null = null;
         try {
           const authenticated = await measureMcpPhase(
             "auth",
             async () => await authenticateMcpRequest(token, { mode }),
           );
           if (Result.isError(authenticated)) {
-            return failureResponse(authenticated.error);
+            return failureResponse(authenticated.error, requestId);
           }
           const session = authenticated.value;
 
@@ -1451,7 +1556,14 @@ export const createMcpHttpRequestHandler = ({
           if (frame.status === "too_large") {
             return await completeResponse(payloadTooLargeResponse(), session);
           }
-          const request = withTransportAcceptHeader(frame.request);
+          const inbound = await readInboundMessage(
+            withTransportAcceptHeader(frame.request),
+          );
+          if (inbound.status === "unreadable") {
+            return await completeResponse(unreadableBodyResponse(), session);
+          }
+          const { parsedBody, request } = inbound;
+          requestId = inbound.requestId;
 
           const authInfo = {
             clientId: session.userId,
@@ -1459,7 +1571,7 @@ export const createMcpHttpRequestHandler = ({
             scopes: session.scopes,
             token,
           };
-          const legacyRequest = await isLegacyRequest(request);
+          const legacyRequest = await isLegacyRequest(request, parsedBody);
           setMcpMetricProtocolPath(legacyRequest ? "legacy" : "modern");
           const dispatch = async () =>
             responseDisposition.run(envelopeDisposition, async () =>
@@ -1468,10 +1580,14 @@ export const createMcpHttpRequestHandler = ({
                     authInfo,
                     clientIp,
                     mode,
+                    parsedBody,
                     request,
                     session,
                   })
-                : await handlerForMode(mode).fetch(request, { authInfo }),
+                : await handlerForMode(mode).fetch(request, {
+                    authInfo,
+                    parsedBody,
+                  }),
             );
           const response =
             policy === undefined
@@ -1482,20 +1598,16 @@ export const createMcpHttpRequestHandler = ({
           // the public retry contract the outer catch provides on the legacy leg.
           if (!legacyRequest && response.status >= 500) {
             return policy === undefined
-              ? retryableServerErrorResponse()
-              : await completeResponse(retryableServerErrorResponse(), session);
+              ? retryableServerErrorResponse(requestId)
+              : await completeResponse(
+                  retryableServerErrorResponse(requestId),
+                  session,
+                );
           }
 
           return await completeResponse(response, session);
         } catch (error) {
-          if (error instanceof McpOrganizationAccessError) {
-            return accessDeniedResponse({
-              denial: "organization_forbidden",
-              mode,
-            });
-          }
-
-          return failureResponse(error);
+          return failureResponse(error, requestId);
         }
         // No teardown here on purpose. The handler owns instance lifetime and a
         // response body may still be streaming when this returns; closing it here
