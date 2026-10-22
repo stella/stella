@@ -57,16 +57,22 @@ import {
  *  - A personal API key additionally reads the organization's personal key
  *    policy (5).
  *
- * Context, for every credential: the membership read (1), then four scoped
- * transactions, each a `set_config` plus one read: authorized workspaces,
- * feature access, organization settings, business registry credentials
- * (4 x 2). An OAuth client token also looks up its agent registration (1).
+ * Context, for every credential: the membership read, which also carries the
+ * feature-access facts (1), then one scoped transaction, a `set_config` plus
+ * the authorized workspaces (2). An OAuth client token also looks up its
+ * agent registration (1).
+ *
+ * The organization's reachable business registries are not part of the
+ * context: the first projection in a request that offers the registry tool
+ * reads them in one scoped transaction (`set_config`, settings, stored
+ * credentials: 3), and a second use within the same request reads nothing.
  */
-const CONTEXT_TRANSACTIONS = 4;
+const CONTEXT_TRANSACTIONS = 1;
 const CONTEXT_STATEMENTS = 1 + CONTEXT_TRANSACTIONS * 2;
 const AGENT_REGISTRATION_READ = 1;
 const MACHINE_KEY_STATEMENTS = 4;
 const PERSONAL_POLICY_READ = 1;
+const REGISTRY_LOAD = { statements: 3, transactions: 1 } as const;
 
 type QueryPlan = {
   authenticate: number;
@@ -206,7 +212,11 @@ const signDelegatedUserToken = async (
   return token;
 };
 
-type Measured = QueryPlan & { signingKeyFetches: number };
+type Measured = QueryPlan & {
+  signingKeyFetches: number;
+  registryLoad: { statements: number; transactions: number };
+  registryReload: number;
+};
 
 const measure = async (credential: string): Promise<Measured> => {
   const keyFetchesBefore = signingKeyFetches;
@@ -220,17 +230,35 @@ const measure = async (credential: string): Promise<Measured> => {
     },
   );
   const transactionsBefore = transactions;
-  const context = await runWithQueryCounter(async (counter) => {
-    await resolveMcpSessionContext(session, {
-      request: new Request(`${BASE}/mcp`, { method: "POST" }),
-    });
+  const { context, requestContext } = await runWithQueryCounter(
+    async (counter) => {
+      const resolved = await resolveMcpSessionContext(session, {
+        request: new Request(`${BASE}/mcp`, { method: "POST" }),
+      });
+      return { context: counter.count, requestContext: resolved };
+    },
+  );
+  const contextTransactions = transactions - transactionsBefore;
+  const registryTransactionsBefore = transactions;
+  const registryLoad = await runWithQueryCounter(async (counter) => {
+    await requestContext.loadEnabledRegistrySlugs?.();
+    return counter.count;
+  });
+  const registryTransactions = transactions - registryTransactionsBefore;
+  const registryReload = await runWithQueryCounter(async (counter) => {
+    await requestContext.loadEnabledRegistrySlugs?.();
     return counter.count;
   });
   return {
     authenticate,
     context,
-    contextTransactions: transactions - transactionsBefore,
+    contextTransactions,
     signingKeyFetches: signingKeyFetches - keyFetchesBefore,
+    registryLoad: {
+      statements: registryLoad,
+      transactions: registryTransactions,
+    },
+    registryReload,
   };
 };
 
@@ -303,6 +331,8 @@ describe("MCP request authentication and session context run a fixed query plan"
         type,
         ...QUERY_PLAN[type],
         signingKeyFetches: 0,
+        registryLoad: REGISTRY_LOAD,
+        registryReload: 0,
       });
       expect(await measure(credential)).toEqual(steady);
     }

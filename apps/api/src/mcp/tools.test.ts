@@ -1766,7 +1766,8 @@ describe("OpenAI-compatible MCP tools", () => {
     test("narrows the registry enum to the org's enabled registries", async () => {
       const tool = await registryTool({
         ...createContext(),
-        enabledRegistrySlugs: ["orsr", "vies"],
+        loadEnabledRegistrySlugs: async () =>
+          await Promise.resolve(Result.ok(["orsr", "vies"] as const)),
       });
 
       expect(tool?.inputSchema.properties?.["registry"]).toEqual({
@@ -1779,7 +1780,8 @@ describe("OpenAI-compatible MCP tools", () => {
     test("drops the tool when the org can reach no registry", async () => {
       const tool = await registryTool({
         ...createContext(),
-        enabledRegistrySlugs: [],
+        loadEnabledRegistrySlugs: async () =>
+          await Promise.resolve(Result.ok([] as const)),
       });
 
       expect(tool).toBeUndefined();
@@ -1808,7 +1810,8 @@ describe("OpenAI-compatible MCP tools", () => {
         args: { registry: "krs", query: "0000123456" },
         context: {
           ...baseContext,
-          enabledRegistrySlugs: ["ares"],
+          loadEnabledRegistrySlugs: async () =>
+            await Promise.resolve(Result.ok(["ares"] as const)),
           testDependencies: {
             ...baseContext.testDependencies,
             executeRegistryLookup: executeRegistryLookupMock,
