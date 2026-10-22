@@ -1397,6 +1397,7 @@
     "credentialSendDescription": "Csak akkor küldd el, ha meg szeretnéd osztani ezt az értéket a beszélgetésben.",
     "credentialSendTitle": "Ez az üzenet hitelesítő adatot tartalmazhat",
     "deleteThread": "Beszélgetés törlése",
+    "diagramUnavailable": "Ezt a diagramot nem sikerült megjeleníteni. A forráskódja alább látható.",
     "editMode": {
       "autoDirect": "Automatikus · átírás",
       "autoDirectDescription": "Az AI módosításai azonnal, a dokumentum közvetlen átírásával lépnek életbe (változáskövetés nélkül).",
@@ -2709,6 +2710,7 @@
       "aiConfigModelInvalid": "Az AI-modell beállítása érvénytelen. Ellenőrizze a kiválasztott modelleket.",
       "aiConfigProviderInvalid": "Az AI-szolgáltató beállítása érvénytelen. Ellenőrizze a szolgáltató beállításait.",
       "aiConfigProviderValidationFailed": "Az AI-szolgáltató elutasította a beállítást. Ellenőrizze az API-kulcsot és a modellt.",
+      "aiDeadlineExceeded": "Az AI nem válaszolt időben. Próbálja újra egy pillanat múlva.",
       "aiOutputInvalid": "Az AI válasza váratlan formátumú volt. Próbálja újra.",
       "aiOutputModerated": "Az AI-szolgáltató moderálta a kimenetet. Fogalmazza át a kérést, vagy válasszon másik modellt.",
       "aiProviderTaskUnsupported": "A beállított AI-szolgáltató nem képes erre a feladatra. Válasszon olyat, amelyik képes rá.",

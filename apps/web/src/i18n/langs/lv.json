@@ -1397,6 +1397,7 @@
     "credentialSendDescription": "Sūtiet tikai tad, ja vēlaties šo vērtību kopīgot sarunā.",
     "credentialSendTitle": "Šajā ziņojumā var būt piekļuves informācija",
     "deleteThread": "Dzēst sarunu",
+    "diagramUnavailable": "Šo diagrammu neizdevās attēlot. Tās pirmkods ir redzams zemāk.",
     "editMode": {
       "autoDirect": "Automātiski · pārrakstīt",
       "autoDirectDescription": "AI labojumi tiek lietoti uzreiz, tieši pārrakstot dokumentu (bez izmaiņu izsekošanas).",
@@ -2709,6 +2710,7 @@
       "aiConfigModelInvalid": "AI modeļa konfigurācija nav derīga. Pārbaudiet atlasītos modeļus.",
       "aiConfigProviderInvalid": "AI pakalpojuma sniedzēja konfigurācija nav derīga. Pārbaudiet pakalpojuma sniedzēja iestatījumus.",
       "aiConfigProviderValidationFailed": "AI pakalpojuma sniedzējs noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",
+      "aiDeadlineExceeded": "AI neatbildēja laikā. Mēģiniet vēlreiz pēc brīža.",
       "aiOutputInvalid": "AI atbilde bija neparedzētā formātā. Mēģiniet vēlreiz.",
       "aiOutputModerated": "AI pakalpojumu sniedzējs moderēja izvadi. Pārfrāzējiet pieprasījumu vai izvēlieties citu modeli.",
       "aiProviderTaskUnsupported": "Konfigurētais AI pakalpojumu sniedzējs nevar izpildīt šo uzdevumu. Izvēlieties tādu, kas to spēj.",

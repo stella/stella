@@ -1,4 +1,8 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+
+import cliPackage from "@stll/cli/package.json" with { type: "json" };
+import mcpKitPackage from "@stll/mcp-kit/package.json" with { type: "json" };
 
 import {
   CLIENT_TOO_OLD_CODE,
@@ -18,6 +22,30 @@ const DESKTOP_IDENTITY_OWNER = new URL(
   "../../../../../apps/desktop/src-tauri/src/http_client.rs",
   import.meta.url,
 );
+
+const DESKTOP_MANIFEST = new URL(
+  "../../../../../apps/desktop/src-tauri/Cargo.toml",
+  import.meta.url,
+);
+
+// The desktop binary reports CARGO_PKG_VERSION, the `[package]` version.
+const CARGO_PACKAGE_VERSION_PATTERN = /^version = "([^"]+)"$/mu;
+
+const desktopWorkspaceVersion = async (): Promise<string> =>
+  CARGO_PACKAGE_VERSION_PATTERN.exec(
+    await Bun.file(DESKTOP_MANIFEST).text(),
+  )?.at(1) ??
+  panic("apps/desktop/src-tauri/Cargo.toml declares no package version");
+
+// The version each client built from this tree reports on the wire.
+const WORKSPACE_CLIENT_VERSIONS = {
+  cli: async () => cliPackage.version,
+  "mcp-kit": async () => mcpKitPackage.version,
+  desktop: desktopWorkspaceVersion,
+} as const satisfies Record<
+  (typeof LOCAL_CLIENT_KINDS)[number],
+  () => Promise<string>
+>;
 
 const request = (identity?: string) =>
   new Request("https://api.example.test/mcp", {
@@ -45,6 +73,19 @@ describe("local client support", () => {
   });
 
   for (const kind of LOCAL_CLIENT_KINDS) {
+    test(`${kind}: the client built from this tree is supported and latest`, async () => {
+      const version = await WORKSPACE_CLIENT_VERSIONS[kind]();
+      expect(
+        version,
+        `${kind}: the workspace manifest must declare a version`,
+      ).toMatch(/^\d+\.\d+\.\d+$/u);
+      expect(
+        clientTooOldError(request(localClientIdentity(kind, version))),
+        `${kind}: LOCAL_CLIENT_SUPPORT.${kind}.minimum (${LOCAL_CLIENT_SUPPORT[kind].minimum}) must not exceed the workspace version ${version}`,
+      ).toBeUndefined();
+      expect(LOCAL_CLIENT_SUPPORT[kind].latest).toBe(version);
+    });
+
     test(`${kind}: below minimum is typed and supported passes`, () => {
       const rejected = clientTooOldError(
         request(localClientIdentity(kind, "0.0.0")),
