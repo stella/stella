@@ -96,7 +96,8 @@ const requireAcceptanceText = (
   value: unknown,
 ): string => {
   const text = asText(value);
-  if (text.trim() === "" || /^TODO\b/iu.test(text.trim())) {
+  const trimmed = text.trim();
+  if (trimmed === "" || trimmed.toUpperCase().startsWith("TODO")) {
     return panic(
       `Dependency audit baseline entry ${id} must have a non-placeholder ${field}`,
     );

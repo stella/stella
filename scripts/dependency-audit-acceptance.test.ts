@@ -314,9 +314,19 @@ describe("audit acceptance expiry", () => {
       reason: "test acceptance",
     },
     {
+      field: "owner",
+      owner: " TODO_owner",
+      reason: "test acceptance",
+    },
+    {
       field: "reason",
       owner: "test owner",
       reason: "todo: document why this is accepted.",
+    },
+    {
+      field: "reason",
+      owner: "test owner",
+      reason: "todoreason",
     },
   ])(
     "a baseline entry with a placeholder $field fails closed",
