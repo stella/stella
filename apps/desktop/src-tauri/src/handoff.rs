@@ -245,7 +245,8 @@ async fn recover(
         tracing::warn!(%error, "required handoff update check failed")
       }
       crate::updater::CheckOutcome::Deferred { .. }
-      | crate::updater::CheckOutcome::UpToDate => {}
+      | crate::updater::CheckOutcome::UpToDate
+      | crate::updater::CheckOutcome::Disabled => {}
     }
   }
   let accepted = host.confirm(&failure).await?;
