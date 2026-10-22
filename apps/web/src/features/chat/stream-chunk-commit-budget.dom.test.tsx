@@ -467,9 +467,6 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
     (at) => at >= firstAt && at <= lastAt,
   ).length;
   const renders = probe.snapshot();
-  if (process.env["RENDER_PROBE_REPORT"] === "1") {
-    process.stdout.write(`\n${kind}\n${formatRenderReport(renders)}\n`);
-  }
   return {
     commits,
     renders,
