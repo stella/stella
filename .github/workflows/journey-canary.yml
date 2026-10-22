@@ -27,6 +27,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: ${{ (github.event_name == 'workflow_dispatch' || github.event.schedule == '41 */6 * * *') && '0' || '1' }}
+          fetch-tags: true
           persist-credentials: false
           sparse-checkout: |
             /scripts/check-journeys.sh
@@ -34,6 +35,7 @@ jobs:
             /scripts/check-npm-publish-lag.ts
             /scripts/publish-packages.ts
             /package.json
+            /VERSION
           sparse-checkout-cone-mode: false
 
       - name: Check public journeys

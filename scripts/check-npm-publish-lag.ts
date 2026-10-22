@@ -64,6 +64,7 @@ export type RegistryResult =
         | "timeout"
         | "contract_error"
         | "version_mismatch"
+        | "publish_awaits_promote"
         | "unattested_publish";
     };
 
@@ -354,7 +355,13 @@ type CheckRegistryOptions = {
   registry: string;
   timeoutMs: number;
   npmRunner?: NpmRunner;
+  fetchImpl?: RegistryFetch;
 };
+
+export type RegistryFetch = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
 
 // This is the network boundary: exceptions become fixed, credential-free reasons.
 export const checkRegistry = async ({
@@ -366,9 +373,10 @@ export const checkRegistry = async ({
   timeoutMs,
   movedRepository,
   npmRunner = runNpm,
+  fetchImpl = fetch,
 }: CheckRegistryOptions): Promise<RegistryResult> => {
   try {
-    const response = await fetch(
+    const response = await fetchImpl(
       `${registry.replace(/\/$/u, "")}/${encodeURIComponent(name)}/latest`,
       { signal: AbortSignal.timeout(timeoutMs) },
     );
