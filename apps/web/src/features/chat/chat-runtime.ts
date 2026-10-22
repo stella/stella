@@ -43,7 +43,11 @@ import {
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
 import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
-import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
+import {
+  BrowserBridgeUnmountedError,
+  getBrowserClientCapability,
+  isBrowserExtensionBridgeMounted,
+} from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
 import { toPersistedChatMessages } from "@/features/chat/chat-persisted-messages";
 import { keepShownRejoinMessages } from "@/features/chat/chat-rejoin-messages";
@@ -651,6 +655,14 @@ export const createChatRuntime = ({
         return panic("Stella chat connection received model messages");
       }
       providerDiagnostic = undefined;
+      if (!isBrowserExtensionBridgeMounted()) {
+        getAnalytics().captureError(
+          new BrowserBridgeUnmountedError({
+            message:
+              "Chat sent without the browser extension bridge mounted; the browser tool is unavailable for this turn",
+          }),
+        );
+      }
       const prepared = Result.try({
         try: () =>
           buildSendRequestBody({
@@ -1302,7 +1314,13 @@ export const createChatRuntime = ({
       return () => {
         listeners.delete(listener);
         subscriberCount -= 1;
-        if (subscriberCount === 0) {
+        // TanStack's detach aborts an open request, and a run this client
+        // sent itself leaves no resume pointer for the next attach to
+        // rejoin: the runtime would keep generating with only what it had
+        // shown. So the last view going (a route handoff's destination
+        // remounting, a move between surfaces) leaves an open request to
+        // end with its turn; `leave` is what drops delivery on purpose.
+        if (subscriberCount === 0 && !client.getIsLoading()) {
           client.detach();
         }
       };
