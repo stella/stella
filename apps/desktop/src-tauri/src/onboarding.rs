@@ -45,6 +45,9 @@ impl Step {
 pub struct FlowContext {
   pub linked: bool,
   pub has_permission_rows: bool,
+  /// Clipboard history exists; managed policy can turn it off, and then
+  /// there is no shortcut to try.
+  pub clipboard: bool,
 }
 
 /// The steps shown, in order. A step that no longer applies is dropped,
@@ -58,7 +61,8 @@ pub fn visible_steps(context: FlowContext, current: Step) -> Vec<Step> {
         || match step {
           Step::Connect => !context.linked,
           Step::Permissions => context.has_permission_rows,
-          Step::Welcome | Step::HowItWorks | Step::TryIt | Step::Done => true,
+          Step::TryIt => context.clipboard,
+          Step::Welcome | Step::HowItWorks | Step::Done => true,
         }
     })
     .collect()
@@ -208,6 +212,7 @@ async fn flow_context(app: &AppHandle) -> FlowContext {
   FlowContext {
     linked,
     has_permission_rows,
+    clipboard: !crate::managed_policy::current().clipboard_disabled,
   }
 }
 
@@ -436,18 +441,22 @@ mod tests {
     FlowContext {
       linked: false,
       has_permission_rows: false,
+      clipboard: true,
     },
     FlowContext {
       linked: false,
       has_permission_rows: true,
+      clipboard: true,
     },
     FlowContext {
       linked: true,
       has_permission_rows: false,
+      clipboard: true,
     },
     FlowContext {
       linked: true,
       has_permission_rows: true,
+      clipboard: true,
     },
   ];
   const INPUTS: [Input; 3] = [Input::Continue, Input::Back, Input::ShortcutPressed];
@@ -533,6 +542,7 @@ mod tests {
     let linked = FlowContext {
       linked: true,
       has_permission_rows: true,
+      clipboard: true,
     };
     assert!(visible_steps(linked, Step::Connect).contains(&Step::Connect));
     let current = on_screen(Step::Connect, Some(Step::Connect), linked);
@@ -572,6 +582,34 @@ mod tests {
           resolve(step, Step::TryIt, Input::ShortcutPressed, context),
           expected
         );
+      }
+    }
+  }
+
+  #[test]
+  fn without_clipboard_history_setup_ends_without_try_it() {
+    for linked in [false, true] {
+      for has_permission_rows in [false, true] {
+        let context = FlowContext {
+          linked,
+          has_permission_rows,
+          clipboard: false,
+        };
+        for walk in walks(6) {
+          let mut step = Step::Welcome;
+          for input in walk {
+            step = next_step(step, input, context);
+            assert_ne!(step, Step::TryIt, "{context:?}");
+          }
+        }
+        let before_done = if has_permission_rows {
+          Step::Permissions
+        } else {
+          Step::HowItWorks
+        };
+        assert_eq!(next_step(before_done, Input::Continue, context), Step::Done);
+        // A resume point saved on Try it before the policy settles on Done.
+        assert_eq!(settle(Step::TryIt, context), Step::Done);
       }
     }
   }
