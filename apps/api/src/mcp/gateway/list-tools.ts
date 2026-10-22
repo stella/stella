@@ -40,7 +40,7 @@ import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import {
   hasGrantedScope,
   isStaticToolShownToMemberRole,
-  listOfferedStaticMcpToolDefinitions,
+  loadOfferedStaticMcpToolDefinitions,
 } from "@/api/mcp/gateway/static-tool-visibility";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
@@ -169,11 +169,13 @@ export const listGatewayMcpToolDefinitions = async ({
   scopes?: readonly string[];
   externalGatewayDependencies?: ExternalGatewayDependencies;
 }): Promise<McpToolDefinition[]> => {
-  const definitions = listOfferedStaticMcpToolDefinitions({
-    context,
-    mode,
-    scopes,
-  }).map((definition) => projectFeatureToolDefinition(definition, context));
+  const definitions = (
+    await loadOfferedStaticMcpToolDefinitions({
+      context,
+      mode,
+      scopes,
+    })
+  ).map((definition) => projectFeatureToolDefinition(definition, context));
   // Restricted surfaces are pure static projections. Dynamic
   // connector discovery runs only on the advanced surface, so a
   // restricted client never discovers a tool its dispatcher rejects and never

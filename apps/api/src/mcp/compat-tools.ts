@@ -1,11 +1,12 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { entities, extractedContent, fields } from "@/api/db/schema";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decryptContent } from "@/api/lib/content-encryption";
+import {
+  loadCurrentExtractedContents,
+  loadCurrentExtractedSources,
+} from "@/api/lib/document-content-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -14,6 +15,11 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
+import {
+  type AuthorizedWorkspaceIds,
+  type AuthorizedWorkspaceReadError,
+  authorizedWorkspaceIds,
+} from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
   COMPAT_FETCH_OUTPUT_SCHEMA,
   COMPAT_SEARCH_OUTPUT_SCHEMA,
@@ -56,6 +62,7 @@ import {
   DEFAULT_COMPAT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
+  internalFailureResult,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
@@ -85,6 +92,38 @@ type CompatFetchPayload = {
 
 const PUBLIC_LAW_FEATURE = "FEATURE_PUBLIC_LAW";
 
+/**
+ * The one compat path into matter content: the workspace check and the
+ * content read share one scoped transaction, and any failure inside it,
+ * thrown or returned, comes back as an error Result for the internal
+ * failure envelope.
+ */
+const readAuthorizedMatterContent = async <T>(
+  context: McpRequestContext,
+  read: (
+    tx: Parameters<Parameters<McpRequestContext["scopedDb"]>[0]>[0],
+    workspaceIds: AuthorizedWorkspaceIds,
+  ) => Promise<T>,
+): Promise<Result<T, unknown>> =>
+  (
+    await Result.tryPromise({
+      try: async () =>
+        await context.scopedDb(
+          async (tx): Promise<Result<T, AuthorizedWorkspaceReadError>> => {
+            const workspaceIds = await authorizedWorkspaceIds(tx, {
+              organizationId: context.organizationId,
+              workspaceIds: context.accessibleWorkspaceIds,
+            });
+            if (workspaceIds.isErr()) {
+              return Result.err(workspaceIds.error);
+            }
+            return Result.ok(await read(tx, workspaceIds.value));
+          },
+        ),
+      catch: (cause) => cause,
+    })
+  ).andThen((inner) => inner);
+
 const getFetchableEntityMap = async ({
   context,
   entityIds,
@@ -93,57 +132,33 @@ const getFetchableEntityMap = async ({
   entityIds: string[];
 }) => {
   if (entityIds.length === 0) {
-    return new Map<string, FetchableEntity>();
+    return Result.ok(new Map<string, FetchableEntity>());
   }
 
   const safeEntityIds = entityIds.map(brandPersistedEntityId);
 
-  const rows = await context.scopedDb((tx) =>
-    tx
-      .select({
-        entityId: extractedContent.entityId,
-        workspaceId: extractedContent.workspaceId,
-        fieldId: fields.id,
-      })
-      .from(extractedContent)
-      .innerJoin(
-        entities,
-        and(
-          eq(entities.id, extractedContent.entityId),
-          eq(entities.workspaceId, extractedContent.workspaceId),
-        ),
-      )
-      .leftJoin(
-        fields,
-        and(
-          eq(fields.entityVersionId, entities.currentVersionId),
-          sql`(${fields.content} ->> 'type') = 'file'`,
-        ),
-      )
-      .where(
-        and(
-          eq(extractedContent.organizationId, context.organizationId),
-          inArray(extractedContent.entityId, safeEntityIds),
-        ),
-      ),
+  const loaded = await readAuthorizedMatterContent(
+    context,
+    async (tx, workspaceIds) =>
+      await loadCurrentExtractedSources(tx, {
+        entityIds: safeEntityIds,
+        organizationId: context.organizationId,
+        workspaceIds,
+      }),
   );
-
+  if (loaded.isErr()) {
+    return loaded;
+  }
   const fetchableEntityMap = new Map<string, FetchableEntity>();
-
-  for (const row of rows) {
-    const existing = fetchableEntityMap.get(row.entityId);
-    if (existing && existing.fieldId !== null) {
-      continue;
-    }
-
+  for (const row of loaded.value) {
     fetchableEntityMap.set(row.entityId, {
       entityId: row.entityId,
-      fieldId: row.fieldId,
+      fieldId: row.sourceFieldId,
       workspaceId: brandPersistedWorkspaceId(row.workspaceId),
     });
   }
 
-  return fetchableEntityMap;
+  return Result.ok(fetchableEntityMap);
 };
 
 const getCompatSearchHits = (result: unknown): unknown[] => {
@@ -438,7 +453,7 @@ const searchMatterKnowledge = async ({
   context: McpRequestContext;
   cursor: string | undefined;
   query: string;
-}): Promise<MatterSearchPage> => {
+}): Promise<Result<MatterSearchPage, unknown>> => {
   const page = await (
     context.testDependencies?.getSearchReader ?? getSearchReader
   )(context.scopedDb).search({
@@ -460,11 +475,14 @@ const searchMatterKnowledge = async ({
     context,
     entityIds: getCompatSearchEntityIds(hits),
   });
+  if (fetchableMap.isErr()) {
+    return fetchableMap;
+  }
 
-  return {
+  return Result.ok({
     nextCursor: page.nextCursor,
-    results: mapCompatSearchResults({ fetchableMap, hits }),
-  };
+    results: mapCompatSearchResults({ fetchableMap: fetchableMap.value, hits }),
+  });
 };
 
 const handleCompatSearchTool: McpToolHandler<
@@ -491,14 +509,18 @@ const handleCompatSearchTool: McpToolHandler<
     return pageLimitResult;
   }
 
-  const matter =
+  const matterResult =
     position.matter === null
-      ? EXHAUSTED_MATTER_PAGE
+      ? Result.ok(EXHAUSTED_MATTER_PAGE)
       : await searchMatterKnowledge({
           context,
           cursor: position.matter,
           query,
         });
+  if (matterResult.isErr()) {
+    return internalFailureResult(matterResult.error);
+  }
+  const matter = matterResult.value;
 
   if (!corpusEnabled) {
     return {
@@ -593,43 +615,35 @@ const handleCompatFetchTool: McpToolHandler<
     return errorResult("Document content is unavailable");
   }
 
-  const row = await context.scopedDb((tx) =>
-    tx.query.extractedContent.findFirst({
-      where: {
-        entityId: { eq: entityId },
-        organizationId: { eq: context.organizationId },
-        workspaceId: { in: context.accessibleWorkspaceIds },
-      },
-      with: {
-        entity: {
-          columns: {
-            name: true,
-            workspaceId: true,
-          },
-        },
-      },
-    }),
+  const loaded = await readAuthorizedMatterContent(
+    context,
+    async (tx, workspaceIds) =>
+      await loadCurrentExtractedContents(tx, {
+        entityIds: [entityId],
+        organizationId: context.organizationId,
+        workspaceIds,
+      }),
   );
+  if (loaded.isErr()) {
+    return internalFailureResult(loaded.error);
+  }
+  const row = loaded.value.at(0);
 
-  if (!row?.entity) {
+  if (!row) {
     return errorResult("Document content is unavailable");
   }
 
-  const text = await decryptContent(
-    context.organizationId,
-    row.ciphertext,
-    row.iv,
-  );
+  const text = row.text;
   // Keep the full decrypted text here; windowing happens in the egress
   // pipeline so anonymized fetches anonymize the whole document before slicing
   // (slicing raw text first could split an entity name across the window
   // boundary and leak its prefix).
   const result = {
     charCount: row.charCount,
-    name: row.entity.name,
+    name: row.name,
     text,
     truncated: false,
-    workspaceId: row.entity.workspaceId,
+    workspaceId: row.workspaceId,
   };
 
   const fetchPayload = getCompatFetchPayload({ entityId: rawEntityId, result });
