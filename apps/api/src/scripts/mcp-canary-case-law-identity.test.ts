@@ -52,8 +52,10 @@ const answer = (
 /** A deployment whose search samples `hits` and whose resolver is `resolve`. */
 const deployment =
   (resolve: Resolver): CallCaseLawTool =>
-  (name, args) =>
-    Promise.resolve({ type: "ok", payload: answer(resolve, name, args) });
+  async (name, args) => ({
+    type: "ok",
+    payload: answer(resolve, name, args),
+  });
 
 const resolvedTo = (decisionId: string) => ({
   status: "resolved",
