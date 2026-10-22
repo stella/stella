@@ -1693,6 +1693,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
+    "./.oxlint-plugins/no-adhoc-email-fold.ts",
     "./.oxlint-plugins/no-string-zip-entry.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
@@ -2651,6 +2652,24 @@ const config = defineConfig({
       excludeFiles: ["packages/text-normalize/**/*.{ts,tsx}"],
       rules: {
         "no-direct-unicode-normalize/no-direct-unicode-normalize": "error",
+      },
+    },
+    {
+      // Email addresses fold through apps/api/src/lib/auth/normalized-email.ts,
+      // the form Better Auth stores and looks accounts up by. The API is where
+      // identity is decided; the web app lowercases only for local substring
+      // search and the API normalizes whatever it receives. Tests compute
+      // expected values independently of the owner.
+      files: [
+        "apps/api/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-adhoc-email-fold.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/lib/auth/normalized-email.ts",
+        "apps/api/**/*.test.ts",
+      ],
+      rules: {
+        "no-adhoc-email-fold/no-adhoc-email-fold": "error",
       },
     },
     {
