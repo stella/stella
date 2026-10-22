@@ -119,7 +119,9 @@ export type ChatRouteHandoffStart = {
 
 /**
  * The composer's Stop, as the server hears it: nothing asked, a stop the
- * server has not answered yet, or one it refused (Stop stays available).
+ * server has not settled yet, or one it did not accept (the request stays
+ * open, so Stop stays available). A stop the server accepted never fails:
+ * the page reloads the turn as the server stores it.
  */
 export type ChatStopState =
   | { status: "idle" }
@@ -290,6 +292,9 @@ const CHAT_RESUME_PROBE_TIMEOUT_MS = 10_000;
  *  settled yet (its run lives on another instance) asks again. */
 const STOP_SETTLE_POLL_MS = 500;
 const STOP_SETTLE_POLL_ATTEMPTS = 20;
+/** How long one stop request may take. Above the server's own wait for a run
+ *  it produces to settle (10 s), so a stop it answers is never cut short. */
+const STOP_REQUEST_TIMEOUT_MS = 20_000;
 
 /** Whether the stopped turn still runs (its owner settles it soon) or is
  *  settled. */
@@ -308,7 +313,9 @@ const requestChatTurnStop = async ({
       const { data, error } = await api.chat
         .threads({ threadId: toSafeId<"chatThread">(threadId) })
         .turns({ turnId })
-        .cancel.post();
+        .cancel.post(undefined, {
+          fetch: { signal: AbortSignal.timeout(STOP_REQUEST_TIMEOUT_MS) },
+        });
       if (error) {
         return Result.err(toAPIError(error));
       }
@@ -1084,12 +1091,12 @@ export const createChatRuntime = ({
     }
     // The server holds the stop, so closing the request can no longer turn it
     // into a dropped connection. A run on another instance settles once it
-    // sees the stop; the page reloads after that.
+    // sees the stop; the page asks until it has, and a failed ask only means
+    // the next one decides.
     client.stop();
     for (
       let attempt = 0;
-      Result.isOk(answer) &&
-      answer.value === "running" &&
+      !(Result.isOk(answer) && answer.value === "settled") &&
       attempt < STOP_SETTLE_POLL_ATTEMPTS;
       attempt += 1
     ) {
@@ -1102,19 +1109,10 @@ export const createChatRuntime = ({
     if (!isCurrent()) {
       return;
     }
-    // A failed poll is not a settled turn. The server already holds the stop,
-    // so Stop stays available to ask again.
-    if (Result.isError(answer)) {
-      stoppedTurnId = null;
-      setSnapshot({
-        stop: { error: answer.error, status: "failed", turnId: stoppedTurn },
-        turnAbandoned: false,
-      });
-      return;
-    }
-    // Settled, or still running once the polls run out (its owner is gone
-    // and its lease has yet to lapse): reload what the server stores. The
-    // stopped turn's continuations stay held back either way.
+    // Settled, or not known settled once the polls run out (its owner is gone
+    // and its lease has yet to lapse, or the server did not answer): reload
+    // what the server stores. A turn it still runs reloads as running, with
+    // Stop on it again. The stopped turn's continuations stay held back.
     setSnapshot({ stop: { status: "idle" } });
     reloadThread();
   };
