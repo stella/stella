@@ -40,6 +40,7 @@ import {
   searchDocuments,
   taskAssignees,
   workspaces,
+  type DocumentProcessingStatus,
 } from "@/api/db/schema";
 import type {
   CellMetadata,
@@ -54,6 +55,7 @@ import {
   pgTimestampCursorValue,
 } from "@/api/lib/db-pagination";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
+import { getCurrentVersionProcessingStatuses } from "@/api/lib/document-processing-status";
 import { isValidDateCursorValue } from "@/api/lib/entities/cursor-validation";
 import {
   entityQueryScopeCondition,
@@ -153,6 +155,7 @@ export type QueryEntityResult = AgendaItemWireFields & {
   readOnly: boolean;
   sortOrder: string | null;
   activeEditBy: { name: string; image: string | null; isMe: boolean } | null;
+  processingStatus?: DocumentProcessingStatus | null;
   fields: {
     id: string;
     propertyId: string;
@@ -952,6 +955,7 @@ const queryEntitiesGenerator = async function* ({
     cellMetadataRowsResult,
     activeSessionsResult,
     assigneeRowsResult,
+    processingStatusesResult,
   ] = await Promise.all([
     safeDb((tx) => {
       const createdByMembers = organizationMemberIdsSubquery(
@@ -1174,6 +1178,9 @@ const queryEntitiesGenerator = async function* ({
             ),
         )
       : Promise.resolve(Result.ok([])),
+    safeDb(
+      async (tx) => await getCurrentVersionProcessingStatuses(tx, pageIds),
+    ),
   ]);
 
   const entityRows = yield* entityRowsResult;
@@ -1182,6 +1189,7 @@ const queryEntitiesGenerator = async function* ({
   const cellMetadataRows = yield* cellMetadataRowsResult;
   const activeSessions = yield* activeSessionsResult;
   const assigneeRows = yield* assigneeRowsResult;
+  const processingStatuses = yield* processingStatusesResult;
   const cellMetadataActorIds = getCellMetadataActorIds(cellMetadataRows);
   const cellMetadataActors =
     cellMetadataActorIds.length > 0
@@ -1310,6 +1318,7 @@ const queryEntitiesGenerator = async function* ({
       readOnly: entity.readOnly,
       sortOrder: entity.sortOrder,
       activeEditBy: activeEditMap.get(entity.id) ?? null,
+      processingStatus: processingStatuses.get(entity.id) ?? null,
       fields: entityFields.map((field) => ({
         id: field.id,
         propertyId: field.propertyId,
