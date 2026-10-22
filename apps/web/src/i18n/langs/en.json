@@ -5943,6 +5943,7 @@
     },
     "files": {
       "addFilePropertyToUpload": "Add a file property to upload files",
+      "additionalUploadFailures": "and {count, plural, one {# more} other {# more}}",
       "attachedTemplateUpload": {
         "confirm": "Remove link and upload",
         "description": "{count, plural, one {This file contains a link to a Word template outside the document.} other {These files contain links to Word templates outside the documents.}} stella blocks unchanged uploads because Word can load content or macros through these links.",

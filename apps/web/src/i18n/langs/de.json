@@ -5943,6 +5943,7 @@
     },
     "files": {
       "addFilePropertyToUpload": "Fügen Sie eine Dateieigenschaft zum Hochladen hinzu",
+      "additionalUploadFailures": "und {count, plural, one {# weitere Datei} other {# weitere Dateien}}",
       "attachedTemplateUpload": {
         "confirm": "Verknüpfung entfernen und hochladen",
         "description": "{count, plural, one {Diese Datei enthält eine Verknüpfung zu einer Word-Vorlage außerhalb des Dokuments.} other {Diese Dateien enthalten Verknüpfungen zu Word-Vorlagen außerhalb der Dokumente.}} stella lädt sie nicht unverändert hoch, da Word über diese Verknüpfungen Inhalte oder Makros laden kann.",

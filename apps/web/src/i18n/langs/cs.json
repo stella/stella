@@ -5943,6 +5943,7 @@
     },
     "files": {
       "addFilePropertyToUpload": "Přidejte vlastnost typu soubor pro nahrávání souborů",
+      "additionalUploadFailures": "a {count, plural, one {# další} few {# další} other {# dalších}}",
       "attachedTemplateUpload": {
         "confirm": "Odebrat odkaz a nahrát",
         "description": "{count, plural, one {Tento soubor obsahuje odkaz na vzor Wordu mimo dokument.} few {Tyto soubory obsahují odkazy na vzory Wordu mimo dokumenty.} other {Tyto soubory obsahují odkazy na vzory Wordu mimo dokumenty.}} stella blokuje nahrání beze změn, protože Word může přes tyto odkazy načíst obsah nebo makra.",

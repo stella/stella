@@ -5943,6 +5943,7 @@
     },
     "files": {
       "addFilePropertyToUpload": "Dodaj właściwość typu plik, aby przesyłać pliki",
+      "additionalUploadFailures": "i jeszcze {count, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}",
       "attachedTemplateUpload": {
         "confirm": "Usuń łącze i prześlij",
         "description": "{count, plural, one {Ten plik zawiera łącze do szablonu programu Word znajdującego się poza dokumentem.} few {Te pliki zawierają łącza do szablonów programu Word znajdujących się poza dokumentami.} many {Te pliki zawierają łącza do szablonów programu Word znajdujących się poza dokumentami.} other {Te pliki zawierają łącza do szablonów programu Word znajdujących się poza dokumentami.}} stella blokuje przesyłanie bez zmian, ponieważ program Word może przez te łącza wczytać zawartość lub makra.",

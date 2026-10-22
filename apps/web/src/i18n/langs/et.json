@@ -5943,6 +5943,7 @@
     },
     "files": {
       "addFilePropertyToUpload": "Lisage failide üleslaadimiseks failide omadus",
+      "additionalUploadFailures": "ja veel {count, plural, one {# fail} other {# faili}}",
       "attachedTemplateUpload": {
         "confirm": "Eemalda link ja laadi üles",
         "description": "{count, plural, one {See fail sisaldab linki väljaspool dokumenti asuvale Wordi mallile.} other {Need failid sisaldavad linke väljaspool dokumente asuvatele Wordi mallidele.}} stella ei laadi neid muutmata üles, sest Word võib nende linkide kaudu sisu või makrosid laadida.",
