@@ -2379,7 +2379,7 @@ type HandleSearchDialogEscapeOptions = {
   focusInput: () => void;
 };
 
-export const handleSearchDialogEscape = ({
+const handleSearchDialogEscape = ({
   action,
   clearSearch,
   event,
