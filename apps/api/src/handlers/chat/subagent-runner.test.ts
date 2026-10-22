@@ -381,6 +381,7 @@ describe("a subagent run on its parent's admitted action", () => {
     const reached = Promise.withResolvers<AbortSignal>();
     const run = admitModelDispatch({
       organizationId: ids.orgA,
+      userId: ids.userA1,
       actionKind: "chat.send",
       organizationStateDb: testOrganizationStateDb,
       signal: lease.signal,

@@ -344,6 +344,11 @@ export const BETTER_AUTH_CORE_SCHEMA = {
     }),
     indexes: [
       {
+        fields: ["id"],
+        predicate: `"session"."id" LIKE 'synthetic-session-%'`,
+        unique: false,
+      },
+      {
         fields: ["userId", "activeOrganizationId"],
         predicate: null,
         unique: false,

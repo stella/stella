@@ -409,10 +409,9 @@ const renderTopMatter = ({
   documentAst = ast,
   fields = {},
   notesByAnchorId,
-}: Partial<
-  Pick<TextDecision, "courtAbbreviation" | "courtTier" | "documentAst">
-> & {
+}: Partial<Pick<TextDecision, "courtAbbreviation" | "courtTier">> & {
   analysis?: DecisionAnalysis;
+  documentAst?: DocumentAst | null;
   fields?: TextFieldOverrides;
   notesByAnchorId?: ReadonlyMap<string, ReactNode>;
 } = {}): string =>
@@ -426,6 +425,7 @@ const renderTopMatter = ({
               analysis === undefined ? null : (
                 <AiHeadnotes
                   analysis={analysis}
+                  blocks={documentAst?.blocks ?? []}
                   onAnchorClick={() => undefined}
                 />
               )

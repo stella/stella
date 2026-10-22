@@ -616,6 +616,7 @@ describe("release proof trust boundary", () => {
     "fork head",
     "fork base",
     "unmerged PR",
+    "ordinary PR",
   ] as const)(
     "refuses identical trees with an unverified chain: %s",
     async (failure) =>
@@ -642,6 +643,10 @@ describe("release proof trust boundary", () => {
               break;
             case "fork base":
               pullRequest.base.repo.full_name = "outsider/stella";
+              publishPullRequests(target, [pullRequest]);
+              break;
+            case "ordinary PR":
+              pullRequest.title = "fix: ordinary change";
               publishPullRequests(target, [pullRequest]);
               break;
             case "unmerged PR":
@@ -723,13 +728,13 @@ describe("release proof trust boundary", () => {
       expect(verify(target, target).exitCode).toBe(0);
     }));
 
-  test("accepts an ancestor only while every intervening first-parent tree is identical", async () =>
+  test("refuses other main commits as proof even when their trees are identical", async () =>
     withRepository(({ commit, git, target, publishCommit, verify }) => {
       git("commit", "--quiet", "--allow-empty", "--message", "unchanged tree");
       const unchanged = git("rev-parse", "HEAD");
       publishCommit(unchanged);
       git("update-ref", "refs/remotes/origin/main", unchanged);
-      expect(verify(unchanged, target).exitCode).toBe(0);
+      expect(verify(unchanged, target).exitCode).not.toBe(0);
       commit("c", "different intervening tree");
       const reverted = commit("b", "restore release tree");
       publishCommit(reverted);
