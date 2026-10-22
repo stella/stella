@@ -286,7 +286,11 @@ export const StreamdownMentionLink = ({
     );
   }
 
-  return <ProxyChatLink href={href}>{children}</ProxyChatLink>;
+  return (
+    <ProxyChatLink href={href} iconSource={{ kind: "model-text" }}>
+      {children}
+    </ProxyChatLink>
+  );
 };
 
 const SourceCitationChip = ({

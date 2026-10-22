@@ -1,15 +1,16 @@
 import { panic } from "better-result";
 
 import type { createLinkIconCache } from "@/api/handlers/chat/link-icons/cache";
+import type { RegistrableIconSite } from "@/api/handlers/chat/link-icons/origin";
 import type { LinkIconOutcome } from "@/api/handlers/chat/link-icons/outcome";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type ReadLinkIconOptions = {
-  hostname: string;
+  hostname: RegistrableIconSite;
   userId: SafeId<"user">;
   ip: string;
   cache: Pick<ReturnType<typeof createLinkIconCache>, "readOrLease" | "store">;
-  readOrigin: (hostname: string) => Promise<LinkIconOutcome>;
+  readOrigin: (hostname: RegistrableIconSite) => Promise<LinkIconOutcome>;
 };
 
 export const readLinkIcon = async ({

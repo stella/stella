@@ -91,6 +91,57 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
+test("requests one site icon only for visible tool-source links", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.IntersectionObserver = VisibleIntersectionObserver;
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      requests.push(new Request(input).url);
+      return Response.json({ type: "no-icon" });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  const view = render(
+    <QueryClientProvider client={client}>
+      <ProxyChatLink
+        href="https://model.example/path"
+        iconSource={{ kind: "model-text" }}
+      >
+        {LINK_LABELS.absent}
+      </ProxyChatLink>
+      <ProxyChatLink
+        href="https://a.attacker.example/one"
+        iconSource={{ kind: "tool-source" }}
+      >
+        {LINK_LABELS.source}
+      </ProxyChatLink>
+      <ProxyChatLink
+        href="https://b.attacker.example/two"
+        iconSource={{ kind: "tool-source" }}
+      >
+        {LINK_LABELS.reference}
+      </ProxyChatLink>
+    </QueryClientProvider>,
+  );
+  try {
+    await act(async () => {
+      for (const observer of [...observers]) {
+        observer.intersectObserved();
+      }
+    });
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests).toEqual([apiUrl("/chat/link-icons/attacker.example")]);
+  } finally {
+    view.unmount();
+    client.clear();
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("loads visible host icons once through the authenticated API and cleans local URLs", async () => {
   const originalFetch = globalThis.fetch;
   const originalCreateObjectURL = Object.getOwnPropertyDescriptor(
@@ -137,16 +188,28 @@ test("loads visible host icons once through the authenticated API and cleans loc
   const view = render(
     <QueryClientProvider client={queryClient}>
       <>
-        <ProxyChatLink href="https://example.com/one">
+        <ProxyChatLink
+          iconSource={{ kind: "tool-source" }}
+          href="https://example.com/one"
+        >
           {LINK_LABELS.source}
         </ProxyChatLink>
-        <ProxyChatLink href="https://example.com/two">
+        <ProxyChatLink
+          iconSource={{ kind: "tool-source" }}
+          href="https://example.com/two"
+        >
           {LINK_LABELS.reference}
         </ProxyChatLink>
-        <ProxyChatLink href="https://no-icon.example/path">
+        <ProxyChatLink
+          iconSource={{ kind: "tool-source" }}
+          href="https://no-icon.example/path"
+        >
           {LINK_LABELS.absent}
         </ProxyChatLink>
-        <ProxyChatLink href="https://github.com/stella/stella">
+        <ProxyChatLink
+          iconSource={{ kind: "tool-source" }}
+          href="https://github.com/stella/stella"
+        >
           {LINK_LABELS.bundled}
         </ProxyChatLink>
       </>
@@ -282,7 +345,10 @@ for (const { disposition } of [
     const client = new QueryClient();
     const view = render(
       <QueryClientProvider client={client}>
-        <ProxyChatLink href="https://retry.example/source">
+        <ProxyChatLink
+          iconSource={{ kind: "tool-source" }}
+          href="https://retry.example/source"
+        >
           {LINK_LABELS.source}
         </ProxyChatLink>
       </QueryClientProvider>,
@@ -343,7 +409,10 @@ for (const { stop } of [{ stop: "hidden" }, { stop: "unmounted" }] as const) {
     const client = new QueryClient();
     const view = render(
       <QueryClientProvider client={client}>
-        <ProxyChatLink href="https://retry.example/source">
+        <ProxyChatLink
+          iconSource={{ kind: "tool-source" }}
+          href="https://retry.example/source"
+        >
           {LINK_LABELS.source}
         </ProxyChatLink>
       </QueryClientProvider>,
@@ -408,7 +477,10 @@ test("earlier terminal cache updates do not consume a mounted link's temporary r
   expect(client.getQueryState(options.queryKey)?.dataUpdateCount).toBe(6);
   const view = render(
     <QueryClientProvider client={client}>
-      <ProxyChatLink href="https://retry.example/source">
+      <ProxyChatLink
+        iconSource={{ kind: "tool-source" }}
+        href="https://retry.example/source"
+      >
         {LINK_LABELS.source}
       </ProxyChatLink>
     </QueryClientProvider>,

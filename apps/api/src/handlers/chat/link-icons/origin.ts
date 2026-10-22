@@ -1,4 +1,5 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
+import { getDomain } from "tldts";
 
 import { Temporal } from "@stll/time";
 
@@ -24,6 +25,30 @@ export const isCanonicalIconHostname = (hostname: string): boolean => {
   }
   const parsed = parseSafeOutboundUrl(`https://${hostname}/favicon.ico`);
   return Result.isOk(parsed) && parsed.value.hostname === hostname;
+};
+
+export type RegistrableIconSite = {
+  readonly kind: "registrable-icon-site";
+  readonly value: string;
+};
+
+export class NotIconSite extends TaggedError("NotIconSite")<{
+  message: string;
+}> {}
+
+export const toRegistrableIconSite = (hostname: string) => {
+  if (!isCanonicalIconHostname(hostname)) {
+    return Result.err(
+      new NotIconSite({ message: "Hostname is not an icon site" }),
+    );
+  }
+  const domain = getDomain(hostname, { allowPrivateDomains: false });
+  if (domain === null) {
+    return Result.err(
+      new NotIconSite({ message: "Hostname has no registrable domain" }),
+    );
+  }
+  return Result.ok({ kind: "registrable-icon-site", value: domain } as const);
 };
 
 const unavailableIcon = ({
@@ -65,19 +90,16 @@ export const createLinkIconOrigin = ({
   let active = 0;
 
   return async (
-    hostname: string,
+    site: RegistrableIconSite,
     permit: ThirdPartyOutboundPermit,
   ): Promise<LinkIconOutcome> => {
-    if (!isCanonicalIconHostname(hostname)) {
-      return unavailableIcon({ type: "no-icon", reason: "hostname" });
-    }
     if (active >= MAX_ORIGIN_CONCURRENCY) {
       return unavailableIcon({ type: "temporary", reason: "capacity" });
     }
     active += 1;
     const deadline = now() + ORIGIN_DEADLINE_MS;
     const signal = AbortSignal.timeout(ORIGIN_DEADLINE_MS);
-    let url: HttpsIconUrl = `https://${hostname}/favicon.ico`;
+    let url: HttpsIconUrl = `https://${site.value}/favicon.ico`;
     let remainingBytes = LINK_ICON_MAX_BYTES;
 
     try {

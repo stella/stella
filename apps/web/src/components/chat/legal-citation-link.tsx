@@ -102,6 +102,8 @@ const LegalCitationView = ({
       {citation.source_url !== undefined && (
         <ProxyChatLink
           href={citation.source_url}
+          // Publisher URLs here come from the resolved tool source.
+          iconSource={{ kind: "tool-source" }}
           newTabLabel={t("common.openInNewTab")}
         >
           {t("common.source")}
@@ -173,6 +175,8 @@ const DecisionTrayLink = ({
     <ProxyChatLink
       appearance="tray"
       href={href}
+      // Decision tray URLs come from the tool source record.
+      iconSource={{ kind: "tool-source" }}
       newTabLabel={t("common.openInNewTab")}
       onClick={onClick}
     >
@@ -207,6 +211,8 @@ const FullLabelTrayLink = ({
     <ProxyChatLink
       appearance="tray"
       href={href}
+      // Full tray URLs are resolved from the tool source record.
+      iconSource={{ kind: "tool-source" }}
       newTabLabel={t("common.openInNewTab")}
     >
       {props.children}
@@ -307,6 +313,8 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
           href={
             citation.url === null ? "" : (props.externalHref ?? citation.url)
           }
+          // External citation URLs come from the tool source record.
+          iconSource={{ kind: "tool-source" }}
           newTabLabel={t("common.openInNewTab")}
         >
           {props.children}
