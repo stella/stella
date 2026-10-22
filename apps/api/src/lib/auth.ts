@@ -2526,10 +2526,12 @@ const VALIDATE_AUTH_REJECTION_BODY = {
 >;
 
 /**
- * Account routes read the session from storage. Organization routes may
- * serve the cached cookie snapshot because their member lookup runs live on
- * every request; an account route has no such lookup, so the stored session
- * is the only thing that ends when the session or the account does.
+ * Account routes confirm the session still exists in storage. Organization
+ * routes may serve the cached cookie snapshot because their member lookup runs
+ * live on every request; an account route has no such lookup, so the stored
+ * session is the only thing that ends when the session or the account does.
+ * The snapshot still supplies the session itself; one indexed read checks it
+ * is live, instead of a full uncached session load.
  */
 export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
   validateSession: {
@@ -2537,7 +2539,6 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
       const sessionResult = await Result.tryPromise(async () => {
         const resolved = await getAuth().api.getSession({
           headers: request.headers,
-          query: { disableCookieCache: true },
           returnHeaders: true,
         });
         forwardAuthResponseCookies(set.headers, resolved.headers);
@@ -2551,6 +2552,30 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
       const session = sessionResult.value?.session;
       const user = sessionResult.value?.user;
       if (!session || !user) {
+        return status(401, AUTH_REJECTION_BODY[401]);
+      }
+
+      // The signed snapshot may outlive its stored session for its cache
+      // lifetime; one indexed read confirms the session still exists. Signing
+      // out elsewhere deletes the row, and deleting the account cascades.
+      // The read goes through the auth layer's own database adapter, which
+      // only reaches auth tables.
+      const liveResult = await Result.tryPromise(async () => {
+        const { adapter } = await getAuth().$context;
+        return await adapter.findOne<{ id: string }>({
+          model: "session",
+          where: [
+            { field: "id", value: session.id },
+            { field: "userId", value: user.id },
+            { field: "expiresAt", operator: "gt", value: new Date() },
+          ],
+          select: ["id"],
+        });
+      });
+      if (Result.isError(liveResult)) {
+        return status(500, AUTH_REJECTION_BODY[500]);
+      }
+      if (liveResult.value === null) {
         return status(401, AUTH_REJECTION_BODY[401]);
       }
 
