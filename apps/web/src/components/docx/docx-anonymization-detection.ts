@@ -39,12 +39,6 @@ type AnonymizationDetection = {
 };
 
 /**
- * Live detections per field. A field can be open in more than one editor
- * (docked and full view), and every one of them must be current.
- */
-const liveDetections = new Map<string, Set<() => boolean>>();
-
-/**
  * Fail-closed gate for every exit that relies on the live DOCX detection
  * (today: the anonymized download in the inspector facet). Returns true only
  * when each live detection for the field holds a result computed for exactly
@@ -58,7 +52,9 @@ const liveDetections = new Map<string, Set<() => boolean>>();
 export const confirmAnonymizationDetectionCurrent = (
   fieldId: string,
 ): boolean => {
-  const confirms = liveDetections.get(fieldId);
+  const confirms =
+    useInspectorAnonymizationStore.getState()
+      .anonymizationDetectionConfirmsByFieldId[fieldId];
   if (confirms === undefined) {
     return true;
   }
@@ -264,9 +260,9 @@ export const startAnonymizationDetection = ({
     run();
     return false;
   };
-  const fieldConfirms = liveDetections.get(fieldId) ?? new Set();
-  fieldConfirms.add(confirmCurrent);
-  liveDetections.set(fieldId, fieldConfirms);
+  useInspectorAnonymizationStore
+    .getState()
+    .registerAnonymizationDetection(fieldId, confirmCurrent);
   // The doc text isn't always populated when the view first captures (lazy
   // DOCX load, async paged rendering); the load itself is a document change
   // and reaches `noteDocChanged`.
@@ -282,13 +278,9 @@ export const startAnonymizationDetection = ({
     stop: () => {
       cancelled = true;
       clearSettleTimer();
-      fieldConfirms.delete(confirmCurrent);
-      if (
-        fieldConfirms.size === 0 &&
-        liveDetections.get(fieldId) === fieldConfirms
-      ) {
-        liveDetections.delete(fieldId);
-      }
+      useInspectorAnonymizationStore
+        .getState()
+        .unregisterAnonymizationDetection(fieldId, confirmCurrent);
     },
   };
 };

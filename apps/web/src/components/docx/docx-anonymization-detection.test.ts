@@ -177,6 +177,7 @@ const createHarness = ({
 beforeEach(() => {
   jest.useFakeTimers();
   useInspectorAnonymizationStore.setState({
+    anonymizationDetectionConfirmsByFieldId: {},
     anonymizationPipelineStatusByFieldId: {},
   });
 });
@@ -350,4 +351,21 @@ test("a stopped detection no longer gates its field", async () => {
   harness.detection.stop();
   harness.detection.stop();
   expect(confirmAnonymizationDetectionCurrent(harness.fieldId)).toBe(true);
+});
+
+test("closing the last editor for a field leaves no gate entry in the store", async () => {
+  const docked = createHarness({ paragraphCount: PARAGRAPHS });
+  const fullView = createHarness({ paragraphCount: PARAGRAPHS });
+  expect(docked.fieldId).toBe(fullView.fieldId);
+  await docked.advance(1000);
+  const entries = () =>
+    useInspectorAnonymizationStore.getState()
+      .anonymizationDetectionConfirmsByFieldId;
+  expect(entries()[docked.fieldId]).toHaveLength(2);
+
+  docked.detection.stop();
+  expect(entries()[docked.fieldId]).toHaveLength(1);
+
+  fullView.detection.stop();
+  expect(docked.fieldId in entries()).toBe(false);
 });

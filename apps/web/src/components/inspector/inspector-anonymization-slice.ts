@@ -18,6 +18,7 @@ export const createInspectorAnonymizationSlice = (
   anonymizationMatchesByFieldId: {},
   anonymizationPipelineStatusByFieldId: {},
   anonymizationRetryByFieldId: {},
+  anonymizationDetectionConfirmsByFieldId: {},
   anonymizationSelection: {
     canonical: null,
     label: null,
@@ -108,6 +109,42 @@ export const createInspectorAnonymizationSlice = (
       );
       state.anonymizationRetryByFieldId = Object.fromEntries(
         Object.entries(state.anonymizationRetryByFieldId).filter(
+          ([id]) => id !== fieldId,
+        ),
+      );
+    }),
+
+  // Stored as arrays rather than Sets: immer drafts Sets only with its MapSet
+  // plugin, and functions are kept by reference, so identity removal works.
+  registerAnonymizationDetection: (fieldId, confirm) =>
+    set((state) => {
+      const confirms = state.anonymizationDetectionConfirmsByFieldId[fieldId];
+      if (confirms === undefined) {
+        state.anonymizationDetectionConfirmsByFieldId[fieldId] = [confirm];
+        return;
+      }
+      if (confirms.includes(confirm)) {
+        return;
+      }
+      state.anonymizationDetectionConfirmsByFieldId[fieldId] = [
+        ...confirms,
+        confirm,
+      ];
+    }),
+
+  unregisterAnonymizationDetection: (fieldId, confirm) =>
+    set((state) => {
+      const confirms = state.anonymizationDetectionConfirmsByFieldId[fieldId];
+      if (confirms === undefined) {
+        return;
+      }
+      const remaining = confirms.filter((entry) => entry !== confirm);
+      if (remaining.length > 0) {
+        state.anonymizationDetectionConfirmsByFieldId[fieldId] = remaining;
+        return;
+      }
+      state.anonymizationDetectionConfirmsByFieldId = Object.fromEntries(
+        Object.entries(state.anonymizationDetectionConfirmsByFieldId).filter(
           ([id]) => id !== fieldId,
         ),
       );
