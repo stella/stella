@@ -48,7 +48,7 @@ afterAll(async () => {
 });
 
 test.each([400, 580, 1440])(
-  "the decision reader shares one pinned breadcrumb and zoom row at %ipx",
+  "the decision reader keeps separate breadcrumb and floating zoom controls at %ipx",
   async (width) => {
     const view = render(<div />);
     const browserWindow = view.baseElement.ownerDocument.defaultView;
@@ -123,7 +123,7 @@ test.each([400, 580, 1440])(
     expect(screen.getByRole("banner").contains(row)).toBe(false);
     for (const name of ["Zoom in", "Zoom out", "Reset zoom"]) {
       expect(screen.getAllByRole("button", { name })).toHaveLength(1);
-      expect(within(row).getByRole("button", { name })).toBeTruthy();
+      expect(within(row).queryByRole("button", { name })).toBeNull();
       expect(
         view.baseElement.querySelectorAll(`button[aria-label="${name}"]`),
       ).toHaveLength(1);

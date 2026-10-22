@@ -20,6 +20,7 @@ import {
 } from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
+import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import {
   LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
@@ -195,8 +196,14 @@ export const StatuteInspectorView = ({
           blocks={preparedReader.blocks}
           content={contentElement}
           viewport={viewportElement}
-          zoomControls={textScale}
           key={payload.documentId}
+        />
+        <FloatingZoomControls
+          atMax={textScale.atMax}
+          atMin={textScale.atMin}
+          level={textScale.level}
+          onReset={textScale.reset}
+          onZoom={textScale.zoom}
         />
       </LegalReaderAIChat>
     </div>

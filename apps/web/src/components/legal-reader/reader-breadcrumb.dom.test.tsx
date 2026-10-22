@@ -65,10 +65,8 @@ test("Contents stays attached to its trigger as the visible heading path changes
   }
 });
 
-test("scrolling keeps the breadcrumb and zoom controls in one pinned row outside the viewport", async () => {
+test("scrolling keeps the breadcrumb in a pinned row outside the viewport", async () => {
   const { LegalReaderControls } = await import("./legal-reader-controls");
-  const { useReaderTextScale } =
-    await import("@stll/decision-reader/use-reader-text-scale");
   const viewport = document.createElement("div");
   const content = document.createElement("article");
   const heading = document.createElement("h2");
@@ -97,7 +95,6 @@ test("scrolling keeps the breadcrumb and zoom controls in one pinned row outside
       ]}
       content={content}
       viewport={viewport}
-      zoomControls={useReaderTextScale()}
     />
   );
   try {
@@ -112,11 +109,9 @@ test("scrolling keeps the breadcrumb and zoom controls in one pinned row outside
     const row = navigation.parentElement;
     expect(row?.classList.contains("absolute")).toBe(true);
     expect(viewport.contains(row)).toBe(false);
-    for (const name of ["Zoom in", "Zoom out", "Reset zoom"]) {
-      expect(screen.getByRole("button", { name }).parentElement === row).toBe(
-        true,
-      );
-    }
+    expect(screen.queryByRole("button", { name: "Zoom in" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Zoom out" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reset zoom" })).toBeNull();
     await act(async () => {
       viewport.scrollTop = 200;
       viewport.dispatchEvent(new Event("scroll"));
@@ -127,7 +122,7 @@ test("scrolling keeps the breadcrumb and zoom controls in one pinned row outside
       ).toBeTruthy(),
     );
     expect(navigation.parentElement === row).toBe(true);
-    expect(row?.querySelectorAll("button").length).toBe(4);
+    expect(row?.querySelectorAll("button").length).toBe(1);
   } finally {
     cleanup();
     viewport.remove();

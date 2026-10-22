@@ -557,7 +557,6 @@ export const PublicStatuteViewer = ({
                 blocks={blocks}
                 content={contentElement}
                 viewport={viewportElement}
-                zoomControls={textScale}
                 key={statute.id}
               />
             )}

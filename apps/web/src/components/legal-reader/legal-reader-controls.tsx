@@ -1,8 +1,6 @@
-import type { useReaderTextScale } from "@stll/decision-reader/use-reader-text-scale";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
-import { ZoomControls } from "@/components/inspector/zoom-controls";
 
 import { LegalReaderBreadcrumb } from "./legal-reader-breadcrumb";
 import type { ReaderBreadcrumbModel } from "./reader-breadcrumb-paths";
@@ -17,7 +15,6 @@ type LegalReaderControlsProps = {
   content: HTMLElement | null;
   fallbackBreadcrumb?: ReaderBreadcrumbModel | undefined;
   viewport: HTMLElement | null;
-  zoomControls: ReturnType<typeof useReaderTextScale>;
 };
 
 export const LegalReaderControls = ({
@@ -25,7 +22,6 @@ export const LegalReaderControls = ({
   content,
   fallbackBreadcrumb,
   viewport,
-  zoomControls,
 }: LegalReaderControlsProps) => (
   <ViewerOverlayBar className="reader-chrome start-2 top-(--reader-controls-inset) h-(--reader-controls-height) min-w-0 gap-0 text-xs">
     <LegalReaderBreadcrumb
@@ -33,13 +29,6 @@ export const LegalReaderControls = ({
       content={content}
       fallback={fallbackBreadcrumb}
       viewport={viewport}
-    />
-    <ZoomControls
-      atMax={zoomControls.atMax}
-      atMin={zoomControls.atMin}
-      level={zoomControls.level}
-      onReset={zoomControls.reset}
-      onZoom={zoomControls.zoom}
     />
   </ViewerOverlayBar>
 );
