@@ -1397,6 +1397,7 @@
     "credentialSendDescription": "Odešlete ji pouze tehdy, pokud chcete tuto hodnotu sdílet v konverzaci.",
     "credentialSendTitle": "Tato zpráva může obsahovat přístupový údaj",
     "deleteThread": "Smazat konverzaci",
+    "diagramUnavailable": "Diagram se nepodařilo vykreslit. Níže je jeho zdrojový kód.",
     "editMode": {
       "autoDirect": "Automaticky · přepsat",
       "autoDirectDescription": "Úpravy od AI se použijí ihned přímým přepsáním dokumentu (bez sledování změn).",
