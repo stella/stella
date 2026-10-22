@@ -1331,7 +1331,10 @@ jobs:
   # superseded in its first minutes never schedules them. `needs` cannot vary
   # by event and a merge group must not wait on ci-quick-checks, so this job
   # polls that sibling instead; outside pull requests it skips and the suites
-  # start straight after the plan.
+  # start straight after the plan. The repository checks and the desktop Rust
+  # lint wait on it too, but run ungated when the plan schedules no gate (a
+  # push that only merges the base still runs its PR-depth checks), so
+  # scripts/ci-pr-jobs.ts does not count them as heavy suites.
   pr-heavy-gate:
     needs: ci-plan
     if: inputs.heavy_only != true && inputs.pr_depth_only != true && needs.ci-plan.outputs.pr_heavy_gate_required == 'true'
@@ -1891,9 +1894,13 @@ jobs:
       - *merge_group_cancel
 
   ci-checks-policy:
-    needs: [ci-plan, generated-sources]
+    needs: [ci-plan, generated-sources, pr-heavy-gate]
     if: >-
-      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && needs.generated-sources.result == 'success'
+      && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success')
+      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -2064,9 +2071,13 @@ jobs:
       - *merge_group_cancel
 
   ci-checks-rest:
-    needs: [ci-plan, generated-sources]
+    needs: [ci-plan, generated-sources, pr-heavy-gate]
     if: >-
-      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && needs.generated-sources.result == 'success'
+      && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success')
+      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -3021,9 +3032,13 @@ jobs:
       - *merge_group_cancel
 
   code-quality-api:
-    needs: [ci-plan, generated-sources]
+    needs: [ci-plan, generated-sources, pr-heavy-gate]
     if: >-
-      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && needs.generated-sources.result == 'success'
+      && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success')
+      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -3175,9 +3190,13 @@ jobs:
             });
 
   code-quality-web-rest:
-    needs: [ci-plan, generated-sources]
+    needs: [ci-plan, generated-sources, pr-heavy-gate]
     if: >-
-      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && needs.generated-sources.result == 'success'
+      && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success')
+      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -3405,7 +3424,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     permissions:
       contents: read
       packages: read
@@ -3500,7 +3519,7 @@ jobs:
         if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
         working-directory: apps/api
         env:
-          CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}/2
+          CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}/3
           POSTGRES_TEST_DURATIONS_FILE: ${{ runner.temp }}/postgres-test-durations.json
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
@@ -5661,6 +5680,13 @@ jobs:
           CHANNEL: prod
         run: bun scripts/desktop-release-step.ts stamp
 
+      # The build action compiles offline; the locked crates download here,
+      # retried as a unit.
+      - name: Fetch Rust dependencies
+        if: github.event_name == 'merge_group' || steps.receipt.outputs.reused != 'true'
+        timeout-minutes: 10
+        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target x86_64-pc-windows-msvc
+
       - name: Exercise Windows desktop release build
         if: github.event_name == 'merge_group' || steps.receipt.outputs.reused != 'true'
         uses: ./.github/actions/desktop-windows-build
@@ -5807,7 +5833,8 @@ jobs:
           key: scan-engine-wasm-${{ runner.os }}-${{ hashFiles('packages/scan-engine/Cargo.lock', 'packages/scan-engine/rust-toolchain.toml') }}
 
       - name: Fetch Rust dependencies and wasm-bindgen
-        run: bash packages/scan-engine/scripts/wasm-toolchain.sh
+        timeout-minutes: 15
+        run: bash scripts/retry.sh bash packages/scan-engine/scripts/wasm-toolchain.sh
 
       - name: Check generated WebAssembly from a fresh Cargo cache
         id: wasm-check
@@ -5909,22 +5936,29 @@ jobs:
           targets: ${{ matrix.target }}
           components: clippy
 
+      # The locked crates download once, retried as a unit; every later
+      # cargo command runs --frozen and never reaches the registry itself.
+      - &desktop_rust_fetch
+        name: Fetch Rust dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target ${{ matrix.target }}
+
       # No cargo cache action here: the job is path-filtered to desktop
       # changes, so it runs rarely and a cold compile (well under the
       # timeout) is acceptable. It also keeps the LGPL-3.0 rust-cache
       # action out of the dependency-review-enforced diff.
       - name: Check
         shell: pwsh
-        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
+        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen
 
       - name: Test
         if: matrix.os == 'macos'
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen
 
       - name: Build test binaries
         if: matrix.os == 'windows'
         shell: pwsh
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked --no-run
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen --no-run
 
       # The signer crates link no Tauri, so their tests do run here: against
       # throwaway certificates in the runner's own current-user store, one
@@ -5963,7 +5997,7 @@ jobs:
       - name: Test signer against the certificate store
         if: matrix.os == 'windows'
         shell: pwsh
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p stella-desktop-windows-signing -p stella-desktop-signing-core --target ${{ matrix.target }} --locked -- --include-ignored
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p stella-desktop-windows-signing -p stella-desktop-signing-core --target ${{ matrix.target }} --frozen -- --include-ignored
 
       - name: Remove signing test certificates
         if: always() && matrix.os == 'windows'
@@ -6004,7 +6038,7 @@ jobs:
             sleep 0.1
           done
           test -s "$url_file"
-          STELLA_DESKTOP_SMOKE_API_URL="$(cat "$url_file")" cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --locked registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact
+          STELLA_DESKTOP_SMOKE_API_URL="$(cat "$url_file")" cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --frozen registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact
           wait "$server_pid"
 
       - name: Install cargo-deny
@@ -6030,7 +6064,7 @@ jobs:
 
       - name: Docs
         shell: pwsh
-        run: cargo doc --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --no-deps --target ${{ matrix.target }} --locked
+        run: cargo doc --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --no-deps --target ${{ matrix.target }} --frozen
         env:
           RUSTDOCFLAGS: -D warnings
 
@@ -6038,9 +6072,12 @@ jobs:
 
   desktop-rust-lint:
     name: Desktop Rust Lint (${{ matrix.os }})
-    needs: ci-plan
+    needs: [ci-plan, pr-heavy-gate]
     if: >-
-      inputs.pr_depth_only != true
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success')
+      && inputs.pr_depth_only != true
       && inputs.heavy_only != true
       && (github.event_name == 'merge_group' || needs.ci-plan.outputs.run_required != 'false')
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
@@ -6063,9 +6100,10 @@ jobs:
     steps:
       - *desktop_rust_checkout
       - *desktop_rust_toolchain
+      - *desktop_rust_fetch
       - name: Clippy
         shell: pwsh
-        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked -- -D warnings
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen -- -D warnings
       - *merge_group_cancel
 
   dependency-malware:
@@ -6234,10 +6272,14 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
         # Remove the tooling checkout so later source checks see only the
-        # candidate tree.
+        # candidate tree. A digest that only needs a mechanical refresh is
+        # rewritten by the autofix generator; this check (the script's
+        # default mode) stays fail-closed. It runs git, so it cannot load the
+        # offline network preload that `--check` commands must use.
         run: |
-          trap 'rm -rf .workflow-tooling' EXIT
-          bun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling
+          trap 'rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"' EXIT
+          cd .workflow-tooling
+          bun scripts/check-ci-job-classification.ts
 
       - name: "ci-checks-docs: Check changed Markdown consumers"
         if: >-
