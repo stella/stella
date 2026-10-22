@@ -12,6 +12,7 @@ import {
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { chooseExtractionSource } from "@/api/lib/extraction-runs/extraction-source-owner";
 import { LIMITS } from "@/api/lib/limits";
 import type { AuthorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 
@@ -73,6 +74,31 @@ export const resolveCurrentExtractionFileField = <T extends FileFieldRow>({
     field.content.sha256Hex === extracted.sourceSha256Hex
     ? field
     : null;
+};
+
+/** Resolve the selected source even before the asynchronous extraction lands. */
+export const resolveDesignatedExtractionFileField = <T extends FileFieldRow>({
+  currentVersionId,
+  extracted,
+  fields,
+  pendingSourceFieldId,
+}: {
+  currentVersionId: SafeId<"entityVersion">;
+  extracted: ExtractedContentSourceProvenance | null | undefined;
+  fields: readonly T[];
+  pendingSourceFieldId?: SafeId<"field"> | undefined;
+}): T | null => {
+  if (extracted) {
+    return resolveCurrentExtractionFileField({
+      currentVersionId,
+      extracted,
+      fields,
+    });
+  }
+  if (pendingSourceFieldId) {
+    return fields.find(({ id }) => id === pendingSourceFieldId) ?? null;
+  }
+  return chooseExtractionSource(fields);
 };
 
 /**
