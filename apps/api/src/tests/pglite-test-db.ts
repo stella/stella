@@ -861,6 +861,248 @@ export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
   });
 };
 
+const PGLITE_BASELINE_FINGERPRINT_FUNCTION =
+  "public.pglite_test_database_fingerprint";
+
+type PgliteBaselineObject = {
+  definition: string;
+  name: string;
+};
+
+type PgliteBaselineTrigger = PgliteBaselineObject & {
+  enabled: string;
+};
+
+type PgliteBaselineTable = PgliteBaselineObject & {
+  hasRows: boolean;
+  rowDigest: string | null;
+};
+
+type PgliteDatabaseFingerprint = {
+  functions: PgliteBaselineObject[];
+  sequences: PgliteBaselineObject[];
+  tables: PgliteBaselineTable[];
+  triggers: PgliteBaselineTrigger[];
+  views: PgliteBaselineObject[];
+};
+
+export type PgliteDatabaseBaseline = {
+  fingerprint: PgliteDatabaseFingerprint;
+};
+
+const readPgliteDatabaseFingerprint = async (
+  client: PGlite,
+): Promise<PgliteDatabaseFingerprint> => {
+  const result = await client.query<{ fingerprint: PgliteDatabaseFingerprint }>(
+    `SELECT ${PGLITE_BASELINE_FINGERPRINT_FUNCTION}() AS fingerprint`,
+  );
+  return (
+    result.rows.at(0)?.fingerprint ??
+    panic("PGlite baseline fingerprint query returned no row")
+  );
+};
+
+/** Capture all mutable user-defined database objects and table contents. */
+export const capturePgliteDatabaseBaseline = async (
+  client: PGlite,
+): Promise<PgliteDatabaseBaseline> => {
+  await client.exec(`
+    CREATE OR REPLACE FUNCTION ${PGLITE_BASELINE_FINGERPRINT_FUNCTION}()
+    RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $function$
+    DECLARE
+      table_record record;
+      table_rows jsonb := '[]'::jsonb;
+      has_rows boolean;
+      row_digest text;
+    BEGIN
+      FOR table_record IN
+        SELECT
+          c.oid,
+          format('%I.%I', n.nspname, c.relname) AS qualified_name,
+          c.relkind::text AS definition
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+          AND n.nspname NOT LIKE 'pg_toast%'
+          AND c.relkind IN ('r', 'p')
+        ORDER BY n.nspname, c.relname
+      LOOP
+        EXECUTE format(
+          'SELECT EXISTS (SELECT 1 FROM %s), md5(COALESCE(string_agg(row_value, E''\\n'' ORDER BY row_value), '''')) FROM (SELECT table_row::text AS row_value FROM %s table_row) rows',
+          table_record.qualified_name,
+          table_record.qualified_name
+        ) INTO has_rows, row_digest;
+        table_rows := table_rows || jsonb_build_array(jsonb_build_object(
+          'name', table_record.qualified_name,
+          'definition', table_record.definition,
+          'hasRows', has_rows,
+          'rowDigest', CASE WHEN has_rows THEN row_digest ELSE NULL END
+        ));
+      END LOOP;
+
+      RETURN jsonb_build_object(
+        'functions', COALESCE((
+          SELECT jsonb_agg(jsonb_build_object(
+            'name', format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)),
+            'definition', p.prokind::text
+          ) ORDER BY n.nspname, p.proname, pg_get_function_identity_arguments(p.oid))
+          FROM pg_proc p
+          JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+            AND n.nspname NOT LIKE 'pg_toast%'
+        ), '[]'::jsonb),
+        'triggers', COALESCE((
+          SELECT jsonb_agg(jsonb_build_object(
+            'name', format('%I.%I.%I', n.nspname, c.relname, t.tgname),
+            'definition', '',
+            'enabled', t.tgenabled::text
+          ) ORDER BY n.nspname, c.relname, t.tgname)
+          FROM pg_trigger t
+          JOIN pg_class c ON c.oid = t.tgrelid
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE NOT t.tgisinternal
+            AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+            AND n.nspname NOT LIKE 'pg_toast%'
+        ), '[]'::jsonb),
+        'tables', table_rows,
+        'views', COALESCE((
+          SELECT jsonb_agg(jsonb_build_object(
+            'name', format('%I.%I', n.nspname, c.relname),
+            'definition', c.relkind::text
+          ) ORDER BY n.nspname, c.relname)
+          FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+            AND n.nspname NOT LIKE 'pg_toast%'
+            AND c.relkind IN ('v', 'm')
+        ), '[]'::jsonb),
+        'sequences', COALESCE((
+          SELECT jsonb_agg(jsonb_build_object(
+            'name', format('%I.%I', n.nspname, c.relname),
+            'definition', c.relkind::text
+          ) ORDER BY n.nspname, c.relname)
+          FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+            AND n.nspname NOT LIKE 'pg_toast%'
+            AND c.relkind = 'S'
+        ), '[]'::jsonb)
+      );
+    END
+    $function$;
+  `);
+  return { fingerprint: await readPgliteDatabaseFingerprint(client) };
+};
+
+const objectNames = (objects: PgliteBaselineObject[]) =>
+  new Set(objects.map(({ name }) => name));
+
+const splitTriggerName = (name: string) => {
+  const parts = name.split(".");
+  if (parts.length !== 3) {
+    return panic(`Invalid qualified PGlite trigger name: ${name}`);
+  }
+  return {
+    namespace: parts.at(0) ?? panic("Expected trigger namespace"),
+    table: parts.at(1) ?? panic("Expected trigger table"),
+    trigger: parts.at(2) ?? panic("Expected trigger name"),
+  };
+};
+
+const triggerEnableAction = (enabled: string) => {
+  switch (enabled) {
+    case "A":
+      return "ENABLE ALWAYS";
+    case "D":
+      return "DISABLE";
+    case "O":
+      return "ENABLE";
+    case "R":
+      return "ENABLE REPLICA";
+    default:
+      return panic(`Invalid PGlite trigger enabled state: ${enabled}`);
+  }
+};
+
+/** Restore a live PGlite database to a previously captured baseline. */
+export const resetPgliteDatabase = async (
+  client: PGlite,
+  baseline: PgliteDatabaseBaseline,
+): Promise<void> => {
+  const current = await readPgliteDatabaseFingerprint(client);
+  const baselineNames = {
+    functions: objectNames(baseline.fingerprint.functions),
+    sequences: objectNames(baseline.fingerprint.sequences),
+    tables: objectNames(baseline.fingerprint.tables),
+    triggers: objectNames(baseline.fingerprint.triggers),
+    views: objectNames(baseline.fingerprint.views),
+  };
+  const statements = [
+    ...current.triggers
+      .filter(({ name }) => !baselineNames.triggers.has(name))
+      .map(({ name }) => {
+        const { namespace, table, trigger } = splitTriggerName(name);
+        return `DROP TRIGGER ${trigger} ON ${namespace}.${table}`;
+      }),
+    ...current.functions
+      .filter(({ name }) => !baselineNames.functions.has(name))
+      .map(({ name }) => `DROP FUNCTION ${name}`),
+    ...current.views
+      .filter(({ name }) => !baselineNames.views.has(name))
+      .map(({ name }) => `DROP VIEW ${name} CASCADE`),
+    ...current.tables
+      .filter(({ name }) => !baselineNames.tables.has(name))
+      .map(({ name }) => `DROP TABLE ${name} CASCADE`),
+    ...current.sequences
+      .filter(({ name }) => !baselineNames.sequences.has(name))
+      .map(({ name }) => `DROP SEQUENCE IF EXISTS ${name} CASCADE`),
+    ...baseline.fingerprint.triggers.map(({ enabled, name }) => {
+      const { namespace, table, trigger } = splitTriggerName(name);
+      const action = triggerEnableAction(enabled);
+      return `ALTER TABLE ${namespace}.${table} ${action} TRIGGER ${trigger}`;
+    }),
+  ];
+  const emptyTables = baseline.fingerprint.tables
+    .filter(({ hasRows }) => !hasRows)
+    .map(({ name }) => name);
+  if (emptyTables.length > 0) {
+    statements.push(
+      `TRUNCATE ${emptyTables.join(", ")} RESTART IDENTITY CASCADE`,
+    );
+  }
+  if (statements.length > 0) {
+    await client.exec(statements.join(";\n"));
+  }
+
+  const restored = await readPgliteDatabaseFingerprint(client);
+  const fingerprintKinds = [
+    "functions",
+    "sequences",
+    "tables",
+    "triggers",
+    "views",
+  ] as const;
+  const differences = fingerprintKinds.flatMap((kind) => {
+    const key = kind;
+    const expected = baseline.fingerprint[key];
+    const actual = restored[key];
+    const expectedByName = new Map(expected.map((item) => [item.name, item]));
+    const actualByName = new Map(actual.map((item) => [item.name, item]));
+    return [...new Set([...expectedByName.keys(), ...actualByName.keys()])]
+      .filter(
+        (name) =>
+          JSON.stringify(expectedByName.get(name)) !==
+          JSON.stringify(actualByName.get(name)),
+      )
+      .map((name) => `${kind}:${name}`);
+  });
+  if (differences.length > 0) {
+    panic(`PGlite reset differs from baseline: ${differences.join(", ")}`);
+  }
+};
+
 /** Simulate the later grant release only in suites exercising exact reads. */
 export const grantPgliteDecisionCitationStatsReader = async (db: {
   execute: (query: SQL) => PromiseLike<unknown>;
