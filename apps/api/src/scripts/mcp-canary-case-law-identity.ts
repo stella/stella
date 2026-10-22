@@ -201,17 +201,28 @@ const probeCountry = async (
       }),
     }),
   });
-  // A court its facet counted that yields no decision is a failure, never a
-  // court left out: coverage that shrinks silently would pass with nothing
-  // resolved.
+  // A court its facet counted that yields no decision, or another court's
+  // decision, is a failure, never a court left out: coverage that shrinks
+  // silently would pass with nothing resolved.
   const searchFailures = samples.flatMap(({ court, sample }) => {
     if (typeof sample === "string") {
       return [`${court}: ${sample}`];
     }
-    return sample.results.length === 0 ? [`${court}: no decision`] : [];
+    const hit = sample.results.at(0);
+    if (hit === undefined) {
+      return [`${court}: no decision`];
+    }
+    return hit.court === court ? [] : [`${court}: sampled ${hit.court}`];
   });
-  const hits = samples.flatMap(({ sample }) =>
-    typeof sample === "string" ? [] : sample.results.slice(0, 1),
+  const hits = samples.flatMap(({ court, sample }) =>
+    typeof sample === "string"
+      ? []
+      : sample.results.slice(0, 1).filter((hit) => hit.court === court),
+  );
+  // Some courts publish no ECLI; their sample proves the docket only, so the
+  // detail names them instead of counting the court as fully probed.
+  const withoutEcli = hits.flatMap(({ court, ecli }) =>
+    ecli === null || ecli === undefined ? [court] : [],
   );
   const checks = hits.flatMap((hit) =>
     expectationsOf(hit).map((expectation) => ({ expectation, hit })),
@@ -238,7 +249,7 @@ const probeCountry = async (
   }
   return {
     status: "passed",
-    detail: `${String(checks.length)} identities across ${String(hits.length)} courts resolved to the decision search found`,
+    detail: `${String(checks.length)} identities across ${String(hits.length)} courts resolved to the decision search found${withoutEcli.length > 0 ? `; docket only (no ECLI sampled): ${withoutEcli.join(", ")}` : ""}`,
   };
 };
 

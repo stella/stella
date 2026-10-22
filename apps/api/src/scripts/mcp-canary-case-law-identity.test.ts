@@ -154,6 +154,42 @@ describe("the case-law identity canary", () => {
     expect(outcome?.detail).toContain(`${SUPREME}: no decision`);
   });
 
+  test("a court sample from another court fails", async () => {
+    const unfiltered: CallCaseLawTool = async (name, args) =>
+      name === "search_case_law" && args["court"] === SUPREME
+        ? {
+            type: "ok",
+            payload: { facets: null, results: [hits[CONSTITUTIONAL]] },
+          }
+        : await deployment(exact)(name, args);
+    const outcome = (await sampleCaseLawIdentities(unfiltered)).find(
+      (entry) => entry.country === "CZE",
+    )?.outcome;
+    expect(outcome?.status).toBe("failed");
+    expect(outcome?.detail).toContain(`${SUPREME}: sampled ${CONSTITUTIONAL}`);
+  });
+
+  test("a court sampled without an ECLI is named as docket only", async () => {
+    const withoutEcli: CallCaseLawTool = async (name, args) =>
+      name === "search_case_law" && args["court"] === SUPREME
+        ? {
+            type: "ok",
+            payload: {
+              facets: null,
+              results: [{ ...hits[SUPREME], ecli: null }],
+            },
+          }
+        : await deployment(exact)(name, args);
+    expect(
+      (await sampleCaseLawIdentities(withoutEcli)).find(
+        (entry) => entry.country === "CZE",
+      )?.outcome,
+    ).toEqual({
+      status: "passed",
+      detail: `4 identities across 2 courts resolved to the decision search found; docket only (no ECLI sampled): ${SUPREME}`,
+    });
+  });
+
   test("a country whose search is closed has nothing to sample", async () => {
     expect((await outcomeFor(exact, "SVK"))?.status).toBe("not_applicable");
   });
