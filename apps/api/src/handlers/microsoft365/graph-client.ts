@@ -388,7 +388,6 @@ export const fetchAccountLabel = async (
               Accept: "application/json",
             },
             timeout: { type: "idle", ms: GRAPH_FETCH_TIMEOUT_MS },
-            signal: AbortSignal.timeout(GRAPH_FETCH_TIMEOUT_MS),
             redirect: "error",
           }),
         catch: (cause) =>
@@ -475,7 +474,6 @@ export const listDriveRootChildren = async ({
               Accept: "application/json",
             },
             timeout: { type: "idle", ms: GRAPH_FETCH_TIMEOUT_MS },
-            signal: AbortSignal.timeout(GRAPH_FETCH_TIMEOUT_MS),
             redirect: "error",
           }),
         catch: (cause) =>

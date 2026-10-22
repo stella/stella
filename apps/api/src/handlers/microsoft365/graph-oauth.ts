@@ -147,7 +147,6 @@ const requestToken = async ({
             },
             body,
             timeout: { type: "idle", ms: GRAPH_OAUTH_TIMEOUT_MS },
-            signal: AbortSignal.timeout(GRAPH_OAUTH_TIMEOUT_MS),
             redirect: "error",
           }),
         catch: (cause) =>
