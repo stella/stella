@@ -10,11 +10,14 @@ import { getChatLinkSite, normalizeChatLink } from "@stll/chat/link-detection";
 import { linkIconOptions } from "@/features/chat/link-icons";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
+/** Only links from a tool-returned source may fetch a site icon. */
+export type LinkIconSource = { kind: "tool-source" } | { kind: "model-text" };
+
 type ProxyChatLinkProps = Omit<
   ComponentProps<typeof ChatLink>,
   "iconSource"
 > & {
-  iconSource: { kind: "tool-source" } | { kind: "model-text" };
+  iconSource: LinkIconSource;
 };
 
 export const ProxyChatLink = ({
@@ -32,7 +35,11 @@ export const ProxyChatLink = ({
       site !== "" &&
       !hasBundledChatLinkIcon(hostname),
   });
-  const blob = icon?.type === "icon" ? icon.blob : undefined;
+  // A disabled query still exposes data another link cached for the site.
+  const blob =
+    source.kind === "tool-source" && icon?.type === "icon"
+      ? icon.blob
+      : undefined;
   const [localIcon, setLocalIcon] = useState<{
     blob: Blob;
     source: ChatLinkIconSource;

@@ -24,6 +24,7 @@ import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
+import type { LinkIconSource } from "@/features/chat/components/proxy-chat-link";
 import { detached } from "@/lib/detached";
 
 type LegalCitationLinks = ReturnType<typeof resolveLegalCitationLinks>;
@@ -31,6 +32,8 @@ type StatuteCitationLinks = Extract<LegalCitationLinks, { type: "statute" }>;
 
 type LegalCitationLinkProps = {
   source: ExternalSourceReference;
+  /** Whether `source` is a record a tool returned or was built from model text. */
+  linkIconSource: LinkIconSource;
   externalHref?: string;
   children: ReactNode;
   interactive: boolean;
@@ -74,6 +77,7 @@ const LegalCitationView = ({
   appearance,
   children,
   citation,
+  linkIconSource,
   onClick,
 }: LegalCitationLinkProps & {
   citation: StatuteCitationLinks;
@@ -102,8 +106,7 @@ const LegalCitationView = ({
       {citation.source_url !== undefined && (
         <ProxyChatLink
           href={citation.source_url}
-          // Publisher URLs here come from the resolved tool source.
-          iconSource={{ kind: "tool-source" }}
+          iconSource={linkIconSource}
           newTabLabel={t("common.openInNewTab")}
         >
           {t("common.source")}
@@ -154,10 +157,12 @@ const DecisionTrayLink = ({
   decisionId,
   href,
   children,
+  linkIconSource,
 }: {
   decisionId: string;
   href: string;
   children: ReactNode;
+  linkIconSource: LinkIconSource;
 }) => {
   const t = useTranslations();
   const { open } = useOpenDecisionTab();
@@ -175,8 +180,7 @@ const DecisionTrayLink = ({
     <ProxyChatLink
       appearance="tray"
       href={href}
-      // Decision tray URLs come from the tool source record.
-      iconSource={{ kind: "tool-source" }}
+      iconSource={linkIconSource}
       newTabLabel={t("common.openInNewTab")}
       onClick={onClick}
     >
@@ -202,7 +206,11 @@ const FullLabelTrayLink = ({
       : null);
   if (props.interactive && decisionId !== null) {
     return (
-      <DecisionTrayLink decisionId={decisionId} href={href}>
+      <DecisionTrayLink
+        decisionId={decisionId}
+        href={href}
+        linkIconSource={props.linkIconSource}
+      >
         {props.children}
       </DecisionTrayLink>
     );
@@ -211,8 +219,7 @@ const FullLabelTrayLink = ({
     <ProxyChatLink
       appearance="tray"
       href={href}
-      // Full tray URLs are resolved from the tool source record.
-      iconSource={{ kind: "tool-source" }}
+      iconSource={props.linkIconSource}
       newTabLabel={t("common.openInNewTab")}
     >
       {props.children}
@@ -313,8 +320,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
           href={
             citation.url === null ? "" : (props.externalHref ?? citation.url)
           }
-          // External citation URLs come from the tool source record.
-          iconSource={{ kind: "tool-source" }}
+          iconSource={props.linkIconSource}
           newTabLabel={t("common.openInNewTab")}
         >
           {props.children}

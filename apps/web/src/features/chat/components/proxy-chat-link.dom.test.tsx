@@ -91,6 +91,49 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
+test("a model-text link never shows an icon another link cached for its site", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.IntersectionObserver = VisibleIntersectionObserver;
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      requests.push(new Request(input).url);
+      return Response.json({ type: "no-icon" });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  client.setQueryData(linkIconOptions("cached.example").queryKey, {
+    type: "icon",
+    blob: new Blob(["icon"], { type: "image/png" }),
+  });
+  const view = render(
+    <QueryClientProvider client={client}>
+      <ProxyChatLink
+        href="https://sub.cached.example/path"
+        iconSource={{ kind: "model-text" }}
+      >
+        {LINK_LABELS.absent}
+      </ProxyChatLink>
+    </QueryClientProvider>,
+  );
+  try {
+    await act(async () => {
+      for (const observer of [...observers]) {
+        observer.intersectObserved();
+      }
+    });
+    expect(view.container.querySelector("img")).toBeNull();
+    expect(requests).toEqual([]);
+  } finally {
+    view.unmount();
+    client.clear();
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("requests one site icon only for visible tool-source links", async () => {
   const originalFetch = globalThis.fetch;
   const requests: string[] = [];

@@ -183,6 +183,7 @@ const ReferenceCitationLink = ({
       anchorId={decision?.paragraph?.anchorId}
       fallback={fallback}
       interactive={interactive}
+      linkIconSource={{ kind: "tool-source" }}
       source={source}
       workspaceId={workspaceId}
     >
@@ -691,6 +692,10 @@ const ExternalCitationLink = ({
       appearance="inline"
       interactive={interactive}
       externalHref={href}
+      // A link the source store does not know came from model text only.
+      linkIconSource={
+        source === undefined ? { kind: "model-text" } : { kind: "tool-source" }
+      }
       source={source ?? { title: inlineLabel || hostname, url: url.toString() }}
       workspaceId={workspaceId}
     >

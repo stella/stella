@@ -846,6 +846,7 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
         anchorId={explicitAnchorId}
         interactive
         appearance="inline"
+        linkIconSource={{ kind: "tool-source" }}
       >
         {quotedPassage}
       </LegalCitationLink>,
@@ -1002,6 +1003,7 @@ test("an external tray label without a safe URL retains its compact presentation
     <LegalCitationLink
       appearance="tray"
       interactive={false}
+      linkIconSource={{ kind: "tool-source" }}
       source={{ title, url: "data:text/plain,unavailable" }}
     >
       {title}
