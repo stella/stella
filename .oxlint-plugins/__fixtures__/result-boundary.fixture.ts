@@ -7,7 +7,7 @@
 // unused and `--report-unused-disable-directives-severity=error` fails CI.
 // Each `expect-clean` marker names a case the rule must accept.
 
-import { panic as invariantFailure, panic, Result } from "better-result";
+import { Result, panic, panic as invariantFailure } from "better-result";
 
 declare class SomeTaggedError extends Error {
   constructor(message: string);

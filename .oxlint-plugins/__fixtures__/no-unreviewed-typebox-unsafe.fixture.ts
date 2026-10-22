@@ -12,7 +12,7 @@ import {
   Unsafe as unsafeAlias,
 } from "@sinclair/typebox";
 import * as TypeBox from "@sinclair/typebox";
-import { t as ElysiaTypes, t } from "elysia";
+import { t, t as ElysiaTypes } from "elysia";
 import * as Elysia from "elysia";
 
 declare const runtimeSchema: TSchema;

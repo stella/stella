@@ -6,12 +6,12 @@
 // comment directly above a `.skip` counts as its reason.
 
 import * as bun from "bun";
-import { SQL as PgClient, SQL } from "bun";
+import { SQL, SQL as PgClient } from "bun";
 import * as bt from "bun:test";
 import {
   describe,
-  expect as assertThat,
   expect,
+  expect as assertThat,
   it,
   test as check,
   test,

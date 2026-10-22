@@ -8,8 +8,9 @@ export const observeTestRequests = async () => {
   await request().catch(() => {});
   try {
     await request();
-    // oxlint-disable-next-line no-swallowed-item-error/no-test-swallowed-error -- fixture: a comment alone does not justify discarding failures
-  } catch {
+  }
+  // oxlint-disable-next-line no-swallowed-item-error/no-test-swallowed-error -- fixture: a comment alone does not justify discarding failures
+  catch {
     // Deliberately no outcome assertion.
   }
   // oxlint-disable-next-line no-swallowed-item-error/no-test-swallowed-error -- fixture: a placeholder reason cannot allow a swallowed failure
@@ -18,8 +19,9 @@ export const observeTestRequests = async () => {
   await request().catch(() => undefined); // swallow-ok: drains a reader after its original error has been asserted
   try {
     await request();
-    // expect-clean: no-swallowed-item-error/no-test-swallowed-error
-  } catch (error) {
+  }
+  // expect-clean: no-swallowed-item-error/no-test-swallowed-error
+  catch (error) {
     recordFailure(error);
     throw error;
   }

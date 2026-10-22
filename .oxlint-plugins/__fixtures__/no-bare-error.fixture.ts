@@ -8,7 +8,7 @@
 // would otherwise crowd the regression signal.
 
 import * as betterResult from "better-result";
-import { Err, Result as Outcome, Result } from "better-result";
+import { Err, Result, Result as Outcome } from "better-result";
 
 declare class FixtureError extends Error {
   constructor(message: string);

@@ -7,7 +7,7 @@
 // accepted cases carry no disable, so a false positive would fail the fixture
 // too.
 
-import { panic as fail, panic } from "better-result";
+import { panic, panic as fail } from "better-result";
 
 type Kind = { type: "a" } | { type: "b" };
 

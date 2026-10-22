@@ -59,9 +59,9 @@ import { toProseDoc } from "@stll/folio-core/prosemirror/conversion";
 import {
   createDocx,
   createEmptyDocument,
-  extractDocxText,
-  materializeYjsDocx,
   parseDocx,
+  materializeYjsDocx,
+  extractDocxText,
 } from "@stll/folio-core/server";
 
 import { writeYjsDocumentMetadata } from "./node_modules/@stll/folio-core/dist/prosemirror/yjsDocumentMetadata.js";

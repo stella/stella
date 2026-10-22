@@ -9,14 +9,16 @@ async function buildItems() {
   for (const item of items) {
     try {
       await build(item);
-      // oxlint-disable-next-line no-swallowed-item-error/no-swallowed-item-error -- fixture: skipping an item must surface its failure
-    } catch {
+    }
+    // oxlint-disable-next-line no-swallowed-item-error/no-swallowed-item-error -- fixture: skipping an item must surface its failure
+    catch {
       continue;
     }
     try {
       await build(item);
-      // oxlint-disable-next-line no-swallowed-item-error/no-swallowed-item-error -- fixture: an empty handler discards the failure
-    } catch {
+    }
+    // oxlint-disable-next-line no-swallowed-item-error/no-swallowed-item-error -- fixture: an empty handler discards the failure
+    catch {
       // Fixture deliberately leaves the item failure unrecorded.
     }
     // oxlint-disable-next-line no-swallowed-item-error/no-swallowed-item-error -- fixture: a promise fallback discards the failure
@@ -45,21 +47,24 @@ async function buildItems() {
     await build(item).catch(() => void 0);
     try {
       await build(item);
-      // oxlint-disable-next-line no-swallowed-item-error/no-swallowed-item-error -- fixture: a constant catch return hides an item failure
-    } catch {
+    }
+    // oxlint-disable-next-line no-swallowed-item-error/no-swallowed-item-error -- fixture: a constant catch return hides an item failure
+    catch {
       return false;
     }
     try {
       await build(item);
-      // expect-clean: no-swallowed-item-error/no-swallowed-item-error
-    } catch (error) {
+    }
+    // expect-clean: no-swallowed-item-error/no-swallowed-item-error
+    catch (error) {
       record({ type: "item_build_failed", cause: error });
       continue;
     }
     try {
       await build(item);
-      // expect-clean: no-swallowed-item-error/no-swallowed-item-error
-    } catch (error) {
+    }
+    // expect-clean: no-swallowed-item-error/no-swallowed-item-error
+    catch (error) {
       record({ type: "item_build_failed", cause: error });
       throw error;
     }

@@ -8,8 +8,8 @@ import {
   ilike,
   like as likeOperator,
   notIlike,
-  type SQL,
   sql,
+  type SQL,
 } from "drizzle-orm";
 import * as ops from "drizzle-orm";
 

@@ -2,7 +2,7 @@
 
 import { maskApiKey as foreignMask } from "unrelated-mask";
 
-import { maskApiKey as mask, maskApiKey } from "@/api/lib/ai-config-crypto";
+import { maskApiKey, maskApiKey as mask } from "@/api/lib/ai-config-crypto";
 
 type Sink = (...values: unknown[]) => void;
 

@@ -1,16 +1,16 @@
 import { FormApi } from "@tanstack/form-core";
 // Passive fixtures: unused suppressions fail CI if the enforcement regresses.
 import {
-  createFormHook,
-  useForm as useAliasedForm,
   useForm,
+  useForm as useAliasedForm,
+  createFormHook,
 } from "@tanstack/react-form";
 import * as forms from "@tanstack/react-form";
 import { schemaFormOptions as unrelatedOptions } from "unrelated-module";
 
 import {
-  schemaFormOptions as configure,
   schemaFormOptions,
+  schemaFormOptions as configure,
 } from "@/lib/schema";
 import * as formOwner from "@/lib/schema";
 

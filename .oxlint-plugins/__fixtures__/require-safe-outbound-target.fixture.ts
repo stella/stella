@@ -10,8 +10,8 @@ import { fetchWithTimeout as unrelatedFetch } from "unrelated-fetch";
 import SocketClient from "ws";
 
 import {
-  fetchWithTimeout as aliasedFetch,
   fetchWithTimeout,
+  fetchWithTimeout as aliasedFetch,
   fetchWithTimeout as webFetch,
 } from "@stll/fetch";
 

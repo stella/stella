@@ -5,10 +5,10 @@
 import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
 
 import {
-  // oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: private schema import crosses the public case-law boundary
-  caseLawMatterLinks,
   // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
   caseLawSources,
+  // oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: private schema import crosses the public case-law boundary
+  caseLawMatterLinks,
   // Constant and type-only schema imports name no table.
   // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
   SOURCE_TOTAL_ORIGIN,
