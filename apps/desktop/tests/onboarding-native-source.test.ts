@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-const source = readFileSync(new URL("onboarding.rs", import.meta.url), "utf-8");
+const source = readFileSync(
+  new URL("../src-tauri/src/onboarding.rs", import.meta.url),
+  "utf-8",
+);
 
 test("the shortcut cannot advance before Try it has been shown", () => {
   expect(source).toContain(

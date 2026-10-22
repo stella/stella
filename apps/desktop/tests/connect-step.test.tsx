@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 const source = readFileSync(
-  new URL("ConnectStep.tsx", import.meta.url),
+  new URL("../src/onboarding/ConnectStep.tsx", import.meta.url),
   "utf-8",
 );
 

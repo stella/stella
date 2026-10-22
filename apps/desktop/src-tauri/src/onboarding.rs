@@ -223,9 +223,12 @@ async fn snapshot(app: &AppHandle) -> Result<OnboardingSnapshot, String> {
     onboarding.shown = Some(step);
     step
   };
+  #[cfg(target_os = "macos")]
   let document_app = tauri::async_runtime::spawn_blocking(document_app)
     .await
     .unwrap_or(None);
+  #[cfg(not(target_os = "macos"))]
+  let document_app = None;
   Ok(OnboardingSnapshot {
     step,
     steps: visible_steps(context, step),
@@ -423,13 +426,6 @@ fn document_app() -> Option<DocumentApp> {
     name,
     icon_data_url: crate::foreground_app_visual::bundle_icon_data_url(&app_path),
   })
-}
-
-/// Windows resolves the handler through registry associations that vary by
-/// install; the tour names the document app generically there.
-#[cfg(not(target_os = "macos"))]
-fn document_app() -> Option<DocumentApp> {
-  None
 }
 
 #[cfg(test)]
