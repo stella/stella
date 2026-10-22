@@ -135,7 +135,7 @@ export const startAnonymizationDetection = ({
       .markAnonymizationPipelineRan(fieldId);
   const readText = (): string => {
     const { doc } = view.state;
-    if (lastRead !== null && lastRead.doc === doc) {
+    if (lastRead?.doc === doc) {
       return lastRead.text;
     }
     const text = doc.textBetween(0, doc.content.size, "\n", "\n");
