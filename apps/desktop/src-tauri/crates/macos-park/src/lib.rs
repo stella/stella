@@ -22,6 +22,11 @@ mod managed_preferences;
 pub use managed_preferences::{ManagedPreference, managed_preference};
 
 #[cfg(target_os = "macos")]
+mod microphone;
+#[cfg(target_os = "macos")]
+pub use microphone::microphone_input_bundle_ids;
+
+#[cfg(target_os = "macos")]
 mod system_permissions;
 #[cfg(target_os = "macos")]
 pub use system_permissions::{
