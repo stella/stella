@@ -313,6 +313,9 @@ pub fn handle_url(
           updater::CheckOutcome::Failed(error) => {
             tracing::warn!(error = %error, "deep link updater check failed");
           }
+          updater::CheckOutcome::Disabled => {
+            tracing::debug!("deep link updater check skipped: updates are managed");
+          }
         }
       });
     }

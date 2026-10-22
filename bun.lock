@@ -635,7 +635,7 @@
     },
     "packages/agent-input": {
       "name": "@stll/agent-input",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "dependencies": {
         "@stll/country-codes": "workspace:^",
         "@stll/fuzzy-search": "catalog:",
