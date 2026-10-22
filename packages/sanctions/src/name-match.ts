@@ -4,7 +4,6 @@ import {
   distance,
   EntityIndexBuilder,
   type EntityIndex,
-  type EntityQuery,
   type EntitySearchResult,
 } from "@stll/fuzzy-search";
 
@@ -33,10 +32,7 @@ export const spendScreeningWork = (
   return true;
 };
 const METRIC = "damerau-levenshtein";
-const SEARCH_CACHE_MAX_ENTRIES = 16_384;
-const SEARCH_CACHE_MAX_VALUES = 256;
 const MAX_REDUNDANT_JOIN_FREQUENCY = 256;
-const MAX_COMPLETE_WEAK_CANDIDATES = 64;
 
 // Weights are inverse document frequencies over entries, so a shared
 // "Mohammed" counts for less than a shared rare surname.
@@ -232,7 +228,6 @@ export type NameIndex = {
     EntityIndex,
     "search" | "toBytes" | "nativeBytes" | "postingCount"
   >;
-  searches: Map<string, EntitySearchResult>;
 };
 const intern = (vocabulary: BuildingVocabulary, text: string): number => {
   const known = vocabulary.ids.get(text);
@@ -489,7 +484,6 @@ export function* nameIndexSteps(
     wordIds,
     joinCounts,
     entities,
-    searches: new Map(),
   };
 }
 export const runSteps = <T>(steps: IndexBuildSteps<T>): T => {
@@ -732,45 +726,6 @@ type MatchNamesOptions = {
   cutoff: number;
   work: ScreeningWorkBudget;
 };
-type SearchEntitiesOptions = {
-  index: NameIndex;
-  query: EntityQuery;
-  tau: number;
-  work: ScreeningWorkBudget;
-};
-const searchEntities = ({
-  index,
-  query,
-  tau,
-  work,
-}: SearchEntitiesOptions): EntitySearchResult => {
-  const key = JSON.stringify([tau, query]);
-  const cached = index.searches.get(key);
-  if (cached !== undefined) {
-    index.searches.delete(key);
-    index.searches.set(key, cached);
-    return cached;
-  }
-  const searched = index.entities.search(query, {
-    tau,
-    quality: 1,
-    maxCost: Math.floor(work.remaining / (index.sharedVocabulary ? 8 : 1)),
-  });
-  if (
-    !searched.exhausted &&
-    searched.survivors.length <= SEARCH_CACHE_MAX_VALUES &&
-    searched.similarities.length <= SEARCH_CACHE_MAX_VALUES
-  ) {
-    if (index.searches.size === SEARCH_CACHE_MAX_ENTRIES) {
-      const oldest = index.searches.keys().next().value;
-      if (oldest !== undefined) {
-        index.searches.delete(oldest);
-      }
-    }
-    index.searches.set(key, searched);
-  }
-  return searched;
-};
 type QuerySource = {
   type: "token" | "join";
   positions: readonly number[];
@@ -854,9 +809,11 @@ export const matchNames = ({
       : [{ type: "token" as const, positions: [position], token }],
   );
   const joinedSources =
-    // A joined query unit only explains a listed single word. Query joins that
-    // exist solely as listed joins add no alignment and fan out over every
-    // alias sharing the adjacent words.
+    // A joined query unit that is not a listed single word adds no alignment
+    // when every part is a listed word: those parts already explain every
+    // alignment the join could add. Drop it only when more than
+    // MAX_REDUNDANT_JOIN_FREQUENCY aliases contain that join. This argument
+    // applies uniformly to all parts, including numerals.
     reading.adjacent
       .filter((positions) => !positions.some((position) => initials[position]))
       .map((positions) => ({
@@ -882,15 +839,11 @@ export const matchNames = ({
           const partId = index.folded.ids.get(part.folded);
           return partId !== undefined && index.wordIds.get(partId) === 1;
         });
-        const hasNumericPart = positions.some((position) =>
-          /^\p{N}+$/u.test(reading.tokens[position]?.folded ?? ""),
-        );
         return (
           isListedWord ||
           !everyPartIsListed ||
           id === undefined ||
-          (!hasNumericPart &&
-            index.joinCounts.get(id) <= MAX_REDUNDANT_JOIN_FREQUENCY)
+          index.joinCounts.get(id) <= MAX_REDUNDANT_JOIN_FREQUENCY
         );
       });
   const sources = [...tokenSources, ...joinedSources];
@@ -939,7 +892,11 @@ export const matchNames = ({
         weight: queryWeights[position] ?? panic("Missing selected weight"),
       })),
     };
-    return searchEntities({ index, query, tau, work });
+    return index.entities.search(query, {
+      tau,
+      quality: 1,
+      maxCost: work.remaining,
+    });
   };
   // Unknown words select IDF from all equally close folded word spellings,
   // in caller intern order. A tau=0 lookup cannot prune that weight source.
@@ -947,15 +904,12 @@ export const matchNames = ({
     needsWeights ? 0 : Math.max(0, threshold - Number.EPSILON * 8),
   );
   const chargeSearch = () => {
-    const nativeCost = Object.values(result.cost).reduce(
+    const cost = Object.values(result.cost).reduce(
       (total, value) => total + value,
       0,
     );
-    // A shared vocabulary is searched once, but its folded/raw evidence and
-    // their candidate pairs retain the deterministic allowance of two forms.
-    const cost = index.sharedVocabulary
-      ? nativeCost * 2 + result.survivors.length * result.similarities.length
-      : nativeCost;
+    // The native index reports the exact work performed, including a shared
+    // vocabulary's single search, so charge that cost without a multiplier.
     if (!spendScreeningWork(work, cost) || result.exhausted) {
       work.exhausted = true;
       return false;
@@ -1032,10 +986,5 @@ export const matchNames = ({
       best.set(alias.entry, { score, name: alias.name });
     }
   }
-  const denseWeakCandidates =
-    result.survivors.length > MAX_COMPLETE_WEAK_CANDIDATES &&
-    result.survivors.every(
-      (id) => index.aliases.metadata(id).quality === "weak",
-    );
-  return { matches: best, truncated: denseWeakCandidates };
+  return { matches: best, truncated: false };
 };

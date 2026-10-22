@@ -337,6 +337,7 @@ test(
     const generatedName = fc
       .oneof(
         fc.array(inflectedWord, { minLength: 1, maxLength: MAX_QUERY_TOKENS }),
+        fc.tuple(inflectedWord, fc.integer({ min: 0, max: 9999 }).map(String)),
         fc.array(inflectedWord, {
           minLength: MAX_QUERY_TOKENS,
           maxLength: MAX_QUERY_TOKENS,
@@ -363,7 +364,13 @@ test(
           const listed =
             names.at(selected % names.length) ??
             panic("Missing generated name");
-          const entries = names.map((name) => entry(name, quality));
+          // The repeated differently split spelling makes "alpha42" a dense
+          // join without listing either query part. Candidate completeness
+          // therefore depends on retaining the numeric query join.
+          const joinWitnesses = Array.from({ length: 257 }, () => "Al pha42");
+          const entries = [...names, ...joinWitnesses].map((name) =>
+            entry(name, quality),
+          );
           const index = buildNameIndex(entries);
           const oracle = runSteps(nameIndexSteps(entries));
           for (const query of [
@@ -373,6 +380,7 @@ test(
             normalizeUnicode(listed, "NFD"),
             stripUnicodeMarks(listed, { form: "NFD", markClass: "combining" }),
             listed.split(" ").toReversed().join(" "),
+            "Alpha 42",
           ]) {
             expect(query.length).toBeLessThanOrEqual(MAX_QUERY_CHARACTERS);
             const reading = nameReading(query, "person");
