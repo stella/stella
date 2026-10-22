@@ -25,7 +25,9 @@
     "runtime",
     "activityRead",
     "activitySubscribe",
-    "activityUpdate"
+    "activityUpdate",
+    "permissionsUpdate",
+    "shortcutUpdate"
   ],
   "errorCodes": [
     "eventSubscriptionFailed",
