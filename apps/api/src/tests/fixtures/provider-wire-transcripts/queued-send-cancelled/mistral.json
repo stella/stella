@@ -1,0 +1,179 @@
+{
+  "format": 1,
+  "scenario": "queued-send-cancelled",
+  "provider": "mistral",
+  "model": "mistral-medium-latest",
+  "entries": [
+    {
+      "type": "expect_outbound",
+      "label": "ask",
+      "request": {
+        "path": "/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "mistral-medium-latest",
+          "temperature": 0,
+          "tools": [
+            "ask-user",
+            "request_secret",
+            "use_connector_secret",
+            "execute_typescript",
+            "discover_tools",
+            "load-skill",
+            "read-skill-resource",
+            "counterparty_check",
+            "update-entity-fields",
+            "list_templates",
+            "describe_template",
+            "fill_template",
+            "suggest_template_fields",
+            "search-chat-history",
+            "expand-chat-history",
+            "search-past-chats",
+            "create-document",
+            "review_folder_consistency",
+            "set_practice_jurisdictions",
+            "create_template",
+            "configure_template_fields",
+            "save_document",
+            "delete_document",
+            "set_field_value",
+            "save_matter",
+            "delete_matter",
+            "save_contact",
+            "delete_contact",
+            "save_task",
+            "delete_task",
+            "link_matter_contact",
+            "save_clause",
+            "delete_clause",
+            "save_playbook",
+            "run_playbook",
+            "create_reader_annotation",
+            "update_reader_annotation",
+            "delete_reader_annotation",
+            "add_matter_member",
+            "remove_matter_member",
+            "update_organization_settings",
+            "mcp__external__delete",
+            "spawn_subagents"
+          ],
+          "messages": [
+            {
+              "role": "system",
+              "content": "[system prompt]"
+            },
+            {
+              "role": "user",
+              "content": "Summarize the draft"
+            }
+          ],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "max_tokens": 262144
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "text",
+      "pauses": [
+        {
+          "label": "answer-streaming",
+          "at": "text-open",
+          "afterFrame": 1
+        }
+      ]
+    },
+    {
+      "type": "expect_outbound",
+      "label": "next-message",
+      "request": {
+        "path": "/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "mistral-medium-latest",
+          "temperature": 0,
+          "tools": [
+            "ask-user",
+            "request_secret",
+            "use_connector_secret",
+            "execute_typescript",
+            "discover_tools",
+            "load-skill",
+            "read-skill-resource",
+            "counterparty_check",
+            "update-entity-fields",
+            "list_templates",
+            "describe_template",
+            "fill_template",
+            "suggest_template_fields",
+            "search-chat-history",
+            "expand-chat-history",
+            "search-past-chats",
+            "create-document",
+            "review_folder_consistency",
+            "set_practice_jurisdictions",
+            "create_template",
+            "configure_template_fields",
+            "save_document",
+            "delete_document",
+            "set_field_value",
+            "save_matter",
+            "delete_matter",
+            "save_contact",
+            "delete_contact",
+            "save_task",
+            "delete_task",
+            "link_matter_contact",
+            "save_clause",
+            "delete_clause",
+            "save_playbook",
+            "run_playbook",
+            "create_reader_annotation",
+            "update_reader_annotation",
+            "delete_reader_annotation",
+            "add_matter_member",
+            "remove_matter_member",
+            "update_organization_settings",
+            "mcp__external__delete",
+            "spawn_subagents"
+          ],
+          "messages": [
+            {
+              "role": "system",
+              "content": "[system prompt]"
+            },
+            {
+              "role": "user",
+              "content": "Summarize the draft"
+            },
+            {
+              "role": "assistant",
+              "content": "The cassette plays."
+            },
+            {
+              "role": "user",
+              "content": "Thanks"
+            }
+          ],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "max_tokens": 262144
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "text"
+    }
+  ]
+}

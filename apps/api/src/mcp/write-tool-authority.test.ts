@@ -59,7 +59,6 @@ const mcpContextFor = (role: MemberRole): McpRequestContext =>
     userId: toSafeId<"user">("user_1"),
     userEmail: "member@example.test",
     accessibleWorkspaceIds: [],
-    enabledRegistrySlugs: undefined,
     grantedScopes: [],
     memberRole: role,
   });
@@ -574,7 +573,6 @@ describe("write tools whose input selects the operation", () => {
     const updateOnly = asTestRaw<McpRequestContext>({
       accessibleWorkspaceIds: [],
       credentialPermissions: { entity: ["update"] },
-      enabledRegistrySlugs: undefined,
       grantedScopes: [],
       memberRole: "owner",
     });
@@ -676,7 +674,6 @@ describe("write tool account access", () => {
     env.DEMO_ACCOUNT_EMAIL = "limited@example.test";
     try {
       const context = asTestRaw<McpRequestContext>({
-        enabledRegistrySlugs: undefined,
         grantedScopes: [],
         memberRole: "owner",
         userEmail: "limited@example.test",
