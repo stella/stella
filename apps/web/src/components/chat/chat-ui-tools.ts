@@ -783,27 +783,41 @@ export const getAwaitedAssistantMessageId = (
   findAwaitedAssistantMessageId(messages, isUserAnswerablePart);
 
 /**
- * The approvals a thread already waits on when a page opens it. The page
- * answers these only on the user's click: a grant or page policy that
- * answered one on its own would resume tool work on a reopened thread with
- * no one asking.
+ * The tool work a thread already waits on when a page opens it: approval
+ * cards, and client-run document tools no result answers yet. The page
+ * resumes none of it on its own (no grant or page policy answers such a
+ * card, the file overlay runs no such call): a reopened thread continues
+ * tool work only once the user acts. Work that arrives while the page is
+ * open is not in it.
  */
-export const getApprovalIdsAwaitedAtOpen = (
+export type ChatWorkAwaitedAtOpen = {
+  approvalIds: ReadonlySet<string>;
+  clientToolCallIds: ReadonlySet<string>;
+};
+
+export const getChatWorkAwaitedAtOpen = (
   messages: readonly PersistedChatMessage[],
-): ReadonlySet<string> =>
-  new Set(
-    messages.flatMap((message) =>
-      message.role === "assistant"
-        ? message.parts.flatMap((part) =>
-            part.type === "tool-call" &&
-            part.state === "approval-requested" &&
-            part.approval !== undefined
-              ? [part.approval.id]
-              : [],
-          )
-        : [],
-    ),
+): ChatWorkAwaitedAtOpen => {
+  const parts = messages.flatMap((message) =>
+    message.role === "assistant" ? message.parts : [],
   );
+  return {
+    approvalIds: new Set(
+      parts.flatMap((part) =>
+        part.type === "tool-call" &&
+        part.state === "approval-requested" &&
+        part.approval !== undefined
+          ? [part.approval.id]
+          : [],
+      ),
+    ),
+    clientToolCallIds: new Set(
+      parts.flatMap((part) =>
+        isUnresolvedFolioAgentDocToolCallPart(part) ? [part.id] : [],
+      ),
+    ),
+  };
+};
 
 /**
  * An unresolved auto-run folio-agents tool-call part (a read tool or
@@ -1006,6 +1020,8 @@ export const isChatClientRequestActive = (status: ChatClientState): boolean => {
 };
 
 type SelectIdleFolioAgentDocToolCallPartsOptions = {
+  /** What the thread waited on when the page opened it: never run here. */
+  awaitedAtOpen: ChatWorkAwaitedAtOpen;
   clientStatus: ChatClientState;
   executedIds: ReadonlySet<string>;
   messageParts: readonly ChatPart[];
@@ -1022,13 +1038,17 @@ type SelectIdleFolioAgentDocToolCallPartsOptions = {
  * `suggest_changes` input state.
  */
 export const selectIdleFolioAgentDocToolCallParts = ({
+  awaitedAtOpen,
   clientStatus,
   executedIds,
   messageParts,
 }: SelectIdleFolioAgentDocToolCallPartsOptions): UnresolvedFolioAgentDocToolCallPart[] =>
   isChatClientRequestActive(clientStatus)
     ? []
-    : selectUnresolvedFolioAgentDocToolCallParts(messageParts, executedIds);
+    : selectUnresolvedFolioAgentDocToolCallParts(
+        messageParts,
+        executedIds,
+      ).filter(({ id }) => !awaitedAtOpen.clientToolCallIds.has(id));
 
 type ServerChatTurnOutcome = NonNullable<
   NonNullable<ChatMessage["metadata"]>["turnOutcome"]

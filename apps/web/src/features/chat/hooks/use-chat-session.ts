@@ -1705,7 +1705,7 @@ export const useChatSession = ({
 
   return {
     activitySession: chat,
-    approvalIdsAwaitedAtOpen: chat.approvalIdsAwaitedAtOpen,
+    approvalIdsAwaitedAtOpen: chat.workAwaitedAtOpen.approvalIds,
     clientStatus: status,
     reconnecting,
     refreshAnswers,
