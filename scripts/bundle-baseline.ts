@@ -13,10 +13,11 @@
 // annotates the grown groups and writes them to the job summary, and a nightly
 // run lists every group over budget. An improvement prompts a ratchet down.
 //
-// Policy: the size budget (--check) is warning-only. The duplicate-content
-// guard (--check-duplicates) is a separate, blocking check: a chunk that
-// carries the same large block twice is a build defect with a known fix, not
-// growth to weigh against a budget. Neither path changes the other's exit code.
+// Policy: ordinary size growth under --check is warning-only. Worker-only
+// groups appearing in the main bundle are blocking because their budget is
+// exactly zero. The duplicate-content guard (--check-duplicates) is a separate,
+// blocking check: a chunk that carries the same large block twice is a build
+// defect with a known fix, not growth to weigh against a budget.
 //
 // Modes:
 //   bun scripts/bundle-baseline.ts                    report groups + gzip sizes
@@ -84,7 +85,7 @@ const HASH = "[A-Za-z0-9_-]{8}";
 // groups (vendor-anonymize-data, wasm-vendor) currently have no
 // client-graph chunk because those deps load inside web workers, not the main
 // bundle; they are tracked at 0 so that if one ever leaks into the client graph
-// the guard forces a deliberate baseline update.
+// the guard fails.
 const VENDOR_GROUPS = [
   "vendor-react",
   "vendor-tanstack",
@@ -112,6 +113,13 @@ const GROUP_KEYS = [
 type GroupKey = (typeof GROUP_KEYS)[number];
 type VendorGroup = (typeof VENDOR_GROUPS)[number];
 type Sizes = Record<GroupKey, number>;
+
+const WORKER_ONLY_GROUPS = [
+  "vendor-anonymize-data",
+  "wasm-vendor",
+] as const satisfies readonly GroupKey[];
+type WorkerOnlyGroup = (typeof WORKER_ONLY_GROUPS)[number];
+const WORKER_ENTRY = "apps/web/src/workers/anonymize-chat-worker.ts";
 
 // --- Classification ---------------------------------------------------------
 // Entry = the client bootstrap (`index-<hash>.js`, the __root__ script that
@@ -432,14 +440,16 @@ const runCheck = (): number => {
   );
 };
 
-// The warning-only size budget. It sees only sizes, so nothing else measured
-// about the build can turn growth into a failure.
+// The size budget warns on ordinary growth, but enforces the worker boundary.
 const checkSizeBudget = (
   sizes: Sizes,
   baseline: Sizes,
   summaryPath: string | undefined,
   log: (line: string) => void,
 ): number => {
+  if (checkWorkerOnlyGroups(sizes, log) !== 0) {
+    return 1;
+  }
   const diffs = diffAll(sizes, baseline);
   const regressions = diffs.filter((d) => d.status === "regressed");
   const drops = diffs.filter((d) => d.status === "dropped");
@@ -461,6 +471,23 @@ const checkSizeBudget = (
   }
 
   return reportRegressions(regressions, summaryPath, log);
+};
+
+export const checkWorkerOnlyGroups = (
+  sizes: Pick<Sizes, WorkerOnlyGroup>,
+  log: (line: string) => void,
+): number => {
+  const leaks = WORKER_ONLY_GROUPS.filter((group) => sizes[group] > 0);
+  if (leaks.length === 0) {
+    return 0;
+  }
+
+  for (const group of leaks) {
+    log(
+      `::error title=Worker-only bundle group: ${group}::${group} contributes ${kib(sizes[group])} to main-thread chunks. Keep this group out of the main build's manualChunks and import worker-only dependencies from ${WORKER_ENTRY} instead.`,
+    );
+  }
+  return 1;
 };
 
 const runCheckDuplicates = (): number => {

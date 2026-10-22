@@ -557,31 +557,52 @@ export const isTwoFactorRedirectResponse = (value: unknown): boolean =>
   value.twoFactorRedirect === true;
 
 /**
- * The two-factor plugin's own management endpoints only require an active
- * (fresh) session — see node_modules/better-auth/dist/plugins/two-factor/index.mjs
- * (enable, disable) and its totp/backup-codes sub-plugins (get-totp-uri,
- * generate-backup-codes). A hijacked session could otherwise silently strip
- * 2FA, re-enable it to rotate the secret out from under the real owner,
- * read back the current TOTP secret to clone the authenticator, or mint
- * fresh backup codes, so these paths are additionally gated on a fresh
- * email verification code (see `requireTwoFactorManageOtp`), mirroring the
- * delete-account flow.
+ * Every HTTP endpoint the two-factor plugin registers, by how it uses the
+ * caller's session. Each one resolves that session from storage, never from
+ * Better Auth's signed cookie snapshot, which trades a short revocation delay
+ * for ordinary-request performance (see `resolveAuthoritativeSessionForSensitiveAuthPath`).
+ *
+ * - `manage`: exposes or replaces second-factor material. The plugin itself
+ *   only requires an active session (node_modules/better-auth/dist/plugins/two-factor/index.mjs
+ *   and its totp/backup-codes sub-plugins), so Stella also requires a live
+ *   session plus a fresh email verification code (see `requireTwoFactorManageOtp`),
+ *   mirroring the delete-account flow, so a session cookie alone can neither
+ *   remove 2FA, rotate the secret, read back the TOTP secret nor mint backup codes.
+ * - `challenge`: completes a sign-in challenge from its challenge cookie, or,
+ *   with a live session, finishes enrollment or consumes a backup code.
+ *
+ * A registry test enumerates the registered plugin, so a new endpoint fails
+ * until it is classified here.
  */
-export const TWO_FACTOR_MANAGE_PATHS = new Set([
-  "/two-factor/enable",
-  "/two-factor/disable",
-  "/two-factor/get-totp-uri",
-  "/two-factor/generate-backup-codes",
-]);
+export const TWO_FACTOR_SESSION_PATHS = {
+  "/two-factor/enable": "manage",
+  "/two-factor/disable": "manage",
+  "/two-factor/get-totp-uri": "manage",
+  "/two-factor/generate-backup-codes": "manage",
+  "/two-factor/verify-totp": "challenge",
+  "/two-factor/verify-otp": "challenge",
+  "/two-factor/verify-backup-code": "challenge",
+  "/two-factor/send-otp": "challenge",
+} as const satisfies Record<`/two-factor/${string}`, "manage" | "challenge">;
+
+const isTwoFactorSessionPath = (
+  path: string,
+): path is keyof typeof TWO_FACTOR_SESSION_PATHS =>
+  Object.hasOwn(TWO_FACTOR_SESSION_PATHS, path);
+
+export const TWO_FACTOR_MANAGE_PATHS: ReadonlySet<string> = new Set(
+  Object.entries(TWO_FACTOR_SESSION_PATHS)
+    .filter(([, use]) => use === "manage")
+    .map(([path]) => path),
+);
 
 /**
- * These endpoints can either mint durable OAuth credentials or change the
- * account's second factor. They must never authorize from Better Auth's
- * signed cookie snapshot: it deliberately trades a short revocation delay for
- * ordinary-request performance. Resolve their session from storage instead.
+ * These endpoints can either mint durable OAuth credentials or read or change
+ * the account's second factor. They must never authorize from the signed
+ * cookie snapshot. Resolve their session from storage instead.
  */
-export const AUTHORITATIVE_SESSION_PATHS = new Set([
-  ...TWO_FACTOR_MANAGE_PATHS,
+export const AUTHORITATIVE_SESSION_PATHS: ReadonlySet<string> = new Set([
+  ...Object.keys(TWO_FACTOR_SESSION_PATHS),
   "/oauth2/authorize",
   "/oauth2/consent",
 ]);
@@ -604,17 +625,29 @@ type RequireTwoFactorManageOtpArgs = {
 type SensitiveAuthPathContext = {
   body?: unknown;
   path?: string | undefined;
+  query?: Record<string, unknown> | undefined;
   request?: Request | undefined;
 };
 type AuthoritativeSessionPathContext = SensitiveAuthPathContext & {
   path: string;
   request: Request;
 };
+/** A `before` hook result whose context Better Auth merges into the endpoint's. */
+type StorageSessionHookResult = {
+  context: { query: Record<string, unknown> };
+};
 /**
  * Establish database-backed session state before a sensitive plugin endpoint
- * runs. Better Auth's endpoint middleware reuses this context, so neither the
- * OAuth authorization-code flow nor two-factor rotation can fall back to a
- * signed cookie-cache snapshot.
+ * runs. Better Auth's endpoint middleware reuses a resolved session from this
+ * context, so neither the OAuth authorization-code flow nor two-factor
+ * rotation can fall back to a signed cookie-cache snapshot.
+ *
+ * A session absent from storage leaves that context empty, and the endpoint
+ * middleware would then read the cookie snapshot again. A two-factor endpoint
+ * therefore also gets `disableCookieCache` in its query, which Better Auth's
+ * session read honours, so the endpoint sees the same absent session. The
+ * returned hook result carries that query; `undefined` means the request
+ * continues unchanged.
  */
 export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
   TContext extends SensitiveAuthPathContext,
@@ -626,34 +659,40 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
   resolveSession: (
     ctx: TContext & AuthoritativeSessionPathContext,
   ) => Promise<TwoFactorManageSession>;
-}): Promise<Result<boolean, APIError>> => {
+}): Promise<Result<StorageSessionHookResult | undefined, APIError>> => {
   const path = ctx.path;
   if (path === undefined || !AUTHORITATIVE_SESSION_PATHS.has(path)) {
-    return Result.ok(false);
+    return Result.ok(undefined);
   }
   const request = ctx.request;
   if (request === undefined) {
     panic("Authoritative-session hook ran outside HTTP dispatch");
   }
   const session = await resolveSession({ ...ctx, path, request });
-  if (!TWO_FACTOR_MANAGE_PATHS.has(path)) {
-    return Result.ok(true);
+  if (!isTwoFactorSessionPath(path)) {
+    return Result.ok(undefined);
+  }
+  const storageSession: StorageSessionHookResult = {
+    context: { query: { ...ctx.query, disableCookieCache: true } },
+  };
+  if (TWO_FACTOR_SESSION_PATHS[path] === "challenge") {
+    return Result.ok(storageSession);
   }
   const gate = await requireTwoFactorManageOtp({ body: ctx.body, session });
-  return gate.map(() => true);
+  return gate.map(() => storageSession);
 };
 
 /**
- * Requires a fresh, single-use email verification code before letting any
- * path in `TWO_FACTOR_MANAGE_PATHS` proceed, so a session cookie alone can
- * neither enroll a second factor, disable it, rotate the TOTP secret via
- * re-enable, read back the current TOTP secret, nor mint fresh backup codes.
- * Enrollment is gated like every other transition: binding an authenticator
- * decides who can pass the challenge from then on.
+ * Requires a live session and a fresh, single-use email verification code
+ * before letting any path in `TWO_FACTOR_MANAGE_PATHS` proceed, so a session
+ * cookie alone can neither enroll a second factor, disable it, rotate the TOTP
+ * secret via re-enable, read back the current TOTP secret, nor mint fresh
+ * backup codes. Enrollment is gated like every other transition: binding an
+ * authenticator decides who can pass the challenge from then on.
  *
- * Resolves the session itself (this runs as a global `before` hook, ahead of
- * each endpoint's own session middleware) and no-ops when there is no
- * session, because the endpoint's own middleware will reject the request.
+ * Receives the session resolved from storage (this runs in the global
+ * `before` hook, ahead of each endpoint's own session middleware) and refuses
+ * a request whose session storage no longer holds, such as a revoked one.
  *
  * One deployment shape is exempt: transactional email is optional, and an
  * instance without a transport cannot deliver a manage code at all, so
@@ -668,7 +707,12 @@ const requireTwoFactorManageOtp = async ({
   session,
 }: RequireTwoFactorManageOtpArgs): Promise<Result<void, APIError>> => {
   if (!session) {
-    return Result.ok(undefined);
+    return Result.err(
+      new APIError("UNAUTHORIZED", {
+        code: "UNAUTHORIZED",
+        message: "Unauthorized",
+      }),
+    );
   }
 
   if (
@@ -2291,7 +2335,7 @@ export const createAuth = (
           throw authoritative.error;
         }
         if (authoritative.value) {
-          return undefined;
+          return authoritative.value;
         }
 
         if (!shouldHandleSelfhostBootstrapPath(ctx.path)) {
@@ -2481,12 +2525,19 @@ const VALIDATE_AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
+/**
+ * Account routes read the session from storage. Organization routes may
+ * serve the cached cookie snapshot because their member lookup runs live on
+ * every request; an account route has no such lookup, so the stored session
+ * is the only thing that ends when the session or the account does.
+ */
 export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
   validateSession: {
     async resolve({ status, request, set }) {
       const sessionResult = await Result.tryPromise(async () => {
         const resolved = await getAuth().api.getSession({
           headers: request.headers,
+          query: { disableCookieCache: true },
           returnHeaders: true,
         });
         forwardAuthResponseCookies(set.headers, resolved.headers);

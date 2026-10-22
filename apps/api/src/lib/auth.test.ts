@@ -41,6 +41,7 @@ import {
   resolveWorkspaceRealtimeAudience,
   SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
   TWO_FACTOR_MANAGE_PATHS,
+  TWO_FACTOR_SESSION_PATHS,
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -630,11 +631,11 @@ describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
       },
     });
 
-    expect(Result.isOk(handled) && handled.value).toBe(true);
+    expect(Result.isOk(handled) && handled.value).toBeUndefined();
     expect(resolvedPaths).toEqual(["/oauth2/authorize"]);
   });
 
-  test("uses the same authoritative session boundary before two-factor rotation", async () => {
+  test("refuses two-factor management when storage holds no session", async () => {
     const resolvedPaths: string[] = [];
 
     const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
@@ -645,8 +646,21 @@ describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
       },
     });
 
-    expect(Result.isOk(handled) && handled.value).toBe(true);
+    expect(Result.isError(handled) && handled.error.status).toBe(
+      "UNAUTHORIZED",
+    );
     expect(resolvedPaths).toEqual(["/two-factor/enable"]);
+  });
+
+  test("pins a two-factor challenge endpoint's own session read to storage", async () => {
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: { ...sensitiveCtx("/two-factor/verify-totp"), query: { a: "1" } },
+      resolveSession: async () => null,
+    });
+
+    expect(Result.isOk(handled) && handled.value).toEqual({
+      context: { query: { a: "1", disableCookieCache: true } },
+    });
   });
 
   test("keeps ordinary endpoints on the cookie-cache fast path", async () => {
@@ -659,14 +673,14 @@ describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
         return null;
       },
     });
-    expect(Result.isOk(handled) && handled.value).toBe(false);
+    expect(Result.isOk(handled) && handled.value).toBeUndefined();
     expect(resolved).toBe(false);
   });
 
-  test("declares both OAuth code-flow endpoints as authoritative", () => {
+  test("declares every two-factor endpoint and both OAuth code-flow endpoints as authoritative", () => {
     expect(AUTHORITATIVE_SESSION_PATHS).toEqual(
       new Set([
-        ...TWO_FACTOR_MANAGE_PATHS,
+        ...Object.keys(TWO_FACTOR_SESSION_PATHS),
         "/oauth2/authorize",
         "/oauth2/consent",
       ]),
