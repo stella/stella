@@ -42,6 +42,7 @@ import { requireFreshDocument } from "@/lib/session-cache-guard";
 import { documentResponsePolicyHeaders } from "@/route-response-policy";
 import { AppFrameHost } from "@/routes/-app-frame-host";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
+import { requireProfessionalUseForSignedInRoute } from "@/routes/-auth-context";
 import { createRootHead } from "@/routes/-root-head";
 import "@/styles/app.css";
 
@@ -59,6 +60,10 @@ export const Route = createRootRouteWithContext<{
   ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname),
   beforeLoad: async ({ context, location }) => {
     await requireFreshDocument({ queryClient: context.queryClient, location });
+    await requireProfessionalUseForSignedInRoute({
+      queryClient: context.queryClient,
+      location,
+    });
   },
   shellComponent: RootDocument,
   component: RootComponent,
