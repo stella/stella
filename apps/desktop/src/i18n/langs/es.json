@@ -507,6 +507,7 @@
     "windowsKeyReserved": "Windows reserva para sí los atajos con la tecla Windows. Use Ctrl o Alt.",
     "taken": "Otra aplicación ya usa {shortcut}. Elija otro.",
     "unavailable": "Otra aplicación usa {shortcut}, así que no abre el portapapeles. Elija otro atajo.",
+    "managed": "Tu organización ha desactivado el historial del portapapeles.",
     "action": {
       "copy": "Copiar",
       "paste": "Pegar",
