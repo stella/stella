@@ -1368,7 +1368,10 @@ jobs:
   # superseded in its first minutes never schedules them. `needs` cannot vary
   # by event and a merge group must not wait on ci-quick-checks, so this job
   # polls that sibling instead; outside pull requests it skips and the suites
-  # start straight after the plan.
+  # start straight after the plan. The repository checks and the desktop Rust
+  # lint wait on it too, but run ungated when the plan schedules no gate (a
+  # push that only merges the base still runs its PR-depth checks), so
+  # scripts/ci-pr-jobs.ts does not count them as heavy suites.
   pr-heavy-gate:
     needs: ci-plan
     if: inputs.heavy_only != true && inputs.pr_depth_only != true && needs.ci-plan.outputs.pr_heavy_gate_required == 'true'
@@ -1928,9 +1931,13 @@ jobs:
       - *merge_group_cancel
 
   ci-checks-policy:
-    needs: [ci-plan, generated-sources]
+    needs: [ci-plan, generated-sources, pr-heavy-gate]
     if: >-
-      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && needs.generated-sources.result == 'success'
+      && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success')
+      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -2101,9 +2108,13 @@ jobs:
       - *merge_group_cancel
 
   ci-checks-rest:
-    needs: [ci-plan, generated-sources]
+    needs: [ci-plan, generated-sources, pr-heavy-gate]
     if: >-
-      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && needs.generated-sources.result == 'success'
+      && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success')
+      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -3058,9 +3069,13 @@ jobs:
       - *merge_group_cancel
 
   code-quality-api:
-    needs: [ci-plan, generated-sources]
+    needs: [ci-plan, generated-sources, pr-heavy-gate]
     if: >-
-      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && needs.generated-sources.result == 'success'
+      && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success')
+      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -3212,9 +3227,13 @@ jobs:
             });
 
   code-quality-web-rest:
-    needs: [ci-plan, generated-sources]
+    needs: [ci-plan, generated-sources, pr-heavy-gate]
     if: >-
-      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && needs.generated-sources.result == 'success'
+      && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success')
+      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -3442,7 +3461,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     permissions:
       contents: read
       packages: read
@@ -3537,7 +3556,7 @@ jobs:
         if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
         working-directory: apps/api
         env:
-          CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}/2
+          CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}/3
           POSTGRES_TEST_DURATIONS_FILE: ${{ runner.temp }}/postgres-test-durations.json
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
@@ -6090,9 +6109,12 @@ jobs:
 
   desktop-rust-lint:
     name: Desktop Rust Lint (${{ matrix.os }})
-    needs: ci-plan
+    needs: [ci-plan, pr-heavy-gate]
     if: >-
-      inputs.pr_depth_only != true
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success')
+      && inputs.pr_depth_only != true
       && inputs.heavy_only != true
       && (github.event_name == 'merge_group' || needs.ci-plan.outputs.run_required != 'false')
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
@@ -6287,10 +6309,14 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
         # Remove the tooling checkout so later source checks see only the
-        # candidate tree.
+        # candidate tree. A digest that only needs a mechanical refresh is
+        # rewritten by the autofix generator; this check (the script's
+        # default mode) stays fail-closed. It runs git, so it cannot load the
+        # offline network preload that `--check` commands must use.
         run: |
-          trap 'rm -rf .workflow-tooling' EXIT
-          bun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling
+          trap 'rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"' EXIT
+          cd .workflow-tooling
+          bun scripts/check-ci-job-classification.ts
 
       - name: "ci-checks-docs: Check changed Markdown consumers"
         if: >-
