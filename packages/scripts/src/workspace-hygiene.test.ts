@@ -64,9 +64,10 @@ describe("workspace hygiene", () => {
         peerDependencies: { "lunr-pro": "1.0.0" },
       },
     });
-    mkdirSync(path.join(rootDir, ".claude/mcp"), { recursive: true });
+    const mcpManifest = path.join(rootDir, ".claude/mcp/package.json");
+    mkdirSync(path.dirname(mcpManifest), { recursive: true });
     writeFileSync(
-      path.join(rootDir, ".claude/mcp/package.json"),
+      mcpManifest,
       JSON.stringify({
         dependencies: { fuzzywuzzy: "1.0.0" },
         name: "stella-docs-mcp",

@@ -274,6 +274,26 @@ describe("resolveProvisionCitation", () => {
     });
   });
 
+  test.each([
+    "§ 11 odst. 1 písm. g) a. t.",
+    "§ 11 odst. 1 písm. g) a.t.",
+    "§ 11 odst. 1 písm. g) a. t",
+    "§ 11 odst. 1 písm. g) advokátního tarifu",
+  ])("%s names the attorney tariff", (text) => {
+    expect(resolved(text)).toMatchObject({
+      workIdentifier: "177/1996 Sb.",
+      section: 11,
+      subsection: "1",
+      letter: "g",
+    });
+  });
+
+  test("the attorney tariff abbreviation does not reach back before the tariff", () => {
+    expect(resolve("§ 11 odst. 1 písm. g) a. t.", "1995-01-01").status).toBe(
+      "no_act",
+    );
+  });
+
   test("a section naming no act is refused as no act", () => {
     expect(resolve("§ 316 odst. 2").status).toBe("no_act");
     expect(resolve("§ 316 neznámého zákona").status).toBe("no_act");

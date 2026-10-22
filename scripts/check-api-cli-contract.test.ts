@@ -295,10 +295,16 @@ describe("API and CLI release contract", () => {
       if (!isRecord(packageExports)) {
         throw new TypeError(`${packageName} exports is not an object`);
       }
-      for (const target of Object.values(packageExports)) {
+      for (const [subpath, target] of Object.entries(packageExports)) {
         expect(typeof target).toBe("string");
         if (typeof target !== "string") {
           throw new TypeError(`${packageName} has a non-string export target`);
+        }
+        // The manifest may export itself so a consumer can read the published
+        // version; every other entry point resolves to source.
+        if (subpath === "./package.json") {
+          expect(target).toBe("./package.json");
+          continue;
         }
         expect(target).toMatch(/^\.\/src\/.*\.(?:css|tsx?)$/u);
       }
