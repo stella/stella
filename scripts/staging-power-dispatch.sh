@@ -19,11 +19,11 @@
 #   HOURS            lease hours for "on": 1, 2, 4 or 8 (default 2)
 set -euo pipefail
 
-readonly WORKFLOW_FILE="staging-power.yml"
-readonly RUNTIME_STEP="Staging runtime is up"
-readonly POLL_SECONDS="${STAGING_POWER_POLL_SECONDS:-10}"
-readonly FIND_ATTEMPTS="${STAGING_POWER_FIND_ATTEMPTS:-30}"
-readonly WATCH_ATTEMPTS="${STAGING_POWER_WATCH_ATTEMPTS:-150}"
+readonly workflow_file="staging-power.yml"
+readonly runtime_step="Staging runtime is up"
+readonly poll_seconds="${STAGING_POWER_POLL_SECONDS:-10}"
+readonly find_attempts="${STAGING_POWER_FIND_ATTEMPTS:-30}"
+readonly watch_attempts="${STAGING_POWER_WATCH_ATTEMPTS:-150}"
 
 action="${1:-}"
 case "$action" in
@@ -59,20 +59,20 @@ title+=" for ${CALLER}"
 # deploy_main=false: the caller deploys its own commit, so the start must not
 # dispatch a second deploy of main.
 bash "$GH_RETRY_SCRIPT" api --method POST \
-  "repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches" \
+  "repos/${INFRA_REPO}/actions/workflows/${workflow_file}/dispatches" \
   -f "ref=main" \
   -f "inputs[action]=${action}" \
   -f "inputs[hours]=${hours}" \
   -f "inputs[deploy_main]=false" \
   -f "inputs[caller]=${CALLER}" >/dev/null
-echo "Dispatched ${WORKFLOW_FILE} (${title}) on ${INFRA_REPO}." >&2
+echo "Dispatched ${workflow_file} (${title}) on ${INFRA_REPO}." >&2
 
 # The title carries this caller's unique id, so it identifies the run alone.
 run_id=""
-for ((attempt = 1; attempt <= FIND_ATTEMPTS; attempt += 1)); do
+for ((attempt = 1; attempt <= find_attempts; attempt += 1)); do
   run_id="$(
     bash "$GH_RETRY_SCRIPT" api \
-      "repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=30" \
+      "repos/${INFRA_REPO}/actions/workflows/${workflow_file}/runs?event=workflow_dispatch&per_page=30" \
       --jq ".workflow_runs[] | select(.display_title == \"${title}\") | .id" |
       head -n 1
   )"
@@ -89,7 +89,7 @@ fi
 run_url="${GITHUB_SERVER_URL:-https://github.com}/${INFRA_REPO}/actions/runs/${run_id}"
 echo "Watching ${run_url}" >&2
 conclusion=""
-for ((attempt = 1; attempt <= WATCH_ATTEMPTS; attempt += 1)); do
+for ((attempt = 1; attempt <= watch_attempts; attempt += 1)); do
   state="$(
     bash "$GH_RETRY_SCRIPT" api "repos/${INFRA_REPO}/actions/runs/${run_id}" \
       --jq '[.status, (.conclusion // "")] | @tsv'
@@ -98,7 +98,7 @@ for ((attempt = 1; attempt <= WATCH_ATTEMPTS; attempt += 1)); do
     conclusion="$(cut -f2 <<<"$state")"
     break
   fi
-  sleep "$POLL_SECONDS"
+  sleep "$poll_seconds"
 done
 if [[ -z "$conclusion" ]]; then
   echo "::error::The staging power run did not finish in time: ${run_url}" >&2
@@ -111,13 +111,13 @@ fi
 
 step_conclusion="$(
   bash "$GH_RETRY_SCRIPT" api "repos/${INFRA_REPO}/actions/runs/${run_id}/jobs" \
-    --jq "[.jobs[].steps[]? | select(.name == \"${RUNTIME_STEP}\") | .conclusion] | first // \"\""
+    --jq "[.jobs[].steps[]? | select(.name == \"${runtime_step}\") | .conclusion] | first // \"\""
 )"
 case "$step_conclusion" in
   success) echo "runtime=up" ;;
   skipped) echo "runtime=off" ;;
   *)
-    echo "::error::The staging power run did not report the runtime (step \"${RUNTIME_STEP}\": ${step_conclusion:-missing}): ${run_url}" >&2
+    echo "::error::The staging power run did not report the runtime (step \"${runtime_step}\": ${step_conclusion:-missing}): ${run_url}" >&2
     exit 1
     ;;
 esac

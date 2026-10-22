@@ -1431,6 +1431,14 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // Staging power dispatch receives its target, caller identity, lease hours,
+  // and optional polling budgets from its workflow or test invocation.
+  "INFRA_REPO",
+  "CALLER",
+  "HOURS",
+  "STAGING_POWER_POLL_SECONDS",
+  "STAGING_POWER_FIND_ATTEMPTS",
+  "STAGING_POWER_WATCH_ATTEMPTS",
   // Dated-waiver healing: the private repository its fix tasks go to, and
   // the merge hold that keeps it from arming removals.
   "DATED_WAIVER_FIX_REPO",
