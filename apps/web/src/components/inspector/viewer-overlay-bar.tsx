@@ -18,9 +18,11 @@ export const ViewerOverlayBar = ({ children }: PropsWithChildren) => (
 );
 
 /**
- * Inline-end space the first row of a document must leave free so the bar
- * cannot paint over it: the corner the bar takes, measured from the document
- * column's own inline padding. Sized for the zoom triad the readers float,
- * the widest bar that shares its corner with content.
+ * Block-start space a reader's document column leaves above its first row,
+ * so at the top of the scroll nothing the reader prints sits under the bar,
+ * whatever that row is and however it aligns. The bar's inset plus its own
+ * height, with a gap; the text scrolls under the glass after that. Every
+ * reader that floats the bar starts its column with this, not a number of
+ * its own.
  */
-export const VIEWER_OVERLAY_BAR_CLEARANCE = "pe-24";
+export const VIEWER_OVERLAY_BAR_TOP_CLEARANCE = "pt-12";
