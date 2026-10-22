@@ -953,9 +953,9 @@ const UserAttachments = ({
         const filename = getAttachmentFilename(part);
         const mimeType = getAttachmentMimeType(part);
         const key = `${filename ?? "attachment"}-${index}`;
-        const contentUrl = getUserFileContentUrl(url) ?? url;
+        const contentUrl = getUserFileContentUrl(url);
         const fallbackLabel = t("chat.attachment");
-        if (IMAGE_MEDIA_TYPES.includes(mimeType)) {
+        if (IMAGE_MEDIA_TYPES.includes(mimeType) && contentUrl) {
           // The backend sets `placeholder` (a blur data URL) only when a
           // thumbnail was generated, so its presence doubles as "serve the
           // smaller thumbnail instead of the full original."
@@ -994,7 +994,7 @@ const UserAttachments = ({
           "text-muted-foreground text-xs",
         );
 
-        if (contentUrl.startsWith(DATA_URL_PREFIX)) {
+        if (contentUrl?.startsWith(DATA_URL_PREFIX)) {
           return (
             <button
               className={attachmentClassName}
@@ -1014,16 +1014,24 @@ const UserAttachments = ({
           );
         }
 
+        if (contentUrl) {
+          return (
+            <a
+              className={attachmentClassName}
+              href={sanitizeHref(contentUrl)}
+              key={key}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {attachmentContent}
+            </a>
+          );
+        }
+
         return (
-          <a
-            className={attachmentClassName}
-            href={sanitizeHref(contentUrl)}
-            key={key}
-            rel="noreferrer"
-            target="_blank"
-          >
+          <span className={attachmentClassName} key={key}>
             {attachmentContent}
-          </a>
+          </span>
         );
       })}
     </div>
