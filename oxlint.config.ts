@@ -1580,6 +1580,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
+    "./.oxlint-plugins/no-internal-mcp-error-result.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
     "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
@@ -1819,6 +1820,13 @@ const config = defineConfig({
       rules: {
         "gdp-ts/no-type-assertion": "error",
         "gdp-ts/no-any": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/mcp/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}"],
+      rules: {
+        "no-internal-mcp-error-result/no-internal-mcp-error-result": "error",
       },
     },
     {
