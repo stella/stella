@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { runLedgerMembershipGuard } from "./ledger-membership.ts";
 
-const LEDGER_REL = "apps/api/src/tests/repeated-sql-fingerprints.json";
+const LEDGER_REL = "apps/api/src/lib/repeated-sql-fingerprints.json";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 export const parseRepeatedSqlFingerprintLedger = (
   text: string,

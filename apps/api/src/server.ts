@@ -190,10 +190,7 @@ import {
   emitEventLoopDelayMetric,
   emitProcessMemoryLog,
 } from "@/api/lib/observability/request-metrics";
-import {
-  runWithMeasuredRequestScope,
-  runWithRequestScope,
-} from "@/api/lib/observability/request-scope";
+import { runWithHttpRequestScope } from "@/api/lib/observability/request-scope";
 import {
   closeActionAdmissionRedis,
   startActionAdmissionRedis,
@@ -759,9 +756,7 @@ const scopeRequestAsyncStores = (): void => {
         }),
       );
     };
-    return process.env["STELLA_RUN_POSTGRES_TESTS"] === "true"
-      ? runWithMeasuredRequestScope(scopedRequest)
-      : runWithRequestScope(scopedRequest);
+    return runWithHttpRequestScope(scopedRequest);
   });
 };
 

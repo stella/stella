@@ -11,7 +11,8 @@ import {
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
 import { runWithRequestIdScope } from "@/api/lib/observability/request-context";
-import { isLocalDevOpen } from "@/api/runtime-mode";
+import repeatedSqlFingerprintLedger from "@/api/lib/repeated-sql-fingerprints.json";
+import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
 
 export const runWithRequestScope = <TResult>(fn: () => TResult): TResult =>
   runWithRequestIdScope(() =>
@@ -20,9 +21,12 @@ export const runWithRequestScope = <TResult>(fn: () => TResult): TResult =>
     }),
   );
 
-export const runWithMeasuredRequestScope = async <TResult>(
+/** Integration requests enforce fingerprints even without a Postgres fixture. */
+export const runWithHttpRequestScope = async <TResult>(
   fn: () => Promise<TResult>,
 ): Promise<TResult> =>
-  await runWithRequestIdScope(() =>
-    runWithMeasuredQueryCounter(async () => await fn()),
-  );
+  isLocalTestRun()
+    ? await runWithRequestIdScope(() =>
+        runWithMeasuredQueryCounter(fn, repeatedSqlFingerprintLedger),
+      )
+    : await runWithRequestScope(fn);

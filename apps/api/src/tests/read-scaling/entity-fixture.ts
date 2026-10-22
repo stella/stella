@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq, getColumns, getTableName, inArray, SQL, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
@@ -148,6 +148,30 @@ export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
   for (let offset = 0; offset < fieldRows.length; offset += 1000) {
     await db.insert(fields).values(fieldRows.slice(offset, offset + 1000));
   }
+  const versionEntity = rows.at(0) ?? panic("Read fixture requires an entity");
+  const history = Array.from({ length: 9 }, (_, index) => ({
+    id: createSafeId<"entityVersion">(),
+    workspaceId,
+    entityId: versionEntity.id,
+    versionNumber: index + 2,
+  }));
+  await db.insert(entityVersions).values(history);
+  const historyFields = history.flatMap(({ id }) =>
+    propertyIds.map((propertyId) => ({
+      id: createSafeId<"field">(),
+      workspaceId,
+      entityVersionId: id,
+      propertyId,
+      content: {
+        version: 1 as const,
+        type: "text" as const,
+        value: "x".repeat(512 + size * 4),
+      },
+    })),
+  );
+  for (let offset = 0; offset < historyFields.length; offset += 1000) {
+    await db.insert(fields).values(historyFields.slice(offset, offset + 1000));
+  }
   const safeDb: SafeDb = async (work) =>
     await Result.tryPromise(async () => await db.transaction(work));
   return {
@@ -155,6 +179,7 @@ export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
     userId,
     workspaceId,
     propertyIds,
+    versionEntityId: versionEntity.id,
     safeDb,
     cleanup: async () => {
       await db.delete(fields).where(eq(fields.workspaceId, workspaceId));

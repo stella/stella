@@ -16,7 +16,10 @@ import {
   RepeatedQueryFingerprintError,
   runCountedTransaction,
 } from "@/api/lib/db-query-counter";
-import { runWithRequestScope } from "@/api/lib/observability/request-scope";
+import {
+  runWithHttpRequestScope,
+  runWithRequestScope,
+} from "@/api/lib/observability/request-scope";
 
 // Yield to the microtask queue so two counter contexts interleave their
 // increments; this is what would break a shared (non-ALS) counter.
@@ -28,6 +31,13 @@ const logQueriesInterleaved = async (queries: number): Promise<void> => {
 };
 
 describe("db query counter logger", () => {
+  test("distinct callsites may issue the same SQL without a repeated fingerprint", async () => {
+    await runWithMeasuredQueryCounter(async () => {
+      queryCountLogger.logQuery("SELECT id FROM matters WHERE id = $1", []);
+      queryCountLogger.logQuery("SELECT id FROM matters WHERE id = $2", []);
+    });
+  });
+
   test("fails after the measured request settles when one callsite repeats normalized SQL", async () => {
     const runSameCallsite = () => {
       for (const query of [
@@ -171,6 +181,29 @@ const runBackgroundQueries = (signal: { done: boolean }) => {
 };
 
 describe("db query counter HTTP header", () => {
+  test("integration HTTP requests reject per-row SQL through the server request scope", async () => {
+    const app = new Elysia()
+      .wrap(
+        (handleRequest) => (request: Request) =>
+          runWithHttpRequestScope(() => handleRequest(request)),
+      )
+      .get("/queries/:count", ({ params }) => {
+        for (let index = 0; index < Number(params.count); index += 1) {
+          queryCountLogger.logQuery("SELECT id FROM matters WHERE id = $1", [
+            index,
+          ]);
+        }
+        return "ok";
+      });
+
+    const single = await app.handle(new Request("http://localhost/queries/1"));
+    expect(single.status).toBe(200);
+    expect(await single.text()).toBe("ok");
+    expect(
+      await rejectionOf(app.handle(new Request("http://localhost/queries/2"))),
+    ).toBeInstanceOf(RepeatedQueryFingerprintError);
+  });
+
   test("a request counts its own queries and no others", async () => {
     const signal = { done: false };
     runBackgroundQueries(signal);

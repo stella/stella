@@ -1,49 +1,92 @@
 import { describe, expect, test } from "bun:test";
+import { Elysia } from "elysia";
 
 import {
-  discoverReadScalingSurface,
-  readRouteSurface,
+  apiScalingSurface,
+  mcpScalingSurface,
+  parseScalingLedger,
   scalingCoverageViolations,
 } from "./surface";
 
-describe("read scaling surface census", () => {
-  test("new GET routes and missing or stale exemptions fail coverage", () => {
-    const original = 'new Elysia().get("/rows", list.handler)';
-    const mutated = `${original}.get("/rows/:id", read.handler)`;
-    const measured = readRouteSurface("routes.ts", original);
-    const surface = readRouteSurface("routes.ts", mutated);
-    expect(measured).toHaveLength(1);
-    expect(surface).toHaveLength(2);
+describe("scaling coverage census", () => {
+  test("a newly mounted GET or mutation requires a measurement or reason", () => {
+    const original = new Elysia({ prefix: "/v1" }).get("/rows", () => []);
+    const measured = apiScalingSurface(original.routes).reads;
+    const mutated = original
+      .get("/rows/:id", () => ({}))
+      .post("/rows", () => ({}));
+    const surface = apiScalingSurface(mutated.routes);
+    expect(measured).toEqual(["GET /v1/rows"]);
     expect(
       scalingCoverageViolations({
-        surface: measured,
+        surface: surface.reads,
         measured,
         exemptions: [],
       }),
-    ).toEqual([]);
+    ).toEqual(["unmeasured: GET /v1/rows/:id"]);
     expect(
-      scalingCoverageViolations({ surface, measured, exemptions: [] }),
-    ).toEqual(["unmeasured: GET routes.ts /rows/:id"]);
+      scalingCoverageViolations({
+        surface: surface.writes,
+        measured: [],
+        exemptions: [],
+      }),
+    ).toEqual(["unmeasured: POST /v1/rows"]);
     const exemptions = [
       {
-        id: "GET routes.ts /rows/:id",
-        reason: "External service fixture requires a recorded response",
+        id: "GET /v1/rows/:id",
+        reason: "Requires a single-row permission fixture",
       },
     ];
     expect(
-      scalingCoverageViolations({ surface, measured, exemptions }),
+      scalingCoverageViolations({
+        surface: surface.reads,
+        measured,
+        exemptions,
+      }),
     ).toEqual([]);
     expect(
       scalingCoverageViolations({ surface: measured, measured, exemptions }),
-    ).toEqual(["stale exemption: GET routes.ts /rows/:id"]);
+    ).toEqual(["stale exemption: GET /v1/rows/:id"]);
   });
 
-  test("enumerates repository GET declarations and read tools without importing services", async () => {
-    const surface = await discoverReadScalingSurface();
-    expect(surface.length).toBeGreaterThan(100);
-    expect(surface).toContain("MCP list_documents");
-    expect(surface).toContain(
-      "GET apps/api/src/handlers/entities/routes.ts /entity/:entityId/versions",
-    );
+  test("tool annotations classify reads independently of tool spelling", () => {
+    const surface = mcpScalingSurface([
+      { name: "inspect", annotations: { readOnlyHint: true } },
+      { name: "read_and_update", annotations: { readOnlyHint: false } },
+    ]);
+    expect(surface).toEqual({
+      reads: ["inspect"],
+      writes: ["read_and_update"],
+    });
+    expect(
+      scalingCoverageViolations({
+        surface: surface.reads,
+        measured: [],
+        exemptions: [],
+      }),
+    ).toEqual(["unmeasured: inspect"]);
+  });
+
+  test("ledger membership includes the section and rejects unreasoned entries", () => {
+    expect(
+      parseScalingLedger(
+        JSON.stringify({
+          unmeasuredReads: [
+            { id: "GET /v1/rows", reason: "Requires a paginated read fixture" },
+          ],
+          pendingWriteHarness: [],
+        }),
+        "fixture",
+      ),
+    ).toEqual(["unmeasuredReads:GET /v1/rows"]);
+    expect(() =>
+      parseScalingLedger(
+        JSON.stringify({
+          unmeasuredReads: [{ id: "GET /v1/rows", reason: "" }],
+          pendingWriteHarness: [],
+        }),
+        "fixture",
+      ),
+    ).toThrow("must contain reasoned");
   });
 });

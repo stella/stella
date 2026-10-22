@@ -187,12 +187,7 @@ const queryCallsite = (): string => {
         !line.includes("db-query-counter.ts") &&
         !line.includes("/node_modules/"),
     );
-  return (
-    frame
-      ?.trim()
-      .replaceAll(`${process.cwd()}/`, "")
-      .replace(/:\d+:\d+(?=\)?$)/u, "") ?? "unknown"
-  );
+  return frame?.trim().replaceAll(`${process.cwd()}/`, "") ?? "unknown";
 };
 
 const isSessionConfigurationQuery = (query: string): boolean =>
