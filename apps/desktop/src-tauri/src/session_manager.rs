@@ -3842,3 +3842,7 @@ mod tests {
     );
   }
 }
+
+#[cfg(feature = "allocation-tests")]
+#[path = "session_allocation_harness.rs"]
+pub mod allocation_harness;

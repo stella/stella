@@ -5953,12 +5953,12 @@ jobs:
 
       - name: Test
         if: matrix.os == 'macos'
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features allocation-tests --target ${{ matrix.target }} --frozen
 
       - name: Build test binaries
         if: matrix.os == 'windows'
         shell: pwsh
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen --no-run
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features allocation-tests --target ${{ matrix.target }} --frozen --no-run
 
       # The signer crates link no Tauri, so their tests do run here: against
       # throwaway certificates in the runner's own current-user store, one

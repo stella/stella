@@ -3930,11 +3930,16 @@ enum ClipboardWriteOrigin {
 pub(crate) fn write_plain_text(plain_text: String) -> Result<(), String> {
   let clipboard = ClipboardContext::new()
     .map_err(|error| format!("clipboard is unavailable: {error}"))?;
-  set_clipboard_contents(
-    &clipboard,
-    vec![ClipboardContent::Text(plain_text)],
-    ClipboardWriteOrigin::New,
-  )
+  publish_plain_text(plain_text, |contents| {
+    set_clipboard_contents(&clipboard, contents, ClipboardWriteOrigin::New)
+  })
+}
+
+fn publish_plain_text(
+  plain_text: String,
+  publish: impl FnOnce(Vec<ClipboardContent>) -> Result<(), String>,
+) -> Result<(), String> {
+  publish(vec![ClipboardContent::Text(plain_text)])
 }
 
 pub(crate) fn write_text_and_html(
@@ -6958,3 +6963,7 @@ mod tests {
     assert_eq!(manager.items[0].rtf(), Some(WORD_RTF));
   }
 }
+
+#[cfg(feature = "allocation-tests")]
+#[path = "clipboard_allocation_harness.rs"]
+pub mod allocation_harness;
