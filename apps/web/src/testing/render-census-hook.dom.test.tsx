@@ -50,7 +50,9 @@ const clients = Object.entries(BUILDS).map(
   ([build, file]) => [build, loadClient(file)] as const,
 );
 
-const List = ({ rows }: { rows: number }) =>
+// Host elements only, built outside render: the development `react` would
+// otherwise ask the production renderer for an owner it does not track.
+const list = (rows: number) =>
   React.createElement(
     "ul",
     null,
@@ -65,7 +67,7 @@ type Mount = (root: Root, rows: number) => void;
 // One commit renders every row.
 const batched: Mount = (root, rows) => {
   flushSync(() => {
-    root.render(React.createElement(List, { rows }));
+    root.render(list(rows));
   });
 };
 
@@ -73,7 +75,7 @@ const batched: Mount = (root, rows) => {
 const perRow: Mount = (root, rows) => {
   for (let shown = 1; shown <= rows; shown += 1) {
     flushSync(() => {
-      root.render(React.createElement(List, { rows: shown }));
+      root.render(list(shown));
     });
   }
 };
