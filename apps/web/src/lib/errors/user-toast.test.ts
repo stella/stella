@@ -89,6 +89,19 @@ describe("notifyUserError", () => {
     expect(capture).toHaveBeenCalledTimes(1);
   });
 
+  test("reports the same notice once per occurrence", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+
+    notifyUserError(undefined, FAILURE, { occurrence: "first" });
+    notifyUserError(undefined, FAILURE, { occurrence: "first" });
+    notifyUserError(undefined, FAILURE, { occurrence: "second" });
+
+    expect(capture).toHaveBeenCalledTimes(2);
+  });
+
   test("does not report a boundary error again at the root", () => {
     const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
       () => undefined,

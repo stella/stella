@@ -23,8 +23,14 @@ type UserErrorToastOptions = Omit<
   "title" | "type"
 > & {
   feature?: string | undefined;
+  occurrence?: string | number | undefined;
   routeTemplate?: string | undefined;
   toastId?: string | undefined;
+};
+
+type UserVisibleErrorReportOptions = {
+  notice?: string | undefined;
+  occurrence?: string | number | undefined;
 };
 
 let currentRouteTemplate = "unknown";
@@ -53,7 +59,7 @@ export const reportUserVisibleError = (
   error: unknown,
   feature: string | undefined,
   routeTemplate: string | undefined,
-  notice?: string,
+  { notice, occurrence }: UserVisibleErrorReportOptions = {},
 ): void => {
   const reportable = error ?? new Error("UserVisibleError");
   const template =
@@ -66,16 +72,20 @@ export const reportUserVisibleError = (
     notice ??
     actionAdmissionOutcome(error)?.messageKey ??
     userErrorFromThrown(error, "user-visible");
+  const occurrenceIdentity =
+    occurrence === undefined ? "default" : `${typeof occurrence}:${occurrence}`;
   const fingerprint = [
     noticeIdentity,
     template,
     telemetryErrorType(reportable),
     apiIdentity,
+    occurrenceIdentity,
   ].join("|");
   const apiOccurrence = [
     template,
     telemetryErrorType(reportable),
     apiIdentity,
+    occurrenceIdentity,
   ].join("|");
   if (reportedFingerprints.has(fingerprint)) {
     return;
@@ -102,18 +112,22 @@ export const reportUserVisibleError = (
 export const notifyUserError = (
   error: unknown,
   fallback: string,
-  { feature, routeTemplate, toastId, ...options }: UserErrorToastOptions = {},
+  {
+    feature,
+    occurrence,
+    routeTemplate,
+    toastId,
+    ...options
+  }: UserErrorToastOptions = {},
 ): boolean => {
   // The stable refusal id coalesces Eden's observer and local error handlers;
   // raw fetch and SDK errors also need to emit the same notice here.
   const refusal = actionAdmissionOutcome(error);
   const title = userErrorFromThrown(error, fallback);
-  reportUserVisibleError(
-    error,
-    feature,
-    routeTemplate,
-    refusal?.messageKey ?? title,
-  );
+  reportUserVisibleError(error, feature, routeTemplate, {
+    notice: refusal?.messageKey ?? title,
+    occurrence,
+  });
   if (refusal) {
     const t = getTranslator();
     stellaToast.add({
