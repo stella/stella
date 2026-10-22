@@ -451,6 +451,9 @@
                     "model": "gpt-5.4-mini",
                     "provider": "openai"
                   },
+                  "turnSpend": {
+                    "promptTokens": 2
+                  },
                   "refContext": {
                     "refs": [],
                     "version": 2,
