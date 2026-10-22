@@ -32,7 +32,7 @@ export type RegistrableIconSite = {
   readonly value: string;
 };
 
-export class NotIconSite extends TaggedError("NotIconSite")<{
+class NotIconSite extends TaggedError("NotIconSite")<{
   message: string;
 }> {}
 
