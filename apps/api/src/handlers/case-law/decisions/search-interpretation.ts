@@ -202,11 +202,11 @@ type SearchAnswerOptions = {
    * hits, so "nothing matched" would be false there.
    */
   countsResultSet: boolean;
-  relaxedMatch?: boolean | undefined;
 };
 
 export type SearchAnswer = {
   queryUsed: string;
+  relaxedHitCount: number;
   warnings: CaseLawSearchWarning[];
 };
 
@@ -220,14 +220,13 @@ export const searchAnswer = ({
   hitCount,
   partialHitCount = 0,
   countsResultSet,
-  relaxedMatch,
 }: SearchAnswerOptions): SearchAnswer => ({
   queryUsed: interpretation.queryUsed,
+  relaxedHitCount: partialHitCount,
   warnings: caseLawSearchWarnings({
     droppedFunctionWords: interpretation.droppedFunctionWords,
     partialHitCount,
     filters: narrowingFilters(body),
     emptyResultSet: countsResultSet && hitCount === 0,
-    relaxedMatch,
   }),
 });

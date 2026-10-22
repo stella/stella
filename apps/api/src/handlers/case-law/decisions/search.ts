@@ -3458,6 +3458,7 @@ export const listCaseLawProvisionDecisions = async ({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       pageReach: SEARCH_PAGE_REACH.REACHED,
       queryUsed: "",
+      relaxedHitCount: 0,
       warnings: [],
     },
     decisionHeadnoteMaxChars(body.headnotePresentation),

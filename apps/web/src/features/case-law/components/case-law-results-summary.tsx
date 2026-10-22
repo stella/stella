@@ -59,13 +59,20 @@ export const CaseLawResultsSummaryText = ({
     );
   }
   if (relaxedHitCount > 0 && total.type !== SEARCH_TOTAL_TYPE.NOT_COUNTED) {
-    const message =
-      total.type === SEARCH_TOTAL_TYPE.ESTIMATE
-        ? "caseLaw.pagination.pageWithEstimatedMatchCounts"
-        : "caseLaw.pagination.pageWithMatchCounts";
+    if (total.type === SEARCH_TOTAL_TYPE.ESTIMATE) {
+      return (
+        <p className="text-xs tabular-nums">
+          {t("caseLaw.pagination.pageWithEstimatedMatchCounts", {
+            exactCount: total.count,
+            page: format.number(page),
+            relaxedCount: relaxedHitCount,
+          })}
+        </p>
+      );
+    }
     return (
       <p className="text-xs tabular-nums">
-        {t(message, {
+        {t("caseLaw.pagination.pageWithMatchCounts", {
           exactCount: total.count,
           page: format.number(page),
           relaxedCount: relaxedHitCount,

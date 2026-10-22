@@ -11,7 +11,6 @@ export const MCP_NOTE_AUDIENCE = {
   filter_dropped: "agent",
   many_required_terms: "agent",
   provision_cited_widely: "agent",
-  relaxed_match: "agent",
 } as const satisfies Record<
   AgentCaseLawSearchWarning["code"] | "input_read",
   "agent" | "user"

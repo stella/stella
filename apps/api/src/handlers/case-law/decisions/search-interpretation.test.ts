@@ -257,10 +257,10 @@ describe("searchAnswer", () => {
         body,
         interpretation,
         hitCount: 2,
+        partialHitCount: 2,
         countsResultSet: true,
-        relaxedMatch: true,
       }).warnings.map(({ code }) => code),
-    ).toContain("relaxed_match");
+    ).toContain("partial_matches_appended");
   });
 });
 
