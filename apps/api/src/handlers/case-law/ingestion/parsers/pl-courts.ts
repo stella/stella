@@ -1,5 +1,6 @@
 // parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
+// parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
 /**
  * Polish Courts (SAOS) parser.
  *
@@ -548,7 +549,7 @@ export const parsePlDecisionContent = (
       { parser: "pl-courts", caseNumber: input.caseNumber },
       input.content,
       state.blocks,
-      { sourceDocument: $ },
+      { document: $ },
     );
   } else {
     enforcePlainTextExpansionBudget(input.content, input.htmlExpansionBudget);
@@ -569,7 +570,7 @@ export const parsePlDecisionContent = (
       { parser: "pl-courts", caseNumber: input.caseNumber },
       validationHtml,
       state.blocks,
-      { sourceDocument },
+      sourceDocument === undefined ? {} : { document: sourceDocument },
     );
   }
 

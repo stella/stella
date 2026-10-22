@@ -1396,6 +1396,7 @@
     "credentialSendDescription": "Csak akkor küldd el, ha meg szeretnéd osztani ezt az értéket a beszélgetésben.",
     "credentialSendTitle": "Ez az üzenet hitelesítő adatot tartalmazhat",
     "deleteThread": "Beszélgetés törlése",
+    "diagramUnavailable": "Ezt a diagramot nem sikerült megjeleníteni. A forráskódja alább látható.",
     "editMode": {
       "autoDirect": "Automatikus · átírás",
       "autoDirectDescription": "Az AI módosításai azonnal, a dokumentum közvetlen átírásával lépnek életbe (változáskövetés nélkül).",
@@ -4198,7 +4199,9 @@
     "prompt": "Mit keres?",
     "recent": "Legutóbbiak",
     "recentCasesFilter": "Határozatok",
+    "recentLoadFailed": "A legutóbbi tevékenységet nem sikerült betölteni.",
     "recentSearchFilter": "Keresések",
+    "recentUpdateFailed": "A legutóbbi tevékenységet nem sikerült frissíteni.",
     "recentlyInForce": "Nemrég hatályba lépett",
     "searchLabel": "Keresés a jogi adatbázisban",
     "searchPlaceholder": "Ügyszám, jogszabályszám, ECLI vagy kulcsszavak",
