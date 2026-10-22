@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 
 import { useHotkeyRecorder } from "@tanstack/react-hotkeys";
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -106,7 +106,10 @@ const ShortcutGroupSection = ({ group }: ShortcutGroupSectionProps) => {
 type ShortcutRowProps = {
   shortcut: ShortcutDescriptor;
   isOverridden: boolean;
-  onRebind: (id: ShortcutId, hotkey: Hotkey) => Promise<RebindError | null>;
+  onRebind: (
+    id: ShortcutId,
+    hotkey: HotkeyChord,
+  ) => Promise<RebindError | null>;
   onReset: (id: ShortcutId) => Promise<void>;
 };
 
@@ -148,9 +151,12 @@ const ShortcutRow = ({
 
 type RebindableBindingProps = {
   id: ShortcutId;
-  hotkey: Hotkey;
+  hotkey: HotkeyChord;
   isOverridden: boolean;
-  onRebind: (id: ShortcutId, hotkey: Hotkey) => Promise<RebindError | null>;
+  onRebind: (
+    id: ShortcutId,
+    hotkey: HotkeyChord,
+  ) => Promise<RebindError | null>;
   onReset: (id: ShortcutId) => Promise<void>;
 };
 
@@ -163,7 +169,7 @@ const RebindableBinding = ({
 }: RebindableBindingProps) => {
   const t = useTranslations();
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
-  const [pending, setPending] = useState<Hotkey | null>(null);
+  const [pending, setPending] = useState<HotkeyChord | null>(null);
   const [rebindError, setRebindError] = useState<RebindError | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -312,7 +318,7 @@ const RebindableBinding = ({
 
 /**
  * Open the cheatsheet on `?`, but never while typing. `?` cannot be a
- * TanStack `Hotkey` (see `SHOW_SHORTCUTS_KEY`), so match the produced
+ * TanStack `HotkeyChord` (see `SHOW_SHORTCUTS_KEY`), so match the produced
  * character directly, which stays correct across keyboard layouts.
  */
 const useShowShortcutsHotkey = (open: () => void) => {
