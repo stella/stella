@@ -345,12 +345,11 @@ export default defineConfig(({ mode, command }) => {
           generatedRouteTree: routeOptions.generatedRouteTree,
           routeFileIgnorePattern: routeOptions.routeFileIgnorePattern,
           codeSplittingOptions: {
-            defaultBehavior: [
-              ["component"],
-              ["errorComponent"],
-              ["notFoundComponent"],
-              ["pendingComponent"],
-            ],
+            // Recovery UI must stay in the entry graph. When a deployment
+            // removes an old route chunk, a split error or pending component
+            // would fail to load from that same old graph and leave the route
+            // blank instead of presenting recovery.
+            defaultBehavior: [["component"]],
           },
         },
       }),
@@ -469,12 +468,10 @@ export default defineConfig(({ mode, command }) => {
             if (id.includes("node_modules/@stll/anonymize-data/")) {
               return "vendor-anonymize-data";
             }
-            if (id.includes("node_modules/@stll/") && id.includes("-wasm")) {
-              return "wasm-vendor";
-            }
-            if (id.includes("node_modules/@napi-rs/wasm-runtime")) {
-              return "wasm-vendor";
-            }
+            // The browser uses some WASM packages directly (for example the
+            // outline and key-term matchers). Let those stay with their lazy
+            // callers: `wasm-vendor` is reserved for the anonymization worker
+            // and must never become a main-thread shared chunk.
             if (id.includes("node_modules/cytoscape")) {
               return "vendor-graphs";
             }
