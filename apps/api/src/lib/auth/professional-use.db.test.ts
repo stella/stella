@@ -12,6 +12,7 @@ import {
 } from "@stll/api-contract/professional-use";
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
@@ -225,6 +226,46 @@ describe("professional-use provenance migrations", () => {
         )
       ).rows,
     ).toEqual(once.rows);
+  });
+
+  test("the previous release keeps recording acceptances while instances roll over", async () => {
+    await using db = await PGlite.create();
+    await db.exec(`
+      CREATE TABLE user_professional_use_acceptances (
+        user_id text PRIMARY KEY,
+        statement_version text NOT NULL,
+        terms_version text NOT NULL,
+        accepted_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    await db.exec(await migrationSql(SOURCE_MIGRATION));
+
+    // The previous release's insert names no source.
+    await db.exec(`
+      INSERT INTO user_professional_use_acceptances
+        (user_id, statement_version, terms_version)
+      VALUES ('previous-release', '2026-10', '2026-10');
+    `);
+    expect(
+      (
+        await db.query(
+          `SELECT source FROM user_professional_use_acceptances
+           WHERE user_id = 'previous-release'`,
+        )
+      ).rows,
+    ).toEqual([
+      { source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.recordedBeforeProvenance },
+    ]);
+    const refused = await rejectionOf(
+      db.exec(`
+        INSERT INTO user_professional_use_acceptances
+          (user_id, statement_version, terms_version, source)
+        VALUES ('unknown-source', '2026-10', '2026-10', 'guessed');
+      `),
+    );
+    expect(String(refused)).toContain(
+      "user_professional_use_acceptances_source_values",
+    );
   });
 });
 

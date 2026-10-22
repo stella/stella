@@ -41,10 +41,16 @@ export const userProfessionalUseAcceptances = p.pgTable(
     statementVersion: p.text("statement_version").notNull(),
     termsVersion: p.text("terms_version").notNull(),
     acceptedAt: timestamptz("accepted_at").notNull().defaultNow(),
-    /** How this acceptance was given or, for legacy rows, why that is unknown. */
+    /**
+     * How this acceptance was given or, for legacy rows, why that is unknown.
+     * The default only covers rows written before provenance existed and by
+     * the previous release during a rollout; every current writer names its
+     * source explicitly (enforced by the writer census test).
+     */
     source: p
       .text("source", { enum: PROFESSIONAL_USE_ACCEPTANCE_SOURCES })
-      .notNull(),
+      .notNull()
+      .default(PROFESSIONAL_USE_ACCEPTANCE_SOURCE.recordedBeforeProvenance),
   },
   () => [
     p.pgPolicy("user_professional_use_acceptances_owner_access", {
