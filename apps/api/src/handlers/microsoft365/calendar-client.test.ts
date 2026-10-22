@@ -157,6 +157,59 @@ test("calendar continuations stay on the original Graph endpoint", async () => {
   expect(requests).toBe(1);
 });
 
+test("calendar reads follow numeric $skip continuations to the last page", async () => {
+  const requests: URL[] = [];
+  const result = await listCalendarEvents(
+    { ...range, limit: 120 },
+    {
+      accessToken,
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        requests.push(url);
+        const skip = Number(url.searchParams.get("$skip") ?? "0");
+        return Response.json({
+          value: Array.from({ length: skip === 100 ? 20 : 50 }, () => event),
+          "@odata.nextLink":
+            skip < 100
+              ? `https://graph.microsoft.com/v1.0/me/calendarView?$top=50&$skip=${skip + 50}`
+              : undefined,
+        });
+      },
+    },
+  );
+  expect(Result.isOk(result)).toBe(true);
+  if (Result.isError(result)) {
+    return;
+  }
+  expect(result.value.events).toHaveLength(120);
+  expect(result.value.truncated).toBe(false);
+  expect(requests.map((url) => url.searchParams.get("$skip"))).toEqual([
+    null,
+    "50",
+    "100",
+  ]);
+  expect(requests.every((url) => !url.searchParams.has("$skiptoken"))).toBe(
+    true,
+  );
+});
+
+test("calendar continuations reject non-numeric $skip offsets", async () => {
+  let requests = 0;
+  const result = await listCalendarEvents(range, {
+    accessToken,
+    fetcher: async () => {
+      requests += 1;
+      return Response.json({
+        value: [],
+        "@odata.nextLink":
+          "https://graph.microsoft.com/v1.0/me/calendarView?$skip=1e9",
+      });
+    },
+  });
+  expect(Result.isError(result)).toBe(true);
+  expect(requests).toBe(1);
+});
+
 test("calendar responses enforce the byte ceiling before parsing", async () => {
   const result = await listCalendarEvents(range, {
     accessToken,

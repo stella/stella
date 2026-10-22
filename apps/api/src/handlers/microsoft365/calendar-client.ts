@@ -233,6 +233,27 @@ type CalendarClientOptions = {
   accessToken: AccessToken;
   fetcher?: typeof fetchWithTimeout;
 };
+
+type CalendarContinuation = {
+  key: string;
+  param: "$skip" | "$skiptoken";
+  value: string;
+};
+
+// Graph continues calendarView pages with an opaque $skiptoken or a numeric
+// $skip offset; any other next link does not continue this request.
+const calendarContinuation = (next: URL): CalendarContinuation | undefined => {
+  const token = next.searchParams.get("$skiptoken");
+  if (token) {
+    return { key: `$skiptoken=${token}`, param: "$skiptoken", value: token };
+  }
+  const offset = next.searchParams.get("$skip");
+  if (offset && /^[1-9]\d{0,5}$/u.test(offset)) {
+    return { key: `$skip=${offset}`, param: "$skip", value: offset };
+  }
+  return undefined;
+};
+
 export const listCalendarEvents = async (
   input: v.InferInput<typeof calendarEventsInputSchema>,
   options: CalendarClientOptions,
@@ -287,17 +308,17 @@ export const listCalendarEvents = async (
         return Result.ok({ events, truncated: true });
       }
       const nextUrl = URL.parse(next);
-      const skip = nextUrl?.searchParams.get("$skiptoken");
-      if (
-        nextUrl?.origin !== url.origin ||
-        nextUrl.pathname !== url.pathname ||
-        !skip ||
-        seen.has(skip)
-      ) {
+      const continuation =
+        nextUrl?.origin === url.origin && nextUrl.pathname === url.pathname
+          ? calendarContinuation(nextUrl)
+          : undefined;
+      if (!continuation || seen.has(continuation.key)) {
         return Result.err(upstreamError("Invalid calendar continuation"));
       }
-      seen.add(skip);
-      url.searchParams.set("$skiptoken", skip);
+      seen.add(continuation.key);
+      url.searchParams.delete("$skiptoken");
+      url.searchParams.delete("$skip");
+      url.searchParams.set(continuation.param, continuation.value);
     }
     return Result.ok({ events, truncated: true });
   });
