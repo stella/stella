@@ -104,6 +104,7 @@ runtime validation, or integration tests.
 
 ### Database, ingestion, pagination, and data shape
 
+- [`no-domain-enum`](./no-domain-enum.ts) (`no-domain-enum`): rejects TypeScript enum declarations; domain values use string-literal unions or `as const` lookup tables, while database columns use named value lists with Drizzle text columns.
 - [`no-bare-jsonb-cast`](./no-bare-jsonb-cast.ts) (`no-bare-jsonb-cast`): rejects bare PostgreSQL JSONB casts that bypass the typed JSONB expression helper.
 - [`no-hand-rolled-execute-rows`](./no-hand-rolled-execute-rows.ts) (`no-hand-rolled-execute-rows`): rejects testing an `execute(query)` result's shape by hand (`Array.isArray`, a `rows` read, `"rows" in`, `{ rows }` destructuring) and any binding tested both as an array and for `rows`; rows are read through `executedRows` (`apps/api/src/lib/db/executed-rows.ts`), which handles the server driver's rows and PGlite's `{ rows }` and panics on a third shape. Provenance follows `await`, assertions, stable bindings, and the `.value` of a `Result.tryPromise` around the call.
 - [`no-hand-rolled-sql-case`](./no-hand-rolled-sql-case.ts) (`no-hand-rolled-sql-case`): rejects a SQL `CASE` whose branch list is generated in the interpolation, where an empty list renders a branchless `CASE`; the shared renderers return the fallback instead.

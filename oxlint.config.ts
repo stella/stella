@@ -639,6 +639,13 @@ const noClassicTypeScriptImport = {
     "TypeScript 7 exposes no compiler API at 'typescript'. Use 'typescript6' for the classic API, or 'typescript/unstable/*' for the TypeScript 7 API.",
 };
 
+const noPgEnumImport = {
+  name: "drizzle-orm/pg-core",
+  importNames: ["pgEnum"],
+  message:
+    "Use a named `as const` value list with `text({ enum: VALUES })` instead of `pgEnum`.",
+};
+
 const webLocalApiImportGroup = ["@/api/*", "@/api/**/*"];
 
 const webProtectedRouteImportGroup = [
@@ -1169,7 +1176,7 @@ const config = defineConfig({
     "eslint/grouped-accessor-pairs": "off",
     "no-restricted-imports": [
       "error",
-      { paths: [noZodImport, noClassicTypeScriptImport] },
+      { paths: [noZodImport, noClassicTypeScriptImport, noPgEnumImport] },
     ],
     "no-bare-error/no-bare-error": "error",
     "no-raw-eden-telemetry/no-raw-eden-telemetry": "error",
@@ -1181,6 +1188,7 @@ const config = defineConfig({
       "error",
     "no-model-timeout-abort-signal/no-model-timeout-abort-signal": "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
+    "no-domain-enum/no-domain-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "provider-call-error-message/provider-call-error-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
@@ -1641,6 +1649,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
+    "./.oxlint-plugins/no-domain-enum.ts",
     "./.oxlint-plugins/no-array-built-typebox-union.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
     "./.oxlint-plugins/provider-call-error-message.ts",
@@ -3574,6 +3583,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               uiPragmaticDragAdapterImport,
             ],
             patterns: [
@@ -3593,7 +3603,7 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, noClassicTypeScriptImport],
+            paths: [noZodImport, noClassicTypeScriptImport, noPgEnumImport],
             patterns: [
               ...uiStandaloneImports,
               pragmaticDragAdapterDeepImportBan,
@@ -3718,6 +3728,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -3754,6 +3765,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               ...webFolioAllLocalesImports,
             ],
             patterns: [
@@ -3972,6 +3984,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -3999,6 +4012,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4034,6 +4048,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -4080,6 +4095,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4124,6 +4140,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4891,6 +4908,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -4919,6 +4937,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               {
                 name: "@/api/db/root",
                 message:
@@ -4951,6 +4970,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -4970,6 +4990,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -4992,6 +5013,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5460,6 +5482,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               apiValibotJsonSchemaImport,
               {
                 name: "@/api/lib/branded-types",
@@ -5514,6 +5537,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               apiValibotJsonSchemaImport,
             ],
           },
@@ -5586,6 +5610,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              noPgEnumImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
