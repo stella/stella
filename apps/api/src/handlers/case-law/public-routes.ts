@@ -278,7 +278,9 @@ const readDecisionSummaryRoute = createSafePublicSubjectHandler({
     mcp: { type: "covered", by: "read_case_law_decision" },
     cache: { kind: "none" },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
-    response: decisionSummaryResponseSchema,
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      decisionSummaryResponseSchema,
+    ),
   },
   caseLawDb: caseLawPublicReadDb,
   locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),

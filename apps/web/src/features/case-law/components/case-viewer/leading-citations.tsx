@@ -322,14 +322,6 @@ const LeadingRow = ({
           treatment={row.treatment}
           passage={{
             type: "citation",
-            textDecisionId,
-            citation: {
-              citationText: row.citationText,
-              decision: cited,
-              id: row.id,
-              sectionIndex: row.sectionIndex,
-              treatment: row.treatment,
-            },
           }}
         >
           {null}

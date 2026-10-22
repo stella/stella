@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import type { CaseLawDecisionSummary } from "@stll/api-contract/case-law-decision-summary";
+
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { dockedChatLegalPayloads } from "../../../e2e/helpers/docked-chat-legal-payloads";
@@ -30,12 +32,13 @@ const cited = {
   headnote: {
     type: "present" as const,
     text: "The cited decision's official legal sentence.",
+    truncated: false,
   },
   publication: "Sb. NS 10/2019",
 };
 const clients: InstanceType<typeof QueryClient>[] = [];
 
-const mount = (decision: typeof cited, children: ReactNode) => {
+const mount = (decision: CaseLawDecisionSummary, children: ReactNode) => {
   const client = new QueryClient();
   clients.push(client);
   client.setQueryData(
@@ -117,14 +120,14 @@ test("loads the stored summary endpoint instead of the full decision read", asyn
   const requests: string[] = [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
-      requests.push(String(input));
+      requests.push(input instanceof Request ? input.url : input.toString());
       return Response.json(cited);
     },
     { preconnect: originalFetch.preconnect },
   );
   const client = new QueryClient();
 
-  const result = await client.fetchQuery(decisionCardSummaryOptions(cited.id));
+  const result = await client.query(decisionCardSummaryOptions(cited.id));
 
   expect(result.court).toBe(cited.court);
   expect(requests).toHaveLength(1);

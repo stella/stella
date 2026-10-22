@@ -92,8 +92,6 @@ const WebDecisionReaderContent = ({
           {...linkProps}
           passage={{
             type: "citation",
-            citation,
-            textDecisionId: props.decisionId,
           }}
           presentation={presentationBesideCitationText({
             caseNumber: linkProps.decision.caseNumber,
