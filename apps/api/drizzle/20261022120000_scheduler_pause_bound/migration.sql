@@ -15,13 +15,17 @@ ALTER TABLE "scheduler_jobs"
   ) NOT VALID;
 --> statement-breakpoint
 
--- The pause audit watches every pause, so it can never be paused itself.
+-- The pause audit watches every pause, so it can never be paused itself. Its
+-- row is created by this release, so no existing row can violate the check.
 ALTER TABLE "scheduler_jobs"
   ADD CONSTRAINT "scheduler_jobs_pause_audit_unpausable_check" CHECK (
     id <> 'scheduler.pauseAudit.hourly' OR paused_until IS NULL
-  );
+  ) NOT VALID;
 --> statement-breakpoint
 
+-- scheduler_jobs holds one row per declared job and scheduled flow, so the
+-- build is short, and lock_timeout above bounds the wait for its lock.
+-- squawk-ignore require-concurrent-index-creation
 CREATE INDEX "scheduler_jobs_paused_until_idx" ON "scheduler_jobs" USING btree ("paused_until") WHERE "paused_until" IS NOT NULL;
 --> statement-breakpoint
 

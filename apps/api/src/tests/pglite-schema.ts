@@ -37,6 +37,11 @@ const SCHEDULER_OPERATOR_PAUSES_MIGRATION_PATH = nodePath.join(
   "20261003123100_scheduler_operator_pauses",
   "migration.sql",
 );
+const SCHEDULER_PAUSE_BOUND_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261022120000_scheduler_pause_bound",
+  "migration.sql",
+);
 const DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260827120000_docx_suggestion_source_matters",
@@ -424,7 +429,7 @@ export const installPgliteTreeParentGuards = async (
   });
 };
 
-/** Install the scheduler pause audit trigger omitted by declarative schema push. */
+/** Install the scheduler pause triggers omitted by declarative schema push. */
 export const installPgliteSchedulerJobPauseLog = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
@@ -437,7 +442,18 @@ export const installPgliteSchedulerJobPauseLog = async (
       executable.startsWith("CREATE TRIGGER scheduler_job_pause_log")
     );
   });
-  for (const statement of statements) {
+  // The 72-hour bound and the recorded start of a pause.
+  const bound = readMigrationStatements(
+    SCHEDULER_PAUSE_BOUND_MIGRATION_PATH,
+  ).filter((statement) => {
+    const executable = executableSql(statement);
+    return (
+      executable.startsWith(
+        "CREATE FUNCTION public.scheduler_job_pause_bound",
+      ) || executable.startsWith("CREATE TRIGGER scheduler_job_pause_bound")
+    );
+  });
+  for (const statement of [...statements, ...bound]) {
     await db.execute(sql.raw(statement));
   }
 };

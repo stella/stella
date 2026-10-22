@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, gt, notInArray, sql } from "drizzle-orm";
+import { and, eq, gt, notInArray, or, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -119,21 +119,31 @@ export const initialNextRunAt = (
 export const boundSchedulerPauses = async (
   db: SchedulerDb,
 ): Promise<string[]> => {
+  const negative = sql`'-infinity'::timestamptz`;
   // audit: skip — scheduler system state; each bounded job is logged below.
-  const bounded = await db
+  const changed = await db
     .update(schedulerJobs)
-    .set({ pausedUntil: sql`now() + interval '72 hours'` })
-    .where(gt(schedulerJobs.pausedUntil, sql`now() + interval '72 hours'`))
-    .returning({ id: schedulerJobs.id });
-  // audit: skip — scheduler system state; a -infinity deadline never paused.
-  await db
-    .update(schedulerJobs)
-    .set({ pausedUntil: null })
-    .where(eq(schedulerJobs.pausedUntil, sql`'-infinity'::timestamptz`));
-  for (const { id } of bounded) {
+    .set({
+      pausedUntil: sql`CASE WHEN ${schedulerJobs.pausedUntil} = ${negative}
+        THEN NULL ELSE now() + interval '72 hours' END`,
+    })
+    .where(
+      or(
+        gt(schedulerJobs.pausedUntil, sql`now() + interval '72 hours'`),
+        eq(schedulerJobs.pausedUntil, negative),
+      ),
+    )
+    .returning({
+      id: schedulerJobs.id,
+      pausedUntil: schedulerJobs.pausedUntil,
+    });
+  const bounded = changed
+    .filter(({ pausedUntil }) => pausedUntil !== null)
+    .map(({ id }) => id);
+  for (const id of bounded) {
     logger.warn("scheduler.job.pause_bounded", { jobId: id });
   }
-  return bounded.map(({ id }) => id);
+  return bounded;
 };
 
 export const ensureSchedulerJob = async (

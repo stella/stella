@@ -82,7 +82,7 @@ describe.skipIf(!enabled)("scheduler pause audit (postgres)", () => {
     });
   });
 
-  test("logs at most the limit, oldest first, and reports the cut", async () => {
+  test("more overdue pauses than the limit report one overflow and no partial list", async () => {
     if (databaseUrl === undefined) {
       throw new TypeError("DATABASE_URL required");
     }
@@ -108,10 +108,8 @@ describe.skipIf(!enabled)("scheduler pause audit (postgres)", () => {
             paused_by = ${PAUSED_BY}, pause_reason = ${PAUSE_REASON},
             paused_until = now() + interval '48 hours'
             WHERE id LIKE ${`${prefix}.%`}`;
-        // The last fixture has no recorded start, so it sorts first.
-        await client`UPDATE scheduler_jobs SET paused_since = CASE
-            WHEN id = ${ids.at(-1)} THEN NULL
-            ELSE now() - interval '2 days' END
+        await client`UPDATE scheduler_jobs
+            SET paused_since = now() - interval '2 days'
             WHERE id LIKE ${`${prefix}.%`}`;
 
         await auditSchedulerPauses(
@@ -119,18 +117,16 @@ describe.skipIf(!enabled)("scheduler pause audit (postgres)", () => {
         );
 
         const errors = logs.at("ERROR");
-        const overdue = errors.filter(
-          ({ message }) => message === "scheduler.job.pause_overdue",
-        );
-        expect(overdue).toHaveLength(PAUSE_AUDIT_LOG_LIMIT);
         expect(
-          overdue.map(({ attributes }) => attributes?.["jobId"]),
-        ).toContain(ids.at(-1));
-        const cut = errors.filter(
-          ({ message }) => message === "scheduler.job.pause_overdue_truncated",
+          errors.filter(
+            ({ message }) => message === "scheduler.job.pause_overdue",
+          ),
+        ).toHaveLength(0);
+        const overflow = errors.filter(
+          ({ message }) => message === "scheduler.job.pause_overdue_overflow",
         );
-        expect(cut).toHaveLength(1);
-        expect(String(cut.at(0)?.attributes?.["logged"])).toBe(
+        expect(overflow).toHaveLength(1);
+        expect(String(overflow.at(0)?.attributes?.["cap"])).toBe(
           String(PAUSE_AUDIT_LOG_LIMIT),
         );
       } finally {
