@@ -140,6 +140,18 @@ describe("the case-law identity canary", () => {
     expect(outcome?.status).toBe("failed");
   });
 
+  test("a court its facet names that yields no decision fails", async () => {
+    const empty: CallCaseLawTool = async (name, args) =>
+      name === "search_case_law" && args["court"] === SUPREME
+        ? { type: "ok", payload: { facets: null, results: [] } }
+        : await deployment(exact)(name, args);
+    const outcome = (await sampleCaseLawIdentities(empty)).find(
+      (entry) => entry.country === "CZE",
+    )?.outcome;
+    expect(outcome?.status).toBe("failed");
+    expect(outcome?.detail).toContain(`${SUPREME}: no decision`);
+  });
+
   test("a country whose search is closed has nothing to sample", async () => {
     expect((await outcomeFor(exact, "SVK"))?.status).toBe("not_applicable");
   });

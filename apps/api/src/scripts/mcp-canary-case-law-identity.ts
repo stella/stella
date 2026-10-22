@@ -19,8 +19,9 @@ const CASE_LAW_IDENTITY_PROBE_COUNTRIES = ["CZE", "SVK"] as const;
 type ProbeCountry = (typeof CASE_LAW_IDENTITY_PROBE_COUNTRIES)[number];
 
 /**
- * A word every decision of the country's apex court carries, which seeds the
- * court facets: the court's own name, so no language is assumed.
+ * The query whose court facets name the courts sampled: the apex court's own
+ * name, so no language is assumed. Each court is then sampled by the same
+ * query, so every court a facet names has a decision to sample.
  */
 const FACET_SEED_QUERY = {
   CZE: "Nejvyšší soud",
@@ -188,19 +189,26 @@ const probeCountry = async (
   const samples = await mapWithConcurrency({
     items: courts,
     limit: TOOL_CALL_CONCURRENCY,
-    operation: async (court) =>
-      await searchOf(callTool, {
+    operation: async (court) => ({
+      court,
+      sample: await searchOf(callTool, {
         country,
         court,
         limit: 1,
-        queries: [court],
-        sort: "newest",
+        queries: [FACET_SEED_QUERY[country]],
       }),
+    }),
   });
-  const searchFailures = samples.flatMap((sample) =>
-    typeof sample === "string" ? [sample] : [],
-  );
-  const hits = samples.flatMap((sample) =>
+  // A court its facet counted that yields no decision is a failure, never a
+  // court left out: coverage that shrinks silently would pass with nothing
+  // resolved.
+  const searchFailures = samples.flatMap(({ court, sample }) => {
+    if (typeof sample === "string") {
+      return [`${court}: ${sample}`];
+    }
+    return sample.results.length === 0 ? [`${court}: no decision`] : [];
+  });
+  const hits = samples.flatMap(({ sample }) =>
     typeof sample === "string" ? [] : sample.results.slice(0, 1),
   );
   const checks = hits.flatMap((hit) =>
@@ -234,7 +242,7 @@ const probeCountry = async (
 
 /**
  * Sample every court search facets name in each probed country, resolve the
- * newest decision of each by its docket and its ECLI, and require the
+ * top decision of each by its docket and its ECLI, and require the
  * decision search found. A country whose search surface is closed has nothing
  * to sample from; it is probed as soon as the capability table opens it.
  */
