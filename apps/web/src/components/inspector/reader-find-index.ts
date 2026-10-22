@@ -95,7 +95,11 @@ export const findReaderMatches = (
   const results = searchReaderIndex(index.search, query);
   const matches: ReaderFindMatch[] = [];
   for (const [pieceIndex, piece] of index.pieces.entries()) {
-    for (const match of results.rangesByPieceId[String(pieceIndex)] ?? []) {
+    const pieceMatches = results.rangesByPieceId[String(pieceIndex)];
+    if (pieceMatches === undefined) {
+      continue;
+    }
+    for (const match of pieceMatches) {
       matches.push({
         block: piece.block,
         end: match.end,

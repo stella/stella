@@ -94,6 +94,15 @@ type FindInputs = {
   landingRequest: number;
 };
 
+/**
+ * The page's highlight registry, or nothing in a browser without the CSS
+ * Custom Highlight API. Every mark goes through here, so that absence is
+ * handled in one place.
+ */
+const highlightRegistry = (): HighlightRegistry | undefined =>
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+  CSS.highlights ?? undefined;
+
 /** The state after a find command: opened, or open with focus asked for again. */
 const findCommanded = (prev: FindBarState): FindBarState =>
   prev.open ? { ...prev, focusRequest: prev.focusRequest + 1 } : FIND_OPENED;
@@ -126,10 +135,8 @@ export const useInspectorFind = ({
     setFindState((prev) =>
       prev.open ? { ...prev, query: "", matchCount: 0, activeIndex: 0 } : prev,
     );
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.delete(allHighlightName);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.delete(activeHighlightName);
+    highlightRegistry()?.delete(allHighlightName);
+    highlightRegistry()?.delete(activeHighlightName);
   }, [activeHighlightName, allHighlightName]);
 
   const closeFind = useCallback(() => {
@@ -273,10 +280,8 @@ export const useInspectorFind = ({
       const query = queryInput.trim();
       if (!isEnabled || !root || query.length === 0) {
         stopFindPaint();
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-        CSS.highlights?.delete(allHighlightName);
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-        CSS.highlights?.delete(activeHighlightName);
+        highlightRegistry()?.delete(allHighlightName);
+        highlightRegistry()?.delete(activeHighlightName);
         setFindState((prev) =>
           prev.open && (prev.matchCount !== 0 || prev.activeIndex !== 0)
             ? { ...prev, matchCount: 0, activeIndex: 0 }
@@ -316,8 +321,7 @@ export const useInspectorFind = ({
 
       if (matches.length === 0) {
         paint.active = null;
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-        CSS.highlights?.delete(activeHighlightName);
+        highlightRegistry()?.delete(activeHighlightName);
         setFindState((prev) =>
           prev.open &&
           (prev.activeIndex !== 0 ||
@@ -594,8 +598,7 @@ const startPaint = ({
 }): FindPaint => {
   const matches = findReaderMatches(index, query);
   const all = new Highlight();
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-  CSS.highlights?.set(allName, all);
+  highlightRegistry()?.set(allName, all);
   const matchesByBlock = new Map<Element, ReaderFindMatch[]>();
   for (const match of matches) {
     const blockMatches = matchesByBlock.get(match.block);
@@ -612,9 +615,11 @@ const startPaint = ({
         const block = entry.target;
         const ranges = drawn.get(block);
         if (entry.isIntersecting && ranges === undefined) {
-          const blockRanges = (matchesByBlock.get(block) ?? []).map(
-            rangeOfMatch,
-          );
+          const blockMatches = matchesByBlock.get(block);
+          if (blockMatches === undefined) {
+            continue;
+          }
+          const blockRanges = blockMatches.map(rangeOfMatch);
           for (const range of blockRanges) {
             all.add(range);
           }
@@ -649,10 +654,8 @@ const stopPaint = (paint: FindPaint | null): void => {
     return;
   }
   paint.observer.disconnect();
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-  CSS.highlights?.delete(paint.allName);
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-  CSS.highlights?.delete(paint.activeName);
+  highlightRegistry()?.delete(paint.allName);
+  highlightRegistry()?.delete(paint.activeName);
 };
 
 /** Draws the active mark, making its range only when the active match moves. */
@@ -666,10 +669,8 @@ const paintActive = (paint: FindPaint, index: number): Range | undefined => {
   }
   const { range } = paint.active;
   // A reader's clear removes the registrations; drawing again restores them.
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-  CSS.highlights?.set(paint.allName, paint.all);
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-  CSS.highlights?.set(paint.activeName, new Highlight(range));
+  highlightRegistry()?.set(paint.allName, paint.all);
+  highlightRegistry()?.set(paint.activeName, new Highlight(range));
   return range;
 };
 
