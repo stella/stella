@@ -1,4 +1,7 @@
-import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  notifyUserError,
+  reportUserVisibleError,
+} from "@/lib/errors/user-toast";
 
 class OAuthCallbackError extends Error {
   override name = "OAuthCallbackError";
@@ -14,17 +17,24 @@ type ReportOAuthCallbackErrorOptions = {
   errorCode: string | undefined;
   fallback: string;
   report?: OAuthErrorReporter | undefined;
+  reportWithoutToast?: typeof reportUserVisibleError | undefined;
 };
 
 export const reportOAuthCallbackError = ({
   errorCode,
   fallback,
   report = notifyUserError,
+  reportWithoutToast = reportUserVisibleError,
 }: ReportOAuthCallbackErrorOptions): void => {
   if (errorCode === undefined) {
     return;
   }
-  report(new OAuthCallbackError(errorCode), fallback, {
+  const error = new OAuthCallbackError(errorCode);
+  if (errorCode === "account_not_linked") {
+    reportWithoutToast(error, "auth", "/auth/error");
+    return;
+  }
+  report(error, fallback, {
     feature: "auth",
     routeTemplate: "/auth/error",
   });

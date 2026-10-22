@@ -23,14 +23,25 @@ const HANDLED_AUTH_CLIENT_CODES: ReadonlySet<string> = new Set([
   "DISPOSABLE_EMAIL_NOT_ALLOWED",
   "INVALID_BACKUP_CODE",
   "INVALID_CODE",
+  "INVALID_OTP",
   "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION",
 ]);
+
+export const SOCIAL_LINK_HINT_PATH = "/social-link-hint";
+
+const isSocialLinkHintRequest = (requestUrl: URL | string): boolean =>
+  new URL(requestUrl).pathname === `/api/auth${SOCIAL_LINK_HINT_PATH}`;
 
 export const reportUnhandledAuthClientError = (
   error: AuthErrorValue,
   report: UserVisibleReporter,
+  requestUrl: URL | string,
 ): void => {
-  if (error.code === undefined || HANDLED_AUTH_CLIENT_CODES.has(error.code)) {
+  if (
+    error.code === undefined ||
+    HANDLED_AUTH_CLIENT_CODES.has(error.code) ||
+    isSocialLinkHintRequest(requestUrl)
+  ) {
     return;
   }
   report(toAuthClientError(error), "auth", undefined);

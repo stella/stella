@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { socialProviderSchema } from "@/components/auth/access-reset.logic";
 import { authClient } from "@/lib/auth-client";
+import { SOCIAL_LINK_HINT_PATH } from "@/lib/auth-code-report";
 import { toAuthClientError } from "@/lib/errors/auth";
 
 const hintSchema = v.object({
@@ -21,7 +22,7 @@ export const loadSocialLinkHint = async (
 ) => {
   const response = await Result.tryPromise(
     async () =>
-      await authClient.$fetch("/social-link-hint", { method: "POST" }),
+      await authClient.$fetch(SOCIAL_LINK_HINT_PATH, { method: "POST" }),
   );
   const hint = response.andThen(({ data, error }) =>
     error ? Result.err(toAuthClientError(error)) : Result.ok(data),

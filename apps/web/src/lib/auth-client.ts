@@ -174,7 +174,11 @@ const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
           notifyUserError(context.error, t("auth.rateLimitExceeded"));
           return;
         }
-        reportUnhandledAuthClientError(context.error, reportUserVisibleError);
+        reportUnhandledAuthClientError(
+          context.error,
+          reportUserVisibleError,
+          context.request.url,
+        );
       },
     },
   });

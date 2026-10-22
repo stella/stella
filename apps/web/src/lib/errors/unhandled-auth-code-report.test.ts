@@ -46,6 +46,7 @@ test.each([
       reportUnhandledAuthClientError(
         PROFESSIONAL_USE_ERROR,
         reportUserVisibleError,
+        "https://api.test/api/auth/get-session",
       );
     },
   },
@@ -102,3 +103,37 @@ test.each([
     user_visible: true,
   });
 });
+
+test.each([
+  {
+    code: PROFESSIONAL_USE_REQUIRED_CODE,
+    name: "caller-owned social-link hint errors",
+    requestUrl: "https://api.test/api/auth/social-link-hint",
+    reported: false,
+  },
+  {
+    code: "INVALID_OTP",
+    name: "caller-handled invalid OTP errors",
+    requestUrl: "https://api.test/api/auth/email-otp/verify-email",
+    reported: false,
+  },
+  {
+    code: PROFESSIONAL_USE_REQUIRED_CODE,
+    name: "other unhandled auth errors",
+    requestUrl: "https://api.test/api/auth/get-session",
+    reported: true,
+  },
+])(
+  "reports $name only when globally owned",
+  ({ code, requestUrl, reported }) => {
+    const report = mock(() => undefined);
+
+    reportUnhandledAuthClientError(
+      { ...PROFESSIONAL_USE_ERROR, code },
+      report,
+      requestUrl,
+    );
+
+    expect(report).toHaveBeenCalledTimes(reported ? 1 : 0);
+  },
+);
