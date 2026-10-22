@@ -2132,6 +2132,55 @@ describe("collaboration server", () => {
     }
   });
 
+  test("ignores publication flushes from read-only sessions", async () => {
+    const fakeApi = createFakeStellaApi({ canEdit: false });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 10_000,
+      maxDebounceMs: 10_000,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const ydoc = new Doc();
+    const statelessPayloads: string[] = [];
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      onStateless: (payload) => {
+        statelessPayloads.push(payload);
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc,
+    });
+
+    try {
+      await waitFor(
+        () =>
+          provider.isAuthenticated &&
+          provider.authorizedScope === "readonly" &&
+          collabServer.hocuspocus.getDocumentsCount() === 1,
+        "Read-only provider did not join the room.",
+      );
+      for (const requestId of [
+        "00000000-0000-4000-8000-000000000097",
+        "00000000-0000-4000-8000-000000000098",
+      ]) {
+        provider.sendStateless(
+          JSON.stringify({ requestId, type: FOLIO_COLLAB_FLUSH_REQUEST_TYPE }),
+        );
+      }
+      await Bun.sleep(150);
+
+      expect(fakeApi.storeRequests()).toBe(0);
+      expect(statelessPayloads).toEqual([]);
+    } finally {
+      provider.destroy();
+      ydoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
   test("rejects clients when stella API authorization fails", async () => {
     const fakeApi = createFakeStellaApi();
     const collabServer = await createCollabServer({

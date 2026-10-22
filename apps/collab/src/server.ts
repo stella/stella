@@ -1282,6 +1282,11 @@ export const createCollabServer = async (
       applyUpdate(document, Buffer.from(result.snapshotBase64, "base64"));
     },
     async onStateless({ connection, document, payload }) {
+      // A durable store is an edit: only a session allowed to edit asks for
+      // one.
+      if (connection.readOnly) {
+        return;
+      }
       const parsed = v.safeParse(flushRequestSchema, payload);
       if (!parsed.success) {
         return;
