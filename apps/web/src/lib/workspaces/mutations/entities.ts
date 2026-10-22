@@ -21,8 +21,10 @@ import { replaceCachedFileName } from "@/lib/files/queries";
 import { inboxKeys } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
-import { invalidateDeletedEntityQueries } from "@/lib/workspaces/mutations/entities.logic";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import {
+  invalidateDeletedEntityQueries,
+  invalidateRenamedEntityQueries,
+} from "@/lib/workspaces/mutations/entities.logic";
 import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
 
 type CreateEntitiesVars = {
@@ -81,6 +83,7 @@ export const useDeleteEntities = () => {
       await invalidateDeletedEntityQueries({
         queryClient,
         workspaceId,
+        entityIds,
       });
     },
     onError: (error) => {
@@ -242,8 +245,10 @@ export const useRenameEntity = (
       detached(
         (async () => {
           await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: entitiesKeys.all(workspaceId),
+            invalidateRenamedEntityQueries({
+              queryClient,
+              workspaceId,
+              entityId,
             }),
             queryClient.invalidateQueries({
               queryKey: entityViewKeys.all(activeOrganizationId, userId),

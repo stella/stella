@@ -1,0 +1,150 @@
+[
+  {
+    "id": "workspaces/mutations.ts::useCreateWorkspace",
+    "reason": "Matter lifecycle mutations refresh matter lists and navigation; those projections need a separate list budget beyond this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations.ts::useDeleteWorkspace",
+    "reason": "Matter deletion drops local table state and has no direct query invalidation callback; matter lifecycle queries are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations.ts::useDuplicateWorkspace",
+    "reason": "Matter lifecycle mutations refresh matter lists and navigation; those projections need a separate list budget beyond this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations.ts::useUnarchiveWorkspace",
+    "reason": "Matter lifecycle mutations refresh matter lists and navigation; those projections need a separate list budget beyond this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations.ts::useUpdateWorkspace",
+    "reason": "Matter lifecycle mutations refresh matter lists and navigation; those projections need a separate list budget beyond this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/entities.ts::useCreateEntities",
+    "reason": "The mutation has no cache invalidation callback; entity creation refreshes through the measured entity live-update event."
+  },
+  {
+    "id": "workspaces/mutations/entities.ts::useMoveEntity",
+    "reason": "The mutation has no cache invalidation callback; entity moves refresh through the measured entity live-update event."
+  },
+  {
+    "id": "workspaces/mutations/entities.ts::useUpdateKanbanPlacement",
+    "reason": "The mutation has no cache invalidation callback; placement updates refresh through the resource live-update adapter covered by the event-kind census."
+  },
+  {
+    "id": "workspaces/mutations/entities.ts::useUpsertField",
+    "reason": "The mutation has no cache invalidation callback; field writes refresh through the resource live-update adapter covered by the event-kind census."
+  },
+  {
+    "id": "workspaces/mutations/expenses.ts::useCreateExpense",
+    "reason": "Expense writes have no direct cache invalidation callback; expense list refetch counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/expenses.ts::useDeleteExpense",
+    "reason": "Expense writes have no direct cache invalidation callback; expense list refetch counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/expenses.ts::useUpdateExpense",
+    "reason": "Expense writes have no direct cache invalidation callback; expense list refetch counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/properties.ts::useCreatePropertiesBatch",
+    "reason": "Property schema mutations refresh property lists; schema-dependent view work needs a separate property-change budget beyond this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/properties.ts::useCreateProperty",
+    "reason": "Property schema mutations refresh property lists; schema-dependent view work needs a separate property-change budget beyond this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/properties.ts::useDeleteProperty",
+    "reason": "Property schema mutations refresh property lists; schema-dependent view work needs a separate property-change budget beyond this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/properties.ts::useSuggestPrompt",
+    "reason": "Prompt suggestion returns a proposed property prompt without mutating or invalidating query caches; no refetch is attributable to this hook."
+  },
+  {
+    "id": "workspaces/mutations/properties.ts::useUpdateProperty",
+    "reason": "Property schema mutations refresh property lists; schema-dependent view work needs a separate property-change budget beyond this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/tasks.ts::useAddTaskAssignee",
+    "reason": "Task mutations refresh task details, my-work and overview projections, including the entity root; that multi-projection fan-out needs a separate task budget and is not measured here."
+  },
+  {
+    "id": "workspaces/mutations/tasks.ts::useCreateTask",
+    "reason": "Task mutations refresh task details, my-work and overview projections, including the entity root; that multi-projection fan-out needs a separate task budget and is not measured here."
+  },
+  {
+    "id": "workspaces/mutations/tasks.ts::useMoveTaskAssignee",
+    "reason": "Task mutations refresh task details, my-work and overview projections, including the entity root; that multi-projection fan-out needs a separate task budget and is not measured here."
+  },
+  {
+    "id": "workspaces/mutations/tasks.ts::useRemoveTaskAssignee",
+    "reason": "Task mutations refresh task details, my-work and overview projections, including the entity root; that multi-projection fan-out needs a separate task budget and is not measured here."
+  },
+  {
+    "id": "workspaces/mutations/time-entries.ts::useBatchDeleteTimeEntries",
+    "reason": "Time-entry mutations use time-entry query command invalidation and suggestion reconciliation; those query counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/time-entries.ts::useBatchUpdateTimeEntries",
+    "reason": "Time-entry mutations use time-entry query command invalidation and suggestion reconciliation; those query counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/time-entries.ts::useCreateTimeEntry",
+    "reason": "Time-entry mutations use time-entry query command invalidation and suggestion reconciliation; those query counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/time-entries.ts::useDecideTimeSuggestion",
+    "reason": "Time-entry mutations use time-entry query command invalidation and suggestion reconciliation; those query counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/time-entries.ts::useDeleteTimeEntry",
+    "reason": "Time-entry mutations use time-entry query command invalidation and suggestion reconciliation; those query counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/time-entries.ts::useSplitTimeEntry",
+    "reason": "Time-entry mutations use time-entry query command invalidation and suggestion reconciliation; those query counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/time-entries.ts::useUpdateTimeEntry",
+    "reason": "Time-entry mutations use time-entry query command invalidation and suggestion reconciliation; those query counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/use-create-file-entities.ts::useBatchUploadLabels",
+    "reason": "This hook only builds translated upload labels and starts no mutation or query; it is retained because the owner census includes all exported hooks."
+  },
+  {
+    "id": "workspaces/mutations/use-create-file-entities.ts::useCreateFileEntities",
+    "reason": "Batch file creation coordinates uploads, sibling naming and completion invalidations; its multi-file query counts need a separate upload budget and are not measured here."
+  },
+  {
+    "id": "workspaces/mutations/use-upload-version.ts::useUploadVersion",
+    "reason": "Version upload reconciles inspector file metadata and invalidates field file content; file-content refetch counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/views.ts::useConvertView",
+    "reason": "View mutations update localized view caches and navigation projections; those view-definition query counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/views.ts::useCreateView",
+    "reason": "View mutations update localized view caches and navigation projections; those view-definition query counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/views.ts::useDeleteView",
+    "reason": "View mutations update localized view caches and navigation projections; those view-definition query counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/views.ts::useReorderViews",
+    "reason": "View mutations update localized view caches and navigation projections; those view-definition query counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/views.ts::useUpdateView",
+    "reason": "View mutations update localized view caches and navigation projections; those view-definition query counts are outside this entity-detail guard."
+  },
+  {
+    "id": "workspaces/mutations/workspace-members.ts::useAddWorkspaceMember",
+    "reason": "Member addition refreshes member and matter lists; membership projection counts are outside this entity-detail guard."
+  }
+]

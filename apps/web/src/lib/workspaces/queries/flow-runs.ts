@@ -1,9 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import {
-  isTerminalFlowRunStatus,
-  type FlowRunStatus,
-} from "@/components/flows/flow-meta";
+import type { FlowRunStatus } from "@/components/flows/flow-meta";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { flowRunsQueryRoot } from "@/lib/resource-query-roots.logic";
@@ -18,7 +15,6 @@ type FlowRunsListKey = {
 };
 
 const FLOW_RUNS_PAGE_SIZE = 50;
-const FLOW_RUNS_POLL_MS = 3000;
 
 // ── Key helpers ─────────────────────────────────────
 
@@ -66,18 +62,6 @@ export const flowRunsOptions = ({
 
       return unwrapEden(response);
     },
-    // Poll while any listed run is still active; the function form returns
-    // `false` once everything is terminal so the interval clears itself.
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data || !("items" in data)) {
-        return false;
-      }
-      const hasActive = data.items.some(
-        (run) => !isTerminalFlowRunStatus(run.status),
-      );
-      return hasActive ? FLOW_RUNS_POLL_MS : false;
-    },
     refetchOnWindowFocus: false,
     staleTime: 0,
   });
@@ -92,13 +76,6 @@ export const flowRunDetailOptions = (workspaceId: string, runId: string) =>
         .get({ fetch: { signal } });
 
       return unwrapEden(response);
-    },
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data || !("status" in data)) {
-        return false;
-      }
-      return isTerminalFlowRunStatus(data.status) ? false : FLOW_RUNS_POLL_MS;
     },
     refetchOnWindowFocus: false,
     staleTime: 0,

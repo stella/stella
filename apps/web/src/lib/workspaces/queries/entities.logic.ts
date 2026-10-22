@@ -96,6 +96,31 @@ export const normalizeVisibleFieldIds = (
 ): string[] =>
   fieldIds === undefined ? [] : [...new Set(fieldIds)].toSorted();
 
+const ENTITY_COLLECTION_KIND = {
+  WINDOW: "window",
+  FILESYSTEM_TREE: "filesystem-tree",
+  KANBAN_GROUP: "kanban-group",
+  GROUP_COUNTS: "group-counts",
+  SUMMARIES: "summaries",
+  FOLDERS: "folders",
+  FILES: "files",
+} as const;
+
+const entityCollectionKinds = new Set<string>(
+  Object.values(ENTITY_COLLECTION_KIND),
+);
+
+/** Entity ids occupy the third key segment; collection segments are named here. */
+export const isEntityCollectionQueryKey = (
+  queryKey: readonly unknown[],
+): boolean => {
+  const kind = queryKey.at(2);
+  return (
+    (typeof kind === "object" && kind !== null) ||
+    (typeof kind === "string" && entityCollectionKinds.has(kind))
+  );
+};
+
 export const entitiesKeys = {
   all: (workspaceId: string) => ["entities", workspaceId],
   detail: (workspaceId: string, entityId: string) => [
@@ -152,7 +177,7 @@ export const entitiesKeys = {
     const normalizedFind = normalizeFind(find);
     return [
       ...entitiesKeys.all(workspaceId),
-      "window",
+      ENTITY_COLLECTION_KIND.WINDOW,
       {
         filters,
         sorts,
@@ -181,7 +206,7 @@ export const entitiesKeys = {
     const normalizedFieldMode = fieldMode ?? "full";
     return [
       ...entitiesKeys.all(workspaceId),
-      "filesystem-tree",
+      ENTITY_COLLECTION_KIND.FILESYSTEM_TREE,
       {
         filters,
         sorts,
@@ -211,7 +236,7 @@ export const entitiesKeys = {
     const normalizedFind = normalizeFind(find);
     return [
       ...entitiesKeys.all(workspaceId),
-      "kanban-group",
+      ENTITY_COLLECTION_KIND.KANBAN_GROUP,
       {
         filters,
         sorts,
@@ -239,7 +264,7 @@ export const entitiesKeys = {
     const normalizedFind = normalizeFind(find);
     return [
       ...entitiesKeys.all(workspaceId),
-      "group-counts",
+      ENTITY_COLLECTION_KIND.GROUP_COUNTS,
       {
         filters,
         groupByPropertyId,
@@ -248,9 +273,17 @@ export const entitiesKeys = {
       },
     ];
   },
+  folders: (workspaceId: string) => [
+    ...entitiesKeys.all(workspaceId),
+    ENTITY_COLLECTION_KIND.FOLDERS,
+  ],
+  files: (workspaceId: string) => [
+    ...entitiesKeys.all(workspaceId),
+    ENTITY_COLLECTION_KIND.FILES,
+  ],
   summaries: (workspaceId: string) => [
     ...entitiesKeys.all(workspaceId),
-    "summaries",
+    ENTITY_COLLECTION_KIND.SUMMARIES,
   ],
   summariesCount: (workspaceId: string) => [
     ...entitiesKeys.summaries(workspaceId),
