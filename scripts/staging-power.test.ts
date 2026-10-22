@@ -426,7 +426,7 @@ test("the readiness deadline fits inside the acquisition and health budgets", as
   );
   const script = await Bun.file(path.join(ACTION_PATH, "dispatch.sh")).text();
   const seconds = Number(
-    script.match(/readonly READINESS_TIMEOUT_SECONDS=(\d+)/u)?.at(1),
+    /readonly READINESS_TIMEOUT_SECONDS=(\d+)/u.exec(script)?.at(1),
   );
   expect(seconds).toBeGreaterThanOrEqual(45 * 60);
   const health = workflow.jobs["staging-health"];
