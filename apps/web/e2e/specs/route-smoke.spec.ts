@@ -511,6 +511,18 @@ const measureRouteTarget = async ({
   route: SmokeRoute;
 }): Promise<RouteNetworkMetrics> => {
   const { context, page } = await openCleanPage(browser);
+  // The last main-frame document response is the one the route renders.
+  let documentPolicy: string | undefined;
+  page.on("response", (response) => {
+    const request = response.request();
+    if (
+      request.isNavigationRequest() &&
+      request.frame() === page.mainFrame() &&
+      response.status() < 300
+    ) {
+      documentPolicy = response.headers()["content-security-policy"];
+    }
+  });
   await context.addInitScript(() => {
     const violations: ContentSecurityPolicyViolation[] = [];
     Object.assign(globalThis, { __cspViolations: violations });
@@ -559,6 +571,21 @@ const measureRouteTarget = async ({
       ),
       `content security policy violations on ${route.template}`,
     ).toEqual([]);
+    // No violations only proves something when a policy is enforced: the
+    // document must carry it, and its nonce must reach the rendered scripts.
+    const policyNonce = /'nonce-([^']+)'/u.exec(documentPolicy ?? "")?.[1];
+    expect(
+      policyNonce,
+      `content security policy nonce on ${route.template}`,
+    ).toBeDefined();
+    expect(
+      await page.evaluate(
+        (nonce) =>
+          [...document.scripts].some((script) => script.nonce === nonce),
+        policyNonce,
+      ),
+      `scripts carry the policy nonce on ${route.template}`,
+    ).toBe(true);
     // Captured after the route shell and tracked API work are ready, so the
     // manifest reflects the fully-rendered route.
     return summarizeCapture(await network.capture());
