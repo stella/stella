@@ -401,9 +401,6 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-ad-hoc-chat-link.fixture.tsx", [
     "no-ad-hoc-chat-link/no-ad-hoc-chat-link",
   ]),
-  fixtureRuleOverride("no-remote-image-src.fixture.tsx", [
-    "no-remote-image-src/no-remote-image-src",
-  ]),
   fixtureRuleOverride("no-font-utility-in-reader.fixture.tsx", [
     "no-font-utility-in-reader/no-font-utility-in-reader",
   ]),
@@ -1685,7 +1682,6 @@ const config = defineConfig({
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
-    "./.oxlint-plugins/no-remote-image-src.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
@@ -3334,16 +3330,6 @@ const config = defineConfig({
       ],
       rules: {
         "no-ad-hoc-chat-link/no-ad-hoc-chat-link": "error",
-      },
-    },
-    {
-      files: [
-        "apps/web/src/**/*.tsx",
-        "packages/**/*.tsx",
-        ".oxlint-plugins/__fixtures__/no-remote-image-src.fixture.tsx",
-      ],
-      rules: {
-        "no-remote-image-src/no-remote-image-src": "error",
       },
     },
     {
