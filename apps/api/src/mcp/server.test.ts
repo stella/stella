@@ -30,6 +30,7 @@ import {
 } from "@/api/lib/analytics/client";
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
+import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import {
@@ -653,12 +654,19 @@ describe("handleMcpHttpRequest", () => {
       async (session, options) =>
         await resolveMcpSessionContext(session, {
           ...options,
-          resolveAuthorization: async () => ({
-            memberId: "member_one",
-            email: "limited@example.test",
-            role: "owner",
-            workspace: null,
-          }),
+          resolveAuthorization: async () =>
+            ({
+              memberId: "member_one",
+              email: "limited@example.test",
+              role: "owner",
+              workspace: null,
+              emailVerified: true,
+              userDeleted: false,
+              enrolledFeatureIds: [],
+              professionalUse: { status: "required" },
+            }) satisfies NonNullable<
+              Awaited<ReturnType<ResolveCredentialMemberAuthorization>>
+            >,
           checkAccountOperation: (email) =>
             checkDemoAccountAccess({
               email,
@@ -700,12 +708,19 @@ describe("handleMcpHttpRequest", () => {
       async (session, options) =>
         await resolveMcpSessionContext(session, {
           ...options,
-          resolveAuthorization: async () => ({
-            memberId: "member_one",
-            email: "limited@example.test",
-            role: "owner",
-            workspace: null,
-          }),
+          resolveAuthorization: async () =>
+            ({
+              memberId: "member_one",
+              email: "limited@example.test",
+              role: "owner",
+              workspace: null,
+              emailVerified: true,
+              userDeleted: false,
+              enrolledFeatureIds: [],
+              professionalUse: { status: "required" },
+            }) satisfies NonNullable<
+              Awaited<ReturnType<ResolveCredentialMemberAuthorization>>
+            >,
           checkAccountOperation: (email) =>
             checkDemoAccountAccess({
               email,
@@ -770,12 +785,19 @@ describe("handleMcpHttpRequest", () => {
       ) =>
         await resolveMcpSessionContext(session, {
           ...options,
-          resolveAuthorization: async () => ({
-            memberId: "member_one",
-            email: "limited@example.test",
-            role: "owner",
-            workspace: null,
-          }),
+          resolveAuthorization: async () =>
+            ({
+              memberId: "member_one",
+              email: "limited@example.test",
+              role: "owner",
+              workspace: null,
+              emailVerified: true,
+              userDeleted: false,
+              enrolledFeatureIds: [],
+              professionalUse: { status: "required" },
+            }) satisfies NonNullable<
+              Awaited<ReturnType<ResolveCredentialMemberAuthorization>>
+            >,
           checkAccountOperation: (email) =>
             checkDemoAccountAccess({
               email,
