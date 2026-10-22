@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 // Base schema, seed and the contending writer before the upgrade starts:
 // measured 5 min 23 s on a hosted runner (10-19), with headroom.
-const SETUP_ALLOWANCE_MINUTES = 8;
+const SETUP_ALLOWANCE_MINUTES = 18;
 // Checkout, install and image pulls before the rehearsal step.
 const JOB_SETUP_ALLOWANCE_MINUTES = 4;
 
@@ -57,4 +57,15 @@ test("the rehearsal step and job timeouts derive from the script's own budget", 
   expect(job["timeout-minutes"]).toBe(
     stepMinutes + JOB_SETUP_ALLOWANCE_MINUTES,
   );
+});
+
+test("the rehearsal boots both releases and enforces online repair coverage", () => {
+  expect(script).toContain(
+    'boot_until_ready "$base_image" stella-rehearsal-base-api',
+  );
+  expect(script).toContain(
+    'boot_until_ready "$checkout_image" stella-rehearsal-checkout-api',
+  );
+  expect(script).toContain("assert-online-migration-rehearsal.ts");
+  expect(script).toContain('--rehearsal-online-repair-report "$repair_report"');
 });

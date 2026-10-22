@@ -192,7 +192,7 @@
   "candidate:.github/workflows/ci.yml/migration-upgrade-rehearsal": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "4120d4fb66bbcdddc0732b2edeb80d2362bee8403c33164ab0c82de3973ccc0a"
+    "reviewedDigest": "3d3162df160428e612b1023c23c9281c2f74b25482a74c6382a49725329231fa"
   },
   "candidate:.github/workflows/ci.yml/release-typecheck": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "cb87a35719dcfcaf152dc503ce468dc7b48237ab3349399b7efdcd7f0715627a"
+    "reviewedDigest": "18708beab5289372e33a613a93b04cc4817314c0168b417438ab2f14b82ec866"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "69a9ed32c8f3b430845b00518adf7a434c7babab60de5bc4f5ed722471ecac03"
+    "reviewedDigest": "6152d1196ef54c3503cc7e15301f9ded7daebb800cde5d0ee38447ab3ad5c372"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",

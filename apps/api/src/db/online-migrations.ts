@@ -690,6 +690,10 @@ type OnlineMigrationMode =
 
 type OnlineMigrationOptions = {
   repairs?: readonly OnlineRepair[];
+  repairAttemptObserver?: (record: {
+    name: string;
+    precondition: "empty" | "non-empty";
+  }) => void;
   log?: (record: {
     event: "online_repair_pending";
     repair: string;
@@ -786,6 +790,7 @@ const processOnlineMigrations = async (
       connection,
       mode,
       repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
+      repairAttemptObserver: options.repairAttemptObserver,
       log:
         options.log ??
         ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),
@@ -893,6 +898,7 @@ type OnlineRepairWalkOptions = {
   connection: OnlineMigrationConnection;
   mode: OnlineMigrationMode;
   repairs: readonly OnlineRepair[];
+  repairAttemptObserver?: OnlineMigrationOptions["repairAttemptObserver"];
   log: NonNullable<OnlineMigrationOptions["log"]>;
   offset?: number;
 };
@@ -901,6 +907,7 @@ const processOnlineRepairAt = async ({
   connection,
   mode,
   repairs,
+  repairAttemptObserver,
   log,
   offset = 0,
 }: OnlineRepairWalkOptions): Promise<OnlineMigrationOutcome> => {
@@ -910,6 +917,12 @@ const processOnlineRepairAt = async ({
   }
 
   const completion = await repair.readCompletion(connection);
+  if (mode.operation === "repair") {
+    repairAttemptObserver?.({
+      name: repair.name,
+      precondition: completion.type === "complete" ? "empty" : "non-empty",
+    });
+  }
   if (mode.operation === "repair" && completion.type !== "complete") {
     const step = {
       event: "migrate.online_step_duration",
@@ -983,6 +996,7 @@ const processOnlineRepairAt = async ({
     connection,
     mode,
     repairs,
+    repairAttemptObserver,
     log,
     offset: offset + 1,
   });

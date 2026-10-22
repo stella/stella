@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { SQL } from "bun";
+import { appendFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { printError } from "@stll/errors";
@@ -29,6 +30,15 @@ if (!url) {
   );
 }
 
+const rehearsalReportFlag = process.argv.indexOf(
+  "--rehearsal-online-repair-report",
+);
+const rehearsalReport =
+  rehearsalReportFlag === -1
+    ? undefined
+    : (process.argv.at(rehearsalReportFlag + 1) ??
+      panic("--rehearsal-online-repair-report requires a path"));
+
 await runScriptWithErrorOutput(async () => {
   const client = new SQL({ url, max: 1 });
   // The loose source and single-file bundle both resolve drizzle from this file.
@@ -40,6 +50,12 @@ await runScriptWithErrorOutput(async () => {
       databaseUrl: url,
       migrationsFolder,
       ebs: ebs.value,
+      repairAttemptObserver:
+        rehearsalReport === undefined
+          ? undefined
+          : (record) => {
+              appendFileSync(rehearsalReport, `${JSON.stringify(record)}\n`);
+            },
     });
     if (result.status === "applied") {
       // oxlint-disable-next-line no-console -- migrate CLI entrypoint; stdout is its interface

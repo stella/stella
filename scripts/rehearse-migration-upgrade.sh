@@ -88,6 +88,56 @@ if [[ ! "$base_ref" =~ $stable_tag ]]; then
   fail "Could not resolve a stable base release to upgrade from (got '${base_ref}')."
 fi
 base_image="${image_repository}:${base_ref}"
+checkout_image="stella-api-migration-rehearsal:${GITHUB_SHA:-local}"
+repair_report="$(mktemp)"
+content_encryption_key="$(openssl rand -hex 32)"
+
+api_env=(
+  --env "DATABASE_URL=${base_database_url}"
+  --env "BETTER_AUTH_SECRET=migration-rehearsal-secret-at-least-32-characters"
+  --env "BETTER_AUTH_URL=http://127.0.0.1:3001"
+  --env "CONTENT_ENCRYPTION_KEY=${content_encryption_key}"
+  --env "EMAIL_PROVIDER=smtp"
+  --env "FRONTEND_URL=http://127.0.0.1:3000"
+  --env "GOTENBERG_PASSWORD=migration-rehearsal"
+  --env "GOTENBERG_URL=http://127.0.0.1:3000"
+  --env "GOTENBERG_USERNAME=migration-rehearsal"
+  --env "REDIS_URL=redis://127.0.0.1:6379"
+  --env "S3_BUCKET=stella"
+  --env "S3_CREDENTIALS_PROVIDER=none"
+  --env "S3_ENDPOINT=http://127.0.0.1:9000"
+  --env "S3_REGION=us-east-1"
+  --env "SMTP_HOST=127.0.0.1"
+  --env "SMTP_PORT=1025"
+  --env "TRANSACTIONAL_EMAIL_FROM=noreply@example.com"
+)
+
+boot_until_ready() {
+  local image="$1"
+  local name="$2"
+  local log_file
+  log_file="$(mktemp)"
+  docker run --rm -d --name "$name" --network host "${api_env[@]}" "$image" > /dev/null
+  for _ in $(seq 1 120); do
+    if curl --connect-timeout 2 --max-time 5 -fsS http://127.0.0.1:3001/ready >/dev/null; then
+      docker stop --time 10 "$name" >/dev/null
+      rm -f "$log_file"
+      return
+    fi
+    if ! docker inspect "$name" >/dev/null 2>&1; then
+      docker logs "$name" >"$log_file" 2>&1 || true
+      cat "$log_file"
+      rm -f "$log_file"
+      fail "API image ${image} exited before /ready answered."
+    fi
+    sleep 1
+  done
+  docker logs "$name" >"$log_file" 2>&1 || true
+  cat "$log_file"
+  docker stop --time 10 "$name" >/dev/null 2>&1 || true
+  rm -f "$log_file"
+  fail "API image ${image} did not answer /ready within 120s."
+}
 
 log "Base release: ${base_ref} (${base_source})"
 log "Refusing anything but an empty database"
@@ -112,6 +162,12 @@ seed_started="$(date +%s)"
 (cd "$repo_root/apps/api" && bun run src/scripts/seed-migration-rehearsal.ts "${seed_args[@]}")
 seed_seconds=$(( $(date +%s) - seed_started ))
 
+log "Booting the running base release once"
+boot_until_ready "$base_image" stella-rehearsal-base-api
+
+log "Building this checkout's API image"
+docker build --quiet --tag "$checkout_image" --file "$repo_root/apps/api/Dockerfile" "$repo_root" >/dev/null
+
 # The writer must hold its locks before the upgrade starts, and must still
 # be running when it ends: an upgrade that ran without contention proves
 # nothing about lock waits.
@@ -125,7 +181,7 @@ stop_contender() {
     wait "$contender_pid" 2>/dev/null || true
   fi
 }
-trap 'stop_contender; rm -f "$contender_log"' EXIT
+trap 'stop_contender; docker rm -f stella-rehearsal-base-api stella-rehearsal-checkout-api >/dev/null 2>&1 || true; rm -f "$contender_log" "$repair_report"' EXIT
 assert_contender_alive() {
   if ! kill -0 "$contender_pid" 2>/dev/null; then
     cat "$contender_log"
@@ -145,7 +201,7 @@ grep -q "contending: locks held" "$contender_log" \
 log "Upgrading to this checkout (budget ${budget}s)"
 window_started_ms="$(now_ms)"
 upgrade_started="$(date +%s)"
-if ! (cd "$repo_root/apps/api" && timeout --foreground "$budget" bun run src/db/migrate.ts); then
+if ! (cd "$repo_root/apps/api" && timeout --foreground "$budget" bun run src/db/migrate.ts --rehearsal-online-repair-report "$repair_report"); then
   upgrade_seconds=$(( $(date +%s) - upgrade_started ))
   if (( upgrade_seconds >= budget )); then
     fail "The upgrade did not finish within ${budget}s on a scale-shaped database."
@@ -153,6 +209,12 @@ if ! (cd "$repo_root/apps/api" && timeout --foreground "$budget" bun run src/db/
   fail "The upgrade failed on a scale-shaped database after ${upgrade_seconds}s."
 fi
 upgrade_seconds=$(( $(date +%s) - upgrade_started ))
+
+log "Booting this checkout after the upgrade"
+boot_until_ready "$checkout_image" stella-rehearsal-checkout-api
+
+log "Checking every online repair met non-empty input"
+(cd "$repo_root/apps/api" && bun run src/scripts/assert-online-migration-rehearsal.ts "$repair_report")
 
 log "Rerunning the upgrade: a completed upgrade must be a fixed point"
 state_before="$(bun "$repo_root/scripts/migration-rehearsal-db.ts" digest)"
