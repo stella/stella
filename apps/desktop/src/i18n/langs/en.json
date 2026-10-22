@@ -507,6 +507,7 @@
     "windowsKeyReserved": "Windows keeps shortcuts with the Windows key for itself. Use Ctrl or Alt.",
     "taken": "Another app already uses {shortcut}. Choose another.",
     "unavailable": "Another app uses {shortcut}, so it does not open the clipboard. Choose another shortcut.",
+    "managed": "Your organization has turned off clipboard history.",
     "action": {
       "copy": "Copy",
       "paste": "Paste",

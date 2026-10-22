@@ -507,6 +507,7 @@
     "windowsKeyReserved": "Windows behält Tastenkürzel mit der Windows-Taste für sich. Verwenden Sie Strg oder Alt.",
     "taken": "Eine andere App verwendet {shortcut} bereits. Wählen Sie ein anderes.",
     "unavailable": "Eine andere App verwendet {shortcut}, daher öffnet es die Zwischenablage nicht. Wählen Sie ein anderes Tastenkürzel.",
+    "managed": "Ihre Organisation hat den Zwischenablageverlauf deaktiviert.",
     "action": {
       "copy": "Kopieren",
       "paste": "Einfügen",

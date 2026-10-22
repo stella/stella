@@ -25,7 +25,7 @@ export const workspaceEventsRoute = new Elysia({
       workspaceId,
     }: {
       request: Request;
-      session: { activeOrganizationId: SafeId<"organization"> };
+      session: { activeOrganizationId: SafeId<"organization">; id: string };
       user: { id: SafeId<"user"> };
       workspaceId: SafeId<"workspace">;
     }) => {
@@ -39,6 +39,7 @@ export const workspaceEventsRoute = new Elysia({
       // clean up when the client disconnects.
       const stream = subscribe({
         organizationId: session.activeOrganizationId,
+        sessionId: session.id,
         signal: request.signal,
         userId: user.id,
         workspaceId,

@@ -230,6 +230,10 @@ pub fn show_on_launch(app: &AppHandle) {
 /// `created_kind` labels the trace when the window has to be created; an
 /// existing window is always a reopen.
 fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
+  // Every way in (tray, shortcut, links, launch) ends here.
+  if crate::managed_policy::current().clipboard_disabled {
+    return;
+  }
   let requested = Instant::now();
 
   if let Some(window) = app.get_webview_window(CLIPBOARD_WINDOW_LABEL) {
