@@ -310,7 +310,7 @@ export class UploadQueue<T> {
         return;
       }
 
-      const status = getErrorStatus(error);
+      const status = uploadErrorStatus(error);
 
       if (status === HTTP_TOO_MANY_REQUESTS) {
         // Put the file back at the front of the queue
@@ -319,10 +319,7 @@ export class UploadQueue<T> {
         return;
       }
 
-      // Retry on server errors and network failures
-      // (status 0 = no HTTP response, e.g. DNS/connection)
-      const isRetryable = status >= HTTP_SERVER_ERROR_MIN || status === 0;
-      if (isRetryable && attempt < MAX_RETRIES) {
+      if (isTransientUploadStatus(status) && attempt < MAX_RETRIES) {
         const delay = RETRY_BACKOFF_MS[attempt] ?? 4000;
         this.retrying++;
 
@@ -413,10 +410,19 @@ export class UploadQueue<T> {
 // -- Error inspection helpers --
 
 /**
- * Extract HTTP status from an error. Works with APIError
- * (which has a `status` field) and plain Error objects.
+ * A server error or no HTTP answer at all (status 0: DNS, connection,
+ * timeout). The queue retries these; anything else is the server's answer.
  */
-const getErrorStatus = (error: unknown): number => {
+export const isTransientUploadStatus = (status: number): boolean =>
+  status >= HTTP_SERVER_ERROR_MIN || status === 0;
+
+/**
+ * Extract HTTP status from an error. Works with APIError
+ * (which has a `status` field) and plain Error objects; `0` means the
+ * request got no HTTP answer. The queue's retry decision and an upload's
+ * own resume decision both read it from here.
+ */
+export const uploadErrorStatus = (error: unknown): number => {
   if (
     error !== null &&
     typeof error === "object" &&
