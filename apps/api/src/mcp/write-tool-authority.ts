@@ -127,7 +127,7 @@ const selectWriteToolOperation = (
  * `sandbox` admits it.
  */
 export type McpToolAuthorityDeclaration =
-  | { access: "read" }
+  | { access: "read"; permissions?: McpWriteToolPermissions }
   | {
       access: "write";
       permissions: McpWriteToolPermissions;
@@ -136,7 +136,7 @@ export type McpToolAuthorityDeclaration =
 
 /**
  * Whether a member may be offered this tool and reach its dispatch. Reads
- * carry no tool-level grant (their scope and per-row checks govern them). A
+ * without a tool-level grant rely on their scope and per-row checks. A
  * tool whose input selects its operation is offered when any operation is
  * held; `isMemberAuthorizedForMcpToolInput` decides the call.
  *
@@ -149,10 +149,10 @@ export const isMemberAuthorizedForMcpTool = (
   authority: AuthorizedMemberRole,
   definition: McpToolAuthorityDeclaration,
 ): boolean => {
-  if (definition.access === "read") {
+  const { permissions } = definition;
+  if (permissions === undefined) {
     return true;
   }
-  const { permissions } = definition;
   switch (permissions.type) {
     case "all":
       return hasMemberPermission(authority, permissions.permissions);
@@ -182,7 +182,7 @@ export const isMemberAuthorizedForMcpToolInput = (
   definition: McpToolAuthorityDeclaration,
   input: Readonly<Record<string, unknown>>,
 ): boolean => {
-  if (definition.access === "read" || definition.permissions.type !== "input") {
+  if (definition.permissions?.type !== "input") {
     return isMemberAuthorizedForMcpTool(authority, definition);
   }
   const operation = selectWriteToolOperation(

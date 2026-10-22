@@ -14,6 +14,8 @@ import { propertyConfig } from "@stll/property-testing";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { SKILL_SLUG_MAX_LENGTH } from "@/api/handlers/skills/slug";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   collisionSafeToolName,
   DYNAMIC_TOOL_NAMESPACES,
@@ -24,6 +26,7 @@ import {
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
 import { MCP_MODES } from "@/api/mcp/constants";
+import type { McpRequestContext } from "@/api/mcp/context";
 import {
   DYNAMIC_TOOL_FAMILY_POLICIES,
   getDynamicMcpToolOutputContract,
@@ -41,16 +44,19 @@ import type {
   McpToolDefinition,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
+import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
   defineMcpToolOutput,
   deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
 import { selectableOperations } from "@/api/mcp/write-tool-authority";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   compileWireSchema,
   createWireSchemaValidator,
   schemaComparisonArbitrary,
 } from "@/api/tests/helpers/wire-json-schema";
+import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
   baselineAudiences,
@@ -81,6 +87,64 @@ const SURFACES = MCP_MODES.map((mode) => ({
   mode,
   definitions: listStaticMcpToolDefinitions(mode),
 }));
+
+const databaseAccessForbidden = asTestRaw<McpRequestContext["scopedDb"]>(() => {
+  throw new Error("database must not be reached before tool authorization");
+});
+
+const contextWithoutDeclaredPermissions = (): McpRequestContext => ({
+  accessibleWorkspaceIds: [],
+  accessibleWorkspaceIdSet: new Set(),
+  accessibleWorkspaceStatusById: new Map(),
+  accessibleWorkspaces: [],
+  credentialPermissions: {},
+  grantedScopes: [],
+  memberRole: "owner",
+  organizationId: toSafeId<"organization">("org_1"),
+  recordAuditEvent: async () => {},
+  safeDb: toSafeDbMock(databaseAccessForbidden),
+  scopedDb: databaseAccessForbidden,
+  thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
+  userEmail: "standard@example.test",
+  userId: toSafeId<"user">("user_1"),
+});
+
+const toolResultErrorCode = (
+  result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+) => {
+  const content = result.content.at(0);
+  if (content?.type !== "text") {
+    return undefined;
+  }
+  const parsed: unknown = JSON.parse(content.text);
+  if (typeof parsed !== "object" || parsed === null || !("error" in parsed)) {
+    return undefined;
+  }
+  const { error } = parsed;
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return undefined;
+  }
+  return typeof error.code === "string" ? error.code : undefined;
+};
+
+test("every declared tool permission is refused before database access", async () => {
+  for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
+    if (
+      definition.permissions === undefined ||
+      definition.permissions.type === "delegated"
+    ) {
+      continue;
+    }
+    const result = await handleMcpToolCall({
+      args: {},
+      context: contextWithoutDeclaredPermissions(),
+      toolName: definition.name,
+    });
+    expect(toolResultErrorCode(result), definition.name).toBe(
+      "permission_denied",
+    );
+  }
+});
 
 // A single tool must not consume an unreviewed multi-thousand-token block of
 // every tools/list. The largest measured schema is in the surface baseline.

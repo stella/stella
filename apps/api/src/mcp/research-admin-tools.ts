@@ -214,6 +214,7 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   // and never appears on the anonymized surface.
   access: "read",
   readClass: "tenant",
+  permissions: { type: "all", permissions: { auditLog: ["read"] } },
   anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
   name: "list_audit_log",
   scope: "stella:admin_read",

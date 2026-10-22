@@ -183,6 +183,11 @@ export type McpToolAccessBranch =
       access: "read";
       readClass: McpReadClass | McpReadClassResolver;
       annotations: McpToolAnnotations & { readOnlyHint: true };
+      /**
+       * The member authority required before a permission-gated read can reach
+       * its handler. Public reads and reads available to every role omit it.
+       */
+      permissions?: McpWriteToolPermissions;
     }
   | {
       access: "write";
