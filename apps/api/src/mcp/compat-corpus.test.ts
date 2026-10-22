@@ -102,9 +102,13 @@ const statuteHit = {
 const createContext = ({
   practiceJurisdictions = null,
   searchProvider = () => ({ search: searchProviderSearchMock }),
+  contentReadFails = false,
+  workspaceReadFails = false,
 }: {
+  contentReadFails?: boolean;
   practiceJurisdictions?: { countryCode: string; isPrimary: boolean }[] | null;
   searchProvider?: () => unknown;
+  workspaceReadFails?: boolean;
 } = {}): McpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock({
     query: {
@@ -116,7 +120,65 @@ const createContext = ({
               : { practiceJurisdictions },
           ),
       },
+      extractedContent: {
+        findMany: async () =>
+          contentReadFails
+            ? await Promise.reject(new Error("content read failed"))
+            : [
+                {
+                  entityId: ENTITY_ID,
+                  workspaceId: WORKSPACE_ID,
+                  ciphertext: "unused",
+                  iv: "unused",
+                  charCount: 1,
+                  language: null,
+                  extractedAt: new Date("2026-01-02"),
+                  sourceEntityVersionId: "version_1",
+                  sourceFieldId: "field_1",
+                  sourceFileId: "file_1",
+                  sourceSha256Hex: "a".repeat(64),
+                  ocrRunId: null,
+                  entity: {
+                    name: "SPA",
+                    workspaceId: WORKSPACE_ID,
+                    workspace: { status: "active" },
+                    currentVersion: {
+                      id: "version_1",
+                      createdAt: new Date("2026-01-01"),
+                      deletedAt: null,
+                      fields: [
+                        {
+                          id: "field_1",
+                          content: {
+                            type: "file",
+                            version: 1,
+                            id: "file_1",
+                            fileName: "SPA.pdf",
+                            mimeType: "application/pdf",
+                            sizeBytes: 1,
+                            encrypted: false,
+                            sha256Hex: "a".repeat(64),
+                            pdfFileId: "pdf_1",
+                          },
+                        },
+                      ],
+                    },
+                    versions: [{ id: "version_1" }],
+                  },
+                },
+              ],
+      },
     },
+    selectDistinct: () => ({
+      from: () => ({
+        innerJoin: () => ({
+          where: async () =>
+            workspaceReadFails
+              ? await Promise.reject(new Error("workspace read failed"))
+              : await Promise.resolve([{ id: WORKSPACE_ID }]),
+        }),
+      }),
+    }),
     select: () => ({
       from: () => ({
         innerJoin: () => ({
@@ -752,6 +814,70 @@ describe("compat search reaching the public corpus", () => {
 
       expect(payload.error?.code).toBe("validation_error");
       expect(payload.error?.issues?.at(0)?.path).toBe("cursor");
+    });
+  });
+});
+
+describe("compat matter reads when the workspace check fails", () => {
+  test("compat search answers with the internal failure envelope", async () => {
+    await withCorpus(async () => {
+      searchProviderSearchMock.mockResolvedValue({
+        hits: [
+          { entityId: ENTITY_ID, workspaceId: WORKSPACE_ID, title: "SPA" },
+        ],
+        nextCursor: null,
+      });
+      const response = await COMPAT_TOOL_HANDLERS.search({
+        args: { query: "promlčení" },
+        context: createContext({ workspaceReadFails: true }),
+      });
+      expect(response).toMatchObject({
+        status: "error",
+        error: { code: "internal_error" },
+      });
+    });
+  });
+
+  test("compat fetch answers with the internal failure envelope", async () => {
+    const response = await COMPAT_TOOL_HANDLERS.fetch({
+      args: { id: ENTITY_ID },
+      context: createContext({ workspaceReadFails: true }),
+    });
+    expect(response).toMatchObject({
+      status: "error",
+      error: { code: "internal_error" },
+    });
+  });
+});
+
+describe("compat matter reads when the content read fails", () => {
+  test("compat search answers with the internal failure envelope", async () => {
+    await withCorpus(async () => {
+      searchProviderSearchMock.mockResolvedValue({
+        hits: [
+          { entityId: ENTITY_ID, workspaceId: WORKSPACE_ID, title: "SPA" },
+        ],
+        nextCursor: null,
+      });
+      const response = await COMPAT_TOOL_HANDLERS.search({
+        args: { query: "promlčení" },
+        context: createContext({ contentReadFails: true }),
+      });
+      expect(response).toMatchObject({
+        status: "error",
+        error: { code: "internal_error" },
+      });
+    });
+  });
+
+  test("compat fetch answers with the internal failure envelope", async () => {
+    const response = await COMPAT_TOOL_HANDLERS.fetch({
+      args: { id: ENTITY_ID },
+      context: createContext({ contentReadFails: true }),
+    });
+    expect(response).toMatchObject({
+      status: "error",
+      error: { code: "internal_error" },
     });
   });
 });
