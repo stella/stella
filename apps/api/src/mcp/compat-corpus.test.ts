@@ -27,10 +27,10 @@ import { LAW_COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -105,7 +105,7 @@ const createContext = ({
 }: {
   practiceJurisdictions?: { countryCode: string; isPrimary: boolean }[] | null;
   searchProvider?: () => unknown;
-} = {}): McpRequestContext => {
+} = {}): AuthorizedMcpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock({
     query: {
       organizationSettings: {
@@ -185,7 +185,7 @@ const run = async ({
   mode = "default",
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   handler: McpToolHandler;
   mode?: McpMode;
 }): Promise<CompatPayload> => {

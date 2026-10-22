@@ -10,7 +10,7 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import {
@@ -143,7 +143,7 @@ export type RegistryWriteToolOutputContract = AssertTrue<
 export type RunRegistryWriteToolProps = {
   toolName: RegistryWriteToolName;
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   refRegistry: ChatRefRegistry;
 };
 

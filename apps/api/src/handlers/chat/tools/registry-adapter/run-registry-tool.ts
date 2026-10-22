@@ -11,7 +11,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
@@ -178,7 +178,7 @@ export type RegistryReadToolOutputContract = AssertTrue<
 export type RunRegistryReadToolProps = {
   toolName: RegistryReadToolName;
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   refRegistry: ChatRefRegistry;
   /**
    * Eval seam: answers the tool in place of its registry handler. Everything
@@ -217,7 +217,7 @@ const runInjectedHandler = async ({
   handler,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   toolName: RegistryReadToolName;
   handler: McpToolHandler;
 }): Promise<McpToolResponse> => {

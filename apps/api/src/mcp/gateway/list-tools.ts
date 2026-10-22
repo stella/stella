@@ -7,7 +7,7 @@ import {
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import {
   isMcpDescriptorFeatureEnabled,
@@ -145,7 +145,7 @@ const externalMcpToolAccess = ({
 
 const projectFeatureToolDefinition = (
   definition: McpToolDefinition,
-  context: McpRequestContext,
+  context: McpRequestResources,
 ) => {
   const featureId = resolveMcpDescriptorFeatureId({
     context,
@@ -164,7 +164,7 @@ export const listGatewayMcpToolDefinitions = async ({
   scopes,
   externalGatewayDependencies,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   scopes?: readonly string[];
   externalGatewayDependencies?: ExternalGatewayDependencies;
@@ -224,7 +224,7 @@ export const getGatewayMcpToolDefinition = async ({
   toolName,
   externalGatewayDependencies,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   toolName: string;
   externalGatewayDependencies?: ExternalGatewayDependencies;

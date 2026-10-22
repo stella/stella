@@ -49,7 +49,6 @@ import {
 } from "@/api/lib/pagination";
 import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import {
@@ -67,6 +66,7 @@ import type {
   McpEgressPlan,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -76,7 +76,7 @@ import type {
  */
 export const bindWorkspaceRecorder =
   (
-    context: McpRequestContext,
+    context: AuthorizedMcpRequestContext,
     workspaceId: SafeId<"workspace">,
   ): AuditRecorder =>
   async (tx, event) => {
@@ -1110,7 +1110,7 @@ export const ensureWorkspaceAccess = ({
   context,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: string;
 }) => {
   const resolved = getAccessibleWorkspaceId({
@@ -1128,7 +1128,7 @@ export const getWorkspaceStatus = ({
   context,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: string;
 }): AccessibleWorkspace["status"] | undefined =>
   context.accessibleWorkspaceStatusById.get(workspaceId);
@@ -1146,7 +1146,7 @@ export const ensureActiveWorkspace = ({
   context,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: string;
 }): SafeId<"workspace"> | InternalToolErrorResult => {
   const resolved = getAccessibleWorkspaceId({

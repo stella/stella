@@ -31,7 +31,7 @@ import {
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import {
   hasGrantedScope,
@@ -64,7 +64,7 @@ const loadSkillTools = async ({
   mode,
   scopes,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   scopes: readonly string[] | undefined;
 }): Promise<ResolvedSkillTool[]> => {
@@ -122,7 +122,7 @@ export const loadVisibleSkillTools = async ({
   mode,
   scopes,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   scopes?: readonly string[] | undefined;
 }): Promise<ModelOfferedSkills<ResolvedSkillTool>> =>
@@ -144,7 +144,7 @@ export const loadSkillPrompts = async ({
   mode,
   scopes,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   scopes?: readonly string[] | undefined;
 }): Promise<ResolvedSkillTool[]> =>
@@ -170,7 +170,7 @@ export const resolveSkillTool = async ({
   mode,
   toolName,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   toolName: string;
 }): Promise<ResolvedSkillTool | null> =>
@@ -211,7 +211,7 @@ export const readSkillTool = async ({
   resourcePath,
   skill,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   resourcePath: string | undefined;
   skill: ResolvedSkillTool;
 }): Promise<SkillToolRead | null> => {

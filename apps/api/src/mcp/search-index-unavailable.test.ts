@@ -27,7 +27,6 @@ import {
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import type { McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
@@ -37,6 +36,7 @@ import {
   serializeToolResult,
 } from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -114,7 +114,7 @@ const scanUnreachableIndex = async (): Promise<never> => {
   throw new Error("the scan succeeded against an unreachable index");
 };
 
-const createContext = (): McpRequestContext => {
+const createContext = (): AuthorizedMcpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock({
     query: {
       organizationSettings: {
@@ -258,7 +258,7 @@ describe("search_index_unavailable", () => {
       );
     /** The generation read refuses before any engine request is made. */
     const requested: string[] = [];
-    const contextWithoutServingGeneration = (): McpRequestContext => {
+    const contextWithoutServingGeneration = (): AuthorizedMcpRequestContext => {
       requested.length = 0;
       globalThis.fetch = Object.assign(
         async (input: string | URL | Request) => {

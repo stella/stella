@@ -25,7 +25,7 @@ import {
   type CorpusSubCursors,
 } from "@/api/mcp/compat-corpus";
 import { encodeCompatId, type CompatCorpusId } from "@/api/mcp/compat-ids";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import type { McpToolResponse } from "@/api/mcp/tool-types";
 import {
   invalidCursorResult,
@@ -175,7 +175,7 @@ export const compatCorpusFetchResponse = async <TData>({
   cursor,
 }: {
   compatId: CompatCorpusId;
-  context: McpRequestContext;
+  context: McpRequestResources;
   cursor: string | undefined;
 }): Promise<McpToolResponse<TData>> => {
   const read = await (compatId.kind === "decision"

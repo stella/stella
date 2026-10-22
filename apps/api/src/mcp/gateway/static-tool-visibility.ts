@@ -3,7 +3,7 @@ import {
   LAW_READ_SCOPE,
 } from "@/api/handlers/legal-resolve/scope";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import {
   projectMcpFeatureInput,
   isMcpDescriptorFeatureEnabled,
@@ -25,7 +25,7 @@ import {
  * without it, and dispatch refuses only the confirmation-gated ones.
  */
 const isStaticToolAvailableToConfirmation = (
-  context: McpRequestContext,
+  context: McpRequestResources,
   definition: McpToolDefinition,
 ): boolean => {
   if (context.toolConfirmation !== TOOL_CONFIRMATION.unavailable) {
@@ -40,7 +40,7 @@ const isStaticToolAvailableToConfirmation = (
  * discovery and, on a call by name, answered as an unknown tool.
  */
 export const isStaticToolShownToMemberRole = (
-  context: McpRequestContext,
+  context: McpRequestResources,
   definition: McpToolDefinition,
 ): boolean => definition.isVisibleToMemberRole?.(context.memberRole) ?? true;
 
@@ -51,7 +51,7 @@ export const isStaticToolShownToMemberRole = (
  * `permission_denied` naming the member role, the credential, or the account.
  */
 const isStaticToolVisibleToRole = (
-  context: McpRequestContext,
+  context: McpRequestResources,
   definition: McpToolDefinition,
 ): boolean =>
   hasMcpToolAuthority(context, definition) &&
@@ -74,7 +74,7 @@ const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
  * enum advertised and let the call-time gate stay the backstop.
  */
 const narrowBusinessRegistryTool = (
-  context: McpRequestContext,
+  context: McpRequestResources,
   definitions: McpToolDefinition[],
 ): McpToolDefinition[] => {
   const enabledSlugs = context.enabledRegistrySlugs;
@@ -131,7 +131,7 @@ export const listOfferedStaticMcpToolDefinitions = ({
   scopes,
   audience,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   scopes?: readonly string[] | undefined;
   audience?: "model" | "app";

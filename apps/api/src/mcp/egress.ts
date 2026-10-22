@@ -13,7 +13,6 @@ import {
   COMPAT_FETCH_OUTPUT_SCHEMA,
 } from "@/api/mcp/compat-contract";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
 import type {
   InternalToolResult,
@@ -32,6 +31,7 @@ import {
   untypedToolDataResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
 
@@ -52,7 +52,7 @@ const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
  * calls (e.g. `read_document({ entity_id })`); redacting them would break the
  * surface's basic usability. Which ids a caller can even see is enforced
  * upstream, by each handler's own workspace-scoped query and
- * `McpRequestContext.accessibleWorkspaceIdSet` (`workspace-access-boundary.ts`),
+ * `AuthorizedMcpRequestContext.accessibleWorkspaceIdSet` (`workspace-access-boundary.ts`),
  * not here. The chat registry adapter (`run-registry-tool.ts`) is the one
  * caller that also crosses into third-party model context: it runs this same
  * pipeline, then separately rewrites ids into opaque chat refs and fails
@@ -61,7 +61,7 @@ const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
  * this pipeline itself never hands output to a model.
  */
 type FinalizeToolEgressOptions<TResponse extends McpToolResponse> = {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   mode: McpMode;
   response: TResponse;
 };
@@ -228,7 +228,7 @@ const anonymizeTextFieldsByWorkspace = async ({
   fields,
 }: {
   anonymizer: EgressAnonymizer;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   fields: readonly McpStructuredTextField[];
 }): Promise<Result<void, EgressAnonymizationError>> => {
   if (fields.length === 0) {
@@ -315,7 +315,7 @@ const finalizeStructured = async ({
   plan,
 }: {
   anonymizer: EgressAnonymizer;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "structured" }>;
 }): Promise<InternalToolResult> => {
@@ -356,7 +356,7 @@ const finalizeCompatSearch = async ({
   plan,
 }: {
   anonymizer: EgressAnonymizer;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatSearch" }>;
 }): Promise<InternalToolResult> => {
@@ -421,7 +421,7 @@ const finalizeCompatFetch = async ({
   plan,
 }: {
   anonymizer: EgressAnonymizer;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatFetch" }>;
 }): Promise<InternalToolResult> => {
@@ -532,7 +532,7 @@ const anonymizeCompatFetchPayload = async ({
   workspaceId,
 }: {
   anonymize: EgressAnonymize;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   text: string;
   title: string;
   workspaceId: string;

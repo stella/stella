@@ -30,7 +30,6 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
@@ -58,6 +57,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 type ResearchAdminToolName =
@@ -894,7 +894,7 @@ const handleAddMember = async ({
   requestedWorkspaceId,
   userId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   requestedWorkspaceId: string;
   userId: string;
 }): Promise<
@@ -935,7 +935,7 @@ const handleRemoveMember = async ({
   userId,
   reassignTo,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   requestedWorkspaceId: string;
   userId: string;
   reassignTo?: string | undefined;

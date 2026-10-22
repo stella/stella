@@ -21,8 +21,8 @@ import transitionWorkObligation from "@/api/handlers/work-obligations/transition
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import {
@@ -107,7 +107,7 @@ const taskAction = async ({
       scopedDb,
       userId: f.userId,
       userEmail: `${f.userId}@example.test`,
-    } satisfies McpRequestContext;
+    } satisfies AuthorizedMcpRequestContext;
     const result = await handleMcpToolCall({
       toolName: "save_task",
       args: {

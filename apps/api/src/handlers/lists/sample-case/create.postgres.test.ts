@@ -35,8 +35,8 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -276,7 +276,7 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
           scopedDb,
           pinServerValidatedWorkspaceId: (id) => id === workspaceId,
         }),
-      } satisfies McpRequestContext;
+      } satisfies AuthorizedMcpRequestContext;
       const result = await handleMcpToolCall({
         mode: "advanced",
         toolName: "write_capability",

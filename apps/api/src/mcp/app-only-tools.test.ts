@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 
 import { chatScriptReadToolNames } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   McpAuthenticationError,
   McpOrganizationAccessError,
@@ -16,6 +15,7 @@ import {
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
 } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 const appOnlyNames = [
@@ -24,7 +24,7 @@ const appOnlyNames = [
 ] as const;
 
 const requestContext = () =>
-  asTestRaw<McpRequestContext>({
+  asTestRaw<AuthorizedMcpRequestContext>({
     organizationId: toSafeId<"organization">("org_test"),
     userId: toSafeId<"user">("user_test"),
     userEmail: "reader@example.test",

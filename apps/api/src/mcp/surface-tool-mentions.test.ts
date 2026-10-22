@@ -5,7 +5,6 @@ import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { MCP_MODES } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { getMcpInstructions, MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
@@ -23,6 +22,7 @@ import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import { namedToolNames, scopeProseToSurface } from "@/api/mcp/tool-mentions";
 import * as toolUtils from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -239,10 +239,12 @@ describe.each(MCP_MODES.map((mode) => ({ mode })))(
 describe("the dispatch boundary scopes the hints it emits", () => {
   // Every DB seam throws, so the handler fails on its first query and the
   // central pipeline answers with its internal-failure envelope.
-  const throwingScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(() => {
-    throw new Error("database unavailable");
-  });
-  const failingContext = (): McpRequestContext => ({
+  const throwingScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
+    () => {
+      throw new Error("database unavailable");
+    },
+  );
+  const failingContext = (): AuthorizedMcpRequestContext => ({
     accessibleWorkspaceIds: [],
     accessibleWorkspaceIdSet: new Set(),
     accessibleWorkspaceStatusById: new Map(),

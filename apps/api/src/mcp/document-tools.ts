@@ -74,7 +74,6 @@ import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { canExtractMimeType } from "@/api/lib/search/extractable-mime-types";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 import type { VersionDiffSegment } from "@/api/lib/text-diff";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   COMPARE_DOCUMENTS_OUTPUT_CONTRACT,
   COMPARE_DOCUMENTS_TOOL_DEFINITION,
@@ -150,6 +149,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -843,7 +843,7 @@ const loadVersionHistory = async ({
   entityId,
   cursor,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   cursor: string | undefined;
@@ -1012,7 +1012,7 @@ const loadDocumentProcessingStates = async ({
   entityId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   current: CurrentDocumentForState;
   entityId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
@@ -1729,7 +1729,7 @@ const createDocumentEntity = async ({
   context,
   input,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   input: SaveDocumentInput;
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
@@ -1788,7 +1788,7 @@ const validateUpdateDocumentTargets = async ({
   versionId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId: SafeId<"entity">;
   parentId: SafeId<"entity"> | undefined;
   versionId: SafeId<"entityVersion"> | undefined;
@@ -1840,7 +1840,7 @@ const applyVersionAnnotations = async ({
   versionId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   description: string | null | undefined;
   entityId: SafeId<"entity">;
   label: string | null | undefined;
@@ -1888,7 +1888,7 @@ const updateDocumentEntity = async ({
   context,
   input,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   input: SaveDocumentInput;
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>

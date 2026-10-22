@@ -17,9 +17,9 @@ import {
 import type { ActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
@@ -98,7 +98,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         readMcpResource: () => ({ contents: [] }),
         recordMcpSessionInitialized: () => undefined,
         resolveMcpSessionContext: async () =>
-          asTestRaw<McpRequestContext>({ organizationId, userId }),
+          asTestRaw<AuthorizedMcpRequestContext>({ organizationId, userId }),
       });
       closeActionAdmissionRedis();
       state.patchConfig({
@@ -168,7 +168,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         readMcpResource: () => ({ contents: [] }),
         recordMcpSessionInitialized: () => undefined,
         resolveMcpSessionContext: async () =>
-          asTestRaw<McpRequestContext>({ organizationId, userId }),
+          asTestRaw<AuthorizedMcpRequestContext>({ organizationId, userId }),
       });
       closeActionAdmissionRedis();
       state.patchConfig({

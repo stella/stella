@@ -24,8 +24,8 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
 import { parseCatalog } from "@/api/mcp/capability-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -177,7 +177,7 @@ const contextFor = (granted: boolean, capability: string) => {
         promptCachingEnabled: false,
       }),
     },
-  } satisfies McpRequestContext;
+  } satisfies AuthorizedMcpRequestContext;
   return { context, database };
 };
 for (const transport of [

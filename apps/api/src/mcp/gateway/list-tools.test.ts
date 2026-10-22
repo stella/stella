@@ -5,7 +5,6 @@ import type { Transaction } from "@/api/db/root";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { ExternalGatewayDependencies } from "@/api/mcp/gateway/external-tools";
 import {
   getGatewayMcpToolDefinition,
@@ -15,6 +14,7 @@ import {
 import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
@@ -24,9 +24,9 @@ import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-en
 // loaders never run and no DB is touched.
 const contextWith = (
   enabledRegistrySlugs: readonly string[] | undefined,
-  memberRole: McpRequestContext["memberRole"] = "owner",
-): McpRequestContext =>
-  asTestRaw<McpRequestContext>({
+  memberRole: AuthorizedMcpRequestContext["memberRole"] = "owner",
+): AuthorizedMcpRequestContext =>
+  asTestRaw<AuthorizedMcpRequestContext>({
     enabledRegistrySlugs,
     grantedScopes: [],
     memberRole,
@@ -118,7 +118,7 @@ const externalGatewayDependencies = {
 
 const contextWithExternalServer = (
   grantedScopes: readonly string[],
-): McpRequestContext => {
+): AuthorizedMcpRequestContext => {
   const builder = {
     from: () => builder,
     innerJoin: () => builder,
@@ -135,11 +135,11 @@ const contextWithExternalServer = (
       },
     ],
   };
-  const safeDb: McpRequestContext["safeDb"] = async (callback) =>
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (callback) =>
     Result.ok(
       await callback(asTestRaw<Transaction>({ select: () => builder })),
     );
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<AuthorizedMcpRequestContext>({
     ...contextWith(undefined),
     grantedScopes: [...grantedScopes],
     safeDb,
@@ -238,11 +238,11 @@ describe("skill gateway mode boundary", () => {
           },
         ],
       };
-      const safeDb: McpRequestContext["safeDb"] = async (callback) =>
+      const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (callback) =>
         Result.ok(
           await callback(asTestRaw<Transaction>({ select: () => builder })),
         );
-      const context = asTestRaw<McpRequestContext>({
+      const context = asTestRaw<AuthorizedMcpRequestContext>({
         ...contextWith(undefined),
         userId: "user_test",
         grantedScopes: ["stella:skills"],

@@ -9,8 +9,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { type ClauseBody, isClauseBody } from "@/api/lib/clauses/types";
 import { isRecord } from "@/api/lib/type-guards";
 import type { MaterializePlaybookRunResult } from "@/api/lib/workflow/materialize-playbook-run";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -49,7 +49,7 @@ const APPROVED_VERSION_ID = toSafeId<"playbookDefinitionVersion">(
 
 /** A scopedDb whose select chain resolves to the seeded clause rows. */
 const createClauseScopedDb = (rows: unknown[]) =>
-  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+  asTestRaw<AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(async (run: (tx: unknown) => unknown) => {
       const builder = {
         select: () => builder,
@@ -88,7 +88,7 @@ const positionsSaying = (issue: string) => ({
 
 /** A scopedDb whose playbookDefinitions.findFirst resolves to `playbook`. */
 const createPlaybookScopedDb = (playbook: unknown) =>
-  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+  asTestRaw<AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(
       async (run: (tx: unknown) => unknown) =>
         await run({
@@ -108,7 +108,7 @@ const createPlaybookScopedDb = (playbook: unknown) =>
 const createClauseWriteScopedDb = () => {
   const insertedBodies: unknown[] = [];
   const scopedDb = asTestRaw<
-    McpRequestContext["scopedDb"] & ReturnType<typeof mock>
+    AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>
   >(
     mock(async (run: (tx: unknown) => unknown) => {
       const tx = {
@@ -184,7 +184,7 @@ const createPlaybookWriteScopedDb = ({
   let lockedReadCompleted = false;
   const savedAt = new Date("2026-09-20T10:05:00.000Z");
   const scopedDb = asTestRaw<
-    McpRequestContext["scopedDb"] & ReturnType<typeof mock>
+    AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>
   >(
     mock(async (run: (tx: unknown) => unknown) => {
       const tx = {
@@ -244,8 +244,8 @@ const createPlaybookWriteScopedDb = ({
 };
 
 const createPlaybookWriteContext = (
-  scopedDb: McpRequestContext["scopedDb"],
-): McpRequestContext => {
+  scopedDb: AuthorizedMcpRequestContext["scopedDb"],
+): AuthorizedMcpRequestContext => {
   const context = createContext({ scopedDb });
   return {
     ...context,
@@ -263,7 +263,7 @@ const createPlaybookWriteContext = (
 
 /** A scopedDb whose clauses.findFirst resolves to `clause` (detail mode). */
 const createClauseDetailScopedDb = (clause: unknown) =>
-  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+  asTestRaw<AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(
       async (run: (tx: unknown) => unknown) =>
         await run({
@@ -279,9 +279,9 @@ const createContext = ({
   memberRole = "owner",
   scopedDb = createClauseScopedDb([]),
 }: {
-  memberRole?: McpRequestContext["memberRole"];
-  scopedDb?: McpRequestContext["scopedDb"];
-} = {}): McpRequestContext => ({
+  memberRole?: AuthorizedMcpRequestContext["memberRole"];
+  scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
+} = {}): AuthorizedMcpRequestContext => ({
   accessibleWorkspaceIds: [toSafeId<"workspace">(MATTER_ID)],
   accessibleWorkspaceIdSet: new Set([MATTER_ID]),
   accessibleWorkspaceStatusById: new Map([[MATTER_ID, "active"]]),
@@ -600,7 +600,7 @@ describe("MCP knowledge tools", () => {
       versions: [],
     };
     let writes = 0;
-    const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+    const scopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
       async (run: (tx: unknown) => unknown) =>
         await run({
           $count: async () => stored.variants.length,
@@ -663,7 +663,7 @@ describe("MCP knowledge tools", () => {
           },
         ],
       };
-      const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+      const scopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
         async (run: (tx: unknown) => unknown) =>
           await run({
             query: { clauses: { findFirst: async () => stored } },

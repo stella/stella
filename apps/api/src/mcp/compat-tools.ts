@@ -41,7 +41,6 @@ import {
   publicLawDisabledResult,
   type CompatSearchPosition,
 } from "@/api/mcp/compat-shared";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpCompatSearchResult,
@@ -65,6 +64,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 type CompatToolName = "fetch" | "search";
@@ -89,7 +89,7 @@ const getFetchableEntityMap = async ({
   context,
   entityIds,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityIds: string[];
 }) => {
   if (entityIds.length === 0) {
@@ -435,7 +435,7 @@ const searchMatterKnowledge = async ({
   cursor,
   query,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   cursor: string | undefined;
   query: string;
 }): Promise<MatterSearchPage> => {

@@ -4,7 +4,7 @@ import { Result } from "better-result";
 import { toSafeId } from "@/api/lib/branded-types";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { MCP_ALL_RESOURCE_SCOPES, type McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
@@ -20,7 +20,7 @@ type McpHttpToolCallOptions = {
   /** Replaces the admission step, so a test can observe whether it ran. */
   admitAction?: typeof withActionAdmission;
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   toolName: string;
 };

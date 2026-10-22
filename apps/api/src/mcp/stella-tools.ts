@@ -173,7 +173,6 @@ import {
   MANY_REQUIRED_TERMS_THRESHOLD,
   searchCaseLawTexts,
 } from "@/api/mcp/case-law-search-guidance";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defaultReadCaseLawCoverageHandler,
@@ -236,6 +235,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { openMcpRead } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -1347,7 +1347,7 @@ const buildOnboardingNextStep = () =>
  * host shows. Callers ask only for an empty result.
  */
 const onboardingNextStep = async (
-  context: McpRequestContext,
+  context: AuthorizedMcpRequestContext,
 ): Promise<{ nextStep?: string }> => {
   const jurisdictions = await loadPracticeJurisdictions(context);
   return jurisdictions.length > 0
@@ -1502,7 +1502,7 @@ const readMatterOverview = async ({
   context,
   matterId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   matterId: string;
 }): Promise<
   Awaited<
@@ -1709,7 +1709,7 @@ type CurrentDocument = {
   extractedContent: ExtractedContentSourceProvenance | null;
   kind: string;
   name: string;
-  workspaceId: McpRequestContext["accessibleWorkspaceIds"][number];
+  workspaceId: AuthorizedMcpRequestContext["accessibleWorkspaceIds"][number];
 };
 
 // SAFETY: `content` is a NOT NULL jsonb column, but that only forbids a SQL
@@ -1723,7 +1723,7 @@ const isDocxFileContent = (
   content.mimeType === DOCX_MIME_TYPE;
 
 type LoadCurrentVersionDocxMarkdownProps = {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   document: CurrentDocument;
 };
 
@@ -2393,11 +2393,15 @@ const mismatchedSearchCursorResult = (encoded: number, queryCount: number) =>
     hint: `Send the same ${String(encoded)} queries this cursor was issued for, in the same order, or omit 'cursor' to start a new search.`,
   });
 
-const mcpCorpusQueryVariant = ({ testDependencies }: McpRequestContext) =>
+const mcpCorpusQueryVariant = ({
+  testDependencies,
+}: AuthorizedMcpRequestContext) =>
   testDependencies?.corpusIndexQueryVariant ??
   envBase.CORPUS_INDEX_QUERY_VARIANT;
 
-const mcpCaseLawSearchGuidance = ({ testDependencies }: McpRequestContext) =>
+const mcpCaseLawSearchGuidance = ({
+  testDependencies,
+}: AuthorizedMcpRequestContext) =>
   testDependencies?.caseLawSearchGuidance ??
   envBase.MCP_CASE_LAW_SEARCH_GUIDANCE;
 
@@ -2585,7 +2589,7 @@ const readSearchProvision = async ({
   country,
 }: {
   args: v.InferOutput<typeof searchCaseLawArgsSchema>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   country: string;
 }): Promise<SearchProvisionArgRead> => {
   const text = args.provision;
@@ -2625,7 +2629,7 @@ const readSearchProvision = async ({
 
 type ListSearchCaseLawProvisionOptions = {
   args: v.InferOutput<typeof searchCaseLawArgsSchema>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   country: NonNullable<ReturnType<typeof publicCaseLawCountry>>;
   /** Absent when the call named neither queries nor a provision. */
   provision: CaseLawProvisionFilter | undefined;

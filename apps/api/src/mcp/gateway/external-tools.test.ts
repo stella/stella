@@ -10,12 +10,12 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import {
   callGatewayExternalMcpTool,
   listGatewayExternalMcpTools,
 } from "@/api/mcp/gateway/external-tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const loadActiveMcpConnectionsForUserMock = mock();
@@ -83,14 +83,14 @@ const createSelectBuilder = (rowBatches: GatewayConnectionToolRow[][]) => {
 
 const createContext = (
   rowBatches: GatewayConnectionToolRow[][],
-): McpRequestContext => {
+): AuthorizedMcpRequestContext => {
   const tx = {
     select: () => createSelectBuilder(rowBatches),
   };
   const scopedDb: ScopedDb = async <T>(
     callback: (transaction: Transaction) => Promise<T>,
   ) => await callback(asTestRaw<Transaction>(tx));
-  const safeDb: McpRequestContext["safeDb"] = async (callback) =>
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (callback) =>
     Result.ok(await callback(asTestRaw<Transaction>(tx)));
 
   return {
@@ -111,9 +111,9 @@ const createContext = (
 };
 
 /** Context whose backing-store read always fails (transient DB outage). */
-const createFailingContext = (): McpRequestContext => {
+const createFailingContext = (): AuthorizedMcpRequestContext => {
   const base = createContext([]);
-  const safeDb: McpRequestContext["safeDb"] = async () =>
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async () =>
     Result.err(new DatabaseError({ message: "connection refused" }));
   return { ...base, safeDb };
 };

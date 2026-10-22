@@ -11,10 +11,10 @@ import {
   readAuthorizedMemberRole,
   roleForDisplay,
 } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 import type { McpToolHandler, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -50,9 +50,11 @@ const WORKSPACE_ID = "00000000-0000-4000-8000-0000000a0001";
 // funnels the throw into a `Result.err`, so the backing handler returns a
 // failed `Result` exactly as it would on a real outage; the tool site then
 // unwraps `.error` into the internal-error envelope.
-const throwingScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(() => {
-  throw new Error(`database unavailable: ${DB_INTERNAL_LEAK_TOKEN}`);
-});
+const throwingScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
+  () => {
+    throw new Error(`database unavailable: ${DB_INTERNAL_LEAK_TOKEN}`);
+  },
+);
 
 const createRecordAuditEventMock = () =>
   asTestRaw<AuditRecorder>(async () => undefined);
@@ -60,7 +62,7 @@ const createRecordAuditEventMock = () =>
 // Owner role with one active, accessible workspace, so authorization and
 // workspace-access pre-checks pass and each handler advances to its first DB
 // call (the only thing that fails here).
-const createFailingDbContext = (): McpRequestContext => ({
+const createFailingDbContext = (): AuthorizedMcpRequestContext => ({
   accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
   accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
   accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),

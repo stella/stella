@@ -9,7 +9,6 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { namespaceSkillToolName } from "@/api/lib/mcp-upstream/namespace";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
   getSkillPrompt,
@@ -22,6 +21,7 @@ import {
   resolveSkillTool,
 } from "@/api/mcp/gateway/skills";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -89,7 +89,7 @@ const createRecordingContext = (userId: SafeId<"user">) => {
     }
     return result;
   };
-  const context = asTestRaw<McpRequestContext>({
+  const context = asTestRaw<AuthorizedMcpRequestContext>({
     enabledRegistrySlugs: undefined,
     grantedScopes: [],
     memberRole: "owner",
@@ -349,7 +349,7 @@ describe("MCP skill tools against the database", () => {
       sizeBytes: 19,
     });
     const recording = createRecordingContext(ids.userA1);
-    const context = asTestRaw<McpRequestContext>({
+    const context = asTestRaw<AuthorizedMcpRequestContext>({
       ...recording.context,
       grantedScopes: ["stella:skills"],
     });
@@ -462,7 +462,7 @@ describe("MCP skill tools against the database", () => {
       const prompt = (
         await getSkillPrompt({
           args: undefined,
-          context: asTestRaw<McpRequestContext>({
+          context: asTestRaw<AuthorizedMcpRequestContext>({
             ...recording.context,
             grantedScopes: ["stella:skills"],
           }),
@@ -502,7 +502,7 @@ describe("MCP skill tools against the database", () => {
     const { context } = createRecordingContext(ids.userA1);
     const result = await getSkillPrompt({
       args: undefined,
-      context: asTestRaw<McpRequestContext>({
+      context: asTestRaw<AuthorizedMcpRequestContext>({
         ...context,
         grantedScopes: ["stella:skills"],
       }),

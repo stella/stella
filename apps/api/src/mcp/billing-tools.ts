@@ -53,7 +53,6 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   hasEffectiveAuthority,
   mcpMemberAuthority,
@@ -92,6 +91,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 type BillingToolName =
   | "list_time_entries"
@@ -370,7 +370,7 @@ const resolveTimeEntryWorkspace = async ({
   context,
   timeEntryId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   timeEntryId: SafeId<"timeEntry">;
 }): Promise<SafeId<"workspace"> | null> => {
   if (context.accessibleWorkspaceIds.length === 0) {
@@ -393,7 +393,7 @@ const resolveInvoiceWorkspace = async ({
   context,
   invoiceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   invoiceId: SafeId<"invoice">;
 }): Promise<SafeId<"workspace"> | null> => {
   if (context.accessibleWorkspaceIds.length === 0) {
@@ -419,7 +419,7 @@ const loadUserNames = async ({
   context,
   userIds,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   userIds: readonly string[];
 }): Promise<Map<string, string>> => {
   if (userIds.length === 0) {
@@ -1276,7 +1276,7 @@ const readInvoiceDetail = async ({
   invoiceId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   invoiceId: SafeId<"invoice">;
   workspaceId: SafeId<"workspace">;
 }) =>

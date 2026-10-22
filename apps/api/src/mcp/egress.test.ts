@@ -18,9 +18,9 @@ import {
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
 import type { AnonymizeTextFieldsInput } from "@/api/mcp/anonymization-core";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import {
   createRewritingAnonymizeDependencies,
   replaceFirstFieldDelimiterToken,
@@ -109,8 +109,8 @@ const finalizeMcpEgress = async (
     }),
   );
 
-const createContext = (): McpRequestContext => {
-  const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(mock());
+const createContext = (): AuthorizedMcpRequestContext => {
+  const scopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(mock());
   return {
     accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
     accessibleWorkspaceIdSet: new Set(["ws_1"]),

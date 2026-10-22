@@ -9,7 +9,7 @@ import {
 import { env } from "@/api/env";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -80,7 +80,7 @@ const createScopedDb = ({
   matters = [],
   practiceJurisdictions = [],
 }: ScopedDbOptions = {}) =>
-  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+  asTestRaw<AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(async (callback: (tx: ScopedTx) => Promise<unknown>) => {
       // list_matters now uses the core query builder; the chain ignores its
       // column/where/order arguments and resolves to the seeded matters.
@@ -115,10 +115,10 @@ const createContext = ({
   recordAuditEvent = createRecordAuditEventMock(),
   scopedDb = createScopedDb(),
 }: {
-  memberRole?: McpRequestContext["memberRole"];
+  memberRole?: AuthorizedMcpRequestContext["memberRole"];
   recordAuditEvent?: AuditRecorder;
-  scopedDb?: McpRequestContext["scopedDb"];
-} = {}): McpRequestContext => ({
+  scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
+} = {}): AuthorizedMcpRequestContext => ({
   accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
   accessibleWorkspaceIdSet: new Set(["ws_1"]),
   accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),

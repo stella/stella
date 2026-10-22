@@ -26,10 +26,10 @@ import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
 import type { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -206,7 +206,7 @@ const createScopedDb = (
   entityTargets: Record<string, SeededEntityTarget> = {},
   entityCount = 0,
 ) =>
-  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+  asTestRaw<AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(async (run: (tx: unknown) => unknown) => {
       // list_templates now uses the core query builder; the chain ignores its
       // column/where/order arguments and resolves to the seeded rows.
@@ -256,10 +256,10 @@ const createContext = ({
   scopedDb = createScopedDb(),
   workspaceStatus = "active",
 }: {
-  memberRole?: McpRequestContext["memberRole"];
-  scopedDb?: McpRequestContext["scopedDb"];
+  memberRole?: AuthorizedMcpRequestContext["memberRole"];
+  scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
   workspaceStatus?: "active" | "archived";
-} = {}): McpRequestContext => ({
+} = {}): AuthorizedMcpRequestContext => ({
   accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
   accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
   accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, workspaceStatus]]),
@@ -303,7 +303,7 @@ const createContext = ({
   },
 });
 
-const createOutboundContext = (): McpRequestContext => ({
+const createOutboundContext = (): AuthorizedMcpRequestContext => ({
   ...createContext(),
   thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
 });

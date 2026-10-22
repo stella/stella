@@ -110,7 +110,6 @@ import * as actionCostContext from "@/api/lib/usage/action-costs/context";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import { decisionTextVersion } from "@/api/mcp/case-law-decision-read";
 import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
 import { windowProvisionText } from "@/api/mcp/provision-text-window";
@@ -131,6 +130,7 @@ import {
   isDocumentsMcpCapabilityAllowed,
   listMcpTools,
 } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import {
   DOCX_MIME_TYPE,
   PDF_MIME_TYPE,
@@ -994,7 +994,7 @@ const createScopedDb = (
     searchUpdatedAt?: Date | null;
   } = {},
 ) =>
-  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+  asTestRaw<AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(
       async (callback: (tx: MockMcpTransaction) => unknown) =>
         await callback({
@@ -1139,11 +1139,11 @@ const createContext = ({
   accessibleWorkspaceIds?: string[];
   archivedWorkspaceIds?: string[];
   recordAuditEvent?: AuditRecorder;
-  scopedDb?: McpRequestContext["scopedDb"];
+  scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
   /** Overrides merged over the suite's own seams, for the few tests that
    *  need a different answer from one of them. */
-  testDependencies?: McpRequestContext["testDependencies"];
-} = {}): McpRequestContext => ({
+  testDependencies?: AuthorizedMcpRequestContext["testDependencies"];
+} = {}): AuthorizedMcpRequestContext => ({
   accessibleWorkspaceIds: accessibleWorkspaceIds.map((workspaceId) =>
     toSafeId<"workspace">(workspaceId),
   ),
@@ -1758,7 +1758,7 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   describe("lookup_business_registry org narrowing", () => {
-    const registryTool = async (context: McpRequestContext) =>
+    const registryTool = async (context: AuthorizedMcpRequestContext) =>
       (await listMcpTools(context)).find(
         (tool) => tool.name === "lookup_business_registry",
       );
@@ -2321,7 +2321,7 @@ describe("OpenAI-compatible MCP tools", () => {
     const result = await handleMcpToolCall({
       args: { id: "stella://reference/template-markers" },
       context: createContext({
-        scopedDb: asTestRaw<McpRequestContext["scopedDb"]>(() => {
+        scopedDb: asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(() => {
           throw new Error("the malformed id must never reach the database");
         }),
       }),
@@ -6044,7 +6044,7 @@ describe("OpenAI-compatible MCP tools", () => {
     const call = async (
       args: Record<string, unknown>,
       readCaseLawCoverageHandler: NonNullable<
-        McpRequestContext["testDependencies"]
+        AuthorizedMcpRequestContext["testDependencies"]
       >["readCaseLawCoverageHandler"] = readCoverage,
     ) =>
       await handleMcpToolCall({
@@ -6210,7 +6210,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   const readDecisions = async (
     args: Record<string, unknown>,
-    context: McpRequestContext = createContext(),
+    context: AuthorizedMcpRequestContext = createContext(),
   ) =>
     asTestRaw<{ items: ReadDecisionEntry[] }>(
       parseToolPayload(
@@ -8915,7 +8915,7 @@ describe("OpenAI-compatible MCP tools", () => {
   // task/message/link (kinds hidden from list_documents) must be rejected, not
   // acted on, even though the caller can read that workspace.
   const createEntityKindScopedDb = (kind: string) =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
+    asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
       mock(
         async (
           callback: (tx: {
@@ -10155,7 +10155,7 @@ describe("OpenAI-compatible MCP tools", () => {
   // The one write allowed on an archived matter is a pure status:"active" flip
   // (unarchive); it must still go through.
   const createWorkspaceUnarchiveScopedDb = () =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
+    asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
       mock(async (callback: (tx: unknown) => unknown) => {
         const builder = {
           set: () => builder,
@@ -10634,7 +10634,7 @@ describe("OpenAI-compatible MCP tools", () => {
   // holding several roles maps to several links, so it must ask for the precise
   // matter_contact_id instead of guessing.
   const createMultiRoleContactScopedDb = () =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
+    asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
       mock(
         async (
           callback: (tx: {
@@ -10678,7 +10678,7 @@ describe("OpenAI-compatible MCP tools", () => {
   // tests, both of which run one `.select().from().where().orderBy().limit()`
   // read through the structured egress pipeline.
   const createSelectListScopedDb = (rows: readonly Record<string, unknown>[]) =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
+    asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
       mock(async (callback: (tx: unknown) => unknown) => {
         const builder = {
           from: () => builder,

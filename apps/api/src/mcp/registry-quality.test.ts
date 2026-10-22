@@ -26,7 +26,6 @@ import {
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
 import { MCP_MODES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   DYNAMIC_TOOL_FAMILY_POLICIES,
   getDynamicMcpToolOutputContract,
@@ -49,6 +48,7 @@ import {
   defineMcpToolOutput,
   deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { selectableOperations } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -88,11 +88,13 @@ const SURFACES = MCP_MODES.map((mode) => ({
   definitions: listStaticMcpToolDefinitions(mode),
 }));
 
-const databaseAccessForbidden = asTestRaw<McpRequestContext["scopedDb"]>(() => {
+const databaseAccessForbidden = asTestRaw<
+  AuthorizedMcpRequestContext["scopedDb"]
+>(() => {
   throw new Error("database must not be reached before tool authorization");
 });
 
-const contextWithoutDeclaredPermissions = (): McpRequestContext => ({
+const contextWithoutDeclaredPermissions = (): AuthorizedMcpRequestContext => ({
   accessibleWorkspaceIds: [],
   accessibleWorkspaceIdSet: new Set(),
   accessibleWorkspaceStatusById: new Map(),

@@ -7,7 +7,6 @@ import { env } from "@/api/env";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
@@ -18,6 +17,7 @@ import type { McpToolDefinition, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { listMcpTools } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -27,13 +27,15 @@ const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
 // A DB accessor that fails the test if any handler reaches it. Every assertion
 // here exercises authorization or input validation, which must reject before
 // the tool touches the database.
-const throwingScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(() => {
-  throw new Error("database must not be reached in a rejection path");
-});
+const throwingScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
+  () => {
+    throw new Error("database must not be reached in a rejection path");
+  },
+);
 
 const createContext = (
   memberRole: MemberRole = "owner",
-): McpRequestContext => ({
+): AuthorizedMcpRequestContext => ({
   accessibleWorkspaceIds: [],
   accessibleWorkspaceIdSet: new Set(),
   accessibleWorkspaceStatusById: new Map(),

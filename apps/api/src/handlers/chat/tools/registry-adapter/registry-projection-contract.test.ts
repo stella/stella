@@ -52,10 +52,10 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import { isRecord } from "@/api/lib/type-guards";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -204,7 +204,7 @@ const selectQueue = (queue: readonly (readonly unknown[])[]) => {
   };
 };
 
-const buildContext = (tx: unknown): McpRequestContext => {
+const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
   const scopedDb = asTestRaw<ScopedDb>(
     async (run: (transaction: unknown) => unknown) => await run(tx),
   );
@@ -267,7 +267,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
 const contextFor = (
   toolName: ProjectableReadToolName,
   tx: unknown,
-): McpRequestContext =>
+): AuthorizedMcpRequestContext =>
   CHAT_READ_SCRIPT_POLICY[toolName] === "script"
     ? buildContext(tx)
     : {

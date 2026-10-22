@@ -10,7 +10,6 @@ import { createSha256 } from "@stll/sha256/node";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   DOCUMENT_UPLOAD_APP_RESOURCE_URI,
   uploadRemoteDocumentVersion,
@@ -22,16 +21,17 @@ import {
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { getStaticMcpToolOutputContract } from "@/api/mcp/static-tool-definitions";
 import { errorResult, serializeToolResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+const emptyScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
   async (run: (tx: unknown) => unknown) => await run({}),
 );
 const noopRecorder = asTestRaw<AuditRecorder>(async () => undefined);
 
-const createContext = (): McpRequestContext => {
+const createContext = (): AuthorizedMcpRequestContext => {
   const workspaceId = toSafeId<"workspace">(
     "00000000-0000-4000-8000-000000000001",
   );
@@ -119,7 +119,7 @@ describe("document file upload surface", () => {
   test("returns the picker's next step in the result the model reads", async () => {
     const entityId = "00000000-0000-4000-8000-000000000010";
     const workspaceId = "00000000-0000-4000-8000-000000000001";
-    const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+    const scopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
       async (run: (tx: unknown) => unknown) =>
         await run({
           query: {

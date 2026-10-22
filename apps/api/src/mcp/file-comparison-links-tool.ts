@@ -19,7 +19,7 @@ import {
   parseSafeOutboundUrl,
   safeOutboundFetchBytes,
 } from "@/api/lib/safe-outbound-fetch";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   FILE_COMPARISON_MAX_BYTES,
@@ -340,7 +340,7 @@ const transferFailure = (side: ComparisonSide): InternalToolErrorResult =>
 
 type PrepareFileComparisonFromLinksCall = {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   permit: ThirdPartyOutboundPermit;
 };
 

@@ -16,7 +16,7 @@ import { putPresignedUpload } from "@/api/lib/s3-presign";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
@@ -104,7 +104,7 @@ const invokeCapability = async ({
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
 }): Promise<CapabilityResult> => {
   const response = await CAPABILITY_TOOL_HANDLERS[
     MCP_CAPABILITY_EXECUTORS.write
@@ -169,7 +169,7 @@ const abortReservation = async ({
   uploadId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   uploadId: string;
   workspaceId: string;
 }): Promise<CapabilityResult> =>
@@ -222,7 +222,7 @@ const abortCreatedReservation = async ({
   uploadId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   dependencies: DocumentFileUploadDependencies;
   uploadId: string;
   workspaceId: string;
@@ -278,7 +278,7 @@ export const uploadRemoteDocumentVersion = async ({
   file,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   dependencies?: DocumentFileUploadDependencies;
   entityId: string;
   file: UploadDocumentVersionInput["file"];

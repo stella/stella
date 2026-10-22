@@ -18,6 +18,7 @@ import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import type { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
 import type {
+  AuthorizedMcpRequestContext,
   McpReadToolPermissions,
   McpWriteToolPermissions,
 } from "@/api/mcp/write-tool-authority";
@@ -607,7 +608,7 @@ export type McpToolHandler<TData = unknown> = ({
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => McpToolResponse<TData> | Promise<McpToolResponse<TData>>;
 
 type TypedMcpToolHandlerResult<TData> =
@@ -616,7 +617,7 @@ type TypedMcpToolHandlerResult<TData> =
 
 export type TypedMcpToolHandler<TData> = (options: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => TypedMcpToolHandlerResult<TData>;
 
 type TypedHandlerData<THandler> =

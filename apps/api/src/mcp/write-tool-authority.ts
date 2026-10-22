@@ -6,6 +6,10 @@ import type { AccountAccess } from "@/api/lib/api-handlers";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type {
+  McpRequestContext,
+  McpRequestDataAccess,
+} from "@/api/mcp/context";
 import {
   mcpMemberAuthority,
   type McpEffectiveAuthority,
@@ -295,6 +299,15 @@ type McpToolAuthorityRefusal = {
   hint?: string;
 };
 
+const authorizedMcpRequestContextBrand: unique symbol = Symbol(
+  "AuthorizedMcpRequestContext",
+);
+
+export type AuthorizedMcpRequestContext = McpRequestContext &
+  McpRequestDataAccess & {
+    readonly [authorizedMcpRequestContextBrand]?: true;
+  };
+
 /**
  * The refusal for `subject` (a tool, or the operation its input selects). A
  * credential narrower than the role needs a different credential, not a role
@@ -354,4 +367,53 @@ export const mcpToolAuthorityRefusal = ({
     };
   }
   return null;
+};
+
+type AuthorizeMcpToolContextOptions = {
+  context: McpRequestContext;
+  dataAccess: McpRequestDataAccess;
+  definition: McpToolAuthorityDeclaration;
+  input: Readonly<Record<string, unknown>>;
+  toolName: string;
+};
+
+export type AuthorizeMcpToolContextResult =
+  | { authorized: true; context: AuthorizedMcpRequestContext }
+  | { authorized: false; refusal: McpToolAuthorityRefusal };
+
+/** The sole boundary that grants tool handlers access to request-scoped data. */
+export const authorizeMcpToolContext = ({
+  context,
+  dataAccess,
+  definition,
+  input,
+  toolName,
+}: AuthorizeMcpToolContextOptions): AuthorizeMcpToolContextResult => {
+  const denial = mcpToolInputAuthorityDenial(context, definition, input);
+  if (denial !== null) {
+    return {
+      authorized: false,
+      refusal: mcpToolAuthorityDenialRefusal(
+        `this ${toolName} operation`,
+        denial,
+      ),
+    };
+  }
+  if (!isAccountAuthorizedForMcpTool(context.userEmail, definition)) {
+    return {
+      authorized: false,
+      refusal: {
+        code: "permission_denied",
+        message: ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
+      },
+    };
+  }
+  return {
+    authorized: true,
+    context: {
+      ...context,
+      ...dataAccess,
+      [authorizedMcpRequestContextBrand]: true,
+    },
+  };
 };

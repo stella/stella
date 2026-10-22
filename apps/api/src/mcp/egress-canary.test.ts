@@ -6,13 +6,13 @@ import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
 import {
   isMcpEgressPlan,
   type McpEgressPlan,
   type McpToolResponse,
 } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -238,11 +238,11 @@ const buildContext = ({
   tx = {},
   workspaceIds = ["00000000-0000-4000-8000-0000000a0001"],
 }: {
-  memberRole?: McpRequestContext["memberRole"];
+  memberRole?: AuthorizedMcpRequestContext["memberRole"];
   organizationId?: string;
   tx?: unknown;
   workspaceIds?: readonly string[];
-} = {}): McpRequestContext => {
+} = {}): AuthorizedMcpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock(tx);
   return {
     accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
@@ -312,7 +312,7 @@ const parseResultText = (result: CallToolResult): string => {
 
 /** Runs a handler's response through the real anonymized egress pipeline. */
 const finalize = async (
-  context: McpRequestContext,
+  context: AuthorizedMcpRequestContext,
   response: McpToolResponse,
 ) => await finalizeMcpEgress({ context, mode: "anonymized", response });
 

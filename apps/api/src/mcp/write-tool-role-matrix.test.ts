@@ -29,7 +29,6 @@ import {
 } from "@/api/lib/permission-authorization";
 import { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
 import { MCP_MODES, type McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
 import { CAPABILITY_FEATURE_BINDINGS } from "@/api/mcp/generated/capability-feature-bindings";
@@ -38,6 +37,7 @@ import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions"
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
+  type AuthorizedMcpRequestContext,
   isMemberAuthorizedForMcpTool,
   isMemberAuthorizedForMcpToolInput,
   type McpToolAuthorityDeclaration,
@@ -608,8 +608,8 @@ const accountAccessMismatches = (definitions: readonly WriteTool[]): string[] =>
 
 // --- Surfaces -----------------------------------------------------------------
 
-const mcpContextFor = (role: MemberRole): McpRequestContext =>
-  asTestRaw<McpRequestContext>({
+const mcpContextFor = (role: MemberRole): AuthorizedMcpRequestContext =>
+  asTestRaw<AuthorizedMcpRequestContext>({
     enabledRegistrySlugs: undefined,
     grantedScopes: [],
     accessibleWorkspaceIds: ["workspace_1"],
@@ -645,7 +645,9 @@ const mcpContextFor = (role: MemberRole): McpRequestContext =>
     }),
   });
 
-const unenrolledMcpContextFor = (role: MemberRole): McpRequestContext => {
+const unenrolledMcpContextFor = (
+  role: MemberRole,
+): AuthorizedMcpRequestContext => {
   const context = mcpContextFor(role);
   return {
     ...context,

@@ -19,7 +19,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   bindApprovedMcpAuditContext,
-  type McpRequestContext,
+  type McpRequestResources,
 } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import {
@@ -67,9 +67,8 @@ import {
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
-  mcpToolAuthorityDenialRefusal,
+  authorizeMcpToolContext,
   mcpToolAuthorityRefusal,
-  mcpToolInputAuthorityDenial,
 } from "@/api/mcp/write-tool-authority";
 
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
@@ -194,7 +193,7 @@ export const isDocumentsMcpCapabilityAllowed = (
 
 export const getMcpToolDefinition = async (
   toolName: string,
-  context: McpRequestContext,
+  context: McpRequestResources,
   mode: McpMode = "default",
 ): Promise<McpToolDefinition | undefined> =>
   await getGatewayMcpToolDefinition({ context, mode, toolName });
@@ -226,7 +225,7 @@ export const getMcpToolRequiredScopesHint = (
 };
 
 export const listMcpTools = async (
-  context: McpRequestContext,
+  context: McpRequestResources,
   mode: McpMode = "default",
   scopes?: readonly string[],
 ): Promise<McpTool[]> => {
@@ -254,7 +253,7 @@ const isStaticToolCallable = ({
   mode,
   toolName,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   grantedScopes: readonly string[];
   mode: McpMode;
   toolName: string;
@@ -277,7 +276,7 @@ const isStaticToolCallable = ({
   );
 };
 
-type McpToolSurface = { context: McpRequestContext; mode: McpMode };
+type McpToolSurface = { context: McpRequestResources; mode: McpMode };
 
 const createSurfaceSerializer =
   ({ context, mode }: McpToolSurface) =>
@@ -330,7 +329,7 @@ const featureUnavailableToolResult = ({
 
 type McpToolCallArgs = {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode?: McpMode;
   toolName: string;
   dependencies?: { dispatchGatewayToolCall: typeof dispatchGatewayToolCall };
@@ -393,7 +392,7 @@ const staticToolReferenceRefusal = async ({
   mode,
   toolName,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   definition: McpToolDefinition;
   args: Record<string, unknown>;
   mode: McpMode;
@@ -548,20 +547,17 @@ const dispatchMcpToolCall = async ({
   }
   const normalizedArgs = normalized.value;
   const inputNotes = normalized.notes;
-  // With the input: the exact grant of the operation it selects.
-  const inputDenial = mcpToolInputAuthorityDenial(
+  const authorization = authorizeMcpToolContext({
     context,
-    staticTool,
-    normalizedArgs,
-  );
-  if (inputDenial !== null) {
-    const refusal = mcpToolAuthorityDenialRefusal(
-      `this ${toolName} operation`,
-      inputDenial,
-    );
-    return serializeForSurface(structuredErrorResult(refusal));
+    dataAccess: context,
+    definition: staticTool,
+    input: normalizedArgs,
+    toolName,
+  });
+  if (!authorization.authorized) {
+    return serializeForSurface(structuredErrorResult(authorization.refusal));
   }
-
+  const authorizedContext = authorization.context;
   const handler = getStaticMcpToolHandler(toolName, mode);
   if (!handler) {
     return serializeForSurface(unknownToolResult(toolName));
@@ -610,8 +606,8 @@ const dispatchMcpToolCall = async ({
       }
 
       const executionContext = requiresConfirmation
-        ? bindApprovedMcpAuditContext(context)
-        : context;
+        ? bindApprovedMcpAuditContext(authorizedContext)
+        : authorizedContext;
       const response = await handler({
         args: normalizedArgs,
         context: executionContext,
@@ -672,7 +668,7 @@ const internalErrorResult = ({
   error,
 }: {
   mode: McpMode;
-  context: McpRequestContext;
+  context: McpRequestResources;
   toolName: string;
   error: unknown;
 }): CallToolResult => {

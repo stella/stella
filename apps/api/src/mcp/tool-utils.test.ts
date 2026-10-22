@@ -10,7 +10,6 @@ import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT } from "@/api/lib/chat/tool-output-degrade";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolSuccess } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
@@ -41,6 +40,7 @@ import {
   defineMcpToolOutput,
   defineProjectedMcpToolOutput,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
   installRecordingAnalytics,
@@ -69,12 +69,12 @@ describe("MCP ISO date contract", () => {
 const createWorkspaceGateContext = (
   status: "active" | "archived",
 ): {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   pinnedWorkspaceIds: string[];
 } => {
   const pinnedWorkspaceIds: string[] = [];
   return {
-    context: asTestRaw<McpRequestContext>({
+    context: asTestRaw<AuthorizedMcpRequestContext>({
       accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
       accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, status]]),
       pinServerValidatedWorkspaceId: (
