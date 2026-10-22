@@ -6,7 +6,14 @@ trap 'rm -rf "$fixture"' EXIT
 mkdir "$fixture/bin"
 cat > "$fixture/bin/bun" <<'STUB'
 #!/usr/bin/env bash
-exit "${TEST_AUDIT_STATUS:?}"
+case "${TEST_AUDIT_RESULT:?}" in
+  pass) exit 0 ;;
+  new-advisory) exit 1 ;;
+  placeholder-owner-baseline) exit 2 ;;
+  audit-command-failure) exit 3 ;;
+esac
+echo "unknown test audit result: $TEST_AUDIT_RESULT" >&2
+exit 99
 STUB
 chmod +x "$fixture/bin/bun"
 export PATH="$fixture/bin:$PATH"
@@ -27,12 +34,15 @@ check() {
   fi
 }
 
-check 0 "" TEST_AUDIT_STATUS=0 WAIVE_DEPENDENCY_AUDIT=false WAIVER_REASON=
-check 1 "" TEST_AUDIT_STATUS=1 WAIVE_DEPENDENCY_AUDIT=false WAIVER_REASON=
+check 0 "" TEST_AUDIT_RESULT=pass WAIVE_DEPENDENCY_AUDIT=false WAIVER_REASON=
+check 1 "" TEST_AUDIT_RESULT=new-advisory WAIVE_DEPENDENCY_AUDIT=false WAIVER_REASON=
 check 0 "Dependency audit explicitly waived: Reviewed for this release" \
-  TEST_AUDIT_STATUS=1 WAIVE_DEPENDENCY_AUDIT=true WAIVER_REASON='Reviewed for this release'
-check 1 "" TEST_AUDIT_STATUS=1 WAIVE_DEPENDENCY_AUDIT=true WAIVER_REASON=' '
-check 2 "" TEST_AUDIT_STATUS=2 WAIVE_DEPENDENCY_AUDIT=true WAIVER_REASON='Reviewed for this release'
+  TEST_AUDIT_RESULT=new-advisory WAIVE_DEPENDENCY_AUDIT=true WAIVER_REASON='Reviewed for this release'
+check 1 "" TEST_AUDIT_RESULT=new-advisory WAIVE_DEPENDENCY_AUDIT=true WAIVER_REASON=' '
+check 2 "waiver cannot cover exit status 2" \
+  TEST_AUDIT_RESULT=placeholder-owner-baseline WAIVE_DEPENDENCY_AUDIT=true WAIVER_REASON='Reviewed for this release'
+check 3 "waiver cannot cover exit status 3" \
+  TEST_AUDIT_RESULT=audit-command-failure WAIVE_DEPENDENCY_AUDIT=true WAIVER_REASON='Reviewed for this release'
 check 1 "The dependency audit waiver cannot be supplied when the audit passes." \
-  TEST_AUDIT_STATUS=0 WAIVE_DEPENDENCY_AUDIT=true WAIVER_REASON='Unused waiver'
+  TEST_AUDIT_RESULT=pass WAIVE_DEPENDENCY_AUDIT=true WAIVER_REASON='Unused waiver'
 echo 'ok   release audit waives only new findings and rejects baseline failures'

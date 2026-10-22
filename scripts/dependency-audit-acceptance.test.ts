@@ -7,10 +7,12 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   AuditCommandError,
+  BaselineError,
   check,
   checkRelease,
   collectGatedAdvisories,
   readBaseline,
+  runDependencyAuditCli,
   type Advisory,
   type Baseline,
 } from "./dependency-audit";
@@ -231,7 +233,7 @@ describe("audit acceptance expiry", () => {
       auditBaseline("2026-10-01"),
       "2026-10-02",
     );
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(2);
     expect(result.info.some((line) => line.endsWith("LAPSED"))).toBe(true);
   });
 
@@ -538,6 +540,20 @@ describe("advisory service retries", () => {
       ).toBeInstanceOf(AuditCommandError);
       expect(attempts).toBe(1);
     }
+  });
+});
+
+describe("CLI exit codes", () => {
+  test.each([
+    { error: new BaselineError("invalid baseline"), status: 2 },
+    { error: new AuditCommandError("audit failed"), status: 3 },
+    { error: new Error("unexpected failure"), status: 4 },
+  ])("maps $error.name to exit $status", async ({ error, status }) => {
+    expect(
+      await runDependencyAuditCli(async () => {
+        throw error;
+      }),
+    ).toBe(status);
   });
 });
 

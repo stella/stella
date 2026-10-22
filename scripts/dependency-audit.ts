@@ -23,6 +23,10 @@
 //   bun scripts/dependency-audit.ts --write-baseline regenerate the baseline from the current audit
 //   bun scripts/dependency-audit.ts --self-test     prove the comparison logic fires
 //
+// Every mode uses the same closed exit-code contract:
+//   0 pass, 1 new advisory, 2 baseline problem, 3 audit failure,
+//   4 unexpected error.
+//
 // A baseline entry may be temporary: `expiresOn` and `untilPatched` make the
 // acceptance lapse (and --check fail) after a date or once a patched release
 // is published; see scripts/dependency-audit-acceptance.ts.
@@ -75,6 +79,13 @@ export type Baseline = {
   auditLevel: string;
   accepted: BaselineEntry[];
 };
+
+export class BaselineError extends Error {
+  override readonly name = "BaselineError";
+}
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -138,21 +149,25 @@ const toBaselineEntry = (value: unknown): BaselineEntry | null => {
 export const readBaseline = async (
   baselinePath: string = BASELINE_PATH,
 ): Promise<Baseline> => {
-  const file = Bun.file(baselinePath);
-  if (!(await file.exists())) {
-    return { note: "", auditLevel: "high", accepted: [] };
+  try {
+    const file = Bun.file(baselinePath);
+    if (!(await file.exists())) {
+      return { note: "", auditLevel: "high", accepted: [] };
+    }
+    const parsed: unknown = await file.json();
+    const accepted = isRecord(parsed) ? parsed["accepted"] : undefined;
+    return {
+      note: isRecord(parsed) ? asText(parsed["note"]) : "",
+      auditLevel: isRecord(parsed) ? asText(parsed["auditLevel"]) : "high",
+      accepted: Array.isArray(accepted)
+        ? accepted
+            .map(toBaselineEntry)
+            .filter((entry): entry is BaselineEntry => entry !== null)
+        : [],
+    };
+  } catch (error) {
+    throw new BaselineError(errorMessage(error), { cause: error });
   }
-  const parsed: unknown = await file.json();
-  const accepted = isRecord(parsed) ? parsed["accepted"] : undefined;
-  return {
-    note: isRecord(parsed) ? asText(parsed["note"]) : "",
-    auditLevel: isRecord(parsed) ? asText(parsed["auditLevel"]) : "high",
-    accepted: Array.isArray(accepted)
-      ? accepted
-          .map(toBaselineEntry)
-          .filter((entry): entry is BaselineEntry => entry !== null)
-      : [],
-  };
 };
 
 const GHSA_ID = /GHSA-[a-z0-9-]+/iu;
@@ -569,7 +584,7 @@ const checkResult = async (
     return {
       lapsed,
       newlyIntroduced,
-      status: lapsed.length > 0 ? 1 : 0,
+      status: lapsed.length > 0 ? 2 : 0,
     };
   }
 
@@ -583,7 +598,11 @@ const checkResult = async (
     "\nFix the dependency (bun update / override), or, if it is genuinely not reachable, add it to scripts/dependency-audit-baseline.json with a reason.",
   );
   markAdvisoryFailure();
-  return { lapsed, newlyIntroduced, status: 1 };
+  return {
+    lapsed,
+    newlyIntroduced,
+    status: lapsed.length > 0 ? 2 : 1,
+  };
 };
 
 export const check = async (
@@ -605,8 +624,7 @@ const selfTest = async (): Promise<number> => {
   };
   const { newlyIntroduced } = diffAgainstBaseline([synthetic], baseline);
   if (!newlyIntroduced.some((a) => a.id === synthetic.id)) {
-    console.error("Self-test FAILED: synthetic advisory was not detected.");
-    return 1;
+    panic("Self-test FAILED: synthetic advisory was not detected.");
   }
 
   // A failing `bun audit` (nonzero exit, no parseable JSON) must be surfaced as
@@ -622,10 +640,7 @@ const selfTest = async (): Promise<number> => {
     auditFailureFailedClosed = error instanceof AuditCommandError;
   }
   if (!auditFailureFailedClosed) {
-    console.error(
-      "Self-test FAILED: a failing audit command was treated as clean.",
-    );
-    return 1;
+    panic("Self-test FAILED: a failing audit command was treated as clean.");
   }
 
   console.info(
@@ -713,7 +728,7 @@ export const checkRelease = async (
 const runReleaseCheck = async (): Promise<number> =>
   checkRelease(await collectGatedAdvisories());
 
-const main = async (): Promise<void> => {
+const main = async (): Promise<number> => {
   const arg = process.argv[2];
 
   if (arg === "--check-diff") {
@@ -723,41 +738,49 @@ const main = async (): Promise<void> => {
         "--check-diff requires a merge-base revision",
       );
     }
-    process.exit(await checkDiff(baseRevision));
+    return checkDiff(baseRevision);
   }
 
   if (arg === "--release") {
-    process.exit(await runReleaseCheck());
+    return runReleaseCheck();
   }
 
   if (arg === "--self-test") {
-    process.exit(await selfTest());
+    return selfTest();
   }
 
   if (arg === "--write-baseline") {
     await writeBaseline(await collectGatedAdvisories());
-    return;
+    return 0;
   }
 
   const advisories = await collectGatedAdvisories();
 
   if (arg === "--check") {
-    process.exit(await check(advisories));
+    return check(advisories);
   }
 
   report(advisories);
+  return 0;
+};
+
+export const runDependencyAuditCli = async (
+  run: () => Promise<number> = main,
+): Promise<number> => {
+  try {
+    return await run();
+  } catch (error) {
+    console.error(errorMessage(error));
+    if (error instanceof BaselineError) {
+      return 2;
+    }
+    if (error instanceof AuditCommandError) {
+      return 3;
+    }
+    return 4;
+  }
 };
 
 if (import.meta.main) {
-  try {
-    await main();
-  } catch (error) {
-    if (error instanceof AuditCommandError) {
-      // Fail closed: the audit tool itself failed, so we cannot assert the
-      // lockfile is clean. Surface the reason and exit nonzero to block the gate.
-      console.error(error.message);
-      process.exit(1);
-    }
-    throw error;
-  }
+  process.exit(await runDependencyAuditCli());
 }
