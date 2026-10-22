@@ -24,6 +24,7 @@ import {
 import { availableParallelism } from "node:os";
 import path from "node:path";
 
+import { poolDriftFailed } from "./autofix-drift-checks";
 import {
   CHECK_POOL_JOBS,
   checkPoolResultsPath,
@@ -709,6 +710,15 @@ const main = async () => {
       ),
     ),
   );
+  // CI requests the changed-file autofix only when a drift check failed;
+  // see scripts/autofix-drift-checks.ts.
+  const output = process.env["GITHUB_OUTPUT"];
+  if (output) {
+    const failedChecks = results
+      .filter(({ outcome }) => outcome === "failure")
+      .map(({ name }) => name);
+    appendFileSync(output, `fixable=${poolDriftFailed(job, failedChecks)}\n`);
+  }
   const failed = blockingFailures(results);
   if (failed.length > 0) {
     print(

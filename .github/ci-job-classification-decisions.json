@@ -67,22 +67,22 @@
   "candidate:.github/workflows/autofix.yml/regenerate-requested-files": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "2e727cf504bdcc912858c3c894ebf5dbbf86aeacee9420ff5024ab44eae76b96"
+    "reviewedDigest": "30fe244187c801b7cf38e26b0cbd72f7d4080f1896d328280b50262e1e186313"
   },
   "candidate:.github/workflows/autofix.yml/dependabot-bun-autofix": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "a87efb8d21c8eaea70a571d1c390f25e1f4ad897994b0375ef5118144b3b2d00"
+    "reviewedDigest": "fd2ca413b2b9c65f967c912e4d42ad51e75a5d780ebaa8e66998bfeccdbd0582"
   },
   "candidate:.github/workflows/autofix.yml/regenerate-scope": {
     "kind": "ordinary",
     "qualifier": "Plans pull-request autofix scope using settled-run evidence; no release publication, tag creation, or deployment.",
-    "reviewedDigest": "466e1c5234bff59076c499902dd4bea241e90fc31238d4ee0ccc8e3d6cfa3f79"
+    "reviewedDigest": "f917848ab7193dd6ab3918915b6b7ddaa18a9db73eae5177df40e6365077edf7"
   },
   "candidate:.github/workflows/autofix.yml/regenerate-derived-files": {
     "kind": "ordinary",
     "qualifier": "Regenerates and pushes scoped pull-request autofix commits; no release publication, tag creation, or deployment.",
-    "reviewedDigest": "fe0a8e4f13e588683afbeb9446e4331307fa650ffc4abdc832a21491ebfa2770"
+    "reviewedDigest": "f01efc40a8a4805a5376e0d5d01e5e4f4e5f2fc890ee2969f74a8bcb851f65be"
   },
   "candidate:.github/workflows/bot-refresh-auto-merge.yml/arm": {
     "kind": "ordinary",
@@ -137,17 +137,17 @@
   "candidate:.github/workflows/ci.yml/ci-checks-generated": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "b6724b7e0880f3def28eb46a90f39400b5c9604d43a46cae2e63b94b99b7c039"
+    "reviewedDigest": "4a5bc6bf46fd7f425aa81ad75e3418300e327efea27fe99de04cc3e11984f343"
   },
   "candidate:.github/workflows/ci.yml/ci-checks-policy": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "7f0b8063a5ec62688e49d8ccc931531384315d0f485c1093fc3c380ba6dea654"
+    "reviewedDigest": "c605a28f2687ae435100a07dd799fbad6319941f3cfe0e333f907ea93379146a"
   },
   "candidate:.github/workflows/ci.yml/ci-checks-rest": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "ce95b36ea6bbece33dd2f4248bcfabc703ed35299d05371579263fa27e3176e2"
+    "reviewedDigest": "58ae2ae0b5cbdd1a3b4814168c016f807b70a73695920eb12575d3593971a257"
   },
   "candidate:.github/workflows/ci.yml/ci-tests": {
     "kind": "support",
@@ -167,12 +167,12 @@
   "candidate:.github/workflows/ci.yml/code-quality-api": {
     "kind": "support",
     "qualifier": "Runs API code-quality checks required by the merge verdict.",
-    "reviewedDigest": "9348a91367aaac85b617a0bd882023393a867217f8541f3bb6e26fbd5fad72a4"
+    "reviewedDigest": "772c4a5273f063ffc6d54c3c014c25fd175b073f72f9d0c0250b5103a05c95ed"
   },
   "candidate:.github/workflows/ci.yml/code-quality-web-rest": {
     "kind": "support",
     "qualifier": "Runs web and remaining code-quality checks required by the merge verdict.",
-    "reviewedDigest": "2c7cec78e5abf19358d50949acb79007c0e6fee8473ebca6584907cca08bc0fe"
+    "reviewedDigest": "872e2441d483d67238d405adc88640da4c7c4121e5362bd05bd12f2b8847bf10"
   },
   "candidate:.github/workflows/ci.yml/query-perf": {
     "kind": "support",
@@ -317,7 +317,7 @@
   "candidate:.github/workflows/ci.yml/ci-quick-checks": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "8337d91aa5e3e977c3d2f697d10b5bbf26b8b25a216e38c66f15f19b9e9e51dc"
+    "reviewedDigest": "f13e956ba025a8c8e344e46fec1ba459c54405540d05eecfc2bbfbd1745c0ef9"
   },
   "candidate:.github/workflows/cla-notify.yml/notify": {
     "kind": "ordinary",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "cb87a35719dcfcaf152dc503ce468dc7b48237ab3349399b7efdcd7f0715627a"
+    "reviewedDigest": "295d0412152dba8e3335159f69b6b1ed73105377e575c8bd78d477d8791b5121"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "69a9ed32c8f3b430845b00518adf7a434c7babab60de5bc4f5ed722471ecac03"
+    "reviewedDigest": "f07033dfddb1753420ded03a9d668e7fc2bf8587d96c9126b80cbb00f808823c"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -943,5 +943,10 @@
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
     "reviewedDigest": "d7314118f0938bde6fef2c4bbcdad6f3638726507a776fe89b86537b858188f9"
+  },
+  "candidate:.github/workflows/ci.yml/autofix-dispatch": {
+    "kind": "ordinary",
+    "qualifier": "Dispatches changed-file autofix for same-repository pull requests after repairable drift; no release publication, tag creation, or deployment.",
+    "reviewedDigest": "0167e0b59104e4d0b12782147052b23881fdf7e9a1d557dbc59a10b1382fcba5"
   }
 }

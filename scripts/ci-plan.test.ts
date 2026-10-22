@@ -349,9 +349,13 @@ const resultJob = v.parse(
 
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
+// Dispatches the changed-file autofix workflow (scripts/autofix-drift-checks.ts),
+// which needs `actions: write`; it runs only for pull requests.
+const PR_AUTOFIX_DISPATCH_JOB = "autofix-dispatch";
 const CANCELLATION_EXCEPTIONS = new Set([
   // Runs only for pull requests, so it never has a merge group to cancel.
   "pr-heavy-gate",
+  PR_AUTOFIX_DISPATCH_JOB,
   "query-perf",
   "fix-tests-on-base",
   "heavy-web-build",
@@ -436,7 +440,8 @@ test("every eligible CI job cancels a failed merge group in its final step with 
       eligible.has(id) ||
         id === CANCEL_REUSABLE_JOB ||
         Object.hasOwn(PR_CODE_QUALITY_CANCEL_JOBS, id) ||
-        MAIN_ONLY_JOBS.has(id),
+        MAIN_ONLY_JOBS.has(id) ||
+        id === PR_AUTOFIX_DISPATCH_JOB,
     );
     const cancellations =
       body.steps?.filter(({ name }) => name === CANONICAL_CANCEL_STEP.name) ??
@@ -1038,6 +1043,8 @@ test("the result gate evaluates every job in the workflow", () => {
           // It only shortens a failing run; gating on it would let a failed
           // cancellation request block the result (bound above).
           job !== CANCEL_REUSABLE_JOB &&
+          // It only requests autofix after checks that gate the result.
+          job !== PR_AUTOFIX_DISPATCH_JOB &&
           !MAIN_ONLY_JOBS.has(job) &&
           !reportOnlyJobs.includes(job) &&
           !diagnosticJobs.includes(job),
@@ -1514,6 +1521,7 @@ test("the required-jobs record names every workflow job once and carries the ver
       "ci-plan",
       "ci-result",
       CANCEL_REUSABLE_JOB,
+      PR_AUTOFIX_DISPATCH_JOB,
       ...MAIN_ONLY_JOBS,
       ...reportOnlyJobs,
       ...diagnosticJobs,

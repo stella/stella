@@ -13,6 +13,7 @@ export const PILOT_FAST_ROOTS = [
   "code-quality-api-cancel",
   "code-quality-web-rest",
   "code-quality-web-rest-cancel",
+  "autofix-dispatch",
   "query-perf",
 ] as const;
 /** Jobs every profile runs: wall-clock checks no plan scope can skip. */

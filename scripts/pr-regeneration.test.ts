@@ -278,8 +278,9 @@ test("manual regeneration uses the existing App only after target and output che
   expect(source).toContain(
     "format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id)",
   );
+  // Only the CI-requested changed-file autofix shares the per-PR group.
   expect(source).toContain(
-    `cancel-in-progress: \${{ github.event_name == 'pull_request' }}`,
+    `cancel-in-progress: \${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.generator == 'changed-files') }}`,
   );
   expect(source).not.toContain("contents: write");
   expect(source).not.toContain("secrets.");
@@ -295,7 +296,10 @@ test("manual regeneration uses the existing App only after target and output che
     throw new TypeError("Missing regeneration job");
   }
   const job = raw.jobs["regenerate-requested-files"];
-  expect(job).toHaveProperty("if", "github.event_name == 'workflow_dispatch'");
+  expect(job).toHaveProperty(
+    "if",
+    "github.event_name == 'workflow_dispatch' && inputs.generator != 'changed-files'",
+  );
   expect(job).toHaveProperty("permissions", {
     contents: "read",
     "pull-requests": "read",

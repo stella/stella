@@ -928,6 +928,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "marketing-screenshots-cancel",
         "code-quality-api-cancel",
         "code-quality-web-rest-cancel",
+        "autofix-dispatch",
         "ci-quick-checks",
         "code-quality-web-rest",
         "desktop-rust-tests",

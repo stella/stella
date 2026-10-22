@@ -1631,6 +1631,10 @@ jobs:
       actions: write
     env:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
+    # Drift the changed-file autofix repairs; see
+    # scripts/autofix-drift-checks.ts.
+    outputs:
+      fixable: ${{ steps.cli_registry_guard.outcome == 'failure' || steps.mcp_app_outputs_guard.outcome == 'failure' || steps.visual_sandbox_guard.outcome == 'failure' || steps.capability_catalog_guard.outcome == 'failure' || steps.route_tree_guard.outcome == 'failure' }}
     steps:
       - name: Checkout
         id: checkout
@@ -1693,6 +1697,7 @@ jobs:
           cp .env.example .env
 
       - name: CLI sharded registry and derived runtime guard
+        id: cli_registry_guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The CLI and shared chat-policy projections must match the live MCP
         # registry: regenerate all of them and fail on any diff so a registry
@@ -1720,6 +1725,7 @@ jobs:
           bun scripts/check-cli-runtime-generation.ts
 
       - name: MCP app derived outputs guard
+        id: mcp_app_outputs_guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The contracts and single-file bundles are derived before use, never
         # committed. Build them from source, check the bundle budgets, and fail
@@ -1745,12 +1751,14 @@ jobs:
           bun scripts/check-mcp-generated-tracking.ts
 
       - name: Visual sandbox document tests
+        id: visual_sandbox_guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           (cd apps/api && bun run build:visual-sandbox)
           git diff --exit-code -- apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt
 
       - name: Capability catalog drift guard
+        id: capability_catalog_guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The committed capability catalog (every `tool`/`covered` safe handler,
         # projected to id + input schema + permissions + scope + access +
@@ -1769,6 +1777,7 @@ jobs:
         run: bun --filter @stll/api gen:web-api-types --check
 
       - name: Route tree drift guard
+        id: route_tree_guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.route_tree_required == 'true') }}
         run: bun --filter @stll/web generate:route-tree --check
 
@@ -1921,6 +1930,10 @@ jobs:
       CI_CANCELLATION_KIND: CONTEXTUAL
       CI_CANCELLATION_CONTEXT: Queue failure cancellation depends on workflow outcomes.
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
+    # Drift the changed-file autofix repairs; see
+    # scripts/autofix-drift-checks.ts.
+    outputs:
+      fixable: ${{ steps.check_pool.outputs.fixable == 'true' }}
     steps:
       - name: Checkout
         env:
@@ -2098,6 +2111,10 @@ jobs:
       CI_CANCELLATION_KIND: CONTEXTUAL
       CI_CANCELLATION_CONTEXT: Queue failure cancellation depends on workflow outcomes.
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
+    # Drift the changed-file autofix repairs; see
+    # scripts/autofix-drift-checks.ts.
+    outputs:
+      fixable: ${{ steps.check_pool.outputs.fixable == 'true' || steps.tauri_alignment.outcome == 'failure' }}
     steps:
       - name: Checkout
         env:
@@ -2257,6 +2274,7 @@ jobs:
           bun scripts/check-standalone-negated-shell.ts
 
       - name: Tauri package alignment
+        id: tauri_alignment
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Tauri package alignment')) }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -3056,6 +3074,10 @@ jobs:
       actions: write
     env:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
+    # Drift the changed-file autofix repairs; see
+    # scripts/autofix-drift-checks.ts.
+    outputs:
+      fixable: ${{ steps.code_quality.outputs.fixable == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -3107,6 +3129,7 @@ jobs:
           cp .env.example .env
 
       - name: Code quality
+        id: code_quality
         # Past the code-check warning budget (~18 min), a stalled check must
         # not hold the job until the job's own timeout.
         timeout-minutes: 20
@@ -3214,6 +3237,10 @@ jobs:
       actions: write
     env:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
+    # Drift the changed-file autofix repairs; see
+    # scripts/autofix-drift-checks.ts.
+    outputs:
+      fixable: ${{ steps.code_quality_web.outputs.fixable == 'true' || steps.typecheck_coverage.outcome == 'failure' || steps.code_quality_rest.outputs.fixable == 'true' || steps.aggregate_ownership.outcome == 'failure' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -3265,6 +3292,7 @@ jobs:
           cp .env.example .env
 
       - name: Code quality (web)
+        id: code_quality_web
         # Past the code-check warning budget (~18 min), a stalled check must
         # not hold the job until the job's own timeout.
         timeout-minutes: 20
@@ -3301,6 +3329,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Typecheck coverage
+        id: typecheck_coverage
         # Loaders can execute a TypeScript file that belongs to no project in
         # the turbo typecheck graph. Compare every repository source with the
         # compiler's own --listFilesOnly output so none bypass typechecking.
@@ -3309,6 +3338,7 @@ jobs:
           bun scripts/typecheck-coverage.ts
 
       - name: Code quality (rest)
+        id: code_quality_rest
         # Past the code-check warning budget (~18 min), a stalled check must
         # not hold the job until the job's own timeout.
         timeout-minutes: 20
@@ -3335,6 +3365,7 @@ jobs:
         run: bun run check:projection-totality
 
       - name: Aggregate ownership
+        id: aggregate_ownership
         run: |
           bun run check:aggregate-locks
           bun run check:aggregate-mutations
@@ -3391,6 +3422,84 @@ jobs:
         with:
           retries: 0
           script: *pr_code_quality_cancel
+
+  # The changed-file autofix runs only when a check found drift it repairs
+  # (scripts/autofix-drift-checks.ts): a clean pull request, or one red only
+  # on other checks, never starts it. The autofix App accepts pushes only
+  # from the `autofix.ci` workflow, so this job dispatches that workflow on
+  # the pull request branch instead of fixing here. `always()` keeps the
+  # request after a code-quality failure cancels the run; the head check
+  # drops a request a newer push superseded. Same-repository pull requests
+  # only, as before; Dependabot keeps its own autofix job.
+  autofix-dispatch:
+    name: Request autofix
+    needs:
+      [
+        ci-plan,
+        ci-quick-checks,
+        ci-checks-generated,
+        ci-checks-policy,
+        ci-checks-rest,
+        code-quality-api,
+        code-quality-web-rest,
+      ]
+    if: >-
+      always()
+      && github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.user.login != 'dependabot[bot]'
+      && github.actor != 'dependabot[bot]'
+      && github.actor != 'autofix-ci[bot]'
+      && contains(needs.*.outputs.fixable, 'true')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Fetch GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Dispatch changed-file autofix
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          gh_retry="$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh"
+          current=$(bash "$gh_retry" api "repos/$REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha)
+          if [[ "$current" != "$HEAD_SHA" ]]; then
+            echo "::notice::Pull request moved to $current; its own run requests autofix."
+            exit 0
+          fi
+          # The dispatch runs the branch's own autofix workflow. A branch from
+          # before CI-requested autofix still fixes on its own pushes.
+          bash "$gh_retry" api -H "Accept: application/vnd.github.raw+json" \
+            "repos/$REPOSITORY/contents/.github/workflows/autofix.yml?ref=$HEAD_SHA" \
+            > "$RUNNER_TEMP/autofix-workflow.yml"
+          if ! grep -qF "inputs.generator == 'changed-files'" "$RUNNER_TEMP/autofix-workflow.yml"; then
+            echo "::notice::The branch's autofix workflow predates CI-requested autofix."
+            exit 0
+          fi
+          bash "$gh_retry" api --method POST "repos/$REPOSITORY/actions/workflows/autofix.yml/dispatches" \
+            -f ref="$HEAD_REF" \
+            -f "inputs[pr]=$PR_NUMBER" \
+            -f "inputs[generator]=changed-files" \
+            -f "inputs[head]=$HEAD_SHA" > /dev/null
+          echo "::notice::Requested autofix for $HEAD_SHA."
 
   query-perf:
     needs: ci-plan
@@ -6173,6 +6282,8 @@ jobs:
     permissions:
       contents: read
       actions: write
+    outputs:
+      fixable: ${{ steps.job-classification.outcome == 'failure' }}
     steps:
       # parser-version-guard reads Git history, so the checkout is full.
       - name: Checkout

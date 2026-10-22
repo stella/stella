@@ -56,9 +56,8 @@ test("both PR paths use trusted alignment sources before their existing App push
   expect(dependencyJob).toContain(
     "github.event.pull_request.head.repo.full_name == github.repository",
   );
-  expect(humanScope).toContain(
-    "github.event.pull_request.head.repo.full_name == github.repository",
-  );
+  // CI requests the human autofix; the scope job re-reads the pull request.
+  expect(humanScope).toContain(".head.repo.full_name == $repository");
   expect(humanScope).toContain("github.actor != 'autofix-ci[bot]'");
   expect(humanJob.indexOf("- name: Install dependencies")).toBeGreaterThan(
     humanJob.indexOf("- name: Align Tauri counterparts"),
