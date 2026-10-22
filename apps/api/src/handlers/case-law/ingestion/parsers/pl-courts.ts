@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
+// parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
 /**
  * Polish Courts (SAOS) parser.
  *
@@ -519,6 +519,7 @@ export const parsePlDecisionContent = (
       { parser: "pl-courts", caseNumber: input.caseNumber },
       input.content,
       state.blocks,
+      { document: $ },
     );
   } else {
     const normalizedContent = normalizeLegacyPlainText(
