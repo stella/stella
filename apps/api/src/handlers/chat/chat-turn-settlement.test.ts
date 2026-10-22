@@ -2,6 +2,8 @@ import { convertMessagesToModelMessages } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import {
   closeCutShortCalls,
@@ -33,6 +35,7 @@ const call = (
   id: string,
   fields: {
     approval?: { approved?: boolean; id: string; needsApproval: boolean };
+    metadata?: Record<string, unknown>;
     output?: unknown;
     state: ToolCallState;
   },
@@ -89,6 +92,26 @@ describe("tool calls a settled turn may leave open", () => {
         streaming,
       ]),
     ).toEqual(["approved", "streaming"]);
+  });
+
+  test("a turn awaiting the user leaves an approved client call owed its result", () => {
+    const executedBy = (executor: "client" | "server") =>
+      call(`approved-${executor}`, {
+        approval: {
+          approved: true,
+          id: `approval_${executor}`,
+          needsApproval: true,
+        },
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor },
+        state: "approval-responded",
+      });
+    const parts = [executedBy("client"), executedBy("server")];
+
+    expect(openIds("awaiting-user", parts)).toEqual(["approved-server"]);
+    expect(openIds("completed", parts)).toEqual([
+      "approved-client",
+      "approved-server",
+    ]);
   });
 
   test.each(["cancelled", "failed", "interrupted"] as const)(
