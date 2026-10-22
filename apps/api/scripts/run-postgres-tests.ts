@@ -134,12 +134,16 @@ process.exitCode = await runGatedTests({
             .map(async (source) => {
               const report = Bun.file(source);
               if (await report.exists()) {
-                return { source, xml: await report.text() };
+                return { source, xml: await report.text(), missing: false };
               }
-              missingReport = true;
-              return { source, xml: missingBatchReport(source) };
+              return {
+                source,
+                xml: missingBatchReport(source),
+                missing: true,
+              };
             }),
         );
+        missingReport = reports.some(({ missing }) => missing);
         await Bun.write(
           path.resolve(import.meta.dir, "..", reporterPlan.requestedOutfile),
           mergeJunitReports(reports),

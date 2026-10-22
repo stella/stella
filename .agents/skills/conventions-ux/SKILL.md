@@ -417,6 +417,8 @@ after three rounds and say plainly what still falls short.
 
 ## Anti-Patterns
 
+Keep narrative prose below 80 characters per line through the Prose component; code, tables, editors and other task-shaped surfaces are exempt.
+
 Explicit list of patterns that AI agents tend to generate and
 that do not belong in a professional legal workspace. Each began as a
 reasonable idea and became a tell by being produced by default,
