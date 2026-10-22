@@ -239,6 +239,8 @@ describe("professional-use provenance migrations", () => {
       );
     `);
     await db.exec(await migrationSql(SOURCE_MIGRATION));
+    // A retry after any committed stage reruns the whole file; it converges.
+    await db.exec(await migrationSql(SOURCE_MIGRATION));
 
     // The previous release's insert names no source.
     await db.exec(`
