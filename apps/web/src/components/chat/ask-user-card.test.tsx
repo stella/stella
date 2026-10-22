@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 
 import { afterAll, describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
@@ -28,14 +28,23 @@ afterAll(() => {
   process.env["VITE_API_URL"] = previousApiUrl;
 });
 
+const withIntl = (children: ReactNode) => (
+  <IntlProvider locale="en" messages={messages} timeZone="UTC">
+    <FormattingProvider locale="en" timeZone="UTC">
+      {children}
+    </FormattingProvider>
+  </IntlProvider>
+);
+
 const renderWithIntl = (children: ReactNode) =>
-  renderToStaticMarkup(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <FormattingProvider locale="en" timeZone="UTC">
-        {children}
-      </FormattingProvider>
-    </IntlProvider>,
-  );
+  renderToStaticMarkup(withIntl(children));
+
+/** Waits for the lazily loaded answer renderer the analysis goes through. */
+const renderWithLoadedMarkdown = async (children: ReactNode) => {
+  const stream = await renderToReadableStream(withIntl(children));
+  await stream.allReady;
+  return new Response(stream).text();
+};
 
 const createAskUserPart = (
   questions: AskUserInput["questions"],
@@ -78,8 +87,8 @@ describe("ask-user clarification card", () => {
 
   for (const { format, analysis } of imageFormats) {
     for (const { mode, restorationPairs } of restorationModes) {
-      test(`renders ${format} image labels in ${mode} analysis`, () => {
-        const html = renderWithIntl(
+      test(`renders ${format} image labels in ${mode} analysis`, async () => {
+        const html = await renderWithLoadedMarkdown(
           <AskUserCard
             isAwaitingUser
             onSubmit={() => {}}

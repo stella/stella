@@ -1,23 +1,28 @@
-import type { ComponentProps } from "react";
-
 import { cn } from "@stll/ui/utils";
 
 import { MessageResponse } from "@/components/ai-elements/message";
-import type { MessageResponseProps } from "@/components/ai-elements/message-response";
-import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
+import type {
+  MessageImagePolicy,
+  MessageResponseProps,
+} from "@/components/ai-elements/message-response";
 
 type MarkdownPreviewProps = Omit<
   MessageResponseProps,
-  "children" | "components"
+  "children" | "imagePolicy"
 > & {
   children: string;
-  components?: MessageResponseProps["components"];
   fallbackChildren?: string | undefined;
 };
 
+// Markdown previews render untrusted document content, so opening one must
+// not itself trigger a network request driven by that content. Images whose
+// data is embedded in the document render; any other image shows its alt text.
+const PREVIEW_IMAGES = {
+  kind: "embedded-data",
+} as const satisfies MessageImagePolicy;
+
 export const MarkdownPreview = ({
   className,
-  components,
   ...props
 }: MarkdownPreviewProps) => (
   <MessageResponse
@@ -34,33 +39,7 @@ export const MarkdownPreview = ({
       "[&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-0.5",
       className,
     )}
-    components={
-      components
-        ? { ...components, ...MARKDOWN_PREVIEW_COMPONENTS }
-        : MARKDOWN_PREVIEW_COMPONENTS
-    }
     {...props}
+    imagePolicy={PREVIEW_IMAGES}
   />
 );
-
-// Markdown previews render untrusted document content, so opening one must
-// not itself trigger a network request driven by that content. Only render
-// images whose data is embedded in the document; for anything else, fall
-// back to the alt text so nothing hits the network.
-const SafePreviewImage = ({
-  alt,
-  node: _node,
-  src,
-  ...props
-}: ComponentProps<"img"> & { node?: unknown }) => {
-  if (isSafeMarkdownPreviewImageSrc(src)) {
-    return <img alt={alt} src={src} {...props} />;
-  }
-  return alt ? (
-    <span className="text-muted-foreground italic">{alt}</span>
-  ) : null;
-};
-
-const MARKDOWN_PREVIEW_COMPONENTS = {
-  img: SafePreviewImage,
-} satisfies MessageResponseProps["components"];

@@ -1,17 +1,15 @@
 import type { AnchorHTMLAttributes, ComponentProps, ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 
-import { defaultRehypePlugins, Streamdown } from "streamdown";
-import type { Pluggable } from "unified";
+import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
-import { rehypeChatLinks } from "@stll/chat/link-markdown";
 import { CheckIcon, HelpCircleIcon, PencilIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
-import { messageComponents } from "@/components/ai-elements/message-response-components";
+import { MessageResponse } from "@/components/ai-elements/message";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
   AskUserInput,
@@ -20,7 +18,6 @@ import type {
   RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
-import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -174,22 +171,14 @@ export const AskUserCard = ({
   const analysisComponents = useMemo(
     () => ({
       a: createAnalysisAnchor(workspaceId),
-      img: messageComponents.img,
       "stll-anon": renderAnalysisAnonymizedSpan,
     }),
     [workspaceId],
   );
-  // Stable rehype-plugins identity so Streamdown's internal memo
-  // can short-circuit when nothing actually changed.
-  const analysisRehypePlugins = useMemo(
-    () => [
-      ...Object.values(defaultRehypePlugins),
-      rehypeScopeAnswerIds,
-      ...(pairs.length > 0
-        ? [[rehypeAnonSpans, pairs] satisfies Pluggable]
-        : []),
-      rehypeChatLinks,
-    ],
+  // Stable rehype-plugins identity so the answer renderer's memo can
+  // short-circuit when nothing actually changed.
+  const analysisRehypePlugins = useMemo<PluggableList | undefined>(
+    () => (pairs.length > 0 ? [[rehypeAnonSpans, pairs]] : undefined),
     [pairs],
   );
   const answeredOutput = part.state === "complete" ? part.output : null;
@@ -389,13 +378,12 @@ export const AskUserCard = ({
       {/* Analysis */}
       {input.analysis && (
         <div className="border-border/50 text-muted-foreground border-t px-3 py-2 text-xs [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-          <Streamdown
-            allowedTags={{ "stll-anon": ["ph"] }}
+          <MessageResponse
             components={analysisComponents}
             rehypePlugins={analysisRehypePlugins}
           >
             {input.analysis}
-          </Streamdown>
+          </MessageResponse>
         </div>
       )}
 

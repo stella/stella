@@ -1,12 +1,11 @@
 import { useState } from "react";
 
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Streamdown } from "streamdown";
 
 import type { TableChartResponse } from "@stll/api-contract/table-chart";
 
+import { MessageResponse } from "@/components/ai-elements/message";
 import { ChatTableChart } from "@/components/chat/chat-table-chart";
-import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { createAppQueryClient } from "@/lib/react-query";
 
 const fixture = {
@@ -23,9 +22,6 @@ const fixture = {
 } satisfies TableChartResponse;
 const requestPlan = async () => await Promise.resolve(fixture);
 const components = {
-  a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-    <StreamdownMentionLink {...props} interactive={false} />
-  ),
   table: (
     props: Omit<React.ComponentProps<typeof ChatTableChart>, "cacheScope">,
   ) => (
@@ -45,11 +41,11 @@ export const TableChartPlayground = () => {
         className="w-full max-w-2xl p-6"
         data-playground-section="table-chart"
       >
-        <Streamdown mode="static" components={components}>
+        <MessageResponse components={components}>
           {
             "| Month | Hours |\n| --- | ---: |\n| June | 12 |\n| July | 8 |\n| August | 16 |"
           }
-        </Streamdown>
+        </MessageResponse>
       </section>
     </QueryClientProvider>
   );

@@ -4,7 +4,6 @@ import { useId, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
-import type { CustomRenderer, CustomRendererProps } from "streamdown";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
@@ -168,7 +167,14 @@ const downloadSvg = (svg: string) => {
   URL.revokeObjectURL(url);
 };
 
-const MermaidDiagramBlock = ({ code, isIncomplete }: CustomRendererProps) => {
+/** A fenced Mermaid block in an answer; the answer renderer registers it. */
+export const MermaidDiagramBlock = ({
+  code,
+  isIncomplete,
+}: {
+  code: string;
+  isIncomplete: boolean;
+}) => {
   const idPrefix = `diagram-${useId().replaceAll(/[^a-zA-Z0-9]/gu, "")}`;
   const diagram = useQuery({
     queryKey: ["chat-diagram", idPrefix, code],
@@ -222,8 +228,3 @@ const blockState = (
     ? { kind: "source" }
     : { kind: "settled", render: data };
 };
-
-export const mermaidDiagramRenderer = {
-  language: "mermaid",
-  component: MermaidDiagramBlock,
-} as const satisfies CustomRenderer;

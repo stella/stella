@@ -1,12 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
 import type { Root } from "hast";
 import { fromMarkdown } from "mdast-util-from-markdown";
-import { defaultRehypePlugins, Streamdown } from "streamdown";
+import { IntlProvider } from "use-intl";
 
 import { assertProperty } from "@stll/property-testing";
 
@@ -16,27 +17,24 @@ import {
 } from "@/components/chat/markdown-selection.logic";
 import { rehypeMarkdownSourceOffsets } from "@/components/chat/rehype-markdown-source-offsets";
 import { mapAnswerSelection } from "@/features/chat/answer-edit/answer-edit-selection";
+import messages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
 afterAll(async () => await unregisterDomEnvironment());
 
+const { MessageResponseImpl } =
+  await import("@/components/ai-elements/message-response");
+
 const renderMarkdown = (source: string) => {
   const root = document.createElement("div");
-  // safe-html: Streamdown's default rehype sanitize/harden chain renders generated Markdown into a detached test document.
+  // safe-html: the answer renderer's own sanitized output for generated Markdown, parsed into a detached test document.
   root.innerHTML = renderToStaticMarkup(
-    <Streamdown
-      mode="static"
-      controls={false}
-      parseIncompleteMarkdown={false}
-      normalizeHtmlIndentation={false}
-      rehypePlugins={[
-        ...Object.values(defaultRehypePlugins),
-        rehypeMarkdownSourceOffsets,
-      ]}
-    >
-      {source}
-    </Streamdown>,
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <MessageResponseImpl sourceOffsets>{source}</MessageResponseImpl>
+      </IntlProvider>
+    </QueryClientProvider>,
   );
   return root;
 };

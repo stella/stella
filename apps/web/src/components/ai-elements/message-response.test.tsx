@@ -3,19 +3,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 
 import { MessageResponseImpl } from "@/components/ai-elements/message-response";
-import { messageComponents } from "@/components/ai-elements/message-response-components";
 
 describe("message response media", () => {
-  test("renders image labels without loading their source", () => {
+  test("server-rendered image labels name no source and add no preload", () => {
+    const source = "![Referenced diagram](https://example.invalid/remote.png)";
     const rendered = renderToStaticMarkup(
-      messageComponents.img({
-        alt: "Referenced diagram",
-        src: "https://example.invalid/remote.png",
-      }),
+      <MessageResponseImpl>{source}</MessageResponseImpl>,
     );
 
     expect(rendered).toContain("Referenced diagram");
     expect(rendered).not.toContain("example.invalid");
+    expect(rendered).not.toMatch(/<(?:img|link)\b/iu);
   });
 });
 

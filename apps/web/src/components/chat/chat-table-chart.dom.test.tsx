@@ -19,7 +19,8 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
-const { Streamdown } = await import("streamdown");
+const { MessageResponseImpl } =
+  await import("@/components/ai-elements/message-response");
 const { ChatTableChart } = await import("./chat-table-chart");
 
 afterEach(async () => {
@@ -59,8 +60,7 @@ const mount = (
         timeZone="UTC"
       >
         <FormattingProvider locale={locale} timeZone="UTC">
-          <Streamdown
-            mode="static"
+          <MessageResponseImpl
             components={{
               table: (props) => (
                 <ChatTableChart
@@ -72,7 +72,7 @@ const mount = (
             }}
           >
             {sourceMarkdown}
-          </Streamdown>
+          </MessageResponseImpl>
         </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,

@@ -100,6 +100,12 @@ const isTestSupportModule = (moduleId: string): boolean =>
   moduleId.startsWith("apps/api/src/tests/");
 
 const LUCIDE = packageWithSubpaths("lucide-react");
+// Streamdown and its `@streamdown/*` plugin packages.
+const STREAMDOWN = (moduleId: string): boolean =>
+  packageWithSubpaths("streamdown")(moduleId) ||
+  moduleId.startsWith("@streamdown/");
+const STREAMDOWN_OWNER =
+  "apps/web/src/components/ai-elements/message-response.tsx";
 // Every icon reaches the app through one module, so a glyph restricted to an
 // owner component is restricted there too.
 const ICON_MODULE = "packages/ui/src/icons.ts";
@@ -285,6 +291,25 @@ const RESTRICTED_IMPORT_RULES = {
         dynamicImports: DYNAMIC_IMPORTS.allowed,
       },
       owners: [],
+    },
+  ],
+  // Chat Markdown is untrusted (model output, tool results, quoted documents).
+  // One renderer owns its sanitize chain and its no-outbound-request pass, so
+  // no surface can render it with a plugin set or components that fetch.
+  "no-direct-streamdown-import": [
+    {
+      messageId: "directStreamdownImport",
+      message:
+        "Do not import streamdown here: render untrusted chat content " +
+        "through MessageResponse from @/components/ai-elements/message-response " +
+        "(or a primitive that module exports).",
+      modules: [STREAMDOWN],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.restricted,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [STREAMDOWN_OWNER],
     },
   ],
   // Most effects are unnecessary; external-system sync goes through the

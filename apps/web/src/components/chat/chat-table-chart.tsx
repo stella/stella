@@ -4,7 +4,6 @@ import type { ComponentProps, ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import type { Element } from "hast";
-import { defaultComponents } from "streamdown";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -21,6 +20,7 @@ import { sha256Hex } from "@stll/sha256/browser";
 import { Button } from "@stll/ui/button";
 import { TableChart } from "@stll/ui/table-chart";
 
+import { MessageTable } from "@/components/ai-elements/message-response";
 import {
   chartTableFromNode,
   tableChartPoints,
@@ -50,13 +50,12 @@ export const ChatTableChart = ({
   ...props
 }: ChatTableChartProps) => {
   const table = chartTableFromNode(node);
-  const SourceTable = defaultComponents.table;
   // A streaming content change starts a new presentation instead of applying an old plan.
   return (
     <ChartableTable
       key={JSON.stringify([cacheScope, table])}
       table={table}
-      source={<SourceTable {...props} />}
+      source={<MessageTable {...props} />}
       cacheScope={cacheScope}
       requestPlan={requestPlan}
     />
