@@ -17,7 +17,7 @@ test("an empty or absent encoded selection runs every discovered suite", () => {
 });
 
 test("an encoded selection reaches the gated runner unchanged", () => {
-  const selected = { mode: "selected", files: ["src/b.db.test.ts"] } as const;
+  const selected = { mode: "selected" as const, files: ["src/b.db.test.ts"] };
   expect(
     parseGatedTestSelection(
       postgresTestSelectionFromEnv(encodePostgresTestSelection(selected)),
