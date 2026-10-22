@@ -33,6 +33,7 @@ import {
 } from "@/api/handlers/chat/active-skill-context";
 import {
   chatMessageFromPersisted,
+  getAwaitedApprovalToolNames,
   getAwaitingUserInteractions,
   getResumedUserInteraction,
   isChatPart,
@@ -1211,6 +1212,29 @@ const prepareDispatch = async ({
 type ThreadValidationState = InferOk<
   Awaited<ReturnType<typeof readThreadValidationState>>
 >;
+
+/**
+ * The tools whose awaited approvals the incoming message answers: a replay of
+ * the stored assistant message that awaits them. An answer resumes on the
+ * tool's gate, so a grant stored while its card waited applies to the next
+ * request.
+ */
+const answeredApprovalToolNamesOf = ({
+  incomingMessage,
+  persistedMessage,
+}: {
+  incomingMessage: Pick<PersistableChatMessage, "id" | "role">;
+  persistedMessage: ThreadValidationState["persistedMessage"];
+}): ReadonlySet<string> =>
+  getAwaitedApprovalToolNames(
+    incomingMessage.role === "assistant" && persistedMessage !== null
+      ? chatMessageFromPersisted({
+          content: persistedMessage.content,
+          id: incomingMessage.id,
+          role: persistedMessage.role,
+        })
+      : null,
+  );
 
 type CreateTurnVisualOriginOptions = {
   incomingMessage: Pick<PersistableChatMessage, "id" | "role">;
@@ -2989,6 +3013,10 @@ export const createSendMessage = (
           latestMessagePlan.messages,
         );
         const chatTools = applyChatToolGrants({
+          answeredApprovalToolNames: answeredApprovalToolNamesOf({
+            incomingMessage: body.message,
+            persistedMessage: validationThreadState.persistedMessage,
+          }),
           externalConnectors,
           grants: chatToolGrants,
           tools: getChatTools({
