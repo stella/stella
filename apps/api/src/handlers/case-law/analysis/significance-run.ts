@@ -27,6 +27,8 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { analysisStore } from "@/api/lib/case-law/analysis-store";
 import type { AnalysisStore } from "@/api/lib/case-law/analysis-store";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -51,6 +53,11 @@ import type { CitationGraphFacts } from "./significance";
  * graph moved is a different key and does start a run.
  */
 const inFlight = new Set<string>();
+
+const SIGNIFICANCE_NONE_SAVE_FAILED_SINK = failureSink({
+  event: "case_law.analysis.significance_none_save_failed",
+  expected: [],
+});
 
 type RefreshSignificanceOptions = {
   /** Admits the refresh only once it is known to call the model. */
@@ -157,9 +164,9 @@ export const refreshSignificance = async ({
         }),
     );
     if (Result.isError(saved)) {
-      captureError(saved.error, {
-        source: "case-law-analysis-significance",
-        decisionId,
+      observeFailure(saved.error, {
+        sink: SIGNIFICANCE_NONE_SAVE_FAILED_SINK,
+        ctx: { decisionId },
       });
     }
     return;
