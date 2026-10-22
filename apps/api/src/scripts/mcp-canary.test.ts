@@ -1481,6 +1481,9 @@ describe("OAuth client journeys", () => {
         input instanceof Request ? input.url : input.toString(),
       );
       requests.push({ url: requestUrl, init });
+      if (CANARY_CLIENT_IDS.some((clientId) => clientId === requestUrl.href)) {
+        return Response.json({ client_id: requestUrl.href });
+      }
       if (requestUrl.pathname === "/.well-known/oauth-protected-resource/mcp") {
         return Response.json({
           authorization_servers: ["https://api.example"],
@@ -1520,7 +1523,7 @@ describe("OAuth client journeys", () => {
       fetcher,
     );
     expect(results).toHaveLength(
-      1 + CANARY_CLIENT_IDS.length * LOOPBACK_REDIRECTS.length,
+      1 + CANARY_CLIENT_IDS.length * (LOOPBACK_REDIRECTS.length + 1),
     );
     expect(results.every(({ status }) => status === "passed")).toBe(true);
     expect(
@@ -1560,7 +1563,9 @@ describe("OAuth client journeys", () => {
       fetcher,
     );
     expect(results).toHaveLength(
-      2 + (CANARY_CLIENT_IDS.length + 1) * LOOPBACK_REDIRECTS.length,
+      2 +
+        CANARY_CLIENT_IDS.length * (LOOPBACK_REDIRECTS.length + 1) +
+        LOOPBACK_REDIRECTS.length,
     );
     expect(results.every(({ status }) => status === "passed")).toBe(true);
     expect(
@@ -1589,6 +1594,155 @@ describe("OAuth client journeys", () => {
     expect(await new Response(registration?.init.body).json()).toMatchObject({
       redirect_uris: LOOPBACK_REDIRECTS,
     });
+  });
+
+  test("reports unavailable client metadata once without probing authorize", async () => {
+    const { fetcher: baseFetcher, requests } = fakeOAuth();
+    const unavailableClient = CANARY_CLIENT_IDS[0];
+    const fetcher: CanaryFetcher = async (input, init) => {
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
+      if (url.href === unavailableClient) {
+        requests.push({ url, init });
+        return new Response(null, { status: 404 });
+      }
+      return await baseFetcher(input, init);
+    };
+
+    const results = await runOAuthJourneys(
+      {
+        baseUrl: "https://api.example",
+        frontendUrl: "https://app.example",
+        mode: "frequent",
+      },
+      fetcher,
+    );
+
+    expect(results).toContainEqual({
+      name: `client metadata ${unavailableClient}`,
+      status: "upstream",
+      detail: "client metadata unavailable upstream (HTTP 404)",
+    });
+    expect(
+      requests.filter(
+        ({ url }) =>
+          url.pathname === "/oauth/authorize" &&
+          url.searchParams.get("client_id") === unavailableClient,
+      ),
+    ).toHaveLength(0);
+  });
+
+  test("stops a client's authorize variants after its first failure", async () => {
+    const { fetcher: baseFetcher, requests } = fakeOAuth();
+    const failingClient = CANARY_CLIENT_IDS[0];
+    const fetcher: CanaryFetcher = async (input, init) => {
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
+      if (
+        url.pathname === "/oauth/authorize" &&
+        url.searchParams.get("client_id") === failingClient
+      ) {
+        requests.push({ url, init });
+        return Response.json({ code: "invalid_client" }, { status: 400 });
+      }
+      return await baseFetcher(input, init);
+    };
+
+    const results = await runOAuthJourneys(
+      {
+        baseUrl: "https://api.example",
+        frontendUrl: "https://app.example",
+        mode: "frequent",
+      },
+      fetcher,
+    );
+
+    expect(
+      requests.filter(
+        ({ url }) =>
+          url.pathname === "/oauth/authorize" &&
+          url.searchParams.get("client_id") === failingClient,
+      ),
+    ).toHaveLength(1);
+    expect(
+      results.filter(
+        ({ name, status }) =>
+          name.startsWith(`authorize ${failingClient}`) && status === "skipped",
+      ),
+    ).toHaveLength(LOOPBACK_REDIRECTS.length - 1);
+  });
+
+  test("retries a 429 once when Retry-After is at most 60 seconds", async () => {
+    const { fetcher: baseFetcher } = fakeOAuth();
+    let authorizeRequests = 0;
+    const fetcher: CanaryFetcher = async (input, init) => {
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
+      if (url.pathname === "/oauth/authorize") {
+        authorizeRequests += 1;
+        if (authorizeRequests === 1) {
+          return new Response(null, {
+            status: 429,
+            headers: { "Retry-After": "1" },
+          });
+        }
+      }
+      return await baseFetcher(input, init);
+    };
+
+    const results = await runOAuthJourneys(
+      {
+        baseUrl: "https://api.example",
+        frontendUrl: "https://app.example",
+        mode: "frequent",
+      },
+      fetcher,
+    );
+
+    expect(authorizeRequests).toBe(
+      CANARY_CLIENT_IDS.length * LOOPBACK_REDIRECTS.length + 1,
+    );
+    expect(results.some(({ status }) => status === "rate_limited")).toBe(false);
+  });
+
+  test("does not retry a 429 with a long Retry-After", async () => {
+    const { fetcher: baseFetcher } = fakeOAuth();
+    let authorizeRequests = 0;
+    const fetcher: CanaryFetcher = async (input, init) => {
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
+      if (url.pathname === "/oauth/authorize") {
+        authorizeRequests += 1;
+        if (authorizeRequests === 1) {
+          return new Response(null, {
+            status: 429,
+            headers: { "Retry-After": "600" },
+          });
+        }
+      }
+      return await baseFetcher(input, init);
+    };
+
+    const results = await runOAuthJourneys(
+      {
+        baseUrl: "https://api.example",
+        frontendUrl: "https://app.example",
+        mode: "frequent",
+      },
+      fetcher,
+    );
+
+    expect(authorizeRequests).toBe(1 + LOOPBACK_REDIRECTS.length);
+    expect(results).toContainEqual(
+      expect.objectContaining({
+        name: expect.stringContaining("authorize"),
+        status: "rate_limited",
+      }),
+    );
   });
 });
 
