@@ -49,6 +49,9 @@ const rateLimitError = (retryAfterS?: number) => {
 type PendingUpload = {
   name: string;
   signal: AbortSignal;
+  reportFinalizeBusy: (
+    event: { retryAfterS: number; attempt: number } | null,
+  ) => void;
   resolve: (value: string) => void;
   reject: (error: Error) => void;
 };
@@ -79,7 +82,11 @@ class ScriptedUploader {
   private readonly live: PendingUpload[] = [];
   private readonly settled = new WeakSet<PendingUpload>();
 
-  readonly fn = async (file: File, signal: AbortSignal): Promise<string> => {
+  readonly fn = async (
+    file: File,
+    signal: AbortSignal,
+    reportFinalizeBusy: PendingUpload["reportFinalizeBusy"],
+  ): Promise<string> => {
     this.totalCalls++;
     this.callsByFile.set(file.name, (this.callsByFile.get(file.name) ?? 0) + 1);
     if (this.live.some((p) => p.name === file.name)) {
@@ -92,6 +99,7 @@ class ScriptedUploader {
       const entry: PendingUpload = {
         name: file.name,
         signal,
+        reportFinalizeBusy,
         resolve: (value) => {
           this.finish(entry);
           resolve(value);
@@ -139,6 +147,13 @@ class ScriptedUploader {
 
   rejectFile(name: string, error: Error) {
     this.pendingFor(name).reject(error);
+  }
+
+  reportFinalizeBusy(
+    name: string,
+    event: { retryAfterS: number; attempt: number } | null,
+  ) {
+    this.pendingFor(name).reportFinalizeBusy(event);
   }
 
   liveNamesList(): string[] {
@@ -930,6 +945,44 @@ describe("a stale in-flight settlement does not leak across runs", () => {
   // retryFailed() has already started a fresh run. The stale settlement
   // must not be counted into the new run's completed/failed/total
   // bookkeeping or its `done` event.
+  test.each([false, true])(
+    "a stale settlement preserves the replacement run's finalize wait (failure: %s)",
+    async (shouldFail) => {
+      const uploader = new ScriptedUploader();
+      const { queue } = harness(uploader, 2);
+      uploader.ignoreAbortFor.add("stale");
+
+      queue.enqueue(makeFiles("stale", "replacement"));
+      await flush();
+      uploader.rejectFile("replacement", httpError(400));
+      await flush();
+      queue.cancel();
+      await flush();
+
+      queue.retryFailed();
+      await flush();
+      uploader.reportFinalizeBusy("replacement", {
+        retryAfterS: 1,
+        attempt: 1,
+      });
+      expect(queue.getState()).toBe("finalize-busy");
+
+      if (shouldFail) {
+        uploader.rejectFile("stale", httpError(500));
+      } else {
+        uploader.resolveFile("stale");
+      }
+      await flush();
+
+      expect(queue.getState()).toBe("finalize-busy");
+
+      uploader.reportFinalizeBusy("replacement", null);
+      uploader.resolveFile("replacement");
+      await flush();
+      expect(queue.getState()).toBe("done");
+    },
+  );
+
   test("an in-flight file that resolves after cancel+retryFailed is dropped from the new run", async () => {
     const uploader = new ScriptedUploader();
     const cap = 2;

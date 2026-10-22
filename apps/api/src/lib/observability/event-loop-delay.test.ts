@@ -135,7 +135,24 @@ describe("event-loop delay monitoring", () => {
           rssBytes: 10,
           heapUsedBytes: 5,
           arrayBuffersBytes: 2,
-          workPools: {},
+          workPools: {
+            upload: {
+              inFlight: 2,
+              queued: 3,
+              bytesInFlight: 4,
+              refusedBusy: 5,
+              refusedMemory: 6,
+              deadlineCancelled: 7,
+            },
+            "heavy-sidecar": {
+              inFlight: 8,
+              queued: 9,
+              bytesInFlight: 10,
+              refusedBusy: 11,
+              refusedMemory: 12,
+              deadlineCancelled: 13,
+            },
+          },
         }),
       onReport: (report) => {
         reports.push(report);
@@ -153,6 +170,18 @@ describe("event-loop delay monitoring", () => {
           rssBytes: 10,
           heapUsedBytes: 5,
           arrayBuffersBytes: 2,
+          "work_pool.upload.inFlight": 2,
+          "work_pool.upload.queued": 3,
+          "work_pool.upload.bytesInFlight": 4,
+          "work_pool.upload.refusedBusy": 5,
+          "work_pool.upload.refusedMemory": 6,
+          "work_pool.upload.deadlineCancelled": 7,
+          "work_pool.heavy-sidecar.inFlight": 8,
+          "work_pool.heavy-sidecar.queued": 9,
+          "work_pool.heavy-sidecar.bytesInFlight": 10,
+          "work_pool.heavy-sidecar.refusedBusy": 11,
+          "work_pool.heavy-sidecar.refusedMemory": 12,
+          "work_pool.heavy-sidecar.deadlineCancelled": 13,
         },
       ]);
     } finally {

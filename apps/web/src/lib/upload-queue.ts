@@ -321,10 +321,6 @@ export class UploadQueue<T> {
       });
       this.inflight.delete(file);
 
-      if (this.state === "finalize-busy") {
-        this.setState("running");
-      }
-
       if (isStaleSettlement()) {
         // Belongs to a superseded run: drop it from accounting, but still
         // pump() so the freed slot (and, for the current run, a possible
@@ -334,19 +330,23 @@ export class UploadQueue<T> {
         return;
       }
 
+      if (this.state === "finalize-busy") {
+        this.setState("running");
+      }
+
       this.completed.push(result);
       this.emitProgress();
       this.pump();
     } catch (error) {
       this.inflight.delete(file);
 
-      if (this.state === "finalize-busy") {
-        this.setState("running");
-      }
-
       if (isStaleSettlement()) {
         this.pump();
         return;
+      }
+
+      if (this.state === "finalize-busy") {
+        this.setState("running");
       }
 
       const status = getErrorStatus(error);
