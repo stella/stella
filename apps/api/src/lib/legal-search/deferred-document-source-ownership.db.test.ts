@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
-import type { ScheduleTimeout } from "@stll/concurrency/with-timeout";
+import type { WithTimeoutScheduler } from "@stll/concurrency/with-timeout";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -38,7 +38,7 @@ const barrier = () => {
 const manualDeadline = () => {
   const scheduled = barrier();
   let fireDeadline = (): void => panic("deadline was never scheduled");
-  const scheduleTimeout: ScheduleTimeout = (callback) => {
+  const scheduleTimeout: WithTimeoutScheduler = (callback) => {
     fireDeadline = callback;
     scheduled.resolve();
     return () => {

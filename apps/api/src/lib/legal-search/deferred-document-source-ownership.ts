@@ -2,7 +2,7 @@
 import { Result, TaggedError } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
-import type { ScheduleTimeout } from "@stll/concurrency/with-timeout";
+import type { WithTimeoutScheduler } from "@stll/concurrency/with-timeout";
 
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction, type ScopedDb } from "@/api/db/safe-db";
@@ -51,7 +51,7 @@ type WithDeferredDocumentSourceOwnershipOptions<T> = {
   signal?: AbortSignal;
   timeoutMs: number;
   /** Starts the deadline timer; tests inject one to fire it at a chosen point. */
-  scheduleTimeout?: ScheduleTimeout;
+  scheduleTimeout?: WithTimeoutScheduler;
   /**
    * The generation an earlier ownership claimed the decision under; a merge
    * completed since then makes that claim's snapshot stale.

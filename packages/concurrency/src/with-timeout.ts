@@ -13,12 +13,12 @@ export class TimeoutError extends TaggedError("TimeoutError")<{
  * Starts the deadline timer and returns its cancel function. Tests inject one
  * to fire the deadline at a chosen point instead of racing the wall clock.
  */
-export type ScheduleTimeout = (
+export type WithTimeoutScheduler = (
   callback: () => void,
   delayMs: number,
 ) => () => void;
 
-const defaultScheduleTimeout: ScheduleTimeout = (callback, delayMs) => {
+const defaultScheduleTimeout: WithTimeoutScheduler = (callback, delayMs) => {
   const timer = setTimeout(callback, delayMs);
   return () => clearTimeout(timer);
 };
@@ -27,7 +27,7 @@ type WithTimeoutOptions = {
   label: string;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
-  scheduleTimeout?: ScheduleTimeout | undefined;
+  scheduleTimeout?: WithTimeoutScheduler | undefined;
 };
 
 /**
