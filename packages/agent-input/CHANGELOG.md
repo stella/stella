@@ -1,5 +1,11 @@
 # @stll/agent-input
 
+## 0.1.8
+
+### Patch Changes
+
+- [#6011](https://github.com/stella/stella/pull/6011) [`6f9f7d4`](https://github.com/stella/stella/commit/6f9f7d46bd87eda5bf37efc402e7611f21044633) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the fuzzy-search dependency to 1.4.0.
+
 ## 0.1.7
 
 ### Patch Changes
