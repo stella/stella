@@ -37,7 +37,7 @@ export type McpSession = {
   scopes: string[];
   credential?:
     | { type: "agent_run"; runId: string }
-    | { type: "oauth_client"; clientId: string }
+    | { type: "oauth_client"; clientId: string; issuedAt: number }
     /**
      * `permissions` is the key's own permission set, already checked to be a
      * subset of its owner's current role when the credential resolved. It rides
@@ -117,7 +117,10 @@ const isMcpCredential = (
       return typeof value["runId"] === "string" && value["runId"].length > 0;
     case "oauth_client":
       return (
-        typeof value["clientId"] === "string" && value["clientId"].length > 0
+        typeof value["clientId"] === "string" &&
+        value["clientId"].length > 0 &&
+        typeof value["issuedAt"] === "number" &&
+        Number.isInteger(value["issuedAt"])
       );
     case "personal_api_key":
     case "machine_api_key":
@@ -221,10 +224,20 @@ export const extractMcpSession = (
         }),
       );
     }
-    credential =
-      typeof rawClientId === "string" && rawClientId.length > 0
-        ? { type: "oauth_client", clientId: rawClientId }
-        : { type: "delegated_user" };
+    if (typeof rawClientId === "string" && rawClientId.length > 0) {
+      if (!Number.isInteger(payload.iat) || payload.iat === undefined) {
+        return Result.err(
+          new McpAuthenticationError({ message: "Token missing iat claim" }),
+        );
+      }
+      credential = {
+        type: "oauth_client",
+        clientId: rawClientId,
+        issuedAt: payload.iat,
+      };
+    } else {
+      credential = { type: "delegated_user" };
+    }
   }
 
   return Result.ok({

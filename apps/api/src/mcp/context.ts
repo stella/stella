@@ -502,11 +502,15 @@ export const resolveMcpSessionContext = async (
     panic("User has an invalid member role");
   }
 
-  const auditExecution = await resolveAgentAuditExecution({
+  const auditExecutionResult = await resolveAgentAuditExecution({
     credential: session.credential,
     organizationId,
     userId,
   });
+  if (auditExecutionResult.isErr()) {
+    throw auditExecutionResult.error;
+  }
+  const auditExecution = auditExecutionResult.value;
 
   const memberRole = authorization.role;
   const bootstrapScopedDb = createMembershipScopedDb(rlsDb, {

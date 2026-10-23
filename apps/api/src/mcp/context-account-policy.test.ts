@@ -13,7 +13,10 @@ import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
 
 const credentialCases = [
-  { type: "oauth_client", claims: { client_id: "client_one" } },
+  {
+    type: "oauth_client",
+    claims: { client_id: "client_one", iat: 1_700_000_000 },
+  },
   { type: "delegated_user", claims: {} },
   {
     type: "agent_run",
