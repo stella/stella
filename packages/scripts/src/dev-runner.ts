@@ -2222,7 +2222,7 @@ export const buildPersistentSteps = ({
         "src/scripts/document-processing-worker.ts",
       ],
       cwd: path.resolve(rootDir, "apps/api"),
-      env: seeded ? { ...apiEnv, SCHEDULED_JOBS_MODE: "worker" } : apiEnv,
+      env: seeded ? { ...apiEnv, SCHEDULED_JOBS_MODE: "enabled" } : apiEnv,
       label: "Document processing worker",
     });
   }

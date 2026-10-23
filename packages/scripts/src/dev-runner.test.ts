@@ -1390,7 +1390,7 @@ describe("dev env factories", () => {
       primarySteps(seeded).map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
     // The API process stays scheduler-disabled after seeding, while the
     // separately started queue worker drains uploaded documents.
-    expect(scheduledJobsModes(true)).toEqual(["disabled", "worker"]);
+    expect(scheduledJobsModes(true)).toEqual(["disabled", "enabled"]);
     expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);
     expect(primarySteps(true).map((step) => step.label)).toContain(
       "Document processing worker",
