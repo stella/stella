@@ -49,6 +49,14 @@ const DENIED_NPM_DEPENDENCIES = new Set([
   "rapidfuzz",
   "fuzzywuzzy",
 ]);
+const DENIED_TEST_RUNNER_DEPENDENCIES = new Set([
+  "jest",
+  "vitest",
+  "mocha",
+  "@types/jest",
+  "@types/vitest",
+  "@types/mocha",
+]);
 const DENIED_CARGO_DEPENDENCIES = new Set([
   "strsim",
   "levenshtein",
@@ -209,6 +217,13 @@ const validateDeniedNpmDependencies = (
               ?.groups?.["name"]
           : undefined;
       const actualName = npmAlias ?? name;
+      if (DENIED_TEST_RUNNER_DEPENDENCIES.has(actualName)) {
+        issues.push({
+          message: `${actualName} is blocked; tests run on bun test`,
+          path: packageJsonPath,
+        });
+        continue;
+      }
       const deniedName = DENIED_NPM_DEPENDENCIES.has(actualName)
         ? actualName
         : undefined;
