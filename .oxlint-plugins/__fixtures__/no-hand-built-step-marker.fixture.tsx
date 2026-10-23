@@ -10,6 +10,7 @@ export const BadNumberedMarker = () => (
 );
 
 export const OrderedSteps = () => (
+  // expect-clean: no-hand-built-step-marker/no-hand-built-step-marker
   <Steps>
     <Step>Prepare</Step>
     <Step>Review</Step>

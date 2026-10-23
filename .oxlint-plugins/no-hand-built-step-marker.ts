@@ -1,7 +1,12 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Ranged } from "@oxlint/plugins";
 
-import { getPropertyName, isAstNode, jsxName } from "./utils.ts";
+import {
+  elementName,
+  getPropertyName,
+  isAstNode,
+  isIdentifier,
+} from "./utils.ts";
 
 const PADDED_MARKER = /^0[1-9]$/u;
 const INDEX_NAMES = new Set(["i", "index", "positionIndex", "stepIndex"]);
@@ -10,7 +15,7 @@ const isInsideSteps = (node: Ranged): boolean => {
   let current: unknown = node;
   while (isAstNode(current)) {
     if (current.type === "JSXElement") {
-      const name = jsxName(current.openingElement.name);
+      const name = elementName(current);
       if (name === "Steps") {
         return true;
       }
@@ -27,8 +32,7 @@ const containsIndexIncrement = (node: unknown): boolean => {
   if (
     node.type === "BinaryExpression" &&
     node.operator === "+" &&
-    isAstNode(node.left) &&
-    node.left.type === "Identifier" &&
+    isIdentifier(node.left) &&
     INDEX_NAMES.has(node.left.name) &&
     isAstNode(node.right) &&
     node.right.type === "Literal" &&
@@ -56,7 +60,7 @@ export default eslintCompatPlugin({
             "Do not hand-build a numbered marker. Remove decorative numbering or render a meaningful sequence through Steps.",
         },
       },
-      create(context) {
+      createOnce(context) {
         const report = (node: Ranged) => {
           if (!isInsideSteps(node)) {
             context.report({ node, messageId: "marker" });

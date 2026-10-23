@@ -23,6 +23,7 @@ import type {
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLocale as useFormattingLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 
 type AskUserPart = Extract<RegisteredChatUIToolCallPart, { name: "ask-user" }>;
@@ -165,6 +166,7 @@ export const AskUserCard = ({
   restorationPairs,
 }: AskUserCardProps) => {
   const t = useTranslations();
+  const formattingLocale = useFormattingLocale();
   // Stable empty fallback so useMemo deps don't churn when the
   // caller doesn't pass any pairs.
   const pairs: readonly ChatAnonRestoration[] =
@@ -399,7 +401,7 @@ export const AskUserCard = ({
       <form onSubmit={handleFormSubmit}>
         {/* Questions */}
         <div className="border-border/50 border-t px-3 py-3">
-          <Steps>
+          <Steps lang={formattingLocale}>
             {input.questions.map((q, i) => {
               const hasOptions = (q.options?.length ?? 0) > 0;
               return (
