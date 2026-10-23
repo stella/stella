@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -81,6 +81,7 @@ const { QueryClient, QueryClientProvider } =
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { default: messages } = await import("@/i18n/langs/en.json");
+const { stellaToast } = await import("@stll/ui/toast");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { AIAvailabilityProvider, AIUnavailableDialogTrigger, useAIKeyGate } =
@@ -241,6 +242,62 @@ test.each([
     queryClient.clear();
   },
 );
+
+test("an AI action a member cannot unblock says why instead of doing nothing", async () => {
+  providerConfiguration = "permission_required";
+  const toast = spyOn(stellaToast, "add").mockReturnValue("toast-1");
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const gates = new Map<"gate", ReturnType<typeof useAIKeyGate>>();
+  const CaptureGate = () => {
+    gates.set("gate", useAIKeyGate());
+    return null;
+  };
+  try {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthenticatedUserProvider
+          user={{
+            activeOrganizationId: "org-1",
+            email: "member@example.test",
+            id: "user-1",
+            image: null,
+            name: "Member",
+            preferredName: null,
+            timezoneId: "UTC",
+            wordEditShortcut: null,
+          }}
+        >
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+            <FormattingProvider locale="en" timeZone="UTC">
+              <AIAvailabilityProvider>
+                <CaptureGate />
+              </AIAvailabilityProvider>
+            </FormattingProvider>
+          </IntlProvider>
+        </AuthenticatedUserProvider>
+      </QueryClientProvider>,
+    );
+    await settle();
+    let proceeded: boolean | undefined;
+    await act(async () => {
+      proceeded = await gates.get("gate")?.ensureAIAvailable();
+    });
+    expect(proceeded).toBe(false);
+    expect(toast).toHaveBeenCalledWith({
+      title: "Only an organization admin can connect an AI provider.",
+      type: "info",
+    });
+    expect(
+      screen.queryByRole("heading", { name: "Connect AI provider" }),
+    ).toBeNull();
+    expect(aiConfigRequests).toBe(0);
+  } finally {
+    toast.mockRestore();
+    queryClient.clear();
+  }
+});
 
 test("a provider under another provider reuses the outer gate", async () => {
   configStatus = 200;

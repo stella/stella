@@ -94,6 +94,7 @@ export const AIAvailabilityProvider = ({
 
 const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const [open, setOpen] = useState(false);
+  const t = useTranslations();
   const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
@@ -136,9 +137,16 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
 
     if (availability.providerConfiguration === "allowed") {
       setOpen(true);
+      return false;
     }
+    // This member cannot connect a provider, so the action they triggered
+    // stops here; say why instead of doing nothing.
+    stellaToast.add({
+      title: t(aiUnavailableMessageKey(availability)),
+      type: "info",
+    });
     return false;
-  }, [availabilityOptions, queryClient, tErrors]);
+  }, [availabilityOptions, queryClient, t, tErrors]);
 
   const openIfAIUnavailable = useCallback(() => {
     if (
