@@ -458,15 +458,20 @@ test("exception identity survives sibling removal and rejects ambiguous covered 
   );
 });
 
+// The tracked tree proves its owners parse offline. The empty change scope is
+// a pull request that touches no waiver, so the verdict cannot depend on
+// today's date; expiry itself is covered above against fixed instants.
 test("check consumes validated tracked files without spawning under the offline preload", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-tracked-"));
   const trackedFiles = path.join(directory, "tracked-files");
+  const changedFiles = path.join(directory, "changed-files");
   try {
     const git = Bun.spawnSync(["git", "ls-files", "-z"], {
       cwd: path.resolve(import.meta.dir, ".."),
     });
     expect(git.exitCode).toBe(0);
     writeFileSync(trackedFiles, git.stdout);
+    writeFileSync(changedFiles, "");
 
     const checked = Bun.spawnSync(
       [
@@ -477,6 +482,8 @@ test("check consumes validated tracked files without spawning under the offline 
         "--check",
         "--tracked-files",
         trackedFiles,
+        "--changed-files",
+        changedFiles,
       ],
       { cwd: path.resolve(import.meta.dir, "..") },
     );

@@ -24,7 +24,6 @@ export const exhaustivePolicy = docSourcePolicyCase({
       expiresAt: "2026-09-25T00:00:00.000Z",
     },
   ],
-  now: "2026-08-27T00:00:00.000Z",
 });
 
 // oxlint-disable-next-line docs-source-policy/docs-source-policy -- a direct dependency with no source or exclusion
@@ -37,11 +36,10 @@ export const unclassifiedDependency = docSourcePolicyCase({
     },
   },
   exclusions: [],
-  now: "2026-08-27T00:00:00.000Z",
 });
 
-// oxlint-disable-next-line docs-source-policy/docs-source-policy -- the quarantine expired before `now`
-export const expiredQuarantine = docSourcePolicyCase({
+// oxlint-disable-next-line docs-source-policy/docs-source-policy -- a quarantine longer than 31 days
+export const unboundedQuarantine = docSourcePolicyCase({
   dependencies: ["undocumented-package"],
   sources: {},
   exclusions: [
@@ -50,10 +48,9 @@ export const expiredQuarantine = docSourcePolicyCase({
       reason: "no-llms-txt",
       explanation: "The canonical documentation had no llms.txt endpoint.",
       checkedAt: "2026-08-26T00:00:00.000Z",
-      expiresAt: "2026-08-27T00:00:00.000Z",
+      expiresAt: "2026-10-01T00:00:00.000Z",
     },
   ],
-  now: "2026-08-27T00:00:00.000Z",
 });
 
 // oxlint-disable-next-line docs-source-policy/docs-source-policy -- one dependency with both a source and an exclusion
@@ -74,7 +71,6 @@ export const doubleClassification = docSourcePolicyCase({
       expiresAt: "2026-09-25T00:00:00.000Z",
     },
   ],
-  now: "2026-08-27T00:00:00.000Z",
 });
 
 const dependencyNames = ["documented-package"];

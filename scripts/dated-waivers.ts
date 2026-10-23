@@ -286,7 +286,8 @@ export const waiverWarnings = (
   );
 
 // How the per-change gate treats an elapsed waiver. An elapsed release-age
-// exclusion is the owner's cleanup (dated-waiver-healing opens it), and an
+// exclusion is the owner's cleanup (dated-waiver-healing opens it) and stops
+// exempting new pins in scripts/check-lockfile-release-ages.ts, and an
 // elapsed flaky-test quarantine is enforced on main by the scheduled
 // flaky-test-quarantine workflow, which fails naming its owner: neither is a defect
 // of whichever change is under review, so pull requests and merge groups only
