@@ -88,6 +88,8 @@ const clientWithAvailability = (available = true) => {
       .queryKey,
     {
       available,
+      unavailableReason: available ? null : "provider_not_configured",
+      providerConfiguration: "allowed",
       orgConfigured: available,
       instanceProvisioned: false,
       deferredServiceTierAvailable: false,

@@ -7,6 +7,11 @@ GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/cases/1" });
 
 const originalFetch = globalThis.fetch;
 let configStatus = 200;
+let providerConfiguration:
+  | "allowed"
+  | "permission_required"
+  | "account_restricted" = "allowed";
+let aiConfigRequests = 0;
 globalThis.fetch = Object.assign(
   async (input: RequestInfo | URL) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
@@ -14,7 +19,15 @@ globalThis.fetch = Object.assign(
       return Response.json(null);
     }
     if (url.pathname.endsWith("/organization-settings/ai-availability")) {
-      return Response.json({ available: false });
+      return Response.json({
+        available: false,
+        instanceProvisioned: false,
+        orgConfigured: false,
+        unavailableReason: "provider_not_configured",
+        providerConfiguration,
+        deferredServiceTierAvailable: false,
+        mockAnswers: false,
+      });
     }
     if (
       url.pathname.endsWith("/organization-settings/ai-config/defaults-preview")
@@ -40,6 +53,7 @@ globalThis.fetch = Object.assign(
       });
     }
     if (url.pathname.endsWith("/organization-settings/ai-config")) {
+      aiConfigRequests += 1;
       return configStatus === 200
         ? Response.json({
             configured: false,
@@ -74,6 +88,8 @@ const { AIAvailabilityProvider, AIUnavailableDialogTrigger, useAIKeyGate } =
 
 afterEach(() => {
   cleanup();
+  providerConfiguration = "allowed";
+  aiConfigRequests = 0;
 });
 
 afterAll(async () => {
@@ -94,6 +110,7 @@ test.each([
   [403, "cancel"],
   [200, "escape"],
   [403, "escape"],
+  [500, "cancel"],
 ] as const)(
   "an automatically opened AI key dialog stays closed after dismissal (config read %d, %s)",
   async (status, dismissal) => {
@@ -139,6 +156,25 @@ test.each([
     expect(heading).toBeDefined();
     expect(isOpen()).toBe(true);
     await settle();
+    if (status === 403) {
+      expect(
+        screen.getByText(
+          "Only an organization admin can connect an AI provider.",
+        ),
+      ).toBeDefined();
+      expect(screen.getByRole("button", { name: "Configure" }).title).toBe(
+        "Only an organization admin can connect an AI provider.",
+      );
+    }
+    if (status === 500) {
+      // A failure that is not a refusal keeps the retry feedback.
+      expect(screen.getByText("Something went wrong")).toBeDefined();
+      expect(
+        screen.queryByText(
+          "Only an organization admin can connect an AI provider.",
+        ),
+      ).toBeNull();
+    }
     if (dismissal === "cancel") {
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     } else {
@@ -151,6 +187,57 @@ test.each([
     });
     await settle();
     expect(isOpen()).toBe(false);
+    queryClient.clear();
+  },
+);
+
+test.each([
+  [
+    "permission_required",
+    "Only an organization admin can connect an AI provider.",
+  ],
+  [
+    "account_restricted",
+    "AI provider settings are unavailable for this account.",
+  ],
+] as const)(
+  "%s capability renders guidance without opening or reading AI config",
+  async (capability, message) => {
+    providerConfiguration = capability;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthenticatedUserProvider
+          user={{
+            activeOrganizationId: "org-1",
+            email: "member@example.test",
+            id: "user-1",
+            image: null,
+            name: "Member",
+            preferredName: null,
+            timezoneId: "UTC",
+            wordEditShortcut: null,
+          }}
+        >
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+            <FormattingProvider locale="en" timeZone="UTC">
+              <AIAvailabilityProvider>
+                <AIUnavailableDialogTrigger />
+              </AIAvailabilityProvider>
+            </FormattingProvider>
+          </IntlProvider>
+        </AuthenticatedUserProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText(message)).toBeDefined();
+    await settle();
+    expect(
+      screen.queryByRole("heading", { name: "Connect AI provider" }),
+    ).toBeNull();
+    expect(aiConfigRequests).toBe(0);
     queryClient.clear();
   },
 );
