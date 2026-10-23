@@ -405,24 +405,34 @@ const digestFileSchema = v.object({
   failures: v.array(v.object({ job: v.string(), step: v.string() })),
 });
 
-const pullPagesSchema = v.array(
-  v.array(
-    v.object({
-      number: v.number(),
-      state: v.string(),
-      draft: v.boolean(),
-      labels: v.array(v.object({ name: v.string() })),
-      head: v.object({
-        sha: v.string(),
-        repo: v.nullable(v.object({ full_name: v.string() })),
-      }),
-      base: v.object({
-        ref: v.string(),
-        repo: v.object({ full_name: v.string() }),
-      }),
-    }),
-  ),
-);
+const pullSchema = v.object({
+  number: v.number(),
+  state: v.string(),
+  draft: v.boolean(),
+  labels: v.array(v.object({ name: v.string() })),
+  head: v.object({
+    sha: v.string(),
+    repo: v.nullable(v.object({ full_name: v.string() })),
+  }),
+  base: v.object({
+    ref: v.string(),
+    repo: v.object({ full_name: v.string() }),
+  }),
+});
+const pullPagesSchema = v.array(v.array(pullSchema));
+
+const pullState = (
+  pull: v.InferOutput<typeof pullSchema>,
+  queued: ReadonlySet<number>,
+) => ({
+  state: pull.state,
+  draft: pull.draft,
+  baseRef: pull.base.ref,
+  baseRepository: pull.base.repo.full_name,
+  headRepository: pull.head.repo?.full_name ?? null,
+  labels: pull.labels.map(({ name }) => name),
+  inMergeQueue: queued.has(pull.number),
+});
 
 const mergeQueueSchema = v.object({
   data: v.object({
@@ -671,7 +681,9 @@ export const collectMainRuns = async (
 const mergeQueueNumbers = async ({
   gh,
   repository,
-}: CollectOptions): Promise<Result<ReadonlySet<number>, GhCommandError>> => {
+}: Pick<CollectOptions, "gh" | "repository">): Promise<
+  Result<ReadonlySet<number>, GhCommandError>
+> => {
   const [owner = "", name = ""] = repository.split("/");
   const response = await gh([
     "api",
@@ -760,14 +772,8 @@ export const collectPullRequests = async (
   for (const pull of pages.value.flat()) {
     const base: PullRequestEvidence = {
       number: pull.number,
-      state: pull.state,
-      draft: pull.draft,
-      baseRef: pull.base.ref,
-      baseRepository: pull.base.repo.full_name,
-      headRepository: pull.head.repo?.full_name ?? null,
+      ...pullState(pull, queued.value),
       headSha: pull.head.sha,
-      labels: pull.labels.map(({ name }) => name),
-      inMergeQueue: queued.value.has(pull.number),
       latestRun: null,
       failedPairs: null,
       headMainMergeAt: null,
@@ -824,6 +830,36 @@ export const collectPullRequests = async (
     });
   }
   return Result.ok(evidence);
+};
+
+/**
+ * Why a selected pull request may no longer be refreshed, read right before
+ * its update: the expected head guards only its commits, while a hold label
+ * or a merge queue entry can arrive without one.
+ */
+export const recheckRefresh = async (
+  options: Pick<CollectOptions, "gh" | "repository">,
+  { number, headSha }: Pick<Selected, "number" | "headSha">,
+): Promise<Result<string | undefined, GhCommandError>> => {
+  const pull = await getJson(
+    options.gh,
+    pullSchema,
+    `repos/${options.repository}/pulls/${number}`,
+  );
+  if (pull.isErr()) {
+    return pull;
+  }
+  if (pull.value.head.sha !== headSha) {
+    return Result.ok("head moved");
+  }
+  // Last, so the queue is read as close to the update as possible.
+  const queued = await mergeQueueNumbers(options);
+  if (queued.isErr()) {
+    return queued;
+  }
+  return Result.ok(
+    pullRequestStateBlocker(pullState(pull.value, queued.value)),
+  );
 };
 
 const runCount = async (
@@ -955,10 +991,38 @@ const runSelect = async (args: readonly string[]): Promise<void> => {
   }
 };
 
+// Prints `eligible` or why the pull request is skipped; exits non-zero only
+// when its state cannot be read.
+const runRecheck = async (args: readonly string[]): Promise<void> => {
+  const usage =
+    "Usage: refresh-after-main-fix.ts recheck --number <n> --head <sha>";
+  const number = Number(option(args, "--number") ?? panic(usage));
+  const headSha = option(args, "--head") ?? panic(usage);
+  const repository =
+    process.env["GITHUB_REPOSITORY"] ?? panic("GITHUB_REPOSITORY is required");
+  const blocker = await recheckRefresh(
+    { gh: ghRetry, repository },
+    { number, headSha },
+  );
+  if (blocker.isErr()) {
+    console.error(
+      `#${number} could not be rechecked: ${blocker.error.message}`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  console.log(blocker.value ?? "eligible");
+};
+
 if (import.meta.main) {
   const [command = "", ...args] = process.argv.slice(2);
-  if (command !== "select") {
-    panic("Usage: bun scripts/refresh-after-main-fix.ts select --out <file>");
+  if (command === "select") {
+    await runSelect(args);
+  } else if (command === "recheck") {
+    await runRecheck(args);
+  } else {
+    panic(
+      "Usage: bun scripts/refresh-after-main-fix.ts select --out <file> | recheck --number <n> --head <sha>",
+    );
   }
-  await runSelect(args);
 }

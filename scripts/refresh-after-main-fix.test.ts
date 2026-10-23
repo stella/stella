@@ -12,6 +12,7 @@ import {
   pairKey,
   plan,
   type PullRequestEvidence,
+  recheckRefresh,
   redWindows,
   type RedWindow,
   selectRefreshes,
@@ -431,5 +432,66 @@ describe("plan", () => {
   test("a day listing short of its total_count fails instead of selecting", async () => {
     const result = await plan(options(fakeGh({ truncate: true }).gh));
     expect(result.isErr()).toBe(true);
+  });
+});
+
+describe("the recheck right before an update", () => {
+  const HEAD = "a".repeat(40);
+  // The pull request as selected; each case changes one fact after selection.
+  const recheck = (
+    change: { labels?: string[]; head?: string; draft?: boolean },
+    queued: number[] = [],
+  ) => {
+    const gh: Gh = async (args) => {
+      if (args.includes("graphql")) {
+        return Result.ok(
+          JSON.stringify({
+            data: {
+              repository: {
+                mergeQueue: {
+                  entries: {
+                    totalCount: queued.length,
+                    nodes: queued.map((number) => ({
+                      pullRequest: { number },
+                    })),
+                  },
+                },
+              },
+            },
+          }),
+        );
+      }
+      expect(args.at(-1)).toBe("repos/o/r/pulls/7");
+      return Result.ok(
+        JSON.stringify({
+          number: 7,
+          state: "open",
+          draft: change.draft ?? false,
+          labels: (change.labels ?? []).map((name) => ({ name })),
+          head: { sha: change.head ?? HEAD, repo: { full_name: "o/r" } },
+          base: { ref: "main", repo: { full_name: "o/r" } },
+        }),
+      );
+    };
+    return recheckRefresh(
+      { gh, repository: "o/r" },
+      { number: 7, headSha: HEAD },
+    );
+  };
+
+  test("an unchanged pull request stays eligible", async () => {
+    expect((await recheck({})).unwrap()).toBeUndefined();
+  });
+
+  test("a hold, a queue entry or a draft that arrived without a commit skips it", async () => {
+    expect((await recheck({ labels: ["hold"] })).unwrap()).toBe("held");
+    expect((await recheck({}, [7])).unwrap()).toBe("in the merge queue");
+    expect((await recheck({ draft: true })).unwrap()).toBe("draft");
+  });
+
+  test("a moved head skips it", async () => {
+    expect((await recheck({ head: "b".repeat(40) })).unwrap()).toBe(
+      "head moved",
+    );
   });
 });

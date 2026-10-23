@@ -144,13 +144,17 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      # The expected head makes GitHub refuse a branch that moved since the
-      # selection. A refusal (422: moved or conflicting) is never retried.
+      # Each pull request is rechecked right before its update, with the
+      # workflow token: a hold or a merge queue entry can arrive without a
+      # commit. The expected head makes GitHub refuse a branch that moved
+      # since. A refusal (422: moved or conflicting) is never retried.
       - name: Update pull request branches
         if: steps.select.outputs.any == 'true'
         timeout-minutes: 5
+        working-directory: source
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          READ_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           refreshed=()
@@ -159,6 +163,15 @@ jobs:
             if [[ ! "$number" =~ ^[1-9][0-9]*$ || ! "$head" =~ ^[0-9a-f]{40}$ ]]; then
               echo "::error::Refusing an invalid selection entry."
               failed=1
+              continue
+            fi
+            if ! verdict=$(GH_TOKEN="$READ_TOKEN" bun scripts/refresh-after-main-fix.ts recheck --number "$number" --head "$head"); then
+              echo "::error::Rechecking #$number failed; the next fixed main run tries again."
+              failed=1
+              continue
+            fi
+            if [[ "$verdict" != eligible ]]; then
+              echo "::notice::Skipped #$number: $verdict."
               continue
             fi
             errors="$RUNNER_TEMP/update-$number.err"
