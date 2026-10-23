@@ -30,6 +30,42 @@ const ARM_PLATFORM = '[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"}]';
 
 export const PERIODIC_RELEASE_TYPECHECK_EVENTS = ["schedule"] as const;
 
+type ChangedFilesOptions = {
+  root: string;
+  base: string;
+  head: string;
+};
+
+class ChangedFilesReadError extends Error {
+  override name = "ChangedFilesReadError";
+  readonly _tag = "ChangedFilesReadError";
+}
+
+/** Read the exact no-renames path set used by changed-file CI planning. */
+export const changedFilesForCiPlan = ({
+  root,
+  base,
+  head,
+}: ChangedFilesOptions): string[] => {
+  const result = Bun.spawnSync(
+    ["git", "diff", "--name-only", "-z", "--no-renames", base, head],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  if (result.exitCode !== 0) {
+    throw new ChangedFilesReadError(
+      `Unable to read CI plan range ${base}..${head}: ${result.stderr.toString().trim()}`,
+    );
+  }
+  return result.stdout
+    .toString()
+    .split("\0")
+    .filter((file) => file.length > 0);
+};
+
+/** The API scope is selected whenever its owned source tree changed. */
+export const selectsApiScope = (changedFiles: readonly string[]): boolean =>
+  changedFiles.some((file) => file.startsWith("apps/api/"));
+
 export type ChangedFileScopeInput = {
   changedFiles: readonly string[];
   comparisonBase: string;

@@ -971,6 +971,7 @@ const resultGateCase = ({
       GITHUB_RUN_ID: "123",
       GITHUB_RUN_ATTEMPT: "1",
       GITHUB_STEP_SUMMARY: "/dev/null",
+      CERTIFIED_BASE: "0".repeat(40),
       FAKE_API_FAILURE: apiFailure ?? "",
       FAKE_CURRENT_RUN: JSON.stringify(currentRun),
       FAKE_RUNS: JSON.stringify([
@@ -1484,6 +1485,9 @@ const requiredRecordSchema = v.strictObject({
   event: v.string(),
   head_sha: v.nullable(v.string()),
   base_sha: v.nullable(v.string()),
+  certified_range: v.nullable(
+    v.strictObject({ base: v.string(), head: v.string() }),
+  ),
   run_id: v.nullable(v.number()),
   run_attempt: v.nullable(v.number()),
   depth: v.nullable(v.string()),
@@ -1563,7 +1567,11 @@ test("the required-jobs record names every workflow job once and carries the ver
         results: {},
         suiteDepth: SUITE_DEPTH.full,
       },
-      env: { HEAD_SHA: "a".repeat(40), BASE_SHA: "b".repeat(40) },
+      env: {
+        HEAD_SHA: "a".repeat(40),
+        BASE_SHA: "b".repeat(40),
+        CERTIFIED_BASE: "e".repeat(40),
+      },
     },
     {
       label: "merge-group-failure",
@@ -1659,6 +1667,7 @@ test("the required-jobs record names every workflow job once and carries the ver
     event: "merge_group",
     head_sha: "a".repeat(40),
     base_sha: "b".repeat(40),
+    certified_range: { base: "e".repeat(40), head: "a".repeat(40) },
     depth: "full",
     reused_from_run_id: null,
     verdict: "success",
@@ -1683,6 +1692,7 @@ test("the required-jobs record names every workflow job once and carries the ver
     event: "pull_request",
     head_sha: "c".repeat(40),
     base_sha: "d".repeat(40),
+    certified_range: null,
     depth: "fast",
     verdict: "success",
   });

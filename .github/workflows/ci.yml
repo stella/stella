@@ -6475,6 +6475,7 @@ jobs:
           # recorded for pull requests only.
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || inputs.sha || github.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || needs.ci-plan.outputs.target_base_sha }}
+          CERTIFIED_BASE: ${{ needs.ci-plan.outputs.comparison_base }}
           HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
           PATCH_ID: ${{ needs.ci-plan.outputs.patch_id }}
           WORKFLOW_VERSION: ${{ needs.ci-plan.outputs.pr_depth_workflow_version }}
@@ -6573,6 +6574,7 @@ jobs:
             fi
             record=$(jq -ce --argjson required "$required_jobs" --arg status "$status" \
               --arg event "${EVENT:-}" --arg head "${HEAD_SHA:-}" --arg base "${BASE_SHA:-}" \
+              --arg certified_base "${CERTIFIED_BASE:-}" \
               --arg run "${GITHUB_RUN_ID:-}" --arg attempt "${GITHUB_RUN_ATTEMPT:-}" \
               --arg depth "$depth" --arg profile "${COVERAGE_PROFILE:-}" --arg reused "$reused_from_run_id" \
               --arg pass_through "$pass_through_reason" '
@@ -6587,6 +6589,7 @@ jobs:
                   | .key] | unique) as $counted
               | {version: 1, event: $event,
                 head_sha: ($head | nonempty), base_sha: ($base | nonempty),
+                certified_range: (if $event == "merge_group" then {base: ($certified_base | nonempty), head: ($head | nonempty)} else null end),
                 run_id: ($run | count), run_attempt: ($attempt | count),
                 depth: ($depth | nonempty), coverage_profile: ($profile | nonempty),
                 reused_from_run_id: ($reused | count),
