@@ -1,0 +1,70 @@
+{
+  "route": "/admin/tools",
+  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data.",
+  "budget": {
+    "depth": 5,
+    "requests": [
+      "GET /api/auth/get-session",
+      "GET /api/auth/organization/get-active-member-role",
+      "GET /health",
+      "GET /v1/chat/threads",
+      "GET /v1/mcp/connectors",
+      "GET /v1/me/professional-use",
+      "GET /v1/notifications",
+      "GET /v1/notifications/events",
+      "GET /v1/organization-settings",
+      "GET /v1/organization-settings/ai-availability",
+      "GET /v1/organization-settings/deployment-features",
+      "GET /v1/signals/count",
+      "GET /v1/time-timers",
+      "GET /v1/workspaces/navigation"
+    ],
+    "requestCounts": {
+      "GET /api/auth/get-session": 1,
+      "GET /api/auth/organization/get-active-member-role": 1,
+      "GET /health": 1,
+      "GET /v1/chat/threads": 1,
+      "GET /v1/mcp/connectors": 1,
+      "GET /v1/me/professional-use": 1,
+      "GET /v1/notifications": 1,
+      "GET /v1/notifications/events": 1,
+      "GET /v1/organization-settings": 1,
+      "GET /v1/organization-settings/ai-availability": 1,
+      "GET /v1/organization-settings/deployment-features": 1,
+      "GET /v1/signals/count": 1,
+      "GET /v1/time-timers": 1,
+      "GET /v1/workspaces/navigation": 1
+    },
+    "dbQueries": {
+      "GET /api/auth/get-session": 4,
+      "GET /api/auth/organization/get-active-member-role": 4,
+      "GET /health": 1,
+      "GET /v1/chat/threads": 6,
+      "GET /v1/mcp/connectors": 6,
+      "GET /v1/me/professional-use": 2,
+      "GET /v1/notifications": 6,
+      "GET /v1/notifications/events": 4,
+      "GET /v1/organization-settings": 4,
+      "GET /v1/organization-settings/ai-availability": 4,
+      "GET /v1/organization-settings/deployment-features": 5,
+      "GET /v1/signals/count": 4,
+      "GET /v1/time-timers": 7,
+      "GET /v1/workspaces/navigation": 7
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/mcp/connectors": 6144,
+      "GET /v1/me/professional-use": 1024,
+      "GET /v1/notifications": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/organization-settings/deployment-features": 1024,
+      "GET /v1/signals/count": 1024,
+      "GET /v1/time-timers": 1024,
+      "GET /v1/workspaces/navigation": 20480
+    }
+  }
+}

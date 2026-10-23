@@ -13,6 +13,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import * as tanstackModels from "@/api/lib/tanstack-ai-models";
+import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import * as decisionModel from "@/api/lib/workflow/decisions/decision-model";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
@@ -33,6 +34,7 @@ type TemplateRow = { id: string; name: string; fieldCount: number };
 
 const orgId = toSafeId<"organization">("org-test");
 const userId = toSafeId<"user">("user-test");
+const templateId = toSafeId<"template">("00000000-0000-4000-8000-000000000001");
 
 /** Minimal scopedDb stub exposing only the templates RQB list_templates calls. */
 const stubScopedDb = (
@@ -132,7 +134,7 @@ describe("createTemplateTools", () => {
 });
 
 describe("fill_template grades the fill", () => {
-  const s3Key = "fake-key-chat-fill";
+  const s3Key = buildTemplateS3Key(orgId, templateId);
   const conditionField: FieldMeta = {
     path: "is_consumer",
     label: "Consumer contract",
@@ -239,10 +241,7 @@ describe("fill_template grades the fill", () => {
         (input: unknown, options: unknown) => Promise<Record<string, unknown>>
       >(tools[FILL_TEMPLATE_TOOL_NAME].execute);
 
-      const result = await execute(
-        { templateId: "00000000-0000-4000-8000-000000000001", values },
-        {},
-      );
+      const result = await execute({ templateId, values }, {});
       return { result, rows };
     } finally {
       fakeS3.stop();
