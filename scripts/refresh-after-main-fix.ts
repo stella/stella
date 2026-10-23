@@ -80,6 +80,8 @@ export type RedWindow = {
   readonly openedAt: string;
   readonly closedAt: string;
   readonly closingRunId: number;
+  // The main commit the closing run proved green.
+  readonly closingSha: string;
   // Normalised pair keys, see pairKey.
   readonly pairs: ReadonlySet<string>;
 };
@@ -196,6 +198,7 @@ export const redWindows = (mainRuns: readonly MainRun[]): RedWindow[] => {
             openedAt: open.openedAt,
             closedAt: run.createdAt,
             closingRunId: run.id,
+            closingSha: run.headSha,
             pairs: open.pairs,
           });
         }
@@ -880,6 +883,32 @@ export const recheckRefresh = async (
   );
 };
 
+/**
+ * Selected pull requests whose head does not contain the main commit their
+ * window closed on: a head that does already tested the fix, so its failure
+ * is its own and a refresh would only repeat it.
+ */
+const withoutFix = async (
+  { gh, repository }: CollectOptions,
+  selected: readonly Selected[],
+): Promise<Result<Selected[], GhCommandError>> => {
+  const kept: Selected[] = [];
+  for (const candidate of selected) {
+    const compared = await getJson(
+      gh,
+      compareSchema,
+      `repos/${repository}/compare/${candidate.window.closingSha}...${candidate.headSha}?per_page=1`,
+    );
+    if (compared.isErr()) {
+      return compared;
+    }
+    if (!["ahead", "identical"].includes(compared.value.status)) {
+      kept.push(candidate);
+    }
+  }
+  return Result.ok(kept);
+};
+
 const runCount = async (
   { gh, repository }: CollectOptions,
   query: string,
@@ -921,11 +950,18 @@ export const plan = async (
   if (pullRequests.isErr()) {
     return pullRequests;
   }
-  const selected = selectRefreshes({
-    windows,
-    pullRequests: pullRequests.value,
-    now: options.now,
-  });
+  const fixed = await withoutFix(
+    options,
+    selectRefreshes({
+      windows,
+      pullRequests: pullRequests.value,
+      now: options.now,
+    }),
+  );
+  if (fixed.isErr()) {
+    return fixed;
+  }
+  const selected = fixed.value;
   const counts: number[] = [];
   for (const query of [
     "event=pull_request&status=in_progress",

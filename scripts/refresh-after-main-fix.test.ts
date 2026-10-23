@@ -249,6 +249,7 @@ describe("paceRefreshes", () => {
     openedAt,
     closedAt: at(9),
     closingRunId: 1,
+    closingSha: "f".repeat(40),
     pairs: new Set(),
   });
   const selected: Selected[] = [
@@ -311,7 +312,11 @@ describe("plan", () => {
 
   // Main green at 1, red at 2 and 3, green at 6; one pull request whose run
   // at 4 failed only a check main failed then.
-  const fakeGh = ({ truncate = false, redAgain = false } = {}) => {
+  const fakeGh = ({
+    truncate = false,
+    redAgain = false,
+    headHasFix = false,
+  } = {}) => {
     const calls: string[] = [];
     const gh: Gh = async (args) => {
       calls.push(args.join(" "));
@@ -389,6 +394,11 @@ describe("plan", () => {
           }),
         ]);
       }
+      if (endpoint.includes("/compare/")) {
+        return Result.ok(
+          JSON.stringify({ status: headHasFix ? "ahead" : "diverged" }),
+        );
+      }
       if (endpoint.includes("/commits/")) {
         return Result.ok(
           JSON.stringify({
@@ -429,6 +439,22 @@ describe("plan", () => {
     expect(
       calls.filter((call) => call.includes("main-pr-depth.yml/runs")),
     ).toHaveLength(4);
+  });
+
+  test("a head that already contains the commit main went green on is not refreshed", async () => {
+    const { gh, calls } = fakeGh({ headHasFix: true });
+    const result = await plan(options(gh));
+    if (result.isErr()) {
+      expect.unreachable(result.error.message);
+    }
+    expect(result.value.selected).toEqual([]);
+    const closing = result.value.windows[0]?.closingSha ?? "";
+    expect(closing).toMatch(/^[0-9a-f]{40}$/u);
+    expect(
+      calls.some((call) =>
+        call.includes(`repos/o/r/compare/${closing}...${"b".repeat(40)}`),
+      ),
+    ).toBe(true);
   });
 
   test("a window that closed is not refreshed onto a main that failed again", async () => {

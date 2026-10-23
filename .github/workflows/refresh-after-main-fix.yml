@@ -180,6 +180,9 @@ jobs:
               refreshed+=("#$number@$head")
             elif grep -q 'HTTP 422' "$errors"; then
               echo "::notice::Skipped #$number: its head moved or it conflicts with main."
+            elif grep -q 'without `workflows` permission' "$errors"; then
+              # Bringing main's workflow changes into a branch needs a permission this job does not hold.
+              echo "::notice::Skipped #$number: updating it would change workflow files; its owner merges main."
             else
               cat "$errors" >&2
               echo "::error::Updating #$number failed; the next fixed main run tries again."
