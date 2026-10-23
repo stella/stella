@@ -1225,9 +1225,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     await back.press("Alt+ArrowLeft");
     await expect(rows).toHaveCount(35);
     await expect(opener).toBeFocused();
-    expect((await history(page)).links).toEqual([
-      `${metadata.url}#par=48-49`,
-    ]);
+    expect((await history(page)).links).toEqual([`${metadata.url}#par=48-49`]);
     await expect(page.locator("iframe")).toHaveCount(1);
   });
 }
@@ -1348,7 +1346,9 @@ test("search notes use one compact disclosure and hide model-only instructions",
   await expect(notice.locator("summary")).toContainText(
     "Žádná odpovídající rozhodnutí",
   );
-  await expect(notice.locator("summary")).toContainText("Žádné výsledky s filtry: Soud");
+  await expect(notice.locator("summary")).toContainText(
+    "Žádné výsledky s filtry: Soud",
+  );
   await expect(notice).not.toHaveAttribute("open");
   await expect(notice.locator("ul")).toBeHidden();
   const collapsedHeight = await notice.evaluate(
