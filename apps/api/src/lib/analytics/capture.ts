@@ -31,6 +31,7 @@ import { getRequestExceptionScopes } from "@/api/lib/observability/exception-sco
 import type { FailureGrading } from "@/api/lib/observability/failure";
 import {
   identityFields,
+  providerStatusFieldsOf,
   requestErrorStatusFields,
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -40,6 +41,7 @@ import {
   SHADOW_SINKS,
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
+import { providerErrorFields } from "@/api/lib/observability/provider-error-reason";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 
 /**
@@ -198,6 +200,7 @@ const exceptionFrame = (
 };
 
 /**
+
  * Drop the key whose window opened longest ago once the map is full, so a
  * process that sees an unbounded variety of errors cannot grow this map
  * without limit. Evicting an old window at worst re-reports its next
@@ -305,12 +308,37 @@ const captureErrorWithOptions = (
         )
       : undefined;
   const { context, rejected } = acceptCaptureContext(safeContext);
-  const status = requestErrorStatusFields(evidence)["error.status_code"];
+  // A provider error an adapter forwards as a plain object has no class, code
+  // or frame of its own, so its provider status and body code are the only
+  // structural fields that tell one refused request from another. Read only
+  // at the root: there the provider status shows the root is a provider error.
+  const rootProviderStatus = evidence.nodes.at(0)?.providerStatus?.status;
+  const providerFields =
+    rootProviderStatus === undefined ? {} : providerErrorFields(error);
+  const providerStatusFields = providerStatusFieldsOf(evidence);
+  const groupingFingerprint =
+    rootProviderStatus === undefined
+      ? stableFingerprint
+      : JSON.stringify([
+          stableFingerprint,
+          providerFields["error.provider.code"] ??
+            providerFields["error.provider.type"] ??
+            "",
+          String(rootProviderStatus),
+        ]);
+  const status =
+    requestErrorStatusFields(evidence)["error.status_code"] ??
+    rootProviderStatus;
   const className = exceptionClass(tag);
   // The identity fills a missing code with the class tag; that echo is no
   // code. Compared before branding: the two brands never overlap.
-  const rawCode = fingerprint["error.code"];
-  const code = rawCode === tag ? undefined : exceptionCode(rawCode);
+  const ownCode = fingerprint["error.code"];
+  const code = exceptionCode(
+    ownCode === undefined || ownCode === tag
+      ? (providerFields["error.provider.code"] ??
+          providerFields["error.provider.type"])
+      : ownCode,
+  );
   const frame = exceptionFrame(fingerprint["error.frame"]);
   const value = exceptionValue({
     className,
@@ -327,7 +355,8 @@ const captureErrorWithOptions = (
   // The caller's context goes first: every key after it is owned here.
   const properties: ExceptionProperties = {
     ...context,
-    $exception_fingerprint: stableFingerprint,
+    $exception_fingerprint: groupingFingerprint,
+
     $exception_level: "error",
     $exception_list: [
       {
@@ -339,6 +368,8 @@ const captureErrorWithOptions = (
     $exception_type: tag,
     // Source positions remain diagnostic properties, separate from grouping.
     ...fingerprint,
+    ...providerStatusFields,
+    ...providerFields,
     ...safeErrorTelemetryFields(error),
     ...(options.organizationId
       ? { organization_id: options.organizationId }
@@ -353,7 +384,7 @@ const captureErrorWithOptions = (
   logServerDevError(safeError, properties);
 
   const suppressed = admitCapture(
-    stableFingerprint,
+    groupingFingerprint,
     Temporal.Now.instant().epochMilliseconds,
   );
   if (suppressed === null) {

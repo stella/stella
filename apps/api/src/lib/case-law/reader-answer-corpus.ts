@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import { plainTextOf } from "@stll/legal-ast/document-ast";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -160,15 +160,13 @@ export const readReaderAnswerDecision = async (
         decisionId: read.decision.id,
         court: read.decision.court,
         decisionDate: read.decision.decisionDate,
+        // Every piece a reader selection can anchor to, so an Explain over a
+        // heading or a table cell resolves like one over a paragraph.
         paragraphs: read.ast.blocks.flatMap((block) =>
-          block.type === "paragraph"
-            ? [
-                {
-                  paragraphId: block.anchorId,
-                  text: plainTextOf(block.inlines),
-                },
-              ]
-            : [],
+          readerAnchorPiecesOf(block).map(({ anchorId, text }) => ({
+            paragraphId: anchorId,
+            text,
+          })),
         ),
       };
     },

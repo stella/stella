@@ -2,6 +2,7 @@ import { UnhandledException } from "better-result";
 import { beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import fc from "fast-check";
 
+import { classifyFailure } from "@stll/errors";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -327,6 +328,81 @@ describe("captureError issue grouping", () => {
     expect(firstExceptionValue()).toMatch(
       /^HandlerError\[upstream_unavailable\] 502 transient at apps\/api\/src\/lib\/analytics\/capture\.test\.ts:\d+:\d+$/u,
     );
+  });
+
+  test("names and separates provider bodies by provider status and code", () => {
+    // The shape a provider stream forwards as its run error's raw event: a
+    // plain object, so it has no class, code or frame of its own.
+    const providerBody = {
+      status: 400,
+      error: {
+        code: "invalid_value",
+        message: "Alex Doe <alex@example.test> privileged document text",
+        param: "input[3].call_id",
+        type: "invalid_request_error",
+      },
+    };
+    classifyFailure(providerBody, "provider_request_rejected");
+    const options = handlerErrorContext("analytics.captureProviderBody");
+    captureError(providerBody, options);
+    captureError(
+      {
+        status: 429,
+        error: {
+          code: "rate_limit_exceeded",
+          type: "requests",
+        },
+      },
+      options,
+    );
+
+    const properties = captured.at(0)?.properties;
+    expect(captured).toHaveLength(2);
+    expect(firstExceptionValue()).toBe(
+      "UnknownError[invalid_value] 400 provider_request_rejected defect",
+    );
+    expect(properties).toMatchObject({
+      "error.provider.code": "invalid_value",
+      "error.provider.param": "input[3].call_id",
+      "error.provider.status": "400",
+      "error.provider.type": "invalid_request_error",
+    });
+    expect(properties?.["$exception_fingerprint"]).toContain("invalid_value");
+    expect(properties?.["$exception_fingerprint"]).toContain("400");
+    expect(captured.at(1)?.properties["$exception_fingerprint"]).toContain(
+      "rate_limit_exceeded",
+    );
+    expect(captured.at(1)?.properties["$exception_fingerprint"]).toContain(
+      "429",
+    );
+    expect(properties?.["$exception_fingerprint"]).not.toBe(
+      captured.at(1)?.properties["$exception_fingerprint"],
+    );
+    expect(JSON.stringify(properties)).not.toContain("alex@example.test");
+  });
+
+  test("contains throwing provider field getters", () => {
+    const providerBody = {
+      status: 400,
+      error: {
+        get code(): string {
+          throw new Error("provider getter failed");
+        },
+        type: "invalid_request_error",
+      },
+    };
+
+    expect(() =>
+      captureError(
+        providerBody,
+        handlerErrorContext("analytics.captureProviderGetter"),
+      ),
+    ).not.toThrow();
+    expect(captured).toHaveLength(1);
+    expect(captured.at(0)?.properties).toMatchObject({
+      "error.provider.status": "400",
+      "error.provider.type": "invalid_request_error",
+    });
   });
 
   test.each([
