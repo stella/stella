@@ -95,6 +95,33 @@ const expectRefused = (
 };
 
 describe("confirmed linked method persistence", () => {
+  test("audit constraint replacement remains validated after replay", async () => {
+    const migration = await Bun.file(
+      new URL(
+        "../../../drizzle/20261022120200_sign_in_method_audit_event/migration.sql",
+        import.meta.url,
+      ),
+    ).text();
+    await withDatabase(async (db) => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        // db-await-in-loop: replay the bounded statements from the owning migration.
+        await db.execute(sql`BEGIN`);
+        for (const statement of migration.split("--> statement-breakpoint")) {
+          // db-await-in-loop: migration statements execute in their declared order.
+          await db.execute(sql.raw(statement));
+        }
+        // db-await-in-loop: close the transaction reopened by the migration.
+        await db.execute(sql`COMMIT`);
+      }
+      const validation = await db.execute(sql`
+        SELECT convalidated FROM pg_constraint
+        WHERE conrelid = 'account_audit_logs'::regclass
+          AND conname = 'account_audit_logs_event_type_check'
+      `);
+      expect(validation.rows).toEqual([{ convalidated: true }]);
+    });
+  });
+
   test("a confirmed removal preserves the other method", async () => {
     await withDatabase(async (db) => {
       const fixture = await createFixture(db);
