@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import { deflateSync } from "node:zlib";
 
 import {
+  createExactIconOrigin,
   createLinkIconOrigin,
   isCanonicalIconHostname,
 } from "@/api/handlers/chat/link-icons/origin";
@@ -17,6 +19,95 @@ const redirectResponse = (location: string) =>
     body: new ArrayBuffer(0),
     headers: new Headers({ location }),
   });
+
+const pngChunk = (type: string, data: Buffer): Buffer => {
+  const body = Buffer.concat([Buffer.from(type), data]);
+  const result = Buffer.alloc(12 + data.length);
+  result.writeUInt32BE(data.length);
+  body.copy(result, 4);
+  result.writeUInt32BE(Bun.hash.crc32(body), 8 + data.length);
+  return result;
+};
+const pngHeader = Buffer.alloc(13);
+pngHeader.writeUInt32BE(1);
+pngHeader.writeUInt32BE(1, 4);
+pngHeader.writeUInt8(8, 8);
+pngHeader.writeUInt8(6, 9);
+const PNG_BYTES = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  pngChunk("IHDR", pngHeader),
+  pngChunk("IDAT", deflateSync(Buffer.alloc(5))),
+  pngChunk("IEND", Buffer.alloc(0)),
+]);
+
+test("exact icon fetch preserves the normalized path and query", async () => {
+  const requests: string[] = [];
+  const origin = createExactIconOrigin({
+    fetchBytes: async ({ url }) => {
+      requests.push(url);
+      return Result.ok({
+        status: 200,
+        ok: true,
+        body: PNG_BYTES.buffer,
+        headers: new Headers({ "content-type": "image/png" }),
+      });
+    },
+  });
+  expect(
+    await origin(
+      "https://cdn.example.com/icons/one.png?version=2",
+      grantThirdPartyOutboundPermit(),
+    ),
+  ).toMatchObject({ type: "icon" });
+  expect(requests).toEqual(["https://cdn.example.com/icons/one.png?version=2"]);
+});
+
+test("exact icon input rejects unsafe URLs before fetching", async () => {
+  let calls = 0;
+  const origin = createExactIconOrigin({
+    fetchBytes: async () => {
+      calls += 1;
+      return Result.ok({
+        status: 200,
+        ok: true,
+        body: PNG_BYTES.buffer,
+        headers: new Headers({ "content-type": "image/png" }),
+      });
+    },
+  });
+  const permit = grantThirdPartyOutboundPermit();
+  for (const url of [
+    "http://example.com/icon.png",
+    "https://user:pass@example.com/icon.png",
+    "https://127.0.0.1/icon.png",
+  ]) {
+    expect(await origin(url, permit)).toEqual({ type: "no-icon" });
+  }
+  expect(calls).toBe(0);
+});
+
+test("exact icon input refuses oversized and non-image responses", async () => {
+  const bodies = [
+    new Uint8Array(65_537),
+    new TextEncoder().encode("not image"),
+  ];
+  const origin = createExactIconOrigin({
+    fetchBytes: async () =>
+      Result.ok({
+        status: 200,
+        ok: true,
+        body: bodies.shift()?.buffer ?? new ArrayBuffer(0),
+        headers: new Headers({ "content-type": "image/png" }),
+      }),
+  });
+  const permit = grantThirdPartyOutboundPermit();
+  expect(await origin("https://example.com/large.png", permit)).toEqual({
+    type: "no-icon",
+  });
+  expect(await origin("https://example.com/text.png", permit)).toEqual({
+    type: "no-icon",
+  });
+});
 
 test("the redirect target boundary refuses a mixed public and non-public DNS answer", async () => {
   const target = await validateOutboundFetchTarget(
