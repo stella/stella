@@ -134,7 +134,7 @@ describe("feature access grant refresh", () => {
       parameterName: "test-grants",
       source: {
         readVersion: async () => 1,
-        readValue: (signal) => {
+        readValue: async (signal) => {
           requestSignal = signal;
           return late.promise;
         },

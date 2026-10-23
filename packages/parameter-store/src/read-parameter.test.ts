@@ -109,7 +109,7 @@ test("an unresponsive client times out even when it ignores cancellation", async
     name: "/test/grants",
     decryption: "enabled",
     client: {
-      send: (_command, options) => {
+      send: async (_command, options) => {
         signal = options.abortSignal;
         return response.promise;
       },

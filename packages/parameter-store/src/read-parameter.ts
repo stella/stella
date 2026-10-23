@@ -37,7 +37,7 @@ export const readParameter = async ({
   client: injectedClient,
 }: ReadParameterOptions) => {
   const result = await Result.tryPromise({
-    try: () =>
+    try: async () =>
       withTimeout(
         async (abortSignal) =>
           await (injectedClient ?? getClient()).send(

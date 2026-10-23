@@ -44,7 +44,7 @@ export const createFeatureAccessGrantsOwner = ({
   const read = (): FeatureAccessGrantsState => current;
   const refresh = async (): Promise<void> => {
     const refreshed = await Result.tryPromise({
-      try: () =>
+      try: async () =>
         withTimeout(
           async (signal) => {
             const version = await source.readVersion(signal);
