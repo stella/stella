@@ -89,7 +89,8 @@ type InspectorBroadcastTab =
   | LegacyDecisionChatTab;
 
 type InspectorBroadcastMessage =
-  InspectorTabsRequestMessage | InspectorTabsSyncMessage;
+  | InspectorTabsRequestMessage
+  | InspectorTabsSyncMessage;
 
 type InspectorBroadcastSession = {
   dispose: () => void;
@@ -190,17 +191,6 @@ let restoreHolds = 0;
 let settlingScope: InspectorBroadcastScope | null = null;
 let settleTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Tests model a reload by starting again in a new page load: the previous
- *  page's pending settle goes with it. */
-export const startNewPageLoadForTest = (): void => {
-  pageLoadId = createUuid();
-  if (settleTimer !== null) {
-    clearTimeout(settleTimer);
-    settleTimer = null;
-  }
-  settlingScope = null;
-};
-
 /** Clears the flag once nothing restored is still loading and the page has
  *  stayed responsive for a moment: a busy main thread runs neither the timer
  *  nor the idle callback. */
@@ -274,10 +264,22 @@ export const holdInspectorRestoreSettle = (): (() => void) => {
 let inspectorBroadcastSession: InspectorBroadcastSession | null = null;
 let failedPersistenceScope: string | null = null;
 let persistenceFailureOccurrence = 0;
-const inspectorScopeOwnership = new WeakMap<
+let inspectorScopeOwnership = new WeakMap<
   StoreApi<InspectorTabsStore>,
   string
 >();
+
+/** Tests model a reload by starting again in a new page load: the previous
+ *  page's pending settle and the scope it attached the store to go with it. */
+export const startNewPageLoadForTest = (): void => {
+  pageLoadId = createUuid();
+  if (settleTimer !== null) {
+    clearTimeout(settleTimer);
+    settleTimer = null;
+  }
+  settlingScope = null;
+  inspectorScopeOwnership = new WeakMap();
+};
 
 /* oxlint-disable unicorn/require-post-message-target-origin -- BroadcastChannel.postMessage does not accept targetOrigin. */
 const postInspectorBroadcastMessage = (
