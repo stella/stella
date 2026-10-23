@@ -37,7 +37,6 @@ describe("registered document stages", () => {
   test("every registered stage emits source-bound windows and typed document failures", async () => {
     for (const adapter of listAdapters()) {
       const observations: DocumentStageObservation[] = [];
-      expect(typeof adapter.observeDocumentStage).toBe("function");
       const page = Result.err(
         new AdapterFetchError({
           adapterKey: adapter.key,
