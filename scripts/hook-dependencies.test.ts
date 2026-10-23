@@ -46,7 +46,24 @@ const packageSchema = v.object({
   optionalDependencies: v.optional(v.record(v.string(), v.string()), {}),
 });
 
-const transpiler = new Bun.Transpiler({ loader: "tsx" });
+// Each file parses with its own extension's syntax: under the JSX loaders a
+// TypeScript generic such as `<const T>` reads as an element.
+const transpilers = {
+  js: new Bun.Transpiler({ loader: "js" }),
+  jsx: new Bun.Transpiler({ loader: "jsx" }),
+  ts: new Bun.Transpiler({ loader: "ts" }),
+  tsx: new Bun.Transpiler({ loader: "tsx" }),
+};
+const transpilerFor = (file: string): Bun.Transpiler => {
+  const extension = path.extname(file);
+  if (extension === ".tsx") {
+    return transpilers.tsx;
+  }
+  if (extension === ".jsx") {
+    return transpilers.jsx;
+  }
+  return /^\.[cm]?ts$/u.test(extension) ? transpilers.ts : transpilers.js;
+};
 const builtins = new Set(builtinModules);
 
 const packageName = (specifier: string): string =>
@@ -133,9 +150,9 @@ export const undeclaredHookImports = (root: string): UndeclaredImport[] => {
       continue;
     }
     seen.add(file);
-    for (const { path: specifier } of transpiler.scanImports(
-      readFileSync(file, "utf-8"),
-    )) {
+    // scanImports rejects an executable script's leading shebang line.
+    const source = readFileSync(file, "utf-8").replace(/^#![^\n]*/u, "");
+    for (const { path: specifier } of transpilerFor(file).scanImports(source)) {
       if (specifier.startsWith("./") || specifier.startsWith("../")) {
         queue.push(resolveFile(path.resolve(path.dirname(file), specifier)));
       } else if (specifier.startsWith("@/api/")) {
@@ -193,7 +210,10 @@ test("reports a bare import a lint plugin reaches through a relative module", ()
       ].join("\n"),
     );
     write("scripts/precommit-lint.ts", 'import "declared-pkg";\n');
-    write("scripts/check-x.ts", 'import "node:fs";\nimport "bun";\n');
+    write(
+      "scripts/check-x.ts",
+      '#!/usr/bin/env bun\nimport "node:fs";\nimport "bun";\n',
+    );
     write("scripts/sync.ts", 'import "workspace-only";\n');
     write(
       LINT_CONFIG,
@@ -205,7 +225,8 @@ test("reports a bare import a lint plugin reaches through a relative module", ()
     );
     write(
       "packages/leaf/src/leaf.ts",
-      'import "@scope/undeclared/sub";\nimport "declared-pkg/deep";\n',
+      // An arrow generic parses as TypeScript, not as an element.
+      'import "@scope/undeclared/sub";\nimport "declared-pkg/deep";\nexport const pick = <const T>(value: T): T => value;\n',
     );
     expect(undeclaredHookImports(root)).toEqual([
       {
