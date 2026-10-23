@@ -255,6 +255,8 @@ export type McpRequestContext = {
   accessibleWorkspaces: AccessibleWorkspace[];
   /** Resolved transport client IP used by shared gateway/REST abuse budgets. */
   clientIp?: string | null;
+  credentialType?: "oauth" | "api-key" | "anonymous";
+  clientId?: string | null;
   /**
    * The credential's own permission set, when it carries one (machine API
    * keys). Authorization ANDs it with `memberRole` through
@@ -391,6 +393,19 @@ export const loadAccessibleMcpWorkspaces = async ({
     throw error;
   }
   return outcome.value.workspaces;
+};
+
+const resolveMcpWebHandoffIdentity = (session: McpSession) => {
+  const credential = session.credential;
+  if (credential?.type === "oauth_client") {
+    return { credentialType: "oauth", clientId: credential.clientId } as const;
+  }
+  const credentialType =
+    credential?.type === "machine_api_key" ||
+    credential?.type === "personal_api_key"
+      ? "api-key"
+      : "anonymous";
+  return { credentialType, clientId: null } as const;
 };
 
 const REGISTRY_NARROWING_SINK = failureSink({
@@ -591,7 +606,10 @@ export const resolveMcpSessionContext = async (
     return await enabledRegistrySlugs;
   };
 
+  const webHandoffIdentity = resolveMcpWebHandoffIdentity(session);
+
   return {
+    ...webHandoffIdentity,
     ...(auditExecution ? { auditExecution } : {}),
     accessibleWorkspaceIds: usableWorkspaceIds,
     accessibleWorkspaceIdSet: workspaceAccessBoundary.accessibleWorkspaceIdSet,

@@ -867,9 +867,12 @@ export default eslintCompatPlugin({
               callback.body === parent
             ) {
               const declaration = callback.parent;
+              // Only the first argument is the column callback.
               if (
                 isAstNode(declaration) &&
-                declaration.type === "CallExpression"
+                declaration.type === "CallExpression" &&
+                Array.isArray(declaration.arguments) &&
+                declaration.arguments.at(0) === callback
               ) {
                 const callee = unwrapExpression(declaration.callee);
                 if (

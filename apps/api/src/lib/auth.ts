@@ -35,6 +35,7 @@ import {
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
+import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
@@ -88,6 +89,7 @@ import {
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import type { AccountAccess } from "@/api/lib/auth/account-access";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
@@ -120,6 +122,18 @@ import {
   EMAIL_OTP_ALLOWED_ATTEMPTS,
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
+import {
+  createHandoffStepUpGuard,
+  HANDOFF_ACCESS_DETAIL,
+  requiresHandoffStepUpForAuthPath,
+  requiresHandoffStepUpForRequest,
+} from "@/api/lib/auth/handoff-step-up-policy";
+import {
+  type createWebHandoffService,
+  webHandoffFailure,
+} from "@/api/lib/auth/mcp-web-handoff";
+import { createMcpWebHandoffPlugin } from "@/api/lib/auth/mcp-web-handoff-plugin";
+import { getWebHandoffService } from "@/api/lib/auth/mcp-web-handoff-service";
 import type {
   MemberAuthorization,
   MemberAuthorizationLookup,
@@ -1226,6 +1240,32 @@ type CreateAuthOptions = {
   rateLimitEnabled?: boolean;
 };
 
+const WEB_HANDOFF_MINT_FAILURE_SINK = failureSink({
+  event: "mcp_web_handoff.mint_failed",
+  expected: [],
+});
+type WebHandoffMintArgs = Parameters<
+  ReturnType<typeof createWebHandoffService>["mint"]
+>;
+export const mintWebHandoff = async (
+  ctx: WebHandoffMintArgs[0],
+  paths: readonly string[],
+  kind: WebHandoffMintArgs[2],
+) => {
+  const outcome = await Result.tryPromise({
+    try: async () => await getWebHandoffService().mint(ctx, paths, kind),
+    catch: webHandoffFailure("mint", "Web handoff could not be created."),
+  });
+  if (Result.isOk(outcome)) {
+    return outcome.value;
+  }
+  observeFailure(outcome.error, {
+    sink: WEB_HANDOFF_MINT_FAILURE_SINK,
+    ctx: { operation: "mint" },
+  });
+  return null;
+};
+
 export const createAuth = (
   roleAssignmentPolicy = assignableRoles,
   factoryOptions: CreateAuthOptions = {},
@@ -2064,6 +2104,7 @@ export const createAuth = (
     plugins: [
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
+      createMcpWebHandoffPlugin({ service: getWebHandoffService }),
       createAgentUserPlugin(),
       createReviewAccountUserPlugin(reviewConfig),
       createReviewAccountPlugin({
@@ -2367,7 +2408,8 @@ export const createAuth = (
         markAuthRequestRoute(ctx);
         await signInRequestBudget(ctx);
         sessionLifetime.prepare(ctx.context);
-        if (!ctx.path) {
+        // Better Call gives pathless server-only operations the middleware path "/".
+        if (!ctx.path || ctx.path === "/") {
           return undefined;
         }
         if (demoConfig.email) {
@@ -2409,6 +2451,16 @@ export const createAuth = (
                 message: "This operation is unavailable for this account.",
               });
             }
+          }
+        }
+        // Better Call supplies `/` to hooks for server-only, pathless helpers.
+        if (ctx.path !== "/" && requiresHandoffStepUpForAuthPath(ctx.path)) {
+          const current = await getAuthoritativeSessionFromCtx(ctx);
+          if (typeof current?.session["originConsentId"] === "string") {
+            throw new APIError("FORBIDDEN", {
+              code: MCP_HANDOFF_STEP_UP_REQUIRED,
+              message: "Sign in again to continue.",
+            });
           }
         }
         await assertSelfhostEmailOtpAllowed(ctx.path);
@@ -2629,6 +2681,8 @@ const VALIDATE_AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
+type ResolveSessionAuthOptions = Pick<Context, "status" | "request" | "set">;
+
 /**
  * Account routes confirm the session still exists in storage. Organization
  * routes may serve the cached cookie snapshot because their member lookup runs
@@ -2637,66 +2691,98 @@ const VALIDATE_AUTH_REJECTION_BODY = {
  * The snapshot still supplies the session itself; one indexed read checks it
  * is live, instead of a full uncached session load.
  */
-export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
-  validateSession: {
-    async resolve({ status, request, set }) {
-      const sessionResult = await Result.tryPromise(async () => {
-        const resolved = await getAuth().api.getSession({
-          headers: request.headers,
-          returnHeaders: true,
-        });
-        forwardAuthResponseCookies(set.headers, resolved.headers);
-        return resolved.response;
-      });
+const resolveSessionAuth = async ({
+  status,
+  request,
+  set,
+}: ResolveSessionAuthOptions) => {
+  const sessionResult = await Result.tryPromise(async () => {
+    const resolved = await getAuth().api.getSession({
+      headers: request.headers,
+      returnHeaders: true,
+    });
+    forwardAuthResponseCookies(set.headers, resolved.headers);
+    return resolved.response;
+  });
 
-      if (Result.isError(sessionResult)) {
-        return status(500, AUTH_REJECTION_BODY[500]);
-      }
+  if (Result.isError(sessionResult)) {
+    return status(500, AUTH_REJECTION_BODY[500]);
+  }
 
-      const session = sessionResult.value?.session;
-      const user = sessionResult.value?.user;
-      if (!session || !user) {
-        return status(401, AUTH_REJECTION_BODY[401]);
-      }
+  const session = sessionResult.value?.session;
+  const user = sessionResult.value?.user;
+  if (!session || !user) {
+    return status(401, AUTH_REJECTION_BODY[401]);
+  }
 
-      // The signed snapshot may outlive its stored session for its cache
-      // lifetime; one indexed read confirms the session still exists. Signing
-      // out elsewhere deletes the row, and deleting the account cascades.
-      // The read goes through the auth layer's own database adapter, which
-      // only reaches auth tables.
-      const liveResult = await Result.tryPromise(async () => {
-        const { adapter } = await getAuth().$context;
-        return await adapter.findOne<{ id: string }>({
-          model: "session",
-          where: [
-            { field: "id", value: session.id },
-            { field: "userId", value: user.id },
-            { field: "expiresAt", operator: "gt", value: new Date() },
-          ],
-          select: ["id"],
-        });
-      });
-      if (Result.isError(liveResult)) {
-        return status(500, AUTH_REJECTION_BODY[500]);
-      }
-      if (liveResult.value === null) {
-        return status(401, AUTH_REJECTION_BODY[401]);
-      }
+  // The signed snapshot may outlive its stored session for its cache
+  // lifetime; one indexed read confirms the session still exists. Signing
+  // out elsewhere deletes the row, and deleting the account cascades.
+  // The read goes through the auth layer's own database adapter, which
+  // only reaches auth tables.
+  const liveResult = await Result.tryPromise(async () => {
+    const { adapter } = await getAuth().$context;
+    return await adapter.findOne<{ id: string }>({
+      model: "session",
+      where: [
+        { field: "id", value: session.id },
+        { field: "userId", value: user.id },
+        { field: "expiresAt", operator: "gt", value: new Date() },
+      ],
+      select: ["id"],
+    });
+  });
+  if (Result.isError(liveResult)) {
+    return status(500, AUTH_REJECTION_BODY[500]);
+  }
+  if (liveResult.value === null) {
+    return status(401, AUTH_REJECTION_BODY[401]);
+  }
 
-      const userId = toSafeId<"user">(user.id);
-      enrichRequestContext(request, {
-        posthogDistinctId: userId,
-      });
+  if (session.originConsentId && requiresHandoffStepUpForRequest(request)) {
+    return status(403, {
+      code: MCP_HANDOFF_STEP_UP_REQUIRED,
+      message: "Sign in again to continue.",
+    });
+  }
 
-      return {
-        user: {
-          id: userId,
-          email: user.email,
-        },
-      };
+  const userId = toSafeId<"user">(user.id);
+  enrichRequestContext(request, {
+    posthogDistinctId: userId,
+  });
+
+  return {
+    handoffOriginConsentId: session.originConsentId ?? null,
+    user: {
+      id: userId,
+      email: user.email,
     },
-  },
-});
+  };
+};
+
+// Guards and accountAccess may expand the same resolver more than once.
+const sessionAuthResolutionCache = new WeakMap<
+  Request,
+  ReturnType<typeof resolveSessionAuth>
+>();
+
+export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" })
+  .macro({
+    validateSession: {
+      async resolve(context) {
+        return await memoizePerRequest(
+          sessionAuthResolutionCache,
+          context.request,
+          async () => await resolveSessionAuth(context),
+        );
+      },
+    },
+  })
+  .macro("accountAccess", (accountAccess: AccountAccess) => ({
+    validateSession: true as const,
+    detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
+    beforeHandle: createHandoffStepUpGuard({ accountAccess }),
+  }));
 
 /**
  * Structural subset of `rootDb` the bounded membership query needs. Tests can
@@ -3128,6 +3214,53 @@ const createAuthDatabases = (
   safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
 });
 
+type AuthWorkspaceAccessOptions = {
+  initialAccess: {
+    workspaceId: SafeId<"workspace">;
+    workspace: AccessibleWorkspace | null;
+  } | null;
+  loadWorkspace: (
+    workspaceId: SafeId<"workspace">,
+    ownerDb: MemberAuthorizationDb,
+  ) => Promise<AccessibleWorkspace | null>;
+  onAuthorizedWorkspace: (workspaceId: SafeId<"workspace">) => void;
+};
+
+/** `ownerDb` is the owner connection, handed to `loadWorkspace` for target lookups. */
+const createAuthWorkspaceAccess = (
+  {
+    initialAccess,
+    loadWorkspace,
+    onAuthorizedWorkspace,
+  }: AuthWorkspaceAccessOptions,
+  ownerDb: MemberAuthorizationDb,
+) => {
+  const accessPromises = new Map<
+    SafeId<"workspace">,
+    Promise<AccessibleWorkspace | null>
+  >();
+  if (initialAccess) {
+    accessPromises.set(
+      initialAccess.workspaceId,
+      Promise.resolve(initialAccess.workspace),
+    );
+  }
+  return async (
+    workspaceId: SafeId<"workspace">,
+  ): Promise<AccessibleWorkspace | null> => {
+    let access = accessPromises.get(workspaceId);
+    if (!access) {
+      access = loadWorkspace(workspaceId, ownerDb);
+      accessPromises.set(workspaceId, access);
+    }
+    const workspace = await access;
+    if (workspace) {
+      onAuthorizedWorkspace(workspace.id);
+    }
+    return workspace;
+  };
+};
+
 const readOrganizationWorkspaces = async (
   scopedDb: AuthScopedDb,
   organizationId: SafeId<"organization">,
@@ -3290,50 +3423,38 @@ const resolveValidateAuth = async ({
     return await activeWorkspaceIdsPromise;
   };
 
-  const workspaceAccessPromises = new Map<
-    SafeId<"workspace">,
-    Promise<AccessibleWorkspace | null>
-  >();
-  if (initialWorkspaceId) {
-    workspaceAccessPromises.set(
-      initialWorkspaceId,
-      Promise.resolve(authorization.workspace),
-    );
-  }
-  const getWorkspaceAccess = async (
-    workspaceId: SafeId<"workspace">,
-  ): Promise<AccessibleWorkspace | null> => {
-    let accessPromise = workspaceAccessPromises.get(workspaceId);
-    if (!accessPromise) {
-      accessPromise = accessibleWorkspacesPromise
-        ? accessibleWorkspacesPromise.then(
-            (items) => items.find((item) => item.id === workspaceId) ?? null,
-          )
-        : resolveMemberAuthorization(
-            {
-              organizationId: activeOrganizationId,
-              userId,
-              workspaceId,
-            },
-            rootDb,
-          ).then((targetAuthorization) => {
-            if (targetAuthorization?.workspace?.id !== workspaceId) {
-              return null;
-            }
-            return targetAuthorization.workspace;
-          });
-      workspaceAccessPromises.set(workspaceId, accessPromise);
-    }
-    const workspace = await accessPromise;
-    if (workspace) {
-      // The factories above intentionally retain this small array by
-      // reference. A later transaction therefore preserves only the target
-      // this request just proved, never the full accessible-workspace list.
-      validatedWorkspaceIdSet.add(workspace.id);
-      pinServerValidatedWorkspaceId(workspace.id);
-    }
-    return workspace;
-  };
+  const getWorkspaceAccess = createAuthWorkspaceAccess(
+    {
+      initialAccess: initialWorkspaceId
+        ? {
+            workspaceId: initialWorkspaceId,
+            workspace: authorization.workspace,
+          }
+        : null,
+      loadWorkspace: async (
+        workspaceId: SafeId<"workspace">,
+        ownerDb: MemberAuthorizationDb,
+      ) => {
+        if (accessibleWorkspacesPromise) {
+          const items = await accessibleWorkspacesPromise;
+          return items.find((item) => item.id === workspaceId) ?? null;
+        }
+        const targetAuthorization = await resolveMemberAuthorization(
+          { organizationId: activeOrganizationId, userId, workspaceId },
+          ownerDb,
+        );
+        return targetAuthorization?.workspace?.id === workspaceId
+          ? targetAuthorization.workspace
+          : null;
+      },
+      onAuthorizedWorkspace: (workspaceId: SafeId<"workspace">) => {
+        // Keep only proved targets available to later transactions in this request.
+        validatedWorkspaceIdSet.add(workspaceId);
+        pinServerValidatedWorkspaceId(workspaceId);
+      },
+    },
+    rootDb,
+  );
 
   const recorderBindings = {
     organizationId: activeOrganizationId,
@@ -3346,6 +3467,7 @@ const resolveValidateAuth = async ({
   return {
     ok: true as const,
     value: {
+      handoffOriginConsentId: session.originConsentId ?? null,
       user: {
         id: toSafeId<"user">(user.id),
         email: user.email,
@@ -3353,6 +3475,7 @@ const resolveValidateAuth = async ({
       session: {
         id: session.id,
         activeOrganizationId,
+        originConsentId: session.originConsentId ?? null,
       },
       getActiveWorkspaceIds,
       getAccessibleWorkspaces,
@@ -3451,29 +3574,49 @@ export const createAuthMacro = ({
     ? createRequestAuthResolver(getSession)
     : resolveRequestAuth;
 
-  return new Elysia({ name: "authMacro" }).macro({
-    validateAuth: {
-      detail: { [TENANT_ACTION_DETAIL]: true },
-      async resolve({ params, query, status, request, server, set }) {
-        const result = await resolveAuth({
-          params,
-          query,
-          request,
-          server,
-          set,
-        });
+  return new Elysia({ name: "authMacro" })
+    .macro({
+      validateAuth: {
+        detail: { [TENANT_ACTION_DETAIL]: true },
+        async resolve({ params, query, status, request, server, set }) {
+          const result = await resolveAuth({
+            params,
+            query,
+            request,
+            server,
+            set,
+          });
 
-        if (!result.ok) {
-          return status(
-            result.statusCode,
-            VALIDATE_AUTH_REJECTION_BODY[result.statusCode],
-          );
-        }
+          if (!result.ok) {
+            return status(
+              result.statusCode,
+              VALIDATE_AUTH_REJECTION_BODY[result.statusCode],
+            );
+          }
 
-        return result.value;
+          if (
+            result.value.session.originConsentId &&
+            requiresHandoffStepUpForRequest(request)
+          ) {
+            return status(403, {
+              code: MCP_HANDOFF_STEP_UP_REQUIRED,
+              message: "Sign in again to continue.",
+            });
+          }
+          return result.value;
+        },
       },
-    },
-  });
+    })
+    .macro("accountAccess", (accountAccess: AccountAccess) => ({
+      validateAuth: true,
+      detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
+      beforeHandle: createHandoffStepUpGuard({ accountAccess }),
+    }))
+    .macro("permissions", (permissions: PermissionInput) => ({
+      validateAuth: true,
+      detail: { [HANDOFF_ACCESS_DETAIL.permissions]: permissions },
+      beforeHandle: createHandoffStepUpGuard({ permissions }),
+    }));
 };
 
 export const authMacro = createAuthMacro();
@@ -3484,17 +3627,21 @@ export const permissionMacro = new Elysia({ name: "permissionMacro" })
     // Reuse authMacro's resolved member role instead of asking better-auth to
     // perform the same permission check through a second session read.
     validateAuth: true,
+    detail: { [HANDOFF_ACCESS_DETAIL.permissions]: permissions },
     // Without this, when this macro is used with another macro that extends the body,
     // the final merged body would not include the first macro's body extension.
     body: t.Object({}),
-    beforeHandle(ctx) {
-      const memberRole = readAuthorizedMemberRole(ctx);
-      if (!memberRole || !hasMemberPermission(memberRole, permissions)) {
-        return ctx.status(403, AUTH_REJECTION_BODY[403]);
-      }
+    beforeHandle: [
+      createHandoffStepUpGuard({ permissions }),
+      (ctx) => {
+        const memberRole = readAuthorizedMemberRole(ctx);
+        if (!memberRole || !hasMemberPermission(memberRole, permissions)) {
+          return ctx.status(403, AUTH_REJECTION_BODY[403]);
+        }
 
-      return undefined;
-    },
+        return undefined;
+      },
+    ],
   }));
 
 const bindWorkspaceRecorder = (
