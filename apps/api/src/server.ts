@@ -1,3 +1,4 @@
+import "./register-schema-formats";
 import cors from "@elysia/cors";
 import { panic } from "better-result";
 import { Elysia } from "elysia";
