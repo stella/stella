@@ -4760,6 +4760,8 @@ describe("OpenAI-compatible MCP tools", () => {
       items: [
         {
           anchor: PROVISION_ANCHOR,
+          // A source list names the reader link by it, not by the host.
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_ID,
           eli: STATUTE_ELI,
           status: "found",
@@ -5160,6 +5162,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
@@ -5173,6 +5176,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_PRIOR_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
           status: "found",
@@ -5238,6 +5242,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
@@ -5251,6 +5256,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_PRIOR_ID,
           message:
             "The source licence does not permit AI use of this wording. Read it at the statute's url instead.",
