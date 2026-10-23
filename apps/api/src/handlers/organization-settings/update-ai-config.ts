@@ -101,7 +101,7 @@ const updateAIConfigBody = t.Object({
   decision: t.Optional(t.Nullable(decisionBody)),
 });
 
-const config = {
+export const updateAIConfigConfig = {
   contract: "replace",
   precondition: {
     type: "deferred",
@@ -129,7 +129,7 @@ const AI_CONFIG_ERROR_CODE = {
  * encrypts the config, and stores it.
  */
 const updateAIConfig = createSafeRootHandler(
-  config,
+  updateAIConfigConfig,
   async function* ({ safeDb, session, body, recordAuditEvent }) {
     let existingConfig: OrgAIConfig | undefined;
     const row = yield* Result.await(
