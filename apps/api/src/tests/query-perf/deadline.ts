@@ -19,7 +19,7 @@ export const createQueryPerfDeadline = ({
   const expiresAt = now() + timeoutMs;
   return {
     run: async <T>(phase: string, operation: () => Promise<T>) => {
-      const label = `query perf ${profileId}: ${phase}`;
+      const messageLabel = `query perf ${profileId}: ${phase}`;
       const remainingMs = expiresAt - now();
       process.stdout.write(
         `${JSON.stringify({
@@ -33,13 +33,13 @@ export const createQueryPerfDeadline = ({
       try {
         if (remainingMs <= 0) {
           throw new TimeoutError({
-            message: `${label} exceeded profile deadline ${timeoutMs}ms`,
-            label,
+            message: `${messageLabel} exceeded profile deadline ${timeoutMs}ms`,
+            label: "query-perf-profile-deadline",
             timeoutMs,
           });
         }
         const value = await withTimeout(operation, {
-          label,
+          label: "query-perf-profile-deadline",
           timeoutMs: remainingMs,
         });
         process.stdout.write(

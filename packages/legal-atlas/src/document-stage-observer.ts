@@ -67,7 +67,7 @@ export const observeDocumentStageSafely = async ({
       : await Result.tryPromise({
           try: async () =>
             await withTimeout(async () => await observe(observation), {
-              label: DOCUMENT_FETCH_EVENT.observerFailed,
+              label: "document-stage-observer-delivery",
               timeoutMs: budgetMs,
             }),
           catch: (cause) =>
@@ -92,7 +92,7 @@ export const observeDocumentStageSafely = async ({
       await withTimeout(
         async (signal) => await reportFailure(failure, signal),
         {
-          label: DOCUMENT_FETCH_EVENT.observerFailed,
+          label: "document-stage-observer-failure-report",
           timeoutMs: Math.max(1, remainingMs),
         },
       );

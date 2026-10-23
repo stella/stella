@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { isTransientRedisConnectionError } from "@/api/lib/redis-client";
 import {
   createWorkflowReconcileRunner,
@@ -127,6 +128,27 @@ describe("workflow reconcile failures", () => {
     ]);
     // The defect took the capture branch, so no second disruption warning.
     expect(logs.at("WARN")).toHaveLength(1);
+  });
+
+  test("names the deadline when a reconcile tick times out", () => {
+    handleWorkflowReconcileFailure(
+      new TimeoutError({
+        message: "expired",
+        label: "workflow-reconcile-tick",
+        timeoutMs: 30_000,
+      }),
+    );
+
+    expect(logs.at("ERROR")).toMatchObject([
+      {
+        message: "workflow.reconcile_failed",
+        attributes: {
+          "error.type": "TimeoutError",
+          "error.timeout.label": "workflow-reconcile-tick",
+          "error.timeout.ms": "30000",
+        },
+      },
+    ]);
   });
 
   test("runs the bounded pending-cell scan on every tick", async () => {

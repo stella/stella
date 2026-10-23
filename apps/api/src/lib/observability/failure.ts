@@ -708,9 +708,14 @@ export const identityFields = (
   }
   const fields: Record<string, string> = {
     "error.class": root.className ?? UNKNOWN_ERROR_CLASS,
-    "error.code": root.code ?? root.awsName ?? root.tag,
+    "error.code": root.timeout?.label ?? root.code ?? root.awsName ?? root.tag,
   };
-  const frame = frameValue(root.frame);
+  const rootFrame = frameValue(root.frame);
+  const frame =
+    root.timeout !== undefined &&
+    rootFrame?.includes("packages/concurrency/src/with-timeout.ts:") === true
+      ? frameValue(root.timeout.callerFrame)
+      : rootFrame;
   if (frame !== undefined) {
     fields["error.frame"] = frame;
   }
@@ -751,6 +756,12 @@ export const systemFields = (
   if (root.syscall !== undefined) {
     fields["error.syscall"] = root.syscall;
   }
+  if (root.timeout !== undefined) {
+    fields["error.timeout.label"] = root.timeout.label;
+    if (root.timeout.timeoutMs !== undefined) {
+      fields["error.timeout.ms"] = String(root.timeout.timeoutMs);
+    }
+  }
   const cause =
     evidence.nodes.at(1) ??
     (evidence.cycleTo === undefined
@@ -763,6 +774,9 @@ export const systemFields = (
       : undefined;
     if (causeCode !== undefined) {
       fields["error.cause.code"] = causeCode;
+    }
+    if (cause.timeout !== undefined) {
+      fields["error.cause.timeout.label"] = cause.timeout.label;
     }
   }
   return { ...fields, ...pgIdentityFields(evidence) };

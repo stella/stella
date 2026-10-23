@@ -39,10 +39,7 @@ const statementTimeoutCapMs = LEGAL_ATLAS_RUNNER_ENV.dbStatementTimeoutMs;
  * which otherwise leaves the transaction idle and the awaiting caller
  * suspended forever.
  */
-const createBoundedIngestionDb = (
-  label: string,
-  timeoutMs: number,
-): ScopedDb => {
+const createBoundedIngestionDb = (timeoutMs: number): ScopedDb => {
   // The lane wait shares the transaction budget: a batch that cannot enter
   // the corpus schema lane within it fails here, at the same moment the
   // wall-clock guard below gives up, instead of entering late and running
@@ -68,17 +65,15 @@ const createBoundedIngestionDb = (
       });
 
     return await withTimeout(operation, {
-      label,
+      label: "legal-atlas-db-transaction",
       timeoutMs: timeoutMs === 0 ? 0 : timeoutMs + TRANSACTION_TIMEOUT_GRACE_MS,
     });
   };
 };
 
 /** Transaction runner for adapter ingest cycles (long pipeline writes). */
-export const ingestionDb: ScopedDb = createBoundedIngestionDb(
-  "ingestion-db-transaction",
-  transactionTimeoutMs,
-);
+export const ingestionDb: ScopedDb =
+  createBoundedIngestionDb(transactionTimeoutMs);
 
 /**
  * Transaction runner for the index-maintenance backfill loops. Same bounded
@@ -90,7 +85,6 @@ export const ingestionDb: ScopedDb = createBoundedIngestionDb(
  * holding its loop for the full ingest ceiling.
  */
 export const backfillDb: ScopedDb = createBoundedIngestionDb(
-  "backfill-db-transaction",
   backfillTransactionTimeoutMs,
 );
 

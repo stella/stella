@@ -278,7 +278,7 @@ export const createPublisherRequestSlot = (
             return await redis.send("EVAL", args);
           },
           {
-            label: `${publisher} publisher gate reservation`,
+            label: "publisher-gate-reservation",
             signal,
             timeoutMs: PUBLISHER_GATE_COMMAND_TIMEOUT_MS,
           },

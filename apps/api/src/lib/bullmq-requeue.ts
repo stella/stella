@@ -130,18 +130,14 @@ export const requeueDeterministicJob = async <
   DataType,
   JobType
 >): Promise<QueueRequeueOutcome> => {
-  const bounded = async <T>(
-    label: string,
-    command: () => Promise<T>,
-  ): Promise<T> =>
+  const bounded = async <T>(command: () => Promise<T>): Promise<T> =>
     await withTimeout(async () => await command(), {
-      label: `queue-requeue.${label}`,
+      label: "queue-requeue-operation",
       timeoutMs: operationTimeoutMs,
     });
 
   const add = async (jobData: DataType): Promise<QueueRequeueOutcome> => {
     await bounded(
-      "add-job",
       async () =>
         await queue.add(name, jobData, {
           jobId,
@@ -151,18 +147,12 @@ export const requeueDeterministicJob = async <
     return QUEUE_REQUEUE_OUTCOME.REQUEUED;
   };
 
-  const existing = await bounded(
-    "get-job",
-    async () => await queue.getJob(jobId),
-  );
+  const existing = await bounded(async () => await queue.getJob(jobId));
   if (!existing) {
     return await add(data);
   }
 
-  const state = await bounded(
-    "get-state",
-    async () => await existing.getState(),
-  );
+  const state = await bounded(async () => await existing.getState());
   const action = EXISTING_JOB_ACTION[state];
   switch (action) {
     case "owned": {
@@ -170,17 +160,14 @@ export const requeueDeterministicJob = async <
     }
     case "retry": {
       if (delayMs !== undefined && delayMs > 0) {
-        await bounded("remove-job", async () => await existing.remove());
+        await bounded(async () => await existing.remove());
         return await add(data);
       }
-      await bounded(
-        "retry-job",
-        async () => await existing.retry("failed", FRESH_ATTEMPTS),
-      );
+      await bounded(async () => await existing.retry("failed", FRESH_ATTEMPTS));
       return QUEUE_REQUEUE_OUTCOME.REQUEUED;
     }
     case "reclaim": {
-      await bounded("remove-job", async () => await existing.remove());
+      await bounded(async () => await existing.remove());
       return await add(reclaimData ? reclaimData(existing) : data);
     }
     case "add": {

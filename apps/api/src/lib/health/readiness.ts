@@ -201,7 +201,7 @@ export const runReadinessProbes = async (
       const result = await Result.tryPromise({
         try: async () =>
           await withTimeout(probes[dependency], {
-            label: `${dependency} readiness probe`,
+            label: "api-readiness-probe",
             timeoutMs,
           }),
         catch: (cause) => cause,
