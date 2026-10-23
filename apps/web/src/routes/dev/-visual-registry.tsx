@@ -12,6 +12,20 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "task-metadata": {
+    load: async () => {
+      const { TaskMetadataPlayground } =
+        await import("./-components/task-metadata-playground");
+      return { default: TaskMetadataPlayground };
+    },
+  },
+  "column-composer": {
+    load: async () => {
+      const { ColumnComposerPlayground } =
+        await import("./-components/column-composer-playground");
+      return { default: ColumnComposerPlayground };
+    },
+  },
   "hungarian-decision": {
     load: async () => {
       const { HungarianDecisionPlayground } =
