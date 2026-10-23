@@ -67,7 +67,7 @@ export const RunDetail = ({ workspaceId, runId, onBack }: RunDetailProps) => {
     );
   }
 
-  // The Eden response type for this endpoint can also resolve to a raw
+  // The API client's response type for this endpoint can also resolve to a raw
   // `Response` (see flow-run-types.ts); guard it the same way sibling flow
   // queries do so `query.data` narrows to `FlowRunDetailData` below. Success
   // data is always defined here (isPending/isError already handled), so no

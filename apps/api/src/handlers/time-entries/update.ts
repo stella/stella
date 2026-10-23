@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { BILLING_STATUS } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { timeEntries } from "@/api/db/schema";
@@ -26,7 +26,7 @@ import {
 } from "@/api/lib/billing/time-entry-authorization";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -34,19 +34,23 @@ import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
-const updateTimeEntryBodySchema = t.Object({
-  id: tSafeId("timeEntry"),
-  dateWorked: t.Optional(t.String({ format: "date" })),
-  timezoneId: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
-  durationMinutes: t.Optional(t.Integer({ minimum: 1 })),
-  narrative: t.Optional(t.String({ minLength: 0, maxLength: 10_000 })),
-  narrativeLanguage: t.Optional(narrativeLanguageSchema),
-  invoiceNarrative: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  billable: t.Optional(t.Boolean()),
-  noCharge: t.Optional(t.Boolean()),
-  workItemId: t.Optional(t.Nullable(tSafeId("entity"))),
-  taskCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
-  activityCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
+const updateTimeEntryBodySchema = v.object({
+  id: resourceIdSchema("timeEntry"),
+  dateWorked: v.optional(apiDateSchema),
+  timezoneId: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
+  durationMinutes: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  narrative: v.optional(
+    v.pipe(v.string(), v.minLength(0), v.maxLength(10_000)),
+  ),
+  narrativeLanguage: v.optional(narrativeLanguageSchema),
+  invoiceNarrative: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+  ),
+  billable: v.optional(v.boolean()),
+  noCharge: v.optional(v.boolean()),
+  workItemId: v.optional(v.nullable(resourceIdSchema("entity"))),
+  taskCode: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(20)))),
+  activityCode: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(20)))),
 });
 
 export type UpdateTimeEntryHandlerProps = {
@@ -57,7 +61,7 @@ export type UpdateTimeEntryHandlerProps = {
     memberRole: AuthorizedMemberRole;
   };
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof updateTimeEntryBodySchema>;
+  body: v.InferOutput<typeof updateTimeEntryBodySchema>;
 };
 
 type ResolvedRateUpdate =

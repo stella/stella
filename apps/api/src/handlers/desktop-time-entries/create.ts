@@ -1,8 +1,5 @@
-import type { Static } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
-import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { TIME_ENTRY_SOURCE } from "@stll/api-contract";
 
@@ -15,40 +12,25 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createTimeEntryBodySchema } from "@/api/lib/billing/time-entry-body";
 import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
 
-const desktopTimeEntryBodySchema = t.Pick(
-  createTimeEntryBodySchema,
-  ["dateWorked", "timezoneId", "durationMinutes", "narrative", "billable"],
-  { additionalProperties: false },
-);
+const desktopTimeEntryBodySchema = v.pick(createTimeEntryBodySchema, [
+  "dateWorked",
+  "timezoneId",
+  "durationMinutes",
+  "narrative",
+  "billable",
+]);
 
-// A parent Elysia app can re-enable normalization for TypeBox schemas. Standard
-// Schema validates the original body, so unexpected activity data is rejected.
-const strictDesktopTimeEntryBodySchema: StandardSchemaV1<
-  unknown,
-  Static<typeof desktopTimeEntryBodySchema>
-> = {
-  "~standard": {
-    version: 1,
-    vendor: "typebox",
-    validate: (input) => {
-      if (Value.Check(desktopTimeEntryBodySchema, input)) {
-        return { value: input };
-      }
-      return {
-        issues: [...Value.Errors(desktopTimeEntryBodySchema, input)].map(
-          ({ message }) => ({ message }),
-        ),
-      };
-    },
-  },
-};
+// Unexpected activity data is refused, never silently dropped.
+const strictDesktopTimeEntryBodySchema = v.strictObject(
+  desktopTimeEntryBodySchema.entries,
+);
 
 export const createDesktopTimeEntryEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
@@ -59,10 +41,10 @@ export const createDesktopTimeEntryEndpoint = (
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "auth_plumbing" },
       cache: { kind: "none" },
-      params: t.Object({ workspaceId: tSafeId("workspace") }),
+      params: v.object({ workspaceId: resourceIdSchema("workspace") }),
       body: strictDesktopTimeEntryBodySchema,
       response: safePublicHandlerResponseSchemasWithStatusText(
-        t.Object({ id: tSafeId("timeEntry") }, { additionalProperties: false }),
+        v.object({ id: resourceIdSchema("timeEntry") }),
       ),
     },
     async function* ({ request, params: { workspaceId }, body }) {
@@ -117,7 +99,7 @@ const desktopTimeEntryEndpoint = createDesktopTimeEntryEndpoint();
 
 // Inserts one entry through the shared time-entry insert, which takes no
 // aggregate lock and maintains no invariant across rows.
-declareAggregateMutation(desktopTimeEntryEndpoint.handler, {
+declareAggregateMutation(desktopTimeEntryEndpoint, {
   type: "independent",
   reason:
     "Inserts one time entry for an authorized matter; no cross-row invariant.",

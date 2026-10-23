@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import Elysia from "elysia";
+
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteEntry } from "@/api/http/route";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import { createDesktopPresenceReportEndpoint } from "./report";
 import { desktopPresenceRoute } from "./routes";
@@ -10,14 +15,20 @@ const report = {
   protocol: 1,
 };
 
+const serve = (table: readonly RouteEntry[]) =>
+  serveForTest(createHttpApp({ routes: table, middleware: [errorBoundary] }));
+
+const serveReport = () =>
+  serve(
+    routes({
+      "/v1/desktop/presence": { POST: createDesktopPresenceReportEndpoint() },
+    }),
+  );
+
 test("desktop presence reports require the desktop account credential", async () => {
-  const endpoint = createDesktopPresenceReportEndpoint();
-  const app = new Elysia().post("/v1/desktop/presence", endpoint.handler, {
-    body: endpoint.config.body,
-    response: endpoint.config.response,
-  });
+  await using server = serveReport();
   for (const authorization of [undefined, "Bearer unrelated-credential"]) {
-    const response = await app.handle(
+    const response = await server.fetch(
       new Request("http://localhost/v1/desktop/presence", {
         method: "POST",
         headers: {
@@ -35,17 +46,13 @@ test("desktop presence reports require the desktop account credential", async ()
 });
 
 test("reports reject client time and ownership fields at the contract boundary", async () => {
-  const endpoint = createDesktopPresenceReportEndpoint();
-  const app = new Elysia().post("/v1/desktop/presence", endpoint.handler, {
-    body: endpoint.config.body,
-    response: endpoint.config.response,
-  });
+  await using server = serveReport();
   for (const extra of [
     { lastSeenAt: "2030-01-01T00:00:00.000Z" },
     { userId: "other" },
     { organizationId: "other" },
   ]) {
-    const response = await app.handle(
+    const response = await server.fetch(
       new Request("http://localhost/v1/desktop/presence", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -57,8 +64,9 @@ test("reports reject client time and ownership fields at the contract boundary",
 });
 
 test("presence reads require a signed-in browser account", async () => {
-  const response = await new Elysia()
-    .use(desktopPresenceRoute)
-    .handle(new Request("http://localhost/v1/desktop/presence"));
+  await using server = serve(desktopPresenceRoute);
+  const response = await server.fetch(
+    new Request("http://localhost/v1/desktop/presence"),
+  );
   expect(response.status).toBe(401);
 });

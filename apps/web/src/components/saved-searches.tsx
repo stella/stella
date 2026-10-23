@@ -50,7 +50,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -111,7 +111,7 @@ export const SavedSearches = ({
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
@@ -131,7 +131,7 @@ export const SavedSearches = ({
     mutationFn: async (name: string) => {
       const criteria = toSavedSearchCriteria({ filters, query });
       const { time, workspaceIds, ...requiredCriteria } = criteria;
-      return unwrapEden(
+      return unwrapApiResponse(
         await api["saved-searches"].post({
           name,
           criteria: {
@@ -156,7 +156,7 @@ export const SavedSearches = ({
       name: string;
       savedSearchId: SavedSearch["id"];
     }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["saved-searches"]({ savedSearchId }).patch({ name }),
       ),
     onSuccess: onMutationSuccess,
@@ -165,7 +165,9 @@ export const SavedSearches = ({
 
   const deleteMutation = useMutation({
     mutationFn: async (savedSearchId: SavedSearch["id"]) =>
-      unwrapEden(await api["saved-searches"]({ savedSearchId }).delete()),
+      unwrapApiResponse(
+        await api["saved-searches"]({ savedSearchId }).delete(),
+      ),
     onSuccess: onMutationSuccess,
     onError: onMutationError,
   });

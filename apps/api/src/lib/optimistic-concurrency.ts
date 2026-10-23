@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
@@ -19,7 +19,7 @@ export const VERSION_CONFLICT_ERROR_CODE = API_VERSION_CONFLICT_ERROR_CODE;
  * Send the value verbatim as the server rendered it; the comparison is on the
  * millisecond instant, not on the string.
  */
-export const expectedUpdatedAtSchema = t.String({ format: "date-time" });
+export const expectedUpdatedAtSchema = v.pipe(v.string(), v.isoTimestamp());
 
 type AssertUnchangedSinceArgs = {
   /** `updatedAt` of the row, read under the same lock as the write. */

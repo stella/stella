@@ -41,7 +41,7 @@ export type RoutablePlaybook = {
 
 // The scope column is nullable and `trigger` is optional, so a stored playbook
 // may carry no trigger at all. Reads must default to `manual` regardless of how
-// Elysia coerced the field at write time.
+// the field was written.
 export const playbookTrigger = (scope: PlaybookScope | null): PlaybookTrigger =>
   scope?.trigger ?? "manual";
 

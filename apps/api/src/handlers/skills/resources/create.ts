@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { agentSkillResources } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -15,18 +15,22 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const createSkillResourceParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const createSkillResourceParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const createSkillResourceBodySchema = t.Object({
-  path: t.String({ minLength: 1, maxLength: RESOURCE_PATH_MAX_CHARS }),
-  content: t.String({ maxLength: LIMITS.agentSkillResourceMaxChars }),
+const createSkillResourceBodySchema = v.object({
+  path: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(RESOURCE_PATH_MAX_CHARS),
+  ),
+  content: v.pipe(v.string(), v.maxLength(LIMITS.agentSkillResourceMaxChars)),
 });
 
 const config = {

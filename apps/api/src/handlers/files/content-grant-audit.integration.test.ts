@@ -8,7 +8,6 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -30,6 +29,7 @@ import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import { readEmailHtmlPreviewHandler } from "@/api/handlers/files/get";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -231,8 +231,8 @@ const expectOneContentRow = async (
 };
 
 const expectStatus = (response: unknown, code: number) => {
-  expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-  if (response instanceof ElysiaCustomStatusResponse) {
+  expect(response).toBeInstanceOf(HttpStatusResponse);
+  if (response instanceof HttpStatusResponse) {
     expect(response.code).toBe(code);
   }
 };

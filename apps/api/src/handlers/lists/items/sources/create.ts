@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
 
@@ -14,29 +14,31 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { parseLegalListSourceLocator } from "@/api/lib/lists/source-locator";
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  itemEntityId: tSafeId("entity"),
-  sourceEntityId: tSafeId("entity"),
-  sourceEntityVersionId: tSafeId("entityVersion"),
-  locator: t.Union([
-    t.Object({ type: t.Literal("document") }),
-    t.Object({
-      type: t.Literal("docx-block"),
-      blockId: t.String({ minLength: 1, maxLength: 512 }),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  itemEntityId: resourceIdSchema("entity"),
+  sourceEntityId: resourceIdSchema("entity"),
+  sourceEntityVersionId: resourceIdSchema("entityVersion"),
+  locator: v.union([
+    v.object({ type: v.literal("document") }),
+    v.object({
+      type: v.literal("docx-block"),
+      blockId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
     }),
-    t.Object({
-      type: t.Literal("pdf-page"),
-      pageNumber: t.Integer({ minimum: 1 }),
+    v.object({
+      type: v.literal("pdf-page"),
+      pageNumber: v.pipe(v.number(), v.integer(), v.minValue(1)),
     }),
   ]),
-  quote: t.Optional(
-    t.Nullable(t.String({ maxLength: LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH })),
+  quote: v.optional(
+    v.nullable(
+      v.pipe(v.string(), v.maxLength(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH)),
+    ),
   ),
 });
 

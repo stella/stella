@@ -3,7 +3,7 @@ import { create } from "zustand";
 import type { ResourceName } from "@stll/api-contract";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import type { CapabilityId } from "@/lib/eden-client";
+import type { CapabilityId } from "@/lib/api";
 
 /** A capability the current screen offers on one resource. */
 export type ScreenAction = {

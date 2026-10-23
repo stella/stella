@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { organizationSettings } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -26,8 +26,8 @@ const DEEPL_KEY_ERROR_CODE = {
   rateLimited: "provider_rate_limited",
 } as const;
 
-const updateDeepLKeyBody = t.Object({
-  apiKey: t.String({ minLength: 1, maxLength: 256 }),
+const updateDeepLKeyBody = v.object({
+  apiKey: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 });
 
 const config = {

@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX } from "@stll/api-contract";
 
@@ -21,14 +21,12 @@ const body = (overrides: Record<string, unknown> = {}) => ({
 
 describe("question prompt suggestion body", () => {
   test("accepts the full sample allowance", () => {
-    expect(Value.Check(suggestResearchColumnPromptBodySchema, body())).toBe(
-      true,
-    );
+    expect(v.is(suggestResearchColumnPromptBodySchema, body())).toBe(true);
   });
 
   test("rejects more decisions than the sample allowance", () => {
     expect(
-      Value.Check(
+      v.is(
         suggestResearchColumnPromptBodySchema,
         body({
           decisionIds: decisionIds(CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX + 1),
@@ -39,10 +37,7 @@ describe("question prompt suggestion body", () => {
 
   test("refuses a suggestion with no question to refine", () => {
     expect(
-      Value.Check(
-        suggestResearchColumnPromptBodySchema,
-        body({ question: "" }),
-      ),
+      v.is(suggestResearchColumnPromptBodySchema, body({ question: "" })),
     ).toBe(false);
   });
 
@@ -54,7 +49,7 @@ describe("question prompt suggestion body", () => {
    */
   test("accepts only the search context, never decision text", () => {
     expect(
-      Object.keys(suggestResearchColumnPromptBodySchema.properties).toSorted(),
+      Object.keys(suggestResearchColumnPromptBodySchema.entries).toSorted(),
     ).toEqual([
       "answerKind",
       "country",
@@ -66,7 +61,7 @@ describe("question prompt suggestion body", () => {
       "question",
     ]);
     expect(
-      Value.Check(
+      v.is(
         suggestResearchColumnPromptBodySchema,
         body({ samples: [{ headnote: "leaked" }] }),
       ),

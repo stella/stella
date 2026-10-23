@@ -1,3 +1,4 @@
+import type { RouteEntry } from "@/api/http/route";
 import type { BudgetObservation } from "@/api/lib/rate-limit/budget-observability";
 
 type MaybePromise<T> = T | Promise<T>;
@@ -57,7 +58,11 @@ export type RateLimitOptions = {
   ) => MaybePromise<readonly RateLimitBudget[]>;
   budget?: BudgetObservation | ((key: string) => BudgetObservation);
   onLimit?: (limited: { key: string; duration: number }) => void;
-  skip?: (request: Request) => MaybePromise<boolean>;
+  /** Leave the request uncharged; it sees the matched route, if any. */
+  skip?: (
+    request: Request,
+    entry: RouteEntry | undefined,
+  ) => MaybePromise<boolean>;
 };
 
 export type RateLimitBudget = {

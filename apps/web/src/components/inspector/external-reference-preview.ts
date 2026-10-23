@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { BoundedSet } from "@/lib/bounded-set";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 const SERVER_PREVIEW_ERROR_THRESHOLD = 500;
@@ -35,7 +35,7 @@ export const externalReferencePreviewOptions = ({
           notifyUserError(error, errorTitle, { description: error.message });
         }
       }
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     retry: false,
     staleTime: 1000 * 60 * 10,

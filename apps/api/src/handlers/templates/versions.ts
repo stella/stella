@@ -1,12 +1,12 @@
 import { panic, Result } from "better-result";
 import { and, desc, eq, lt } from "drizzle-orm";
-import { status } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateVersions } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";

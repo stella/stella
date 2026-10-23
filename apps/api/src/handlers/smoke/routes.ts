@@ -25,12 +25,13 @@
  *    organization settings API.
  */
 
-import Elysia from "elysia";
 import { timingSafeEqual } from "node:crypto";
 
 import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
+import { routes } from "@/api/http/route";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import { logger } from "@/api/lib/observability/logger";
 import {
   mintSmokeSession,
@@ -49,8 +50,9 @@ const isAuthorizedSmokeCaller = (headerSecret: string | null): boolean => {
   return timingSafeEqual(a, b);
 };
 
-export const smokeRoute = new Elysia({ prefix: "/smoke" }).post(
-  "/session",
+// No body is read: the secret travels in a header and the principal in the query.
+const mintSession = defineEndpoint.public(
+  { bodyMode: "none" },
   async ({ request }) => {
     if (!isAuthorizedSmokeCaller(request.headers.get("x-smoke-secret"))) {
       return notAvailable();
@@ -72,4 +74,9 @@ export const smokeRoute = new Elysia({ prefix: "/smoke" }).post(
     });
     return smokeSession;
   },
+);
+
+export const smokeRoute = routes(
+  { "/session": { POST: mintSession } },
+  { prefix: "/smoke" },
 );

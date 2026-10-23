@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
 const DEEPL_AVAILABILITY_STALE_MS = 5 * 60 * 1000;
@@ -42,7 +42,7 @@ export const deepLAvailabilityOptions = ({
       // oxlint-disable-next-line require-query-signal/require-query-signal -- Cached availability must survive observer teardown.
       const response = await api["organization-settings"].deepl.get();
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 
@@ -56,6 +56,6 @@ export const deepLConfigOptions = ({
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });

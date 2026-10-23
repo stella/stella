@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
@@ -68,38 +68,38 @@ const importFailureCodeFromInstallError = (
   }
 };
 
-export const importSkillsBodySchema = t.Object({
-  items: t.Array(
-    t.Object({
-      integrity: t.Union([
-        t.Object({
-          type: t.Literal("content-hash"),
-          value: t.String({ pattern: CONTENT_HASH_PATTERN }),
-        }),
-        t.Object({
-          entrypointHash: t.String({ pattern: CONTENT_HASH_PATTERN }),
-          sourceUrl: t.String({ minLength: 1, maxLength: 2048 }),
-          type: t.Literal("github-commit"),
-          value: t.String({ pattern: GITHUB_COMMIT_SHA_PATTERN }),
-        }),
-      ]),
-      sourceUrl: t.String({ minLength: 1, maxLength: 2048 }),
-    }),
-    {
-      minItems: 1,
-      maxItems: MAX_SKILL_IMPORTS,
-    },
+export const importSkillsBodySchema = v.object({
+  items: v.pipe(
+    v.array(
+      v.object({
+        integrity: v.union([
+          v.object({
+            type: v.literal("content-hash"),
+            value: v.pipe(
+              v.string(),
+              v.regex(new RegExp(CONTENT_HASH_PATTERN, "u")),
+            ),
+          }),
+          v.object({
+            entrypointHash: v.pipe(
+              v.string(),
+              v.regex(new RegExp(CONTENT_HASH_PATTERN, "u")),
+            ),
+            sourceUrl: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
+            type: v.literal("github-commit"),
+            value: v.pipe(
+              v.string(),
+              v.regex(new RegExp(GITHUB_COMMIT_SHA_PATTERN, "u")),
+            ),
+          }),
+        ]),
+        sourceUrl: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
+      }),
+    ),
+    v.minLength(1),
+    v.maxLength(MAX_SKILL_IMPORTS),
   ),
-  scope: t.Union(
-    [
-      t.Literal(importSkillScopeValues[0]),
-      t.Literal(importSkillScopeValues[1]),
-    ],
-    {
-      enum: [...importSkillScopeValues],
-      type: "string",
-    },
-  ),
+  scope: v.picklist(importSkillScopeValues),
 });
 
 const config = {

@@ -1,12 +1,12 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { buildTemplateCheckFindings } from "@/api/handlers/templates/check-template";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
@@ -18,8 +18,8 @@ import {
   STORED_TEMPLATE_FILE_COLUMNS,
 } from "@/api/lib/templates/stored-template-file";
 
-const checkTemplateParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const checkTemplateParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
 type CheckTemplateProps = {

@@ -11,11 +11,8 @@ import * as v from "valibot";
 import { AUTH_SOCIAL_PROVIDER_IDS } from "@stll/auth-model";
 import { Temporal } from "@stll/time";
 
+import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
 import { isRecord } from "@/api/lib/type-guards";
 
 const HINT_LIFETIME_MS = 10 * 60 * 1000;

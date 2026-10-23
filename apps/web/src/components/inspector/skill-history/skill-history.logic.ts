@@ -27,7 +27,7 @@ export type SkillCommentRow = Awaited<
  * Authoring statuses a proposal moves through. Mirrors the API's
  * `agentSkillProposals.status`; the mirror is bound at compile time because
  * every consumer indexes {@link PROPOSAL_STATUS_LABEL_KEY} with the status the
- * Eden client returns, so a new server-side status fails to typecheck here
+ * API client returns, so a new server-side status fails to typecheck here
  * rather than falling through to a default label.
  */
 const NO_MEMBERS: readonly never[] = [];

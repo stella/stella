@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
-import { t } from "elysia";
 import { timingSafeEqual } from "node:crypto";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
@@ -17,22 +17,22 @@ import {
   searchHistoryScopeQuery,
 } from "./scope-precondition";
 
-export const searchHistoryImportClockSchema = t.Object(
-  {
-    issuedAt: t.String({
-      format: "date-time",
-      maxLength: 64,
-      description:
-        "The database time returned by search-history/import-clock. Obtain it before capturing clientNow.",
-    }),
-    signature: t.String({
-      pattern: "^[a-f0-9]{64}$",
-      minLength: 64,
-      maxLength: 64,
-    }),
-  },
-  { additionalProperties: false },
-);
+export const searchHistoryImportClockSchema = v.strictObject({
+  issuedAt: v.pipe(
+    v.string(),
+    v.isoTimestamp(),
+    v.maxLength(64),
+    v.description(
+      "The database time returned by search-history/import-clock. Obtain it before capturing clientNow.",
+    ),
+  ),
+  signature: v.pipe(
+    v.string(),
+    v.regex(/^[a-f0-9]{64}$/u),
+    v.minLength(64),
+    v.maxLength(64),
+  ),
+});
 
 // Use the deletion barriers' database clock, with precision rounded down.
 export const readSearchHistoryDatabaseClock = async (tx: Transaction) => {
@@ -69,7 +69,7 @@ const clockSignature = async (
   );
 
 type VerifySearchHistoryImportClockOptions = ImportClockOwner & {
-  clock: typeof searchHistoryImportClockSchema.static;
+  clock: v.InferOutput<typeof searchHistoryImportClockSchema>;
   databaseNow: string;
 };
 export const verifySearchHistoryImportClock = async ({

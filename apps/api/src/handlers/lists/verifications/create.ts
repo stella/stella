@@ -6,7 +6,7 @@
 
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { legalListVerificationRuns } from "@/api/db/schema";
@@ -22,7 +22,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { encryptedContentError } from "@/api/lib/files/detect-file-encryption";
@@ -35,12 +35,11 @@ import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
 import { estimateDocumentRunUnits } from "@/api/lib/usage/run-estimate";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  entityId: tSafeId("entity"),
-  fileFieldId: tSafeId("field"),
-  /** The estimate the caller accepted, when a large run asked for one. */
-  confirmedUnits: t.Optional(t.Integer({ minimum: 0 })),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  entityId: resourceIdSchema("entity"),
+  fileFieldId: resourceIdSchema("field"),
+  confirmedUnits: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
 });
 
 const config = {

@@ -85,7 +85,7 @@ const extractStructured = (
  * Recognise an HTTP-402 error across the error shapes we
  * receive on the frontend:
  *
- *  - `APIError` from Eden treaty mutations (toAPIError converts
+ *  - `APIError` from API client mutations (toAPIError converts
  *    a 4xx response into one of these).
  *  - Streaming/provider transport errors whose `statusCode === 402`.
  *    Detected here by reading a numeric `statusCode` on any thrown

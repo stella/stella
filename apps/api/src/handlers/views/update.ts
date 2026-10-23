@@ -13,7 +13,7 @@ import {
   avtViewAccessStatus,
   isAvtLayoutVisible,
 } from "@/api/lib/auth/feature-access/view-eligibility";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -55,7 +55,7 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  params: workspaceParams({ viewId: tSafeId("workspaceView") }),
+  params: workspaceParams({ viewId: resourceIdSchema("workspaceView") }),
   body: tUpdateViewBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

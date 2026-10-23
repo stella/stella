@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
@@ -387,7 +386,7 @@ export const buildAnswerJustification = (
  * as the union's own error arm, never handed to the client as an unknown shape.
  */
 export const parseStoredAnswerContent = (value: unknown): FieldContent => {
-  if (Value.Check(fieldContentSchema, value)) {
+  if (v.is(fieldContentSchema, value)) {
     return value;
   }
   captureError(

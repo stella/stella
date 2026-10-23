@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 
 import { handleOAuthAuthorizationServerMetadataRequest } from "@/api/handlers/auth/metadata";
-import { dropOriginBoundCors } from "@/api/handlers/public-cors";
 import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
@@ -12,11 +11,12 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
   {
     contract: "patch",
     cache: DISCOVERY_METADATA_CACHE_POLICY,
+    // Any origin may read it; the answer carries its own CORS headers.
+    cors: "own",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
   },
-  async function* ({ request, set }) {
-    dropOriginBoundCors(set);
+  async function* ({ request }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>

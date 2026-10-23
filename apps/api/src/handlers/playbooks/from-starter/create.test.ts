@@ -84,7 +84,7 @@ const createOrgContext = (
 };
 
 // The exported `.handler` returns the *unwrapped* success payload on ok, or an
-// Elysia status response ({ code, ... }) on error — not a raw Result.
+// `HttpStatusResponse` ({ code, ... }) on error — not a raw Result.
 type TestEndpoint<TContext> = {
   handler: (context: TContext) => Promise<unknown>;
 };

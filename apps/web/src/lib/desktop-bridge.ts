@@ -22,7 +22,7 @@ import {
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, serializeStoredJson } from "@/lib/stored-json";
@@ -362,7 +362,7 @@ const createDesktopEditHandoff = async ({
       propertyId: toSafeId<"property">(propertyId),
     });
 
-  return unwrapEden(response) satisfies DesktopEditHandoff;
+  return unwrapApiResponse(response) satisfies DesktopEditHandoff;
 };
 
 const readDesktopEditHandoffStatus = async ({
@@ -379,7 +379,7 @@ const readDesktopEditHandoffStatus = async ({
     })
     .status.get();
 
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 const launchDesktopEditHandoff = (deepLinkUrl: string) => {
@@ -548,7 +548,7 @@ export const linkDesktopAccount = async ({
           message: "desktop_account_conflict",
         });
       }
-      const grant = unwrapEden(
+      const grant = unwrapApiResponse(
         await api["desktop-registry"].grant.post(
           desktopAccountGrantRequest(challenge),
         ),

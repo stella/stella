@@ -1,17 +1,17 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 import {
   updateTemplateCategoryBodySchema,
   updateTemplateCategoryHandler,
 } from "../categories";
 
-const updateTemplateCategoryParamsSchema = t.Object({
-  categoryId: tSafeId("templateCategory"),
+const updateTemplateCategoryParamsSchema = v.object({
+  categoryId: resourceIdSchema("templateCategory"),
 });
 
 const config = {

@@ -4,7 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { Temporal } from "@stll/time";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import {
   fetchWorkspaceNavigationPage,
@@ -61,7 +61,7 @@ const readOverviewActivity = async ({
       ...(cursor ? { cursor } : {}),
     },
   });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 export type MatterActivityItem = Awaited<
@@ -88,7 +88,7 @@ export const exportOverviewActivity = async ({
         format,
       },
     });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 const readOverviewActivityActors = async ({
@@ -112,7 +112,7 @@ const readOverviewActivityActors = async ({
         ...(search === "" ? {} : { search }),
       },
     });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 export type MatterActivityActor = Awaited<
@@ -149,7 +149,7 @@ const readWorkspaces = async (signal?: AbortSignal) => {
     signal ? { fetch: { signal } } : {},
   );
 
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 export type WorkspacesData = Awaited<ReturnType<typeof readWorkspaces>>;
@@ -193,7 +193,7 @@ export const workspaceOptions = (workspaceId: string) =>
         .workspaces({ workspaceId })
         .get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -216,7 +216,7 @@ export const workspaceActivityOptions = ({
           query,
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: getInitialWorkspaceActivityCursor(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -250,7 +250,7 @@ export const overviewOptions = (workspaceId: string) =>
         .workspaces({ workspaceId })
         .overview.get({ query: { agendaFrom }, fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

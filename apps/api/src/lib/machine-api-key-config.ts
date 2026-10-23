@@ -143,9 +143,8 @@ const machineApiKeyScopeSchema = v.picklist(MACHINE_API_KEY_GRANTABLE_SCOPES);
  * because its `stella:*_anonymized` scopes are not grantable here, so a key
  * bound to it could never carry a scope that surface accepts.
  *
- * A literal tuple rather than a filter over `MCP_MODES`, because both the
- * TypeBox boundary schema and the valibot metadata picklist need the exact
- * member union. `machine-api-keys.test.ts` recomputes the rule and asserts this
+ * A literal tuple rather than a filter over `MCP_MODES`, because the
+ * boundary picklist needs the exact member union. `machine-api-keys.test.ts` recomputes the rule and asserts this
  * list equals it, so a new audience cannot quietly fail to be offered here.
  */
 export const MACHINE_API_KEY_GRANTABLE_AUDIENCES = [

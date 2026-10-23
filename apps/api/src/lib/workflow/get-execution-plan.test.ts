@@ -576,8 +576,8 @@ describe("getPropertyExecutionPlan", () => {
 
 describe("COMPUTED_PROPERTY_TOOL_TYPES", () => {
   /** Every tool type a column can carry, read from the stored shape itself. */
-  const allToolTypes = propertyToolSchema.anyOf.map(
-    (member) => member.properties.type.const,
+  const allToolTypes = propertyToolSchema.options.map(
+    (member) => member.entries.type.literal,
   );
   /** The rest: columns a person fills in, which sit stale legitimately. */
   const USER_ENTERED_TOOL_TYPES = ["manual-input"] as const;

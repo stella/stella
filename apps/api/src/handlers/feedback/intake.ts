@@ -12,10 +12,9 @@
  *     caller's own pass is never trusted) and deduplicates identical content
  *     against the stored reports.
  *
- * The route hands us the raw body string (Elysia `parse: "text"`) rather than
- * a pre-validated object: Elysia's normalizer strips unknown keys before a
- * handler sees them, so a strict "reject anything else" contract must run on
- * the raw payload here, the same shape as the hosted-usage webhook receiver.
+ * The route hands us the raw body string (`bodyMode: "text"`) rather than a
+ * pre-validated object, and the strict "reject anything else" contract runs
+ * on the raw payload here, the same shape as the hosted-usage webhook receiver.
  *
  * All error bodies use the MCP `{ error: { code, message, hint } }` envelope
  * (codes from `McpErrorCode`) so a forwarding tool can branch on HTTP status

@@ -2,8 +2,7 @@ import { panic } from "better-result";
 import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias, unionAll } from "drizzle-orm/pg-core";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT as CITATION_SUMMARY_SCAN_LIMIT,
@@ -22,6 +21,7 @@ import {
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
@@ -39,7 +39,7 @@ import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/lan
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -127,29 +127,39 @@ const [
   unclassifiedPolarity,
 ] = CITATION_TREATMENTS;
 
-export const listDecisionCitationsQuerySchema = t.Object({
-  direction: t.UnionEnum(CITATION_DIRECTIONS),
-  // Literal unions keep absent optional query parameters absent; Elysia
-  // otherwise coerces an optional UnionEnum to its first member.
-  doctrine: t.Optional(
-    t.Union([t.Literal(distinguishesDoctrine), t.Literal(limitsDoctrine)]),
+const listDecisionCitationsQueryEntries = v.object({
+  direction: v.picklist(CITATION_DIRECTIONS),
+  doctrine: v.optional(
+    v.union([v.literal(distinguishesDoctrine), v.literal(limitsDoctrine)]),
   ),
-  polarity: t.Optional(
-    t.Union([
-      t.Literal(negativePolarity),
-      t.Literal(neutralPolarity),
-      t.Literal(positivePolarity),
-      t.Literal(supportivePolarity),
-      t.Literal(mixedPolarity),
-      t.Literal(unclassifiedPolarity),
+  polarity: v.optional(
+    v.union([
+      v.literal(negativePolarity),
+      v.literal(neutralPolarity),
+      v.literal(positivePolarity),
+      v.literal(supportivePolarity),
+      v.literal(mixedPolarity),
+      v.literal(unclassifiedPolarity),
     ]),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
-type ListDecisionCitationsQuery = Static<
-  typeof listDecisionCitationsQuerySchema
+type ListDecisionCitationsQuery = v.InferOutput<
+  typeof listDecisionCitationsQueryEntries
 >;
+
+/** A cursor belongs to one direction and filter; any other is refused as input. */
+export const listDecisionCitationsQuerySchema = v.pipe(
+  listDecisionCitationsQueryEntries,
+  v.forward(
+    v.check(
+      (query) => decodeCitationCursor(query.cursor, query) !== null,
+      "Invalid cursor",
+    ),
+    ["cursor"],
+  ),
+);
 
 /** The decision at the far end of a citation, enough to address its page. */
 type RelatedDecision = {
@@ -1137,11 +1147,13 @@ export const listTopCitingDecisionsHandler = async ({
 /** How many decisions each treatment shows before the reader asks for all. */
 export const LEADING_CITATIONS_PER_TREATMENT = 3;
 
-export const listLeadingCitationsQuerySchema = t.Object({
-  direction: t.UnionEnum(CITATION_DIRECTIONS),
+export const listLeadingCitationsQuerySchema = v.object({
+  direction: v.picklist(CITATION_DIRECTIONS),
 });
 
-type ListLeadingCitationsQuery = Static<typeof listLeadingCitationsQuerySchema>;
+type ListLeadingCitationsQuery = v.InferOutput<
+  typeof listLeadingCitationsQuerySchema
+>;
 
 export type LeadingCitationRow = {
   id: SafeId<"caseLawCitation">;

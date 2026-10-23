@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import * as v from "valibot";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
@@ -205,7 +205,7 @@ if (!databaseUrl || !runPostgres) {
             interpretationNote,
             scoring,
           };
-          expect(Value.Check(updateFactDetails.config.body, body)).toBe(true);
+          expect(v.is(updateFactDetails.config.body, body)).toBe(true);
           return await updateFactDetails.handler(
             createTestHandlerContext<
               Parameters<typeof updateFactDetails.handler>[0]

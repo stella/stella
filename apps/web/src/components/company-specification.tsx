@@ -34,7 +34,7 @@ import type { LookupRegistryOption } from "@/components/templates/registry-optio
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
@@ -114,7 +114,7 @@ const CompanySpecificationEditor = ({
       format: debouncedFormat,
     }),
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.templates["lookup-preview"].post(
           {
             registry,

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { CONTACT_IMPORT_MAPPING_MAX_CHARS } from "@stll/api-contract";
 
@@ -10,12 +10,12 @@ import {
 } from "@/api/handlers/contacts/contact-import-file";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { fileSchema } from "@/api/lib/custom-schema";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 
-const importPreviewBodySchema = t.Object({
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.dataImport }),
-  /** The mapping, JSON-encoded by the client; bounded before it is parsed. */
-  mapping: t.String({ maxLength: CONTACT_IMPORT_MAPPING_MAX_CHARS }),
+const importPreviewBodySchema = v.object({
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.dataImport }),
+  mapping: v.pipe(v.string(), v.maxLength(CONTACT_IMPORT_MAPPING_MAX_CHARS)),
 });
 
 const config = {

@@ -7,7 +7,7 @@
 
 import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   documentReviewFindings,
@@ -17,7 +17,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
   buildIssuesTableRows,
   describeIssuesTableBasis,
@@ -73,8 +73,8 @@ const config = {
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
-  params: workspaceParams({ runId: tSafeId("documentReviewRun") }),
-  query: t.Object({ format: t.UnionEnum([...ISSUES_TABLE_FORMATS]) }),
+  params: workspaceParams({ runId: resourceIdSchema("documentReviewRun") }),
+  query: v.object({ format: v.picklist([...ISSUES_TABLE_FORMATS]) }),
 } satisfies WorkspaceHandlerConfig;
 
 const exportDocumentReviewRun = createSafeHandler(

@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import {
   afterAll,
@@ -9,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import { featureEnrolments, timeDailyTargets } from "@/api/db/schema";
@@ -163,10 +163,10 @@ const readTarget = async ({
 describe("daily target boundaries", () => {
   test("the request schema accepts only null or integer minute bounds", () => {
     for (const minutes of [null, 1, 1440]) {
-      expect(Value.Check(dailyTargetBody, { minutes })).toBe(true);
+      expect(v.is(dailyTargetBody, { minutes })).toBe(true);
     }
     for (const minutes of [0, -1, 1.5, 1441, "60"]) {
-      expect(Value.Check(dailyTargetBody, { minutes })).toBe(false);
+      expect(v.is(dailyTargetBody, { minutes })).toBe(false);
     }
   });
 

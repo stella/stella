@@ -49,7 +49,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { PropertyOptionColor } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -424,7 +424,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           taskId: toSafeId<"entity">(taskId),
           status,
         });
-      unwrapEden(response);
+      unwrapApiResponse(response);
       return { taskId };
     },
     onError: (error) => {

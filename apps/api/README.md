@@ -1,6 +1,7 @@
 # Stella API
 
-The Stella backend API built with [Elysia](https://elysiajs.com/).
+The Stella backend API, served by its own HTTP core on `Bun.serve`
+(`src/http/`).
 
 ## Getting Started
 

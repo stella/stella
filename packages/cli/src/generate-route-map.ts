@@ -385,7 +385,7 @@ const classifyObject = (
 /**
  * The schema's own `description`, as a spreadable field. Present on a curated
  * tool's hand-written property schema and on any handler-config property given
- * an Elysia `t.X({ description })`; both reach the generator as plain JSON
+ * a `v.description(...)`; both reach the generator as plain JSON
  * Schema, so one helper covers the tool tree and the capability tree alike.
  */
 const descriptionField = (schema: PropSchema): { description?: string } => {

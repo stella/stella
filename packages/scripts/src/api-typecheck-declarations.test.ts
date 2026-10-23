@@ -230,7 +230,7 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
   }
 });
 
-test.each(["permissive-route-schema.ts", "server-analytics.ts"])(
+test.each(["server-analytics.ts"])(
   "shared utilities remain serializable without admitting runtime routes: %s",
   (filename) => {
     const root = mkdtempSync(path.join(tmpdir(), "api-schema-boundary-"));

@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -23,7 +22,7 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
@@ -37,25 +36,29 @@ const SUMMARY_MAX_CHARS = 600;
 const GENERATION_TIMEOUT_MS = 90_000;
 const GENERATION_MAX_OUTPUT_TOKENS = 8192;
 
-const fromCommentsParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const fromCommentsParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const fromCommentsBodySchema = t.Object({
-  commentIds: t.Optional(
-    t.Array(tSafeId("agentSkillComment"), {
-      minItems: 1,
-      maxItems: COMMENTS_MAX,
-      description:
+const fromCommentsBodySchema = v.object({
+  commentIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("agentSkillComment")),
+      v.minLength(1),
+      v.maxLength(COMMENTS_MAX),
+      v.description(
         "Comments to apply. Omit to apply every unresolved comment written against the skill's newest revision.",
-    }),
+      ),
+    ),
   ),
-  instructions: t.Optional(
-    t.String({
-      maxLength: INSTRUCTIONS_MAX_CHARS,
-      description:
+  instructions: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(INSTRUCTIONS_MAX_CHARS),
+      v.description(
         "Extra guidance for the revision, applied on top of the comments.",
-    }),
+      ),
+    ),
   ),
 });
 

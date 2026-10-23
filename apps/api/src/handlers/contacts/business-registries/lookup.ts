@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   BUSINESS_REGISTRY_LOOKUP_DETAILS,
@@ -26,20 +26,24 @@ const [standardDetail, fullDetail] =
     BusinessRegistryLookupDetail,
   ];
 
-const querySchema = t.Object({
-  registry: t.UnionEnum(BUSINESS_REGISTRY_SLUGS, {
-    description: "Business register to query",
-  }),
-  q: t.String({
-    minLength: 1,
-    maxLength: 256,
-    description:
+const querySchema = v.object({
+  registry: v.pipe(
+    v.picklist(BUSINESS_REGISTRY_SLUGS),
+    v.description("Business register to query"),
+  ),
+  q: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(256),
+    v.description(
       "Canonical identifier (e.g. company number, VAT number) or company name",
-  }),
-  detail: t.Optional(
-    t.Union([t.Literal(standardDetail), t.Literal(fullDetail)], {
-      description: LOOKUP_DETAIL_DESCRIPTION,
-    }),
+    ),
+  ),
+  detail: v.optional(
+    v.pipe(
+      v.union([v.literal(standardDetail), v.literal(fullDetail)]),
+      v.description(LOOKUP_DETAIL_DESCRIPTION),
+    ),
   ),
 });
 

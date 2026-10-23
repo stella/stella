@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   AGENT_SKILL_COMMAND_PATTERN,
@@ -22,16 +22,21 @@ import { includes } from "@/api/lib/type-guards";
 
 import { uniqueSlug } from "./slug";
 
-const createSkillBodySchema = t.Object({
-  scope: t.UnionEnum(AGENT_SKILL_SCOPES),
-  name: t.String({ minLength: 1, maxLength: 64 }),
-  description: t.String({
-    minLength: 1,
-    maxLength: LIMITS.agentSkillDescriptionMaxChars,
-  }),
-  body: t.String({ minLength: 1, maxLength: LIMITS.agentSkillBodyMaxChars }),
-  command: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
-  invocation: t.Optional(tSkillInvocation()),
+const createSkillBodySchema = v.object({
+  scope: v.picklist(AGENT_SKILL_SCOPES),
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  description: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.agentSkillDescriptionMaxChars),
+  ),
+  body: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.agentSkillBodyMaxChars),
+  ),
+  command: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(50))),
+  invocation: v.optional(tSkillInvocation()),
 });
 
 const config = {

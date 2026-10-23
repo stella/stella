@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { PropertyContentType } from "@/lib/api-contract";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
@@ -62,7 +62,7 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
           ...(fallback !== undefined ? { fallback } : {}),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async () => {
       // Reflect the actor's own write immediately instead of waiting on
@@ -123,7 +123,7 @@ export const useCreatePropertiesBatch = ({
           })),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -212,7 +212,7 @@ export const suggestPropertyPrompt = async ({
   currentPrompt,
   instruction,
 }: SuggestPromptVars) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api
       .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["suggest-prompt"].post({

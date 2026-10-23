@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
 
@@ -14,15 +14,15 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { clauseExpectedBodySchema } from "@/api/lib/clauses/body-schema";
 import { inspectLegacyClauseDirectives } from "@/api/lib/clauses/clause-directives";
 import { normalizeClauseBody } from "@/api/lib/clauses/types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import { updateSearchVector } from "../search-vector";
 
-const restoreClauseVersionParamsSchema = t.Object({
-  clauseId: tSafeId("clause"),
-  versionId: tSafeId("clauseVersion"),
+const restoreClauseVersionParamsSchema = v.object({
+  clauseId: resourceIdSchema("clause"),
+  versionId: resourceIdSchema("clauseVersion"),
 });
 
 const config = {
@@ -42,8 +42,8 @@ const config = {
     consumesServices: false,
   },
   params: restoreClauseVersionParamsSchema,
-  body: t.Optional(
-    t.Object({ expectedBody: t.Optional(clauseExpectedBodySchema) }),
+  body: v.optional(
+    v.object({ expectedBody: v.optional(clauseExpectedBodySchema) }),
   ),
 } satisfies HandlerConfig;
 

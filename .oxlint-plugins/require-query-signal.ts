@@ -1,5 +1,5 @@
 // Require queryFn to thread TanStack Query's abort `signal` into any
-// fetch()/Eden api.* call it makes directly.
+// fetch()/API client api.* call it makes directly.
 //
 // TanStack Query passes an AbortSignal to every queryFn via the first
 // argument (`{ signal, ... }`). A queryFn that ignores it never cancels: a
@@ -20,7 +20,7 @@
 //     of those), and
 //   - Its value is an inline function or one statically resolved same-file
 //     function whose body contains a *direct* browser-global `fetch(...)`
-//     call or an Eden `api.*` call chain (`api.foo.bar.get(...)`, rooted at
+//     call or an API client `api.*` call chain (`api.foo.bar.get(...)`, rooted at
 //     the named `api` import from `@/lib/api`), and
 //   - Its first parameter does not destructure `signal`.
 //
@@ -47,7 +47,7 @@
 // would require whole-program call-graph analysis, which this rule
 // deliberately avoids to stay fast and low-noise. Audit new nested helpers by
 // hand: give them a `{ signal }: { signal: AbortSignal }` parameter and thread
-// it into `fetch`/Eden calls the same way the queryFn case does.
+// it into `fetch`/API client calls the same way the queryFn case does.
 //
 // Escape hatch: `// SAFETY:` + `// oxlint-disable-next-line
 // require-query-signal/require-query-signal` when the call genuinely cannot
@@ -220,16 +220,16 @@ const rootIdentifier = (node) => {
   return null;
 };
 
-// Eden route chains call intermediate path-parameter segments as functions
+// API client route chains call intermediate path-parameter segments as functions
 // too (`api.workspaces({ workspaceId }).reports(...)`); only the trailing
 // HTTP-verb call actually hits the network, so restrict to that to avoid
 // double-reporting the same chain once per segment.
 const HTTP_VERBS = new Set(["get", "post", "put", "patch", "delete", "head"]);
 
-// The Eden client is always imported as `api` from `@/lib/api` (see
+// The API client is always imported as `api` from `@/lib/api` (see
 // AGENTS.md). A call chain rooted at that identifier and ending in an HTTP
 // verb hits the network.
-const isEdenApiCallee = (callee, isEdenApiRoot) => {
+const isApiClientCallee = (callee, isApiClientRoot) => {
   const unwrapped = unwrapTS(callee);
   if (unwrapped?.type !== "MemberExpression" || unwrapped.computed !== false) {
     return false;
@@ -238,7 +238,7 @@ const isEdenApiCallee = (callee, isEdenApiRoot) => {
   if (propertyName === null || !HTTP_VERBS.has(propertyName)) {
     return false;
   }
-  return isEdenApiRoot(rootIdentifier(unwrapped.object));
+  return isApiClientRoot(rootIdentifier(unwrapped.object));
 };
 
 const containsSignalIdentifier = (node, bindingName) => {
@@ -319,7 +319,7 @@ export default eslintCompatPlugin({
           missingQuerySignal:
             "queryFn makes a network call without threading TanStack Query's " +
             "abort signal: destructure `signal` from the queryFn argument and " +
-            "pass it through (`fetch(url, { signal })` or Eden's " +
+            "pass it through (`fetch(url, { signal })` or the API client's " +
             "`{ fetch: { signal } }`), or a superseded call can still resolve " +
             "and apply stale data after a newer one wins.",
         },
@@ -336,7 +336,7 @@ export default eslintCompatPlugin({
           return variable === null || variable.defs.length === 0;
         };
 
-        const isEdenApiRoot = (node: unknown): boolean => {
+        const isApiClientRoot = (node: unknown): boolean => {
           if (!isIdentifierReference(node)) {
             return false;
           }
@@ -360,7 +360,7 @@ export default eslintCompatPlugin({
           if (isFetchCallee(callee, isGlobalReference)) {
             return "fetch";
           }
-          return isEdenApiCallee(callee, isEdenApiRoot) ? "eden" : null;
+          return isApiClientCallee(callee, isApiClientRoot) ? "eden" : null;
         };
 
         const resolveLocalQueryFunction = (

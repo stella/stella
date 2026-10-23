@@ -92,19 +92,19 @@ export type ToAPIErrorProps = {
   value: unknown;
 };
 
-export type EdenResponse<T> =
+export type ApiResponse<T> =
   | { data: T; error: null }
   | { data: null; error: { status: number; value: unknown } };
 
 /**
- * Unwraps an Eden treaty response: throws a localized {@link APIError} when the
+ * Unwraps an API client response: throws a localized {@link APIError} when the
  * response carries an error, otherwise returns `response.data`.
  *
  * `T` is inferred from the response's success branch, so nullable payloads (e.g.
  * public-law endpoints whose `data` is `X | null`) keep their nullability at the
  * call site. Do not pass an explicit type argument; let inference flow.
  */
-export function unwrapEden<T>(response: EdenResponse<T>): T {
+export function unwrapApiResponse<T>(response: ApiResponse<T>): T {
   if (response.error) {
     throw toAPIError(response.error);
   }

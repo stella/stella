@@ -15,7 +15,7 @@ import {
 } from "@/features/guides/guide-types";
 import { api } from "@/lib/api";
 import { sessionOptions } from "@/lib/auth-queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { readStoredJson } from "@/lib/stored-json";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -102,7 +102,7 @@ export const useOnboardingProgress = (
         tourId,
         status,
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: ({ guideProgress }) => {
       queryClient.setQueryData(sessionOptions.queryKey, (current) =>

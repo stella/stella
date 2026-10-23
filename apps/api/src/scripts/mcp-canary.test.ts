@@ -14,10 +14,10 @@ import {
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Base64Url as legacySha256Base64Url } from "@stll/sha256/node";
 
+import { apiRoutes } from "@/api/api-routes";
 import { VerifiedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof";
 import { bridgeOauthUiRedirect } from "@/api/lib/oauth-ui-fragment";
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
-import api from "@/api/server";
 
 import {
   AUTHENTICATED_PROBES,
@@ -65,7 +65,10 @@ type ReviewFailure = {
 };
 
 type ReviewCallbackMutation =
-  "missing-state" | "wrong-state" | "wrong-origin" | "wrong-path";
+  | "missing-state"
+  | "wrong-state"
+  | "wrong-origin"
+  | "wrong-path";
 type ReviewAttack = "maliciousDiscovery" | "maliciousConsent";
 
 const REVIEW_ATTACKS: readonly ReviewAttack[] = [
@@ -2130,7 +2133,7 @@ describe("staging credential journeys", () => {
           cookieValue: "staging-session",
         });
       }
-      if (url.pathname === "/v1/api-keys/") {
+      if (url.pathname === "/v1/api-keys") {
         return Response.json({ id: "mcp-key-id", key: "mcp-token" });
       }
       if (url.pathname === "/api/auth/get-session") {
@@ -2207,7 +2210,7 @@ describe("staging credential journeys", () => {
       name: "MCP credential cleanup",
       status: "passed",
     });
-    const bootstrap = requests.find(({ path }) => path === "/v1/api-keys/");
+    const bootstrap = requests.find(({ path }) => path === "/v1/api-keys");
     expect(JSON.parse(bootstrap?.body ?? "{}")).toEqual({
       name: "MCP staging canary",
       scopes: ["stella:search", "stella:read"],
@@ -2235,31 +2238,33 @@ describe("staging credential journeys", () => {
       { baseUrl: "https://api.example", smokeSecret: "smoke-secret" },
       fetcher,
     );
-    const mounted = api.routes
-      // The Better Auth catch-all matches any path; its own prefix is
-      // checked separately below.
-      .filter(({ path }) => path !== "/*")
-      .map(({ method, path }) => ({
-        method,
-        pattern: new RegExp(
-          `^${path
-            .replaceAll(/[.+?^${}()|[\]\\]/gu, "\\$&")
-            .replaceAll(/:[^/]+/gu, "[^/]+")
-            .replaceAll("*", ".*")}$`,
-          "u",
-        ),
-      }));
+    // Better Auth's catch-all is mounted under its own prefix, so it matches
+    // only the auth paths a journey sends there.
+    const mounted = apiRoutes.map(({ method, path }) => ({
+      method,
+      pattern: new RegExp(
+        `^${path
+          .replaceAll(/[.+?^${}()|[\]\\]/gu, "\\$&")
+          .replaceAll(/:[^/]+/gu, "[^/]+")
+          .replaceAll("*", ".*")}$`,
+        "u",
+      ),
+    }));
+    // A HEAD request is answered by the path's GET route.
+    const routedMethod = (method: string) =>
+      method === "HEAD" ? "GET" : method;
     const unrouted = requests
-      .filter(({ path }) => !path.startsWith("/api/auth/"))
       .filter(
         ({ method, path }) =>
           !mounted.some(
             (route) =>
-              (route.method === method || route.method === "ALL") &&
-              route.pattern.test(path),
+              route.method === routedMethod(method) && route.pattern.test(path),
           ),
       )
       .map(({ method, path }) => `${method} ${path}`);
+    expect(
+      mounted.some(({ pattern }) => pattern.test("/api/auth/get-session")),
+    ).toBe(true);
     expect(requests.map(({ path }) => path)).toContain("/smoke/session");
     expect(unrouted).toEqual([]);
   });
@@ -2277,7 +2282,7 @@ describe("staging credential journeys", () => {
       if (url.pathname === "/smoke/session") {
         return Response.json({ cookieName: "session", cookieValue: "session" });
       }
-      if (url.pathname === "/v1/api-keys/") {
+      if (url.pathname === "/v1/api-keys") {
         return Response.json({ id: "partial-id" });
       }
       if (url.pathname === "/v1/api-keys/revoke") {
@@ -2309,7 +2314,7 @@ describe("staging credential journeys", () => {
       if (path === "/smoke/session") {
         return Response.json({ cookieName: "session", cookieValue: "session" });
       }
-      if (path === "/v1/api-keys/") {
+      if (path === "/v1/api-keys") {
         return Response.json({ id: "key-id", key: "token" });
       }
       if (path === "/v1/api-keys/revoke") {

@@ -1,9 +1,9 @@
-import { TypeCompiler } from "@sinclair/typebox/compiler";
 import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
+import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { clauses, clauseVariants, clauseVersions } from "@/api/db/schema";
@@ -37,7 +37,12 @@ const MIGRATION_FILE = nodePath.resolve(
   "../../../drizzle/20261015060100_clause_list_level_numbering/migration.sql",
 );
 
-const writtenBody = TypeCompiler.Compile(clauseBodySchema);
+// The schema strips undeclared keys, so a body is one it writes only when
+// decoding keeps every key it carries.
+const isWrittenBody = (body: unknown) => {
+  const decoded = v.safeParse(clauseBodySchema, body);
+  return decoded.success && Bun.deepEquals(decoded.output, body);
+};
 
 const levelOnly = (ilvl: number) => ({ kind: "levelOnly", ilvl }) as const;
 
@@ -226,7 +231,7 @@ test("the normalizer keeps the migrated nesting and the schema accepts it", () =
         "numbering" in paragraph ? paragraph.numbering : undefined,
       ),
     );
-    expect(writtenBody.Check(normalized)).toBe(true);
+    expect(isWrittenBody(normalized)).toBe(true);
   }
 });
 
@@ -256,7 +261,7 @@ test("reading, editing and saving a migrated clause keeps its nesting", async ()
       ? { ...paragraph, text: "Seller and its successors" }
       : paragraph,
   );
-  expect(writtenBody.Check(edited)).toBe(true);
+  expect(isWrittenBody(edited)).toBe(true);
   const saved = await Result.gen(() =>
     updateClauseHandler({
       safeDb,

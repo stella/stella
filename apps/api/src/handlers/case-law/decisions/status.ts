@@ -1,7 +1,6 @@
 import { Result, TaggedError } from "better-result";
 import { and, desc, eq, notInArray, sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
@@ -18,6 +17,7 @@ import {
   readCaseLawCourtActivityQuery,
   readCaseLawCourtCountQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -68,11 +68,11 @@ type CorpusUpdatedAtRead = {
   excludedSourceIds: readonly SafeId<"caseLawSource">[];
 };
 
-export const readCaseLawCorpusStatusQuerySchema = t.Object({
+export const readCaseLawCorpusStatusQuerySchema = v.object({
   country: tPublicLawCountry,
 });
 
-type ReadCaseLawCorpusStatusQuery = Static<
+type ReadCaseLawCorpusStatusQuery = v.InferOutput<
   typeof readCaseLawCorpusStatusQuerySchema
 >;
 

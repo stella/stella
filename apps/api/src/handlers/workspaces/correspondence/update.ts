@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { CORRESPONDENCE_HANDLING_STATES } from "@stll/api-contract/correspondence";
 
@@ -9,7 +9,7 @@ import { correspondence, workspaceMembers } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { readCorrespondenceProvenance } from "@/api/lib/email/correspondence/provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -29,15 +29,17 @@ const config = {
     reason: "correspondence",
     consumesServices: false,
   },
-  params: workspaceParams({ correspondenceId: tSafeId("correspondence") }),
-  body: t.Object({
-    handlingState: t.Optional(
-      t.Union([
-        t.Literal(HANDLING_STATE_SCHEMA_VALUES[0]),
-        t.Literal(HANDLING_STATE_SCHEMA_VALUES[1]),
+  params: workspaceParams({
+    correspondenceId: resourceIdSchema("correspondence"),
+  }),
+  body: v.object({
+    handlingState: v.optional(
+      v.union([
+        v.literal(HANDLING_STATE_SCHEMA_VALUES[0]),
+        v.literal(HANDLING_STATE_SCHEMA_VALUES[1]),
       ]),
     ),
-    assigneeId: t.Optional(t.Nullable(tSafeId("user"))),
+    assigneeId: v.optional(v.nullable(resourceIdSchema("user"))),
   }),
 } satisfies WorkspaceHandlerConfig;
 

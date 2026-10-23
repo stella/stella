@@ -4,7 +4,7 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 
 import { api } from "@/lib/api";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { withActiveUpload } from "@/lib/files/active-uploads";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -46,7 +46,7 @@ const abortUpload = async (
         uploadId,
       })
       .abort.post({});
-    unwrapEden(response);
+    unwrapApiResponse(response);
   } catch {
     // Preserve the original upload failure. Cleanup is intentionally best effort.
   }
@@ -95,7 +95,7 @@ export const uploadEntityVersion = async ({
       },
       signal ? { fetch: { signal } } : undefined,
     );
-    const { uploadId, url, headers } = unwrapEden(presign);
+    const { uploadId, url, headers } = unwrapApiResponse(presign);
 
     await completeEntityVersionUpload({
       abort: async () => await abortUpload(workspaceId, uploadId),

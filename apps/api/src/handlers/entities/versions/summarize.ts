@@ -9,7 +9,7 @@ import {
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { buildLineDiffSegments, diffSegmentsToText } from "@/api/lib/text-diff";
 
@@ -34,8 +34,8 @@ const config = {
   },
   access: "write",
   params: workspaceParams({
-    entityId: tSafeId("entity"),
-    versionId: tSafeId("entityVersion"),
+    entityId: resourceIdSchema("entity"),
+    versionId: resourceIdSchema("entityVersion"),
   }),
   requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies WorkspaceHandlerConfig;

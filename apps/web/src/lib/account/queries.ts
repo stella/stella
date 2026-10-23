@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { authClient, listAuthSessions } from "@/lib/auth-client";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 
 /** Stands in for the user id in a per-user query key while nobody is signed in. */
@@ -51,7 +51,7 @@ export const pendingDeletionTasksOptions = (userId: string) =>
   queryOptions({
     queryKey: ["me", "delete", "pending-tasks", userId] as const,
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.me.delete["pending-tasks"].get({ fetch: { signal } }),
       ),
   });

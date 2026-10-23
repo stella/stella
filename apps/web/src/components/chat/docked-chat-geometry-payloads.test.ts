@@ -1,9 +1,6 @@
 import { expect, test } from "bun:test";
 
-import type {
-  CorrespondenceRoutes,
-  WebRoutes,
-} from "@/generated/api-routes.gen";
+import type { WebRoutes } from "@/generated/api-routes.gen";
 
 import { decisionParagraphRangePayloads } from "../../../e2e/helpers/decision-paragraph-range-payloads";
 import { dockedChatLegalPayloads } from "../../../e2e/helpers/docked-chat-legal-payloads";
@@ -55,7 +52,7 @@ const pageContracts = {
   report:
     pages.report satisfies ApiRoutes["workspaces"][":workspaceId"]["reports"][":exportId"]["get"]["response"][200],
   correspondence:
-    pages.correspondence satisfies CorrespondenceRoutes["v1"]["workspaces"][":workspaceId"]["correspondence"][":correspondenceId"]["get"]["response"][200],
+    pages.correspondence satisfies ApiRoutes["workspaces"][":workspaceId"]["correspondence"][":correspondenceId"]["get"]["response"][200],
   registryLookup:
     pages.registryLookup satisfies ApiRoutes["contacts"]["business-registries"]["get"]["response"][200],
 } satisfies Record<keyof typeof pages, unknown>;

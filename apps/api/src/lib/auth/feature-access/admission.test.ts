@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { Elysia, t } from "elysia";
+import * as v from "valibot";
 
+import { createHttpApp } from "@/api/http/app";
+import { decodeRequestInput } from "@/api/http/input";
+import { routes } from "@/api/http/route";
+import type { RouteRequest } from "@/api/http/route";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -10,6 +14,7 @@ import {
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
 import {
@@ -17,6 +22,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -66,6 +72,20 @@ const snapshot = (userId: string, organizationId: string, invited: boolean) =>
       ],
     ]),
   });
+
+/** Serve one GET route behind the production error boundary. */
+const serveGet = (
+  path: string,
+  answer: (request: RouteRequest) => Promise<unknown>,
+) =>
+  serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: routes({
+        [path]: { GET: { access: "public", config: {}, run: answer } },
+      }),
+    }),
+  );
 
 describe("feature access safe-handler admission", () => {
   test.each(["always", "when-used"] as const)(
@@ -338,25 +358,30 @@ describe("feature access safe-handler admission", () => {
         return Result.ok({ ok: true });
       },
     );
-    const app = new Elysia().get("/fixture", async ({ request, set }) =>
-      endpoint.handler(
-        createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
-          audit: NO_AUDIT,
-          scopedDb: NO_DB,
-          set,
-          request,
-          route: "/fixture",
-          user: { id: toSafeId<"user">(userId), email: "invited@example.test" },
-          session: {
-            activeOrganizationId: toSafeId<"organization">(organizationId),
-          },
-          memberRole: sessionMemberRole("owner"),
-          featureAccessSnapshot: snapshot(userId, organizationId, invited),
-          safeDb: database.safeDb,
-        }),
-      ),
+    await using server = serveGet(
+      "/fixture",
+      async ({ ctx }) =>
+        await endpoint.handler(
+          createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+            audit: NO_AUDIT,
+            scopedDb: NO_DB,
+            set: ctx.set,
+            request: ctx.request,
+            route: "/fixture",
+            user: {
+              id: toSafeId<"user">(userId),
+              email: "invited@example.test",
+            },
+            session: {
+              activeOrganizationId: toSafeId<"organization">(organizationId),
+            },
+            memberRole: sessionMemberRole("owner"),
+            featureAccessSnapshot: snapshot(userId, organizationId, invited),
+            safeDb: database.safeDb,
+          }),
+        ),
     );
-    const response = await app.handle(new Request("http://localhost/fixture"));
+    const response = await server.fetch("http://localhost/fixture");
     const enabled =
       userId === "user_1" && organizationId === "org_1" && invited;
     expect(response.status).toBe(enabled ? 200 : 404);
@@ -368,8 +393,8 @@ describe("feature access safe-handler admission", () => {
   });
 });
 
-const conditionalQuerySchema = t.Object({
-  mode: t.Union([t.Literal("ordinary"), t.Literal("feature")]),
+const conditionalQuerySchema = v.object({
+  mode: v.picklist(["ordinary", "feature"]),
 });
 
 test.each([
@@ -410,15 +435,15 @@ test.each([
         return Result.ok(output);
       },
     );
-    const app = new Elysia().get(
+    await using server = serveGet(
       "/query-fixture",
-      async ({ query, request, set }) =>
-        endpoint.handler(
+      async ({ ctx }) =>
+        await endpoint.handler(
           createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
             audit: NO_AUDIT,
-            query,
-            request,
-            set,
+            query: await decodeRequestInput(conditionalQuerySchema, ctx.query),
+            request: ctx.request,
+            set: ctx.set,
             user: {
               id: toSafeId<"user">(userId),
               email: "invited@example.test",
@@ -431,10 +456,9 @@ test.each([
             scopedDb: database.scopedDb,
           }),
         ),
-      { query: conditionalQuerySchema },
     );
-    const selected = await app.handle(
-      new Request("http://localhost/query-fixture?mode=feature"),
+    const selected = await server.fetch(
+      "http://localhost/query-fixture?mode=feature",
     );
     expect(selected.status).toBe(granted ? 200 : 404);
     expect(resourceOperations).toBe(granted ? 1 : 0);
@@ -443,14 +467,14 @@ test.each([
     if (!granted) {
       expect(await selected.json()).toEqual({ message: "Not found" });
     }
-    const ordinary = await app.handle(
-      new Request("http://localhost/query-fixture?mode=ordinary"),
+    const ordinary = await server.fetch(
+      "http://localhost/query-fixture?mode=ordinary",
     );
     expect(ordinary.status).toBe(200);
     expect(await ordinary.json()).toEqual({ query: { mode: "ordinary" } });
     expect(resourceOperations).toBe(granted ? 2 : 1);
-    const invalid = await app.handle(
-      new Request("http://localhost/query-fixture?mode=invalid"),
+    const invalid = await server.fetch(
+      "http://localhost/query-fixture?mode=invalid",
     );
     expect(invalid.status).toBe(422);
     expect(resourceOperations).toBe(granted ? 2 : 1);

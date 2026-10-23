@@ -3,7 +3,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { ContactType } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { contactsQueryRoot } from "@/lib/resource-query-roots.logic";
@@ -52,7 +52,7 @@ export const contactsOptions = (
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     getNextPageParam: ({ nextCursor }) => nextCursor ?? undefined,
   });
@@ -69,6 +69,6 @@ export const contactOptions = (
         .contacts({ contactId })
         .get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });

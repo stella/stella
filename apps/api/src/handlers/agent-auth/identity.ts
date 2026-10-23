@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
@@ -32,22 +32,16 @@ import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
  */
 const config = {
   contract: "patch",
-  body: t.Union([
-    t.Object({
-      type: t.Literal("service_auth"),
-      // The hint is what binds confirmation to one human's account email, so
-      // the ceremony cannot be started without it. An arbitrary string would
-      // create a permanently unclaimable ceremony; require a valid address
-      // (same as the claim endpoint).
-      login_hint: t.String({ format: "email", maxLength: 320 }),
+  body: v.union([
+    v.object({
+      type: v.literal("service_auth"),
+      login_hint: v.pipe(v.string(), v.email(), v.maxLength(320)),
     }),
-    t.Object({
-      type: t.Literal("anonymous"),
-    }),
-    t.Object({
-      type: t.Literal("identity_assertion"),
-      assertion_type: t.Literal(AGENT_AUTH_ID_JAG_ASSERTION_TYPE),
-      assertion: t.String({ minLength: 1, maxLength: 8192 }),
+    v.object({ type: v.literal("anonymous") }),
+    v.object({
+      type: v.literal("identity_assertion"),
+      assertion_type: v.literal(AGENT_AUTH_ID_JAG_ASSERTION_TYPE),
+      assertion: v.pipe(v.string(), v.minLength(1), v.maxLength(8192)),
     }),
   ]),
   accountAccess: ACCOUNT_ACCESS.sandbox,

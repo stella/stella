@@ -6,7 +6,7 @@ import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets"
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 
 const config = {
   contract: "patch",
@@ -24,7 +24,7 @@ const config = {
     consumesServices: false,
   },
   params: workspaceParams({
-    entryId: tSafeId("anonymizationBlacklistEntry"),
+    entryId: resourceIdSchema("anonymizationBlacklistEntry"),
   }),
 } satisfies WorkspaceHandlerConfig;
 

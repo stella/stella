@@ -9,7 +9,11 @@ import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { safeDbFromScoped } from "@/api/db/safe-db";
-import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
+import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
+import type {
+  SafeHandlerGenerator,
+  VerifyCaller,
+} from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
@@ -23,13 +27,11 @@ import {
   DESKTOP_REGISTRY_KEY_CONFIG,
   DESKTOP_REGISTRY_KEY_SECONDS,
 } from "@/api/lib/business-registries/desktop/config";
-import { authorizeDesktopLinkGrant } from "@/api/lib/business-registries/desktop/link-grants";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
 import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
+  authorizeDesktopLinkGrant,
+  desktopLinkCredentialsSchema,
+} from "@/api/lib/business-registries/desktop/link-grants";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type DesktopLinkIdentity = {
   userId: SafeId<"user">;
@@ -160,6 +162,63 @@ const redemptionServices = {
   revokeCredential,
 };
 
+type LinkedDesktopCaller = {
+  identity: DesktopLinkIdentity;
+  /** The request already carried the linked desktop account it redeems for. */
+  linked: boolean;
+};
+
+/**
+ * The caller proves itself with the one-time grant, and with the desktop
+ * account it already holds when it sends one. Redeeming consumes the grant,
+ * so it happens here, before anything reads the body's shape.
+ */
+const verifyLinkCaller =
+  (services: typeof redemptionServices): VerifyCaller<LinkedDesktopCaller> =>
+  async ({ body, request }) => {
+    if (
+      request.headers.get(DESKTOP_ACCOUNT_PROTOCOL_HEADER) !==
+      String(DESKTOP_ACCOUNT_POLICY.linkProtocol)
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 426,
+          code: DESKTOP_HANDOFF_FAILURE.updateRequired,
+          message: "Update stella desktop",
+          retryable: false,
+        }),
+      );
+    }
+    const linkedAccount = request.headers.has("authorization")
+      ? await services.authorizeLinkedAccount(request)
+      : Result.ok(null);
+    if (Result.isError(linkedAccount)) {
+      return Result.err(linkedAccount.error);
+    }
+    const linked = linkedAccount.value;
+    const identity = await services.authorizeGrant(
+      body,
+      request,
+      linked?.consumedProof,
+    );
+    if (Result.isError(identity)) {
+      return Result.err(identity.error);
+    }
+    if (
+      linked !== null &&
+      (linked.userId !== identity.value.userId ||
+        linked.organizationId !== identity.value.organizationId)
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 401,
+          message: "Desktop account is unavailable",
+        }),
+      );
+    }
+    return Result.ok({ identity: identity.value, linked: linked !== null });
+  };
+
 export const createDesktopLinkRedeemHandler = (
   services: typeof redemptionServices = redemptionServices,
 ) =>
@@ -168,53 +227,16 @@ export const createDesktopLinkRedeemHandler = (
       contract: "patch",
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "provider_secret" },
-      body: permissiveBodySchema({
-        keys: [
-          "correlationId",
-          "verifier",
-          "deviceJkt",
-          "expectedUserId",
-          "expectedOrganizationId",
-        ],
-      }),
+      body: desktopLinkCredentialsSchema,
     },
+    verifyLinkCaller(services),
     async function* ({
-      body,
+      caller: { identity, linked },
       request,
       set,
     }): SafeHandlerGenerator<DesktopLinkResponse> {
       set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
-      if (
-        request.headers.get(DESKTOP_ACCOUNT_PROTOCOL_HEADER) !==
-        String(DESKTOP_ACCOUNT_POLICY.linkProtocol)
-      ) {
-        return Result.err(
-          new HandlerError({
-            status: 426,
-            code: DESKTOP_HANDOFF_FAILURE.updateRequired,
-            message: "Update stella desktop",
-            retryable: false,
-          }),
-        );
-      }
-      const linked = request.headers.has("authorization")
-        ? yield* Result.await(services.authorizeLinkedAccount(request))
-        : null;
-      const identity = yield* Result.await(
-        services.authorizeGrant(body, request, linked?.consumedProof),
-      );
       if (linked) {
-        if (
-          linked.userId !== identity.userId ||
-          linked.organizationId !== identity.organizationId
-        ) {
-          return Result.err(
-            new HandlerError({
-              status: 401,
-              message: "Desktop account is unavailable",
-            }),
-          );
-        }
         return Result.ok({
           status: "connected" as const,
           identity: {

@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
 type OrganizationAnonymizationBlacklistKey = {
@@ -33,6 +33,6 @@ export const organizationAnonymizationBlacklistOptions = ({
         "anonymization-blacklist"
       ].get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });

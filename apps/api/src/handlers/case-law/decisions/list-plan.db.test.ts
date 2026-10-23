@@ -2,7 +2,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import { caseLawSources } from "@/api/db/schema";
 import {
@@ -115,7 +115,7 @@ test(
   DB_TEST_TIMEOUT_MS,
 );
 
-type BrowseQuery = Static<typeof listDecisionsQuerySchema>;
+type BrowseQuery = v.InferOutput<typeof listDecisionsQuerySchema>;
 type BrowseFilter = Exclude<keyof BrowseQuery, "cursor" | "limit" | "offset">;
 
 /** The indexes whose order is the walk's: a page is a range of one of them. */

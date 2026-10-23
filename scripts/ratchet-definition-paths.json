@@ -26,6 +26,6 @@
   "scripts/sha256-owners.ts",
   "scripts/source-globs.ts",
   "scripts/status-write-shapes.ts",
-  "scripts/undeclared-eden-writes.ts",
+  "scripts/undeclared-api-client-writes.ts",
   "scripts/unsignalled-skip.ts"
 ]

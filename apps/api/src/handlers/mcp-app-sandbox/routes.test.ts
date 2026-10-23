@@ -1,11 +1,12 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterAll, describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
 import { runInNewContext } from "node:vm";
 
 import { propertyConfig } from "@stll/property-testing";
 
 import { env } from "@/api/env";
-import api from "@/api/server";
+import { apiApp } from "@/api/server";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import { MCP_APP_SANDBOX_DOCUMENT } from "./routes";
 
@@ -75,9 +76,14 @@ const runSandboxScript = (hash: string) => {
   };
 };
 
+const api = serveForTest(apiApp);
+afterAll(async () => {
+  await api.stop();
+});
+
 describe("MCP App sandbox", () => {
   test("serves a different-origin, display-only security boundary", async () => {
-    const response = await api.handle(
+    const response = await api.fetch(
       new Request("http://localhost/mcp-app-sandbox"),
     );
     const body = await response.text();
@@ -165,7 +171,7 @@ describe("MCP App sandbox", () => {
   });
 
   test("keeps its framable policy when mounted under global API headers", async () => {
-    const response = await api.handle(
+    const response = await api.fetch(
       new Request("http://localhost/mcp-app-sandbox"),
     );
     const csp = response.headers.get("Content-Security-Policy") ?? "";
@@ -181,7 +187,7 @@ describe("MCP App sandbox", () => {
     await fc.assert(
       fc.asyncProperty(fc.string(), async (query) => {
         const injectedOrigin = `https://attacker.invalid/${query}`;
-        const response = await api.handle(
+        const response = await api.fetch(
           new Request(
             `http://localhost/mcp-app-sandbox?csp=${encodeURIComponent(injectedOrigin)}`,
           ),

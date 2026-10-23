@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
@@ -16,25 +16,26 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import { validateCommentRange } from "./range";
 
-const createSkillCommentParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const createSkillCommentParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const createSkillCommentBodySchema = t.Object({
-  revisionId: t.Optional(tSafeId("agentSkillRevision")),
-  proposalId: t.Optional(tSafeId("agentSkillProposal")),
-  rangeStart: t.Integer({ minimum: 0 }),
-  rangeEnd: t.Integer({ minimum: 0 }),
-  body: t.String({
-    minLength: 1,
-    maxLength: LIMITS.agentSkillCommentBodyMaxChars,
-  }),
+const createSkillCommentBodySchema = v.object({
+  revisionId: v.optional(resourceIdSchema("agentSkillRevision")),
+  proposalId: v.optional(resourceIdSchema("agentSkillProposal")),
+  rangeStart: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  rangeEnd: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  body: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.agentSkillCommentBodyMaxChars),
+  ),
 });
 
 const config = {

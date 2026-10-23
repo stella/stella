@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -9,7 +11,10 @@ import { templates } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -60,13 +65,20 @@ const UNPROJECTED_TEMPLATE_LIST_COLUMNS = [
 
 const UNCATEGORIZED = "uncategorized" as const;
 
-const listTemplatesQuerySchema = t.Object({
-  categoryId: t.Optional(
-    t.Union([tSafeId("templateCategory"), t.Literal(UNCATEGORIZED)]),
+const listTemplatesQuerySchema = v.object({
+  categoryId: v.exactOptional(
+    v.union([resourceIdSchema("templateCategory"), v.literal(UNCATEGORIZED)]),
   ),
-  cursor: t.Optional(tPaginationCursor()),
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.templatesPageSizeMax }),
+  cursor: v.exactOptional(paginationCursorSchema()),
+  limit: v.exactOptional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.templatesPageSizeMax),
+      ),
+    ),
   ),
 });
 

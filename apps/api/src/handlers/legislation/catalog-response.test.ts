@@ -1,7 +1,6 @@
-import type { TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import {
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE,
@@ -25,6 +24,7 @@ import {
   statuteSitemapShardsSuccessResponseSchema,
   statuteSitemapStatutesSuccessResponseSchema,
 } from "@/api/handlers/legislation/catalog-response";
+import { toRouteJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
@@ -59,16 +59,16 @@ const unicode = fc
   .map((parts) => parts.join(""));
 
 const boundedResponseProperty = (
-  schema: TSchema,
+  schema: v.GenericSchema,
   responseWithText: (text: string) => unknown,
 ) =>
   fc.property(unicode, (text) => {
     const overlong = text.repeat(Math.ceil(9000 / text.length));
     const response = responseWithText(overlong);
-    expect(Value.Check(schema, response)).toBe(true);
+    expect(v.is(schema, response)).toBe(true);
     const serialized = JSON.stringify(response);
     expect(Buffer.byteLength(serialized, "utf-8")).toBeLessThanOrEqual(
-      responseSchemaByteBound(schema),
+      responseSchemaByteBound(toRouteJsonSchema(schema)),
     );
     expect(JSON.parse(serialized)).toEqual(response);
   });

@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
 
 import {
   DESKTOP_ACCOUNT_POLICY,
@@ -8,14 +7,18 @@ import {
 } from "@stll/api-contract/desktop-registry";
 
 import { createDesktopLinkRedeemHandler } from "@/api/handlers/desktop-registry/redeem-link";
+import { createHttpApp } from "@/api/http/app";
+import { PRIVATE_CACHE_CONTROL, responseCachePolicy } from "@/api/http/cache";
+import { routes } from "@/api/http/route";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
-import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
 import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 type RedemptionServices = NonNullable<
   Parameters<typeof createDesktopLinkRedeemHandler>[0]
@@ -150,9 +153,15 @@ const createRedemptionFixture = async (
     },
   } satisfies RedemptionServices;
   const route = createDesktopLinkRedeemHandler(services);
-  const app = new Elysia().post("/redeem-link", route.handler, {
-    body: route.config.body,
-  });
+  // The production stages that decide every answer's Cache-Control and
+  // answer failures, around the redemption route alone.
+  const serve = () =>
+    serveForTest(
+      createHttpApp({
+        routes: routes({ "/redeem-link": { POST: route } }),
+        middleware: [responseCachePolicy, errorBoundary],
+      }),
+    );
   const body = {
     correlationId: "90123344-5566-7788-9900-aabbccddeeff",
     verifier: "a".repeat(64),
@@ -184,7 +193,7 @@ const createRedemptionFixture = async (
       : {}),
   });
   return {
-    app,
+    serve,
     request,
     body,
     identity,
@@ -204,7 +213,8 @@ describe("desktop link redemption over HTTP", () => {
     for (const protocol of [null, "3", "4", "invalid", "5"] as const) {
       test(`${scenario} redemption requires supported protocol ${String(protocol)}`, async () => {
         const fixture = await createRedemptionFixture(scenario, protocol);
-        const response = await fixture.app.handle(fixture.request);
+        await using server = fixture.serve();
+        const response = await server.fetch(fixture.request);
         if (protocol === "5") {
           expect(DESKTOP_ACCOUNT_POLICY.linkProtocol).toBe(5);
           expect(response.status).toBe(200);
@@ -236,7 +246,8 @@ describe("desktop link redemption over HTTP", () => {
 
   test("issues an audited account credential with organization display data and no-store", async () => {
     const fixture = await createRedemptionFixture("credential");
-    const response = await fixture.app.handle(fixture.request);
+    await using server = fixture.serve();
+    const response = await server.fetch(fixture.request);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
     const payload: unknown = await response.json();
@@ -255,7 +266,8 @@ describe("desktop link redemption over HTTP", () => {
 
   test("an existing credential for the same identity confirms the link without minting", async () => {
     const fixture = await createRedemptionFixture("connected");
-    const response = await fixture.app.handle(fixture.request);
+    await using server = fixture.serve();
+    const response = await server.fetch(fixture.request);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
     expect(await response.json()).toEqual({
@@ -274,7 +286,8 @@ describe("desktop link redemption over HTTP", () => {
   test("a bearer for another user or organization cannot confirm the granted identity", async () => {
     for (const scenario of ["other-user", "other-organization"] as const) {
       const fixture = await createRedemptionFixture(scenario);
-      const response = await fixture.app.handle(fixture.request);
+      await using server = fixture.serve();
+      const response = await server.fetch(fixture.request);
       expect(response.status).toBe(401);
       expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
       expect(await response.json()).toEqual({
@@ -289,7 +302,8 @@ describe("desktop link redemption over HTTP", () => {
 
   test("an unavailable linked credential leaves the connection request unclaimed", async () => {
     const fixture = await createRedemptionFixture("invalid-credential");
-    const response = await fixture.app.handle(fixture.request);
+    await using server = fixture.serve();
+    const response = await server.fetch(fixture.request);
     expect(response.status).toBe(401);
     expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
     expect(fixture.grantBodies).toEqual([]);
@@ -300,7 +314,8 @@ describe("desktop link redemption over HTTP", () => {
 
   test("an audit failure revokes the issued key before returning a credential-free failure", async () => {
     const fixture = await createRedemptionFixture("audit-failure");
-    const response = await fixture.app.handle(fixture.request);
+    await using server = fixture.serve();
+    const response = await server.fetch(fixture.request);
     expect(response.status).toBe(500);
     expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
     const payload: unknown = await response.json();
@@ -319,7 +334,8 @@ describe("desktop link redemption over HTTP", () => {
 
   test("a credential issuer failure returns unavailable without auditing or revoking", async () => {
     const fixture = await createRedemptionFixture("mint-failure");
-    const response = await fixture.app.handle(fixture.request);
+    await using server = fixture.serve();
+    const response = await server.fetch(fixture.request);
     expect(response.status).toBe(503);
     expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
     expect(await response.json()).toEqual({

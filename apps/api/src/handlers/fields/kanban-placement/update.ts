@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
@@ -7,7 +7,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { kanbanPlacementRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FIELD_VALUE_WRITE_PERMISSIONS,
@@ -20,8 +20,8 @@ import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 
-const fieldAssignmentSchema = t.Object({
-  propertyId: tSafeId("property"),
+const fieldAssignmentSchema = v.object({
+  propertyId: resourceIdSchema("property"),
   content: upsertFieldContentSchema,
 });
 
@@ -49,10 +49,10 @@ export const createUpdateKanbanPlacement = ({
         reason: "workspace_schema",
         consumesServices: false,
       },
-      body: t.Object({
-        entityId: tSafeId("entity"),
-        status: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-        fields: t.Array(fieldAssignmentSchema, { maxItems: 2 }),
+      body: v.object({
+        entityId: resourceIdSchema("entity"),
+        status: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+        fields: v.pipe(v.array(fieldAssignmentSchema), v.maxLength(2)),
       }),
     },
     async function* ({

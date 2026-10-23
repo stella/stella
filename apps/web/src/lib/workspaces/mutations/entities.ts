@@ -14,7 +14,7 @@ import { api } from "@/lib/api";
 import type { UpsertFieldContent } from "@/lib/api-contract";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { replaceCachedFileName } from "@/lib/files/queries";
@@ -49,7 +49,7 @@ export const useCreateEntities = () => {
           }),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -74,7 +74,7 @@ export const useDeleteEntities = () => {
           entityIds: entityIds.map((entityId) => toSafeId<"entity">(entityId)),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, { workspaceId, entityIds }) => {
       closeInspectorTabsForEntities(entityIds);
@@ -107,7 +107,7 @@ export const useMoveEntity = () => {
           parentId: parentId === null ? null : toSafeId<"entity">(parentId),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -202,7 +202,7 @@ export const useRenameEntity = (
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .rename.patch({ entityId: toSafeId<"entity">(entityId), name });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data, { workspaceId, entityId }, context) => {
       const reconciled = Result.try(() => {
@@ -364,7 +364,7 @@ export const useUpdateKanbanPlacement = () => {
           })),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -392,7 +392,7 @@ export const useUpsertField = () => {
           content,
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
 
     onError: (error) => {

@@ -1,7 +1,7 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import {
   ACTION_ADMISSION_CODES,
@@ -253,7 +253,7 @@ describe("organization budgets at action admission", () => {
           format,
           ...(aiNarrative === undefined ? {} : { aiNarrative }),
         };
-        expect(Value.Check(reportExportBodySchema, body)).toBe(true);
+        expect(v.is(reportExportBodySchema, body)).toBe(true);
         const consumesServices = reportExportConsumesServices({
           body,
           params: {},

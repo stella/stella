@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { legalListColumns, legalLists } from "@/api/db/schema";
 import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -8,17 +8,17 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import { LIST_COLUMN_LIMIT_ERROR_CODE } from "@/api/lib/lists/column-error-codes";
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  propertyId: tSafeId("property"),
-  position: t.Optional(t.Integer({ minimum: 0 })),
-  required: t.Optional(t.Boolean()),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  propertyId: resourceIdSchema("property"),
+  position: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+  required: v.optional(v.boolean()),
 });
 const config = {
   contract: "patch",

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
@@ -10,15 +10,15 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  name: t.String({ minLength: 1, maxLength: 256 }),
-  position: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  position: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
 });
 
 const config = {

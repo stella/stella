@@ -10,7 +10,7 @@ import { renderInvoicePdf } from "@/api/handlers/invoices/pdf/render";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   extractFormattingLocale,
@@ -18,6 +18,7 @@ import {
 } from "@/api/lib/locale";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -41,7 +42,7 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
         reason: "billing_admin",
         consumesServices: false,
       },
-      params: workspaceParams({ invoiceId: tSafeId("invoice") }),
+      params: workspaceParams({ invoiceId: resourceIdSchema("invoice") }),
       realtime: noResourceSetUpdates(
         "Stores a generated PDF download; nothing a web view lists changes.",
       ),
@@ -190,7 +191,7 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
               resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
               resourceId: loaded.invoice.id,
               userId: user.id,
-              source: { kind: "request", sessionId: session.id },
+              source: callerDownloadSource(session),
               s3Key: key,
               s3Keyspace: "exports",
               expiresInSeconds: EXPORT_URL_TTL_SECONDS,

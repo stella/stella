@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ratesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -29,7 +29,7 @@ export const rateTablesOptions = (workspaceId: string) =>
         .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .get({ fetch: { signal } });
 
-      return unwrapEden(response).items;
+      return unwrapApiResponse(response).items;
     },
   });
 
@@ -43,7 +43,7 @@ export const rateEntriesOptions = (workspaceId: string, rateTableId: string) =>
         })
         .entries.get({ fetch: { signal } });
 
-      return unwrapEden(response).items;
+      return unwrapApiResponse(response).items;
     },
     enabled: rateTableId.length > 0,
   });
@@ -63,7 +63,7 @@ export const resolvedRateOptions = (
           fetch: { signal },
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     enabled: userId.length > 0 && date.length > 0,
   });

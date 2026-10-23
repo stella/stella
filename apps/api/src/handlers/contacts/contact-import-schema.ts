@@ -1,5 +1,4 @@
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { CONTACT_IMPORT_TAX_ID_SCHEMES } from "@stll/api-contract";
 
@@ -34,22 +33,22 @@ import { LIMITS } from "@/api/lib/limits";
 const DRAFT_TEXT_MAX_CHARS = LIMITS.contactsImportNotesMaxChars;
 const DRAFT_LIST_MAX_ITEMS = 200;
 
-const draftText = t.String({ maxLength: DRAFT_TEXT_MAX_CHARS });
-const optionalDraftText = t.Optional(draftText);
+const draftText = v.pipe(v.string(), v.maxLength(DRAFT_TEXT_MAX_CHARS));
+const optionalDraftText = v.exactOptional(draftText);
 
-const draftEmailSchema = t.Composite([
-  t.Pick(contactEmailSchema, ["type", "isPrimary", "label"]),
-  t.Object({ address: draftText }),
+const draftEmailSchema = v.intersect([
+  v.pick(contactEmailSchema, ["type", "isPrimary", "label"]),
+  v.object({ address: draftText }),
 ]);
 
-const draftPhoneSchema = t.Composite([
-  t.Pick(contactPhoneSchema, ["type", "isPrimary", "label"]),
-  t.Object({ number: draftText }),
+const draftPhoneSchema = v.intersect([
+  v.pick(contactPhoneSchema, ["type", "isPrimary", "label"]),
+  v.object({ number: draftText }),
 ]);
 
-const draftAddressSchema = t.Composite([
-  t.Pick(contactAddressSchema, ["type", "isPrimary", "label"]),
-  t.Object({
+const draftAddressSchema = v.intersect([
+  v.pick(contactAddressSchema, ["type", "isPrimary", "label"]),
+  v.object({
     line1: draftText,
     line2: optionalDraftText,
     city: optionalDraftText,
@@ -61,12 +60,12 @@ const draftAddressSchema = t.Composite([
 
 // Custom-field ids and labels are client-derived identifiers, not reviewed
 // content, so they keep the persisted bounds; only the value is a draft.
-const draftCustomFieldSchema = t.Composite([
-  t.Pick(contactCustomFieldSchema, ["id", "label"]),
-  t.Object({ value: draftText }),
+const draftCustomFieldSchema = v.intersect([
+  v.pick(contactCustomFieldSchema, ["id", "label"]),
+  v.object({ value: draftText }),
 ]);
 
-export const contactImportCandidateSchema = t.Object({
+export const contactImportCandidateSchema = v.object({
   type: createContactTypeSchema,
   displayName: draftText,
   prefix: optionalDraftText,
@@ -76,50 +75,49 @@ export const contactImportCandidateSchema = t.Object({
   suffix: optionalDraftText,
   organizationName: optionalDraftText,
   notes: optionalDraftText,
-  emails: t.Optional(
-    t.Array(draftEmailSchema, { maxItems: DRAFT_LIST_MAX_ITEMS }),
+  emails: v.exactOptional(
+    v.pipe(v.array(draftEmailSchema), v.maxLength(DRAFT_LIST_MAX_ITEMS)),
   ),
-  phones: t.Optional(
-    t.Array(draftPhoneSchema, { maxItems: DRAFT_LIST_MAX_ITEMS }),
+  phones: v.exactOptional(
+    v.pipe(v.array(draftPhoneSchema), v.maxLength(DRAFT_LIST_MAX_ITEMS)),
   ),
-  addresses: t.Optional(
-    t.Array(draftAddressSchema, { maxItems: DRAFT_LIST_MAX_ITEMS }),
+  addresses: v.exactOptional(
+    v.pipe(v.array(draftAddressSchema), v.maxLength(DRAFT_LIST_MAX_ITEMS)),
   ),
-  tags: t.Optional(t.Array(draftText, { maxItems: DRAFT_LIST_MAX_ITEMS })),
+  tags: v.exactOptional(
+    v.pipe(v.array(draftText), v.maxLength(DRAFT_LIST_MAX_ITEMS)),
+  ),
   registrationNumber: optionalDraftText,
   taxId: optionalDraftText,
-  dateOfBirth: t.Optional(
-    t.Union([
-      t.Object(
-        { precision: t.Literal("year"), year: t.Integer() },
-        { additionalProperties: false },
-      ),
-      t.Object(
-        {
-          precision: t.Literal("month"),
-          year: t.Integer(),
-          month: t.Integer(),
-        },
-        { additionalProperties: false },
-      ),
-      t.Object(
-        {
-          precision: t.Literal("day"),
-          year: t.Integer(),
-          month: t.Integer(),
-          day: t.Integer(),
-        },
-        { additionalProperties: false },
-      ),
+  dateOfBirth: v.exactOptional(
+    v.union([
+      v.strictObject({
+        precision: v.literal("year"),
+        year: v.pipe(v.number(), v.integer()),
+      }),
+      v.strictObject({
+        precision: v.literal("month"),
+        year: v.pipe(v.number(), v.integer()),
+        month: v.pipe(v.number(), v.integer()),
+      }),
+      v.strictObject({
+        precision: v.literal("day"),
+        year: v.pipe(v.number(), v.integer()),
+        month: v.pipe(v.number(), v.integer()),
+        day: v.pipe(v.number(), v.integer()),
+      }),
     ]),
   ),
-  nationalityCodes: t.Optional(
-    t.Array(draftText, { maxItems: MAX_CONTACT_NATIONALITY_CODES }),
+  nationalityCodes: v.exactOptional(
+    v.pipe(v.array(draftText), v.maxLength(MAX_CONTACT_NATIONALITY_CODES)),
   ),
-  metadata: t.Optional(
-    t.Object({
-      customFields: t.Optional(
-        t.Array(draftCustomFieldSchema, { maxItems: DRAFT_LIST_MAX_ITEMS }),
+  metadata: v.exactOptional(
+    v.object({
+      customFields: v.exactOptional(
+        v.pipe(
+          v.array(draftCustomFieldSchema),
+          v.maxLength(DRAFT_LIST_MAX_ITEMS),
+        ),
       ),
     }),
   ),
@@ -134,19 +132,20 @@ type SameKeys<A, B> = [keyof A] extends [keyof B]
     : never
   : never;
 
-true satisfies SameKeys<Static<typeof draftEmailSchema>, ContactEmail>;
-true satisfies SameKeys<Static<typeof draftPhoneSchema>, ContactPhone>;
-true satisfies SameKeys<Static<typeof draftAddressSchema>, ContactAddress>;
+true satisfies SameKeys<v.InferOutput<typeof draftEmailSchema>, ContactEmail>;
+true satisfies SameKeys<v.InferOutput<typeof draftPhoneSchema>, ContactPhone>;
 true satisfies SameKeys<
-  Static<typeof draftCustomFieldSchema>,
+  v.InferOutput<typeof draftAddressSchema>,
+  ContactAddress
+>;
+true satisfies SameKeys<
+  v.InferOutput<typeof draftCustomFieldSchema>,
   ContactCustomField
 >;
 
 /**
- * The contract's scheme list as a fixed tuple. `t.Union` over a mapped array
- * (`SCHEMES.map(t.Literal)`) infers `Static` as `never`, so no caller can name
- * a scheme at all; `t.UnionEnum` types it but stamps a `default`, and an
- * omitted scheme must stay a rejection rather than silently become `none`.
+ * The contract's scheme list as a fixed tuple, with no default: an omitted
+ * scheme must stay a rejection rather than silently become `none`.
  * `satisfies` binds this list to the contract's: adding a scheme there fails
  * to compile here until this union learns about it.
  */
@@ -162,7 +161,7 @@ const TAX_ID_SCHEMES = [
  * stores the value as given and applies no tax-id uniqueness (ordinary create
  * permits duplicates).
  */
-export const taxIdSchemeSchema = t.Union([
-  t.Literal(TAX_ID_SCHEMES[0]),
-  t.Literal(TAX_ID_SCHEMES[1]),
+export const taxIdSchemeSchema = v.union([
+  v.literal(TAX_ID_SCHEMES[0]),
+  v.literal(TAX_ID_SCHEMES[1]),
 ]);

@@ -2,7 +2,6 @@ import { defaultKeyHasher } from "@better-auth/api-key";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import Elysia from "elysia";
 import { randomBytes } from "node:crypto";
 
 import {
@@ -21,18 +20,22 @@ import {
 import { auditLogs } from "@/api/db/schema";
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
 import { createDesktopLinkRedeemHandler } from "@/api/handlers/desktop-registry/redeem-link";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import {
   DESKTOP_REGISTRY_KEY_CONFIG,
   DESKTOP_REGISTRY_KEY_PREFIX,
   DESKTOP_REGISTRY_KEY_SECONDS,
 } from "@/api/lib/business-registries/desktop/config";
 import { createDesktopLinkGrant } from "@/api/lib/business-registries/desktop/link-grant-store";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 // Every authorization operation and credential write here uses the production
 // handler and its real database owners, including initial grant claims and
@@ -116,10 +119,14 @@ describe.skipIf(
               expectedUserId: userId,
               expectedOrganizationId: organizationId,
             };
-            const route = createDesktopLinkRedeemHandler();
-            const app = new Elysia().post("/redeem-link", route.handler, {
-              body: route.config.body,
-            });
+            await using server = serveForTest(
+              createHttpApp({
+                routes: routes({
+                  "/redeem-link": { POST: createDesktopLinkRedeemHandler() },
+                }),
+                middleware: [errorBoundary],
+              }),
+            );
             const headers = new Headers({
               "content-type": "application/json",
               [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(
@@ -150,7 +157,7 @@ describe.skipIf(
                 signed.headers.get("DPoP") ?? panic("Proof header required"),
               );
             }
-            const response = await app.handle(request);
+            const response = await server.fetch(request);
             const payload: unknown = await response.json();
             expect(response.status).toBe(proofState === "valid" ? 200 : 401);
             const grant = await db

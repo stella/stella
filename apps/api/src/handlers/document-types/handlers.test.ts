@@ -63,7 +63,7 @@ const createOrgContext = (
 };
 
 // The exported `.handler` returns the *unwrapped* success payload on ok, or an
-// Elysia status response (`{ code, response }`) on error — not a raw Result. So
+// `HttpStatusResponse` (`{ code, response }`) on error — not a raw Result. So
 // we mirror the cross-tenant harness: read the numeric status for errors and
 // inspect the returned object fields for successes.
 type TestEndpoint<TContext> = {
@@ -87,7 +87,7 @@ const runHandler = async <TContext>(
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-// Errors surface as an Elysia status response; success payloads have no
+// Errors surface as an `HttpStatusResponse`; success payloads have no
 // status-like field. `null` means "the handler returned a success payload".
 const getStatusCode = (result: unknown): number | null => {
   if (!isRecord(result)) {

@@ -16,7 +16,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -60,7 +60,7 @@ export const NewEntityViewTask = ({
     pendingRef.current = true;
     setPending(true);
     const result = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .tasks({ workspaceId: toSafeId<"workspace">(selectedWorkspaceId) })
           .put({

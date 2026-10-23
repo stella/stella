@@ -1,21 +1,21 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { fileSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const saveDocumentBodySchema = t.Object({
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
+const saveDocumentBodySchema = v.object({
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
 });
 
-const saveDocumentParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const saveDocumentParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
 const config = {

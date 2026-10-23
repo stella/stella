@@ -181,13 +181,17 @@ const partiesFailingWith = (cause: unknown): typeof detectReviewParties =>
 
 describe("reviewParties", () => {
   test("cached miss skips model, file preparation, and usage admission", async () => {
-    const { context, insertCalled, writtenTables } = createHarness({
+    const harness = createHarness({
       cachedRows: [],
       mode: "cached",
     });
+    const { insertCalled, writtenTables } = harness;
     // A cached read must work even when model admission is unavailable.
-    context.orgAIConfig = null;
-    context.orgAIConfigStatus = ORG_AI_CONFIG_STATUS.ownKeyRequired;
+    const context = {
+      ...harness.context,
+      orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ownKeyRequired,
+    };
     let modelCalls = 0;
     let fileCalls = 0;
     const handler = createReviewParties({

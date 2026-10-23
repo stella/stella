@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { env } from "@/api/env";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -9,7 +9,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
   isEmailAttachmentPreviewable,
   resolveEmailAttachmentMimeType,
@@ -36,12 +36,15 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   access: "read",
-  query: t.Object({
-    disposition: t.String({ pattern: EMAIL_ATTACHMENT_DISPOSITION_PATTERN }),
+  query: v.object({
+    disposition: v.pipe(
+      v.string(),
+      v.regex(new RegExp(EMAIL_ATTACHMENT_DISPOSITION_PATTERN, "u")),
+    ),
   }),
   params: workspaceParams({
-    fieldId: tSafeId("field"),
-    attachmentId: t.String(),
+    fieldId: resourceIdSchema("field"),
+    attachmentId: v.string(),
   }),
 } satisfies WorkspaceHandlerConfig;
 

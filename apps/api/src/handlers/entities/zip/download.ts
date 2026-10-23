@@ -24,7 +24,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
 import { getS3 } from "@/api/lib/s3";
@@ -33,7 +33,7 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 
 const downloadZipParamsSchema = workspaceParams({
-  entityId: tSafeId("entity"),
+  entityId: resourceIdSchema("entity"),
 });
 
 // At most this many files are fetched from S3 at once. Bounds the

@@ -1,19 +1,19 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { updateVersionAnnotation } from "@/api/handlers/entities/version-annotation";
 import type { VersionAnnotationTarget } from "@/api/handlers/entities/version-annotation";
 import { entityVersionRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 
 const paramsSchema = workspaceParams({
-  entityId: tSafeId("entity"),
-  versionId: tSafeId("entityVersion"),
+  entityId: resourceIdSchema("entity"),
+  versionId: resourceIdSchema("entityVersion"),
 });
 
-const bodySchema = t.Object({
-  description: t.Union([t.String({ maxLength: 1024 }), t.Null()]),
+const bodySchema = v.object({
+  description: v.union([v.pipe(v.string(), v.maxLength(1024)), v.null()]),
 });
 
 const config = {

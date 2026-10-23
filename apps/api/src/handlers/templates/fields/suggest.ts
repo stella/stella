@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -13,11 +13,9 @@ import {
   toSuggestFieldsError,
 } from "@/api/lib/templates/suggest-template-fields";
 
-const suggestFieldsBodySchema = t.Object({
-  // The text the editor chose to send: the whole document or just the current
-  // selection. Bounded so a pathological document can't blow up the prompt.
-  text: t.String({ maxLength: 200_000 }),
-  instructions: t.Optional(t.String({ maxLength: 2000 })),
+const suggestFieldsBodySchema = v.object({
+  text: v.pipe(v.string(), v.maxLength(200_000)),
+  instructions: v.optional(v.pipe(v.string(), v.maxLength(2000))),
 });
 
 const config = {

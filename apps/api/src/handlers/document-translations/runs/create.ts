@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import { isDocumentTranslationDeepLSupportedMimeType } from "@stll/api-contract/document-translation";
 
@@ -62,7 +62,7 @@ type CreateDocumentTranslationRunResult =
   | { type: "started"; runId: SafeId<"documentTranslationRun"> };
 
 const validateTranslationSource = (
-  body: Static<typeof createDocumentTranslationRunBodySchema>,
+  body: v.InferOutput<typeof createDocumentTranslationRunBodySchema>,
   source: EntityVersionFile,
 ) => {
   if (

@@ -22,10 +22,12 @@ import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
+import { createHttpApp } from "@/api/http/app";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   brandActorSessionIdentity,
   brandPersistedOrganizationId,
@@ -38,11 +40,12 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // A matter's event stream across the removal of one of its members: the real
-// stream route and its access macro, the real member-removal route, and the
-// real revocation it triggers.
+// stream route and its workspace access served over HTTP, the real
+// member-removal route, and the real revocation it triggers.
 
 setDefaultTimeout(120_000);
 
@@ -55,7 +58,19 @@ beforeAll(async () => {
   startSse(realtimeAuthorizers);
 });
 
+const server = serveForTest(
+  createHttpApp({
+    routes: [
+      ...workspaceEventsRoute,
+      ...notificationsRoute,
+      ...workspacesRoute,
+    ],
+    middleware: [errorBoundary],
+  }),
+);
+
 afterAll(async () => {
+  await server.stop();
   stopSse();
   await releaseAgentAuthTestDb();
 });
@@ -66,14 +81,14 @@ const BASE = "http://localhost";
 const STREAM_CLOSE_WAIT_MS = 2000;
 
 const openEventStream = async (browser: HumanBrowser, workspaceId: string) =>
-  await workspaceEventsRoute.handle(
+  await server.fetch(
     new Request(`${BASE}/workspaces/${workspaceId}/events`, {
       headers: { cookie: browser.cookieHeader() },
     }),
   );
 
 const openUserEventStream = async (browser: HumanBrowser) =>
-  await notificationsRoute.handle(
+  await server.fetch(
     new Request(`${BASE}/v1/notifications/events`, {
       headers: { cookie: browser.cookieHeader() },
     }),
@@ -202,7 +217,7 @@ describe("a matter's event stream when a member is removed", () => {
     const ownerStream = await openEventStream(owner, workspaceId);
     expect(ownerStream.status).toBe(200);
 
-    const removal = await workspacesRoute.handle(
+    const removal = await server.fetch(
       new Request(
         `${BASE}/workspaces/${workspaceId}/members/${member.userId}`,
         {

@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 import { readFileSync } from "node:fs";
 
 import type {
@@ -31,6 +30,7 @@ import getMatterInboundAddress from "@/api/handlers/workspaces/correspondence/ad
 import getCorrespondence from "@/api/handlers/workspaces/correspondence/get";
 import listCorrespondence from "@/api/handlers/workspaces/correspondence/list";
 import updateCorrespondence from "@/api/handlers/workspaces/correspondence/update";
+import { HttpStatusResponse } from "@/api/http/status";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { eraseCorrespondenceActorDisplays } from "@/api/lib/email/correspondence/offboarding";
@@ -95,8 +95,8 @@ type HandlerFailure = Extract<
 >;
 
 const expectSuccess = <T>(response: T | HandlerFailure): T => {
-  expect(response).not.toBeInstanceOf(ElysiaCustomStatusResponse);
-  if (response instanceof ElysiaCustomStatusResponse) {
+  expect(response).not.toBeInstanceOf(HttpStatusResponse);
+  if (response instanceof HttpStatusResponse) {
     throw new TypeError(`Expected success, received status ${response.code}`);
   }
   return response;

@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { numberFromString } from "@stll/api-contract/http-input";
 import { READER_ANNOTATION_MAX_SPANS } from "@stll/api-contract/legal-reader-annotations";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -16,9 +16,9 @@ import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotati
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tUuid,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  uuidSchema,
 } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -31,11 +31,15 @@ import type {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
 
-const querySchema = t.Object({
+const querySchema = v.object({
   targetType: annotationTargetTypeSchema,
-  targetId: tUuid,
-  cursor: t.Optional(tPaginationCursor()),
-  limit: t.Optional(tPaginationLimit(LIMITS.readerAnnotationsPageSizeMax)),
+  targetId: uuidSchema,
+  cursor: v.optional(paginationCursorSchema()),
+  limit: v.optional(
+    numberFromString(
+      paginationLimitSchema(LIMITS.readerAnnotationsPageSizeMax),
+    ),
+  ),
 });
 
 const config = {
@@ -114,7 +118,7 @@ type ListReaderAnnotationsProps = Omit<
   AnnotationAuthorScope,
   "recordAuditEvent"
 > & {
-  query: Static<typeof querySchema>;
+  query: v.InferOutput<typeof querySchema>;
 };
 
 export const listReaderAnnotationsHandler = async function* ({

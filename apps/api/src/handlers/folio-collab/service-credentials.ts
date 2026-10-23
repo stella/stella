@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { env } from "@/api/env";
+import type { VerifyCaller } from "@/api/lib/api-handlers";
 import {
   authorizeConfiguredBearer,
   type ConfiguredBearerAccess,
@@ -36,3 +37,11 @@ export const authorizeFolioCollabService = (
   });
   return toFolioCollabServiceAuthorization(access);
 };
+
+/** A snapshot endpoint's caller: the deployment's collaboration service. */
+export const verifyFolioCollabServiceCaller: VerifyCaller<void> = ({
+  request,
+}) =>
+  Promise.resolve(
+    authorizeFolioCollabService(request.headers.get("authorization")),
+  );

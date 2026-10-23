@@ -1,7 +1,7 @@
 // `$defs` compaction for the committed capability catalog.
 //
 // A handful of capabilities (the view condition/filter family) declare deeply
-// recursive TypeBox unions whose expanded JSON Schema repeats the same
+// recursive valibot unions whose expanded JSON Schema repeats the same
 // condition subschema a dozen times, serializing to 140-165 KiB each. That is
 // past the catalog's per-entry byte cap, and the exporter used to drop those
 // schemas entirely — which cost exactly those capabilities their typed CLI
@@ -267,7 +267,7 @@ const savingOf = (body: unknown, refCount: number): number =>
  * back byte-identical to their JSON input, with no `$defs` key added.
  *
  * The input is JSON round-tripped before hashing, preserving insertion order
- * and dropping TypeBox symbol metadata. Artifact recompaction supplies existing
+ * and dropping anything JSON cannot carry. Artifact recompaction supplies existing
  * names separately; normal generation must retain the published hash format. The
  * round trip makes the value compacted here exactly the value that would have
  * been serialized, so the exporter's round-trip gate compares like with like.
@@ -276,7 +276,7 @@ export const compactSchemaDefs = (
   inputSchema: CapabilityInputSchemaParts,
   artifactDefNames?: ReadonlyMap<string, string>,
 ): CompactionResult => {
-  // oxlint-disable-next-line unicorn/prefer-structured-clone -- NOT a deep clone: the JSON projection is the point. `structuredClone` would carry through TypeBox's metadata and values JSON drops, so what gets compacted would stop matching what gets written.
+  // oxlint-disable-next-line unicorn/prefer-structured-clone -- NOT a deep clone: the JSON projection is the point. `structuredClone` would keep values JSON drops, so what gets compacted would stop matching what gets written.
   const document: CapabilityInputSchemaParts = JSON.parse(
     JSON.stringify(inputSchema),
   );

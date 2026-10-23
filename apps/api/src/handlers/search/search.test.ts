@@ -18,12 +18,14 @@ const unusedScopedDb: ScopedDb = async () => {
   throw new Error("scopedDb should not be called");
 };
 
+// The decoded body: `limit` always carries the schema's default.
 const emptySearchFilters = () => ({
   editedByUserIds: [],
   kinds: [],
   mimeTypes: [],
   types: [],
   workspaceIds: [],
+  limit: LIMITS.searchPageSizeDefault,
 });
 
 type SearchBody = Parameters<typeof searchHandler>[0]["body"];

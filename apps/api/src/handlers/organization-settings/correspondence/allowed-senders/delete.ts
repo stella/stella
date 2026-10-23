@@ -1,16 +1,16 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { correspondenceAllowedSenders } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const paramsSchema = t.Object({
-  senderId: tSafeId("correspondenceAllowedSender"),
+const paramsSchema = v.object({
+  senderId: resourceIdSchema("correspondenceAllowedSender"),
 });
 const config = {
   contract: "patch",

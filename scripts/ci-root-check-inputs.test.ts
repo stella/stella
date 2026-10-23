@@ -64,7 +64,7 @@ const CASES = [
     outside: "apps/web/e2e/probe.spec.ts",
   },
   {
-    check: "ci-checks-rest/exactMirror route guard",
+    check: "ci-checks-rest/MCP coverage guard",
     inside: "apps/api/src/probe.ts",
     outside: "apps/landing/src/probe.ts",
   },

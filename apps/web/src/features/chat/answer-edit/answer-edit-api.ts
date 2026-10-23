@@ -5,7 +5,7 @@ import type { ChatMessageAcceptedEdit } from "@stll/api-contract/chat-message-re
 import { sha256Hex } from "@stll/sha256/browser";
 
 import { api } from "@/lib/api";
-import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 
 export type AnswerEditAnchor = {
   messageId: string;
@@ -34,7 +34,7 @@ export const requestAnswerEdit = async ({
       const messageResource = api.chat
         .threads({ threadId })
         .messages({ messageId: anchor.messageId });
-      return unwrapEden(
+      return unwrapApiResponse(
         await messageResource["span-edit"].post(
           {
             baseRevision: anchor.baseRevision,
@@ -70,7 +70,7 @@ export const acceptAnswerEdit = async ({
 }: AcceptAnswerEditOptions) =>
   await Result.tryPromise({
     try: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.chat
           .threads({ threadId })
           .messages({ messageId: anchor.messageId })

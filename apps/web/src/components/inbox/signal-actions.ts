@@ -11,7 +11,7 @@ import {
 } from "@/lib/chat-draft-store";
 import { createChatThreadId, getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -32,7 +32,7 @@ export const snoozeSignal = async ({
   until,
 }: SignalMutationArgs & { until: Date }) =>
   Result.tryPromise(async () => {
-    unwrapEden(
+    unwrapApiResponse(
       await signalClient(signalId).snoozes.post({ until: until.toISOString() }),
     );
   });
@@ -42,7 +42,7 @@ export const dismissSignal = async ({
   reason,
 }: SignalMutationArgs & { reason: string | null }) =>
   Result.tryPromise(async () => {
-    unwrapEden(await signalClient(signalId).dismissals.post({ reason }));
+    unwrapApiResponse(await signalClient(signalId).dismissals.post({ reason }));
   });
 
 export const assignSignal = async ({
@@ -50,7 +50,7 @@ export const assignSignal = async ({
   assigneeUserId,
 }: SignalMutationArgs & { assigneeUserId: string | null }) =>
   Result.tryPromise(async () => {
-    unwrapEden(
+    unwrapApiResponse(
       await signalClient(signalId).assignments.post({
         assigneeUserId:
           assigneeUserId === null ? null : toSafeId<"user">(assigneeUserId),
@@ -67,7 +67,7 @@ export const acceptSignal = async ({
   result?: ClientSignalAcceptanceResult;
 }) =>
   Result.tryPromise(async () => {
-    const accepted = unwrapEden(
+    const accepted = unwrapApiResponse(
       await signalClient(signalId).acceptances.post({
         suggestionKind,
         ...(result

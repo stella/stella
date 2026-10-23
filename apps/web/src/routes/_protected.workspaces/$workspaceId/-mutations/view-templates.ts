@@ -4,7 +4,7 @@ import { useRouteContext } from "@tanstack/react-router";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
@@ -32,7 +32,7 @@ export const useCreateViewTemplate = () => {
       const response = await api["view-templates"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).put(body);
-      return { data: unwrapEden(response), workspaceId };
+      return { data: unwrapApiResponse(response), workspaceId };
     },
     onSuccess: () => {
       detached(
@@ -72,7 +72,7 @@ export const useDeleteViewTemplate = () => {
       })({
         templateId: toSafeId<"workspaceViewTemplate">(templateId),
       }).delete();
-      return { data: unwrapEden(response), workspaceId };
+      return { data: unwrapApiResponse(response), workspaceId };
     },
     onSuccess: () => {
       detached(

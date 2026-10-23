@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
@@ -54,10 +54,14 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
-  body: t.Object({
-    query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
+  body: v.object({
+    query: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+    ),
     country: tPublicLawCountry,
-    locale: t.Optional(t.String({ maxLength: 16 })),
+    locale: v.optional(v.pipe(v.string(), v.maxLength(16))),
   }),
   requiresUsage: { actionType: "chat", modelTask: "search-expand" },
 } satisfies HandlerConfig;

@@ -11,7 +11,7 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { api } from "@/lib/api";
 import { getApiRequestHeaders } from "@/lib/api-request-context";
 import { apiUrl } from "@/lib/api-url";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -37,7 +37,7 @@ export const readerAnswersOptions = ({
       const cursors = new Set<string>();
       let cursor: string | undefined;
       do {
-        const page = unwrapEden(
+        const page = unwrapApiResponse(
           // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- The next page cursor is known only after the preceding response.
           await api.reader.answers.get({
             query: {
@@ -138,7 +138,7 @@ export const deleteReaderAnswer = async (
   answerId: string,
   signal: AbortSignal,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api.reader
       .answers({ answerId: toSafeId<"legalReaderAnswer">(answerId) })
       .delete({ fetch: { signal } }),
@@ -148,7 +148,7 @@ export const changeReaderAnswerVisibility = async (
   visibility: ReaderAnswer["visibility"],
   signal: AbortSignal,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api.reader
       .answers({ answerId: toSafeId<"legalReaderAnswer">(answerId) })
       .patch({ visibility }, { fetch: { signal } }),

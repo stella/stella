@@ -13,7 +13,7 @@ import {
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { api } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 type ChatToolGrantsKey = {
@@ -39,7 +39,7 @@ export const chatToolGrantsOptions = ({
         query: { threadId: toSafeId<"chatThread">(threadId) },
         fetch: { signal },
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -56,7 +56,7 @@ export const readChatToolGrantCoverage = async ({
   threadId: string;
   toolName: ApprovalToolName;
 }) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api.chat["tool-grants"].coverage.get({
       query: { threadId: toSafeId<"chatThread">(threadId), toolName },
     }),
@@ -71,7 +71,7 @@ export const storeChatToolGrant = async ({
   threadId: string;
   toolName: ApprovalToolName;
 }) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api.chat["tool-grants"].post({
       scope,
       threadId: toSafeId<"chatThread">(threadId),

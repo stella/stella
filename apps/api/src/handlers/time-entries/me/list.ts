@@ -1,8 +1,10 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, gt, ne, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
+import { numberFromString } from "@stll/api-contract/http-input";
 import { parsePlainDate } from "@stll/time";
 
 import { timeDailyTargets, timeEntries, workspaces } from "@/api/db/schema";
@@ -10,7 +12,10 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { leftTodayMinutes } from "@/api/lib/billing/daily-target";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -156,13 +161,17 @@ const config = {
     consumesServices: false,
   },
   access: "read",
-  query: t.Object({
-    date: t.String({
-      format: "date",
-      description: "Work date in YYYY-MM-DD format",
-    }),
-    limit: t.Optional(tPaginationLimit(LIMITS.timeEntriesPageSizeMax)),
-    cursor: t.Optional(tPaginationCursor()),
+  query: v.object({
+    date: v.pipe(
+      v.string(),
+      v.isoDate(),
+      API_CALENDAR_DATE_CHECK,
+      v.description("Work date in YYYY-MM-DD format"),
+    ),
+    limit: v.optional(
+      numberFromString(paginationLimitSchema(LIMITS.timeEntriesPageSizeMax)),
+    ),
+    cursor: v.optional(paginationCursorSchema()),
   }),
 } satisfies HandlerConfig;
 

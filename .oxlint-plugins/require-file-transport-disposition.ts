@@ -1,10 +1,11 @@
-// A handler whose Elysia schema declares a file/blob field must declare its
+// A handler whose request schema declares a file/blob field must declare its
 // transport disposition.
 //
 // The generic capability transport (`invoke_capability` and the generated CLI)
-// carries JSON. A `t.File()` / `t.Files()` / `t.Blob()` field cannot cross it:
-// a plain string passes `format: "binary"` validation and reaches a handler
-// that expects a `File`. What the catalog says about such a capability — which
+// carries JSON. A `v.file()` / `v.blob()` field (and `fileSchema({ maxBytes })`
+// from `@/api/lib/custom-schema`, which pipes one) cannot cross it: a plain
+// string passes `format: "binary"` validation and reaches a handler that
+// expects a `File`. What the catalog says about such a capability — which
 // field carries the bytes, whether that field is optional (so the JSON modes
 // still run), and where the same work can be done instead — comes from one
 // place: the `transport` field on the handler config
@@ -19,8 +20,13 @@
 // module. Neither replaces the other: the lint rule is fast and local, the
 // exporter is total.
 //
+// A handler config is an object literal that `satisfies` one of the safe
+// handler config types, or that is passed straight to a safe-handler factory
+// (`createSafeRootHandler({ ... }, handler)`, or the `config` of an
+// options-style factory).
+//
 // Flagged:
-//   const bodySchema = t.Object({ file: t.File() });
+//   const bodySchema = v.object({ file: fileSchema({ maxBytes }) });
 //   const config = { permissions, mcp, body: bodySchema } satisfies HandlerConfig;
 //
 // Allowed:
@@ -39,17 +45,27 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  isSafeHandlerFactory,
+  SAFE_HANDLER_FACTORIES,
+} from "../apps/api/src/lib/safe-handler-factories.ts";
+import {
   getCalleeName,
   getPropertyName,
   isAstNode,
   unwrapExpression,
 } from "./utils.ts";
 
-/** Elysia schema constructors that put raw bytes in a request field. */
-const BINARY_SCHEMA_FACTORIES = new Set(["t.File", "t.Files", "t.Blob"]);
+/** Schema constructors that put raw bytes in a request field. */
+const BINARY_SCHEMA_FACTORIES = new Set(["v.file", "v.blob", "fileSchema"]);
 
 /** The config types whose objects carry an `mcp` disposition and a transport. */
-const HANDLER_CONFIG_TYPES = new Set(["HandlerConfig", "SessionHandlerConfig"]);
+const HANDLER_CONFIG_TYPES = new Set([
+  "HandlerConfig",
+  "PublicHandlerConfig",
+  "SessionHandlerConfig",
+  "TokenHandlerConfig",
+  "WorkspaceHandlerConfig",
+]);
 
 const satisfiesHandlerConfig = (node: unknown): boolean => {
   if (!isAstNode(node) || node.type !== "TSSatisfiesExpression") {
@@ -108,6 +124,26 @@ const isInternalDisposition = (configObject: unknown): boolean => {
   );
 };
 
+/** The config object literal a safe-handler factory call is given inline. */
+const inlineFactoryConfig = (node: unknown): unknown => {
+  if (!isAstNode(node) || node.type !== "CallExpression") {
+    return null;
+  }
+  const calleeName = getCalleeName(node.callee);
+  if (calleeName === null || !isSafeHandlerFactory(calleeName)) {
+    return null;
+  }
+  const first = unwrapExpression(
+    Array.isArray(node.arguments) ? node.arguments.at(0) : undefined,
+  );
+  if (first?.type !== "ObjectExpression") {
+    return null;
+  }
+  return SAFE_HANDLER_FACTORIES[calleeName].configArgument === "direct"
+    ? first
+    : unwrapExpression(propertyValue(first, "config"));
+};
+
 export default eslintCompatPlugin({
   meta: { name: "require-file-transport-disposition" },
   rules: {
@@ -120,25 +156,41 @@ export default eslintCompatPlugin({
             "must declare a `transport` disposition naming the field, whether " +
             "it is required, the media types it accepts, and the alternative " +
             "transport (see CapabilityTransport in " +
-            "apps/api/src/lib/capability-transport.ts). Without it the config " +
-            "declares a plain JSON transport, and every client would advertise " +
-            "a capability the generic path cannot run.",
+            "apps/api/src/lib/capability-transport.ts), or an " +
+            '`mcp: { type: "internal", reason }` disposition. Without it the ' +
+            "config declares a plain JSON transport, and every client would " +
+            "advertise a capability the generic path cannot run.",
         },
       },
       createOnce(context) {
         // Per-file state: the binary factory seen (if any) and the config
         // objects to report against once the whole module has been walked.
         let binaryFactory: string | null = null;
-        let configNodes: unknown[] = [];
+        let configNodes = new Set<unknown>();
+
+        const consider = (expression: unknown): void => {
+          if (
+            isAstNode(expression) &&
+            expression.type === "ObjectExpression" &&
+            !hasProperty(expression, "transport") &&
+            !isInternalDisposition(expression)
+          ) {
+            configNodes.add(expression);
+          }
+        };
 
         return {
           before() {
             binaryFactory = null;
-            configNodes = [];
+            configNodes = new Set();
             return true;
           },
           CallExpression(node) {
-            if (binaryFactory !== null || !isAstNode(node)) {
+            if (!isAstNode(node)) {
+              return;
+            }
+            consider(inlineFactoryConfig(node));
+            if (binaryFactory !== null) {
               return;
             }
             const calleeName = getCalleeName(node.callee);
@@ -153,14 +205,7 @@ export default eslintCompatPlugin({
             if (!satisfiesHandlerConfig(node) || !isAstNode(node)) {
               return;
             }
-            const expression = unwrapExpression(node.expression);
-            if (
-              expression?.type === "ObjectExpression" &&
-              !hasProperty(expression, "transport") &&
-              !isInternalDisposition(expression)
-            ) {
-              configNodes.push(expression);
-            }
+            consider(unwrapExpression(node.expression));
           },
           "Program:exit"() {
             if (binaryFactory === null) {

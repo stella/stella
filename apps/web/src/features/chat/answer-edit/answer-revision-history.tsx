@@ -17,7 +17,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
@@ -99,7 +99,7 @@ export const AnswerRevisionHistoryContent = ({
     setWriteState({ status: "saving" });
     const saved = await Result.tryPromise({
       try: async () =>
-        unwrapEden(
+        unwrapApiResponse(
           await api.chat
             .threads({ threadId })
             .messages({ messageId })

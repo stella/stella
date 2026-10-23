@@ -17,8 +17,15 @@ import {
   type PublicLawPageSize,
 } from "@/components/public-law-table/public-law-route-pagination.logic";
 import { api } from "@/lib/api";
-import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
-import { type PublicLawData, unwrapPublicLawEden } from "@/lib/public-law-api";
+import {
+  APIError,
+  shouldRetryAPIRequest,
+  unwrapApiResponse,
+} from "@/lib/errors/api";
+import {
+  type PublicLawData,
+  unwrapPublicLawResponse,
+} from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
@@ -159,7 +166,7 @@ export const decisionFacetsOptions = (country: string) =>
         fetch: { signal },
       });
 
-      const data = unwrapPublicLawEden(response, "listPublicCaseLawFacets");
+      const data = unwrapPublicLawResponse(response, "listPublicCaseLawFacets");
 
       return data;
     },
@@ -177,7 +184,7 @@ export const latestDecisionsOptions = (country: string) =>
         fetch: { signal },
       });
 
-      const data = unwrapPublicLawEden(
+      const data = unwrapPublicLawResponse(
         response,
         "listLatestPublicCaseLawDecisions",
       );
@@ -197,7 +204,7 @@ export const caseLawCorpusStatusOptions = (country: string) =>
         fetch: { signal },
       });
 
-      const data = unwrapPublicLawEden(
+      const data = unwrapPublicLawResponse(
         response,
         "readPublicCaseLawCorpusStatus",
       );
@@ -218,7 +225,7 @@ export const caseLawCoverageOptions = () =>
     queryFn: async ({ signal }) => {
       const response = await api.case.coverage.get({ fetch: { signal } });
 
-      return unwrapPublicLawEden(response, "readPublicCaseLawCoverage");
+      return unwrapPublicLawResponse(response, "readPublicCaseLawCoverage");
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -283,7 +290,7 @@ export const decisionsPageOptions = ({
           { fetch: { signal } },
         );
 
-        const data = unwrapPublicLawEden(
+        const data = unwrapPublicLawResponse(
           response,
           "searchPublicCaseLawDecisions",
         );
@@ -355,7 +362,10 @@ export const decisionsPageOptions = ({
         fetch: { signal },
       });
 
-      const data = unwrapPublicLawEden(response, "listPublicCaseLawDecisions");
+      const data = unwrapPublicLawResponse(
+        response,
+        "listPublicCaseLawDecisions",
+      );
 
       return {
         decisions: data.items,
@@ -415,7 +425,7 @@ type RefineCaseLawQueryOptions = {
  * never boolean syntax. Authenticated and metered, unlike the reads above.
  */
 export const refineCaseLawQuery = async (body: RefineCaseLawQueryOptions) =>
-  unwrapEden(await api.case.decisions.search.refine.post(body));
+  unwrapApiResponse(await api.case.decisions.search.refine.post(body));
 
 type CaseLawQueryExpansionOptions = {
   /** The organization whose model and usage answer; part of the identity. */
@@ -468,7 +478,7 @@ export const caseLawQueryExpansionOptions = ({
     queryFn: async ({ signal }) => {
       const result = await Result.tryPromise({
         try: async () =>
-          unwrapEden(
+          unwrapApiResponse(
             await api.case.decisions.search.expand.post(
               { country, query },
               { fetch: { signal } },
@@ -507,7 +517,10 @@ export const decisionOptions = (decisionId: string) =>
         .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
         .get({ fetch: { signal } });
 
-      const data = unwrapPublicLawEden(response, "readPublicCaseLawDecision");
+      const data = unwrapPublicLawResponse(
+        response,
+        "readPublicCaseLawDecision",
+      );
 
       return data;
     },
@@ -518,7 +531,7 @@ export const decisionCardSummaryOptions = (decisionId: string) =>
   queryOptions({
     queryKey: caseLawDecisionKeys.summary(decisionId),
     queryFn: async ({ signal }) =>
-      unwrapPublicLawEden(
+      unwrapPublicLawResponse(
         await api.case
           .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
           .summary.get({ fetch: { signal } }),
@@ -571,7 +584,7 @@ export const decisionBySlugOptions = ({
         fetch: { signal },
       });
 
-      const data = unwrapPublicLawEden(
+      const data = unwrapPublicLawResponse(
         response,
         "readPublicCaseLawDecisionBySlug",
       );

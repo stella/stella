@@ -5,15 +5,21 @@ import {
   runWithPublicReadStatementTimeout,
 } from "@/api/lib/legal-search/public-read-timeout-context";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
-import { resolvePublicCorpusPolicy } from "@/api/public-corpus-policy";
+import { publicCorpusClassOf } from "@/api/public-corpus-policy";
 import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 
 export const PUBLIC_READ_TIMEOUT_CODE = "PUBLIC_READ_TIMEOUT";
 
 /** Carry the registered route's budget through every public-law transaction. */
-export const runPublicReadRequest = <T>(request: Request, fn: () => T): T => {
-  const policy = resolvePublicCorpusPolicy(request);
-  if (policy === undefined) {
+export const runPublicReadRequest = <T>(
+  { request, route }: { request: Request; route: string },
+  fn: () => T,
+): T => {
+  const routeClass = publicCorpusClassOf({
+    method: request.method,
+    path: route,
+  });
+  if (routeClass === undefined) {
     return fn();
   }
   return runWithPublicReadStatementTimeout(
@@ -22,7 +28,7 @@ export const runPublicReadRequest = <T>(request: Request, fn: () => T): T => {
         PublicCorpusClass,
         number
       >
-    )[policy.class],
+    )[routeClass],
     fn,
   );
 };

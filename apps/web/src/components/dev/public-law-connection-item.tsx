@@ -14,19 +14,19 @@ import { MenuItem } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 
 const CONNECTING_POLL_INTERVAL_MS = 1000;
 
 /**
- * The dev guard answers outside dev with a 404, which Eden reports as an
+ * The dev guard answers outside dev with a 404, which the API client reports as an
  * error; a successful raw `Response` is not a state the route produces.
  */
 const unexpectedResponse = () =>
   panic("The dev public-law connection route returned a raw Response");
 
 const readPublicLawConnection = async (signal: AbortSignal) => {
-  const data = unwrapEden(
+  const data = unwrapApiResponse(
     await api.dev["public-law-connection"].get({ fetch: { signal } }),
   );
   return data instanceof Response ? unexpectedResponse() : data;
@@ -108,7 +108,9 @@ export const PublicLawConnectionItem = () => {
   const connection = useQuery(publicLawConnectionOptions);
   const connect = useMutation({
     mutationFn: async () => {
-      const data = unwrapEden(await api.dev["public-law-connection"].post());
+      const data = unwrapApiResponse(
+        await api.dev["public-law-connection"].post(),
+      );
       return data instanceof Response ? unexpectedResponse() : data;
     },
     onSuccess: (data) => {

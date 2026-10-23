@@ -20,7 +20,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { appToday } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
@@ -442,7 +442,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       detached(
         (async () => {
           const requested = await Result.tryPromise(async () =>
-            unwrapEden(
+            unwrapApiResponse(
               await api
                 .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
                 .patch({
@@ -466,7 +466,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       detached(
         (async () => {
           const requested = await Result.tryPromise(async () =>
-            unwrapEden(
+            unwrapApiResponse(
               await api
                 .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
                 .patch({

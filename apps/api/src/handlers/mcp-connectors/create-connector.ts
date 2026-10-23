@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, count, eq, inArray, isNull, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { mcpConnectors } from "@/api/db/schema";
@@ -30,13 +30,15 @@ import { LIMITS } from "@/api/lib/limits";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { oauthDomainsMatch } from "@/api/lib/mcp-upstream/oauth";
 
-const requestBody = t.Object({
-  url: t.String({ minLength: 1, maxLength: 2048 }),
-  displayName: t.Optional(t.String({ minLength: 1, maxLength: 160 })),
-  description: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
-  confirmedIssuer: t.Optional(t.String({ maxLength: 2048 })),
-  confirmedEndpointOrigins: t.Optional(
-    t.Array(t.String({ maxLength: 2048 }), { maxItems: 3 }),
+const requestBody = v.object({
+  url: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
+  displayName: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(160))),
+  description: v.optional(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
+  ),
+  confirmedIssuer: v.optional(v.pipe(v.string(), v.maxLength(2048))),
+  confirmedEndpointOrigins: v.optional(
+    v.pipe(v.array(v.pipe(v.string(), v.maxLength(2048))), v.maxLength(3)),
   ),
 });
 

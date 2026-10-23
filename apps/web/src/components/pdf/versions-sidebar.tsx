@@ -39,7 +39,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { filesKeys } from "@/lib/files/queries";
 import {
@@ -262,7 +262,7 @@ export const VersionsSidebar = ({
       remaining.find((v) => v.id === currentVersionId) ?? remaining.at(0);
 
     const requested = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .entity({ entityId: toSafeId<"entity">(entityId) })
@@ -289,7 +289,7 @@ export const VersionsSidebar = ({
 
   const handleSetLabel = async (versionId: string, label: string | null) => {
     const requested = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .entity({ entityId: toSafeId<"entity">(entityId) })
@@ -309,7 +309,7 @@ export const VersionsSidebar = ({
 
   const handleRestore = async (versionId: string) => {
     const requested = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .entity({ entityId: toSafeId<"entity">(entityId) })
@@ -344,7 +344,7 @@ export const VersionsSidebar = ({
         .entity({ entityId: toSafeId<"entity">(entityId) })
         .versions({ versionId: toSafeId<"entityVersion">(versionId) })
         .diff.get();
-      return unwrapEden(response).segments;
+      return unwrapApiResponse(response).segments;
     };
 
   const buildSummarize =
@@ -354,7 +354,7 @@ export const VersionsSidebar = ({
         .entity({ entityId: toSafeId<"entity">(entityId) })
         .versions({ versionId: toSafeId<"entityVersion">(versionId) })
         .summarize.post({});
-      return unwrapEden(response).summary;
+      return unwrapApiResponse(response).summary;
     };
 
   // Render oldest → newest top-to-bottom so the timeline reads

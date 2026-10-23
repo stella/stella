@@ -1,8 +1,8 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { CONTACT_CURSOR_MAX_LENGTH } from "@/api/handlers/contacts/list-query";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 
 describe("contact pagination cursor contract", () => {
@@ -14,14 +14,14 @@ describe("contact pagination cursor contract", () => {
 
     expect(cursor).toHaveLength(CONTACT_CURSOR_MAX_LENGTH);
     expect(
-      Value.Check(
-        tPaginationCursor({ maxChars: CONTACT_CURSOR_MAX_LENGTH }),
+      v.is(
+        paginationCursorSchema({ maxChars: CONTACT_CURSOR_MAX_LENGTH }),
         cursor,
       ),
     ).toBe(true);
     expect(
-      Value.Check(
-        tPaginationCursor({ maxChars: CONTACT_CURSOR_MAX_LENGTH }),
+      v.is(
+        paginationCursorSchema({ maxChars: CONTACT_CURSOR_MAX_LENGTH }),
         `${cursor}x`,
       ),
     ).toBe(false);

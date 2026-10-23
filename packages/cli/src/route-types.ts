@@ -113,8 +113,8 @@ export type FlagSpec = {
   repeatable: boolean;
   default?: unknown;
   /**
-   * Per-property prose from the source JSON Schema's `description` (an Elysia
-   * `t.String({ description })` on the handler config, or a curated tool's
+   * Per-property prose from the source JSON Schema's `description` (a
+   * `v.description(...)` on the handler config's schema, or a curated tool's
    * hand-written property description). Rendered ahead of the mechanical
    * type/required suffix in the flag's `--help` brief.
    */

@@ -69,7 +69,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -109,7 +109,8 @@ type ChatHistoryPageProps = {
 };
 
 type DeleteDialog =
-  { type: "closed" } | { type: "confirm"; thread: ChatHistoryItem };
+  | { type: "closed" }
+  | { type: "confirm"; thread: ChatHistoryItem };
 
 /**
  * Every chat the reader has started, newest first, grouped by when it was
@@ -535,7 +536,7 @@ function DeleteChatDialog({ dialog, onOpenChange }: DeleteChatDialogProps) {
                 : {},
           },
         );
-      unwrapEden(response);
+      unwrapApiResponse(response);
     },
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));

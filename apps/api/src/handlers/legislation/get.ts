@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import * as v from "valibot";
 
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
@@ -19,10 +19,11 @@ import {
   projectStatuteAmendments,
   projectStatuteReader,
 } from "@/api/handlers/legislation/reader-response";
+import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   LEGISLATION_AMENDMENT_PAGE_MAX,
   readLegislationAmendments,
@@ -192,7 +193,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_statute" },
   access: "read",
-  params: t.Object({ documentId: tSafeId("legislationDocument") }),
+  params: v.object({ documentId: resourceIdSchema("legislationDocument") }),
 } satisfies HandlerConfig;
 
 const readLegislation = createSafeRootHandler(

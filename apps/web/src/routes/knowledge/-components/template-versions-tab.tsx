@@ -9,7 +9,7 @@ import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { templateVersionsOptions } from "@/lib/knowledge/queries";
@@ -74,7 +74,7 @@ export const TemplateVersionsTab = ({
         .templates({ templateId: toSafeId<"template">(templateId) })
         .versions({ versionId: toSafeId<"templateVersion">(versionId) })
         .diff.get();
-      return unwrapEden(response).segments;
+      return unwrapApiResponse(response).segments;
     };
 
   const buildSummarize =
@@ -83,7 +83,7 @@ export const TemplateVersionsTab = ({
         .templates({ templateId: toSafeId<"template">(templateId) })
         .versions({ versionId: toSafeId<"templateVersion">(versionId) })
         .summarize.post({});
-      return unwrapEden(response).summary;
+      return unwrapApiResponse(response).summary;
     };
 
   if (isLoading) {

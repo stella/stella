@@ -59,7 +59,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
@@ -238,7 +238,7 @@ export const AnonymizationFacet = ({
       // a try/catch that captures and toasts, so a handler here would report
       // the same failure twice. `deleteMutation` below is fire-and-forget and
       // keeps its handler for that reason.
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
   const deleteMutation = useMutation({
@@ -427,7 +427,7 @@ export const AnonymizationFacet = ({
             ? { entityId: toSafeId<"entity">(vars.entityId) }
             : {}),
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);

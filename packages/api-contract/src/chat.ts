@@ -197,7 +197,7 @@ type ChatNativeContinuation = {
 
 export type ChatContinuation = ChatInitialTurn | ChatNativeContinuation;
 
-/** Portable projection of the Elysia chat-stream request schema. */
+/** Portable projection of the chat-stream route's valibot request schema. */
 type ChatSendRequestBase = {
   activeDecision?: {
     decisionId: SafeId<"caseLawDecision">;

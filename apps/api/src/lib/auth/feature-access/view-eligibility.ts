@@ -1,4 +1,3 @@
-import { KindGuard, type TSchema } from "@sinclair/typebox";
 import { and, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
 
 import type { UnavailableWorkspaceView } from "@stll/api-contract";
@@ -16,6 +15,10 @@ import {
   isFeatureEnabled,
 } from "@/api/lib/feature-access/policy";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import type {
+  JsonSchema,
+  JsonSchemaDefinition,
+} from "@/api/lib/json-schema/valibot-to-json-schema";
 import { isRecord } from "@/api/lib/type-guards";
 import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 
@@ -123,60 +126,68 @@ export const avtLayoutVisibilityCondition = (
     ? sql`true`
     : sql`${layout}->>'type' is distinct from 'avt'`;
 
-const projectViewSchema = (schema: TSchema): TSchema => {
-  if (Array.isArray(schema["enum"])) {
-    return {
-      ...schema,
-      enum: schema["enum"].filter((value: unknown) => value !== "avt"),
-    };
+const AVT_LAYOUT = "avt";
+
+/** A literal `avt`, or an object whose `type` is the literal `avt`. */
+const isAvtBranch = (branch: JsonSchemaDefinition): boolean => {
+  if (typeof branch === "boolean") {
+    return false;
   }
-  if (KindGuard.IsUnion(schema)) {
-    return {
-      ...schema,
-      anyOf: schema.anyOf
-        .filter(
-          (branch) =>
-            !(KindGuard.IsLiteral(branch) && branch.const === "avt") &&
-            !(
-              KindGuard.IsObject(branch) &&
-              KindGuard.IsLiteral(branch.properties["type"]) &&
-              branch.properties["type"].const === "avt"
-            ),
-        )
-        .map(projectViewSchema),
-    };
-  }
-  if (KindGuard.IsObject(schema)) {
-    return {
-      ...schema,
-      properties: Object.fromEntries(
-        Object.entries(schema.properties).map(([key, value]) => [
-          key,
-          projectViewSchema(value),
-        ]),
-      ),
-    };
-  }
-  if (KindGuard.IsArray(schema)) {
-    return { ...schema, items: projectViewSchema(schema.items) };
-  }
-  if (KindGuard.IsIntersect(schema)) {
-    return { ...schema, allOf: schema.allOf.map(projectViewSchema) };
-  }
-  return schema;
+  const type = branch.properties?.["type"];
+  return (
+    branch.const === AVT_LAYOUT ||
+    (typeof type === "object" && type.const === AVT_LAYOUT)
+  );
 };
+
+const projectViewDefinition = (
+  definition: JsonSchemaDefinition,
+): JsonSchemaDefinition =>
+  typeof definition === "boolean" ? definition : projectViewSchema(definition);
+
+const withoutAvtBranches = (branches: JsonSchemaDefinition[]) =>
+  branches.filter((branch) => !isAvtBranch(branch)).map(projectViewDefinition);
+
+/** The schema an agent without layout verification is shown: no `avt` layout anywhere. */
+const projectViewSchema = (schema: JsonSchema): JsonSchema => {
+  const { enum: values, anyOf, oneOf, allOf, properties, items } = schema;
+  return {
+    ...schema,
+    ...(values === undefined
+      ? {}
+      : { enum: values.filter((value) => value !== AVT_LAYOUT) }),
+    ...(anyOf === undefined ? {} : { anyOf: withoutAvtBranches(anyOf) }),
+    ...(oneOf === undefined ? {} : { oneOf: withoutAvtBranches(oneOf) }),
+    ...(allOf === undefined ? {} : { allOf: allOf.map(projectViewDefinition) }),
+    ...(properties === undefined
+      ? {}
+      : {
+          properties: Object.fromEntries(
+            Object.entries(properties).map(([key, value]) => [
+              key,
+              projectViewDefinition(value),
+            ]),
+          ),
+        }),
+    ...(items === undefined
+      ? {}
+      : {
+          items: Array.isArray(items)
+            ? items.map(projectViewDefinition)
+            : projectViewDefinition(items),
+        }),
+  };
+};
+
+const projectViewPart = (schema: JsonSchema | undefined) =>
+  schema === undefined ? undefined : projectViewSchema(schema);
 
 export const projectAvtViewInputSchemas = (
   schemas: AdvertisedSchemas,
 ): AdvertisedSchemas => ({
-  body:
-    schemas.body === undefined ? undefined : projectViewSchema(schemas.body),
-  params:
-    schemas.params === undefined
-      ? undefined
-      : projectViewSchema(schemas.params),
-  query:
-    schemas.query === undefined ? undefined : projectViewSchema(schemas.query),
+  body: projectViewPart(schemas.body),
+  params: projectViewPart(schemas.params),
+  query: projectViewPart(schemas.query),
 });
 
 const usesAvtFeature = async ({

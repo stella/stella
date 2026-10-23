@@ -51,7 +51,7 @@ import {
   draggable,
   dropTargetForElements,
 } from "@/lib/drag-and-drop/element-registration";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -562,7 +562,7 @@ export const ExistingFileOrganizerDialog = ({
               { fetch: { signal } },
             );
 
-          return unwrapEden(response);
+          return unwrapApiResponse(response);
         },
       });
 
@@ -1578,7 +1578,7 @@ const ensureFolders = async ({
           parentId: parentSafeId,
         });
 
-      const newEntityId: string = unwrapEden(response).entityId;
+      const newEntityId: string = unwrapApiResponse(response).entityId;
       currentParentId = newEntityId;
       knownFolders.set(key, newEntityId);
       folderIds.set(pathKey, newEntityId);

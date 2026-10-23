@@ -124,7 +124,7 @@ const clearSearchHistory = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(clearSearchHistory.handler, {
+declareAggregateMutation(clearSearchHistory, {
   type: "independent",
   reason:
     "Owner-serialized clear records its import cutoff and deletes the entries in one audited transaction.",

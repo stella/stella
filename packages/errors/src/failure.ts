@@ -85,6 +85,7 @@ export const FAILURE_REASON_GRADE = {
   request_validation: "client",
   route_not_found: "client",
   request_malformed: "client",
+  method_not_allowed: "client",
   unclassified: "defect",
   // parser-output-unchanged: provider request rejections grade observed failures only; no parser reads them.
   // A provider answered 400 to a request this service built and nothing more

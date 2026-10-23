@@ -10,7 +10,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -25,7 +25,9 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: workspaceContactRealtimeUpdates,
   mcp: { type: "covered", by: "link_matter_contact" },
-  params: workspaceParams({ workspaceContactId: tSafeId("workspaceContact") }),
+  params: workspaceParams({
+    workspaceContactId: resourceIdSchema("workspaceContact"),
+  }),
 } satisfies WorkspaceHandlerConfig;
 
 export type DeleteWorkspaceContactHandlerProps = {

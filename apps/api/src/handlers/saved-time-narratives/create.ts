@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { savedTimeNarratives } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -20,10 +20,10 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
-  body: t.Object({
-    name: t.String({ minLength: 1, maxLength: 128 }),
-    narrative: t.String({ minLength: 1, maxLength: 10_000 }),
-    narrativeLanguage: t.Optional(narrativeLanguageSchema),
+  body: v.object({
+    name: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    narrative: v.pipe(v.string(), v.minLength(1), v.maxLength(10_000)),
+    narrativeLanguage: v.optional(narrativeLanguageSchema),
   }),
 } satisfies HandlerConfig;
 

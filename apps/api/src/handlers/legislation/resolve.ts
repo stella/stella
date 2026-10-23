@@ -1,7 +1,7 @@
 import { inArray } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
@@ -17,20 +17,24 @@ import {
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
-export const resolveStatutesBodySchema = t.Object({
-  works: t.Array(
-    t.Object({
-      /** Jurisdiction of the cited work, which need not be the reader's own. */
-      country: tPublicLawCountry,
-      eli: t.String({ minLength: 1, maxLength: LIMITS.legislationEliMaxChars }),
-      /** Date whose applicable consolidation should answer for the work. */
-      asOf: t.String({ format: "date" }),
-    }),
-    { maxItems: LIMITS.legislationResolveWorksMax },
+export const resolveStatutesBodySchema = v.object({
+  works: v.pipe(
+    v.array(
+      v.object({
+        country: tPublicLawCountry,
+        eli: v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(LIMITS.legislationEliMaxChars),
+        ),
+        asOf: apiDateSchema,
+      }),
+    ),
+    v.maxLength(LIMITS.legislationResolveWorksMax),
   ),
 });
 
-type ResolveStatutesBody = Static<typeof resolveStatutesBodySchema>;
+type ResolveStatutesBody = v.InferOutput<typeof resolveStatutesBodySchema>;
 
 /** What a link to a consolidation needs, the same fields the list returns. */
 const resolvedStatuteColumns = {

@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { status } from "elysia";
 
 import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
@@ -8,6 +7,7 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
+import { status } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

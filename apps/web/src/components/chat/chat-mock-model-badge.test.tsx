@@ -10,7 +10,7 @@ import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
-// The query module imports the Eden client, which reads the API URL eagerly.
+// The query module imports the API client, which reads the API URL eagerly.
 beforeAll(() => {
   process.env["VITE_API_URL"] ??= "https://api.example.test";
 });

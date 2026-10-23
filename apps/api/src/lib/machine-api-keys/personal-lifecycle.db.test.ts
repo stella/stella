@@ -5,7 +5,6 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { panic } from "better-result";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
-import Elysia from "elysia";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -20,13 +19,16 @@ import {
 } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
 import { auditLogs, organizationSettings } from "@/api/db/schema";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteDefinition } from "@/api/http/route";
 import { API_KEY_PLUGIN_CONFIGS } from "@/api/lib/api-key-plugin-configs";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
-import { createAuthMacro } from "@/api/lib/auth";
+import { createMemberAuthenticator } from "@/api/lib/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   PERSONAL_API_KEY_AUDIENCES,
@@ -49,6 +51,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
@@ -347,24 +350,34 @@ describe("personal key persistence and receipts", () => {
           plugins: [apiKey([...API_KEY_PLUGIN_CONFIGS])],
         });
         const sessionReads = { count: 0 };
-        const rest = new Elysia()
-          .use(
-            createAuthMacro({
-              getSession: async ({ headers }) => {
-                const resolved = await auth.api.getSession({
-                  headers: new Headers(headers),
-                  returnHeaders: true,
-                });
-                expect(resolved.response).toBeNull();
-                if (resolved.response !== null) {
-                  panic("A personal key must never create a REST session");
-                }
-                sessionReads.count += 1;
-                return { headers: resolved.headers, response: null };
-              },
-            }),
-          )
-          .get("/protected", () => "authenticated", { validateAuth: true });
+        const authenticate = createMemberAuthenticator({
+          getSession: async ({ headers }) => {
+            const resolved = await auth.api.getSession({
+              headers: new Headers(headers),
+              returnHeaders: true,
+            });
+            expect(resolved.response).toBeNull();
+            if (resolved.response !== null) {
+              panic("A personal key must never create a REST session");
+            }
+            sessionReads.count += 1;
+            return { headers: resolved.headers, response: null };
+          },
+        });
+        const protectedRoute: RouteDefinition = {
+          access: "member",
+          config: {},
+          run: async ({ ctx }) => {
+            const outcome = await authenticate(ctx, {});
+            return outcome.ok ? "authenticated" : outcome.answer;
+          },
+        };
+        await using rest = serveForTest(
+          createHttpApp({
+            middleware: [],
+            routes: routes({ "/protected": { GET: protectedRoute } }),
+          }),
+        );
         const resolveAuthorization: NonNullable<
           Parameters<typeof resolveMachineApiKeySession>[1]
         >["resolveAuthorization"] = async ({ organizationId, userId }) => {
@@ -418,8 +431,9 @@ describe("personal key persistence and receipts", () => {
               expect(response.status).toBe(200);
               expect(await response.json()).toBeNull();
               const readsBefore = sessionReads.count;
-              const protectedResponse = await rest.handle(
-                new Request("http://localhost:3001/protected", { headers }),
+              const protectedResponse = await rest.fetch(
+                "http://localhost:3001/protected",
+                { headers },
               );
               expect(protectedResponse.status).toBe(401);
               expect(sessionReads.count).toBe(readsBefore + 1);

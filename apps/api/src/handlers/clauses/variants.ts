@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
@@ -11,7 +10,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { defaultVarcharSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
@@ -20,19 +19,19 @@ import { clauseVariantReadLimit } from "./variant-read";
 
 // ── Schemas ─────────────────────────────────────────
 
-export const createVariantBodySchema = t.Object({
-  label: tDefaultVarchar,
+export const createVariantBodySchema = v.object({
+  label: defaultVarcharSchema,
   body: clauseBodySchema,
 });
 
-export const updateVariantBodySchema = t.Object({
-  label: t.Optional(tDefaultVarchar),
-  body: t.Optional(clauseBodySchema),
-  sortOrder: t.Optional(t.Integer({ minimum: 0 })),
+export const updateVariantBodySchema = v.object({
+  label: v.exactOptional(defaultVarcharSchema),
+  body: v.exactOptional(clauseBodySchema),
+  sortOrder: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
 });
 
-type CreateVariantBody = Static<typeof createVariantBodySchema>;
-type UpdateVariantBody = Static<typeof updateVariantBodySchema>;
+type CreateVariantBody = v.InferOutput<typeof createVariantBodySchema>;
+type UpdateVariantBody = v.InferOutput<typeof updateVariantBodySchema>;
 
 // ── Helpers ─────────────────────────────────────────
 

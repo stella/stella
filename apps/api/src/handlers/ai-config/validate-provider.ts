@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
@@ -17,19 +17,18 @@ import { ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/chat/anthropic-config"
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 
-export const validateProviderBody = t.Object({
-  provider: t.UnionEnum(TANSTACK_AI_PROVIDERS),
-  apiKey: t.String({ minLength: 1, maxLength: 512 }),
-  anthropicWorkspaceId: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 256,
-      pattern: ANTHROPIC_WORKSPACE_ID_PATTERN,
-    }),
+export const validateProviderBody = v.object({
+  provider: v.picklist(TANSTACK_AI_PROVIDERS),
+  apiKey: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  anthropicWorkspaceId: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(256),
+      v.regex(new RegExp(ANTHROPIC_WORKSPACE_ID_PATTERN, "u")),
+    ),
   ),
-  region: t.Optional(
-    t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")]),
-  ),
+  region: v.optional(v.picklist(["global", "eu", "ch"])),
 });
 
 const config = {

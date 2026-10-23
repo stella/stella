@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   BYOK_DEFAULT_MODELS,
@@ -434,7 +434,7 @@ describe("Anthropic workspace settings", () => {
   test("workspace update schema rejects unsafe header text and allows explicit clearing", () => {
     for (const anthropicWorkspaceId of ["wrk_safe-ID_01", ""]) {
       expect(
-        Value.Check(updateAIConfig.config.body, {
+        v.is(updateAIConfig.config.body, {
           providers: [{ provider: "anthropic", anthropicWorkspaceId }],
           overrideModels: anthropicOverrides,
         }),
@@ -448,7 +448,7 @@ describe("Anthropic workspace settings", () => {
       "wrk/path",
     ]) {
       expect(
-        Value.Check(updateAIConfig.config.body, {
+        v.is(updateAIConfig.config.body, {
           providers: [{ provider: "anthropic", anthropicWorkspaceId }],
           overrideModels: anthropicOverrides,
         }),

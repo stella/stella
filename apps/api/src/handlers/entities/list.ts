@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -14,14 +14,16 @@ import {
   entityReadPageBodySchema,
 } from "@/api/lib/entities/query-window-schema";
 
-const readEntitiesBodySchema = t.Object({
-  ...entityReadPageBodySchema.properties,
-  limit: {
-    ...entityReadPageBodySchema.properties.limit,
-    description: "Max entities to return",
-  },
-  ...t.Pick(entityQueryWindowBodySchema, ["excludedKinds", "previewableForAi"])
-    .properties,
+const readEntitiesBodySchema = v.object({
+  ...entityReadPageBodySchema.entries,
+  limit: v.optional(
+    v.pipe(
+      entityReadPageBodySchema.entries.limit.wrapped,
+      v.description("Max entities to return"),
+    ),
+  ),
+  ...v.pick(entityQueryWindowBodySchema, ["excludedKinds", "previewableForAi"])
+    .entries,
 });
 
 const config = {

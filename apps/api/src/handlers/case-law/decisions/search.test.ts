@@ -1,7 +1,6 @@
 import { panic, Result, UnhandledException } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { envBase } from "@/api/env-base";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
@@ -9,6 +8,7 @@ import {
   searchCorpusIndexDecisions,
   searchDecisionsHandler,
 } from "@/api/handlers/case-law/decisions/search";
+import { HttpStatusResponse } from "@/api/http/status";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { bodyPreviewJoin } from "@/api/lib/case-law/search-sql";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
@@ -57,8 +57,8 @@ describe("PostgreSQL metadata filter admission", () => {
       caseLawDb: unreadableDb,
       observer: "unobserved",
     });
-    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (!(result instanceof ElysiaCustomStatusResponse)) {
+    expect(result).toBeInstanceOf(HttpStatusResponse);
+    if (!(result instanceof HttpStatusResponse)) {
       panic("Expected metadata-filter rejection");
     }
     expect(result.code).toBe(400);
@@ -118,8 +118,8 @@ test("the corpus handler rejects a cursor after a query variant changes", async 
         readServingTarget: async () => Result.ok(target),
       },
     });
-    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (!(result instanceof ElysiaCustomStatusResponse)) {
+    expect(result).toBeInstanceOf(HttpStatusResponse);
+    if (!(result instanceof HttpStatusResponse)) {
       panic("Expected cross-variant cursor rejection");
     }
     expect(result.code).toBe(400);
@@ -261,8 +261,8 @@ test.each(SERVING_TARGET_REFUSALS)(
     });
 
     expect(requested).toEqual([]);
-    expect(outcome).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (!(outcome instanceof ElysiaCustomStatusResponse)) {
+    expect(outcome).toBeInstanceOf(HttpStatusResponse);
+    if (!(outcome instanceof HttpStatusResponse)) {
       return;
     }
     // The returned envelope is the body the route error mapping renders for

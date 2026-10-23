@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
@@ -14,8 +15,8 @@ import {
   projectAuditReadChanges,
 } from "@/api/lib/audit-log-details";
 import {
-  tPaginationCursor,
-  tSafeId,
+  paginationCursorSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -27,14 +28,21 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({
-  listId: tSafeId("legalList"),
-  itemEntityId: tSafeId("entity"),
+  listId: resourceIdSchema("legalList"),
+  itemEntityId: resourceIdSchema("entity"),
 });
-const querySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.legalListActivityPageSizeMax }),
+const querySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.legalListActivityPageSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 const config = {
   contract: "patch",

@@ -8,8 +8,9 @@
  *
  * The brand lives in this package, so it threads end to end:
  * the same `CentsAmount` flows from a Drizzle column declared with
- * `.$type<CentsAmount>()`, across the API boundary (Eden infers the
- * brand from the handler's return type), into browser previews and back.
+ * `.$type<CentsAmount>()`, across the API boundary (the API route types
+ * carry the brand from the handler's return type), into browser previews
+ * and back.
  * A plain `number` is not assignable to `CentsAmount`; mint one with
  * `cents()` after validating minor-unit input, or `unsafeCents()` at a
  * documented boundary.
@@ -159,7 +160,7 @@ type IsSingletonCurrency<C extends string> = string extends C
  * Both operands are further constrained by `IsSingletonCurrency` to reject
  * any non-singleton currency type: the WIDE `CurrencyCents<string>`, and
  * also a finite union such as `CurrencyCents<"USD" | "EUR">` (e.g. from a
- * validator's `t.UnionEnum`). A currency read back from a DB row or
+ * validator's `v.picklist`). A currency read back from a DB row or
  * narrowed only to a finite set of allowed codes types as `string` or a
  * union, not a single literal, so without this, `addCents(currencyCents(a,
  * x), currencyCents(b, y))` would still typecheck even when `a`/`b` are

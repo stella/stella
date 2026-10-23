@@ -33,11 +33,17 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
 import {
   readServiceOAuthClient,
   resolveServiceOAuthToken,
 } from "./service-client";
+
+const routeServer = serveRoutesForTest(meRoute);
+afterAll(async () => {
+  await routeServer.stop();
+});
 
 beforeAll(initAgentAuthTestDb);
 afterAll(releaseAgentAuthTestDb);
@@ -391,7 +397,7 @@ describe("confidential service OAuth lifecycle", () => {
     const token = v.parse(tokenSchema, await (await issue(client)).json());
     const payload = decodeJwt(token.access_token);
     expect(Result.isError(extractMcpSession(payload))).toBe(true);
-    const response = await meRoute.handle(
+    const response = await routeServer.fetch(
       new Request("http://localhost/me/oauth-connections", {
         headers: { authorization: `Bearer ${token.access_token}` },
       }),

@@ -1,13 +1,15 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -20,13 +22,17 @@ const entityCreatedAtCursor = createTimestampIdCursorCodec({
   brandId: brandPersistedEntityId,
 });
 
-const readEntitySummariesQuerySchema = t.Object({
-  cursor: t.Optional(tPaginationCursor()),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.entitiesWindowSizeMax,
-    }),
+const readEntitySummariesQuerySchema = v.object({
+  cursor: v.optional(paginationCursorSchema()),
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.entitiesWindowSizeMax),
+      ),
+    ),
   ),
 });
 

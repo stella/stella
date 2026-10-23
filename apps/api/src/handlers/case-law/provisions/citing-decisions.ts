@@ -1,12 +1,12 @@
 import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { numberFromString } from "@stll/api-contract/http-input";
 import {
   PROVISION_CITING_DECISION_SORTS,
   PROVISION_CITING_FILTER_LIMITS,
@@ -19,6 +19,7 @@ import {
   caseLawSources,
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -28,7 +29,10 @@ import type { CourtRegistry } from "@/api/lib/case-law/court-presentation";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import { provisionAnchorSubtreeSql } from "@/api/lib/case-law/provision-anchor-lineage";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
@@ -59,48 +63,56 @@ import {
  * at another producer's formatting. Both are indexed keys on the citation
  * table, so either answers from the same access path.
  */
-export const listCitingDecisionsQuerySchema = t.Object({
+export const listCitingDecisionsQuerySchema = v.object({
   jurisdiction: tPublicLawCountry,
-  work: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
-  eli: t.Optional(t.String({ minLength: 1, maxLength: 512 })),
-  anchor: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
-  limit: t.Optional(
-    tPaginationLimit(
-      Math.max(
-        LIMITS.caseLawSearchPageSizeMax,
-        PROVISION_CITING_SNAPSHOT_LIMIT,
-      ),
-    ),
-  ),
-  cursor: t.Optional(tPaginationCursor()),
-  // A spread of mapped literals widens the union's static type to `never`;
-  // the derived enum keeps the contract's sorts and stays undefined when absent.
-  sort: t.Optional(
-    t.Enum(
-      Object.fromEntries(
-        [...PROVISION_CITING_DECISION_SORTS, "authority" as const].map(
-          (sort) => [sort, sort] as const,
+  work: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+  eli: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
+  anchor: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+  limit: v.optional(
+    numberFromString(
+      paginationLimitSchema(
+        Math.max(
+          LIMITS.caseLawSearchPageSizeMax,
+          PROVISION_CITING_SNAPSHOT_LIMIT,
         ),
       ),
     ),
   ),
-  court: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: PROVISION_CITING_FILTER_LIMITS.courtChars,
-    }),
+  cursor: v.optional(
+    v.pipe(
+      paginationCursorSchema(),
+      v.check(
+        (cursor) => decodeCitingDecisionsCursor(cursor) !== null,
+        "Invalid cursor",
+      ),
+    ),
   ),
-  year: t.Optional(
-    t.Integer({
-      minimum: PROVISION_CITING_FILTER_LIMITS.yearMin,
-      maximum: PROVISION_CITING_FILTER_LIMITS.yearMax,
-    }),
+  sort: v.optional(
+    v.picklist([...PROVISION_CITING_DECISION_SORTS, "authority"]),
   ),
-  /** Require a readable excerpt rather than relationship metadata alone. */
-  excerpt: t.Optional(t.Literal("required")),
+  court: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(PROVISION_CITING_FILTER_LIMITS.courtChars),
+    ),
+  ),
+  year: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(PROVISION_CITING_FILTER_LIMITS.yearMin),
+        v.maxValue(PROVISION_CITING_FILTER_LIMITS.yearMax),
+      ),
+    ),
+  ),
+  excerpt: v.optional(v.literal("required")),
 });
 
-type ListCitingDecisionsQuery = Static<typeof listCitingDecisionsQuerySchema>;
+type ListCitingDecisionsQuery = v.InferOutput<
+  typeof listCitingDecisionsQuerySchema
+>;
 
 /**
  * Which column the work filter reads, refused when the request names neither

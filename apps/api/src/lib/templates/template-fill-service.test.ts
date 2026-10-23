@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
 import fc from "fast-check";
 import JSZip from "jszip";
 
@@ -13,6 +12,9 @@ import { filtersFromFieldConfig } from "@stll/template-conditions";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { discoverHandler } from "@/api/handlers/templates/discover";
 import discoverEndpoint from "@/api/handlers/templates/discover";
+import { createHttpApp } from "@/api/http/app";
+import { decodeRequestInput } from "@/api/http/input";
+import { routes } from "@/api/http/route";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
@@ -26,6 +28,7 @@ import type { FieldMeta, TemplateData } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
@@ -35,6 +38,7 @@ import {
 } from "@/api/tests/helpers/handler-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -2023,23 +2027,35 @@ test("stored web discovery, description and effective fill declarations agree fo
   try {
     fakeS3.put("stella", s3Key, new Uint8Array(file.bytes));
     const scopedDb = stubScopedDb(clauseBody, s3Key);
-    const app = new Elysia().post(
-      "/templates/discover",
-      async ({ body, request }) =>
-        await discoverEndpoint.handler(
-          createTestHandlerContext<
-            Parameters<typeof discoverEndpoint.handler>[0]
-          >({
-            audit: NO_AUDIT,
-            safeDb: NO_DB,
-            scopedDb,
-            session: { activeOrganizationId: organizationId },
-            body,
-            request,
-            route: "/templates/discover",
-          }),
-        ),
-      { body: discoverEndpoint.config.body },
+    await using server = serveForTest(
+      createHttpApp({
+        middleware: [errorBoundary],
+        routes: routes({
+          "/templates/discover": {
+            POST: {
+              access: "public",
+              config: { body: discoverEndpoint.config.body },
+              run: async ({ ctx, readBody }) =>
+                await discoverEndpoint.handler(
+                  createTestHandlerContext<
+                    Parameters<typeof discoverEndpoint.handler>[0]
+                  >({
+                    audit: NO_AUDIT,
+                    safeDb: NO_DB,
+                    scopedDb,
+                    session: { activeOrganizationId: organizationId },
+                    body: await decodeRequestInput(
+                      discoverEndpoint.config.body,
+                      await readBody(),
+                    ),
+                    request: ctx.request,
+                    route: "/templates/discover",
+                  }),
+                ),
+            },
+          },
+        }),
+      }),
     );
     const form = new FormData();
     form.set(
@@ -2049,12 +2065,10 @@ test("stored web discovery, description and effective fill declarations agree fo
       }),
     );
     form.set("templateId", templateId);
-    const response = await app.handle(
-      new Request("http://localhost/templates/discover", {
-        method: "POST",
-        body: form,
-      }),
-    );
+    const response = await server.fetch("http://localhost/templates/discover", {
+      method: "POST",
+      body: form,
+    });
     expect(response.status).toBe(200);
     const web =
       await readTestJson<

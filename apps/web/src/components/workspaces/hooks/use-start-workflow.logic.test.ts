@@ -241,7 +241,7 @@ describe("performing a workflow start", () => {
 
     const result = await performWorkflowStart({
       ...ports,
-      // What `unwrapEden` throws for the endpoint's failed-enqueue answer.
+      // What `unwrapApiResponse` throws for the endpoint's failed-enqueue answer.
       request: async () => {
         throw toAPIError({
           status: 500,

@@ -24,7 +24,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -195,7 +195,7 @@ export const useInspectorGroupTransfer = (
             deleteSource: false,
             sourceFieldId: toSafeId<"field">(source.id),
           });
-        return unwrapEden(response);
+        return unwrapApiResponse(response);
       });
 
       if (Result.isError(result)) {
@@ -270,7 +270,7 @@ export const useInspectorGroupTransfer = (
         .entities({ workspaceId: toSafeId<"workspace">(pending.workspaceId) })
         .entity({ entityId: toSafeId<"entity">(copiedEntityId) })
         .get();
-      const copiedEntity = unwrapEden(response);
+      const copiedEntity = unwrapApiResponse(response);
       if (!isCurrentScope(requestScope)) {
         return false;
       }

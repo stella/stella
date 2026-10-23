@@ -12,7 +12,7 @@ import { api } from "@/lib/api";
 import { roleOptions } from "@/lib/auth-queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { optionalOrganizationSettingsOptions } from "@/queries/organization-settings";
@@ -32,7 +32,7 @@ const documentOcrAvailabilityOptions = (organizationId: string) =>
   queryOptions({
     queryKey: ["document-ocr-availability", organizationId],
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["document-ocr-availability"].get({
           fetch: { signal },
         }),

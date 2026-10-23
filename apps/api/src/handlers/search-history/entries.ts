@@ -1,8 +1,5 @@
-import type { Static } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
@@ -37,102 +34,95 @@ import type {
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 
-const documentIdSchema = t.String({
-  minLength: 1,
-  maxLength: LIMITS.searchHistoryTitleMaxLength,
-  description:
+const documentIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(LIMITS.searchHistoryTitleMaxLength),
+  v.description(
     "The opened document's public identifier: a decision id or a statute ELI.",
-});
-const titleSchema = t.String({
-  minLength: 1,
-  maxLength: LIMITS.searchHistoryTitleMaxLength,
-});
-const pathSchema = t.String({
-  minLength: 1,
-  maxLength: LIMITS.searchHistoryPathMaxLength,
-  pattern: "^/law/[A-Za-z0-9_/-]+$",
-  description: "The public law page the entry reopens.",
-});
-
-const unknownDocumentIdentitySchema = t.Object(
-  { kind: t.Literal("unknown") },
-  { additionalProperties: false },
+  ),
 );
-const decisionDocumentIdentitySchema = t.Object(
-  {
-    kind: t.Literal("decision"),
-    courtAbbreviation: t.Nullable(t.String({ minLength: 1, maxLength: 128 })),
-    courtTier: t.Optional(
-      t.Enum(
-        Object.fromEntries(
-          COURT_TIER_LABELS.map((tier) => [tier, tier] as const),
-        ),
+const titleSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(LIMITS.searchHistoryTitleMaxLength),
+);
+const pathSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(LIMITS.searchHistoryPathMaxLength),
+  v.regex(/^\/law\/[A-Za-z0-9_/-]+$/u),
+  v.description("The public law page the entry reopens."),
+);
+
+const unknownDocumentIdentitySchema = v.strictObject({
+  kind: v.literal("unknown"),
+});
+const decisionDocumentIdentitySchema = v.strictObject({
+  kind: v.literal("decision"),
+  courtAbbreviation: v.nullable(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  ),
+  courtTier: v.optional(
+    v.enum(
+      Object.fromEntries(
+        COURT_TIER_LABELS.map((tier) => [tier, tier] as const),
       ),
     ),
-  },
-  { additionalProperties: false },
-);
-const statuteDocumentIdentitySchema = t.Object(
-  {
-    kind: t.Literal("statute"),
-    number: t.Nullable(t.String({ minLength: 1, maxLength: 32 })),
-    year: t.Nullable(
-      t.String({ minLength: 1, maxLength: 4, pattern: "^[0-9]{1,4}$" }),
+  ),
+});
+const statuteDocumentIdentitySchema = v.strictObject({
+  kind: v.literal("statute"),
+  number: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+  year: v.nullable(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(4),
+      v.regex(/^[0-9]{1,4}$/u),
     ),
-  },
-  { additionalProperties: false },
-);
+  ),
+});
 
 /** One use to record: a typed query, or a decision or statute opened. */
-export const searchHistoryEntryInputSchema = t.Union([
-  t.Object(
-    {
-      kind: t.Literal("search"),
-      query: t.String({
-        minLength: 1,
-        maxLength: LIMITS.searchQueryMaxLength,
-      }),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      kind: t.Literal("decision"),
-      courtId: t.Optional(
-        t.Nullable(t.String({ minLength: 1, maxLength: 128 })),
-      ),
-      documentIdentity: t.Optional(
-        t.Union([
-          decisionDocumentIdentitySchema,
-          unknownDocumentIdentitySchema,
-        ]),
-      ),
-      documentId: documentIdSchema,
-      title: titleSchema,
-      path: pathSchema,
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      kind: t.Literal("statute"),
-      documentIdentity: t.Optional(
-        t.Union([statuteDocumentIdentitySchema, unknownDocumentIdentitySchema]),
-      ),
-      documentId: documentIdSchema,
-      title: titleSchema,
-      path: pathSchema,
-    },
-    { additionalProperties: false },
-  ),
+export const searchHistoryEntryInputSchema = v.union([
+  v.strictObject({
+    kind: v.literal("search"),
+    query: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+    ),
+  }),
+  v.strictObject({
+    kind: v.literal("decision"),
+    courtId: v.optional(
+      v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+    ),
+    documentIdentity: v.optional(
+      v.union([decisionDocumentIdentitySchema, unknownDocumentIdentitySchema]),
+    ),
+    documentId: documentIdSchema,
+    title: titleSchema,
+    path: pathSchema,
+  }),
+  v.strictObject({
+    kind: v.literal("statute"),
+    documentIdentity: v.optional(
+      v.union([statuteDocumentIdentitySchema, unknownDocumentIdentitySchema]),
+    ),
+    documentId: documentIdSchema,
+    title: titleSchema,
+    path: pathSchema,
+  }),
 ]);
 
-export type SearchHistoryEntryInput = Static<
+export type SearchHistoryEntryInput = v.InferOutput<
   typeof searchHistoryEntryInputSchema
 >;
 
 // Enum derives its choices without assigning a default to an omitted filter.
-export const searchHistoryKindSchema = t.Enum(
+export const searchHistoryKindSchema = v.enum(
   Object.fromEntries(SEARCH_HISTORY_KINDS.map((kind) => [kind, kind] as const)),
 );
 
@@ -219,7 +209,7 @@ export const canonicalSearchHistoryEntry = (
 export const readSearchHistoryEntryInput = (
   value: unknown,
 ): SearchHistoryEntryInput | null =>
-  Value.Check(searchHistoryEntryInputSchema, value) ? value : null;
+  v.is(searchHistoryEntryInputSchema, value) ? value : null;
 
 const payloadOf = (entry: SearchHistoryEntryInput) => {
   switch (entry.kind) {

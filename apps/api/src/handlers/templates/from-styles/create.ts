@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -9,11 +9,11 @@ import type {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { defaultVarcharSchema, fileSchema } from "@/api/lib/custom-schema";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import {
   type CreatedTemplate,
@@ -21,9 +21,9 @@ import {
 } from "@/api/lib/templates/create-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const createTemplateFromStylesBodySchema = t.Object({
-  name: tDefaultVarchar,
-  styleSource: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
+const createTemplateFromStylesBodySchema = v.object({
+  name: defaultVarcharSchema,
+  styleSource: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
 });
 
 const DOCX_EXTENSION = ".docx";

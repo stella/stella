@@ -5,12 +5,12 @@ import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
 import { OAUTH_TOKEN_OBSERVATION } from "@/api/lib/auth/oauth-token-refusal";
 import { logger } from "@/api/lib/observability/logger";
 import {
-  getCurrentRequestId,
+  getRequestId,
   markMountedRequestRoute,
 } from "@/api/lib/observability/request-context";
 
-/** Elysia clones the mounted Request. Mark the registered template before
- * any auth hook can refuse the request, using the enclosing scope. */
+/** Mark the Better Auth endpoint's registered template on the enclosing
+ * request scope before any auth hook can refuse the request. */
 export const markAuthRequestRoute = ({
   context,
   path,
@@ -34,7 +34,7 @@ export const createAuthRefusalLogPlugin = (
         {
           matcher: () => true,
           handler: middleware(async (ctx) => {
-            const requestId = getCurrentRequestId();
+            const requestId = getRequestId();
             const refusal = describeAuthRefusal({
               path: ctx.path,
               returned: ctx.context.returned,

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { asc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   CONTACT_IMPORT_FIELDS,
@@ -22,8 +22,8 @@ import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 
-const exportQuerySchema = t.Object({
-  format: t.Optional(t.Union([t.Literal("csv"), t.Literal("json")])),
+const exportQuerySchema = v.object({
+  format: v.optional(v.picklist(["csv", "json"])),
 });
 
 const CONTACT_EXPORT_BYTE_LIMIT = 25 * 1024 * 1024;

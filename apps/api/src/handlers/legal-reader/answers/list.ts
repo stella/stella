@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
 import type { ReaderAnswer } from "@stll/api-contract/reader-answers";
@@ -108,7 +108,7 @@ true satisfies UnexpectedMessageColumn extends never ? true : never;
 type ListReaderAnswersOptions = Omit<
   AnnotationAuthorScope,
   "recordAuditEvent"
-> & { query: Static<typeof listAnswersQuerySchema> };
+> & { query: v.InferOutput<typeof listAnswersQuerySchema> };
 export const listReaderAnswersHandler = async function* ({
   query,
   organizationId,

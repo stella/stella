@@ -43,7 +43,7 @@ const requestPersonalDataExport = createSafeSessionHandler(
   },
 );
 
-declareAggregateMutation(requestPersonalDataExport.handler, {
+declareAggregateMutation(requestPersonalDataExport, {
   type: "independent",
   reason:
     "The export store serializes the request under the account and export aggregate locks in one audited transaction.",

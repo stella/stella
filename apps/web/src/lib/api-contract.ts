@@ -27,12 +27,12 @@ import type {
   ViewLayout,
   ViewTemplateProperty,
   WebApiRoutes,
-} from "@/lib/eden-client";
+} from "@/lib/api";
 
 type PropertiesResponse =
   WebApiRoutes["properties"][":workspaceId"]["get"]["response"][200];
 
-// The wire shape of one property list item, straight off the Eden response.
+// The wire shape of one property list item, straight off the API response.
 // `WorkspaceProperty` in `@/lib/types` derives from this so a column the API
 // starts or stops projecting shows up there as a type error instead of
 // silently drifting.

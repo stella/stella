@@ -2,7 +2,7 @@ import { hashKey } from "@tanstack/react-query";
 
 import type { EntityFind } from "@stll/api-contract";
 
-import type { ViewSort } from "@/lib/eden-client";
+import type { ViewSort } from "@/lib/api";
 import type { ConditionNode, EntityKind, WorkspaceProperty } from "@/lib/types";
 
 /**

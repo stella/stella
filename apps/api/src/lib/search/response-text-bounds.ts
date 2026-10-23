@@ -1,25 +1,20 @@
-import { FormatRegistry } from "@sinclair/typebox";
-import { t } from "elysia";
+import * as v from "valibot";
 
-export const boundedString = (maxBytes: number) => {
-  const format = `legislation-search-utf8-${maxBytes}`;
-  if (!FormatRegistry.Has(format)) {
-    FormatRegistry.Set(
-      format,
+export const boundedString = (maxBytes: number) =>
+  v.pipe(
+    v.string(),
+    v.maxLength(maxBytes),
+    v.check(
       (value) =>
         value.isWellFormed() && Buffer.byteLength(value, "utf-8") <= maxBytes,
-    );
-  }
-  return t.String({
-    maxLength: maxBytes,
-    format,
-    "x-maxUtf8Bytes": maxBytes,
-    description: `At most ${maxBytes} UTF-8 bytes.`,
-  });
-};
+      `Expected well-formed text of at most ${maxBytes} UTF-8 bytes`,
+    ),
+    v.metadata({ "x-maxUtf8Bytes": maxBytes }),
+    v.description(`At most ${maxBytes} UTF-8 bytes.`),
+  );
 
 export const nullableBoundedString = (maxBytes: number) =>
-  t.Union([boundedString(maxBytes), t.Null()]);
+  v.union([boundedString(maxBytes), v.null()]);
 
 export const truncateTextBytes = (text: string, maxBytes: number): string => {
   let result = "";

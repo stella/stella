@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { contacts, workspaces, workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -10,7 +12,7 @@ import {
   avtLayoutVisibilityCondition,
   avtViewAccessStatus,
 } from "@/api/lib/auth/feature-access/view-eligibility";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
@@ -40,18 +42,22 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
-  query: t.Object({
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(
-      t.Integer({
-        minimum: 1,
-        maximum: LIMITS.workspaceNavigationPageSizeMax,
-      }),
+  query: v.object({
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.workspaceNavigationPageSizeMax),
+        ),
+      ),
     ),
-    statusScope: t.Optional(
-      t.Union([
-        t.Literal(WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE),
-        t.Literal(WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE_AND_ARCHIVED),
+    statusScope: v.optional(
+      v.union([
+        v.literal(WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE),
+        v.literal(WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE_AND_ARCHIVED),
       ]),
     ),
   }),

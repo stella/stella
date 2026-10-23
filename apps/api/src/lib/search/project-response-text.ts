@@ -1,5 +1,7 @@
-import { ElysiaCustomStatusResponse } from "elysia";
+import type { GenericSchema } from "valibot";
 
+import { HttpStatusResponse } from "@/api/http/status";
+import { toRouteJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { truncateTextBytes } from "@/api/lib/search/response-text-bounds";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -72,7 +74,7 @@ const project = (value: unknown, schema: unknown): unknown => {
  * and so do primitives, including branded ones such as `SafeId`.
  */
 type DeepMutable<T> =
-  T extends ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status>
+  T extends HttpStatusResponse<infer _Code, infer _Body>
     ? T
     : T extends Response | string | number | boolean | bigint | null | undefined
       ? T
@@ -82,16 +84,27 @@ type DeepMutable<T> =
           ? { -readonly [Key in keyof T]: DeepMutable<T[Key]> }
           : T;
 
+/** Response schemas are module-level values; each renders once. */
+const renderedSchemas = new WeakMap<GenericSchema, unknown>();
+
+const renderedSchema = (schema: GenericSchema): unknown => {
+  let rendered = renderedSchemas.get(schema);
+  if (rendered === undefined) {
+    rendered = toRouteJsonSchema(schema);
+    renderedSchemas.set(schema, rendered);
+  }
+  return rendered;
+};
+
 /** Bound display text from the declared response contract, preserving stored data and cursors. */
 export const projectResponseText = <T>(
   response: T,
-  schema: unknown,
+  schema: GenericSchema,
 ): DeepMutable<T> => {
   const projected =
-    response instanceof ElysiaCustomStatusResponse ||
-    response instanceof Response
+    response instanceof HttpStatusResponse || response instanceof Response
       ? response
-      : project(structuredClone(response), schema);
+      : project(structuredClone(response), renderedSchema(schema));
   // SAFETY: a status response or Response passes through and DeepMutable maps
   // its type to itself; every other value is a fresh structuredClone deep copy
   // owned by this call, so dropping readonly cannot alias the caller's data.

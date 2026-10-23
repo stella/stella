@@ -1,4 +1,4 @@
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import {
   type DecisionQueryIntent,
@@ -34,7 +34,7 @@ import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-wor
  * or the same query means two things depending on a deployment flag.
  */
 
-type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
+type SearchDecisionsBody = v.InferOutput<typeof searchDecisionsBodySchema>;
 
 /** Every request key that is not the query itself or the index it selects. */
 type SearchOptionKey = Exclude<keyof SearchDecisionsBody, "country" | "query">;

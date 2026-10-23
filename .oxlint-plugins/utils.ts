@@ -115,7 +115,7 @@ export const isCallTo = (node: unknown, name: string): boolean =>
   isIdentifier(node.callee, name);
 
 // Resolve the dot-notation name of a callee: an Identifier, or a
-// non-computed MemberExpression chain (e.g. `t.String`, `Schema.is`,
+// non-computed MemberExpression chain (e.g. `v.string`, `Schema.is`,
 // `process.stderr.write`). Returns null when the chain is computed
 // or the property name itself can't be resolved.
 //

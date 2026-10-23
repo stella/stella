@@ -6,10 +6,7 @@ import * as v from "valibot";
 
 import type { VerifiedOAuthClientBrand } from "@stll/api-contract";
 
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
+import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 
 type HttpsUrl = `https://${string}`;
 
@@ -20,7 +17,8 @@ type HttpsUrl = `https://${string}`;
  * where the vendor documents that form.
  */
 type VerifiedClientLocation =
-  { readonly exact: HttpsUrl } | { readonly oneSegmentUnder: `${HttpsUrl}/` };
+  | { readonly exact: HttpsUrl }
+  | { readonly oneSegmentUnder: `${HttpsUrl}/` };
 
 type VerifiedClientUrl = VerifiedClientLocation & {
   readonly source: HttpsUrl;

@@ -2,7 +2,7 @@ import { infiniteQueryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
 type NotificationsKey = {
@@ -32,7 +32,7 @@ export const notificationsOptions = ({
     queryKey: notificationKeys.list({ organizationId, userId }),
     initialPageParam: stringCursorSeed(),
     queryFn: async ({ pageParam, signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.notifications.get({
           query: { ...(pageParam ? { cursor: pageParam } : {}) },
           fetch: { signal },

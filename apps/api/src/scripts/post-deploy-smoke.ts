@@ -27,7 +27,6 @@ import { TaggedError } from "better-result";
  * client, no env module) so it can run as a standalone `bun` invocation
  * from a deploy job without booting the server or opening a connection.
  */
-import type { Static } from "elysia";
 import * as v from "valibot";
 
 import { sleep } from "@stll/concurrency/sleep";
@@ -285,7 +284,7 @@ const parseSmokeSession = (value: unknown): SmokeSession => {
   });
 };
 
-type ChatSmokeBody = Static<typeof agUiSendMessageBodySchema>;
+type ChatSmokeBody = v.InferOutput<typeof agUiSendMessageBodySchema>;
 
 /**
  * Minimal valid AG-UI `POST /v1/chat/` envelope that triggers a real chat

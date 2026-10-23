@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -11,7 +10,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLES } from "@/api/lib/entity-constants";
 import type { TaskAssigneeRole } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -21,10 +20,10 @@ import {
 } from "@/api/lib/tasks/assignment-membership";
 import { includes } from "@/api/lib/type-guards";
 
-const addAssigneeBodySchema = t.Object({
-  taskId: tSafeId("entity"),
-  userId: tUserId,
-  role: t.Optional(t.String({ minLength: 1, maxLength: 16 })),
+const addAssigneeBodySchema = v.object({
+  taskId: resourceIdSchema("entity"),
+  userId: userIdSchema,
+  role: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(16))),
 });
 
 const isTaskAssigneeRole = (value: string): value is TaskAssigneeRole =>
@@ -34,7 +33,7 @@ export type AddAssigneeHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof addAssigneeBodySchema>;
+  body: v.InferOutput<typeof addAssigneeBodySchema>;
 };
 
 // Shared task-assignee add logic reused by the HTTP handler and the

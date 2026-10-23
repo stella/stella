@@ -1,5 +1,4 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { Elysia } from "elysia";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
 
@@ -7,14 +6,19 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
 import { env } from "@/api/env";
 import startFlowRunHandler from "@/api/handlers/flows/runs/start";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteDefinition } from "@/api/http/route";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import * as handlerErrorResolution from "@/api/lib/errors/handler-error-resolution";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import * as queuedActionAdmission from "@/api/lib/rate-limit/queued-action-admission";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 describe("manual flow start admission response", () => {
@@ -100,9 +104,12 @@ describe("manual flow start admission response", () => {
       env.ACTION_ADMISSION_PERIOD_MS = undefined;
       env.ACTION_ADMISSION_PERIOD_ACTIONS = undefined;
       try {
-        const app = new Elysia().post(
-          "/flow-start",
-          async ({ set, request }) =>
+        // The handler core under a member context the test builds, answered
+        // through the HTTP layer so the refusal is read off the wire.
+        const flowStart: RouteDefinition = {
+          access: "public",
+          config: {},
+          run: async ({ ctx: { set, request } }) =>
             await startFlowRunHandler.handler(
               asTestRaw({
                 set,
@@ -129,8 +136,14 @@ describe("manual flow start admission response", () => {
                 createAuditRecorder: () => recordAuditEvent,
               }),
             ),
+        };
+        await using server = serveForTest(
+          createHttpApp({
+            routes: routes({ "/flow-start": { POST: flowStart } }),
+            middleware: [errorBoundary],
+          }),
         );
-        const response = await app.handle(
+        const response = await server.fetch(
           new Request("http://localhost/flow-start", { method: "POST" }),
         );
         if (kickoff !== null) {

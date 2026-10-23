@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -12,7 +12,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 type ReadJustificationsHandlerProps = {
@@ -82,11 +82,12 @@ const config = {
     consumesServices: false,
   },
   access: "read",
-  body: t.Object({
-    entityIds: t.Array(tSafeId("entity"), {
-      minItems: 1,
-      maxItems: LIMITS.entitiesPageSizeMax,
-    }),
+  body: v.object({
+    entityIds: v.pipe(
+      v.array(resourceIdSchema("entity")),
+      v.minLength(1),
+      v.maxLength(LIMITS.entitiesPageSizeMax),
+    ),
   }),
 } satisfies WorkspaceHandlerConfig;
 

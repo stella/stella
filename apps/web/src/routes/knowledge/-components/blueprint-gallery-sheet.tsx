@@ -30,13 +30,16 @@ import {
 } from "@stll/ui/select";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 type SkillScope = "team" | "private";
 type BlueprintId =
-  "check-against-rules" | "intake-to-draft" | "answer-from-sources" | "blank";
+  | "check-against-rules"
+  | "intake-to-draft"
+  | "answer-from-sources"
+  | "blank";
 type BlueprintCardId = Exclude<BlueprintId, "blank">;
 
 export type BlueprintCreatedSkill = {
@@ -121,7 +124,7 @@ const BlueprintGallerySheetBody = ({
         scope,
         blueprintId: id,
       });
-      return { id: unwrapEden(response).id };
+      return { id: unwrapApiResponse(response).id };
     },
     onSuccess: ({ id }) => {
       onCreated({ id });

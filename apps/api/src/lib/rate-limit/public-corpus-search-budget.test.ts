@@ -1,27 +1,59 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { Elysia } from "elysia";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
+import { apiRoutes } from "@/api/api-routes";
 import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { mount, routes } from "@/api/http/route";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import {
   InMemoryRateLimitContext,
+  isRateLimitMiddleware,
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
 import type { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
-import { resolvePublicCorpusPolicy } from "@/api/public-corpus-policy";
+import {
+  PUBLIC_CORPUS_ROUTE_POLICY,
+  publicCorpusClassOf,
+} from "@/api/public-corpus-policy";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import { createPublicCorpusRateLimitComposition } from "./public-corpus-rate-limit-composition";
 import { createPublicCorpusAddressRateLimitOptions } from "./public-corpus-rate-limits";
 
 const searchPath = `${STELLA_API_VERSION_PREFIX}/law/statutes/search`;
 const searchKey = scopedGenerator("public-corpus-search");
-const isSearchRequest = (request: Request) =>
-  resolvePublicCorpusPolicy(request)?.class === "search";
+/** Whether the route mounted at `path` for `method` spends the search class. */
+const isSearchRoute = (method: string, path: string) =>
+  publicCorpusClassOf({ method, path }) === "search";
 const request = (path: string, method = "GET") =>
   new Request(`http://localhost${path}`, { method });
+/**
+ * The test client reaches the server over loopback, so every counter is keyed
+ * by that peer: `127.0.0.1`, or `::1` normalized to its /64 network (`::`).
+ */
+const LOOPBACK_RATE_LIMIT_ADDRESSES: ReadonlySet<string> = new Set([
+  "127.0.0.1",
+  "::",
+]);
+/** The peer address the first recorded `scope` key names, checked as loopback. */
+const loopbackAddressOf = (scope: string, keys: readonly string[]): string => {
+  const prefix = `${scope}:`;
+  const key = keys.at(0);
+  if (key?.startsWith(prefix) !== true) {
+    return panic(
+      `The ${scope} budget must key its counter by the peer address`,
+    );
+  }
+  const address = key.slice(prefix.length);
+  expect(LOOPBACK_RATE_LIMIT_ADDRESSES.has(address)).toBe(true);
+  return address;
+};
 
 describe("public corpus search request budget", () => {
   test("public search counter scopes belong only to the class policy helper", async () => {
@@ -43,12 +75,12 @@ describe("public corpus search request budget", () => {
   });
   test("the shared development bypass skips class and ordinary HTTP budgets", async () => {
     const previous = env.E2E_DISABLE_AUTH_RATE_LIMIT;
-    const { app, searchKeys, sharedKeys, kill } = createBudgetApp();
+    const { server, searchKeys, sharedKeys, kill } = createBudgetApp();
     env.E2E_DISABLE_AUTH_RATE_LIMIT = true;
     try {
       for (const path of [searchPath, "/v1/other"]) {
         for (let index = 0; index <= 30; index += 1) {
-          const response = await app.handle(request(path));
+          const response = await server.fetch(request(path));
           expect(response.status).toBe(200);
           expect(response.headers.get("RateLimit-Limit")).toBeNull();
         }
@@ -57,30 +89,45 @@ describe("public corpus search request budget", () => {
       expect(sharedKeys).toEqual([]);
     } finally {
       env.E2E_DISABLE_AUTH_RATE_LIMIT = previous;
-      kill();
+      await kill();
     }
   });
 
-  test("charges GET and its implicit HEAD search, including the accepted trailing slash", () => {
-    for (const path of [
-      searchPath,
-      `${searchPath}/`,
-      `${searchPath}?query=test`,
-    ]) {
-      expect(isSearchRequest(request(path))).toBe(true);
-      expect(isSearchRequest(request(path, "HEAD"))).toBe(true);
-    }
+  test("classes the mounted search route for GET and its implicit HEAD only", () => {
+    expect(isSearchRoute("GET", searchPath)).toBe(true);
+    expect(isSearchRoute("HEAD", searchPath)).toBe(true);
     for (const path of [
       "/law/statutes/search",
       "/v1/law/statutes",
-      "/v1/law/statutes/read",
+      "/v1/law/statutes/:documentId",
       "/v1/law/statutes/search/extra",
       "/v1/legislation/search",
     ]) {
-      expect(isSearchRequest(request(path))).toBe(false);
+      expect(isSearchRoute("GET", path)).toBe(false);
     }
     for (const method of ["POST", "OPTIONS", "PUT", "DELETE"]) {
-      expect(isSearchRequest(request(searchPath, method))).toBe(false);
+      expect(isSearchRoute(method, searchPath)).toBe(false);
+    }
+  });
+
+  test("charges GET and its implicit HEAD search, including the accepted trailing slash", async () => {
+    const { server, searchKeys, sharedKeys, kill } = createBudgetApp();
+    try {
+      let charged = 0;
+      for (const path of [
+        searchPath,
+        `${searchPath}/`,
+        `${searchPath}?query=test`,
+      ]) {
+        for (const method of ["GET", "HEAD"]) {
+          expect((await server.fetch(request(path, method))).status).toBe(200);
+          charged += 1;
+          expect(searchKeys).toHaveLength(charged);
+        }
+      }
+      expect(sharedKeys).toEqual([]);
+    } finally {
+      await kill();
     }
   });
 
@@ -117,31 +164,51 @@ describe("public corpus search request budget", () => {
     }
   });
 
-  test("the server installs class admission before mounting public routes", async () => {
-    const source = await Bun.file(
-      new URL("../../server.ts", import.meta.url),
-    ).text();
-    const imports = new Bun.Transpiler({ loader: "ts" }).scan(source).imports;
-    expect(imports.map(({ path }) => path)).toContain(
-      "@/api/lib/rate-limit/public-corpus-rate-limit-composition",
-    );
-    const group = source.slice(
-      source.indexOf(".group(STELLA_API_VERSION_PREFIX"),
-    );
+  test("every classified public corpus route carries the one class admission composition", () => {
+    const classified = Object.keys(PUBLIC_CORPUS_ROUTE_POLICY).map((id) => {
+      const separator = id.indexOf(" ");
+      return {
+        id,
+        method: id.slice(0, separator),
+        path: `${STELLA_API_VERSION_PREFIX}${id.slice(separator + 1)}`,
+      };
+    });
+    const mounted = classified.map(({ id, method, path }) => ({
+      id,
+      entry: apiRoutes.find(
+        (entry) => entry.method === method && entry.path === path,
+      ),
+    }));
     expect(
-      group.indexOf(".use(publicCorpusRateLimits)"),
-    ).toBeGreaterThanOrEqual(0);
-    expect(group.indexOf(".use(publicLegislationRoute)")).toBeGreaterThan(
-      group.indexOf(".use(publicCorpusRateLimits)"),
+      mounted.filter(({ entry }) => entry === undefined).map(({ id }) => id),
+    ).toEqual([]);
+    const limiters = mounted.flatMap(({ id, entry }) =>
+      entry === undefined
+        ? []
+        : [{ id, stages: entry.middleware.filter(isRateLimitMiddleware) }],
     );
-    expect(group.indexOf(".use(caseLawRoute)")).toBeGreaterThan(
-      group.indexOf(".use(publicCorpusRateLimits)"),
-    );
+    const reference = limiters.at(0);
+    if (reference === undefined) {
+      panic("No classified public corpus route is mounted");
+    }
+    // The shared budget, three class address budgets and three global ones.
+    expect(reference.stages.length).toBeGreaterThanOrEqual(7);
+    // One composition instance: every class route spends the same buckets.
+    expect(
+      limiters
+        .filter(
+          ({ stages }) =>
+            stages.length !== reference.stages.length ||
+            stages.some((stage, index) => stage !== reference.stages[index]),
+        )
+        .map(({ id }) => id),
+    ).toEqual([]);
   });
 
   for (const method of ["GET", "HEAD"]) {
     test(`production composition budgets ${method} searches without consuming the shared quota`, async () => {
-      const { app, bindings, searchKeys, sharedKeys, kill } = createBudgetApp();
+      const { server, bindings, searchKeys, sharedKeys, kill } =
+        createBudgetApp();
       try {
         expect(
           bindings
@@ -190,11 +257,11 @@ describe("public corpus search request budget", () => {
           ),
         );
         for (let index = 0; index < 30; index += 1) {
-          expect((await app.handle(request(searchPath, method))).status).toBe(
+          expect((await server.fetch(request(searchPath, method))).status).toBe(
             200,
           );
         }
-        const limited = await app.handle(request(`${searchPath}/`, method));
+        const limited = await server.fetch(request(`${searchPath}/`, method));
         expect(limited.status).toBe(429);
         if (method === "GET") {
           expect(await limited.text()).toBe("rate-limit reached");
@@ -202,30 +269,38 @@ describe("public corpus search request budget", () => {
         expect(limited.headers.get("retry-after")).toMatch(/^\d+$/u);
         expect(limited.headers.get("ratelimit-limit")).toBe("30");
         expect(searchKeys).toHaveLength(31);
-        expect(new Set(searchKeys)).toEqual(new Set(["public-corpus-search"]));
+        const address = loopbackAddressOf("public-corpus-search", searchKeys);
+        expect(new Set(searchKeys)).toEqual(
+          new Set([`public-corpus-search:${address}`]),
+        );
         expect(sharedKeys).toEqual([]);
-        expect((await app.handle(request("/v1/law/statutes"))).status).toBe(
+        expect((await server.fetch(request("/v1/law/statutes"))).status).toBe(
           200,
         );
-        expect((await app.handle(request("/v1/other"))).status).toBe(429);
-        expect(sharedKeys).toEqual(["api", "api"]);
+        expect((await server.fetch(request("/v1/other"))).status).toBe(429);
+        expect(sharedKeys).toEqual([`api:${address}`, `api:${address}`]);
         expect(searchKeys).toHaveLength(31);
       } finally {
-        kill();
+        await kill();
       }
     });
   }
 
   test("exhausting the production shared quota leaves search available", async () => {
-    const { app, searchKeys, sharedKeys, kill } = createBudgetApp();
+    const { server, searchKeys, sharedKeys, kill } = createBudgetApp();
     try {
-      expect((await app.handle(request("/v1/law/statutes"))).status).toBe(200);
-      expect((await app.handle(request("/v1/law/statutes"))).status).toBe(429);
-      expect((await app.handle(request(searchPath))).status).toBe(200);
-      expect(sharedKeys).toEqual(["api", "api"]);
-      expect(searchKeys).toEqual(["public-corpus-search"]);
+      expect((await server.fetch(request("/v1/law/statutes"))).status).toBe(
+        200,
+      );
+      expect((await server.fetch(request("/v1/law/statutes"))).status).toBe(
+        429,
+      );
+      expect((await server.fetch(request(searchPath))).status).toBe(200);
+      const address = loopbackAddressOf("api", sharedKeys);
+      expect(sharedKeys).toEqual([`api:${address}`, `api:${address}`]);
+      expect(searchKeys).toEqual([`public-corpus-search:${address}`]);
     } finally {
-      kill();
+      await kill();
     }
   });
 });
@@ -282,19 +357,30 @@ const createBudgetApp = () => {
       };
     },
   });
-  const app = new Elysia().group(STELLA_API_VERSION_PREFIX, (versioned) =>
-    versioned
-      .use(composition)
-      .get("/law/statutes/search", () => ({ items: [] }))
-      .get("/law/statutes", () => "browse")
-      .get("/other", () => "ordinary"),
+  const server = serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: mount(
+        [
+          routes({
+            "/law/statutes/search": {
+              GET: defineEndpoint.public({}, () => ({ items: [] })),
+            },
+            "/law/statutes": { GET: defineEndpoint.public({}, () => "browse") },
+            "/other": { GET: defineEndpoint.public({}, () => "ordinary") },
+          }),
+        ],
+        { prefix: STELLA_API_VERSION_PREFIX, middleware: composition },
+      ),
+    }),
   );
   return {
-    app,
+    server,
     bindings,
     searchKeys,
     sharedKeys,
-    kill: () => {
+    kill: async () => {
+      await server.stop();
       sharedContext.kill();
       searchContext.kill();
       for (const context of corpusContexts) {

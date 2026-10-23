@@ -7,7 +7,7 @@ import {
   readAuthorizedMemberRole,
   roleForDisplay,
 } from "@/api/lib/permission-authorization";
-import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
+import { capabilityHandlerContext } from "@/api/mcp/capability-context";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   hasEffectiveAuthority,
@@ -87,10 +87,10 @@ describe("the context a capability handler receives", () => {
       recordAuditEvent: async () => undefined,
     });
 
-  const synthesize = async (
+  const handlerContext = async (
     credentialPermissions: McpRequestContext["credentialPermissions"],
   ) =>
-    await synthesizeCapabilityContext({
+    await capabilityHandlerContext({
       capabilityId: "views.create",
       context: contextWith(credentialPermissions),
       input: { body: {}, params: {}, query: {} },
@@ -101,18 +101,18 @@ describe("the context a capability handler receives", () => {
   // Every handler-level decision reads this field, so carrying the credential
   // here is what keeps a narrowed key narrow inside compound handlers.
   test("carries a narrowed credential's own set", async () => {
-    const synthesized = await synthesize({ view: ["create"] });
+    const handlerCtx = await handlerContext({ view: ["create"] });
 
-    expect(shape(readAuthorizedMemberRole(synthesized))).toEqual({
+    expect(shape(readAuthorizedMemberRole(handlerCtx))).toEqual({
       role: "owner",
       credentialPermissions: { view: ["create"] },
     });
   });
 
   test("carries a session credential when the credential has no set", async () => {
-    const synthesized = await synthesize(undefined);
+    const handlerCtx = await handlerContext(undefined);
 
-    expect(shape(readAuthorizedMemberRole(synthesized))).toEqual({
+    expect(shape(readAuthorizedMemberRole(handlerCtx))).toEqual({
       role: "owner",
       credentialPermissions: undefined,
     });

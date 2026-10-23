@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, desc, eq, isNotNull, lt, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import {
   LOOKUP_FORMAT_PREFERENCE,
@@ -13,7 +15,7 @@ import {
 } from "@/api/handlers/templates/lookup-formats/projection";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -38,12 +40,19 @@ const config = {
     reason: "template_authoring_ui",
     consumesServices: false,
   },
-  query: t.Object({
-    registry: t.UnionEnum(LOOKUP_REGISTRIES),
-    limit: t.Optional(
-      t.Integer({ minimum: 1, maximum: FORMAT_LIMITS.pageMax }),
+  query: v.object({
+    registry: v.picklist(LOOKUP_REGISTRIES),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(FORMAT_LIMITS.pageMax),
+        ),
+      ),
     ),
-    cursor: t.Optional(tPaginationCursor()),
+    cursor: v.optional(paginationCursorSchema()),
   }),
 } satisfies HandlerConfig;
 

@@ -1,6 +1,5 @@
 import { panic } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   READER_ANNOTATION_BODY_MAX_LENGTH,
@@ -18,7 +17,7 @@ import type {
   ReaderAnnotationVisibility,
 } from "@stll/api-contract/legal-reader-annotations";
 
-import { tSafeId, tUuid } from "@/api/lib/custom-schema";
+import { resourceIdSchema, uuidSchema } from "@/api/lib/custom-schema";
 
 const ANNOTATION_TARGET_TYPE_SCHEMA_VALUES = [
   READER_ANNOTATION_TARGET_TYPES[0],
@@ -64,26 +63,26 @@ true satisfies MissingAnnotationColor extends never ? true : never;
 true satisfies MissingAnnotationStyle extends never ? true : never;
 true satisfies MissingAnnotationVisibility extends never ? true : never;
 
-export const annotationTargetTypeSchema = t.Union([
-  t.Literal(ANNOTATION_TARGET_TYPE_SCHEMA_VALUES[0]),
-  t.Literal(ANNOTATION_TARGET_TYPE_SCHEMA_VALUES[1]),
+export const annotationTargetTypeSchema = v.union([
+  v.literal(ANNOTATION_TARGET_TYPE_SCHEMA_VALUES[0]),
+  v.literal(ANNOTATION_TARGET_TYPE_SCHEMA_VALUES[1]),
 ]);
-const annotationColorSchema = t.Union([
-  t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[0]),
-  t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[1]),
-  t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[2]),
-  t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[3]),
-  t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[4]),
+const annotationColorSchema = v.union([
+  v.literal(ANNOTATION_COLOR_SCHEMA_VALUES[0]),
+  v.literal(ANNOTATION_COLOR_SCHEMA_VALUES[1]),
+  v.literal(ANNOTATION_COLOR_SCHEMA_VALUES[2]),
+  v.literal(ANNOTATION_COLOR_SCHEMA_VALUES[3]),
+  v.literal(ANNOTATION_COLOR_SCHEMA_VALUES[4]),
 ]);
-const annotationStyleSchema = t.Union([
-  t.Literal(ANNOTATION_STYLE_SCHEMA_VALUES[0]),
-  t.Literal(ANNOTATION_STYLE_SCHEMA_VALUES[1]),
-  t.Literal(ANNOTATION_STYLE_SCHEMA_VALUES[2]),
-  t.Literal(ANNOTATION_STYLE_SCHEMA_VALUES[3]),
+const annotationStyleSchema = v.union([
+  v.literal(ANNOTATION_STYLE_SCHEMA_VALUES[0]),
+  v.literal(ANNOTATION_STYLE_SCHEMA_VALUES[1]),
+  v.literal(ANNOTATION_STYLE_SCHEMA_VALUES[2]),
+  v.literal(ANNOTATION_STYLE_SCHEMA_VALUES[3]),
 ]);
-const annotationVisibilitySchema = t.Union([
-  t.Literal(ANNOTATION_VISIBILITY_SCHEMA_VALUES[0]),
-  t.Literal(ANNOTATION_VISIBILITY_SCHEMA_VALUES[1]),
+const annotationVisibilitySchema = v.union([
+  v.literal(ANNOTATION_VISIBILITY_SCHEMA_VALUES[0]),
+  v.literal(ANNOTATION_VISIBILITY_SCHEMA_VALUES[1]),
 ]);
 
 /** The route schema has validated these values; preserve its closed domain. */
@@ -147,73 +146,81 @@ export const requireAnnotationVisibility = (
  */
 const targetSchemaFields = {
   targetType: annotationTargetTypeSchema,
-  targetId: tUuid,
+  targetId: uuidSchema,
 } as const;
 
 /** Where on the document one paragraph's share of the annotation sits. */
-const spanSchema = t.Object({
-  blockAnchorId: t.String({ minLength: 1, maxLength: 64 }),
-  startOffset: t.Integer({ minimum: 0 }),
-  endOffset: t.Integer({ minimum: 1 }),
-  quote: t.String({
-    minLength: 1,
-    maxLength: READER_ANNOTATION_QUOTE_MAX_LENGTH,
-  }),
+const spanSchema = v.object({
+  blockAnchorId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  startOffset: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  endOffset: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  quote: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(READER_ANNOTATION_QUOTE_MAX_LENGTH),
+  ),
 });
 
-const spansSchema = t.Array(spanSchema, {
-  minItems: 1,
-  maxItems: READER_ANNOTATION_MAX_SPANS,
-});
+const spansSchema = v.pipe(
+  v.array(spanSchema),
+  v.minLength(1),
+  v.maxLength(READER_ANNOTATION_MAX_SPANS),
+);
 
 /**
  * One body per kind, so a highlight cannot carry words and a comment cannot
  * arrive without them; the database CHECK says the same.
  */
-export const createAnnotationBodySchema = t.Union([
-  t.Object({
+export const createAnnotationBodySchema = v.union([
+  v.object({
     ...targetSchemaFields,
-    kind: t.Literal("highlight"),
+    kind: v.literal("highlight"),
     color: annotationColorSchema,
     style: annotationStyleSchema,
-    requestId: t.Optional(tSafeId("legalReaderAnnotation")),
-    visibility: t.Optional(annotationVisibilitySchema),
+    requestId: v.optional(resourceIdSchema("legalReaderAnnotation")),
+    visibility: v.optional(annotationVisibilitySchema),
     spans: spansSchema,
   }),
-  t.Object({
+  v.object({
     ...targetSchemaFields,
-    kind: t.Literal("comment"),
-    body: t.String({
-      minLength: 1,
-      maxLength: READER_ANNOTATION_BODY_MAX_LENGTH,
-    }),
-    requestId: t.Optional(tSafeId("legalReaderAnnotation")),
-    visibility: t.Optional(annotationVisibilitySchema),
+    kind: v.literal("comment"),
+    body: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(READER_ANNOTATION_BODY_MAX_LENGTH),
+    ),
+    requestId: v.optional(resourceIdSchema("legalReaderAnnotation")),
+    visibility: v.optional(annotationVisibilitySchema),
     spans: spansSchema,
   }),
 ]);
 
-export type CreateAnnotationBody = Static<typeof createAnnotationBodySchema>;
+export type CreateAnnotationBody = v.InferOutput<
+  typeof createAnnotationBodySchema
+>;
 
 /** One change per request, named, so an update cannot be empty or ambiguous. */
-export const updateAnnotationBodySchema = t.Union([
-  t.Object({
-    change: t.Literal("body"),
-    body: t.String({
-      minLength: 1,
-      maxLength: READER_ANNOTATION_BODY_MAX_LENGTH,
-    }),
+export const updateAnnotationBodySchema = v.union([
+  v.object({
+    change: v.literal("body"),
+    body: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(READER_ANNOTATION_BODY_MAX_LENGTH),
+    ),
   }),
-  t.Object({ change: t.Literal("color"), color: annotationColorSchema }),
-  t.Object({ change: t.Literal("style"), style: annotationStyleSchema }),
-  t.Object({
-    change: t.Literal("visibility"),
+  v.object({ change: v.literal("color"), color: annotationColorSchema }),
+  v.object({ change: v.literal("style"), style: annotationStyleSchema }),
+  v.object({
+    change: v.literal("visibility"),
     visibility: annotationVisibilitySchema,
   }),
 ]);
 
-export type UpdateAnnotationBody = Static<typeof updateAnnotationBodySchema>;
+export type UpdateAnnotationBody = v.InferOutput<
+  typeof updateAnnotationBodySchema
+>;
 
-export const annotationParamsSchema = t.Object({
-  annotationId: tSafeId("legalReaderAnnotation"),
+export const annotationParamsSchema = v.object({
+  annotationId: resourceIdSchema("legalReaderAnnotation"),
 });

@@ -116,7 +116,7 @@ import { CHAT_EDIT_APPLY_MODE } from "@/lib/chat-edit-mode";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
@@ -227,7 +227,7 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
       const response = await api.chat["template-thread"].rotate.post({
         templateId: toSafeId<"template">(props.templateId),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
     if (Result.isError(rotated)) {
       getAnalytics().captureError(rotated.error);

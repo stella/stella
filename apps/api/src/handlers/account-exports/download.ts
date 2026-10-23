@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { accountExportParams } from "@/api/handlers/account-exports/params";
+import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { recordAccountExportDownload } from "@/api/lib/account-export/store";
 import {
   ACCOUNT_ACCESS,
@@ -10,10 +11,6 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { openS3ObjectStreamWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
 
 const downloadPersonalDataExport = createSafeSessionHandler(
   {

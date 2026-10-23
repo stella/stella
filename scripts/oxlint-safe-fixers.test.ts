@@ -10,7 +10,6 @@ setDefaultTimeout(20_000);
 
 const PLUGINS = [
   "no-awaited-builder-union",
-  "no-coerced-optional-union-enum",
   "no-layout-motion-classes",
   "no-physical-properties",
 ] as const;
@@ -124,15 +123,6 @@ describe.serial("custom oxlint safe fixers", () => {
     });
   });
 
-  test("expands a static namespaced optional UnionEnum", async () => {
-    await expectFixedPoint({
-      source:
-        'const schema = t.Optional(t.UnionEnum(["person", /* keep */ "organization"]));\n',
-      expected:
-        'const schema = t.Optional(t.Union([t.Literal("person"), /* keep */ t.Literal("organization")]));\n',
-    });
-  });
-
   test("leaves context-dependent violations for the agent", async () => {
     const { configPath, directory } = await writeHarness();
     const sourcePath = path.join(directory, "subject.tsx");
@@ -150,7 +140,6 @@ describe.serial("custom oxlint safe fixers", () => {
       "async function loadWithNestedBranchWrapper() {",
       "  return await (lock ? ((paged ? query : query.limit(1)) satisfies Builder) : query.offset(2));",
       "}",
-      "const schema = t.Optional(t.UnionEnum(VALUES));",
       'const guidance = "Use right-click to open the menu";',
       `const arbitraryContent = <span className="before:content-['right-click']" />;`,
       `const quotedBracketContent = <span className="before:content-['a] right-click']" />;`,
@@ -164,7 +153,6 @@ describe.serial("custom oxlint safe fixers", () => {
     const result = await runOxlint(configPath, sourcePath);
     expect(result.exitCode).toBe(1);
     expect(result.output).toContain("no-awaited-builder-union");
-    expect(result.output).toContain("no-coerced-optional-union-enum");
     expect(result.output).toContain("no-physical-properties");
     expect(await Bun.file(sourcePath).text()).toBe(source);
   });

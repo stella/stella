@@ -1,9 +1,8 @@
 import { panic } from "better-result";
-import type { Context } from "elysia";
 
 import type { LinkIconOutcome } from "@/api/handlers/chat/link-icons/outcome";
-import { applyResponseCachePolicy } from "@/api/lib/security-headers";
-import type { CachePolicy } from "@/api/lib/security-headers";
+import type { CachePolicy } from "@/api/http/cache";
+import type { ResponseSet } from "@/api/http/context";
 
 const BROWSER_CACHE_SECONDS = 3600;
 const BROWSER_CACHE = {
@@ -27,13 +26,9 @@ const serializeLinkIcon = (outcome: LinkIconOutcome) => {
   }
 };
 
-export const linkIconBody = (outcome: LinkIconOutcome, set: Context["set"]) => {
-  Object.assign(set.headers, { "X-Content-Type-Options": "nosniff" });
-  const response = serializeLinkIcon(outcome);
-  applyResponseCachePolicy({
-    cache: BROWSER_CACHE[outcome.type],
-    response,
-    set,
-  });
-  return response;
+/** An icon answer: browsers keep a found or missing icon, never a failure. */
+export const linkIconBody = (outcome: LinkIconOutcome, set: ResponseSet) => {
+  set.headers["X-Content-Type-Options"] = "nosniff";
+  set.cache = BROWSER_CACHE[outcome.type];
+  return serializeLinkIcon(outcome);
 };

@@ -17,7 +17,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { contactsKeys } from "@/lib/contacts/queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 type RegistryCredentialSetupProps = {
@@ -58,7 +58,7 @@ export const RegistryCredentialSetup = ({
   const save = useMutation({
     // The secret never enters the mutation variables/cache or a query key.
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"][
           "business-registry-credentials"
         ].post({
@@ -78,7 +78,7 @@ export const RegistryCredentialSetup = ({
   });
   const remove = useMutation({
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"][
           "business-registry-credentials"
         ].delete(

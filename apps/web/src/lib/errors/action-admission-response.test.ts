@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { createStellaEdenClient } from "@stll/api-client";
-import type { EdenRoutesApp } from "@stll/api-client";
+import { createApiClient } from "@stll/api-client";
 import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
@@ -71,7 +70,7 @@ describe("action response observation", () => {
     }
   });
 
-  test("invalid JSON is captured without changing Eden's response handling", async () => {
+  test("invalid JSON is captured without changing the client's response handling", async () => {
     const response = new Response("Invalid JSON", {
       status: 503,
       headers: { "content-type": "application/json" },
@@ -117,7 +116,7 @@ describe("action response observation", () => {
   });
 });
 
-test("the installed Eden hook preserves refused status, error payload and headers", async () => {
+test("the installed client hook preserves refused status, error payload and headers", async () => {
   for (const code of Object.values(ACTION_ADMISSION_CODES)) {
     const refusal = ACTION_ADMISSION_REFUSALS[code];
     const payload = {
@@ -128,29 +127,27 @@ test("the installed Eden hook preserves refused status, error payload and header
     } as const satisfies ActionAdmissionRefusal;
     const observed: unknown[] = [];
     const captured: unknown[] = [];
-    const client = createStellaEdenClient<
-      EdenRoutesApp<Pick<WebRoutes, "health">>
-    >("https://api.example.test", {
-      fetcher: Object.assign(
-        async () =>
+    const client = createApiClient<Pick<WebRoutes, "health">>(
+      "https://api.example.test",
+      {
+        fetcher: async () =>
           Response.json(payload, {
             status: refusal.status,
             headers: { "x-receipt-id": "receipt-example" },
           }),
-        { preconnect: () => undefined },
-      ),
-      onResponse: async (response) => {
-        await observeActionAdmissionResponse(response, {
-          notifyRefusal: (error) => {
-            observed.push(actionAdmissionOutcome(error)?.code);
-            return true;
-          },
-          captureError: (error) => {
-            captured.push(error);
-          },
-        });
+        onResponse: async (response) => {
+          await observeActionAdmissionResponse(response, {
+            notifyRefusal: (error) => {
+              observed.push(actionAdmissionOutcome(error)?.code);
+              return true;
+            },
+            captureError: (error) => {
+              captured.push(error);
+            },
+          });
+        },
       },
-    });
+    );
     const result = await client.health.get();
     expect(result.status).toBe(refusal.status);
     expect(result.data).toBeNull();

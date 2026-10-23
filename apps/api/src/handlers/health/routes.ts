@@ -1,9 +1,10 @@
 import { Result } from "better-result";
-import Elysia from "elysia";
-import type { Context } from "elysia";
 
 import { STELLA_REST_API_CONTRACT_VERSION } from "@stll/api-contract";
 
+import type { ResponseSet } from "@/api/http/context";
+import { routes } from "@/api/http/route";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
 import { createProbeCache } from "@/api/lib/health/probe-cache";
 import type { ProbeOutcome } from "@/api/lib/health/probe-cache";
@@ -71,23 +72,23 @@ export const createHealthRoute = ({
     return outcome;
   };
   const livenessHandler = () => ({
-    status: "ok" as const,
+    status: "ok",
     ...BUILD_METADATA,
   });
-  const readinessHandler = async ({ set }: Pick<Context, "set">) => {
+  const readinessHandler = async ({ set }: { readonly set: ResponseSet }) => {
     const outcome = await readinessResponse();
     if (!outcome.ok) {
       set.status = 503;
       return {
-        status: "error" as const,
+        status: "error",
         message: "Required dependency unavailable",
         ...BUILD_METADATA,
       };
     }
-    return { status: "ok" as const, ...BUILD_METADATA };
+    return { status: "ok", ...BUILD_METADATA };
   };
 
-  const startedHandler = async ({ set }: Pick<Context, "set">) => {
+  const startedHandler = async ({ set }: { readonly set: ResponseSet }) => {
     if (startupGate.startup() === STARTUP_STATE.started) {
       return { status: STARTUP_STATE.started, ...BUILD_METADATA };
     }
@@ -99,11 +100,13 @@ export const createHealthRoute = ({
     return { status: STARTUP_STATE.started, ...BUILD_METADATA };
   };
 
-  return new Elysia()
-    .get("/live", livenessHandler)
-    .get("/ready", readinessHandler)
-    .get("/started", startedHandler)
-    .get("/health", livenessHandler);
+  const liveness = defineEndpoint.public({}, livenessHandler);
+  return routes({
+    "/live": { GET: liveness },
+    "/ready": { GET: defineEndpoint.public({}, readinessHandler) },
+    "/started": { GET: defineEndpoint.public({}, startedHandler) },
+    "/health": { GET: liveness },
+  });
 };
 
 export const healthRoute = createHealthRoute();

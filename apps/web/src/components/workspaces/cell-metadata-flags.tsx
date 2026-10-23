@@ -35,7 +35,7 @@ import {
 import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatRelativeTime } from "@/lib/relative-time";
@@ -532,7 +532,7 @@ export const useCellMetadataFlags = ({
           ...(locked !== undefined && { locked }),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     scope: { id: `cell-metadata:${workspaceId}:${entityId}:${propertyId}` },
     onSuccess: () => {

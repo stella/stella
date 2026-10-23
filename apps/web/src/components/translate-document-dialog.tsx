@@ -60,7 +60,7 @@ import { api } from "@/lib/api";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -359,7 +359,7 @@ export const TranslateDocumentDialog = (
       const data = await (async () => {
         switch (choice) {
           case "translated:deepl":
-            return unwrapEden(
+            return unwrapApiResponse(
               await client.post({
                 ...common,
                 output: "translated",
@@ -371,7 +371,7 @@ export const TranslateDocumentDialog = (
             const entityVersionId =
               preparationQuery.data?.entityVersionId ??
               panic("AI translation started without a prepared version");
-            return unwrapEden(
+            return unwrapApiResponse(
               await client.post({
                 ...common,
                 output: choice === "translated:ai" ? "translated" : "bilingual",

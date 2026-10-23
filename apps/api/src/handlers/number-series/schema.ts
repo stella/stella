@@ -1,31 +1,27 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
-export const numberSeriesParams = t.Object({
-  numberSeriesId: tSafeId("numberSeries"),
+export const numberSeriesParams = v.object({
+  numberSeriesId: resourceIdSchema("numberSeries"),
 });
 
-const documentType = t.Union([
-  t.Literal("invoice"),
-  t.Literal("advance"),
-  t.Literal("credit_note"),
-]);
-const name = t.String({ minLength: 1, maxLength: 128 });
-const pattern = t.String({ minLength: 5, maxLength: 128 });
-const padding = t.Integer({ minimum: 1, maximum: 6 });
+const documentType = v.picklist(["invoice", "advance", "credit_note"]);
+const name = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
+const pattern = v.pipe(v.string(), v.minLength(5), v.maxLength(128));
+const padding = v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(6));
 
-export const createNumberSeriesBody = t.Object({
+export const createNumberSeriesBody = v.object({
   documentType,
   name,
   pattern,
   padding,
-  sellerProfileId: t.Optional(tSafeId("sellerProfile")),
+  sellerProfileId: v.optional(resourceIdSchema("sellerProfile")),
 });
 
-export const updateNumberSeriesBody = t.Object({
-  name: t.Optional(name),
-  pattern: t.Optional(pattern),
-  padding: t.Optional(padding),
-  sellerProfileId: t.Optional(t.Nullable(tSafeId("sellerProfile"))),
+export const updateNumberSeriesBody = v.object({
+  name: v.optional(name),
+  pattern: v.optional(pattern),
+  padding: v.optional(padding),
+  sellerProfileId: v.optional(v.nullable(resourceIdSchema("sellerProfile"))),
 });

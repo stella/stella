@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
-import { status, t } from "elysia";
+import * as v from "valibot";
 
+import { numberFromString } from "@stll/api-contract/http-input";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
@@ -8,11 +9,12 @@ import {
   searchLegislationBodySchema,
   searchLegislationResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
+import { status } from "@/api/http/status";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
 } from "@/api/lib/api-handlers";
-import { tPaginationLimit } from "@/api/lib/custom-schema";
+import { paginationLimitSchema } from "@/api/lib/custom-schema";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
@@ -20,15 +22,15 @@ import {
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
-const publicStatuteSearchQuerySchema = t.Object(
-  {
-    ...t.Omit(searchLegislationBodySchema, ["jurisdiction", "limit"])
-      .properties,
-    country: tPublicLawCountry,
-    limit: t.Optional(tPaginationLimit(LIMITS.publicStatuteSearchPageSizeMax)),
-  },
-  { additionalProperties: false },
-);
+const publicStatuteSearchQuerySchema = v.strictObject({
+  ...v.omit(searchLegislationBodySchema, ["jurisdiction", "limit"]).entries,
+  country: tPublicLawCountry,
+  limit: v.optional(
+    numberFromString(
+      paginationLimitSchema(LIMITS.publicStatuteSearchPageSizeMax),
+    ),
+  ),
+});
 
 /** The public HTTP boundary delegates retrieval to the shared corpus operation. */
 export const createPublicStatuteSearch = (search = searchLegislationHandler) =>

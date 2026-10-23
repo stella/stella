@@ -4,6 +4,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
 import { classifyFailure } from "@stll/errors";
@@ -269,8 +270,8 @@ export const PL_COURTS_WALK_KINDS = {
    */
   [PL_COURTS_WALK_KIND.JUDGMENT_DATE]: defineWalkKind({
     params: {
-      from: v.optional(v.pipe(v.string(), v.isoDate())),
-      to: v.optional(v.pipe(v.string(), v.isoDate())),
+      from: v.optional(apiDateSchema),
+      to: v.optional(apiDateSchema),
     },
     /**
      * A window that ends before it starts holds no date, so the publisher

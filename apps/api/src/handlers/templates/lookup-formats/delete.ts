@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { templateLookupFormats } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 const config = {
   contract: "patch",
@@ -19,7 +19,7 @@ const config = {
     reason: "template_authoring_ui",
     consumesServices: false,
   },
-  params: t.Object({ formatId: tSafeId("templateLookupFormat") }),
+  params: v.object({ formatId: resourceIdSchema("templateLookupFormat") }),
 } satisfies HandlerConfig;
 
 const deleteLookupFormat = createSafeRootHandler(

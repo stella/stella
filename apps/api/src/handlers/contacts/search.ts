@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, ilike, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { arabicNormalize } from "@stll/text-normalize";
 
@@ -11,9 +11,9 @@ import { escapeLike } from "@/api/lib/escape-like";
 
 const SEARCH_LIMIT = 20;
 
-const searchContactsQuerySchema = t.Object({
-  q: t.String({ minLength: 1 }),
-  type: t.Optional(contactTypeSchema),
+const searchContactsQuerySchema = v.object({
+  q: v.pipe(v.string(), v.minLength(1)),
+  type: v.optional(contactTypeSchema),
 });
 
 const searchContacts = createSafeRootHandler(

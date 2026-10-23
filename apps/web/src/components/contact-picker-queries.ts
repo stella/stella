@@ -4,7 +4,7 @@ import type { ContactType } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
 type ContactPickerOrganizationKey = {
@@ -49,6 +49,6 @@ export const contactPickerSearchOptions = ({
         fetch: { signal },
       });
 
-      return unwrapEden(response).items;
+      return unwrapApiResponse(response).items;
     },
   });

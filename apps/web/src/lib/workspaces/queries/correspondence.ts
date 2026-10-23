@@ -10,8 +10,8 @@ import type {
 } from "@stll/api-contract/correspondence";
 
 import type { TranslationKey } from "@/i18n/types";
-import { correspondenceApi } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { api } from "@/lib/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { correspondenceQueryRoot } from "@/lib/resource-query-roots.logic";
 
@@ -67,7 +67,7 @@ export const correspondenceInfiniteOptions = (
       pageParam,
       signal,
     }): Promise<CorrespondenceListResponse> => {
-      const response = await correspondenceApi
+      const response = await api
         .workspaces({ workspaceId })
         .correspondence.get({
           query: {
@@ -76,7 +76,7 @@ export const correspondenceInfiniteOptions = (
           },
           fetch: { signal },
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: getInitialCorrespondencePageParam(),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
@@ -90,11 +90,11 @@ export const correspondenceByIdOptions = (
     queryKey: correspondenceKeys.byId(workspaceId, correspondenceId),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
     queryFn: async ({ signal }): Promise<CorrespondenceDetailResponse> => {
-      const response = await correspondenceApi
+      const response = await api
         .workspaces({ workspaceId })
         .correspondence({ correspondenceId })
         .get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 
@@ -112,9 +112,9 @@ export const correspondenceAddressOptions = (workspaceId: string) =>
     queryKey: correspondenceKeys.address(workspaceId),
     select: correspondenceAddressState,
     queryFn: async ({ signal }): Promise<CorrespondenceAddressResponse> => {
-      const response = await correspondenceApi
+      const response = await api
         .workspaces({ workspaceId })
         .correspondence.address.get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });

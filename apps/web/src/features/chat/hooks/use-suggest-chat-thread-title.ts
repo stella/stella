@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -24,7 +24,7 @@ export const useSuggestChatThreadTitle = (threadRef: ChatThreadRef) => {
   const suggest = async (): Promise<string | null> => {
     setIsPending(true);
     const result = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.chat
           .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
           .title.suggest.post(undefined, {

@@ -1,18 +1,19 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { renameEntityHandler } from "@/api/handlers/entities/rename-operation";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
-const renameEntityBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  name: t.String({
-    minLength: 1,
-    maxLength: LIMITS.entityNameMaxLength,
-  }),
+const renameEntityBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  name: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.entityNameMaxLength),
+  ),
 });
 
 const config = {

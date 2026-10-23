@@ -1,7 +1,7 @@
 /**
  * The entity kinds, declared once.
  *
- * Everything that needs the full set derives from this array: the TypeBox
+ * Everything that needs the full set derives from this array: the valibot
  * validator and the Drizzle column enum in the API, the search facet bounds,
  * the filter guard, and the property-test generators. The hand-written copies
  * this replaces were bound with `satisfies readonly EntityKind[]`, a check

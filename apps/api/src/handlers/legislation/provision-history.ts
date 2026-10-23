@@ -1,8 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { numberFromString } from "@stll/api-contract/http-input";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { mapWithConcurrency } from "@stll/concurrency";
 
@@ -13,11 +13,12 @@ import {
   selectWorkKey,
   workKeyConditions,
 } from "@/api/handlers/legislation/work-key";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tSafeId,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import { derivedAiLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
@@ -43,19 +44,21 @@ import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundarie
 
 const HISTORY_READ_STEP = "provisionHistory.corpusAst";
 
-export const provisionHistoryParamsSchema = t.Object({
-  documentId: tSafeId("legislationDocument"),
-  anchor: t.String({ minLength: 1, maxLength: 256 }),
+export const provisionHistoryParamsSchema = v.object({
+  documentId: resourceIdSchema("legislationDocument"),
+  anchor: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 });
 
-export const provisionHistoryQuerySchema = t.Object({
-  limit: t.Optional(
-    tPaginationLimit(LIMITS.legislationProvisionHistoryPageSizeMax),
+export const provisionHistoryQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      paginationLimitSchema(LIMITS.legislationProvisionHistoryPageSizeMax),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
-type ProvisionHistoryQuery = Static<typeof provisionHistoryQuerySchema>;
+type ProvisionHistoryQuery = v.InferOutput<typeof provisionHistoryQuerySchema>;
 
 type ProvisionHistoryOptions = {
   documentId: SafeId<"legislationDocument">;

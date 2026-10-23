@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -23,8 +22,8 @@ import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS } from "@/api/lib/auth/feature-access/view-eligibility";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tDefaultVarchar,
-  tSafeId,
+  defaultVarcharSchema,
+  resourceIdSchema,
   withDescription,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -46,20 +45,21 @@ import { nextAvailableMatterName } from "@/api/lib/workspaces/matter-name";
 // A request without `clientId` creates a personal matter (initially
 // visible only to the creator). With `clientId`, it's a normal
 // client matter and `memberUserIds` may add additional members.
-const createWorkspaceBodySchema = t.Object({
-  id: tSafeId("workspace"),
-  clientId: t.Optional(
-    tSafeId("contact", {
+const createWorkspaceBodySchema = v.object({
+  id: resourceIdSchema("workspace"),
+  clientId: v.optional(
+    resourceIdSchema("contact", {
       description: "Contact ID to attach in the client role",
     }),
   ),
-  memberUserIds: t.Optional(
-    t.Array(t.String({ maxLength: 128 }), {
-      maxItems: LIMITS.workspaceMembersCount - 1,
-    }),
+  memberUserIds: v.optional(
+    v.pipe(
+      v.array(v.pipe(v.string(), v.maxLength(128))),
+      v.maxLength(LIMITS.workspaceMembersCount - 1),
+    ),
   ),
-  name: withDescription(tDefaultVarchar, "Matter name"),
-  filePropertyName: tDefaultVarchar,
+  name: withDescription(defaultVarcharSchema, "Matter name"),
+  filePropertyName: defaultVarcharSchema,
 });
 
 const config = {
@@ -81,7 +81,7 @@ export type CreateWorkspaceHandlerProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof createWorkspaceBodySchema>;
+  body: v.InferOutput<typeof createWorkspaceBodySchema>;
 };
 
 // Shared matter-creation logic reused by the HTTP handler and the

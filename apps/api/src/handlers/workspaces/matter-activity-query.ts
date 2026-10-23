@@ -1,4 +1,4 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type {
   MATTER_ACTIVITY_ACTIONS,
@@ -8,7 +8,7 @@ import type {
   MatterActivityFilters,
 } from "@stll/api-contract/matter-activity";
 
-import { tUserId } from "@/api/lib/custom-schema";
+import { userIdSchema } from "@/api/lib/custom-schema";
 
 const MATTER_ACTIVITY_ACTION_SCHEMA_VALUES = [
   "all",
@@ -34,34 +34,34 @@ const MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES = [
 ] as const satisfies typeof MATTER_ACTIVITY_CATEGORIES;
 
 export const matterActivityFilterQueryProperties = {
-  action: t.Optional(
-    t.Union([
-      t.Literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[0]),
-      t.Literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[1]),
-      t.Literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[2]),
-      t.Literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[3]),
-      t.Literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[4]),
-      t.Literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[5]),
-      t.Literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[6]),
-      t.Literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[7]),
-      t.Literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[8]),
+  action: v.exactOptional(
+    v.union([
+      v.literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[0]),
+      v.literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[1]),
+      v.literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[2]),
+      v.literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[3]),
+      v.literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[4]),
+      v.literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[5]),
+      v.literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[6]),
+      v.literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[7]),
+      v.literal(MATTER_ACTIVITY_ACTION_SCHEMA_VALUES[8]),
     ]),
   ),
-  actorId: t.Optional(tUserId),
-  category: t.Optional(
-    t.Union([
-      t.Literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[0]),
-      t.Literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[1]),
-      t.Literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[2]),
-      t.Literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[3]),
-      t.Literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[4]),
-      t.Literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[5]),
-      t.Literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[6]),
-      t.Literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[7]),
+  actorId: v.exactOptional(userIdSchema),
+  category: v.exactOptional(
+    v.union([
+      v.literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[0]),
+      v.literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[1]),
+      v.literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[2]),
+      v.literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[3]),
+      v.literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[4]),
+      v.literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[5]),
+      v.literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[6]),
+      v.literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[7]),
     ]),
   ),
-  from: t.Optional(t.String({ format: "date-time" })),
-  toExclusive: t.Optional(t.String({ format: "date-time" })),
+  from: v.exactOptional(v.pipe(v.string(), v.isoTimestamp())),
+  toExclusive: v.exactOptional(v.pipe(v.string(), v.isoTimestamp())),
 };
 
 type MatterActivityFilterQuery = {

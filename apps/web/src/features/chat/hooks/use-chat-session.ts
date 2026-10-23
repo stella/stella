@@ -144,7 +144,7 @@ import {
   APIError,
   internalToolErrorMessage,
   toAPIError,
-  unwrapEden,
+  unwrapApiResponse,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -178,7 +178,8 @@ type UseChatSessionOptions = {
   chat: ChatRuntime;
   conversationId: string;
   getDocxEditRepresentation?:
-    (() => DocxEditRepresentation | undefined) | undefined;
+    | (() => DocxEditRepresentation | undefined)
+    | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
@@ -972,7 +973,7 @@ export const useChatSession = ({
       toolCallId: string,
       decision: RequestSecretDecision,
     ): Promise<RequestSecretOutput> =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.chat
           .threads({ threadId: toSafeId<"chatThread">(conversationId) })
           .secrets({ toolCallId })
@@ -1002,7 +1003,7 @@ export const useChatSession = ({
         query: { connectorSlug },
         fetch: { signal },
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     [conversationId],
   );

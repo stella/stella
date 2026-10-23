@@ -1,13 +1,13 @@
 import { Result } from "better-result";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 const config = {
   contract: "patch",
@@ -26,7 +26,7 @@ const config = {
     reason: "chat_thread_ui",
     consumesServices: false,
   },
-  params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+  params: v.object({ decisionId: resourceIdSchema("caseLawDecision") }),
 } satisfies HandlerConfig;
 
 type FindDecisionChatThreadOptions = {

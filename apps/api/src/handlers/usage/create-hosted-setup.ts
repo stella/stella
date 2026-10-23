@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 
@@ -23,7 +23,7 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createHostedSetupSession,
@@ -40,12 +40,11 @@ import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
 
 /** Create a hosted setup session for an active usage policy. */
 
-const createHostedSetupBodySchema = t.Object({
-  usagePolicyId: tSafeId("usagePolicy"),
-  // Seat count for seat-based subscription checkout. Bounded well below
-  // any legitimate organisation size; larger arrangements go through an
-  // operator, not self-service.
-  seats: t.Optional(t.Integer({ minimum: 1, maximum: 1000 })),
+const createHostedSetupBodySchema = v.object({
+  usagePolicyId: resourceIdSchema("usagePolicy"),
+  seats: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(1000)),
+  ),
 });
 
 const config = {
@@ -345,7 +344,7 @@ const awaitHostedCheckoutSession = async ({
 
 type PrepareCheckoutStartOptions = {
   tx: Transaction;
-  body: typeof createHostedSetupBodySchema.static;
+  body: v.InferOutput<typeof createHostedSetupBodySchema>;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
 };

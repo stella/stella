@@ -12,7 +12,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 import type { AnswerEditProposal } from "./answer-edit-api";
@@ -103,7 +103,7 @@ export const AnswerFormatProposal = ({
       revision: anchor.baseRevision,
     }),
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.chat
           .threads({ threadId })
           .messages({ messageId: anchor.messageId })

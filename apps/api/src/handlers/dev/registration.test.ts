@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import api from "@/api/server";
+import { apiApp } from "@/api/server";
 
 const LOCAL_DEV_PATHS = ["/dev-public/last-otp", "/v1/dev/seed"] as const;
 
@@ -30,13 +30,13 @@ const strictEnvironment = {
   S3_REGION: "us-east-1",
 } as const;
 
-const ROUTE_PATHS_SCRIPT = `const { default: api } = await import(${JSON.stringify(serverModuleUrl)});
-process.stdout.write(JSON.stringify(api.routes.map(({ path }) => path)));
+const ROUTE_PATHS_SCRIPT = `const { apiApp } = await import(${JSON.stringify(serverModuleUrl)});
+process.stdout.write(JSON.stringify(apiApp.routes.map(({ path }) => path)));
 process.exit(0);`;
 
 describe("local development routes", () => {
   test("are registered when local development access is open", () => {
-    const paths = api.routes.map(({ path }) => path);
+    const paths = apiApp.routes.map(({ path }) => path);
 
     for (const path of LOCAL_DEV_PATHS) {
       expect(paths).toContain(path);

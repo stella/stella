@@ -2,7 +2,7 @@ import { infiniteQueryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -10,7 +10,7 @@ export const vatRatesKeys = {
   all: (organizationId: string) => ["vat-rates", organizationId] as const,
 };
 const listVatRates = async (cursor: string | undefined, signal: AbortSignal) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api["vat-rates"].get({
       query: { ...(cursor === undefined ? {} : { cursor }) },
       fetch: { signal },
@@ -31,14 +31,14 @@ export type VatRateCommand =
   | { type: "archive"; id: string };
 export const sendVatRateCommand = async (command: VatRateCommand) => {
   if (command.type === "create") {
-    return unwrapEden(await api["vat-rates"].post(command.values));
+    return unwrapApiResponse(await api["vat-rates"].post(command.values));
   }
   const rate = api["vat-rates"]({ vatRateId: toSafeId<"vatRate">(command.id) });
   switch (command.type) {
     case "update":
-      return unwrapEden(await rate.patch(command.values));
+      return unwrapApiResponse(await rate.patch(command.values));
     case "archive":
-      return unwrapEden(await rate.archive.post());
+      return unwrapApiResponse(await rate.archive.post());
     default:
       command satisfies never;
       return panic("Unexpected VAT rate command");

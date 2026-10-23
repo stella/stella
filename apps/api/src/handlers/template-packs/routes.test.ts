@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -6,12 +5,21 @@ import { env } from "@/api/env";
 import { envApiServerSchema } from "@/api/env-schema";
 import getTemplatePack from "@/api/handlers/template-packs/get";
 import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
+import { createHttpApp } from "@/api/http/app";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const withGate = async (enabled: boolean, request: Request) => {
   const previous = env.FEATURE_TEMPLATE_PACKS;
   env.FEATURE_TEMPLATE_PACKS = enabled;
   try {
-    return await templatePacksRoute.handle(request);
+    await using server = serveForTest(
+      createHttpApp({
+        routes: templatePacksRoute,
+        middleware: [errorBoundary],
+      }),
+    );
+    return await server.fetch(request);
   } finally {
     env.FEATURE_TEMPLATE_PACKS = previous;
   }
@@ -54,11 +62,11 @@ describe("template pack id", () => {
   test("accepts the slug grammar and rejects traversal, case and emptiness", () => {
     const schema = getTemplatePack.config.params;
 
-    expect(Value.Check(schema, { packId: "general-legal" })).toBe(true);
-    expect(Value.Check(schema, { packId: ".." })).toBe(false);
-    expect(Value.Check(schema, { packId: "../etc" })).toBe(false);
-    expect(Value.Check(schema, { packId: "packs/general-legal" })).toBe(false);
-    expect(Value.Check(schema, { packId: "General-Legal" })).toBe(false);
-    expect(Value.Check(schema, { packId: "" })).toBe(false);
+    expect(v.is(schema, { packId: "general-legal" })).toBe(true);
+    expect(v.is(schema, { packId: ".." })).toBe(false);
+    expect(v.is(schema, { packId: "../etc" })).toBe(false);
+    expect(v.is(schema, { packId: "packs/general-legal" })).toBe(false);
+    expect(v.is(schema, { packId: "General-Legal" })).toBe(false);
+    expect(v.is(schema, { packId: "" })).toBe(false);
   });
 });

@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entityLinks } from "@/api/db/schema";
@@ -10,18 +9,18 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const deleteEntityLinkBodySchema = t.Object({
-  linkId: tSafeId("entityLink"),
+const deleteEntityLinkBodySchema = v.object({
+  linkId: resourceIdSchema("entityLink"),
 });
 
 export type DeleteEntityLinkHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof deleteEntityLinkBodySchema>;
+  body: v.InferOutput<typeof deleteEntityLinkBodySchema>;
 };
 
 // Shared entity-link deletion logic reused by the HTTP handler and the

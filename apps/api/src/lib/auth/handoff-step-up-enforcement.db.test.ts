@@ -27,6 +27,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
@@ -68,7 +69,7 @@ const mountedEndpoints = (endpoints: Readonly<Record<string, unknown>>) =>
   });
 
 describe("handoff sessions enforce recent authentication at real entry points", () => {
-  test("session and application macros plus Better Auth refuse account changes until reauthentication", async () => {
+  test("session and member access steps plus Better Auth refuse account changes until reauthentication", async () => {
     const human = await createHumanSession({
       email: `handoff-step-up-${Bun.randomUUIDv7()}@stella.dev`,
       orgName: "Organization",
@@ -104,8 +105,14 @@ describe("handoff sessions enforce recent authentication at real entry points", 
       query: { disableCookieCache: true },
     });
     expect(stored?.session.originConsentId).toBe(consentId);
+    // The routes as the API serves them: pipeline, access step, handler.
+    await using api = serveRoutesForTest([
+      ...meRoute,
+      ...agentAuthConfirmRoute,
+      ...apiKeysRoute,
+    ]);
     await expectStepUp(
-      await meRoute.handle(
+      await api.fetch(
         new Request(`http://localhost/me/oauth-connections/${consentId}`, {
           method: "DELETE",
           headers,
@@ -113,7 +120,7 @@ describe("handoff sessions enforce recent authentication at real entry points", 
       ),
     );
     await expectStepUp(
-      await agentAuthConfirmRoute.handle(
+      await api.fetch(
         new Request("http://localhost/agent/identity/confirm", {
           method: "POST",
           headers,
@@ -122,7 +129,7 @@ describe("handoff sessions enforce recent authentication at real entry points", 
       ),
     );
     await expectStepUp(
-      await apiKeysRoute.handle(
+      await api.fetch(
         new Request("http://localhost/api-keys/personal", {
           method: "POST",
           headers,

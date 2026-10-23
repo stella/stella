@@ -8,6 +8,11 @@ import type {
 } from "@stll/api-contract";
 import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
+import {
+  CACHE_CONTROL_HEADER,
+  SSE_CACHE_CONTROL,
+  SSE_MEDIA_TYPE,
+} from "@/api/http/cache";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
@@ -22,11 +27,6 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import {
-  CACHE_CONTROL_HEADER,
-  SSE_CACHE_CONTROL,
-  SSE_MEDIA_TYPE,
-} from "@/api/lib/security-headers";
 import {
   INSTANCE_ID,
   parseRedisPayload,
@@ -1160,7 +1160,7 @@ const closeLocalConnections = (): void => {
 // Importing this module must have no side effects: route-level realtime
 // producers pull it into many processes, so an eager Redis connection or timer
 // would fire for every process that imports the route tree, including the
-// exact-mirror schema guard and the test runner. `startSse`/`stopSse` make
+// route-table guards and the test runner. `startSse`/`stopSse` make
 // the keep-alive timer and the cross-instance Redis subscriber an explicit
 // lifecycle that only the server's boot/shutdown path drives, mirroring the
 // BullMQ `init*Worker` / `.close()` pairs in server.ts.

@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, ne, sql } from "drizzle-orm";
-import { type Static, t } from "elysia";
+import * as v from "valibot";
 
 import type { InvoiceDocumentType } from "@stll/invoicing";
 
@@ -9,15 +9,15 @@ import { INVOICE_STATUS, invoices } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-export const tInvoiceDocumentType = t.Union([
-  t.Literal("invoice"),
-  t.Literal("advance"),
-  t.Literal("credit_note"),
+export const tInvoiceDocumentType = v.picklist([
+  "invoice",
+  "advance",
+  "credit_note",
 ]);
 true satisfies [InvoiceDocumentType] extends [
-  Static<typeof tInvoiceDocumentType>,
+  v.InferOutput<typeof tInvoiceDocumentType>,
 ]
-  ? [Static<typeof tInvoiceDocumentType>] extends [InvoiceDocumentType]
+  ? [v.InferOutput<typeof tInvoiceDocumentType>] extends [InvoiceDocumentType]
     ? true
     : never
   : never;

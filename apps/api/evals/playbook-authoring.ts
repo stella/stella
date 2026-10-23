@@ -33,11 +33,11 @@
  *   bun run eval:playbook-authoring -- --tier behavior --task discovery --surface chat
  */
 
-import { Value } from "@sinclair/typebox/value";
 import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, ModelMessage, TokenUsage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
+import * as v from "valibot";
 
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 
@@ -777,7 +777,7 @@ const runTask = async ({
   // What the tool stored must be what the HTTP route would have accepted.
   if (
     playbook !== undefined &&
-    !Value.Check(playbookPositionsSchema, playbook.positions)
+    !v.is(playbookPositionsSchema, playbook.positions)
   ) {
     score.defects.push("the stored positions do not parse as positionSchema");
     score.steps.saved = false;
@@ -1421,9 +1421,7 @@ const runScenario = async ({
   });
   // What the tool stored must be what the HTTP route would have accepted.
   if (
-    playbooks.some(
-      ({ positions }) => !Value.Check(playbookPositionsSchema, positions),
-    )
+    playbooks.some(({ positions }) => !v.is(playbookPositionsSchema, positions))
   ) {
     defects.push("the stored positions do not parse as positionSchema");
   }

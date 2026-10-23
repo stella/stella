@@ -1,5 +1,4 @@
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { tConditionNode } from "@/api/lib/conditions/contract";
 
@@ -19,8 +18,8 @@ export const POSITION_SEVERITIES = [
   "medium",
   "low",
 ] as const;
-export const positionSeveritySchema = t.UnionEnum([...POSITION_SEVERITIES]);
-export type PositionSeverity = Static<typeof positionSeveritySchema>;
+export const positionSeveritySchema = v.picklist([...POSITION_SEVERITIES]);
+export type PositionSeverity = v.InferOutput<typeof positionSeveritySchema>;
 
 // ── Term kind: what shape of term the position is about ──
 // A position is one reviewable term, and its kind decides how comparing it is
@@ -38,27 +37,21 @@ export const POSITION_TERM_KINDS = [
   "presence",
   "language",
 ] as const;
-export const positionTermKindSchema = t.UnionEnum([...POSITION_TERM_KINDS]);
-export type PositionTermKind = Static<typeof positionTermKindSchema>;
+export const positionTermKindSchema = v.picklist([...POSITION_TERM_KINDS]);
+export type PositionTermKind = v.InferOutput<typeof positionTermKindSchema>;
 
 // ── GRADE: how the extracted answer is judged ─────────
-export const positionRuleSchema = t.Union([
-  // No verdict: produces a value column only (today's extraction column).
-  t.Object({ kind: t.Literal("extractOnly") }),
-  // The clause must be present / absent.
-  t.Object({
-    kind: t.Literal("presence"),
-    expectation: t.UnionEnum(["required", "restricted"]),
+export const positionRuleSchema = v.union([
+  v.object({ kind: v.literal("extractOnly") }),
+  v.object({
+    kind: v.literal("presence"),
+    expectation: v.picklist(["required", "restricted"]),
   }),
-  // Deterministic check over the extracted value via the shared condition AST;
-  // no LLM.
-  t.Object({
-    kind: t.Literal("propertyConstraint"),
+  v.object({
+    kind: v.literal("propertyConstraint"),
     condition: tConditionNode,
   }),
-  // The LLM compares the extracted prose to the standard's preferred/fallbacks
-  // and returns a tier.
-  t.Object({ kind: t.Literal("positionMatch") }),
+  v.object({ kind: v.literal("positionMatch") }),
 ]);
 
 // ── Resolved tiers (verdict-time snapshot) ────────────
@@ -74,21 +67,23 @@ export const positionRuleSchema = t.Union([
 //   - `acceptableRules` / `notAcceptableRules`: the plain-language rules a
 //     graded LLM tier-match compares against; red-line ids let a finding cite
 //     which line was violated.
-const resolvedTierRuleSchema = t.Object({
-  id: t.String({ minLength: 1, maxLength: 128 }),
-  text: t.String({ minLength: 1, maxLength: 500 }),
+const resolvedTierRuleSchema = v.object({
+  id: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  text: v.pipe(v.string(), v.minLength(1), v.maxLength(500)),
 });
 
-export const resolvedTiersSchema = t.Object({
-  ideal: t.Optional(t.String({ maxLength: 10_000 })),
-  fallbacks: t.Array(
-    t.Object({
-      rank: t.Integer({ minimum: 0 }),
-      label: t.Optional(t.String({ maxLength: 256 })),
-      text: t.String({ minLength: 1, maxLength: 10_000 }),
-    }),
-    { maxItems: 10 },
+export const resolvedTiersSchema = v.object({
+  ideal: v.optional(v.pipe(v.string(), v.maxLength(10_000))),
+  fallbacks: v.pipe(
+    v.array(
+      v.object({
+        rank: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        label: v.optional(v.pipe(v.string(), v.maxLength(256))),
+        text: v.pipe(v.string(), v.minLength(1), v.maxLength(10_000)),
+      }),
+    ),
+    v.maxLength(10),
   ),
-  acceptableRules: t.Array(resolvedTierRuleSchema, { maxItems: 50 }),
-  notAcceptableRules: t.Array(resolvedTierRuleSchema, { maxItems: 50 }),
+  acceptableRules: v.pipe(v.array(resolvedTierRuleSchema), v.maxLength(50)),
+  notAcceptableRules: v.pipe(v.array(resolvedTierRuleSchema), v.maxLength(50)),
 });

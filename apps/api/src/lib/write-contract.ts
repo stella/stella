@@ -1,11 +1,15 @@
-import { Kind } from "@sinclair/typebox";
 import { panic } from "better-result";
 
 import { HandlerError } from "./errors/tagged-errors";
 import {
+  isValibotSchema,
+  toRouteJsonSchema,
+} from "./json-schema/valibot-to-json-schema";
+import {
   assertUnchangedSince,
   VERSION_CONFLICT_ERROR_CODE,
 } from "./optimistic-concurrency";
+import { isRecord, isUnknownArray } from "./type-guards";
 
 /** Exact migration identities; the route census binds these to the reasoned baseline. */
 const REPLACE_CONTRACT_DEBT_IDS = [
@@ -15,7 +19,6 @@ const REPLACE_CONTRACT_DEBT_IDS = [
   "apps/api/src/handlers/clauses/variants/update.ts",
   "apps/api/src/handlers/contacts/update.ts",
   "apps/api/src/handlers/document-types/reorder.ts",
-  "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-sessions/:sessionId/checkpoint",
   "apps/api/src/handlers/entities/versions/upload.ts",
   "apps/api/src/handlers/entity-views/reorder.ts",
   "apps/api/src/handlers/entity-views/update.ts",
@@ -41,6 +44,7 @@ const REPLACE_CONTRACT_DEBT_IDS = [
   "apps/api/src/handlers/templates/update.ts",
   "apps/api/src/handlers/views/reorder.ts",
   "apps/api/src/handlers/views/update.ts",
+  "POST /v1/desktop-edit-sessions/:sessionId/checkpoint",
 ] as const;
 
 const REVISION_PRECONDITIONS = {
@@ -101,166 +105,157 @@ export const enforceWritePrecondition = (
   }
 };
 
-/** Custom transport boundaries declare the same contract without changing handler identities. */
+/**
+ * Routes whose definitions no safe factory built declare their contract here,
+ * by the method and path the route table mounts them at.
+ */
 export const RAW_WRITE_CONTRACTS = {
-  "apps/api/src/handlers/agent-auth/routes.ts|POST|/agent/event/notify": {
+  "DELETE /mcp": {
     contract: "patch",
   },
-  "apps/api/src/handlers/dev/routes.ts|POST|/dev/clean": {
+  "DELETE /mcp-anonymized": {
     contract: "patch",
   },
-  "apps/api/src/handlers/dev/routes.ts|POST|/dev/clear-cache": {
+  "DELETE /mcp-documents": {
     contract: "patch",
   },
-  "apps/api/src/handlers/dev/routes.ts|POST|/dev/public-law-connection": {
+  "DELETE /mcp-law": {
     contract: "patch",
   },
-  "apps/api/src/handlers/dev/routes.ts|POST|/dev/rebuild-search": {
+  "DELETE /mcp/advanced": {
     contract: "patch",
   },
-  "apps/api/src/handlers/dev/routes.ts|POST|/dev/seed-firm-knowledge": {
+  "POST /api/auth/*": {
     contract: "patch",
   },
-  "apps/api/src/handlers/dev/routes.ts|POST|/dev/seed": {
+  "POST /mcp": {
     contract: "patch",
   },
-  "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-handoffs/:handoffId/opened":
-    {
-      contract: "patch",
+  "POST /mcp-anonymized": {
+    contract: "patch",
+  },
+  "POST /mcp-documents": {
+    contract: "patch",
+  },
+  "POST /mcp-law": {
+    contract: "patch",
+  },
+  "POST /mcp/advanced": {
+    contract: "patch",
+  },
+  "POST /public/feedback": {
+    contract: "patch",
+  },
+  "POST /smoke/session": {
+    contract: "patch",
+  },
+  "POST /synthetic/session": {
+    contract: "patch",
+  },
+  "POST /usage/hosted/webhook": {
+    contract: "patch",
+  },
+  "POST /v1/desktop-edit-handoffs/:handoffId/opened": {
+    contract: "patch",
+  },
+  "POST /v1/desktop-edit-handoffs/redeem": {
+    contract: "patch",
+  },
+  "POST /v1/desktop-edit-sessions/:sessionId/checkpoint": {
+    contract: "replace",
+    precondition: {
+      type: "deferred",
+      baselineId: "POST /v1/desktop-edit-sessions/:sessionId/checkpoint",
     },
-  "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-handoffs/redeem":
-    {
-      contract: "patch",
-    },
-  "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-sessions/:sessionId/checkpoint":
-    {
-      contract: "replace",
-      precondition: {
-        type: "deferred",
-        baselineId:
-          "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-sessions/:sessionId/checkpoint",
-      },
-    },
-  "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-sessions/:sessionId/finalize":
-    {
-      contract: "patch",
-    },
-  "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-sessions/:sessionId/respond-takeover":
-    {
-      contract: "patch",
-    },
-  "apps/api/src/handlers/feedback/routes.ts|POST|/public/feedback": {
+  },
+  "POST /v1/desktop-edit-sessions/:sessionId/finalize": {
     contract: "patch",
   },
-  "apps/api/src/handlers/hosted-usage-webhook/routes.ts|POST|/usage/hosted/webhook":
-    {
-      contract: "patch",
-    },
-  "apps/api/src/handlers/mcp/routes-core.ts|ALL|/mcp-anonymized": {
+  "POST /v1/desktop-edit-sessions/:sessionId/respond-takeover": {
     contract: "patch",
   },
-  "apps/api/src/handlers/mcp/routes-core.ts|ALL|/mcp-documents": {
+  "POST /v1/dev/clean": {
     contract: "patch",
   },
-  "apps/api/src/handlers/mcp/routes-core.ts|ALL|/mcp-law": {
+  "POST /v1/dev/clear-cache": {
     contract: "patch",
   },
-  "apps/api/src/handlers/mcp/routes-core.ts|ALL|/mcp/advanced": {
+  "POST /v1/dev/public-law-connection": {
     contract: "patch",
   },
-  "apps/api/src/handlers/mcp/routes-core.ts|ALL|/mcp": {
+  "POST /v1/dev/rebuild-search": {
     contract: "patch",
   },
-  "apps/api/src/handlers/smoke/routes.ts|POST|/smoke/session": {
+  "POST /v1/dev/seed": {
     contract: "patch",
   },
-  "apps/api/src/handlers/synthetic/routes.ts|POST|/synthetic/session": {
-    contract: "patch",
-  },
-  "apps/api/src/server.ts|MOUNT|": {
+  "POST /v1/dev/seed-firm-knowledge": {
     contract: "patch",
   },
 } as const satisfies Record<string, WriteContract>;
 
-/** Custom transport identity excludes inline handler source text. */
-export const writeContractRouteKey = (key: string) =>
-  key.split("|").slice(0, 3).join("|");
-
 const contracts = new WeakMap<object, WriteContract>();
 
-// Elysia integer/number schemas transform a union of numeric strings and numbers.
+const REVISION_TYPES = new Set(["string", "integer", "number"]);
+
+/** A revision token: a string or a number, or a union of them. */
 const isRevisionField = (schema: unknown): boolean => {
-  if (typeof schema !== "object" || schema === null || !(Kind in schema)) {
+  if (!isRecord(schema)) {
     return false;
   }
-  switch (schema[Kind]) {
-    case "String":
-    case "Integer":
-    case "Number":
-      return true;
-    case "Union":
-      return (
-        "anyOf" in schema &&
-        Array.isArray(schema.anyOf) &&
-        schema.anyOf.length > 0 &&
-        schema.anyOf.every(isRevisionField)
-      );
-    default:
-      return false;
+  const branches = schema["anyOf"] ?? schema["oneOf"];
+  if (isUnknownArray(branches)) {
+    return branches.length > 0 && branches.every(isRevisionField);
   }
+  return (
+    typeof schema["type"] === "string" && REVISION_TYPES.has(schema["type"])
+  );
 };
 
-/** TypeBox unions require the token in every alternative; an intersection may supply it in one conjunct. */
+/**
+ * Whether every body the schema accepts carries the token: a union requires
+ * it in every alternative, an intersection in one conjunct. Read from the
+ * body's JSON Schema rendering, which states exactly which fields are
+ * required.
+ */
 const requiresField = (schema: unknown, field: string): boolean => {
-  if (typeof schema !== "object" || schema === null || !(Kind in schema)) {
+  if (!isRecord(schema)) {
     return false;
   }
-  switch (schema[Kind]) {
-    case "Object": {
-      if (
-        !("type" in schema) ||
-        schema.type !== "object" ||
-        !("required" in schema) ||
-        !Array.isArray(schema.required) ||
-        !schema.required.includes(field) ||
-        !("properties" in schema) ||
-        typeof schema.properties !== "object" ||
-        schema.properties === null
-      ) {
-        return false;
-      }
-      const value: unknown = Object.entries(schema.properties)
-        .find(([key]) => key === field)
-        ?.at(1);
-      if (typeof value !== "object" || value === null || !(Kind in value)) {
-        return false;
-      }
-      if (field === "expectedUpdatedAt") {
-        return (
-          value[Kind] === "String" &&
-          "format" in value &&
-          value.format === "date-time"
-        );
-      }
-      return isRevisionField(value);
-    }
-    case "Union":
-      return (
-        "anyOf" in schema &&
-        Array.isArray(schema.anyOf) &&
-        schema.anyOf.length > 0 &&
-        schema.anyOf.every((branch) => requiresField(branch, field))
-      );
-    case "Intersect":
-      return (
-        "allOf" in schema &&
-        Array.isArray(schema.allOf) &&
-        schema.allOf.some((branch) => requiresField(branch, field))
-      );
-    default:
-      return false;
+  const branches = schema["anyOf"] ?? schema["oneOf"];
+  if (isUnknownArray(branches)) {
+    return (
+      branches.length > 0 &&
+      branches.every((branch) => requiresField(branch, field))
+    );
   }
+  const conjuncts = schema["allOf"];
+  if (isUnknownArray(conjuncts)) {
+    return conjuncts.some((branch) => requiresField(branch, field));
+  }
+  const required = schema["required"];
+  const properties = schema["properties"];
+  if (
+    schema["type"] !== "object" ||
+    !isUnknownArray(required) ||
+    !required.includes(field) ||
+    !isRecord(properties)
+  ) {
+    return false;
+  }
+  const value = properties[field];
+  if (field === "expectedUpdatedAt") {
+    return (
+      isRecord(value) &&
+      value["type"] === "string" &&
+      value["format"] === "date-time"
+    );
+  }
+  return isRevisionField(value);
 };
+
+const bodyRequiresField = (body: unknown, field: string): boolean =>
+  isValibotSchema(body) && requiresField(toRouteJsonSchema(body), field);
 
 type WriteContractConfig = WriteContract & {
   body?: unknown;
@@ -297,7 +292,7 @@ export const assertWriteContract = (
         case "deferred":
           return;
         case "updatedAt":
-          if (!requiresField(config.body, precondition.field)) {
+          if (!bodyRequiresField(config.body, precondition.field)) {
             panic(
               failureMessage(
                 "A replacement body must require expectedUpdatedAt in every branch",
@@ -307,7 +302,7 @@ export const assertWriteContract = (
           return;
         case "revision":
           for (const field of precondition.fields) {
-            if (!requiresField(config.body, field)) {
+            if (!bodyRequiresField(config.body, field)) {
               panic(
                 failureMessage(
                   `A replacement body must require ${field} in every branch`,

@@ -6,7 +6,7 @@ import {
 } from "@/api/lib/properties/property-kinds";
 
 // PropertyTool (apps/api/src/db/schema-validators.ts) is a union of three
-// TypeBox object schemas, not a const array of tool types, so there is no
+// valibot object schemas, not a const array of tool types, so there is no
 // `keyof typeof` or mapped-array source to derive this list from. Each case
 // below is asserted explicitly instead; a fourth tool type added to the
 // union will fail the helper's `never` exhaustiveness check at compile time,

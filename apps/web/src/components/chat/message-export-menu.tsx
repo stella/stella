@@ -31,7 +31,7 @@ import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
@@ -134,7 +134,7 @@ export const MessageExportMenu = ({
               },
             },
           );
-        const { downloadUrl, fileName } = unwrapEden(response);
+        const { downloadUrl, fileName } = unwrapApiResponse(response);
         const file = await fetchWithTimeout(downloadUrl, {
           timeoutMs: DOWNLOAD_TIMEOUT_MS,
         });

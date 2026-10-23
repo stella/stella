@@ -43,8 +43,8 @@ type PollSeedJobOptions = {
   /**
    * Reads the job's current status, or null when there is nothing to act on:
    * a failed request, or the raw Response the endpoint answers an
-   * unauthenticated caller with. Callers inspect Eden's error channel here so
-   * this helper never handles a half-checked response.
+   * unauthenticated caller with. Callers inspect the API client's error
+   * channel here so this helper never handles a half-checked response.
    */
   poll: () => Promise<SeedJobStatus | null>;
   onSucceeded: () => void;

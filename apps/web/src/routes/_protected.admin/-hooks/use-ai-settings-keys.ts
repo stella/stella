@@ -5,7 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { deepLKeys } from "@/lib/deepl/queries";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { webSearchKeysKeys } from "@/lib/web-search/queries";
 
 import type {
@@ -18,21 +18,23 @@ const KEY_SECTIONS = {
   deepl: {
     invalidate: deepLKeys.all,
     set: async (apiKey: string) =>
-      unwrapEden(await api["organization-settings"].deepl.post({ apiKey })),
+      unwrapApiResponse(
+        await api["organization-settings"].deepl.post({ apiKey }),
+      ),
     clear: async () =>
-      unwrapEden(await api["organization-settings"].deepl.delete()),
+      unwrapApiResponse(await api["organization-settings"].deepl.delete()),
   },
   search: {
     invalidate: webSearchKeysKeys.all,
     set: async (apiKey: string) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["web-search-key"].post({
           kind: "search",
           apiKey,
         }),
       ),
     clear: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["web-search-key"].delete({
           kind: "search",
         }),
@@ -41,14 +43,14 @@ const KEY_SECTIONS = {
   fetch: {
     invalidate: webSearchKeysKeys.all,
     set: async (apiKey: string) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["web-search-key"].post({
           kind: "fetch",
           apiKey,
         }),
       ),
     clear: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["web-search-key"].delete({
           kind: "fetch",
         }),

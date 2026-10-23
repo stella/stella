@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { DesktopAccountIdentity } from "@stll/api-contract/desktop-rpc";
 
@@ -15,7 +15,7 @@ import {
   probeDesktopCredential,
   renewDesktopCredential,
 } from "@/api/lib/business-registries/desktop/renewal";
-import { tUserId } from "@/api/lib/custom-schema";
+import { userIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -30,30 +30,21 @@ const renewDesktopAccount = createSafeBoundedPublicHandler(
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
     cache: { kind: "none" },
-    body: t.Union([
-      t.Object(
-        {
-          type: t.Literal("rotate"),
-          successorKey: t.String({ minLength: 1, maxLength: 256 }),
-        },
-        { additionalProperties: false },
-      ),
-      t.Object({ type: t.Literal("probe") }, { additionalProperties: false }),
+    body: v.union([
+      v.strictObject({
+        type: v.literal("rotate"),
+        successorKey: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+      }),
+      v.strictObject({ type: v.literal("probe") }),
     ]),
     response: safePublicHandlerResponseSchemasWithStatusText(
-      t.Object(
-        {
-          expiresAt: t.String({ format: "date-time", maxLength: 64 }),
-          identity: t.Object(
-            {
-              userId: tUserId,
-              organizationId: t.String({ minLength: 1, maxLength: 128 }),
-            },
-            { additionalProperties: false },
-          ),
-        },
-        { additionalProperties: false },
-      ),
+      v.object({
+        expiresAt: v.pipe(v.string(), v.isoTimestamp(), v.maxLength(64)),
+        identity: v.object({
+          userId: userIdSchema,
+          organizationId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+        }),
+      }),
     ),
   },
   async function* ({
@@ -117,7 +108,7 @@ const renewDesktopAccount = createSafeBoundedPublicHandler(
 
 // The renewal owner locks desktopMembership then desktopCredential through
 // the aggregate lock owner inside its own transaction.
-declareAggregateMutation(renewDesktopAccount.handler, {
+declareAggregateMutation(renewDesktopAccount, {
   type: "aggregate",
   aggregates: ["desktopMembership", "desktopCredential"],
 });

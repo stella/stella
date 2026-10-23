@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -15,7 +15,7 @@ import {
   reserveObjectCleanupIntent,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import {
@@ -66,13 +66,13 @@ export const isFolioCollabIdempotencyConstraintError = (error: unknown) =>
     FOLIO_COLLAB_PUBLICATION_IDEMPOTENCY_CONSTRAINT,
   );
 
-const publishFolioCollabVersionBodySchema = t.Object({
-  description: t.Optional(t.String({ maxLength: 1024 })),
-  expectedGeneration: t.Integer({ minimum: 0 }),
-  expectedSha256Hex: t.String({ minLength: 64, maxLength: 64 }),
-  idempotencyKey: t.String({ format: "uuid" }),
-  label: t.Optional(t.String({ maxLength: 128 })),
-  roomId: tSafeId("folioCollabRoom"),
+const publishFolioCollabVersionBodySchema = v.object({
+  description: v.exactOptional(v.pipe(v.string(), v.maxLength(1024))),
+  expectedGeneration: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  expectedSha256Hex: v.pipe(v.string(), v.minLength(64), v.maxLength(64)),
+  idempotencyKey: v.pipe(v.string(), v.uuid()),
+  label: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
+  roomId: resourceIdSchema("folioCollabRoom"),
 });
 
 type CheckpointRoom = Extract<

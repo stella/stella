@@ -1,6 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   ACCOUNT_ACCESS,
@@ -13,20 +12,23 @@ import type { McpClientMetadataDocument } from "@/api/lib/mcp-upstream/oauth";
 const URL_MAX_LENGTH = 2048;
 const TOKEN_MAX_LENGTH = 64;
 
-const clientMetadataResponseSchema = t.Object({
-  client_id: t.String({ maxLength: URL_MAX_LENGTH }),
-  client_name: t.String({ maxLength: 256 }),
-  client_uri: t.String({ maxLength: URL_MAX_LENGTH }),
-  grant_types: t.Array(t.String({ maxLength: TOKEN_MAX_LENGTH }), {
-    maxItems: 4,
-  }),
-  redirect_uris: t.Array(t.String({ maxLength: URL_MAX_LENGTH }), {
-    maxItems: 8,
-  }),
-  response_types: t.Array(t.String({ maxLength: TOKEN_MAX_LENGTH }), {
-    maxItems: 4,
-  }),
-  token_endpoint_auth_method: t.Literal("none"),
+const clientMetadataResponseSchema = v.object({
+  client_id: v.pipe(v.string(), v.maxLength(URL_MAX_LENGTH)),
+  client_name: v.pipe(v.string(), v.maxLength(256)),
+  client_uri: v.pipe(v.string(), v.maxLength(URL_MAX_LENGTH)),
+  grant_types: v.pipe(
+    v.array(v.pipe(v.string(), v.maxLength(TOKEN_MAX_LENGTH))),
+    v.maxLength(4),
+  ),
+  redirect_uris: v.pipe(
+    v.array(v.pipe(v.string(), v.maxLength(URL_MAX_LENGTH))),
+    v.maxLength(8),
+  ),
+  response_types: v.pipe(
+    v.array(v.pipe(v.string(), v.maxLength(TOKEN_MAX_LENGTH))),
+    v.maxLength(4),
+  ),
+  token_endpoint_auth_method: v.literal("none"),
 });
 
 type ExactShape<TLeft, TRight> = [TLeft] extends [TRight]
@@ -39,7 +41,7 @@ type ExactShape<TLeft, TRight> = [TLeft] extends [TRight]
 // field added to the document cannot be dropped from the response unseen.
 true satisfies ExactShape<
   McpClientMetadataDocument,
-  Static<typeof clientMetadataResponseSchema>
+  v.InferOutput<typeof clientMetadataResponseSchema>
 >;
 
 const readClientMetadata = createSafeBoundedPublicHandler(

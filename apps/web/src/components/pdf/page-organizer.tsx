@@ -64,7 +64,7 @@ import {
   draggable,
   dropTargetForElements,
 } from "@/lib/drag-and-drop/element-registration";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOptions, filesKeys } from "@/lib/files/queries";
 import {
@@ -117,7 +117,9 @@ type AddedSource = {
 };
 
 type EditorOperation =
-  { type: "idle" } | { type: "transforming" } | { type: "uploading" };
+  | { type: "idle" }
+  | { type: "transforming" }
+  | { type: "uploading" };
 
 type PDFPageOrganizerProps = {
   canSaveVersion: boolean;
@@ -298,7 +300,7 @@ const authorizePDFOrganizerExport = async ({
     .files({ workspaceId })
     .url({ fieldId })
     .get({ query: { purpose: "download" } });
-  unwrapEden(response);
+  unwrapApiResponse(response);
 };
 
 type PageThumbnailProps = {

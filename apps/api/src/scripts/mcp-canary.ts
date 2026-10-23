@@ -1480,7 +1480,7 @@ export const runStagingCredentialJourneys = async (
         }
         sessionCookie = `${smoke.body.cookieName}=${smoke.body.cookieValue}`;
         const minted = await readProbeResponse(
-          await fetcher(new URL("/v1/api-keys/", baseUrl), {
+          await fetcher(new URL("/v1/api-keys", baseUrl), {
             method: "POST",
             headers: {
               cookie: sessionCookie,

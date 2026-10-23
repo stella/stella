@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   playbookPositionsSchema,
@@ -42,48 +42,46 @@ const gradedPosition = {
 
 describe("playbookPositionsSchema — container version", () => {
   test("accepts version 3", () => {
-    expect(
-      Value.Check(playbookPositionsSchema, { version: 3, items: [] }),
-    ).toBe(true);
+    expect(v.is(playbookPositionsSchema, { version: 3, items: [] })).toBe(true);
   });
 
   test("rejects the retired version 2", () => {
-    expect(
-      Value.Check(playbookPositionsSchema, { version: 2, items: [] }),
-    ).toBe(false);
+    expect(v.is(playbookPositionsSchema, { version: 2, items: [] })).toBe(
+      false,
+    );
   });
 });
 
 describe("positionSchema — extract / graded discriminated union", () => {
   test("accepts a valid extract position", () => {
-    expect(Value.Check(positionSchema, extractPosition)).toBe(true);
+    expect(v.is(positionSchema, extractPosition)).toBe(true);
   });
 
   test("accepts a valid graded position", () => {
-    expect(Value.Check(positionSchema, gradedPosition)).toBe(true);
+    expect(v.is(positionSchema, gradedPosition)).toBe(true);
   });
 
   test("rejects an extract position missing enabled", () => {
     const { enabled, ...rest } = extractPosition;
     void enabled;
-    expect(Value.Check(positionSchema, rest)).toBe(false);
+    expect(v.is(positionSchema, rest)).toBe(false);
   });
 
   test("rejects a graded position missing severity", () => {
     const { severity, ...rest } = gradedPosition;
     void severity;
-    expect(Value.Check(positionSchema, rest)).toBe(false);
+    expect(v.is(positionSchema, rest)).toBe(false);
   });
 
   test("rejects a graded position missing a standard", () => {
     const { standard, ...rest } = gradedPosition;
     void standard;
-    expect(Value.Check(positionSchema, rest)).toBe(false);
+    expect(v.is(positionSchema, rest)).toBe(false);
   });
 
   test("rejects a tier rule without an id", () => {
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         standard: {
           source: "tiers",
@@ -97,20 +95,20 @@ describe("positionSchema — extract / graded discriminated union", () => {
   });
 
   test("rejects an unknown mode", () => {
-    expect(
-      Value.Check(positionSchema, { ...extractPosition, mode: "review" }),
-    ).toBe(false);
+    expect(v.is(positionSchema, { ...extractPosition, mode: "review" })).toBe(
+      false,
+    );
   });
 });
 
 describe("purpose — what the term is for, on either standard", () => {
   test("accepts a graded position without a purpose", () => {
-    expect(Value.Check(positionSchema, gradedPosition)).toBe(true);
+    expect(v.is(positionSchema, gradedPosition)).toBe(true);
   });
 
   test("accepts a purpose on a tiers-standard position an author wrote", () => {
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         purpose:
           "Fixes whose courts decide a dispute; drives cost and enforceability for both sides.",
@@ -120,7 +118,7 @@ describe("purpose — what the term is for, on either standard", () => {
 
   test("rejects a purpose past one sentence's worth", () => {
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         purpose: "x".repeat(POSITION_PURPOSE_MAX_LENGTH + 1),
       }),
@@ -130,12 +128,12 @@ describe("purpose — what the term is for, on either standard", () => {
 
 describe("negotiation — optional reviewer guidance on a graded position", () => {
   test("accepts a graded position without negotiation", () => {
-    expect(Value.Check(positionSchema, gradedPosition)).toBe(true);
+    expect(v.is(positionSchema, gradedPosition)).toBe(true);
   });
 
   test("accepts a graded position with a full negotiation block", () => {
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         negotiation: {
           rationale: "We want English law for predictable enforcement.",
@@ -151,7 +149,7 @@ describe("negotiation — optional reviewer guidance on a graded position", () =
 
   test("accepts negotiation with only some fields set", () => {
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         negotiation: { rationale: "Why we want this." },
       }),
@@ -160,7 +158,7 @@ describe("negotiation — optional reviewer guidance on a graded position", () =
 
   test("rejects a talking point below the minimum length", () => {
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         negotiation: { talkingPoints: [""] },
       }),
@@ -169,7 +167,7 @@ describe("negotiation — optional reviewer guidance on a graded position", () =
 
   test("rejects more than the max talking points", () => {
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         negotiation: {
           talkingPoints: Array.from({ length: 21 }, (_, i) => `Point ${i}`),
@@ -182,7 +180,7 @@ describe("negotiation — optional reviewer guidance on a graded position", () =
 describe("askConfigSchema — auto vs manual", () => {
   test("accepts an auto ask with no stored derived result", () => {
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         ask: { mode: "auto" },
       }),
@@ -191,7 +189,7 @@ describe("askConfigSchema — auto vs manual", () => {
 
   test("accepts an auto ask carrying a derived result", () => {
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         ask: {
           mode: "auto",
@@ -215,33 +213,33 @@ describe("positionSchema — sources", () => {
 
   test("accepts sources on both position modes", () => {
     for (const position of [extractPosition, gradedPosition]) {
-      expect(
-        Value.Check(positionSchema, { ...position, sources: [SOURCE] }),
-      ).toBe(true);
+      expect(v.is(positionSchema, { ...position, sources: [SOURCE] })).toBe(
+        true,
+      );
     }
   });
 
   test("rejects an empty list: absent is the one way to store none", () => {
-    expect(
-      Value.Check(positionSchema, { ...gradedPosition, sources: [] }),
-    ).toBe(false);
+    expect(v.is(positionSchema, { ...gradedPosition, sources: [] })).toBe(
+      false,
+    );
   });
 
   test("rejects a source that carries anything but the two ids", () => {
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         sources: [{ ...SOURCE, name: "Supply agreement.docx" }],
       }),
     ).toBe(false);
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         sources: [{ entityId: SOURCE.entityId }],
       }),
     ).toBe(false);
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         sources: [{ ...SOURCE, entityId: "ent_1" }],
       }),
@@ -254,11 +252,9 @@ describe("positionSchema — sources", () => {
       (_, index) =>
         source(`44444444-4444-4444-8444-${String(index).padStart(12, "0")}`),
     );
-    expect(Value.Check(positionSchema, { ...gradedPosition, sources })).toBe(
-      false,
-    );
+    expect(v.is(positionSchema, { ...gradedPosition, sources })).toBe(false);
     expect(
-      Value.Check(positionSchema, {
+      v.is(positionSchema, {
         ...gradedPosition,
         sources: sources.slice(1),
       }),

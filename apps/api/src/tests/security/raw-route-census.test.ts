@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { apiRoutes } from "@/api/api-routes";
+import type { RouteAccess, RouteDefinition } from "@/api/http/route";
 import {
   ACCOUNT_ACCESS,
   getSafeHandlerAccountAccess,
@@ -8,7 +10,6 @@ import {
   MCP_MODES,
   MCP_RESOURCE_MODE_CONFIG,
 } from "@/api/mcp/resource-policy-contract";
-import api from "@/api/server";
 
 /**
  * How a route outside the safe handler factories treats the demo account.
@@ -35,21 +36,46 @@ type RawRouteReview = { access: RawRouteAccess; reason: string };
  * here with a reason; an entry whose route is gone fails it too.
  */
 const RAW_ROUTES = {
-  "ALL /*": {
+  "GET /api/auth/*": {
+    access: RAW_ROUTE_ACCESS.sandbox,
+    reason:
+      "Better Auth handler; its before hooks refuse the demo account's account, key, OAuth and organization writes.",
+  },
+  "POST /api/auth/*": {
     access: RAW_ROUTE_ACCESS.sandbox,
     reason:
       "Better Auth handler; its before hooks refuse the demo account's account, key, OAuth and organization writes.",
   },
   ...Object.fromEntries(
+    MCP_MODES.flatMap((mode) =>
+      ["GET", "POST", "DELETE"].map((method) => [
+        `${method} ${MCP_RESOURCE_MODE_CONFIG[mode].httpPath}`,
+        {
+          access: RAW_ROUTE_ACCESS.sessionless,
+          reason:
+            "MCP token transport; the demo account is refused once the token resolves.",
+        },
+      ]),
+    ),
+  ),
+  ...Object.fromEntries(
     MCP_MODES.map((mode) => [
-      `ALL ${MCP_RESOURCE_MODE_CONFIG[mode].httpPath}`,
+      `OPTIONS ${MCP_RESOURCE_MODE_CONFIG[mode].httpPath}`,
       {
         access: RAW_ROUTE_ACCESS.sessionless,
         reason:
-          "MCP token transport; the demo account is refused once the token resolves.",
+          "MCP transport preflight; answers any origin without credentials.",
       },
     ]),
   ),
+  "GET /mcp-app-sandbox": {
+    access: RAW_ROUTE_ACCESS.sessionless,
+    reason: "Public static sandbox document the web app frames.",
+  },
+  "GET /visual-sandbox": {
+    access: RAW_ROUTE_ACCESS.sessionless,
+    reason: "Public static sandbox document the web app frames.",
+  },
   "GET /.well-known/openai-apps-challenge": {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason: "Public static domain-verification token.",
@@ -124,14 +150,6 @@ const RAW_ROUTES = {
     reason:
       "Read-only event stream for a matter the session's member can access.",
   },
-  "OPTIONS /": {
-    access: RAW_ROUTE_ACCESS.sessionless,
-    reason: "CORS preflight.",
-  },
-  "OPTIONS /*": {
-    access: RAW_ROUTE_ACCESS.sessionless,
-    reason: "CORS preflight.",
-  },
   "OPTIONS /.well-known/oauth-authorization-server": {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason: "Public discovery preflight.",
@@ -160,10 +178,6 @@ const RAW_ROUTES = {
   "OPTIONS /auth.md": {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason: "Public agent-auth manifest preflight.",
-  },
-  "POST /agent/event/notify": {
-    access: RAW_ROUTE_ACCESS.sessionless,
-    reason: "Rate-limited agent-auth event receiver; reads no session.",
   },
   "POST /public/feedback": {
     access: RAW_ROUTE_ACCESS.sessionless,
@@ -229,25 +243,50 @@ const RAW_ROUTES = {
   },
 } as const satisfies Record<string, RawRouteReview>;
 
+/** How a route may be reached without a session: no caller, or its own credential. */
+const SESSIONLESS_ACCESS: ReadonlySet<RouteAccess> = new Set([
+  "public",
+  "token",
+]);
+
 const routeLabel = ({ method, path }: { method: string; path: string }) =>
   `${method} ${path}`;
 
+/** The safe factory's handler a definition carries, when a factory built it. */
+const handlerOf = (definition: RouteDefinition): unknown =>
+  "handler" in definition ? definition.handler : undefined;
+
+const isSafeRoute = ({ definition }: { definition: RouteDefinition }) =>
+  getSafeHandlerAccountAccess(handlerOf(definition)) !== undefined;
+
+const reviewOf = (label: string): RawRouteReview | undefined =>
+  Object.entries(RAW_ROUTES).find(([key]) => key === label)?.[1];
+
 describe("raw route census", () => {
   test("every route outside the safe handlers is classified", () => {
-    const safeRoutes = api.routes.filter(
-      (route) => getSafeHandlerAccountAccess(route.handler) !== undefined,
-    );
+    const safeRoutes = apiRoutes.filter(isSafeRoute);
     // The registry must see the factory-built routes, or a census that
     // recognized nothing would report every route as raw.
     expect(safeRoutes.length).toBeGreaterThan(100);
 
-    const rawRoutes = api.routes
-      .filter(
-        (route) => getSafeHandlerAccountAccess(route.handler) === undefined,
-      )
+    const rawRoutes = apiRoutes
+      .filter((route) => !isSafeRoute(route))
       .map((route) => routeLabel(route))
       .toSorted();
 
     expect(rawRoutes).toEqual(Object.keys(RAW_ROUTES).toSorted());
+  });
+
+  test("a route classified sessionless never authenticates by session", () => {
+    const sessionless = apiRoutes.filter(
+      (route) =>
+        reviewOf(routeLabel(route))?.access === RAW_ROUTE_ACCESS.sessionless,
+    );
+    expect(sessionless.length).toBeGreaterThan(0);
+    expect(
+      sessionless
+        .filter((route) => !SESSIONLESS_ACCESS.has(route.definition.access))
+        .map((route) => `${routeLabel(route)} (${route.definition.access})`),
+    ).toEqual([]);
   });
 });

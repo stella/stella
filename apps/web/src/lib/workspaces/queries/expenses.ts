@@ -5,7 +5,7 @@ import type { Temporal } from "@stll/time";
 
 import { startOfWeek } from "@/i18n/week";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -70,7 +70,7 @@ export const expensesOptions = (
           fetch: { signal },
         });
 
-      return unwrapEden(response).items;
+      return unwrapApiResponse(response).items;
     },
   });
 

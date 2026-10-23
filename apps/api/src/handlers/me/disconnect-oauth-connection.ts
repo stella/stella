@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   ACCOUNT_ACCESS,
@@ -9,10 +9,8 @@ import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { disconnectOAuthConnectionForUser } from "@/api/lib/oauth-connections";
 
-const routeParams = t.Object({
-  // better-auth generates its own OAuth consent ids (not a stella `SafeId`),
-  // so this is a plain bounded string rather than `tSafeId`.
-  consentId: t.String({ minLength: 1, maxLength: 128 }),
+const routeParams = v.object({
+  consentId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
 });
 
 const config = {

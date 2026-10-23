@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 import { Temporal } from "@stll/time";
@@ -44,9 +44,9 @@ const config = {
         "no capability returns the matter's complete filtered activity history",
     },
   },
-  query: t.Object({
+  query: v.object({
     ...matterActivityFilterQueryProperties,
-    format: t.UnionEnum([...MATTER_ACTIVITY_EXPORT_FORMATS]),
+    format: v.picklist([...MATTER_ACTIVITY_EXPORT_FORMATS]),
   }),
 } satisfies WorkspaceHandlerConfig;
 

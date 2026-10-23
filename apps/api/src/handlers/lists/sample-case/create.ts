@@ -8,7 +8,7 @@ import {
   isNull,
   TransactionRollbackError,
 } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   ENTITY_PRIORITY,
@@ -39,7 +39,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { defaultVarcharSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
@@ -116,10 +116,7 @@ const config = {
     reason: "document_processing",
     consumesServices: true,
   },
-  body: t.Object({
-    /** Name for the matter's file property if it has none yet (localized). */
-    filePropertyName: tDefaultVarchar,
-  }),
+  body: v.object({ filePropertyName: defaultVarcharSchema }),
 } satisfies WorkspaceHandlerConfig;
 
 type SampleCaseResult = {
@@ -648,7 +645,7 @@ const createSampleCase = createSafeHandler(
   },
 );
 
-declareAggregateMutation(createSampleCase.handler, {
+declareAggregateMutation(createSampleCase, {
   type: "aggregate",
   aggregates: ["sampleCase"],
 });

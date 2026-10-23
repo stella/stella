@@ -1,6 +1,7 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { numberFromString } from "@stll/api-contract/http-input";
 import { BOE_SEARCH_PAGE_LIMITS, BoeValidationError } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
@@ -9,68 +10,76 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
-const querySchema = t.Object({
-  text: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 256,
-      description: "Free-text search over consolidated legislation",
-    }),
+const querySchema = v.object({
+  text: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(256),
+      v.description("Free-text search over consolidated legislation"),
+    ),
   ),
-  title: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 256,
-      description: "Filter search results by title text",
-    }),
+  title: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(256),
+      v.description("Filter search results by title text"),
+    ),
   ),
-  departmentCode: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 32,
-      description: "Filter search results by department code",
-    }),
+  departmentCode: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(32),
+      v.description("Filter search results by department code"),
+    ),
   ),
-  legalRangeCode: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 32,
-      description: "Filter search results by legal-range code (law rank)",
-    }),
+  legalRangeCode: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(32),
+      v.description("Filter search results by legal-range code (law rank)"),
+    ),
   ),
-  matterCode: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 32,
-      description: "Filter search results by subject-matter code",
-    }),
+  matterCode: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(32),
+      v.description("Filter search results by subject-matter code"),
+    ),
   ),
-  dateFrom: t.Optional(
-    t.String({
-      pattern: "^\\d{8}$",
-      description: "Only laws published on or after this date (YYYYMMDD)",
-    }),
+  dateFrom: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(/^\d{8}$/u),
+      v.description("Only laws published on or after this date (YYYYMMDD)"),
+    ),
   ),
-  dateTo: t.Optional(
-    t.String({
-      pattern: "^\\d{8}$",
-      description: "Only laws published on or before this date (YYYYMMDD)",
-    }),
+  dateTo: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(/^\d{8}$/u),
+      v.description("Only laws published on or before this date (YYYYMMDD)"),
+    ),
   ),
-  cursor: t.Optional(
-    t.String({
-      pattern: "^\\d+$",
-      maxLength: 5,
-      description:
+  cursor: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(/^\d+$/u),
+      v.maxLength(5),
+      v.description(
         "Opaque cursor from a previous search_boe_legislation call for the next page",
-    }),
+      ),
+    ),
   ),
-  limit: t.Optional(
-    t.Numeric({
-      minimum: 1,
-      maximum: 100,
-      description: "Max search results to return",
-    }),
+  limit: v.optional(
+    v.pipe(
+      numberFromString(v.pipe(v.number(), v.minValue(1), v.maxValue(100))),
+      v.description("Max search results to return"),
+    ),
   ),
 });
 

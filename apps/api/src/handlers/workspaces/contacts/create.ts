@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
@@ -15,7 +14,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -23,15 +22,16 @@ import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
-const createWorkspaceContactBodySchema = t.Object({
-  contactId: tSafeId("contact", {
+const createWorkspaceContactBodySchema = v.object({
+  contactId: resourceIdSchema("contact", {
     description: "Contact ID: with role to link the contact",
   }),
-  role: t.UnionEnum(WORKSPACE_CONTACT_ROLES, {
-    description: "Party role for the linked contact",
-  }),
-  isPrimary: t.Optional(t.Boolean()),
-  notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
+  role: v.pipe(
+    v.picklist(WORKSPACE_CONTACT_ROLES),
+    v.description("Party role for the linked contact"),
+  ),
+  isPrimary: v.optional(v.boolean()),
+  notes: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
 });
 
 const config = {
@@ -64,7 +64,7 @@ export type CreateWorkspaceContactHandlerProps = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof createWorkspaceContactBodySchema>;
+  body: v.InferOutput<typeof createWorkspaceContactBodySchema>;
   dependencies?: {
     flushWorkspaceSearchRepairs: typeof flushWorkspaceSearchRepairs;
   };

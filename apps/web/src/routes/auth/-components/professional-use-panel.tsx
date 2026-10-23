@@ -16,7 +16,7 @@ import { useSignOut } from "@/hooks/use-sign-out";
 import { signalSessionChange } from "@/lib/account/session-signal";
 import { api } from "@/lib/api";
 import { professionalUseOptions } from "@/lib/auth-queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 type ProfessionalUsePanelProps = {
@@ -36,7 +36,7 @@ export const ProfessionalUsePanel = ({
 
   const accept = useMutation({
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.me["professional-use"].post({
           statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
         }),

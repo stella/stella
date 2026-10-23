@@ -5,7 +5,7 @@ import { timeTimersKeys } from "@/features/time-timers/queries";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
@@ -34,7 +34,7 @@ export const useTimerMutation = () => {
     mutationFn: async (command: TimerCommand) => {
       switch (command.type) {
         case "start":
-          unwrapEden(
+          unwrapApiResponse(
             await api["time-timers"].start.post({
               matterId:
                 command.matterId === null
@@ -45,19 +45,23 @@ export const useTimerMutation = () => {
           );
           return;
         case "pause":
-          unwrapEden(await api["time-timers"]({ id: command.id }).pause.post());
+          unwrapApiResponse(
+            await api["time-timers"]({ id: command.id }).pause.post(),
+          );
           return;
         case "resume":
-          unwrapEden(
+          unwrapApiResponse(
             await api["time-timers"]({ id: command.id }).resume.post(),
           );
           return;
         case "discard":
-          unwrapEden(await api["time-timers"]({ id: command.id }).delete());
+          unwrapApiResponse(
+            await api["time-timers"]({ id: command.id }).delete(),
+          );
           return;
         case "confirm":
           if (command.preparation.type === "update") {
-            unwrapEden(
+            unwrapApiResponse(
               await api["time-timers"]({ id: command.id }).patch({
                 matterId: toSafeId<"workspace">(command.preparation.matterId),
                 description: command.preparation.description,
@@ -65,7 +69,7 @@ export const useTimerMutation = () => {
             );
             command.preparation.onPrepared();
           }
-          unwrapEden(
+          unwrapApiResponse(
             await api["time-timers"]({ id: command.id }).confirm.post({
               timezoneId: user.timezoneId,
             }),

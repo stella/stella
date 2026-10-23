@@ -132,7 +132,7 @@ export const ClauseList = ({
       return;
     }
 
-    // Eden may return parsed JSON/CSV text; wrap in Blob
+    // The API client returns parsed JSON or CSV text; wrap in Blob
     const blob =
       format === "csv"
         ? new Blob([String(data)], { type: "text/csv" })
@@ -391,7 +391,7 @@ const ClauseCategorySidebar = ({
   );
 };
 
-/** Clause-categories CRUD wired to the api treaty. Each op surfaces its own
+/** Clause-categories CRUD wired to the API client. Each op surfaces its own
  *  error toast and resolves to the shared `CategoryOps` contract. */
 const useClauseCategoryOps = (): CategoryOps => {
   const t = useTranslations();

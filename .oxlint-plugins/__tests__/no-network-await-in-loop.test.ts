@@ -15,7 +15,7 @@ describe("no-network-await-in-loop", () => {
     expect(
       await lintSingleRule(
         "no-network-await-in-loop",
-        'import { fetchWithTimeout as request } from "@stll/fetch";\nimport { api } from "@/lib/eden-client";\nasync function load() { for (const id of ids) { await request(url); await api["copy-to-workspace"].post({ id }); } }',
+        'import { fetchWithTimeout as request } from "@stll/fetch";\nimport { api } from "@/lib/api";\nasync function load() { for (const id of ids) { await request(url); await api["copy-to-workspace"].post({ id }); } }',
       ),
     ).toEqual([3, 3]);
   });

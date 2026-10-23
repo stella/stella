@@ -1,0 +1,194 @@
+[
+  {
+    "key": "PATCH /v1/entity-views/:viewId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/entity-views/update.ts"
+  },
+  {
+    "key": "PATCH /v1/reader/annotations/:annotationId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/legal-reader/annotations/update.ts"
+  },
+  {
+    "key": "PATCH /v1/saved-searches/:savedSearchId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/saved-searches/update.ts"
+  },
+  {
+    "key": "PATCH /v1/skills/:skillId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/skills/update.ts"
+  },
+  {
+    "key": "PATCH /v1/skills/:skillId/proposals/:proposalId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/skills/proposals/update.ts"
+  },
+  {
+    "key": "PATCH /v1/skills/:skillId/resources",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/skills/resources/update.ts"
+  },
+  {
+    "key": "PATCH /v1/tasks/:workspaceId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/tasks/update.ts"
+  },
+  {
+    "key": "POST /v1/chat/threads/:threadId/messages/:messageId/revisions",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/chat/messages/revisions/accept.ts"
+  },
+  {
+    "key": "POST /v1/clauses/:clauseId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/clauses/update.ts"
+  },
+  {
+    "key": "POST /v1/clauses/:clauseId/variants/:variantId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/clauses/variants/update.ts"
+  },
+  {
+    "key": "POST /v1/contacts/:contactId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/contacts/update.ts"
+  },
+  {
+    "key": "POST /v1/desktop-edit-sessions/:sessionId/checkpoint",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "POST /v1/desktop-edit-sessions/:sessionId/checkpoint"
+  },
+  {
+    "key": "POST /v1/document-types/reorder",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/document-types/reorder.ts"
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/upload-version",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/entities/versions/upload.ts"
+  },
+  {
+    "key": "POST /v1/entity-views/reorder",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/entity-views/reorder.ts"
+  },
+  {
+    "key": "POST /v1/fields/:workspaceId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/fields/upsert.ts"
+  },
+  {
+    "key": "POST /v1/folio-collab-rooms/snapshot/store",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/folio-collab/snapshot-store.ts"
+  },
+  {
+    "key": "POST /v1/organization-settings/ai-config",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/organization-settings/update-ai-config.ts"
+  },
+  {
+    "key": "POST /v1/organization-settings/practice-jurisdictions",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts"
+  },
+  {
+    "key": "POST /v1/properties/:workspaceId/property/:propertyId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/properties/update.ts"
+  },
+  {
+    "key": "POST /v1/style-sets/:styleSetId/editor",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/style-sets/from-editor/update.ts"
+  },
+  {
+    "key": "POST /v1/style-sets/:styleSetId/source",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/style-sets/replace.ts"
+  },
+  {
+    "key": "POST /v1/templates/:templateId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/templates/update.ts"
+  },
+  {
+    "key": "POST /v1/templates/:templateId/document",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/templates/document/update.ts"
+  },
+  {
+    "key": "POST /v1/views/:workspaceId/reorder",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/views/reorder.ts"
+  },
+  {
+    "key": "POST /v1/views/:workspaceId/view/:viewId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/views/update.ts"
+  },
+  {
+    "key": "PUT /v1/case/research/columns/order",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/case-law/research/columns-reorder.ts"
+  },
+  {
+    "key": "PUT /v1/flows/:flowId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/flows/update.ts"
+  },
+  {
+    "key": "PUT /v1/lists/:workspaceId/item-fact-details",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/lists/items/fact-details/update.ts"
+  },
+  {
+    "key": "PUT /v1/organization-settings/anonymization-blacklist",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/organization-settings/anonymization-blacklist/update.ts"
+  },
+  {
+    "key": "PUT /v1/playbooks/:playbookId",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/playbooks/update.ts"
+  },
+  {
+    "key": "PUT /v1/rates/:workspaceId/arrangement",
+    "count": 1,
+    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
+    "baselineId": "apps/api/src/handlers/rates/arrangement/update.ts"
+  }
+]

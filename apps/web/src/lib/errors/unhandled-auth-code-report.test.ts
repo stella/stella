@@ -7,7 +7,7 @@ import { reportUnhandledAuthClientError } from "@/lib/account/auth-code-report";
 import { sanitizeExceptionEvent } from "@/lib/analytics/posthog";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
-import { webApiClientOptions } from "@/lib/eden-client";
+import { webApiClientOptions } from "@/lib/api";
 import {
   reportUserVisibleError,
   resetUserErrorReportDedupeForTests,

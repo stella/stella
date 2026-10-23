@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { envBase } from "@/api/env-base";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -105,8 +105,8 @@ describe("stamped DOCX download", () => {
 
     // The stored bytes were read: the request reached the stamp step.
     expect(fake.requests.some(({ method }) => method === "GET")).toBe(true);
-    expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (response instanceof ElysiaCustomStatusResponse) {
+    expect(response).toBeInstanceOf(HttpStatusResponse);
+    if (response instanceof HttpStatusResponse) {
       expect(response.code).toBe(422);
     }
     expect(events).toEqual([]);

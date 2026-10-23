@@ -2,249 +2,27 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { lexShell, programWords } from "./install-free-ci";
 
 const root = path.resolve(import.meta.dir, "..");
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-const methods = new Set([
-  "get",
-  "post",
-  "put",
-  "patch",
-  "delete",
-  "head",
-  "options",
-  "all",
-]);
 type Route = { method: string; path: string };
-type Router = { prefix: string; routes: Route[] };
-type Module = {
-  declarations: Map<string, ts.Expression>;
-  imports: Map<string, { file: string; name: string }>;
-};
-const modules = new Map<string, Module>();
-const moduleFile = (file: string, specifier: string) => {
-  if (specifier === "@stll/api-contract") {
-    return path.join(root, "packages/api-contract/src/index.ts");
-  }
-  if (specifier.startsWith("@/api/")) {
-    return path.join(root, "apps/api/src", `${specifier.slice(6)}.ts`);
-  }
-  if (specifier.startsWith(".")) {
-    return path.resolve(
-      path.dirname(file),
-      `${specifier.replace(/\.js$/u, "")}.ts`,
-    );
-  }
-  return undefined;
-};
-const readModule = (file: string): Module => {
-  const cached = modules.get(file);
-  if (cached) {
-    return cached;
-  }
-  const source = ts.createSourceFile(
-    file,
-    readFileSync(file, "utf-8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const declarations = new Map<string, ts.Expression>();
-  const imports: Module["imports"] = new Map();
-  for (const statement of source.statements) {
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name) && declaration.initializer) {
-          declarations.set(declaration.name.text, declaration.initializer);
-        }
-      }
-    }
-    if (ts.isExportAssignment(statement)) {
-      declarations.set("default", statement.expression);
-    }
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
-      continue;
-    }
-    const target = moduleFile(file, statement.moduleSpecifier.text);
-    const clause = statement.importClause;
-    if (target === undefined || clause === undefined) {
-      continue;
-    }
-    if (clause.name) {
-      imports.set(clause.name.text, { file: target, name: "default" });
-    }
-    if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
-      for (const binding of clause.namedBindings.elements) {
-        imports.set(binding.name.text, {
-          file: target,
-          name: binding.propertyName?.text ?? binding.name.text,
-        });
-      }
-    }
-  }
-  const result = { declarations, imports };
-  modules.set(file, result);
-  return result;
-};
-const binding = (file: string, name: string) => {
-  const module = readModule(file);
-  const imported = module.imports.get(name);
-  return imported ?? { file, name };
-};
-const staticText = (
-  expression: ts.Expression | undefined,
-  file: string,
-): string | undefined => {
-  if (!expression) {
-    return undefined;
-  }
-  if (ts.isStringLiteralLike(expression)) {
-    return expression.text;
-  }
-  if (
-    ts.isAsExpression(expression) ||
-    ts.isParenthesizedExpression(expression)
-  ) {
-    return staticText(expression.expression, file);
-  }
-  if (!ts.isIdentifier(expression)) {
-    return undefined;
-  }
-  const target = binding(file, expression.text);
-  return staticText(
-    readModule(target.file).declarations.get(target.name),
-    target.file,
-  );
-};
 const join = (prefix: string, suffix: string) =>
   `${prefix}/${suffix}`.replaceAll(/\/+/gu, "/").replace(/\/$/u, "") || "/";
-type WalkOptions = {
-  file: string;
-  prefix: string;
-  locals: Map<string, Router>;
-  active: Set<string>;
-};
-const walk = (
-  expression: ts.Expression | undefined,
-  options: WalkOptions,
-): Router | undefined => {
-  if (!expression) {
-    return undefined;
-  }
-  if (
-    ts.isParenthesizedExpression(expression) ||
-    ts.isAsExpression(expression)
-  ) {
-    return walk(expression.expression, options);
-  }
-  if (ts.isIdentifier(expression)) {
-    const local = options.locals.get(expression.text);
-    if (local) {
-      return local;
-    }
-    const target = binding(options.file, expression.text);
-    const key = `${target.file}:${target.name}:${options.prefix}`;
-    if (options.active.has(key)) {
-      return undefined;
-    }
-    const active = new Set(options.active).add(key);
-    return walk(readModule(target.file).declarations.get(target.name), {
-      ...options,
-      file: target.file,
-      active,
-    });
-  }
-  if (
-    ts.isNewExpression(expression) &&
-    ts.isIdentifier(expression.expression) &&
-    expression.expression.text === "Elysia"
-  ) {
-    const config = expression.arguments?.at(0);
-    const property =
-      config && ts.isObjectLiteralExpression(config)
-        ? config.properties.find(
-            (item) =>
-              ts.isPropertyAssignment(item) && item.name.getText() === "prefix",
-          )
-        : undefined;
-    const prefix =
-      property && ts.isPropertyAssignment(property)
-        ? staticText(property.initializer, options.file)
-        : "";
-    return prefix === undefined
-      ? undefined
-      : { prefix: join(options.prefix, prefix), routes: [] };
-  }
-  if (
-    !ts.isCallExpression(expression) ||
-    !ts.isPropertyAccessExpression(expression.expression)
-  ) {
-    return undefined;
-  }
-  const receiver = walk(expression.expression.expression, options);
-  if (!receiver) {
-    return undefined;
-  }
-  const method = expression.expression.name.text;
-  const first = expression.arguments.at(0);
-  const routes = [...receiver.routes];
-  if (methods.has(method)) {
-    const suffix = staticText(first, options.file);
-    if (suffix !== undefined) {
-      routes.push({
-        method: method.toUpperCase(),
-        path: join(receiver.prefix, suffix),
-      });
-    }
-  }
-  if (method === "use") {
-    routes.push(
-      ...(walk(first, { ...options, prefix: receiver.prefix })?.routes ?? []),
-    );
-  }
-  if (method === "group" || method === "guard") {
-    const callback = expression.arguments.find(ts.isArrowFunction);
-    const group = method === "group" ? staticText(first, options.file) : "";
-    const parameter = callback?.parameters.at(0)?.name;
-    if (
-      callback &&
-      parameter &&
-      ts.isIdentifier(parameter) &&
-      group !== undefined
-    ) {
-      const prefix = join(receiver.prefix, group);
-      const locals = new Map(options.locals).set(parameter.text, {
-        prefix,
-        routes: [],
-      });
-      const body = ts.isBlock(callback.body)
-        ? callback.body.statements.find(ts.isReturnStatement)?.expression
-        : callback.body;
-      routes.push(
-        ...(walk(body, { ...options, prefix, locals })?.routes ?? []),
-      );
-    }
-  }
-  return { ...receiver, routes };
-};
-const served =
-  walk(
-    readModule(path.join(root, "apps/api/src/server.ts")).declarations.get(
-      "default",
-    ),
-    {
-      file: path.join(root, "apps/api/src/server.ts"),
-      prefix: "",
-      locals: new Map(),
-      active: new Set(),
-    },
-  )?.routes ?? panic("API route inventory unavailable");
+
+// The routes the API serves, read off its route table. Route modules read
+// the API env when they load, so its test defaults are seeded first.
+await import("../apps/api/src/tests/setup-env");
+const { apiRoutes } = await import("../apps/api/src/api-routes");
+const served: Route[] = apiRoutes.map(({ method, path: routePath }) => ({
+  method,
+  path: routePath,
+}));
+if (served.length === 0) {
+  panic("API route inventory unavailable");
+}
 
 const apiOrigin = /https:\/\/api(?:-staging)?\.stll\.app(?:\/|$)/u;
 const references = (value: string) =>
@@ -472,10 +250,11 @@ const resolves = (probe: Route, inventory = served) => {
   if (probe.method === "GET" && ["/ready", "/health"].includes(probe.path)) {
     return true;
   }
+  // The API answers HEAD with its GET route.
+  const method = probe.method === "HEAD" ? "GET" : probe.method;
   return inventory.some(
     (route) =>
-      (route.method === probe.method || route.method === "ALL") &&
-      join("", route.path) === join("", probe.path),
+      route.method === method && join("", route.path) === join("", probe.path),
   );
 };
 test("workflow API curl probes resolve to the mounted API route and method", () => {

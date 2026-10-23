@@ -1,0 +1,230 @@
+import { panic } from "better-result";
+import type { BunRequest } from "bun";
+
+import { createResponseSet } from "@/api/http/context";
+import type { HttpServer, RequestContext } from "@/api/http/context";
+import { HTTP_FAILURE, HttpFailureError } from "@/api/http/errors";
+import { encodeResponseOutput, parseQuery, readBody } from "@/api/http/input";
+import type { QueryRecord } from "@/api/http/input";
+import { toResponse } from "@/api/http/respond";
+import type {
+  AnySchema,
+  HttpMethod,
+  Middleware,
+  RouteEntry,
+} from "@/api/http/route";
+import { HttpStatusResponse, unwrapStatus } from "@/api/http/status";
+
+export type HttpAppOptions = {
+  readonly routes: readonly RouteEntry[];
+  /** Stages every request passes through, outermost first. */
+  readonly middleware: readonly Middleware[];
+};
+
+type PathRoutes = {
+  readonly pattern: string;
+  readonly byMethod: ReadonlyMap<HttpMethod, RouteEntry>;
+};
+
+type BunRouteHandler = (
+  request: BunRequest,
+  server: HttpServer,
+) => Promise<Response>;
+
+const isWebRequest = (value: unknown): value is Request =>
+  value instanceof Request;
+
+const compose = async (
+  stages: readonly Middleware[],
+  ctx: RequestContext,
+  last: (ctx: RequestContext) => Promise<Response>,
+): Promise<Response> => {
+  const run = async (
+    index: number,
+    current: RequestContext,
+  ): Promise<Response> => {
+    const stage = stages[index];
+    return stage === undefined
+      ? await last(current)
+      : await stage(
+          current,
+          async (replacement) => await run(index + 1, replacement ?? current),
+        );
+  };
+  return await run(0, ctx);
+};
+
+const METHOD_BY_NAME: Readonly<Partial<Record<string, HttpMethod>>> = {
+  GET: "GET",
+  HEAD: "GET",
+  POST: "POST",
+  PUT: "PUT",
+  PATCH: "PATCH",
+  DELETE: "DELETE",
+  OPTIONS: "OPTIONS",
+};
+
+const entryFor = (
+  routes: PathRoutes | undefined,
+  method: string,
+): RouteEntry | undefined => {
+  const lookup = METHOD_BY_NAME[method];
+  return routes === undefined || lookup === undefined
+    ? undefined
+    : routes.byMethod.get(lookup);
+};
+
+/** Bytes, streams and raw responses are sent as they are, never re-encoded. */
+const isRawAnswer = (value: unknown): boolean =>
+  value instanceof Response ||
+  value instanceof Blob ||
+  value instanceof ReadableStream ||
+  value instanceof ArrayBuffer ||
+  ArrayBuffer.isView(value);
+
+const encodeAnswer = async (
+  entry: RouteEntry,
+  answer: unknown,
+  ctx: RequestContext,
+): Promise<unknown> => {
+  const { value, code } = unwrapStatus(answer);
+  if (isRawAnswer(value)) {
+    return answer;
+  }
+  const schema: AnySchema | undefined =
+    entry.definition.config.response?.[code ?? ctx.set.status ?? 200];
+  if (schema === undefined) {
+    return answer;
+  }
+  const encoded = await encodeResponseOutput(schema, value);
+  return code === undefined ? encoded : new HttpStatusResponse(code, encoded);
+};
+
+const withoutBody = (response: Response): Response =>
+  new Response(null, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+
+const indexRoutes = (
+  routes: readonly RouteEntry[],
+): Map<string, PathRoutes> => {
+  const byPath = new Map<string, Map<HttpMethod, RouteEntry>>();
+  for (const entry of routes) {
+    const methods = byPath.get(entry.path) ?? new Map<HttpMethod, RouteEntry>();
+    if (methods.has(entry.method)) {
+      panic(`Route ${entry.method} ${entry.path} is mounted twice`);
+    }
+    methods.set(entry.method, entry);
+    byPath.set(entry.path, methods);
+  }
+  return new Map(
+    [...byPath].map(([pattern, byMethod]) => [pattern, { pattern, byMethod }]),
+  );
+};
+
+export type HttpApp = {
+  /** Every mounted route, for tooling and censuses. */
+  readonly routes: readonly RouteEntry[];
+  /** `Bun.serve` routes: one handler per path; methods are dispatched here. */
+  readonly bunRoutes: Readonly<Record<string, BunRouteHandler>>;
+  /** `Bun.serve` fallback: answers paths no route serves, through the pipeline. */
+  readonly fetch: (request: Request, server: HttpServer) => Promise<Response>;
+};
+
+export const createHttpApp = ({
+  routes,
+  middleware,
+}: HttpAppOptions): HttpApp => {
+  const index = indexRoutes(routes);
+
+  const runRoute = async (
+    entry: RouteEntry,
+    ctx: RequestContext,
+  ): Promise<Response> =>
+    await compose(entry.middleware, ctx, async (inner) => {
+      const answer = await entry.definition.run({
+        ctx: inner,
+        route: entry.path,
+        readBody: async () =>
+          await readBody(
+            inner.request,
+            entry.definition.config.bodyMode ?? "auto",
+          ),
+      });
+      return toResponse(await encodeAnswer(entry, answer, inner), inner.set);
+    });
+
+  const handle = async (
+    request: Request,
+    server: HttpServer,
+    matched: PathRoutes | undefined,
+    params: Readonly<Record<string, string>>,
+  ): Promise<Response> => {
+    const url = new URL(request.url);
+    const routeEntry = entryFor(matched, request.method);
+    // Read on first use: most answers (a preflight, a refusal, a route with
+    // no query) never look at it.
+    let query: QueryRecord | undefined;
+    const ctx: RequestContext = {
+      request,
+      server,
+      path: url.pathname,
+      route: matched?.pattern,
+      routeEntry,
+      params,
+      get query() {
+        query ??= parseQuery(url);
+        return query;
+      },
+      set: createResponseSet(),
+    };
+    const response = await compose(middleware, ctx, async (inner) => {
+      if (matched === undefined) {
+        throw new HttpFailureError(HTTP_FAILURE.notFound);
+      }
+      if (routeEntry === undefined) {
+        throw new HttpFailureError(HTTP_FAILURE.methodNotAllowed, {
+          allow: [...matched.byMethod.keys()],
+        });
+      }
+      return await runRoute(routeEntry, inner);
+    });
+    return request.method === "HEAD" ? withoutBody(response) : response;
+  };
+
+  const bunRoutes = Object.fromEntries(
+    [...index].flatMap(([pattern, pathRoutes]) => {
+      const handler: BunRouteHandler = async (request, server) => {
+        // A route request is a `Request` at run time. bun-types declares its
+        // `clone()` apart from the web one, so a guard (not `instanceof`,
+        // which trusts the declared heritage) narrows it to what the
+        // pipeline reads.
+        if (!isWebRequest(request)) {
+          return panic("Bun.serve handed a route a non-Request value");
+        }
+        return await handle(request, server, pathRoutes, request.params);
+      };
+      const mounts: [string, BunRouteHandler][] = [[pattern, handler]];
+      // A trailing slash names the same resource.
+      const slashed = `${pattern}/`;
+      if (
+        pattern !== "/" &&
+        !pattern.endsWith("/") &&
+        !pattern.endsWith("*") &&
+        !index.has(slashed)
+      ) {
+        mounts.push([slashed, handler]);
+      }
+      return mounts;
+    }),
+  );
+
+  return {
+    routes,
+    bunRoutes,
+    fetch: async (request, server) =>
+      await handle(request, server, undefined, {}),
+  };
+};

@@ -9,7 +9,7 @@ import {
   type PdfSigningSessionSnapshot,
 } from "@/components/inspector/pdf-signing.logic";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 export type PdfSignableFile = {
@@ -38,7 +38,7 @@ export const createPdfSigningHandoff = async ({
       ...(stamp === undefined ? {} : { stamp }),
     });
 
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 /**
@@ -61,7 +61,7 @@ const readPdfSigningSession = async ({
     })
     .get();
 
-  return unwrapEden(response) satisfies PdfSigningSessionSnapshot;
+  return unwrapApiResponse(response) satisfies PdfSigningSessionSnapshot;
 };
 
 /**
@@ -79,7 +79,7 @@ export const cancelPdfSigningSession = async ({
     sessionId: toSafeId<"pdfSigningSession">(sessionId),
   }).cancel.post();
 
-  return unwrapEden(response) satisfies PdfSigningSessionSnapshot;
+  return unwrapApiResponse(response) satisfies PdfSigningSessionSnapshot;
 };
 
 const nowMs = () => Temporal.Now.instant().epochMilliseconds;

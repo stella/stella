@@ -1,30 +1,34 @@
-import Elysia, { t } from "elysia";
+import * as v from "valibot";
 
 import { VERIFICATION_CODE_PATTERN } from "@stll/api-contract";
 
 import { resolveVerificationCodeAuth } from "@/api/handlers/verify/resolve-auth";
-import { authMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
+import { defineEndpoint } from "@/api/lib/endpoints";
+
+const VERIFICATION_CODE = new RegExp(VERIFICATION_CODE_PATTERN, "u");
 
 /**
- * Authenticated resolution: `/v1/verify/:code` → the referenced document
+ * Authenticated resolution: `/v1/verify/:code` to the referenced document
  * version (matter, document, reference, version numbers), or 404 when no
  * version in the caller's organization carries the code. Called by the
  * frontend's `/verify/:code` page after the user is logged in.
  */
-export const verifyAuthRoute = new Elysia({ prefix: "/verify" })
-  .use(authMacro)
-  .guard({ validateAuth: true })
-  .get(
-    "/:code",
-    async (ctx) =>
-      await resolveVerificationCodeAuth(
-        ctx.params.code,
-        ctx.session.activeOrganizationId,
-        ctx.scopedDb,
-      ),
-    {
-      params: t.Object({
-        code: t.String({ pattern: VERIFICATION_CODE_PATTERN }),
-      }),
-    },
-  );
+const resolveVerificationCode = defineEndpoint.member(
+  {
+    params: v.object({
+      code: v.pipe(v.string(), v.regex(VERIFICATION_CODE)),
+    }),
+  },
+  async ({ params, session, scopedDb }) =>
+    await resolveVerificationCodeAuth(
+      params.code,
+      session.activeOrganizationId,
+      scopedDb,
+    ),
+);
+
+export const verifyAuthRoute = routes(
+  { "/:code": { GET: resolveVerificationCode } },
+  { prefix: "/verify" },
+);

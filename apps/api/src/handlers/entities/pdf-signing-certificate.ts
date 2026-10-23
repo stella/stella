@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { PdfSigningSessionCloseReason } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
@@ -23,26 +23,33 @@ import {
 import { PdfSigningStampError } from "@/api/lib/files/pdf-signing/stamp";
 import { configuredTimestampAuthorities } from "@/api/lib/files/pdf-signing/timestamp-authority";
 import { findRevokedCertificates } from "@/api/lib/files/pdf-signing/validation-data";
-import {
-  permissiveBodySchema,
-  permissiveRouteSchema,
-  validatePostAuth,
-} from "@/api/lib/permissive-route-schema";
 
-import { authorizePdfSigningCredentials } from "./pdf-signing-credentials";
+import {
+  pdfSigningSessionParamsSchema,
+  pdfSigningSessionTokenSchema,
+  verifyPdfSigningCaller,
+} from "./pdf-signing-credentials";
 
 /** DER certificates are small; the cap keeps a hostile body bounded. */
 const CERTIFICATE_BASE64_MAX_LENGTH = 16_384;
 const CERTIFICATE_CHAIN_MAX_LENGTH = 8;
 
-const certificatePayloadSchema = t.Object({
-  certificate: t.String({
-    minLength: 1,
-    maxLength: CERTIFICATE_BASE64_MAX_LENGTH,
-  }),
-  certificateChain: t.Array(
-    t.String({ minLength: 1, maxLength: CERTIFICATE_BASE64_MAX_LENGTH }),
-    { maxItems: CERTIFICATE_CHAIN_MAX_LENGTH },
+const certificatePayloadSchema = v.object({
+  sessionToken: pdfSigningSessionTokenSchema,
+  certificate: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(CERTIFICATE_BASE64_MAX_LENGTH),
+  ),
+  certificateChain: v.pipe(
+    v.array(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(CERTIFICATE_BASE64_MAX_LENGTH),
+      ),
+    ),
+    v.maxLength(CERTIFICATE_CHAIN_MAX_LENGTH),
   ),
 });
 
@@ -111,32 +118,16 @@ const config = {
     reason: "Verifies signing inputs without returning stored-file bytes.",
   },
   mcp: { type: "internal", reason: "session_token_exchange" },
-  body: permissiveBodySchema({
-    keys: ["sessionToken", "certificate"],
-    passthroughKeys: ["certificateChain"],
-  }),
-  params: permissiveRouteSchema({ keys: ["sessionId"] }),
+  body: certificatePayloadSchema,
+  params: pdfSigningSessionParamsSchema,
 } satisfies TokenHandlerConfig;
 
 const submitPdfSigningCertificate = createSafeTokenHandler(
   config,
-  async function* ({ body, params, request, server }) {
-    const session = yield* Result.await(
-      authorizePdfSigningCredentials({
-        sessionId: params.sessionId,
-        sessionToken: body?.sessionToken,
-      }),
-    );
-
-    const payload = validatePostAuth(certificatePayloadSchema, body);
-    if (!payload.ok) {
-      return Result.err(
-        new HandlerError({ status: 400, message: payload.message }),
-      );
-    }
-
-    const certificate = decodeBase64Der(payload.value.certificate);
-    const chain = payload.value.certificateChain.map(decodeBase64Der);
+  verifyPdfSigningCaller,
+  async function* ({ body, caller: session, request, server }) {
+    const certificate = decodeBase64Der(body.certificate);
+    const chain = body.certificateChain.map(decodeBase64Der);
     if (certificate === null || chain.includes(null)) {
       return Result.err(
         new HandlerError({

@@ -8,7 +8,7 @@ import { propertyRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { deletePlaybookPositionColumns } from "@/api/lib/properties/delete-playbook-columns";
@@ -28,7 +28,7 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  params: workspaceParams({ propertyId: tSafeId("property") }),
+  params: workspaceParams({ propertyId: resourceIdSchema("property") }),
 } satisfies WorkspaceHandlerConfig;
 
 const deleteProperty = createSafeHandler(

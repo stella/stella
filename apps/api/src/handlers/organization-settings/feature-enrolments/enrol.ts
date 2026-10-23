@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { featureEnrolments } from "@/api/db/schema";
@@ -24,7 +24,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: { type: "internal", reason: "ui_navigation_state" },
-  params: t.Object({ featureId: t.UnionEnum(SELF_SERVE_FEATURE_IDS) }),
+  params: v.object({ featureId: v.picklist(SELF_SERVE_FEATURE_IDS) }),
 } satisfies HandlerConfig;
 
 export type EnrolFeatureHandlerProps = {

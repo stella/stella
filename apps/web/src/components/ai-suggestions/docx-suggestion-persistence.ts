@@ -41,7 +41,7 @@ import {
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { api } from "@/lib/api";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { readDocxSuggestionCreatedAt } from "@/lib/workspaces/queries/docx-suggestions";
 
@@ -117,7 +117,7 @@ export const createDocxSuggestionsRequest = async ({
       const response = await api["docx-suggestions"]({ workspaceId })
         .entity({ entityId })
         .put({ suggestions: body, originThreadId: chatThreadId ?? null });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     catch: (cause) => cause,
   });
@@ -189,7 +189,7 @@ export const resolveDocxSuggestionRequest = async ({
       .entity({ entityId })
       .suggestion({ suggestionId })
       .resolve.patch(body);
-    return unwrapEden(response);
+    return unwrapApiResponse(response);
   });
   if (Result.isError(result)) {
     return "failed";
@@ -233,7 +233,7 @@ export const revertDocxSuggestionRequest = async ({
         .entity({ entityId })
         .suggestion({ suggestionId: suggestion.id })
         .revert.patch();
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     catch: (cause) => cause,
   });
@@ -290,7 +290,7 @@ export const rejectPendingDocxSuggestionsRequest = async ({
           toSafeId<"docxSuggestion">(id),
         ),
       });
-    return unwrapEden(response);
+    return unwrapApiResponse(response);
   });
   if (Result.isError(result)) {
     return Result.err(result.error);
