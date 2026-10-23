@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Tagasi rakendusse",
-    "billingAndUsage": "Arveldus ja kasutus",
     "billingProfiles": "Arveldusprofiilid",
     "deleteDescription": "Kustutage see organisatsioon ja selle andmed jäädavalt. Seda toimingut ei saa tagasi võtta.",
     "deleteOrganization": "Kustuta organisatsioon",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Lahku organisatsioonist",
     "leaveRefusedOnlyOwner": "Olete ainus omanik. Enne lahkumist määrake omanikuks mõni teine liige.",
     "modelsAndProviders": "Mudelid ja pakkujad",
-    "noPlan": "Aktiivne pakett puudub",
     "organizationDeleted": "Organisatsioon on kustutatud.",
     "organizationId": "Organisatsiooni ID",
     "organizationLeft": "Olete organisatsioonist lahkunud.",
-    "overviewDescription": "Hallake oma organisatsiooni, inimesi ja tööriistu.",
-    "people": "Inimesed",
     "planAndUsage": "Pakett ja kasutus",
     "title": "Organisatsiooni haldus",
     "toolsDescription": "Lubage või keelake sisseehitatud tööriistad kõigile selles organisatsioonis."

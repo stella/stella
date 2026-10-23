@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "DI",
-    "backToApp": "Grįžti į programą",
-    "billingAndUsage": "Atsiskaitymas ir naudojimas",
     "billingProfiles": "Atsiskaitymo profiliai",
     "deleteDescription": "Visam laikui ištrinkite šią organizaciją ir jos duomenis. Šio veiksmo negalima atšaukti.",
     "deleteOrganization": "Ištrinti organizaciją",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Išeiti iš organizacijos",
     "leaveRefusedOnlyOwner": "Esate vienintelis savininkas. Prieš išeidami paskirkite savininku kitą narį.",
     "modelsAndProviders": "Modeliai ir teikėjai",
-    "noPlan": "Nėra aktyvaus plano",
     "organizationDeleted": "Organizacija ištrinta.",
     "organizationId": "Organizacijos ID",
     "organizationLeft": "Išėjote iš organizacijos.",
-    "overviewDescription": "Tvarkykite organizaciją, žmones ir įrankius.",
-    "people": "Žmonės",
     "planAndUsage": "Planas ir naudojimas",
     "title": "Organizacijos administravimas",
     "toolsDescription": "Įjunkite arba išjunkite integruotus įrankius visiems šios organizacijos nariams."

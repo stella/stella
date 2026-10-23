@@ -30,7 +30,7 @@ import {
 } from "@stll/ui/combobox";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import {
-  BotIcon,
+  AiActionIcon,
   ChevronDownIcon,
   Clock3Icon,
   DownloadIcon,
@@ -992,7 +992,7 @@ const HorizontalActivityMilestone = ({
 
   const marker =
     first.performer.type === "agent" ? (
-      <BotIcon className="size-4" />
+      <AiActionIcon className="size-4" />
     ) : (
       <WorkflowIcon className="size-4" />
     );
@@ -1103,7 +1103,7 @@ const ActivityRunRow = ({
     resolveVisibleActivityTriggerType(first.trigger.type) !== null;
   const marker =
     first.performer.type === "agent" ? (
-      <BotIcon className="size-3.5" />
+      <AiActionIcon className="size-3.5" />
     ) : (
       <WorkflowIcon className="size-3.5" />
     );
@@ -1597,7 +1597,7 @@ const Performer = ({ item }: { item: MatterActivityItem }) => {
     >
       <span className="flex size-5 items-center justify-center">
         {item.performer.type === "agent" ? (
-          <BotIcon className="size-3.5" />
+          <AiActionIcon className="size-3.5" />
         ) : (
           <WorkflowIcon className="size-3.5" />
         )}
@@ -1685,7 +1685,7 @@ const PerformerCells = ({ item }: { item: MatterActivityItem }) => {
     <>
       <span className="flex size-5 items-center justify-center">
         {item.performer.type === "agent" ? (
-          <BotIcon className="size-3.5" />
+          <AiActionIcon className="size-3.5" />
         ) : (
           <WorkflowIcon className="size-3.5" />
         )}
