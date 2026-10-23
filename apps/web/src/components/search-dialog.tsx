@@ -60,6 +60,7 @@ import {
   SearchCompanyResult,
   useCompanyRegistrySearch,
 } from "@/components/search-company-result";
+import { filterCommandActions } from "@/components/search-dialog-actions.logic";
 import {
   SearchColumnResizeHandle,
   SearchFooterHint,
@@ -921,16 +922,11 @@ export const SearchDialog = ({
   const { resolvedActions, executeAction, uploadRequest, closeUpload } =
     useCommandActions(open);
 
-  const normalizedActionQuery = query.trim().toLowerCase();
-  const filteredActions = resolvedActions.filter(
-    (action) =>
-      mode.type === "browse" &&
-      (normalizedActionQuery.length === 0 ||
-        action.title.toLowerCase().includes(normalizedActionQuery) ||
-        action.keywordLabels.some((keyword) =>
-          keyword.toLowerCase().includes(normalizedActionQuery),
-        )),
-  );
+  const filteredActions = filterCommandActions({
+    actions: resolvedActions,
+    mode: mode.type,
+    query,
+  });
 
   const actionEntries = filteredActions.map(
     (action) =>
@@ -1059,6 +1055,16 @@ export const SearchDialog = ({
     setSupplementalPreview({ type: "internal" });
     setSearchScope("all");
     setFilters(initialFiltersForMode(mode, initialWorkspaceId));
+  };
+
+  const escapeAction = hasVisibleSearch ? "clear" : "close";
+  const handleEscape = (event: ReactKeyboardEvent<HTMLElement>) => {
+    handleSearchDialogEscape({
+      action: escapeAction,
+      clearSearch,
+      event,
+      focusInput: () => searchInputRef.current?.focus(),
+    });
   };
 
   const handleSummarizeResults = () => {
@@ -1699,18 +1705,9 @@ export const SearchDialog = ({
         onOpenChangeComplete={(nextOpen) => {
           closeActionQueue.complete(nextOpen);
         }}
-        onOpenChange={(nextOpen, eventDetails) => {
+        onOpenChange={(nextOpen) => {
           if (nextOpen) {
             closeActionQueue.cancel();
-          }
-          if (
-            !nextOpen &&
-            eventDetails.reason === "escape-key" &&
-            hasVisibleSearch
-          ) {
-            eventDetails.cancel();
-            clearSearch();
-            return;
           }
           onOpenChange(nextOpen);
         }}
@@ -1724,6 +1721,7 @@ export const SearchDialog = ({
               : "sm:w-[min(960px,calc(100vw-32px))]",
           )}
           layer="search"
+          onKeyDownCapture={handleEscape}
           showCloseButton={false}
         >
           <RenderStormRegion name="search-dialog">
@@ -2112,7 +2110,7 @@ export const SearchDialog = ({
                 here so the input row stays a plain input. */}
               <SearchDialogFooter
                 scope={searchScope}
-                escapeAction={hasVisibleSearch ? "clear" : "close"}
+                escapeAction={escapeAction}
                 canAskAI={canSummarizeSearch}
                 isAskingAI={askAIMutation.isPending}
                 mode={mode.type}
@@ -2372,10 +2370,34 @@ const ESCAPE_HINT_KEYS = {
   close: "search.hintClose",
 } as const;
 
+type SearchDialogEscapeAction = keyof typeof ESCAPE_HINT_KEYS;
+
+type HandleSearchDialogEscapeOptions = {
+  action: SearchDialogEscapeAction;
+  clearSearch: () => void;
+  event: ReactKeyboardEvent<HTMLElement>;
+  focusInput: () => void;
+};
+
+const handleSearchDialogEscape = ({
+  action,
+  clearSearch,
+  event,
+  focusInput,
+}: HandleSearchDialogEscapeOptions) => {
+  if (event.key !== "Escape" || action !== "clear") {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  clearSearch();
+  focusInput();
+};
+
 type SearchDialogFooterProps = {
   scope: SearchScope;
   /** What the next Esc does: it clears an active search before it closes. */
-  escapeAction: keyof typeof ESCAPE_HINT_KEYS;
+  escapeAction: SearchDialogEscapeAction;
   canAskAI: boolean;
   isAskingAI: boolean;
   mode: SearchDialogMode["type"];

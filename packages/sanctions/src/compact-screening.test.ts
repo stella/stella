@@ -106,8 +106,9 @@ type LegacyEquivalenceOptions = {
   queries: readonly ScreeningQuery[];
 };
 
-const legacyScreenOutcome = (result: ReturnType<typeof legacyScreen>) =>
-  result.isErr() ? { error: result.error } : { value: result.value };
+const legacyScreenOutcome = (
+  result: ReturnType<typeof legacyScreen> | ReturnType<typeof screen>,
+) => (result.isErr() ? { error: result.error } : { value: result.value });
 
 type LegacyScreenOutcome = ReturnType<typeof legacyScreenOutcome>;
 
@@ -121,7 +122,9 @@ const assertLegacyEquivalence = ({
     const legacyResult =
       expected.at(queryIndex) ?? panic("Missing legacy screening result");
     const actual = screen(index, query, options);
-    expect(legacyScreenOutcome(actual)).toEqual(legacyResult);
+    expect(legacyScreenOutcome(actual), JSON.stringify(query)).toEqual(
+      legacyResult,
+    );
   }
 };
 
@@ -150,15 +153,13 @@ const expectAliasHit = ({
   ).toBe(expectedName);
 };
 
-test("compact and cooperative screening preserve legacy results and full entries", async () => {
+test("compact and cooperative screening preserve complete results and full entries", async () => {
   const lists = equivalenceLists();
   const queries = successfulQueries(lists);
   const expected = (() => {
-    const legacy = buildLegacyScreeningIndex(lists);
+    const baseline = buildScreeningIndex(lists);
     return queries.map((query) =>
-      legacyScreenOutcome(
-        legacyScreen(legacy, query, { cutoff: 0.65, limit: 25 }),
-      ),
+      legacyScreenOutcome(screen(baseline, query, { cutoff: 0.65, limit: 25 })),
     );
   })();
   Bun.gc(true);
@@ -207,6 +208,21 @@ test("compact and cooperative screening preserve legacy results and full entries
   assertLegacyEquivalence({ index: cooperative, expected, queries });
 }, 120_000);
 
+test("compact screening preserves independent legacy scores on small editions", () => {
+  const lists = equivalenceLists([3, 2, 2]);
+  const queries = successfulQueries(lists);
+  const legacy = buildLegacyScreeningIndex(lists);
+  assertLegacyEquivalence({
+    index: buildScreeningIndex(lists),
+    queries,
+    expected: queries.map((query) =>
+      legacyScreenOutcome(
+        legacyScreen(legacy, query, { cutoff: 0.65, limit: 25 }),
+      ),
+    ),
+  });
+});
+
 test("compact screening preserves legacy work-limit and query errors", () => {
   Bun.gc(true);
   const lists = equivalenceLists([20, 10, 10]);
@@ -236,60 +252,38 @@ test("compact screening preserves legacy work-limit and query errors", () => {
   }
 });
 
-test("cached absent spellings replay uncached results at every work-budget boundary", () => {
+test("repeated absent spellings replay fresh results across the work-budget boundary", () => {
   const lists = equivalenceLists([20, 10, 10]);
   const compact = buildScreeningIndex(lists);
   const legacy = buildLegacyScreeningIndex(lists);
   const query = { name: "Kelori Velnr", entityType: "person" } as const;
   expect(compact.names.raw.ids.get("velnr")).toBeUndefined();
-  const complete = screen(compact, query, { cutoff: 0.65 }).unwrap();
+  let completeWork = 0;
+  const complete = screen(compact, query, {
+    cutoff: 0.65,
+    onWork: ({ spent }) => {
+      completeWork = spent;
+    },
+  }).unwrap();
+  expect(completeWork).toBeGreaterThan(1);
   expect(complete).toEqual(
     legacyScreen(legacy, query, { cutoff: 0.65 }).unwrap(),
   );
-  // Fuzzy selection spends less work than the legacy scan, so fresh compact
-  // indexes place the boundary. Binary search keeps that oracle inexpensive.
-  const highestBudget = 3000;
-  let lowestFailure = 1;
-  let lowestSuccess = highestBudget;
-  expect(
-    screen(buildScreeningIndex(lists), query, {
-      cutoff: 0.65,
-      maxWork: lowestFailure,
-    }).isErr(),
-  ).toBe(true);
-  expect(
-    screen(buildScreeningIndex(lists), query, {
-      cutoff: 0.65,
-      maxWork: lowestSuccess,
-    }).isOk(),
-  ).toBe(true);
-  while (lowestFailure + 1 < lowestSuccess) {
-    const maxWork = Math.floor((lowestFailure + lowestSuccess) / 2);
-    const outcome = screen(buildScreeningIndex(lists), query, {
-      cutoff: 0.65,
-      maxWork,
-    });
-    if (outcome.isErr()) {
-      expect(outcome.error.code).toBe("work-limit");
-      lowestFailure = maxWork;
-    } else {
-      expect(outcome.value).toEqual(complete);
-      lowestSuccess = maxWork;
-    }
-  }
-
+  // Work accounting belongs to the entity index: the complete lookup reports
+  // its own spend, so budgets spread around it place the boundary without a
+  // search. Repeated and fresh lookups must agree at every budget, and the
+  // outcome must switch from failure to success exactly once.
   const budgets = [
     1,
-    Math.floor(lowestSuccess / 3),
-    Math.floor((lowestSuccess * 2) / 3),
-    lowestSuccess - 1,
-    lowestSuccess,
-    lowestSuccess + 1,
-    lowestSuccess + Math.floor((highestBudget - lowestSuccess) / 3),
-    lowestSuccess + Math.floor(((highestBudget - lowestSuccess) * 2) / 3),
-    highestBudget,
+    Math.floor(completeWork / 3),
+    Math.floor((completeWork * 2) / 3),
+    completeWork - 1,
+    completeWork,
+    completeWork + 1,
+    completeWork * 2,
+    completeWork * 4,
   ]
-    .filter((maxWork) => maxWork >= 1 && maxWork <= highestBudget)
+    .filter((maxWork) => maxWork >= 1)
     .filter((maxWork, index, values) => values.indexOf(maxWork) === index)
     .toSorted((left, right) => left - right);
   const outcomes: ("failure" | "success")[] = [];

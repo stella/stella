@@ -30,6 +30,7 @@ import type { USAGE_POLICY_PRICE_BASES } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
 
 export const MEMBER_CAPACITY_REACHED_ERROR_CODE =
   "organization_member_capacity_reached";
@@ -204,14 +205,17 @@ export const checkMemberCapacityChange = async (
  * with a member capacity (see above), only a member holding a seat
  * assignment may, whether the organization's own key or the instance
  * provider would serve the work; anyone else is refused rather than served
- * from the organization's shared pool. Always true while the flag is off,
- * without a query.
+ * from the organization's shared pool. The monitoring principal is not
+ * admitted. Other principals are admitted without a query while the flag is off.
  */
 export const memberMayUseAI = async (
   db: Pick<Transaction, "select">,
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
 ): Promise<boolean> => {
+  if (isSyntheticPrincipal({ organizationId, userId })) {
+    return false;
+  }
   if (!isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")) {
     return true;
   }

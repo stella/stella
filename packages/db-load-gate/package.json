@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@stll/concurrency": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/time": "0.4.1",
     "better-result": "catalog:"
   },
   "devDependencies": {

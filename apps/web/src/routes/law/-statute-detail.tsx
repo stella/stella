@@ -40,7 +40,8 @@ import {
   outlineMatchItems,
   rankOutlineMatches,
 } from "@/components/legal-reader/outline-jump-field.logic";
-import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
+import { useRecordOpenedLawDocument } from "@/features/law-search-history/law-search-history-query";
+import { PendingStatuteChanges } from "@/features/statutes/components/pending-statute-changes";
 import {
   StatuteIneligibleVersionNotice,
   StatuteWindowGapNotice,
@@ -53,7 +54,7 @@ import {
 } from "@/features/statutes/statute-compare-search";
 import type { StatuteCompareSearch } from "@/features/statutes/statute-compare-search";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
@@ -168,39 +169,24 @@ const useRecordStatuteOpen = ({
   eli: string;
   title: string;
 }) => {
-  const openedPath = useRouterState({
-    select: ({ location }) => location.pathname,
+  const { citation, rest } = splitStatuteTitleCitation(title);
+  const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(eli);
+  const year = eliCitation?.at(1);
+  const number = eliCitation?.at(2);
+  useRecordOpenedLawDocument({
+    kind: "statute",
+    documentId: eli,
+    documentIdentity:
+      number === undefined || year === undefined
+        ? { kind: "unknown" }
+        : { kind: "statute", number, year },
+    title: {
+      identifier:
+        citation ??
+        (year === undefined || number === undefined ? "" : `${number}/${year}`),
+      description: rest,
+    },
   });
-  const {
-    record: { mutate: recordHistory },
-    enabled: historyEnabled,
-  } = useLawHistory();
-  useExternalSyncEffect(() => {
-    if (!historyEnabled) {
-      return;
-    }
-    const { citation, rest } = splitStatuteTitleCitation(title);
-    const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(eli);
-    const year = eliCitation?.at(1);
-    const number = eliCitation?.at(2);
-    recordHistory({
-      kind: "statute",
-      documentId: eli,
-      documentIdentity:
-        number === undefined || year === undefined
-          ? { kind: "unknown" }
-          : { kind: "statute", number, year },
-      title: {
-        identifier:
-          citation ??
-          (year === undefined || number === undefined
-            ? ""
-            : `${number}/${year}`),
-        description: rest,
-      },
-      path: openedPath,
-    });
-  }, [historyEnabled, recordHistory, title, eli, openedPath]);
 };
 
 /**
@@ -421,6 +407,7 @@ export const PublicStatuteViewer = ({
         ) : (
           <>
             <StatuteIneligibleVersionNotice version={statute} />
+            <PendingStatuteChanges changes={statute.pendingChanges} />
             <StatuteReaderBody
               blocks={blocks}
               masthead={preparedReader.masthead}

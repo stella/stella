@@ -1,5 +1,45 @@
 # @stll/ui
 
+## 0.49.3
+
+### Patch Changes
+
+- [#6583](https://github.com/stella/stella/pull/6583) [`85cae51`](https://github.com/stella/stella/commit/85cae51c030a8fbb6421dd13456001dd5a9dcdde) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The outline rail opens its panel when the pointer rests on the tick strip, not the moment it crosses it.
+
+## 0.49.2
+
+### Patch Changes
+
+- [#6512](https://github.com/stella/stella/pull/6512) [`0bf6d20`](https://github.com/stella/stella/commit/0bf6d20b7a8225cc3cc27a933d2e09608b31dc8c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A toast that closes on its own shows a faint countdown line that holds while the toast is hovered, focused or the window is in the background; the same plain message raised again refreshes the toast on screen instead of stacking a copy.
+
+## 0.49.1
+
+### Patch Changes
+
+- [#6437](https://github.com/stella/stella/pull/6437) [`bbede41`](https://github.com/stella/stella/commit/bbede4118c2a62a39bb4a709ef51f4545de7055e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Prose` accepts `tone` and `size` variants for muted and small narrative copy.
+
+## 0.49.0
+
+### Minor Changes
+
+- [#6310](https://github.com/stella/stella/pull/6310) [`f68baf7`](https://github.com/stella/stella/commit/f68baf7f2240db328e62201120dde71f3baf2b7b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Prose` sets an 80-character measure for narrative text.
+
+### Patch Changes
+
+- [#6206](https://github.com/stella/stella/pull/6206) [`6787bf4`](https://github.com/stella/stella/commit/6787bf4a6e33a5fa97538d91428d928ffffaabc8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The floating outline opens from its tick strip (hover, focus or tap) and no longer draws a toggle button; Escape closes it and returns focus to the tick.
+
+## 0.48.0
+
+### Minor Changes
+
+- [#5823](https://github.com/stella/stella/pull/5823) [`ed25af1`](https://github.com/stella/stella/commit/ed25af1211e6e5f091842ddf553f2795f5c16622) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `textMarkHighlightRule` takes a `variant` and every state, so a line mark (underline, dotted, wavy, strike) can be drawn through the CSS Custom Highlight API as well as a fill.
+
+## 0.47.1
+
+### Patch Changes
+
+- [#5740](https://github.com/stella/stella/pull/5740) [`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A destructive confirm dialog stays open when its confirm settles to `"keep-open"`, and a host-responsive workspace frame may omit its end dock.
+
 ## 0.47.0
 
 ### Minor Changes

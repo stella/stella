@@ -4,7 +4,10 @@ import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { DESKTOP_ACTIVITY_REVIEW_LIMIT } from "@stll/api-contract/desktop-time-entries";
+import {
+  DESKTOP_ACTIVITY_REVIEW_LIMIT,
+  DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
+} from "@stll/api-contract/desktop-time-entries";
 import type {
   DesktopMatter,
   DesktopTimeEntryBatch,
@@ -38,7 +41,7 @@ import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivityTimeline } from "./ActivityTimeline";
 import type { TimelineSegment } from "./ActivityTimeline";
 import "./day-review.css";
-import { matchDay } from "./day-review-logic";
+import { canAssign, matchDay } from "./day-review-logic";
 import type {
   DayReviewGroup,
   MatchConfidence,
@@ -258,6 +261,10 @@ export const ActivityDayReview = ({
       maximumFractionDigits: 1,
     });
   const timelineSegments = withAwaySegments(day.segments, t("awayNotCounted"));
+  const assignmentEnabled = canAssign({
+    editable,
+    timeBillingEnabled: snapshot.timeBillingEnabled,
+  });
   const assign = (ranges: readonly Range[], matter: DesktopMatter) => {
     setError(null);
     // Only local instants and the chosen matter identity cross this native boundary.
@@ -401,7 +408,7 @@ export const ActivityDayReview = ({
     <div className="flex flex-col gap-5">
       <DayReviewMetrics header={header} segments={day.segments} />
       <ActivityTimeline
-        disabled={!editable || !snapshot.timeBillingEnabled}
+        disabled={!assignmentEnabled}
         segments={timelineSegments}
         snapshot={snapshot}
         candidates={matters}
@@ -425,6 +432,7 @@ export const ActivityDayReview = ({
         matters={matters}
         snapshot={snapshot}
         editable={editable}
+        assignmentEnabled={assignmentEnabled}
         leaveOut={leaveOut}
         onLeaveOut={() => setLeaveOut(true)}
         assign={assign}
@@ -621,6 +629,7 @@ const withAwaySegments = (
         matterId: null,
         document: null,
         windowTitle: null,
+        call: false,
         matter: null,
         confidence: "unmatched",
         evidence: [],
@@ -711,6 +720,7 @@ const ReviewEntries = ({
   matters,
   snapshot,
   editable,
+  assignmentEnabled,
   leaveOut,
   onLeaveOut,
   assign,
@@ -721,6 +731,7 @@ const ReviewEntries = ({
   matters: readonly DesktopTimeEntryMatterCandidate[];
   snapshot: ActivityDaySnapshot;
   editable: boolean;
+  assignmentEnabled: boolean;
   leaveOut: boolean;
   onLeaveOut: () => void;
   assign: (ranges: readonly Range[], matter: DesktopMatter) => void;
@@ -767,7 +778,7 @@ const ReviewEntries = ({
                         key={candidate.id}
                         variant="outline"
                         size="sm"
-                        disabled={!editable}
+                        disabled={!assignmentEnabled}
                         onClick={() =>
                           assign(
                             group.ranges.map(({ start, end }) => ({
@@ -790,7 +801,7 @@ const ReviewEntries = ({
                       </Button>
                     ))}
                   <MatterPicker
-                    disabled={!editable || !snapshot.timeBillingEnabled}
+                    disabled={!assignmentEnabled}
                     candidates={matters}
                     onChoose={(chosen) =>
                       assign(
@@ -861,7 +872,7 @@ const ReviewEntries = ({
                   aria-label={t("entryNarrative")}
                   aria-describedby={`review-matter-${matter.id}`}
                   value={edit.narrative}
-                  maxLength={4000}
+                  maxLength={DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH}
                   disabled={!editable}
                   onChange={(event) =>
                     update(group, { narrative: event.target.value })

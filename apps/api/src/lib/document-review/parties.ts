@@ -144,6 +144,7 @@ export const detectReviewParties = async ({
         managedAIResidency,
         organizationId,
         admission,
+        userId: admission.userId,
         analytics: aiAnalytics,
         caching,
         serviceTier,
@@ -159,10 +160,8 @@ export const detectReviewParties = async ({
             }),
           },
         ],
-        abortSignal: AbortSignal.any([
-          abortSignal,
-          AbortSignal.timeout(TIMEOUT_MS),
-        ]),
+        abortSignal,
+        deadlineMs: TIMEOUT_MS,
         outputSchema: proposedPartiesSchema,
       });
       return normalizeParties(output.parties);

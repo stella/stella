@@ -376,8 +376,11 @@ const renderTextSegment = ({
   }
 
   if (anonymized) {
+    // No inline padding: a selection paints only behind glyphs, so padding
+    // would stay tinted inside a selected passage and break it at every
+    // placeholder. The brackets give the token its room.
     return (
-      <span className="bg-muted/60 text-muted-foreground rounded-sm px-0.5">
+      <span className="bg-muted/60 text-muted-foreground rounded-sm">
         [{content}]
       </span>
     );

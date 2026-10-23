@@ -380,6 +380,12 @@
       "attentionComplete": "<strong>Všetky tvrdenia vyžadujúce úsudok boli vybavené.</strong> {count, plural, one {Zostávajúce # bežné posúdenie nevyžaduje samostatnú kontrolu.} few {Zostávajúce # bežné posúdenia nevyžadujú samostatnú kontrolu.} many {Zostávajúcich # bežných posúdení nevyžaduje samostatnú kontrolu.} other {Zostávajúceho # bežného posúdenia nevyžaduje samostatnú kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrdenie vyžaduje} few {# tvrdenia vyžadujú} many {# tvrdení vyžaduje} other {# tvrdenia vyžaduje}} váš úsudok</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zostávajúce # je bežné a nevyžaduje samostatné schválenie.} few {Zostávajúce # sú bežné a nevyžadujú samostatné schválenie.} many {Zostávajúcich # je bežných a nevyžaduje samostatné schválenie.} other {Zostávajúceho # bežného posúdenia netreba samostatne schvaľovať.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, skontrolované} disputed {, spochybnené} other {}})",
+      "documentView": {
+        "label": "Zobrazenie dokumentu",
+        "original": "Originál",
+        "reading": "Text na čítanie"
+      },
+      "notLocated": "{count, plural, one {# tvrdenie sa v origináli nepodarilo nájsť} few {# tvrdenia sa v origináli nepodarilo nájsť} many {# tvrdenia sa v origináli nepodarilo nájsť} other {# tvrdení sa v origináli nepodarilo nájsť}}",
       "selectClaim": "Vyberte tvrdenie a pozrite si súvisiace záznamy.",
       "showQueue": "Zobraziť poradie",
       "stats": {
@@ -849,7 +855,6 @@
         "unavailable": "AI analýza nie je pre toto rozhodnutie k dispozícii."
       },
       "generate": "Zostaviť právne vety pomocou AI",
-      "holdingAnchor": "Prejsť na odsek",
       "invitation": "S bezplatným účtom vám AI k rozhodnutiu pripraví pracovné poznámky.",
       "topics": "Témy",
       "treatment": "Neskoršia judikatúra"
@@ -1009,6 +1014,9 @@
       "saved": "Do spisu {matter} {count, plural, one {bolo uložené # rozhodnutie} few {boli uložené # rozhodnutia} other {bolo uložených # rozhodnutí}}"
     },
     "newestDecisions": "Najnovšie rozhodnutia",
+    "noResults": {
+      "hint": "Skúste iné slová, vylepšite dopyt pomocou AI alebo sa opýtajte v chate."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Ľudské"
@@ -1082,6 +1090,10 @@
         "short": "Krátky"
       }
     },
+    "rewritten": {
+      "line": "Pre <bdi>{original}</bdi> nič presne nezodpovedá; zobrazujeme výsledky pre <bdi>{query}</bdi>",
+      "searchOriginal": "Hľadať moje pôvodné slová"
+    },
     "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie}} túto spisovú značku. Vyberte súd.",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
@@ -1098,6 +1110,8 @@
         "hint": "Zrušte alebo rozšírte filter a hľadajte znova.",
         "message": "Zvoleným filtrom nič nezodpovedá."
       },
+      "partialMatch": "Čiastočná zhoda",
+      "partialMatches": "Čiastočné zhody pre: <bdi>{query}</bdi>",
       "resultsFor": "Výsledky pre: <bdi>{query}</bdi>",
       "searchEveryWord": "Hľadať všetky slová"
     },
@@ -1135,6 +1149,7 @@
       "judges": "Sudcovia",
       "legalArea": "Oblasť práva",
       "legalSentence": "Právna veta",
+      "paragraphReference": "Odsek {number}",
       "popularName": "Populárny názov",
       "portraitCredit": "Zdroj portrétov: {source}",
       "provisionMentions": "{count, number}×",
@@ -1381,6 +1396,7 @@
     "credentialSendDescription": "Odošlite ju iba vtedy, ak chcete túto hodnotu zdieľať v konverzácii.",
     "credentialSendTitle": "Táto správa môže obsahovať prístupový údaj",
     "deleteThread": "Zmazať konverzáciu",
+    "diagramUnavailable": "Diagram sa nepodarilo vykresliť. Nižšie je jeho zdrojový kód.",
     "editMode": {
       "autoDirect": "Automaticky · prepísať",
       "autoDirectDescription": "Úpravy od AI sa použijú ihneď priamym prepísaním dokumentu (bez sledovania zmien).",
@@ -1601,6 +1617,9 @@
         "private": "Vaše AI zručnosti",
         "team": "Tímové AI zručnosti"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Tiež konzultované ({count, number})"
     },
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",
@@ -2662,10 +2681,12 @@
     "api": {
       "badRequest": "Požiadavku sa nepodarilo dokončiť.",
       "caseLawCountryUnavailable": "Judikatúra tejto krajiny nie je dostupná. Vyberte inú krajinu.",
+      "caseLawIdentityOnly": "Pre túto krajinu je dostupné iba presné vyhľadanie a čítanie rozhodnutí.",
       "caseLawSearchUnavailable": "Vyhľadávanie judikatúry tejto krajiny nie je dostupné. Jej verejné rozhodnutia si môžete naďalej čítať.",
       "conflict": "Požiadavka je v konflikte s aktuálnym stavom.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "legislationCountryUnavailable": "Právne predpisy tejto krajiny nie sú dostupné. Vyberte inú krajinu.",
+      "legislationIdentityOnly": "Pre túto krajinu je dostupné iba presné vyhľadanie a čítanie právnych predpisov.",
       "legislationSearchUnavailable": "Vyhľadávanie právnych predpisov tejto krajiny nie je dostupné. Jej verejné právne predpisy si môžete naďalej čítať.",
       "notFound": "Požadovanú položku sa nepodarilo nájsť.",
       "payloadTooLarge": "Požiadavka je príliš veľká.",
@@ -2688,6 +2709,11 @@
       "aiConfigModelInvalid": "Konfigurácia modelu AI je neplatná. Skontrolujte vybrané modely.",
       "aiConfigProviderInvalid": "Konfigurácia poskytovateľa AI je neplatná. Skontrolujte nastavenia poskytovateľa.",
       "aiConfigProviderValidationFailed": "Poskytovateľ AI konfiguráciu odmietol. Skontrolujte kľúč API a model.",
+      "aiDeadlineExceeded": "AI neodpovedala včas. Skúste to o chvíľu znova.",
+      "aiOutputInvalid": "Odpoveď AI mala neočakávaný formát. Skúste to znova.",
+      "aiOutputModerated": "Poskytovateľ AI výstup zablokoval. Preformulujte požiadavku alebo vyberte iný model.",
+      "aiProviderTaskUnsupported": "Nastavený poskytovateľ AI túto úlohu nedokáže vykonať. Vyberte poskytovateľa, ktorý ju dokáže vykonať.",
+      "aiUnknown": "Požiadavka AI zlyhala. Skúste to znova.",
       "clauseDirectivesInvalid": "Prepojené ustanovenie obsahuje neplatné direktívy. Pred vyplnením vzoru ustanovenie opravte.",
       "clauseDirectivesInvalidDetails": "Ustanovenie {clauseName} na pozícii {slotName} obsahuje neplatné direktívy. Otvorte editor ustanovenia, opravte uvedené odseky a znova vyplňte vzor.",
       "clauseDirectivesOverrideInvalidDetails": "Prepísané ustanovenie {clauseName} na pozícii {slotName} obsahuje neplatné direktívy. Pred ďalším vyplnením opravte prepísané znenie v tomto vyplnení.",
@@ -4173,7 +4199,9 @@
     "prompt": "Čo hľadáte?",
     "recent": "Nedávne",
     "recentCasesFilter": "Rozhodnutia",
+    "recentLoadFailed": "Nedávnu aktivitu sa nepodarilo načítať.",
     "recentSearchFilter": "Vyhľadávania",
+    "recentUpdateFailed": "Nedávnu aktivitu sa nepodarilo aktualizovať.",
     "recentlyInForce": "Nedávno nadobudlo účinnosť",
     "searchLabel": "Hľadať v právnej databáze",
     "searchPlaceholder": "Spisová značka, číslo predpisu, ECLI alebo kľúčové slová",
@@ -4234,6 +4262,10 @@
     "archivedEmpty": "Žiadne archivované pamäte.",
     "archivedToast": "Pamäť bola archivovaná",
     "createdToast": "Uložené do pamäte",
+    "deleteConfirmation": "Na potvrdenie napíšte {confirmation}",
+    "deleteDescription": "Týmto túto pamäť natrvalo odstránite. Túto akciu nemožno vrátiť späť.",
+    "deleteTitle": "Odstrániť pamäť?",
+    "deletedToast": "Pamäť bola odstránená",
     "empty": "Zatiaľ žiadna pamäť.",
     "kinds": {
       "decision": "Rozhodnutie",
@@ -5162,6 +5194,8 @@
     "outline": "Obsah",
     "outlineJumpLabel": "Prejsť na ustanovenie",
     "outlineJumpPlaceholder": "§ 10 alebo názov",
+    "pendingChanges": "Nadchádzajúce novely",
+    "pendingChangesIncomplete": "Údaje vydavateľa nemusia zahŕňať všetky nadchádzajúce novely.",
     "provisionAskContextPrompt": "\n\nPasáže, ktoré toto ustanovenie aplikujú v najvplyvnejších rozhodnutiach:\n{passages}\n\nPomocou nástrojov pre judikatúru si môžeš prečítať ktorékoľvek z týchto rozhodnutí celé alebo vyhľadať ďalšie rozhodnutia, ktoré ustanovenie citujú.",
     "provisionAskPlaceholder": "Opýtajte sa na toto ustanovenie",
     "provisionAskQuestionPrompt": "K {subject}: {question}",

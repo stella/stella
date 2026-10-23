@@ -136,6 +136,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
 
   try {
     return await generateTanStackObjectForTask({
+      userId: admission.userId,
       dataClass: "customer",
       task: DERIVE_ASK_TASK,
       orgAIConfig,
@@ -154,7 +155,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
       serviceTier: "standard",
       system,
       prompt,
-      abortSignal: AbortSignal.timeout(DERIVE_ASK_TIMEOUT_MS),
+      deadlineMs: DERIVE_ASK_TIMEOUT_MS,
       outputSchema: deriveAskSchema,
     });
   } catch (error) {

@@ -117,6 +117,7 @@ export const runScheduledBackgroundWork = async <T>({
     run: async (leaseSignal) =>
       await admitModelDispatch({
         organizationId,
+        userId,
         actionKind,
         organizationStateDb,
         signal: leaseSignal,
@@ -171,6 +172,7 @@ export const runBackgroundJob = async <T>({
       // discards the run signal.
       return await admitModelDispatch({
         organizationId,
+        userId,
         actionKind,
         organizationStateDb,
         signal: leaseSignal,

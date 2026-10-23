@@ -42,6 +42,7 @@ import type {
 } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import type { ModelDefaultCandidate } from "@stll/ai-catalog/model-defaults-ledger";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { createSha256 } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
@@ -1225,6 +1226,7 @@ const byokProviderTaskUnsupportedError = (
   task: ModelTask,
 ): HandlerError<400> =>
   new HandlerError({
+    code: AI_FAILURE_CODES.provider_task_unsupported,
     status: 400,
     message:
       `${provider} is not available for the "${task}" AI task. ` +
@@ -1945,6 +1947,7 @@ export function tanStackModelOptionsForTask(
 
 const byokRoleNotConfiguredError = (task: ModelTask): HandlerError =>
   new HandlerError({
+    code: AI_FAILURE_CODES.role_not_configured,
     status: 403,
     message:
       `AI is not available for the "${task}" task on this deployment. ` +

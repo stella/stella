@@ -1,4 +1,4 @@
-// parser-output-unchanged: an unused log-export flag was removed; no parser output depends on it.
+// parser-output-unchanged: Release attribution adds a service.version attribute to telemetry records; parsed ingestion records are unchanged.
 import { logs } from "@opentelemetry/api-logs";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
@@ -8,6 +8,7 @@ import {
 } from "@opentelemetry/sdk-logs";
 
 import { envBase } from "@/api/env-base";
+import { APP_VERSION, SERVICE_VERSION_KEY } from "@/api/lib/version";
 
 /**
  * External log export is opt-in per deployment: the OTLP provider registers
@@ -32,6 +33,7 @@ if (
     ],
     resource: resourceFromAttributes({
       "service.name": "stella-api",
+      [SERVICE_VERSION_KEY]: APP_VERSION,
     }),
   });
   logs.setGlobalLoggerProvider(provider);
