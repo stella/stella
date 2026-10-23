@@ -147,7 +147,9 @@ export const parseBfdiDocument = ({
     const date = /^(\d{2})\.(\d{2})\.(\d{4})$/u.exec(
       compact(dates.find(".value").text()),
     );
-    const [, day, month, year] = date ?? [];
+    const day = date?.at(1);
+    const month = date?.at(2);
+    const year = date?.at(3);
     const issuedOn = day && month && year ? [year, month, day].join("-") : "";
     if (!parsePlainDate(issuedOn)) {
       return yield* invalid("BfDI publication date is invalid");
@@ -410,6 +412,8 @@ const BFDI_DEFINITION = {
   sourceSurfaces: { surfaces: SOURCE_SURFACE_DISPOSITIONS },
 } as const satisfies Omit<SoftLawSourceAdapter, "discover" | "fetchDocument">;
 
+const BFDI_DISCOVERY_BATCH_LIMIT = 10;
+
 export const createBfdiAdapter = (input: unknown) =>
   Result.gen(function* () {
     const parsed = v.safeParse(policySchema, input);
@@ -419,20 +423,25 @@ export const createBfdiAdapter = (input: unknown) =>
     const policy = parsed.output;
     const urls = new Set<string>();
     for (const index of policy.indexes) {
-      urls.add(yield* publisherUrl(index.url));
+      index.url = yield* publisherUrl(index.url);
+      urls.add(index.url);
       if (!new URL(index.url).pathname.startsWith("/DE/Fachthemen/")) {
         return yield* invalid("BfDI discovery does not name a topical page");
       }
       for (const document of index.documents) {
-        for (const value of [document.url, document.documentUrl]) {
-          const url = yield* publisherUrl(value);
-          if (!new URL(url).pathname.startsWith("/SharedDocs/Downloads/DE/")) {
-            return yield* invalid(
-              "BfDI publication does not name a document surface",
-            );
-          }
-          urls.add(url);
+        document.url = yield* publisherUrl(document.url);
+        document.documentUrl = yield* publisherUrl(document.documentUrl);
+        if (
+          ![document.url, document.documentUrl].every((url) =>
+            new URL(url).pathname.startsWith("/SharedDocs/Downloads/DE/"),
+          )
+        ) {
+          return yield* invalid(
+            "BfDI publication does not name a document surface",
+          );
         }
+        urls.add(document.url);
+        urls.add(document.documentUrl);
       }
     }
     const policyHash = sha256Hex(JSON.stringify(policy));
@@ -459,8 +468,7 @@ export const createBfdiAdapter = (input: unknown) =>
             );
           }
           const index = policy.indexes.at(indexNumber);
-          const admitted = index?.documents.at(item);
-          if (!index || !admitted) {
+          if (!index || !index.documents.at(item)) {
             return yield* invalid(
               "BfDI discovery cursor is outside its admitted collection",
             );
@@ -473,45 +481,52 @@ export const createBfdiAdapter = (input: unknown) =>
             new TextDecoder().decode(indexResponse.bytes),
             index.url,
           );
-          if (!listed.includes(admitted.url)) {
-            return yield* invalid(
-              "BfDI topical page is missing an admitted publication",
-            );
+          const admittedDocuments = index.documents.slice(
+            item,
+            item + BFDI_DISCOVERY_BATCH_LIMIT,
+          );
+          const entries = [];
+          for (const admitted of admittedDocuments) {
+            if (!listed.includes(admitted.url)) {
+              return yield* invalid(
+                "BfDI topical page is missing an admitted publication",
+              );
+            }
+            const detailResponse = yield* await read(admitted.url, {
+              expectedContentTypes: HTML_TYPES,
+            });
+            const entry = yield* parseBfdiDocument({
+              html: new TextDecoder().decode(detailResponse.bytes),
+              ...admitted,
+            });
+            entries.push({
+              ...entry,
+              sourcePages: [index.url, admitted.url],
+              sourceRaw: [
+                captureDiscoveryResponse({
+                  role: "index",
+                  url: index.url,
+                  response: indexResponse,
+                  retrievedAt: indexRetrievedAt,
+                }),
+                captureDiscoveryResponse({
+                  role: "detail",
+                  url: admitted.url,
+                  response: detailResponse,
+                  retrievedAt: Temporal.Now.instant().toString(),
+                }),
+              ],
+            });
           }
-          const detailResponse = yield* await read(admitted.url, {
-            expectedContentTypes: HTML_TYPES,
-          });
-          const entry = yield* parseBfdiDocument({
-            html: new TextDecoder().decode(detailResponse.bytes),
-            ...admitted,
-          });
+          const nextItem = item + admittedDocuments.length;
           let nextCursor: string | null = null;
-          if (item + 1 < index.documents.length) {
-            nextCursor = `${policyHash}:${indexNumber}:${item + 1}`;
+          if (nextItem < index.documents.length) {
+            nextCursor = `${policyHash}:${indexNumber}:${nextItem}`;
           } else if (indexNumber + 1 < policy.indexes.length) {
             nextCursor = `${policyHash}:${indexNumber + 1}:0`;
           }
           return Result.ok({
-            entries: [
-              {
-                ...entry,
-                sourcePages: [index.url, admitted.url],
-                sourceRaw: [
-                  captureDiscoveryResponse({
-                    role: "index",
-                    url: index.url,
-                    response: indexResponse,
-                    retrievedAt: indexRetrievedAt,
-                  }),
-                  captureDiscoveryResponse({
-                    role: "detail",
-                    url: admitted.url,
-                    response: detailResponse,
-                    retrievedAt: Temporal.Now.instant().toString(),
-                  }),
-                ],
-              },
-            ],
+            entries,
             nextCursor,
           });
         }),

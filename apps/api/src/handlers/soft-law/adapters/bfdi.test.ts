@@ -296,6 +296,85 @@ test("admission validation and stale cursors fail before publisher requests", as
   expect(denied.calls).toEqual([]);
 });
 
+test("admission locators are normalized before discovery and document reads", async () => {
+  const policies = [
+    {
+      indexUrl: INDEX.replace("www.bfdi.bund.de", "WWW.BFDI.BUND.DE"),
+      detailUrl: DETAIL,
+      documentUrl: ASSET,
+    },
+    {
+      indexUrl: INDEX,
+      detailUrl: DETAIL.replace("www.bfdi.bund.de", "www.bfdi.bund.de:443"),
+      documentUrl: ASSET,
+    },
+    {
+      indexUrl: INDEX,
+      detailUrl: DETAIL,
+      documentUrl: ASSET.replace(
+        "Besch%C3%A4ftigtendatenschutz",
+        "Beschäftigtendatenschutz",
+      ),
+    },
+  ];
+  for (const locators of policies) {
+    const adapter = createBfdiAdapter({
+      ...policy,
+      indexes: [
+        {
+          url: locators.indexUrl,
+          documents: [
+            {
+              ...admitted,
+              url: locators.detailUrl,
+              documentUrl: locators.documentUrl,
+            },
+          ],
+        },
+      ],
+    }).unwrap();
+    const read = transport(await responses());
+    const page = (
+      await adapter.discover({
+        cursor: null,
+        signal: signal(),
+        fetch: read.fetch,
+      })
+    ).unwrap();
+    const entry = page.entries.at(0) ?? panic("Missing normalized BfDI entry");
+    expect(
+      (
+        await adapter.fetchDocument(entry, {
+          signal: signal(),
+          fetch: read.fetch,
+        })
+      ).isOk(),
+    ).toBe(true);
+    expect(read.calls).toEqual([INDEX, DETAIL, ASSET]);
+  }
+});
+
+test("one bounded discovery batch reuses its topical index response", async () => {
+  const adapter = createBfdiAdapter({
+    ...policy,
+    indexes: [
+      { ...index, documents: Array.from({ length: 11 }, () => admitted) },
+    ],
+  }).unwrap();
+  const read = transport(await responses());
+  const page = (
+    await adapter.discover({
+      cursor: null,
+      signal: signal(),
+      fetch: read.fetch,
+    })
+  ).unwrap();
+  expect(page.entries).toHaveLength(10);
+  expect(page.nextCursor).not.toBeNull();
+  expect(read.calls.filter((url) => url === INDEX)).toHaveLength(1);
+  expect(read.calls.filter((url) => url === DETAIL)).toHaveLength(10);
+});
+
 test("overlapping discovery and replay converge while preserving complete raw and local PDF text", async () => {
   const adapter = createBfdiAdapter({
     ...policy,
