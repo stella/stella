@@ -5403,7 +5403,10 @@ const config = defineConfig({
     {
       // Rule tests only: the shared runner (lint-single-rule.ts) owns the
       // one-oxlint-process slot and runs its lone fallbacks in turn.
-      files: [".oxlint-plugins/__tests__/*.test.ts"],
+      files: [
+        ".oxlint-plugins/__tests__/*.test.ts",
+        ".oxlint-plugins/__fixtures__/no-serial-lint-case.fixture.ts",
+      ],
       rules: {
         "no-serial-lint-case/no-serial-lint-case": "error",
       },
