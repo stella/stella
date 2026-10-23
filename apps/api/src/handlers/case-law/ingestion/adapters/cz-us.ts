@@ -794,7 +794,6 @@ const detailJudges = (fields: NalusDetailFields): PrintedDecisionJudge[] =>
 
 type DecisionJudgesOptions = {
   recordCard: ParsedRecordCard;
-  cardJudges: readonly PrintedDecisionJudge[] | undefined;
   bench: readonly CzechDeclinedDecisionJudge[];
 };
 
@@ -811,12 +810,11 @@ type DecisionJudgesOptions = {
  */
 const decisionJudges = ({
   recordCard,
-  cardJudges,
   bench,
 }: DecisionJudgesOptions): DecisionJudgeInput[] | undefined => {
   switch (recordCard.state) {
     case CZ_US_RECORD_CARD_STATE.READ:
-      return [...bench, ...(cardJudges ?? [])];
+      return [...bench, ...detailJudges(recordCard.fields)];
     case CZ_US_RECORD_CARD_STATE.ABSENT:
       return bench.length === 0 ? undefined : [...bench];
     case CZ_US_RECORD_CARD_STATE.UNAVAILABLE:
@@ -1074,15 +1072,13 @@ const parseDecisionPage = ({
     extractLabel(html, "lblPopularName") ?? detail?.popularName.at(0);
   const bodyText = extractDocContentText(html);
   const fulltext = extractFulltext(bodyText);
-  const cardJudges = detail === null ? undefined : detailJudges(detail);
   const judges = decisionJudges({
     recordCard,
-    cardJudges,
     bench: czUsOpeningBench(bodyText ?? ""),
   });
   // The stored facts row reads one name; the roles live on `judges`, and
   // both spell it the way the roster is matched on.
-  const judge = cardJudges?.find(
+  const judge = (detail === null ? undefined : detailJudges(detail))?.find(
     ({ role }) => role === DECISION_JUDGE_ROLE.RAPPORTEUR,
   )?.nameAsPrinted;
 

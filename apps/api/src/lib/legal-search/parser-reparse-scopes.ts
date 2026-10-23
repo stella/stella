@@ -130,10 +130,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 25,
+    version: 26,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "the bench read from the opening sentence is part of the judges every re-parse replaces, which have no feature storage of their own",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {

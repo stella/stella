@@ -63,7 +63,7 @@ describe("czUsOpeningBench", () => {
         "Davida Uhlíře",
         "Jiřího Zemánka",
       ].map((czechDeclinedName) => ({
-        role: "panel-member",
+        role: "panel-member" as const,
         czechDeclinedName,
       })),
     ]);

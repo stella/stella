@@ -53,10 +53,6 @@ const BENCH_START_PATTERN =
 const BENCH_END_PATTERN =
   /[\s,](?:o|ve\s+věci|v\s+(?:právní\s+)?věci|takto)(?=[\s,:])/u;
 
-/** Names are separated by commas and by the conjunction "a". */
-const SEGMENT_SEPARATOR = /\s*,\s*|\s+a\s+/u;
-
-const PARENTHETICAL_PATTERN = /\((?<note>[^)]*)\)/gu;
 const RAPPORTEUR_WORD = /zpravodaj/u;
 const PRESIDING_WORD = /^předsed/u;
 const NAME_WORD = /^\p{Lu}[\p{L}'’-]*$/u;
@@ -135,55 +131,115 @@ const benchText = (
   };
 };
 
+/**
+ * The bench split where the sentence separates it: at commas and at the
+ * conjunction "a". The text arrives with its whitespace collapsed to single
+ * spaces, so plain string splits find every separator without a pattern
+ * that backtracks.
+ */
+const benchSegments = (names: string): string[] =>
+  names.split(",").flatMap((part) => part.split(" a "));
+
+/**
+ * A segment without its parenthesised notes, and the notes: "(soudce
+ * zpravodaje)" marks the name it follows.
+ */
+const withoutNotes = (segment: string): { text: string; notes: string[] } => {
+  const notes: string[] = [];
+  let text = "";
+  let rest = segment;
+  for (;;) {
+    const open = rest.indexOf("(");
+    const close = open === -1 ? -1 : rest.indexOf(")", open);
+    if (close === -1) {
+      return { text: `${text}${rest}`, notes };
+    }
+    text = `${text}${rest.slice(0, open)} `;
+    notes.push(rest.slice(open + 1, close));
+    rest = rest.slice(close + 1);
+  }
+};
+
+/**
+ * What one segment states: a name (after any role phrase), a role phrase on
+ * its own, or neither, which is what a title left behind a comma ("Ph.D.",
+ * "S.J.D.") is.
+ */
+type BenchSegment =
+  | { type: "name"; phrase: string; words: string[]; rapporteur: boolean }
+  | { type: "phrase"; phrase: string }
+  | { type: "not-a-name" };
+
+const readSegment = (segment: string): BenchSegment => {
+  const { text, notes } = withoutNotes(segment);
+  const words = stripAcademicTitles(text)
+    .split(WHITESPACE)
+    .filter((word) => word.length > 0);
+  const phraseLength = words.findIndex((word) => !LOWERCASE_START.test(word));
+  const phrase = words
+    .slice(0, phraseLength === -1 ? words.length : phraseLength)
+    .join(" ");
+  const nameWords = phraseLength === -1 ? [] : words.slice(phraseLength);
+  if (nameWords.length === 0) {
+    return phrase.length === 0
+      ? { type: "not-a-name" }
+      : { type: "phrase", phrase };
+  }
+  return nameWords.length >= MIN_NAME_WORDS &&
+    nameWords.every((word) => NAME_WORD.test(word))
+    ? {
+        type: "name",
+        phrase,
+        words: nameWords,
+        rapporteur: notes.some((note) => RAPPORTEUR_WORD.test(note)),
+      }
+    : { type: "not-a-name" };
+};
+
 const benchEntries = (names: string, alone: boolean): BenchEntry[] => {
   const entries: BenchEntry[] = [];
   let seat: BenchSeat | null = alone ? "alone" : null;
 
-  for (const segment of names.split(SEGMENT_SEPARATOR)) {
-    const notes = [...segment.matchAll(PARENTHETICAL_PATTERN)].map(
-      (match) => match.groups?.["note"] ?? "",
-    );
-    const words = stripAcademicTitles(
-      segment.replace(PARENTHETICAL_PATTERN, " "),
-    )
-      .split(WHITESPACE)
-      .filter((word) => word.length > 0);
-    const phraseLength = words.findIndex((word) => !LOWERCASE_START.test(word));
-    const phrase = words
-      .slice(0, phraseLength === -1 ? words.length : phraseLength)
-      .join(" ");
-    const nameWords = phraseLength === -1 ? [] : words.slice(phraseLength);
-    const rapporteur = notes.some((note) => RAPPORTEUR_WORD.test(note));
-
-    if (nameWords.length === 0) {
-      // A role phrase alone: "soudkyň" before "a soudců …" names the seat of
-      // what follows, and "soudce zpravodaje" set off by commas marks the
-      // name before it.
-      const previous = entries.at(-1);
-      if (RAPPORTEUR_WORD.test(phrase) && previous !== undefined) {
-        previous.rapporteur = true;
-      } else if (phrase.length > 0 && !alone) {
-        seat = seatOf(phrase);
+  for (const segment of benchSegments(names)) {
+    const read = readSegment(segment);
+    switch (read.type) {
+      case "phrase": {
+        // A role phrase alone: "soudkyň" before "a soudců …" names the seat
+        // of what follows, and "soudce zpravodaje" set off by commas marks
+        // the name before it.
+        const previous = entries.at(-1);
+        if (RAPPORTEUR_WORD.test(read.phrase) && previous !== undefined) {
+          previous.rapporteur = true;
+        } else if (!alone) {
+          seat = seatOf(read.phrase);
+        }
+        break;
       }
-      continue;
+      case "not-a-name":
+        // States no judge, so there is nothing to keep.
+        break;
+      case "name": {
+        const entrySeat =
+          alone || read.phrase.length === 0 ? seat : seatOf(read.phrase);
+        // A name with no seat before it follows the presiding judge without
+        // a role phrase; the sentence does not say what it is.
+        if (entrySeat !== null) {
+          entries.push({
+            declinedName: read.words.join(" "),
+            seat: entrySeat,
+            rapporteur: read.rapporteur,
+          });
+        }
+        // The presiding judge is named alone; the names after them are
+        // members unless a phrase says otherwise.
+        seat = entrySeat === "presiding" ? null : entrySeat;
+        break;
+      }
+      default: {
+        read satisfies never;
+        return panic(`Unhandled bench segment: ${String(read)}`);
+      }
     }
-
-    const entrySeat = alone || phrase.length === 0 ? seat : seatOf(phrase);
-    if (
-      entrySeat === null ||
-      nameWords.length < MIN_NAME_WORDS ||
-      !nameWords.every((word) => NAME_WORD.test(word))
-    ) {
-      continue;
-    }
-    entries.push({
-      declinedName: nameWords.join(" "),
-      seat: entrySeat,
-      rapporteur,
-    });
-    // The presiding judge is named alone; the names after them are members
-    // unless a phrase says otherwise.
-    seat = entrySeat === "presiding" ? null : entrySeat;
   }
   return entries;
 };
