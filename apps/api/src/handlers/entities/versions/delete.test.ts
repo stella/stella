@@ -286,13 +286,6 @@ describe("delete-version chain-of-custody guard", () => {
             "MCP processing-state provenance reads only the latest version ID across tombstones so a rollback cannot expose stale extracted text.",
         },
       ],
-      "mcp/stella-tools.ts": [
-        {
-          anchor: "Provenance fence: include tombstones",
-          reason:
-            "MCP content provenance reads only the latest version ID across tombstones so a rollback cannot expose withdrawn extracted text.",
-        },
-      ],
     };
 
     const toRepoPath = (file: string) => repoRelativePath(API_SRC, file);
@@ -429,8 +422,11 @@ describe("delete-version chain-of-custody guard", () => {
 
     expect(projectionDelete).toBeGreaterThan(txStart);
     expect(projectionDelete).toBeLessThan(txEnd);
+    // The promoted version is reprojected after the transaction, through the
+    // injected projector whose production default is the extraction owner.
+    expect(source).toContain("processPromotedVersion = processExtraction,");
     expect(
-      source.indexOf("processExtraction(params.entityId)"),
+      source.indexOf("processPromotedVersion(params.entityId)"),
     ).toBeGreaterThan(txEnd);
   });
 

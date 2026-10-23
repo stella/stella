@@ -16,4 +16,7 @@ if [[ "$status" -eq 1 && "${WAIVE_DEPENDENCY_AUDIT:-false}" == "true" && "$reaso
   echo "::warning::Dependency audit explicitly waived: $reason"
   exit 0
 fi
+if [[ "$status" -ne 1 ]]; then
+  echo "::error::The dependency audit waiver cannot cover exit status $status." >&2
+fi
 exit "$status"

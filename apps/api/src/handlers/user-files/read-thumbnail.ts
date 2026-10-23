@@ -9,8 +9,8 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import { createUserFileKey } from "@/api/lib/files/utils";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const readUserFileThumbnail = createSafeRootHandler(
   {
@@ -34,6 +34,8 @@ const readUserFileThumbnail = createSafeRootHandler(
           await tx
             .select({
               thumbnailFileId: userFiles.thumbnailFileId,
+              s3Key: userFiles.s3Key,
+              userId: userFiles.userId,
               workspaceId: chatThreads.workspaceId,
             })
             .from(userFiles)
@@ -59,11 +61,15 @@ const readUserFileThumbnail = createSafeRootHandler(
           return null;
         }
 
-        const thumbnailKey = createUserFileKey({
-          fileId: file.thumbnailFileId,
-          mimeType: THUMBNAIL_MIME_TYPE,
-          userId: user.id,
+        const thumbnailKey = createUserFileThumbnailKey({
+          sourceKey: file.s3Key,
+          thumbnailFileId: file.thumbnailFileId,
+          organizationId: activeOrganizationId,
+          uploaderUserId: brandPersistedUserId(file.userId),
         });
+        if (thumbnailKey === null) {
+          return null;
+        }
 
         const presignedUrl = await auditedPresignDownload({
           readSessionAuthority: ownerSyntheticSessionAuthorityReader,
