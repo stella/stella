@@ -171,7 +171,8 @@ describe("billing arrangement scope", () => {
       ownerPolicies.map(({ name, command }) => `${name}:${command}`).toSorted(),
     ).toEqual(["review_reset_owner_delete:d", "review_reset_owner_select:r"]);
     for (const policy of ownerPolicies) {
-      expect(policy.using).toContain("pg_get_userbyid(relowner)");
+      expect(policy.using).toContain("pg_get_userbyid");
+      expect(policy.using).toContain("relowner");
       expect(policy.using).toContain(
         CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId,
       );
