@@ -926,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Išsamumas",
-      "countedOn": "Suskaičiuota {date}",
       "courtsHeading": "Pagal teismą",
       "courtsUnavailable": "Suskirstymas pagal teismus šiuo metu nepasiekiamas.",
       "decisionYears": "Sprendimų metai",
       "description": "Kiek teismų praktikos yra korpuse pagal valstybes ir teismus ir kiek atnaujintas kiekvienas šaltinis.",
-      "exceedsReportedTotal": "Turi daugiau, nei paskutinis skelbėjo nurodytas skaičius {date}",
-      "gapStatusUnknown": "Spragų būsena nežinoma",
       "generatedAt": "Duomenys {date}",
       "globeLabel": "Valstybės, kurių teismų praktiką turi korpusas, gaublyje",
       "healthCurrent": "Atnaujinta",
