@@ -21,6 +21,7 @@ import type {
   ModelsDevRateProvider,
 } from "@stll/ai-catalog";
 
+import { assertOfflineCheckPreload } from "../../../scripts/offline-check-startup";
 import { loadModelCatalogSnapshot } from "./model-catalog-snapshot";
 
 const OUTPUT_PATH = path.resolve(
@@ -640,5 +641,7 @@ const main = async (): Promise<void> => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   await main();
 }
