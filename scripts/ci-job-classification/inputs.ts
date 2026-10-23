@@ -4,7 +4,7 @@
 // No imports: the autofix planner loads this from a sparse checkout without
 // dependencies.
 export const CLASSIFICATION_DECISIONS_PATH =
-  ".github/ci-job-classification-decisions.json";
+  ".github/ci-job-classification-decisions";
 
 export const CLASSIFICATION_INPUT_PATHS = [
   ".github/workflows",
@@ -21,6 +21,7 @@ export const CLASSIFICATION_INPUT_PATHS = [
 const DIRECTORY_INPUTS = new Set<string>([
   ".github/workflows",
   ".github/actions",
+  CLASSIFICATION_DECISIONS_PATH,
   "scripts/ci-job-classification",
 ]);
 

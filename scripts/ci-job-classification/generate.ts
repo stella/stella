@@ -5,6 +5,12 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
+import {
+  DECISIONS,
+  decisionPath,
+  readDecisions,
+  readDecisionsAtRevision,
+} from "./decisions";
 import { verifyPublicMetadata } from "./public-metadata";
 import type { PublicMetadata, MetadataReader } from "./public-metadata";
 import {
@@ -17,14 +23,6 @@ import { isPrivilegedJobClosure, ReviewRequiredError } from "./review";
 import { AdmissionError, parseDocument } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
-const DECISIONS = v.record(
-  v.string(),
-  v.strictObject({
-    kind: v.picklist(CLASSIFICATIONS),
-    qualifier: v.pipe(v.string(), v.minLength(1)),
-    reviewedDigest: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
-  }),
-);
 const REVISION_DECISIONS = v.record(
   v.string(),
   v.strictObject({
@@ -74,7 +72,7 @@ export const readClassificationInputs = (root: string) => {
     },
   };
   return {
-    decisions: v.parse(DECISIONS, read("ci-job-classification-decisions.json")),
+    decisions: readDecisions(root),
     snapshots,
     reader,
     localActionPath: (directory: string) => {
@@ -152,7 +150,7 @@ export const readClassificationInputsAtRevision = (
   };
   const revisionDecisions = v.parse(
     REVISION_DECISIONS,
-    readGithubJson("ci-job-classification-decisions.json"),
+    readDecisionsAtRevision(revision, (args) => gitText(root, args)),
   );
   return {
     decisions: v.parse(
@@ -402,12 +400,19 @@ const reviewJobs = ({
   );
   if (removed.length) {
     throw new AdmissionError({
-      message: `Decisions for removed jobs: ${removed.join(", ")}. Remove these entries from .github/ci-job-classification-decisions.json`,
+      message: `Decisions for removed jobs: ${removed.join(", ")}. Remove these files:\n${removed.map(decisionPath).join("\n")}`,
     });
   }
   if (Object.keys(entries).length) {
     throw new ReviewRequiredError({
-      message: `${privilegedJobs.length ? `Sensitive classification change: ${privilegedJobs.join(", ")}\n` : ""}Missing or changed job review. Re-review kind and qualifier; paste these entries into .github/ci-job-classification-decisions.json (choose kind and qualifier for new jobs):\n${JSON.stringify(entries, null, 2)}`,
+      message: `${privilegedJobs.length ? `Sensitive classification change: ${privilegedJobs.join(", ")}\n` : ""}Missing or changed job review. Re-review kind and qualifier; write these decision files (choose kind and qualifier for new jobs):\n${Object.entries(
+        entries,
+      )
+        .map(
+          ([key, entry]) =>
+            `${decisionPath(key)}\n${JSON.stringify(entry, null, 2)}`,
+        )
+        .join("\n")}`,
       privilegedJobs,
     });
   }

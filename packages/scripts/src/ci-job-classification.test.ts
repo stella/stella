@@ -18,6 +18,10 @@ import {
   sha256,
 } from "../../../scripts/ci-job-classification/classification-values";
 import {
+  decisionKey,
+  decisionPath,
+} from "../../../scripts/ci-job-classification/decisions";
+import {
   generateClassification,
   readClassificationInputs,
 } from "../../../scripts/ci-job-classification/generate";
@@ -48,6 +52,19 @@ const SUPPORT = CLASSIFICATIONS[1];
 const repositoryRoot = path.resolve(import.meta.dir, "../../..");
 const githubExpression = (expression: string) =>
   ["$", "{{ ", expression, " }}"].join("");
+const writeDecision = (root: string, key: string, decision: object) => {
+  const file = path.join(root, decisionPath(key));
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(decision));
+  return file;
+};
+
+test("decision file paths round-trip every encoded key component", () => {
+  const key = "supplier:% workflow/ünicode%job";
+  const file = decisionPath(key);
+  expect(file).toContain("supplier/%25%20workflow/%C3%BCnicode%25job.json");
+  expect(decisionKey(file)).toBe(key);
+});
 
 test("committed classifications cover the repository and its pinned metadata callees", () => {
   const inputs = readClassificationInputs(repositoryRoot);
@@ -57,15 +74,47 @@ test("committed classifications cover the repository and its pinned metadata cal
     throw generated.error;
   }
   const manifest = generated.value;
-  // Parsing must preserve all reviewed decisions and pinned supplier metadata.
-  for (const [file, parsed] of [
-    [".github/ci-job-classification-decisions.json", decisions],
-    [".github/ci-job-classification-sources.json", snapshots],
-  ] as const) {
-    expect(parsed).toEqual(
-      JSON.parse(readFileSync(path.join(repositoryRoot, file), "utf-8")),
-    );
-  }
+  // The migration must preserve every value from the former manifest.
+  const oldManifest = ".github/ci-job-classification-decisions.json";
+  const headHasManifest = Bun.spawnSync(
+    ["git", "cat-file", "-e", `HEAD:${oldManifest}`],
+    { cwd: repositoryRoot, stderr: "pipe" },
+  ).exitCode;
+  const revision =
+    headHasManifest === 0
+      ? "HEAD"
+      : `${new TextDecoder()
+          .decode(
+            Bun.spawnSync(
+              [
+                "git",
+                "log",
+                "-1",
+                "--format=%H",
+                "--diff-filter=D",
+                "--",
+                oldManifest,
+              ],
+              { cwd: repositoryRoot, stdout: "pipe" },
+            ).stdout,
+          )
+          .trim()}^`;
+  const previous = Bun.spawnSync(
+    ["git", "show", `${revision}:${oldManifest}`],
+    { cwd: repositoryRoot, stdout: "pipe", stderr: "pipe" },
+  );
+  expect(previous.exitCode).toBe(0);
+  expect(decisions).toEqual(
+    JSON.parse(new TextDecoder().decode(previous.stdout)),
+  );
+  expect(snapshots).toEqual(
+    JSON.parse(
+      readFileSync(
+        path.join(repositoryRoot, ".github/ci-job-classification-sources.json"),
+        "utf-8",
+      ),
+    ),
+  );
   expect(fixtureDecisions(manifest)).toEqual(decisions);
   expect(manifest.workflows.length).toBeGreaterThan(0);
   expect(
@@ -1057,10 +1106,7 @@ for (const change of [
     expect(changed).not.toBe(original);
     f.documents.set(key, changed);
     failure(verifyPublicMetadata(f), ".github/workflows/ci.yml/caller");
-    failure(
-      verifyPublicMetadata(f),
-      ".github/ci-job-classification-decisions.json",
-    );
+    failure(verifyPublicMetadata(f), ".github/ci-job-classification-decisions");
   });
 }
 
@@ -1075,10 +1121,10 @@ test("new jobs remain unclassified even when refreshing generated metadata", () 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.message).toContain(
-      "candidate:.github/workflows/ci.yml/added",
+      decisionPath("candidate:.github/workflows/ci.yml/added"),
     );
     expect(result.error.message).toContain(
-      ".github/ci-job-classification-decisions.json",
+      ".github/ci-job-classification-decisions",
     );
   }
 }, 15_000);
@@ -1123,10 +1169,10 @@ test("job digests bind exactly the reachable local action closure", () => {
       if (changed.isErr()) {
         expect(changed.error).toBeInstanceOf(ReviewRequiredError);
         expect(changed.error.message).toContain(
-          '"candidate:.github/workflows/ci.yml/caller"',
+          decisionPath("candidate:.github/workflows/ci.yml/caller"),
         );
         expect(changed.error.message).not.toContain(
-          '"candidate:.github/workflows/ci.yml/reusable"',
+          decisionPath("candidate:.github/workflows/ci.yml/reusable"),
         );
       }
       f.documents.set(actionKey, originalAction);
@@ -1290,7 +1336,7 @@ for (const [before, after] of [
     );
     failure(
       verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
-      ".github/ci-job-classification-decisions.json",
+      ".github/ci-job-classification-decisions",
     );
     const stale = generateClassification(options);
     expect(stale.isErr()).toBe(true);
@@ -1364,7 +1410,7 @@ test("reusable workflow caller inputs require review until metadata is refreshed
   );
   failure(
     verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
-    ".github/ci-job-classification-decisions.json",
+    ".github/ci-job-classification-decisions",
   );
   const stale = generateClassification(options);
   expect(stale.isErr()).toBe(true);
@@ -1563,7 +1609,7 @@ for (const [before, after] of [
     f.documents.set(key, changed);
     failure(
       verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
-      ".github/ci-job-classification-decisions.json",
+      ".github/ci-job-classification-decisions",
     );
     const stale = generateClassification(options);
     expect(stale.isErr()).toBe(true);
@@ -1777,20 +1823,19 @@ for (const review of ["missing", "stale"] as const) {
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error).toBeInstanceOf(ReviewRequiredError);
+      expect(result.error.message).toContain(decisionPath(key));
       expect(result.error.message).toContain(
         JSON.stringify(
           {
-            [key]: {
-              kind:
-                review === "missing"
-                  ? "<choose ordinary, support, or priority>"
-                  : decision.kind,
-              qualifier:
-                review === "missing"
-                  ? "<describe the reviewed classification>"
-                  : decision.qualifier,
-              reviewedDigest,
-            },
+            kind:
+              review === "missing"
+                ? "<choose ordinary, support, or priority>"
+                : decision.kind,
+            qualifier:
+              review === "missing"
+                ? "<describe the reviewed classification>"
+                : decision.qualifier,
+            reviewedDigest,
           },
           null,
           2,
@@ -1809,10 +1854,6 @@ test("the CLI emits a sensitive annotation and machine output until review is up
   try {
     mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
     const workflowPath = path.join(root, ".github/workflows/ci.yml");
-    const decisionsPath = path.join(
-      root,
-      ".github/ci-job-classification-decisions.json",
-    );
     const outputPath = path.join(root, "step-output");
     const key = "candidate:.github/workflows/ci.yml/publish";
     const baseline = parsedWorkflow({ jobs: { publish: { steps: [] } } });
@@ -1835,7 +1876,7 @@ test("the CLI emits a sensitive annotation and machine output until review is up
       qualifier: "Reviewed checks",
       reviewedDigest: originalJob.digest,
     };
-    writeFileSync(decisionsPath, JSON.stringify({ [key]: decision }));
+    const decisionsPath = writeDecision(root, key, decision);
     const git = (args: string[]) =>
       Bun.spawnSync(["git", "-C", root, ...args], {
         stdout: "pipe",
@@ -1890,9 +1931,7 @@ test("the CLI emits a sensitive annotation and machine output until review is up
     );
     writeFileSync(
       decisionsPath,
-      JSON.stringify({
-        [key]: { ...decision, reviewedDigest: changedJob.digest },
-      }),
+      JSON.stringify({ ...decision, reviewedDigest: changedJob.digest }),
     );
     const reviewed = check();
     expect(reviewed.exitCode).toBe(0);
@@ -1935,10 +1974,6 @@ test("a reviewed publish change in a reachable composite action stays sensitive"
       "runs: {using: composite, steps: [{run: 'npm publish'}]}";
     const workflowPath = path.join(root, ".github/workflows/ci.yml");
     const actionPath = path.join(root, ".github/actions/local/action.yml");
-    const decisionsPath = path.join(
-      root,
-      ".github/ci-job-classification-decisions.json",
-    );
     const outputPath = path.join(root, "output");
     const key = "candidate:.github/workflows/ci.yml/check";
     const digest = (action: string) => {
@@ -1962,16 +1997,11 @@ test("a reviewed publish change in a reachable composite action stays sensitive"
       path.join(root, ".github/ci-job-classification-sources.json"),
       "{}",
     );
-    writeFileSync(
-      decisionsPath,
-      JSON.stringify({
-        [key]: {
-          kind: ORDINARY,
-          qualifier: "Reviewed",
-          reviewedDigest: digest(beforeAction),
-        },
-      }),
-    );
+    const decisionsPath = writeDecision(root, key, {
+      kind: ORDINARY,
+      qualifier: "Reviewed",
+      reviewedDigest: digest(beforeAction),
+    });
     const git = (args: string[]) => Bun.spawnSync(["git", "-C", root, ...args]);
     expect(git(["init", "--quiet"]).exitCode).toBe(0);
     expect(git(["add", "."]).exitCode).toBe(0);
@@ -1994,11 +2024,9 @@ test("a reviewed publish change in a reachable composite action stays sensitive"
     writeFileSync(
       decisionsPath,
       JSON.stringify({
-        [key]: {
-          kind: ORDINARY,
-          qualifier: "Reviewed",
-          reviewedDigest: digest(afterAction),
-        },
+        kind: ORDINARY,
+        qualifier: "Reviewed",
+        reviewedDigest: digest(afterAction),
       }),
     );
     const result = Bun.spawnSync(
@@ -2038,16 +2066,12 @@ test("the CLI defaults its root and base when invoked without arguments", () => 
       path.join(root, ".github/ci-job-classification-sources.json"),
       "{}",
     );
-    writeFileSync(
-      path.join(root, ".github/ci-job-classification-decisions.json"),
-      JSON.stringify({
-        "candidate:.github/workflows/ci.yml/check": {
-          kind: ORDINARY,
-          qualifier: "Reviewed",
-          reviewedDigest: parsed.value.jobs["check"].digest,
-        },
-      }),
-    );
+    const key = "candidate:.github/workflows/ci.yml/check";
+    writeDecision(root, key, {
+      kind: ORDINARY,
+      qualifier: "Reviewed",
+      reviewedDigest: parsed.value.jobs["check"].digest,
+    });
     const git = (args: string[]) => Bun.spawnSync(["git", "-C", root, ...args]);
     expect(git(["init", "--quiet"]).exitCode).toBe(0);
     expect(git(["add", "."]).exitCode).toBe(0);
@@ -2079,21 +2103,11 @@ test("the CLI defaults its root and base when invoked without arguments", () => 
     );
 
     // A check that fails for any reason reports the change as sensitive.
-    writeFileSync(
-      path.join(root, ".github/ci-job-classification-decisions.json"),
-      JSON.stringify({
-        "candidate:.github/workflows/ci.yml/check": {
-          kind: ORDINARY,
-          qualifier: "Reviewed",
-          reviewedDigest: parsed.value.jobs["check"].digest,
-        },
-        "candidate:.github/workflows/ci.yml/removed": {
-          kind: ORDINARY,
-          qualifier: "Reviewed",
-          reviewedDigest: parsed.value.jobs["check"].digest,
-        },
-      }),
-    );
+    writeDecision(root, "candidate:.github/workflows/ci.yml/removed", {
+      kind: ORDINARY,
+      qualifier: "Reviewed",
+      reviewedDigest: parsed.value.jobs["check"].digest,
+    });
     const outputPath = path.join(root, "output");
     const failed = Bun.spawnSync(
       [
@@ -2137,10 +2151,6 @@ for (const scenario of [
       try {
         mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
         const workflow = path.join(root, ".github/workflows/ci.yml");
-        const decisions = path.join(
-          root,
-          ".github/ci-job-classification-decisions.json",
-        );
         const sources = path.join(
           root,
           ".github/ci-job-classification-sources.json",
@@ -2160,16 +2170,11 @@ for (const scenario of [
         };
         writeFileSync(workflow, scenario.before);
         writeFileSync(sources, "{}");
-        writeFileSync(
-          decisions,
-          JSON.stringify({
-            [key]: {
-              kind: ORDINARY,
-              qualifier: "Reviewed",
-              reviewedDigest: digest(scenario.before),
-            },
-          }),
-        );
+        const decisions = writeDecision(root, key, {
+          kind: ORDINARY,
+          qualifier: "Reviewed",
+          reviewedDigest: digest(scenario.before),
+        });
         const git = (args: string[]) =>
           Bun.spawnSync(["git", "-C", root, ...args]);
         expect(git(["init", "--quiet"]).exitCode).toBe(0);
@@ -2217,11 +2222,9 @@ for (const scenario of [
         writeFileSync(
           decisions,
           JSON.stringify({
-            [key]: {
-              kind: ORDINARY,
-              qualifier: "Reviewed",
-              reviewedDigest: digest(scenario.after),
-            },
+            kind: ORDINARY,
+            qualifier: "Reviewed",
+            reviewedDigest: digest(scenario.after),
           }),
         );
         const result = run();
@@ -2247,24 +2250,23 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
     if (!job) {
       throw new AdmissionError({ message: "kind fixture parse failed" });
     }
-    const decisionsPath = path.join(
-      root,
-      ".github/ci-job-classification-decisions.json",
-    );
+    const key = "candidate:.github/workflows/ci.yml/check";
     const decide = (kind: (typeof CLASSIFICATIONS)[number]) =>
       JSON.stringify({
-        "candidate:.github/workflows/ci.yml/check": {
-          kind,
-          qualifier: "Reviewed",
-          reviewedDigest: job.digest,
-        },
+        kind,
+        qualifier: "Reviewed",
+        reviewedDigest: job.digest,
       });
     writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
     writeFileSync(
       path.join(root, ".github/ci-job-classification-sources.json"),
       "{}",
     );
-    writeFileSync(decisionsPath, decide(CLASSIFICATIONS[2]));
+    const decisionsPath = writeDecision(root, key, {
+      kind: CLASSIFICATIONS[2],
+      qualifier: "Reviewed",
+      reviewedDigest: job.digest,
+    });
     const git = (args: string[]) => Bun.spawnSync(["git", "-C", root, ...args]);
     expect(git(["init", "--quiet"]).exitCode).toBe(0);
     expect(git(["add", "."]).exitCode).toBe(0);
@@ -2315,16 +2317,12 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
     if (!otherJob) {
       throw new AdmissionError({ message: "removal fixture parse failed" });
     }
-    writeFileSync(
-      decisionsPath,
-      JSON.stringify({
-        "candidate:.github/workflows/ci.yml/other": {
-          kind: ORDINARY,
-          qualifier: "Reviewed",
-          reviewedDigest: otherJob.digest,
-        },
-      }),
-    );
+    rmSync(decisionsPath);
+    writeDecision(root, "candidate:.github/workflows/ci.yml/other", {
+      kind: ORDINARY,
+      qualifier: "Reviewed",
+      reviewedDigest: otherJob.digest,
+    });
     const removed = Bun.spawnSync(
       [
         process.execPath,

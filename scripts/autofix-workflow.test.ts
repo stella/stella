@@ -82,7 +82,7 @@ test("every workflow edit selects the classification digest refresh", () => {
   for (const file of [
     ".github/workflows/deploy-staging.yml",
     ".github/actions/ci-install/action.yml",
-    ".github/ci-job-classification-decisions.json",
+    ".github/ci-job-classification-decisions/candidate/.github/workflows/ci.yml/ci-result.json",
     "scripts/ci-job-classification/yaml.ts",
   ]) {
     expect(

@@ -102,6 +102,16 @@ const measure = (value: unknown, depth = 0): [number, number] => {
 };
 
 const canonicalize = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    // Moving the decision manifest into its directory is storage-only; keep
+    // the checkout declaration from invalidating otherwise unchanged reviews.
+    return value.includes(".github/ci-job-classification-decisions.json")
+      ? value
+      : value.replaceAll(
+          ".github/ci-job-classification-decisions",
+          ".github/ci-job-classification-decisions.json",
+        );
+  }
   if (Array.isArray(value)) {
     return value.map(canonicalize);
   }

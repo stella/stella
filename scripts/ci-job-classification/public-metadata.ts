@@ -16,8 +16,7 @@ import type { MetadataOrigin, MetadataReferenceKind } from "./references";
 import { AdmissionError, parseDocument } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
-const REVIEW_INSTRUCTION =
-  "review .github/ci-job-classification-decisions.json";
+const REVIEW_INSTRUCTION = "review .github/ci-job-classification-decisions/";
 
 const TEXT = v.pipe(
   v.string(),

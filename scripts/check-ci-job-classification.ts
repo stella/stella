@@ -5,15 +5,17 @@ import path from "node:path";
 import * as v from "valibot";
 
 import {
+  CLASSIFICATION_DECISIONS_PATH,
+  DECISION,
+  decisionPath,
+} from "./ci-job-classification/decisions";
+import {
   generateClassification,
   readClassificationInputs,
   readClassificationInputsAtRevision,
 } from "./ci-job-classification/generate";
 import type { DerivedJob } from "./ci-job-classification/generate";
-import {
-  CLASSIFICATION_DECISIONS_PATH,
-  isClassificationInput,
-} from "./ci-job-classification/inputs";
+import { isClassificationInput } from "./ci-job-classification/inputs";
 import { ReviewRequiredError } from "./ci-job-classification/review";
 import { AdmissionError } from "./ci-job-classification/yaml";
 
@@ -105,10 +107,8 @@ const generateBase = (root: string, base: string) => {
   return { inputs, generation };
 };
 
-const DECISION_FILE = v.record(v.string(), v.record(v.string(), v.unknown()));
-
 // Rewrites only the digests of mechanical refreshes; every other byte of the
-// decisions file is reproduced from its parsed form.
+// decision file is reproduced from its parsed form.
 export const refreshJobClassificationDigests = (root: string, base: string) =>
   Result.try({
     try: () => {
@@ -122,21 +122,15 @@ export const refreshJobClassificationDigests = (root: string, base: string) =>
         baseDecisions: baseRevision.inputs.decisions,
       });
       if (refreshes.length > 0) {
-        const file = path.resolve(root, CLASSIFICATION_DECISIONS_PATH);
-        const decisions = v.parse(
-          DECISION_FILE,
-          JSON.parse(readFileSync(file, "utf-8")),
-        );
         for (const { key, digest } of refreshes) {
-          const decision = decisions[key];
-          if (decision === undefined) {
-            throw new AdmissionError({
-              message: `Decision disappeared while refreshing: ${key}`,
-            });
-          }
-          decision["reviewedDigest"] = digest;
+          const file = path.resolve(root, decisionPath(key));
+          const decision = v.parse(
+            DECISION,
+            JSON.parse(readFileSync(file, "utf-8")),
+          );
+          decision.reviewedDigest = digest;
+          writeFileSync(file, `${JSON.stringify(decision, null, 2)}\n`);
         }
-        writeFileSync(file, `${JSON.stringify(decisions, null, 2)}\n`);
       }
       return { refreshed: refreshes.map(({ key }) => key) };
     },
