@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
@@ -15,6 +17,7 @@ import {
   REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
 } from "../lib/db/migration-history";
+import { isRecord } from "../lib/type-guards";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
 import {
@@ -72,15 +75,52 @@ import {
 // runs through the gate in `online-ddl.ts`, which lifts it and watches the
 // wait instead.
 const ONLINE_MIGRATION_LOCK_TIMEOUT_SQL = "SET lock_timeout = '1s'";
+// Only ever tried, never awaited in the database: a statement waiting on this
+// lock runs into the statement timeout long before an index build releases it.
 const ONLINE_MIGRATIONS_LOCK_SQL =
-  "SELECT pg_advisory_lock(hashtext('stella-online-migrations'))";
+  "SELECT pg_try_advisory_lock(hashtext('stella-online-migrations')) AS acquired";
 const ONLINE_MIGRATIONS_UNLOCK_SQL =
   "SELECT pg_advisory_unlock(hashtext('stella-online-migrations'))";
+const ONLINE_MIGRATIONS_LOCK_RETRY_MS = 1000;
+// Startup reads the catalog and checkpoint rows only, so a slower statement is
+// waiting on a lock or a load spike; boot fails fast instead of queueing.
+const STARTUP_VALIDATION_TIMEOUT_SQL = "SET statement_timeout = '5s'";
+// The session is pooled: it goes back with the timeout it came with, which
+// need not be the role default a RESET would give it.
+const READ_STATEMENT_TIMEOUT_SQL =
+  "SELECT current_setting('statement_timeout') AS timeout";
+const RESTORE_STATEMENT_TIMEOUT_SQL =
+  "SELECT set_config('statement_timeout', $1, false)";
 
+const readStatementTimeout = async (
+  connection: OnlineMigrationConnection,
+): Promise<string> => {
+  const row = (await connection.query(READ_STATEMENT_TIMEOUT_SQL)).at(0);
+  if (!isRecord(row) || typeof row["timeout"] !== "string") {
+    return panic("Session statement timeout is unreadable");
+  }
+  return row["timeout"];
+};
+
+const tryAcquireOnlineMigrationLock = async (
+  connection: OnlineMigrationConnection,
+): Promise<boolean> => {
+  const row = (await connection.query(ONLINE_MIGRATIONS_LOCK_SQL)).at(0);
+  if (!isRecord(row) || typeof row["acquired"] !== "boolean") {
+    return panic("Online migration try-lock returned no verdict");
+  }
+  return row["acquired"];
+};
+
+/** Waits for another migrate run to finish, one try per second. */
 export const acquireOnlineMigrationLock = async (
   connection: OnlineMigrationConnection,
 ): Promise<void> => {
-  await connection.execute(ONLINE_MIGRATIONS_LOCK_SQL);
+  if (await tryAcquireOnlineMigrationLock(connection)) {
+    return;
+  }
+  await sleep(ONLINE_MIGRATIONS_LOCK_RETRY_MS);
+  await acquireOnlineMigrationLock(connection);
 };
 
 export const releaseOnlineMigrationLock = async (
@@ -153,6 +193,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: false,
     name: "case_law_citations_doctrine_cited_idx",
     tableName: "case_law_citations",
+  },
+  // Bounded cross-publisher ruling lookup before a decision insert.
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_republished_ruling_idx" ON public."case_law_decisions" ("country", "court", "docket_family_key", "id") WHERE "docket_family_key" IS NOT NULL`,
+    definitionBody:
+      "ON public.case_law_decisions USING btree (country, court, docket_family_key, id) WHERE (docket_family_key IS NOT NULL)",
+    isUnique: false,
+    name: "case_law_decisions_republished_ruling_idx",
+    tableName: "case_law_decisions",
   },
   {
     createSql: `CREATE INDEX CONCURRENTLY "apikey_personal_owner_keyset_idx" ON public."apikey" (((metadata::jsonb ->> 'organizationId')), reference_id, created_at DESC, id DESC) WHERE metadata IS NOT NULL AND metadata::jsonb ->> 'kind' = 'personal'`,
@@ -722,23 +771,60 @@ export const runOnlineMigrations = async (
     options,
   );
 
+type OnlineValidationOutcome =
+  | { type: "validated" }
+  | { type: "migrator_active" };
+
+const VALIDATED = {
+  type: "validated",
+} as const satisfies OnlineValidationOutcome;
+const MIGRATOR_ACTIVE = {
+  type: "migrator_active",
+} as const satisfies OnlineValidationOutcome;
+
+/**
+ * Startup validation. It never waits on the migrator: a migrate run holds the
+ * online lock for a whole index build, longer than any statement timeout, so
+ * a waiting boot would fail on the timeout instead. While the migrator holds
+ * the lock it owns these objects and may be mid-cutover, so startup leaves
+ * them to it rather than read a state between two of its statements.
+ */
 export const assertOnlineMigrationsApplied = async (
   pool: OnlineMigrationPool,
   options: OnlineMigrationOptions = {},
-): Promise<void> => {
-  const outcome = await processOnlineMigrations(
-    pool,
-    { operation: "validate" },
-    options,
-  );
-  if (outcome.type !== "complete") {
-    panic("Online migration validation cannot defer");
+): Promise<OnlineValidationOutcome> => {
+  const connection = await pool.reserve();
+  try {
+    const sessionTimeout = await readStatementTimeout(connection);
+    await connection.execute(STARTUP_VALIDATION_TIMEOUT_SQL);
+    try {
+      if (!(await tryAcquireOnlineMigrationLock(connection))) {
+        return MIGRATOR_ACTIVE;
+      }
+      try {
+        const outcome = await walkOnlineMigrations({
+          connection,
+          mode: { operation: "validate" },
+          options,
+        });
+        if (outcome.type !== "complete") {
+          panic("Online migration validation cannot defer");
+        }
+        return VALIDATED;
+      } finally {
+        await releaseOnlineMigrationLock(connection);
+      }
+    } finally {
+      await connection.query(RESTORE_STATEMENT_TIMEOUT_SQL, [sessionTimeout]);
+    }
+  } finally {
+    await connection.release();
   }
 };
 
 const processOnlineMigrations = async (
   pool: OnlineMigrationPool,
-  mode: OnlineMigrationMode,
+  mode: Extract<OnlineMigrationMode, { operation: "repair" }>,
   options: OnlineMigrationOptions,
 ): Promise<OnlineMigrationOutcome> => {
   const connection = await pool.reserve();
@@ -756,40 +842,9 @@ const processOnlineMigrations = async (
   try {
     await acquireOnlineMigrationLock(connection);
     lockAcquired = true;
-
-    if (mode.operation === "repair") {
-      await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
-      await connection.execute("SET statement_timeout = '0'");
-    }
-
-    const indexes = await processOnlineIndexAt({
-      connection,
-      mode,
-    });
-    if (indexes.type === "deferred") {
-      return indexes;
-    }
-    const cutovers = await processOnlineIndexCutoverAt({
-      connection,
-      mode,
-    });
-    if (cutovers.type === "deferred") {
-      return cutovers;
-    }
-    if (mode.operation === "repair") {
-      const retirements = await retireReplacedIndexAt(connection, mode);
-      if (retirements.type === "deferred") {
-        return retirements;
-      }
-    }
-    return await processOnlineRepairAt({
-      connection,
-      mode,
-      repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
-      log:
-        options.log ??
-        ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),
-    });
+    await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
+    await connection.execute("SET statement_timeout = '0'");
+    return await walkOnlineMigrations({ connection, mode, options });
   } finally {
     try {
       if (lockAcquired && sessionIsActive()) {
@@ -799,6 +854,42 @@ const processOnlineMigrations = async (
       await connection.release();
     }
   }
+};
+
+type WalkOnlineMigrationsOptions = {
+  connection: OnlineMigrationConnection;
+  mode: OnlineMigrationMode;
+  options: OnlineMigrationOptions;
+};
+
+/** Every online step in order, on a session that holds the online lock. */
+const walkOnlineMigrations = async ({
+  connection,
+  mode,
+  options,
+}: WalkOnlineMigrationsOptions): Promise<OnlineMigrationOutcome> => {
+  const indexes = await processOnlineIndexAt({ connection, mode });
+  if (indexes.type === "deferred") {
+    return indexes;
+  }
+  const cutovers = await processOnlineIndexCutoverAt({ connection, mode });
+  if (cutovers.type === "deferred") {
+    return cutovers;
+  }
+  if (mode.operation === "repair") {
+    const retirements = await retireReplacedIndexAt(connection, mode);
+    if (retirements.type === "deferred") {
+      return retirements;
+    }
+  }
+  return await processOnlineRepairAt({
+    connection,
+    mode,
+    repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
+    log:
+      options.log ??
+      ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),
+  });
 };
 
 type OnlineIndexWalkOptions = {
