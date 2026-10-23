@@ -115,6 +115,11 @@ type CaseLawCoverageSource = {
   decisionYearTo: number | null;
   /** Publisher-listed decisions whose text has not arrived. */
   pendingTextCount: number;
+  /**
+   * Everything the corpus holds for this source, as the ingestion side last
+   * counted it; null before the first count, never a zero standing in for one.
+   */
+  storedDecisions: number | null;
   /** Reconciled slice-ledger completeness by calendar year. */
   knownGaps: CaseLawKnownGaps;
   completeness: CaseLawSourceCompleteness;
@@ -447,6 +452,8 @@ export const loadCaseLawCoverage = async ({
       decisionYearFrom: source.decisionYearFrom,
       decisionYearTo: source.decisionYearTo,
       pendingTextCount: source.pendingTextCount,
+      storedDecisions:
+        source.storedTotalAsOf === null ? null : source.storedTotal,
       knownGaps: Result.isError(yearCompleteness)
         ? UNREAD_YEAR_COMPLETENESS
         : (yearCompleteness.value.get(String(source.id)) ??

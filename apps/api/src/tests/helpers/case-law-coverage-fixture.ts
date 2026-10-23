@@ -26,6 +26,7 @@ const base = {
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
       pendingTextCount: 3,
+      storedDecisions: 150,
       knownGaps: {
         type: "not_reconciled",
         reason: "The source listing is not date-sliced.",

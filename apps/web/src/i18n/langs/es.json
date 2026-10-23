@@ -49,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Tu asistente te pedirá esta dirección",
-    "copiedToast": "Instrucciones copiadas. Pégalas en un chat con tu asistente.",
     "copy": "Cópiale las instrucciones",
     "description": "Pregunta a Claude o ChatGPT sobre tus asuntos y documentos. Elige tu asistente para ver una guía breve; lleva alrededor de un minuto.",
     "instructions": "Conéctame a stella, mi espacio de trabajo jurídico. Sigue las instrucciones para agentes de IA de {guideUrl} y usa esta dirección de servidor: {mcpUrl}",
     "openGuide": "Abrir la guía de {assistant}",
+    "pasteHint": "Pégalas en un chat con tu asistente.",
     "selfSetupHint": "¿Usas Claude Code o Codex?",
     "title": "Usa stella en tu asistente de IA"
   },
@@ -926,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Exhaustividad",
-      "countedOn": "Contado el {date}",
       "courtsHeading": "Por tribunal",
       "courtsUnavailable": "El desglose por tribunal no está disponible en este momento.",
       "decisionYears": "Años de las resoluciones",
       "description": "Cuánta jurisprudencia contiene el corpus, por país y por tribunal, y cuán actualizada está cada fuente.",
-      "exceedsReportedTotal": "Contiene más que el último total indicado por el organismo el {date}",
-      "gapStatusUnknown": "Estado de lagunas desconocido",
       "generatedAt": "Datos a {date}",
       "globeLabel": "Países cuya jurisprudencia contiene el corpus, en un globo terráqueo",
       "healthCurrent": "Actualizado",
