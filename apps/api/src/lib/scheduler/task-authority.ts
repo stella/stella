@@ -259,6 +259,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "sanctions-refresh.ts",
     "Refreshes public sanctions lists.",
   ),
+  "scheduler.auditPauses": platform(
+    "scheduler-pause-audit.ts",
+    "Reports overdue scheduler operator pauses.",
+  ),
   "scheduler.dispatchBullMq": {
     authority: "unclassified",
     module: "apps/api/src/lib/scheduler/bullmq.ts",
