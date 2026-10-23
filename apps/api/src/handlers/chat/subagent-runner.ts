@@ -22,8 +22,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { chatRequestOptions } from "@/api/lib/chat/chat-request";
 import {
-  chatToolMapToArray,
   type ChatToolMap,
+  chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
 import {
   guardModelMessages,
@@ -208,6 +208,7 @@ export const runSubagent = async (
   dependencies: RunSubagentDependencies = defaultRunSubagentDependencies,
 ): Promise<RunSubagentResult> => {
   const model = await dependencies.resolveModel({
+    userId: options.admission.userId,
     dataClass: "customer",
     managedAIResidency: options.managedAIResidency,
     modelId: options.modelId,
@@ -309,6 +310,7 @@ export const runSubagent = async (
   });
 
   const stream = streamTanStackChatRun({
+    userId: options.admission.userId,
     admission: options.admission,
     model,
     adapter: model.adapter,

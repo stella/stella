@@ -11,9 +11,9 @@ import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogPopup,
   DialogTitle,
   DialogTrigger,
@@ -67,8 +67,8 @@ import {
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
-  WorkspaceProperty,
   SelectPropertyOption,
+  WorkspaceProperty,
 } from "@/lib/types";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {

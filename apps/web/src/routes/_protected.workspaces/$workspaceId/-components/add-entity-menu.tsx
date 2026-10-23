@@ -6,8 +6,8 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
-  FolderPlusIcon,
   FilePlus2Icon,
+  FolderPlusIcon,
   LayoutTemplateIcon,
   PlusIcon,
   SquareCheckIcon,

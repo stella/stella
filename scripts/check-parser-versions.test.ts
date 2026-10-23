@@ -5,6 +5,12 @@ import { checkParserVersions, comparisonBase } from "./check-parser-versions";
 const INGESTION = "apps/api/src/handlers/case-law/ingestion/";
 const ADAPTERS = `${INGESTION}adapters/`;
 const PARSERS = `${INGESTION}parsers/`;
+const LEGISLATION_ADAPTERS =
+  "apps/api/src/handlers/legislation/ingestion/adapters/";
+const ENV_BASE = "apps/api/src/env-base.ts";
+const TAGGED_ERRORS = "apps/api/src/lib/errors/tagged-errors.ts";
+const LOGGER = "apps/api/src/lib/observability/logger.ts";
+const VERSION = "apps/api/src/lib/version.ts";
 
 type FixtureOptions = {
   versions?: Partial<Record<"A" | "B" | "C", number>>;
@@ -59,6 +65,10 @@ const fixture = ({
       ].join("\n"),
     ],
     [`${PARSERS}shared-helper.ts`, `${markerSource}${helperSource}`],
+    [ENV_BASE, "export const env = {};"],
+    [TAGGED_ERRORS, "export class TaggedError extends Error {}"],
+    [LOGGER, "export const logger = { info: () => {} };"],
+    [VERSION, "export const APP_VERSION = 'test';"],
   ]);
 
   for (const key of adapters) {
@@ -117,6 +127,25 @@ test("missing and equal bumps fail, catching merge-group version collisions", ()
     changed(higherBase, fixture({ versions: { A: 2 }, parserSources })),
   ).toEqual([
     expect.stringContaining("test-a: parser version 2 must exceed base 2"),
+  ]);
+});
+
+test("layout, comments and types never demand a bump, but output changes do", () => {
+  const base = fixture();
+  const reformatted = fixture({
+    parserSources: {
+      A: "// Reads one record.\nexport const parseA = (): string =>\n  helper( )\n",
+    },
+  });
+  const changedOutput = fixture({
+    parserSources: {
+      A: "export const parseA = (): string =>\n  helper() + '!'\n",
+    },
+  });
+
+  expect(changed(base, reformatted)).toEqual([]);
+  expect(changed(base, changedOutput)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
   ]);
 });
 
@@ -227,6 +256,126 @@ test("a shared helper change fans out to every importing adapter", () => {
   expect(changed(base, bothVersionsBumped)).toEqual([]);
 });
 
+test("a change confined to an output boundary needs no version bump", () => {
+  const base = fixture();
+  const head = fixture();
+  for (const tree of [base, head]) {
+    tree.set(
+      `${PARSERS}parser-a.ts`,
+      'import { logger } from "@/api/lib/observability/logger";\nexport const parseA = () => { logger.info(); return "same"; };',
+    );
+  }
+  head.set(LOGGER, "export const logger = { info: () => 'changed' };");
+
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("an output module reached only through a boundary is not owned", () => {
+  const base = fixture();
+  const head = fixture();
+  const hidden = "apps/api/src/lib/output-hidden-by-logger.ts";
+  for (const tree of [base, head]) {
+    tree.set(
+      `${PARSERS}parser-a.ts`,
+      'import { logger } from "@/api/lib/observability/logger";\nexport const parseA = () => { logger.info(); return "same"; };',
+    );
+    tree.set(
+      LOGGER,
+      'import { hidden } from "../output-hidden-by-logger";\nexport const logger = { info: () => hidden };',
+    );
+    tree.set(hidden, "export const hidden = 'base';");
+  }
+  head.set(hidden, "export const hidden = 'changed';");
+
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("a stale output boundary fails", () => {
+  const base = fixture();
+  const head = fixture();
+  head.delete(LOGGER);
+
+  expect(changed(base, head)).toContain(
+    `Parser output boundary does not exist in head tree: ${LOGGER}`,
+  );
+});
+
+test("output boundaries cannot lie in any output-shaping root", () => {
+  const roots = [
+    `${ADAPTERS}boundary.ts`,
+    `${LEGISLATION_ADAPTERS}boundary.ts`,
+    `${PARSERS}boundary.ts`,
+    "apps/api/src/lib/legal-search/parsers/boundary.ts",
+    "apps/api/src/lib/case-law/boundary.ts",
+    "packages/legal-ast/boundary.ts",
+    "packages/text-normalize/boundary.ts",
+    "packages/sha256/boundary.ts",
+    "apps/api/src/lib/legal-search/ingestion-constants.ts",
+  ];
+  for (const boundary of roots) {
+    const base = fixture();
+    const head = fixture();
+    base.set(boundary, "export {};\n");
+    head.set(boundary, "export {};\n");
+
+    expect(
+      checkParserVersions({
+        base,
+        head,
+        boundaries: [{ path: boundary, reason: "invalid test boundary" }],
+      }),
+    ).toContain(
+      `Parser output boundary lies in an output-shaping root: ${boundary}`,
+    );
+  }
+});
+
+test("an output module also reachable without a boundary still needs a bump", () => {
+  const base = fixture();
+  const head = fixture();
+  for (const tree of [base, head]) {
+    tree.set(
+      `${PARSERS}parser-a.ts`,
+      [
+        'import { logger } from "@/api/lib/observability/logger";',
+        'import { helper } from "./shared-helper";',
+        "export const parseA = () => { logger.info(); return helper(); };",
+      ].join("\n"),
+    );
+    tree.set(
+      LOGGER,
+      [
+        'import { helper } from "@/api/handlers/case-law/ingestion/parsers/shared-helper";',
+        'import { hidden } from "../output-hidden-by-logger";',
+        "export const logger = { info: () => helper() + hidden };",
+      ].join("\n"),
+    );
+    tree.set(
+      "apps/api/src/lib/output-hidden-by-logger.ts",
+      "export const hidden = 'base';",
+    );
+  }
+  head.set(
+    `${PARSERS}shared-helper.ts`,
+    "export const helper = () => 'changed';\n",
+  );
+
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+    expect.stringContaining("test-b: parser version 1 must exceed base 1"),
+  ]);
+
+  head.set(
+    `${PARSERS}shared-helper.ts`,
+    "export const helper = () => 'base';\n",
+  );
+  head.set(
+    "apps/api/src/lib/output-hidden-by-logger.ts",
+    "export const hidden = 'changed';",
+  );
+  expect(changed(base, head)).toEqual([]);
+});
+
 test("a newly added marker exempts only its changed file", () => {
   const base = fixture();
   const head = fixture({
@@ -309,7 +458,9 @@ const movedHelper = ({
   head.set(
     `${PARSERS}parser-a.ts`,
     [
-      "// parser-output-unchanged: helper moved without output changes",
+      ...(keepCounterpart
+        ? ["// parser-output-unchanged: helper moved without output changes"]
+        : []),
       keepCounterpart
         ? 'import { helper } from "./moved-helper";'
         : "const helper = () => 'base';",
@@ -471,6 +622,83 @@ test("parser source deletions without a counterpart still require a version bump
   ]);
 });
 
+const deletedWorkspaceDependency = (marker = "") => {
+  const base = fixture({ adapters: ["A"] });
+  const parser = `${PARSERS}parser-a.ts`;
+  base.set(
+    "packages/dependency/package.json",
+    JSON.stringify({ exports: "./src/index.ts" }),
+  );
+  base.set(
+    "packages/dependency/src/index.ts",
+    "export const dependency = () => 'base';\n",
+  );
+  base.set(
+    parser,
+    'import { dependency } from "@stll/dependency";\nimport { helper } from "./shared-helper";\nexport const parseA = () => dependency() + helper();\n',
+  );
+  const head = new Map(base);
+  head.delete("packages/dependency/package.json");
+  head.delete("packages/dependency/src/index.ts");
+  head.set(
+    parser,
+    `${marker}import { dependency } from "@stll/dependency";\nimport { helper } from "./shared-helper";\nexport const parseA = () => dependency() + helper();\n`,
+  );
+  return { base, head, parser };
+};
+
+test("an owner-level marker exempts a deleted parser dependency", () => {
+  const { base, head } = deletedWorkspaceDependency(
+    "// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\n",
+  );
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("a deleted parser dependency without an owner-level marker requires a version bump", () => {
+  const { base, head } = deletedWorkspaceDependency();
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
+test("an owner-level marker does not exempt another modified parser dependency", () => {
+  const { base, head } = deletedWorkspaceDependency(
+    "// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\n",
+  );
+  head.set(
+    `${PARSERS}shared-helper.ts`,
+    "export const helper = () => 'changed';\n",
+  );
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining(`${PARSERS}shared-helper.ts`),
+  ]);
+});
+
+test("an owner-level marker does not exempt another deleted parser dependency", () => {
+  const marker =
+    "// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\n";
+  const { base, head, parser } = deletedWorkspaceDependency(marker);
+  head.delete(`${PARSERS}shared-helper.ts`);
+  head.set(
+    parser,
+    `${marker}import { dependency } from "@stll/dependency";\nexport const parseA = () => dependency() + "base";\n`,
+  );
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining(`${PARSERS}shared-helper.ts`),
+  ]);
+});
+
+test("an owner-level marker does not exempt a removed package the parser no longer imports", () => {
+  const { base, head, parser } = deletedWorkspaceDependency();
+  head.set(
+    parser,
+    '// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\nimport { helper } from "./shared-helper";\nexport const parseA = () => helper();\n',
+  );
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("packages/dependency/src/index.ts"),
+  ]);
+});
+
 test("deleted modules containing only reexports need no parser version bump", () => {
   for (const source of [
     'export { helper } from "./shared-helper";\n',
@@ -507,9 +735,11 @@ test("deleted reexport modules with any local code still need a bump", () => {
     const { base, head, facade } = deletedFacade(
       `export { helper } from "./shared-helper";\n${localCode}\n`,
     );
-    expect(changed(base, head)).toEqual([
-      `test-a: parser version 1 must exceed base 1; changed: ${facade}`,
-    ]);
+    head.set(
+      `${PARSERS}parser-a.ts`,
+      'import { helper } from "./shared-helper";\nexport const parseA = () => helper();\n',
+    );
+    expect(changed(base, head)).toEqual([expect.stringContaining(facade)]);
   }
 });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
@@ -31,11 +31,13 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
-import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
+import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryView } from "@/lib/use-query-view";
 
 import {
-  LastUsedSignInFrame,
+  LAST_USED_BADGE_PILL_CLASS_NAME,
+  LAST_USED_BADGE_POSITION_CLASS_NAME,
+  LastUsedFieldBadge,
   readLastUsedLoginMethod,
 } from "./last-used-sign-in";
 import {
@@ -45,6 +47,8 @@ import {
   SecretCredentialField,
 } from "./password-sign-in-form";
 import { PasswordSignInOption } from "./password-sign-in-option";
+import { SIGN_IN_MODE } from "./sign-in-mode";
+import type { SignInMode } from "./sign-in-mode";
 import {
   resolveLastUsedSignInMethod,
   resolveSignInOptions,
@@ -54,10 +58,15 @@ import {
 import type { AuthCapabilities, SignInMethod } from "./sign-in-panel.logic";
 
 type SignInPanelProps = {
+  mode?: SignInMode;
   className?: string;
   redirectTo: string;
   showHeading?: boolean;
-  onOtpSent?: (payload: { email: string; redirectTo: string }) => void;
+  onOtpSent?: (payload: {
+    email: string;
+    redirectTo: string;
+    mode: SignInMode;
+  }) => void;
 };
 
 const formSchema = v.strictObject({
@@ -91,6 +100,7 @@ const SignInOptionsPanel = ({
   className,
   redirectTo,
   showHeading = true,
+  mode = SIGN_IN_MODE.signIn,
   onOtpSent,
   authCapabilities,
 }: SignInPanelProps & { authCapabilities: AuthCapabilities }) => {
@@ -125,13 +135,13 @@ const SignInOptionsPanel = ({
 
   const handleOtpSent = async (email: string) => {
     if (onOtpSent) {
-      onOtpSent({ email, redirectTo });
+      onOtpSent({ email, redirectTo, mode });
       return;
     }
 
     await navigate({
       to: "/auth/otp",
-      search: { email, redirectTo },
+      search: { email, redirectTo, mode },
     });
   };
 
@@ -282,7 +292,7 @@ const SignInOptionsPanel = ({
         >
           <form.Field name="email">
             {(field) => (
-              <Field name={field.name}>
+              <Field className="relative" name={field.name}>
                 <Input
                   autoFocus={!showSocialProviders && !showLocalPassword}
                   onBlur={field.handleBlur}
@@ -292,6 +302,7 @@ const SignInOptionsPanel = ({
                   type="email"
                   value={field.state.value}
                 />
+                {lastUsed === SIGN_IN_METHOD.emailOtp && <LastUsedFieldBadge />}
                 <FieldError />
               </Field>
             )}
@@ -304,26 +315,19 @@ const SignInOptionsPanel = ({
             })}
           >
             {({ isSubmitting, canSubmit, email }) => (
-              <LastUsedSignInFrame
-                lastUsed={lastUsed === SIGN_IN_METHOD.emailOtp}
+              <Button
+                className="w-full"
+                disabled={!canSubmit || email.trim().length === 0}
+                loading={isSubmitting}
+                type="submit"
+                variant={signInMethodVariant({
+                  method: SIGN_IN_METHOD.emailOtp,
+                  lastUsed,
+                  fallback: "default",
+                })}
               >
-                {(describedBy) => (
-                  <Button
-                    aria-describedby={describedBy}
-                    className="w-full"
-                    disabled={!canSubmit || email.trim().length === 0}
-                    loading={isSubmitting}
-                    type="submit"
-                    variant={signInMethodVariant({
-                      method: SIGN_IN_METHOD.emailOtp,
-                      lastUsed,
-                      fallback: "default",
-                    })}
-                  >
-                    {t("auth.continueWithEmail")}
-                  </Button>
-                )}
-              </LastUsedSignInFrame>
+                {t("auth.continueWithEmail")}
+              </Button>
             )}
           </form.Subscribe>
         </Form>
@@ -411,6 +415,7 @@ const BootstrapSignUpForm = ({
             <EmailCredentialField
               autoFocus={!hasSocialProviders}
               field={field}
+              lastUsed={false}
             />
           )}
         </form.Field>
@@ -516,6 +521,39 @@ const signUpWithSelfhostBootstrap = async (
       message: parsedPayload.success ? parsedPayload.output.message : undefined,
     },
   };
+};
+
+/**
+ * Wraps a one-click sign-in action (a social provider button) and, when it
+ * is the last-used method, pins a "Last used" badge to its corner and links
+ * it as the action's description. Methods typed into a form mark their email
+ * field with `LastUsedFieldBadge` instead; a submit button never carries it.
+ */
+const LastUsedSignInFrame = ({
+  lastUsed,
+  children,
+}: {
+  lastUsed: boolean;
+  children: (describedBy: string | undefined) => ReactNode;
+}) => {
+  const t = useTranslations();
+  const badgeId = useId();
+  return (
+    <div className="relative">
+      {children(lastUsed ? badgeId : undefined)}
+      {lastUsed && (
+        <span
+          className={cn(
+            LAST_USED_BADGE_POSITION_CLASS_NAME,
+            LAST_USED_BADGE_PILL_CLASS_NAME,
+          )}
+          id={badgeId}
+        >
+          {t("auth.lastUsed")}
+        </span>
+      )}
+    </div>
+  );
 };
 
 const SocialButton = ({

@@ -1,29 +1,24 @@
-import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import {
-  PublicLawSearch,
   publicLawAskScope,
+  PublicLawSearch,
 } from "@/components/public-law-search";
-import {
-  caseLawCountryRegion,
-  fromCaseLawCountryParam,
-} from "@/features/case-law/case-law-jurisdiction";
-import { refineCaseLawQuery } from "@/features/case-law/queries/decisions";
+import type { PublicLawAskScope } from "@/components/public-law-search";
+import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
+import type { CaseLawRefine } from "@/features/case-law/use-case-law-refine";
 import { useFormatter } from "@/i18n/formatting-context";
-import { useI18nStore } from "@/i18n/i18n-store";
-import { useAnalytics } from "@/lib/analytics/provider";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { caseLawCountryName } from "@/lib/case-law-route";
 
 type CaseLawSearchProps = {
   /** The jurisdiction the page is scoped to, as a country param. */
   country: string;
   maxLength: number;
   onQueryChange: (value: string) => void;
-  /** The AI rewrite landed: search for it in place of the entry. */
-  onRefined: (query: string) => void;
   onSubmit: () => void;
   query: string;
+  /** The wand: the page owns the rewrite, which its empty results reuse. */
+  refine: CaseLawRefine;
 };
 
 /**
@@ -44,70 +39,42 @@ export const CaseLawSearch = ({
   country,
   maxLength,
   onQueryChange,
-  onRefined,
   onSubmit,
   query,
+  refine,
 }: CaseLawSearchProps) => {
   const t = useTranslations();
-  const format = useFormatter();
-  const analytics = useAnalytics();
-  const locale = useI18nStore((state) => state.loadedLang);
-  const refine = useMutation({
-    mutationFn: async (asked: { country: string; entry: string }) =>
-      await refineCaseLawQuery({
-        country: fromCaseLawCountryParam(asked.country),
-        locale,
-        query: asked.entry,
-      }),
-    // The box stays editable while the model answers. A rewrite of an entry
-    // the reader has since changed, or of another jurisdiction, is dropped
-    // rather than written over what they typed.
-    onSuccess: (refined, asked) => {
-      if (asked.entry !== query.trim() || asked.country !== country) {
-        return;
-      }
-      onRefined(refined.query);
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      notifyUserError(error, t("common.somethingWentWrong"));
-    },
-  });
+  const askScope = useCaseLawAskScope(country);
 
   return (
     <PublicLawSearch
-      askScope={publicLawAskScope(
-        "case_law",
-        fromCaseLawCountryParam(country),
-        t("chat.mention.corpus.caseLaw", {
-          country: caseLawCountryName(format, fromCaseLawCountryParam(country)),
-        }),
-      )}
+      askScope={askScope}
       maxLength={maxLength}
       onQueryChange={onQueryChange}
       onSubmit={onSubmit}
       placeholder={t("caseLaw.searchPlaceholder")}
       query={query}
-      refine={{
-        isPending: refine.isPending,
-        onRefine: () => refine.mutate({ country, entry: query.trim() }),
-      }}
+      refine={{ isPending: refine.isPending, onRefine: refine.onRefine }}
       searchLabel={t("caseLaw.searchLabel")}
     />
   );
 };
 
 /**
- * A corpus country as a reader names it. One helper, because the search box,
- * the top-bar menu and the home all have to say the same country the same
- * way.
+ * The corpus "Ask in chat" scopes a case-law question to, wherever the page
+ * offers it (the box, the empty results).
  */
-export const caseLawCountryName = (
-  format: ReturnType<typeof useFormatter>,
-  code: string,
-): string => {
-  const region = caseLawCountryRegion(code);
-  return region === null
-    ? code
-    : format.displayName(region, { type: "region" });
+export const useCaseLawAskScope = (
+  country: string,
+): PublicLawAskScope | null => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const code = fromCaseLawCountryParam(country);
+  return publicLawAskScope(
+    "case_law",
+    code,
+    t("chat.mention.corpus.caseLaw", {
+      country: caseLawCountryName(format, code),
+    }),
+  );
 };

@@ -13,6 +13,7 @@ import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
+import { renderResultInputs } from "./ci-result-inputs";
 import {
   contextFromNested,
   contextWithPlanOutputs,
@@ -349,6 +350,7 @@ type ExpectedPrSelectionOptions = {
 };
 const DECLARED_PR_PLAN_CHANGES = new Set([
   "ci-browser",
+  "e2e-landing",
   "e2e-production-shard",
   "scan-engine-wasm-drift",
   "web-build",
@@ -383,6 +385,17 @@ const expectedPrSelection = ({
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["browser_spec_selection_required"] ===
         "true"
+    );
+  }
+  // A landing change is checked in its own pull request, behind the gate.
+  if (job === "e2e-landing") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      value.needs["ci-plan"]?.outputs["run_required"] !== "false" &&
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["e2e_landing_required"] === "true" &&
+      value.needs["ci-plan"].outputs["coverage_profile"] === "normal-v1" &&
+      value.needs["pr-heavy-gate"]?.result === "success"
     );
   }
   if (job === "e2e-production-shard") {
@@ -787,10 +800,16 @@ test("failure-only cancellation jobs resolve both successful and failed dependen
       for (const failed of [false, true]) {
         const value = context({ event, variable: "full", queueDepth: "full" });
         value.failure = () => failed;
+        const pullRequestHelper =
+          id.endsWith("-cancel") && id.startsWith("code-quality-");
         expect(selected(job.if, value), `${id}/${event.event}/${failed}`).toBe(
-          failed && event.event === "merge_group",
+          failed &&
+            event.event ===
+              (pullRequestHelper ? "pull_request" : "merge_group"),
         );
-        if (event.event === "merge_group") {
+        if (
+          event.event === (pullRequestHelper ? "pull_request" : "merge_group")
+        ) {
           const unresolved = Object.fromEntries(
             Object.entries(value).filter(([key]) => key !== "failure"),
           );
@@ -908,6 +927,8 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "postgres-service-suites",
         "pr-heavy-gate",
         "marketing-screenshots-cancel",
+        "code-quality-api-cancel",
+        "code-quality-web-rest-cancel",
         "ci-quick-checks",
         "code-quality-web-rest",
         "desktop-rust-tests",
@@ -919,6 +940,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   );
   expect([...DECLARED_PR_PLAN_CHANGES].toSorted()).toEqual([
     "ci-browser",
+    "e2e-landing",
     "e2e-production-shard",
     "scan-engine-wasm-drift",
     "web-build",
@@ -1091,7 +1113,16 @@ const evaluate = ({
       ];
     }),
   );
-  return Bun.spawnSync(["bash", "-e", "-c", script], {
+  const rendered = renderResultInputs(script, {
+    needs: JSON.stringify(dependencies),
+    plan: JSON.stringify({
+      ...plan,
+      queue_depth: queueDepth,
+      heavy_web_build_required: "false",
+      release_typecheck_required: releaseTypecheck ? "true" : "false",
+    }),
+  });
+  return Bun.spawnSync(["bash", "-e", "-c", rendered], {
     cwd: root,
     env: {
       ...process.env,
@@ -1113,13 +1144,6 @@ const evaluate = ({
       PR_DEPTH_REUSED: "false",
       PR_DEPTH_ONLY: "false",
       PR_DEPTH_SOURCE_RUN_ID: "",
-      PLAN: JSON.stringify({
-        ...plan,
-        queue_depth: queueDepth,
-        heavy_web_build_required: "false",
-        release_typecheck_required: releaseTypecheck ? "true" : "false",
-      }),
-      NEEDS: JSON.stringify(dependencies),
     },
   }).exitCode;
 };

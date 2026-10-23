@@ -5,11 +5,11 @@ import { PROPERTY_CONTENT_TYPES } from "@stll/api-contract";
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
 import {
-  fieldContentSchema,
-  propertyContentTypeSchema,
   type AiExtractablePropertyContent,
+  fieldContentSchema,
   type PropertyContent,
   type PropertyContentType,
+  propertyContentTypeSchema,
 } from "@/api/db/schema-validators";
 
 /**

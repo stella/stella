@@ -17,17 +17,11 @@ on:
         description: Owning generator ID
         required: true
         type: string
+  # Workflow files are never fixed (the App cannot push them), but every one
+  # feeds the job classification digests, so no path is filtered out. A test
+  # derives this from the generators and the Tauri alignment.
   pull_request:
     types: [opened, synchronize, reopened]
-    # Workflow files are never fixed (the App cannot push them); only those a
-    # generator or the Tauri alignment reads stay in scope. A test derives
-    # this list from both.
-    paths:
-      - "**"
-      - "!.github/workflows/**"
-      - ".github/workflows/autofix.yml"
-      - ".github/workflows/ci.yml"
-      - ".github/workflows/release.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id) || format('run-{0}', github.run_id) }}
@@ -62,7 +56,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Setup regeneration tooling
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: .regeneration-controls/package.json
@@ -195,7 +189,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -488,7 +482,7 @@ jobs:
           git diff --name-only -z --no-renames --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- apps/api/ > "$RUNNER_TEMP/autofix-added-paths"
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -614,7 +608,9 @@ jobs:
             fi
             # A type-aware fix is kept only when its project type-checks. A
             # push the fixer leaves unchanged has nothing to keep, so it skips
-            # the full project check; CI's typecheck reports its types.
+            # the full project check; CI's typecheck reports its types. A
+            # rejected fix drops only the lint rewrites: formatting and the
+            # generators still run and push.
             fixed=false
             for path in "${lint_paths[@]}"; do
               if ! cmp -s "$path" "$backup/$path"; then
@@ -627,13 +623,12 @@ jobs:
               bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}" || typecheck_status=$?
               if (( typecheck_status != 0 )); then
                 restore_lint_paths
-                exit "$typecheck_status"
+                echo "::warning title=Autofix lint fixes dropped::The type-aware lint fixes did not type-check (exit $typecheck_status); kept formatting and generated files only."
               fi
             fi
           fi
           if (( ${#format_paths[@]} > 0 )); then
-            bun run format:guard
-            bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "${format_paths[@]}"
+            bun fmt --ignore-unknown "${format_paths[@]}"
           fi
 
       # Final outputs must reflect lint and formatting rewrites, including

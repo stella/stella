@@ -17,13 +17,17 @@ import type {
   CitationAnchorSource,
   DecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
+  ExternalDecisionProvisionAnchor,
 } from "@stll/decision-reader/reader-types";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
-import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import {
+  decisionCitationCourtLabel,
+  presentationBesideCitationText,
+} from "@/components/references/decision-citation-chip.logic";
 import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
@@ -37,6 +41,9 @@ export type WebDecisionReaderProps = Omit<
   surface: DecisionReaderSurface;
   landingSessionId?: string | undefined;
   citationAnchors?: readonly CitationAnchorSource[] | undefined;
+  externalProvisionAnchors?:
+    | readonly ExternalDecisionProvisionAnchor[]
+    | undefined;
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
   statuteCitationAnchors?: readonly DecisionStatuteCitationAnchor[] | undefined;
 };
@@ -52,6 +59,7 @@ const WebDecisionReaderContent = ({
   annotationAnchors = NO_ANCHORS,
   citationAnchors = NO_ANCHORS,
   provisionAnchors = NO_ANCHORS,
+  externalProvisionAnchors = NO_ANCHORS,
   statuteCitationAnchors = NO_ANCHORS,
   surface,
   landingSessionId,
@@ -87,10 +95,13 @@ const WebDecisionReaderContent = ({
             citation,
             textDecisionId: props.decisionId,
           }}
-          presentation={
-            presentations.get(linkProps.decision.id) ??
-            panic("Reader citation missing collected identity")
-          }
+          presentation={presentationBesideCitationText({
+            caseNumber: linkProps.decision.caseNumber,
+            citationText: citation.citationText,
+            presentation:
+              presentations.get(linkProps.decision.id) ??
+              panic("Reader citation missing collected identity"),
+          })}
         />
       ),
     },
@@ -98,6 +109,7 @@ const WebDecisionReaderContent = ({
     annotationAnchors: hydrated ? annotationAnchors : NO_ANCHORS,
     citationAnchors: citations,
     provisionAnchors: hydrated ? provisionAnchors : NO_ANCHORS,
+    externalProvisionAnchors: hydrated ? externalProvisionAnchors : NO_ANCHORS,
     statuteCitationAnchors: hydrated ? statuteCitationAnchors : NO_ANCHORS,
   });
   useProvisionPlacementTelemetry({

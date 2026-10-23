@@ -13,15 +13,33 @@ import {
 } from "@/features/avt/avt.test-fixtures";
 import type { VerificationRun } from "@/features/avt/types";
 import {
+  claimMark,
   claimSpansForBlock,
   groupClaimsIntoPassages,
   passageReadingOrder,
   proseReadingOrder,
   readerParagraph,
-  selectClaimPresentation,
   segmentProse,
+  selectClaimPresentation,
   spanPresentation,
 } from "@/features/avt/verification-view.logic";
+
+describe("claimMark", () => {
+  test("selection wins, a filtered-out claim is not drawn", () => {
+    expect(claimMark({ selected: true, dim: true, highlight: false })).toBe(
+      "active",
+    );
+    expect(claimMark({ selected: false, dim: true, highlight: false })).toBe(
+      null,
+    );
+    expect(claimMark({ selected: false, dim: false, highlight: true })).toBe(
+      "matched",
+    );
+    expect(claimMark({ selected: false, dim: false, highlight: false })).toBe(
+      "rest",
+    );
+  });
+});
 
 describe("spanPresentation", () => {
   const cases: {

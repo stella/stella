@@ -2,10 +2,10 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
   lstatSync,
-  readlinkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -20,12 +20,13 @@ import { ciGeneratedFiles } from "./generated-file-inventory";
 import {
   generatedFileHash,
   generatedInputIdentity,
+  hasPreparedGeneratedSources,
+  preparedGeneratedFile,
+  preparedManifestPath,
   requireUnchangedGeneratedInputs,
+  restorePreparedGeneratedSources,
   validatePreparedManifest,
   verifyPreparedGeneratedFiles,
-  restorePreparedGeneratedSources,
-  preparedManifestPath,
-  hasPreparedGeneratedSources,
 } from "./prepared-generated-sources";
 
 const fixture = () => {
@@ -38,7 +39,7 @@ const fixture = () => {
     writeFileSync(destination, bytes);
   };
   write(
-    "node_modules/typescript/package.json",
+    "node_modules/typescript6/package.json",
     JSON.stringify({ version: "test-compiler" }),
   );
   write("input.ts", "export const input = 1;\n");
@@ -81,6 +82,15 @@ const fixture = () => {
   };
   return { root, write, manifest };
 };
+
+test("the identity names the TypeScript 6 compiler the generators run on", () => {
+  const { root, manifest } = fixture();
+  try {
+    expect(manifest.compilerVersion).toBe("test-compiler");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("every prepared output has required identity and byte coverage", () => {
   const { root, manifest, write } = fixture();
@@ -278,6 +288,43 @@ test("regeneration keeps its concrete file diff after a verified handoff is clea
     } else {
       process.env["CI_GENERATED_SOURCES_MANIFEST"] = previous;
     }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// It never reads CI_GENERATED_SOURCES_MANIFEST, so a regeneration guard that
+// cleared the handoff cannot hide the producer's printout.
+test("a prepared file is offered only for the recorded inputs and bytes", () => {
+  const { root, manifest, write } = fixture();
+  const [file] = ciGeneratedFiles(root);
+  if (file === undefined) {
+    panic("Fixture has no generated outputs");
+  }
+  try {
+    // No manifest on disk.
+    expect(preparedGeneratedFile(root, file)).toBeUndefined();
+    write(
+      ".cache/ci-generated-sources/manifest.json",
+      JSON.stringify(manifest),
+    );
+    expect(
+      Buffer.from(preparedGeneratedFile(root, file) ?? []).toString("utf-8"),
+    ).toBe(`prepared:${file}\n`);
+    // A file the manifest does not name.
+    expect(preparedGeneratedFile(root, "input.ts")).toBeUndefined();
+    // Bytes on disk no longer those the producer recorded.
+    write(file, "rewritten\n");
+    expect(preparedGeneratedFile(root, file)).toBeUndefined();
+    write(file, `prepared:${file}\n`);
+    expect(preparedGeneratedFile(root, file)).toBeDefined();
+    // Source inputs changed since the producer ran.
+    write("input.ts", "export const input = 2;\n");
+    expect(preparedGeneratedFile(root, file)).toBeUndefined();
+    write("input.ts", "export const input = 1;\n");
+    // A malformed manifest offers nothing rather than failing.
+    write(".cache/ci-generated-sources/manifest.json", "{");
+    expect(preparedGeneratedFile(root, file)).toBeUndefined();
+  } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });

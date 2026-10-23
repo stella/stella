@@ -1,19 +1,19 @@
 import { panic } from "better-result";
 import {
   existsSync,
-  readdirSync,
-  readFileSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { builtinModules } from "node:module";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
-import { GENERATORS, type Generator } from "./generated-files";
+import { type Generator, GENERATORS } from "./generated-files";
 import { specifierCandidates } from "./generated-imports";
 import { lexShell } from "./install-free-ci";
 

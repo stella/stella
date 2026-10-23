@@ -20,6 +20,8 @@ import {
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
+import type { AccountAccess } from "@/api/lib/auth/account-access";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
@@ -46,12 +48,12 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag, unredactedErrorFields } from "@/api/lib/errors/utils";
 import {
-  isFeatureEnabled,
   isFeatureAccessSnapshotForPrincipal,
+  isFeatureEnabled,
 } from "@/api/lib/feature-access/policy";
 import type {
-  FeatureAccessSnapshot,
   FeatureAccessProof,
+  FeatureAccessSnapshot,
 } from "@/api/lib/feature-access/policy";
 import {
   getContentDeliveryReceiptError,
@@ -126,11 +128,8 @@ import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import { recordWriteContract } from "@/api/lib/write-contract";
 import type { WriteContract } from "@/api/lib/write-contract";
-// Type-only: derive the closed tool-name union from the single MCP registry
-// so `mcp: { type: "tool", name }` typechecks against the real tools. The
-// import is erased at build time and never creates a runtime import cycle
-// (api-handlers must stay importable without pulling in the MCP graph).
-import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
+// Type-only: keep endpoint metadata independent of the expensive MCP schema graph.
+import type { McpToolName } from "@/api/mcp/static-tool-names";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -139,7 +138,7 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
  * `type: "covered"` disposition references one of these; the coverage guard
  * (`apps/api/scripts/mcp-coverage-guard.ts`) cross-checks the runtime registry.
  */
-export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
+export type { McpToolName };
 
 /**
  * Reasons an endpoint is a real end-to-end capability a user or their agent
@@ -465,14 +464,8 @@ export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
  * and `account-control` (credentials, keys, billing, external connections,
  * organization configuration) also refuses the restricted review account.
  */
-export const ACCOUNT_ACCESS = {
-  standard: "standard",
-  sandbox: "sandbox",
-  accountControl: "account-control",
-} as const;
-
-export type AccountAccess =
-  (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
+export { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
+export type { AccountAccess } from "@/api/lib/auth/account-access";
 
 const requiresAccountCheck = (accountAccess: AccountAccess) =>
   accountAccess !== ACCOUNT_ACCESS.sandbox;
@@ -486,12 +479,16 @@ type SandboxAccountAccess = {
  * declares. A route census reads it: a mounted handler missing here skipped
  * every factory, so it carries no account decision of its own.
  */
-const safeHandlerAccountAccess = new WeakMap<object, AccountAccess>();
+const safeHandlerAccountAccess = new WeakMap<
+  object,
+  { accountAccess: AccountAccess; permissions?: PermissionInput }
+>();
 
 const recordSafeHandler = <
   TDefinition extends {
     config: WriteContract & {
       accountAccess: AccountAccess;
+      permissions?: PermissionInput;
       body?: unknown;
       description?: string;
     };
@@ -501,14 +498,16 @@ const recordSafeHandler = <
   definition: TDefinition,
 ): TDefinition => {
   recordWriteContract(definition.handler, definition.config);
-  safeHandlerAccountAccess.set(
-    definition.handler,
-    definition.config.accountAccess,
-  );
+  safeHandlerAccountAccess.set(definition.handler, definition.config);
   return definition;
 };
 
 export const getSafeHandlerAccountAccess = (handler: unknown) =>
+  typeof handler === "function"
+    ? safeHandlerAccountAccess.get(handler)?.accountAccess
+    : undefined;
+
+export const getSafeHandlerAccessMetadata = (handler: unknown) =>
   typeof handler === "function"
     ? safeHandlerAccountAccess.get(handler)
     : undefined;
@@ -568,6 +567,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
       email: string;
     };
     session: {
+      id: string;
       activeOrganizationId: SafeId<"organization">;
     };
     featureAccessSnapshot?: FeatureAccessSnapshot;
@@ -1154,6 +1154,7 @@ const runAdmittedFiniteHandler = async function* <
         }
         const outcome = await admitModelDispatch({
           organizationId: ctx.session.activeOrganizationId,
+          userId: ctx.user.id,
           actionKind,
           organizationStateDb: ctx.scopedDb,
           signal,
@@ -2414,6 +2415,7 @@ const logAndCaptureSafeError = ({
     sink: SHADOW_SINKS.handler,
     channel: legacyChannelOf({ severity, capture: telemetry === "capture" }),
     request,
+    route,
     requestState: { answeredStatus: statusCode },
   });
 

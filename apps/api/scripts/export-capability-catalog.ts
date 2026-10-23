@@ -57,23 +57,23 @@ import {
 } from "../src/lib/capability-transport";
 import { FEATURE_REGISTRY } from "../src/lib/feature-access/registry";
 import {
-  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
   type CatalogServiceClassification,
   type ServiceClassification,
+  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
 } from "../src/lib/rate-limit/service-classification";
 import type { HandlerKind } from "../src/lib/safe-handler-factories";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
 import {
-  generateCapabilityRuntime,
   generateCapabilityCatalogRuntime,
+  generateCapabilityRuntime,
 } from "./generate-capability-runtime";
 import {
-  type CapabilityDispatchRecord,
   type AccessResolution,
   CANONICAL_ACTION_VERBS,
   CAPABILITY_ID_SEGMENT_PATTERN,
+  type CapabilityDispatchRecord,
   type CapabilityInputSchema,
   checkTransportAgainstDerived,
   compareCapabilityIds,

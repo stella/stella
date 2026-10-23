@@ -140,7 +140,7 @@ const evictBuilder = () => {
 };
 
 /** The server: the saved builder thread, which never records a turn. */
-const serveSavedBuilder = () => {
+const serveSavedBuilder = ({ aiAvailable = true } = {}) => {
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const request = new Request(input, init);
@@ -148,6 +148,9 @@ const serveSavedBuilder = () => {
       if (pathname.endsWith(`/chat/threads/${threadRef.threadId}/messages`)) {
         requests.push(request);
         return Response.json(savedThread);
+      }
+      if (pathname.endsWith("/chat/tool-grants")) {
+        return Response.json({ grants: [] });
       }
       if (pathname.endsWith("/chat") && request.method === "POST") {
         const body: unknown = await request.json();
@@ -208,7 +211,7 @@ const serveSavedBuilder = () => {
         } satisfies WebApiRoutes["chat"]["threads"][":threadId"]["suggested-prompts"]["post"]["response"][200]);
       }
       if (pathname.endsWith("/organization-settings/ai-availability")) {
-        return Response.json({ available: true });
+        return Response.json({ available: aiAvailable });
       }
       if (pathname.endsWith("/skills")) {
         return Response.json({
@@ -395,4 +398,39 @@ test("an evicted builder's chat lives and goes with the thread entry the page re
     forwardedProps: { activeSkill: builder, threadId: threadRef.threadId },
   });
   expect(unexpected).toEqual([]);
+});
+
+// A send the page declines (no AI available, so it opens the configure-key
+// dialog instead) must leave the typed message in the composer for the retry.
+test("a send declined for missing AI keeps the typed draft in the composer", async () => {
+  serveSavedBuilder({ aiAvailable: false });
+  const client = createClient();
+  const prompt = "Summarise the indemnity clause";
+  draftPrompt(prompt);
+
+  const ui = await openThreadPage(client);
+  const textbox = ui.getByRole("textbox");
+  expect(textbox.textContent).toBe(prompt);
+
+  await testing.act(async () => {
+    testing.fireEvent.click(
+      ui.getByRole("button", { name: messages.chat.sendPrompt }),
+    );
+    await sleep(50);
+  });
+
+  // The page declined the send and asked for a key instead.
+  await testing.waitFor(() => expect(ui.queryByRole("dialog")).not.toBeNull());
+  expect(sends).toEqual([]);
+  // Only the dialog's own settings read is new; this test does not serve it.
+  expect(
+    unexpected.filter(
+      (pathname) => !pathname.endsWith("/organization-settings/ai-config"),
+    ),
+  ).toEqual([]);
+  expect(textbox.textContent).toBe(prompt);
+  expect(
+    useChatDraftStore.getState().getDraft(getChatThreadKey(threadRef))?.doc
+      .content,
+  ).toEqual([{ type: "paragraph", content: [{ type: "text", text: prompt }] }]);
 });

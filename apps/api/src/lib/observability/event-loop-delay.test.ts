@@ -2,8 +2,8 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 
 import {
   EVENT_LOOP_STALL_THRESHOLD_MS,
-  startEventLoopDelayMonitor,
   type EventLoopDelayReport,
+  startEventLoopDelayMonitor,
 } from "@/api/lib/observability/event-loop-delay";
 import {
   emitEventLoopDelayMetric,

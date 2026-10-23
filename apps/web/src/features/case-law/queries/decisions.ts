@@ -7,8 +7,8 @@ import {
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
-  searchPageEnd,
   type SearchExcerpt,
+  searchPageEnd,
   type SearchSort,
 } from "@stll/api-contract/search";
 
@@ -302,6 +302,7 @@ export const decisionsPageOptions = ({
             sourceUrl: h.sourceUrl,
             headnote: h.headnote,
             headline: h.headline,
+            match: h.match,
             anchorId: h.anchorId,
             citationCount: h.citationCount,
             createdAt: h.createdAt,

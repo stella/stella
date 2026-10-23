@@ -112,15 +112,15 @@ import type {
 } from "./lib/playbook-authoring-score";
 import {
   ACCESSIBLE_MATTER_IDS,
+  answerMatterTool,
   BUILDER_SCENARIOS,
   BUILDER_SURFACES,
   DISCOVER_TOOLS,
   EXECUTE_TYPESCRIPT,
+  isMatterToolName,
   MATTER_TOOL_NAMES,
   READABLE_DOCUMENTS,
   SAVE_PLAYBOOK,
-  answerMatterTool,
-  isMatterToolName,
   scoreScenario,
 } from "./lib/playbook-builder-scenarios";
 import type {
@@ -1600,6 +1600,7 @@ const resolveModels = async (modelIds: readonly string[]) => {
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",

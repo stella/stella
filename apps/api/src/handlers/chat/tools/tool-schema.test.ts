@@ -4,9 +4,9 @@ import {
   hashSchemaInput,
   normalizeApprovalSchema,
   parseWithStandardSchema,
-  toolDefinition,
   type StreamChunk,
   type Tool,
+  toolDefinition,
 } from "@tanstack/ai";
 import {
   convertToolsToProviderFormat as convertAnthropicTools,
@@ -89,6 +89,14 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+} from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
@@ -96,7 +104,7 @@ import {
 } from "@/api/lib/provider-safe-json-schema";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
-import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { MODEL_VISIBLE_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { offeredSkillCatalog } from "@/api/tests/helpers/offered-skills";
@@ -156,6 +164,29 @@ const getChatTools = (
   return getChatToolsWithPin({
     ...rest,
     memoryEnabled: props.memoryEnabled ?? true,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: props.organizationId,
+      userId: props.userId,
+      decisions: new Map([
+        ...(props.featureAccessSnapshot?.decisions ?? []),
+        [
+          AI_MEMORY_FEATURE_ID,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            featureId: AI_MEMORY_FEATURE_ID,
+            organizationId: props.organizationId,
+            userId: props.userId,
+            membership: true,
+            user: { email: "member@example.test", emailVerified: true },
+            grants: {
+              [AI_MEMORY_FEATURE_ID]: [
+                { type: "organization", organizationId: props.organizationId },
+              ],
+            },
+          }),
+        ],
+      ]),
+    }),
     pinServerValidatedWorkspaceId: () => true,
     registryDispatch,
   });
@@ -945,6 +976,40 @@ describe("chat tool schemas", () => {
       memoryEnabled: false,
     };
 
+    for (const invited of [false, true]) {
+      const featureAccessSnapshot = createFeatureAccessSnapshot({
+        organizationId,
+        userId,
+        decisions: new Map([
+          [
+            AI_MEMORY_FEATURE_ID,
+            decideFeatureAccess({
+              registry: FEATURE_REGISTRY,
+              featureId: AI_MEMORY_FEATURE_ID,
+              organizationId,
+              userId,
+              membership: true,
+              user: { email: "member@example.test", emailVerified: true },
+              grants: invited
+                ? {
+                    [AI_MEMORY_FEATURE_ID]: [
+                      { type: "organization", organizationId },
+                    ],
+                  }
+                : {},
+            }),
+          ],
+        ]),
+      });
+      const tools = getChatToolsWithPin({
+        ...baseArgs,
+        memoryEnabled: undefined,
+        featureAccessSnapshot,
+        pinServerValidatedWorkspaceId: () => true,
+        registryDispatch: BUSINESS_REGISTRY_DISPATCH,
+      });
+      expect(REMEMBER_TOOL_NAME in tools).toBe(invited);
+    }
     expect(getChatTools(baseArgs)).not.toHaveProperty(REMEMBER_TOOL_NAME);
     expect(
       getChatTools({
@@ -2485,7 +2550,7 @@ describe("chat tool schemas", () => {
 });
 
 describe("registry write tool approval policy", () => {
-  const projectedWriteNames = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+  const projectedWriteNames = MODEL_VISIBLE_MCP_TOOL_DEFINITIONS.filter(
     (definition) =>
       definition.access === "write" &&
       WRITE_TOOL_REF_FIELD_MAP[definition.name].chatProjectable,

@@ -11,9 +11,9 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import {
-  rehydrateLegislationCandidates,
-  readLegislationCandidateRows,
   legislationCandidateRowsStatement,
+  readLegislationCandidateRows,
+  rehydrateLegislationCandidates,
 } from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
@@ -22,16 +22,21 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  corpusIndexLexicalScore,
   NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
+import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
-import { installCorpusDispositionScan } from "@/api/tests/helpers/corpus-disposition-scan";
+import {
+  installCorpusDispositionScan,
+  installCorpusRevisionScan,
+} from "@/api/tests/helpers/corpus-disposition-scan";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -374,11 +379,11 @@ test("the legislation read separates eligible content from id-only dispositions"
 test("legislation scan counts retained omissions once as eligible candidates grow", async () => {
   const hitDispositions = createCorpusHitDispositionCounter();
   const missingId = createSafeId<"legislationDocument">();
-  const eligibleIds = [projectedId, secondProjectedId];
   const restoreFetch = installCorpusDispositionScan([
-    withdrawnId,
-    missingId,
-    ...eligibleIds,
+    { id: withdrawnId, revision: withdrawnIntentId },
+    { id: missingId, revision: createSafeId<"corpusIndexProjectionIntent">() },
+    { id: projectedId, revision: projectedIntentId },
+    { id: secondProjectedId, revision: secondProjectedIntentId },
   ]);
   const candidateCounts: number[] = [];
   const eligibleCounts: number[] = [];
@@ -400,7 +405,7 @@ test("legislation scan counts retained omissions once as eligible candidates gro
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: () => 0,
-      rankCandidates: async (candidates) => {
+      rankCandidates: async (candidates, { selectAppliedCandidates }) => {
         candidateCounts.push(candidates.length);
         const result = await rehydrateLegislationCandidates({
           body: { query: "smlouva" },
@@ -409,6 +414,7 @@ test("legislation scan counts retained omissions once as eligible candidates gro
           hitDispositions,
           candidates,
           namedWorks: [],
+          selectAppliedCandidates,
         });
         eligibleCounts.push(result.ranked.length);
         return result;
@@ -427,3 +433,79 @@ test("legislation scan counts retained omissions once as eligible candidates gro
     restoreFetch();
   }
 });
+
+test.each(["off", "bm25-ratio"] as const)(
+  "applied revision alone supplies query matches and candidate scores in %s scans",
+  async (rankingMode) => {
+    const oldRevision = createSafeId<"corpusIndexProjectionIntent">();
+    const oldText = "obsolete common common common common";
+    const currentText = "current common";
+    expect(oldRevision).not.toBe(projectedIntentId);
+    expect(oldText).not.toBe(currentText);
+    expect(currentText).not.toContain("obsolete");
+    const restoreFetch = installCorpusRevisionScan([
+      { id: projectedId, revision: oldRevision, text: oldText },
+      { id: projectedId, revision: projectedIntentId, text: currentText },
+      {
+        id: secondProjectedId,
+        revision: secondProjectedIntentId,
+        text: "common common",
+      },
+    ]);
+    try {
+      const search = async (query: string) =>
+        await readCorpusIndexSearchPage({
+          observer: "unobserved",
+          cluster: "q09",
+          indexId: PROJECTED_INDEX_ID,
+          query: `text:${query}`,
+          limit: 40,
+          order: RELEVANCE_ORDER,
+          parsedCursor: null,
+          rankingMode,
+          scanTransport:
+            rankingMode === "bm25-ratio"
+              ? { type: "scored" }
+              : { type: "native" },
+          snippetFields: ["text"],
+          projectionRevisionField: "projection_revision",
+          extractId: (hit) =>
+            typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+          extractSnippet: () => null,
+          unseenScoreUpperBound: () => 0,
+          rankCandidates: async (candidates, scope) =>
+            await rehydrateLegislationCandidates({
+              body: { query },
+              legislationDb,
+              generation: PROJECTED_GENERATION,
+              candidates,
+              ranking: "lexical",
+              namedWorks: [],
+              selectAppliedCandidates: scope.selectAppliedCandidates,
+            }),
+        });
+      const obsolete = await search("obsolete");
+      expect(obsolete.scan.passagesScanned).toBe(1);
+      expect(reads).toBe(1);
+      expect(obsolete.pageRanked).toEqual([]);
+      const common = await search("common");
+      expect(common.scan.passagesScanned).toBe(3);
+      expect(reads).toBe(2);
+      expect(common.pageRanked.map(({ id }) => id)).toEqual([
+        secondProjectedId,
+        projectedId,
+      ]);
+      const applied = common.pageRanked.find(({ id }) => id === projectedId);
+      expect(applied?.lexicalScore).toBeCloseTo(
+        rankingMode === "off"
+          ? corpusIndexLexicalScore(2)
+          : (1 / 4) ** CORPUS_BM25_RATIO_POWER,
+        10,
+      );
+      expect(common.passageCountById.get(projectedId)).toBe(1);
+      expect(common.passageClauseById.get(projectedId)).toContain("passage-1");
+    } finally {
+      restoreFetch();
+    }
+  },
+);

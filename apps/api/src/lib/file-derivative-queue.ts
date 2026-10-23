@@ -3,7 +3,7 @@ import { DelayedError } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
 import { Temporal } from "@stll/time";
 
@@ -52,8 +52,8 @@ import {
   resolveQueuedFileObject,
 } from "@/api/lib/files/file-object-ids";
 import {
-  type ConversionInputErrorReason,
   ConversionInputError,
+  type ConversionInputErrorReason,
   convertToPdf,
   shouldGeneratePdfDerivative,
 } from "@/api/lib/files/gotenberg";
@@ -96,9 +96,9 @@ import {
   S3ObjectBudgetError,
 } from "@/api/lib/s3";
 import {
+  brandNullablePersistedUserId,
   brandPersistedEntityId,
   brandPersistedFieldId,
-  brandNullablePersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";

@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import * as cheerio from "cheerio";
+import type { AnyNode } from "domhandler";
 
 import type {
   BlockContent as FolioBlockContent,
@@ -57,7 +58,7 @@ import {
   CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
-// parser-output-unchanged: imports the document AST from its package owner
+// parser-output-unchanged: cached DocContent and direct paragraph validation preserve the extracted text, blocks, metadata, sections, and cross-references.
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import {
   normalizeInlineLine,
@@ -68,20 +69,17 @@ import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
-  createParagraphLineReader,
   type BodyDocumentLine,
+  createParagraphLineReader,
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
+import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
-import { visibleHtmlText, stripFurniturePrefix } from "./shared-inlines";
+import { stripFurniturePrefix, visibleHtmlText } from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -111,14 +109,15 @@ export const parseUsDecisionHtml = (
   input: ParseUsDecisionInput,
 ): ParseUsDecisionOutput => {
   const $ = cheerio.load(input.html);
+  const docContent = $(".DocContent");
 
   // Extract metadata from hidden fields
   const hiddenMeta = extractHiddenMetadata($);
 
   // Extract cross-reference links from the visible HTML
-  const crossReferences = extractCrossReferences($);
+  const crossReferences = extractCrossReferences($, docContent);
 
-  const lines = extractLines($);
+  const lines = extractLines($, docContent);
   const blocks = courtParagraphNumbers(classifyUsDocumentLines(lines), {
     parser: "cz-us",
     caseNumber: input.caseNumber,
@@ -147,14 +146,12 @@ export const parseUsDecisionHtml = (
   // all text without whitespace between sections, creating
   // phantom words like "tarifu.ii.skutkové" that aren't in
   // the AST. Using per-line <p> tags preserves word boundaries.
-  const validationHtml = buildValidationHtml(
-    lines.map((line) =>
-      line.kind === "body" ? line.value.plainText : line.note.value.plainText,
-    ),
+  const validationParagraphs = lines.map((line) =>
+    line.kind === "body" ? line.value.plainText : line.note.value.plainText,
   );
   validateAndLog(
     { parser: "cz-us", caseNumber: input.caseNumber },
-    validationHtml,
+    { type: "paragraphs", paragraphs: validationParagraphs },
     blocks,
   );
 
@@ -216,11 +213,14 @@ const CROSS_REF_HREF_RE = /GetRegSignDecisions\.aspx\?sz=/iu;
  * Extract cross-reference links to other ÚS decisions from
  * the visible DocContent HTML.
  */
-const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
+const extractCrossReferences = (
+  $: cheerio.CheerioAPI,
+  docContent: cheerio.Cheerio<AnyNode>,
+): CrossReference[] => {
   const refs: CrossReference[] = [];
   const seen = new Set<string>();
 
-  $(".DocContent a[href]").each((_, el) => {
+  docContent.find("a[href]").each((_, el) => {
     const href = $(el).attr("href") ?? "";
     if (!CROSS_REF_HREF_RE.test(href)) {
       return;
@@ -366,8 +366,10 @@ export const usDocumentLinesOf = (
  * `docContentHidden` field. Splits the crammed text at
  * paragraph boundaries using heuristics.
  */
-const extractLinesFromDocContent = ($: cheerio.CheerioAPI): ParsedLine[] => {
-  const docContent = $(".DocContent");
+const extractLinesFromDocContent = (
+  $: cheerio.CheerioAPI,
+  docContent: cheerio.Cheerio<AnyNode>,
+): ParsedLine[] => {
   const container = docContent.length > 0 ? docContent : $("body");
 
   const fullText = visibleHtmlText(container).trim();
@@ -423,7 +425,10 @@ const PARAGRAPH_BOUNDARY_PATTERNS = [
  * Prefers the `docContentHidden` RTF field; falls back to
  * parsing the visible DocContent HTML.
  */
-const extractLines = ($: cheerio.CheerioAPI): ParsedLine[] => {
+const extractLines = (
+  $: cheerio.CheerioAPI,
+  docContent: cheerio.Cheerio<AnyNode>,
+): ParsedLine[] => {
   const rtfContent = $("input#docContentHidden").attr("value") ?? "";
 
   if (rtfContent.trim()) {
@@ -431,7 +436,7 @@ const extractLines = ($: cheerio.CheerioAPI): ParsedLine[] => {
   }
 
   // Fallback: parse the visible DocContent HTML
-  return extractLinesFromDocContent($);
+  return extractLinesFromDocContent($, docContent);
 };
 
 // ── Patterns ───────────────────────────────────────────────
