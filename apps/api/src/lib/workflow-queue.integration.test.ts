@@ -291,6 +291,12 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
         aiJustifications: [],
         skippedPropertyIds: [],
         unsupportedPropertyIds: [],
+        settlements: new Map(
+          batch.properties.map((property) => [
+            property.id,
+            "answered" as const,
+          ]),
+        ),
       });
     });
     stragglerSpy.mockImplementation(async () => {
@@ -344,6 +350,12 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
         aiJustifications: [],
         skippedPropertyIds: [],
         unsupportedPropertyIds: [],
+        settlements: new Map(
+          batch.properties.map((property) => [
+            property.id,
+            "answered" as const,
+          ]),
+        ),
       });
     });
 
