@@ -42,6 +42,11 @@ const NALUS_REQUEST_BUDGET_SHARE = 0.96;
  */
 export const PUBLISHER_GATES = {
   "uoou-cz": { publisher: "ÚOOÚ", intervalMs: 1000, hosts: ["uoou.gov.cz"] },
+  "bfdi-de": {
+    publisher: "BfDI",
+    intervalMs: 30_000,
+    hosts: ["www.bfdi.bund.de"],
+  },
   "uohs-cz": { publisher: "ÚOHS", intervalMs: 1000, hosts: ["uohs.gov.cz"] },
   "edpb-eu": {
     publisher: "European Data Protection Board",

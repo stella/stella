@@ -508,6 +508,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
           key,
           contentType: part.contentType,
           ...(part.purpose ? { purpose: part.purpose } : {}),
+          ...(part.provenance ? { provenance: part.provenance } : {}),
         });
       }
       return {
