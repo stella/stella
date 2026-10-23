@@ -391,7 +391,7 @@ const WordingFrame = ({
   children: ReactNode;
   expanded: boolean;
   placement: ProvisionCardPlacement;
-}) => {
+}): ReactNode => {
   if (placement === "inline") {
     return children;
   }
