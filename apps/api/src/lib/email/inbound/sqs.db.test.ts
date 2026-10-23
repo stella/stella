@@ -25,22 +25,22 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { createInboundMailPersistence } from "@/api/lib/email/inbound/persistence";
 import {
-  createSesS3ObjectReader,
   createSesS3ObjectDeleter,
+  createSesS3ObjectReader,
   receiveAndDeleteSesInboundMail,
   SesInboundError,
 } from "@/api/lib/email/inbound/ses";
 import { drainInboundMailQueue } from "@/api/lib/email/inbound/sqs";
 import { logger } from "@/api/lib/observability/logger";
 import {
-  openGatedTestDatabase,
   type GatedTestDb,
+  openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { startFakeS3, type FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { type FakeS3, startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createFakeSqsQueue } from "@/api/tests/helpers/fake-sqs";
 
 const databaseUrl = process.env["DATABASE_URL"];

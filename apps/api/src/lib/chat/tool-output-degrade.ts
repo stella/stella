@@ -266,9 +266,7 @@ class ToolOutputContractDegradedError extends TaggedError(
 export type ToolOutputDegradeDefect = "undeclared_fields" | "unmapped_id";
 
 export type ToolOutputDegradeSource =
-  | "mcp"
-  | "run-registry-tool"
-  | "run-registry-write-tool";
+  "mcp" | "run-registry-tool" | "run-registry-write-tool";
 
 export const TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT =
   "tool_output.contract_degraded";

@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
-  beforeEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   setDefaultTimeout,

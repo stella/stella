@@ -1,15 +1,15 @@
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   isAstNode,
   isIdentifierReference,
   memberPropertyName,
   resolveImport,
   resolveVariable,
+  type ScopeContext,
   stableInitializer,
   unwrapExpression,
-  type AstNode,
-  type ScopeContext,
 } from "./utils.ts";
 
 const NODE_FS_MODULES = new Set([

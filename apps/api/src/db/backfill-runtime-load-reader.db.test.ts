@@ -251,7 +251,7 @@ describe.skipIf(!enabled)(
           expect(aggregateAge - age).toBeLessThan(1000);
         } finally {
           await holder`ROLLBACK`;
-          holder.release();
+          await holder.release();
         }
       });
     });
@@ -425,7 +425,7 @@ describe.skipIf(!enabled)(
           expect(aggregate?.["transaction_age_ms"]).toBe(0);
         } finally {
           await holder`ROLLBACK`;
-          holder.release();
+          await holder.release();
         }
       });
     });
@@ -519,8 +519,8 @@ describe.skipIf(!enabled)(
             }
             await vacuum;
           }
-          worker.release();
-          observer.release();
+          await worker.release();
+          await observer.release();
         }
       });
     }, 30_000);

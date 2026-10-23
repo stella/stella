@@ -12,9 +12,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   maskWebSearchKey,
   validateWebSearchKey,
+  WEB_SEARCH_KEY_KINDS,
   webSearchKeyAuditField,
   webSearchKeyColumns,
-  WEB_SEARCH_KEY_KINDS,
 } from "@/api/lib/web-search/keys";
 import { WebSearchProviderError } from "@/api/lib/web-search/types";
 
