@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import { readerAnchorPiecesOf } from "@stll/legal-ast/document-ast";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { SafeId } from "@/api/lib/branded-types";

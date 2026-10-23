@@ -11,7 +11,7 @@
 import { panic } from "better-result";
 
 import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
-import { readerAnchorPiecesOf } from "@stll/legal-ast/document-ast";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 type AnnotationPassage = {
