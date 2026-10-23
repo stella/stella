@@ -129,6 +129,7 @@ export const specVisualNames = (
 const sourceCandidate = (
   root: string,
   candidate: string,
+  boundary: ReadonlySet<string> = new Set(),
 ): string | undefined => {
   const normalized = normalize(path.posix.normalize(candidate));
   const extension = path.posix.extname(normalized);
@@ -156,8 +157,9 @@ const sourceCandidate = (
   }
   return candidates.find(
     (file) =>
-      existsSync(path.join(root, file)) &&
-      statSync(path.join(root, file)).isFile(),
+      boundary.has(file) ||
+      (existsSync(path.join(root, file)) &&
+        statSync(path.join(root, file)).isFile()),
   );
 };
 
@@ -208,8 +210,9 @@ const resolveImport = (
   imported: string,
   importer: string,
   root: string,
+  boundary: ReadonlySet<string>,
 ): { files: readonly string[]; internal: boolean; complete: boolean } => {
-  const importPath = imported.split("?", 1)[0] ?? imported;
+  const importPath = imported.split(/[?#]/u, 1)[0] ?? imported;
   let candidates: readonly string[] | undefined;
   if (importPath.startsWith(".")) {
     candidates = [path.posix.join(path.posix.dirname(importer), importPath)];
@@ -263,7 +266,7 @@ const resolveImport = (
     return { files: [], internal: false, complete: true };
   }
   const files = candidates
-    .map((candidate) => sourceCandidate(root, candidate))
+    .map((candidate) => sourceCandidate(root, candidate, boundary))
     .filter((file): file is string => file !== undefined);
   return {
     files,
@@ -312,7 +315,7 @@ export const staticImportClosure = (
           pending.push(relative);
           continue;
         }
-        const resolved = resolveImport(imported, file, root);
+        const resolved = resolveImport(imported, file, root, boundary);
         pending.push(...resolved.files);
         complete &&= resolved.complete;
       }
@@ -377,7 +380,7 @@ export const staticImportClosure = (
         .filter((imported): imported is string => imported !== undefined);
     }
     for (const imported of imports) {
-      const resolved = resolveImport(imported, file, root);
+      const resolved = resolveImport(imported, file, root, boundary);
       pending.push(...resolved.files);
       if (!resolved.complete && resolved.internal) {
         complete = false;

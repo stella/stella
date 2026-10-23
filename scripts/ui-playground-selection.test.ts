@@ -186,6 +186,56 @@ test("unresolved internal imports fail the closure closed", () => {
   }
 });
 
+test("resource queries and hashes resolve to their underlying module", () => {
+  const fixture = createSelectionFixture();
+  try {
+    fixture.write(
+      "apps/web/src/routes/dev/-visual-metadata.ts",
+      "export const visualRegistry = {\n  fixture: {},\n  other: {},\n} as const;\n",
+    );
+    fixture.write(
+      "apps/web/src/routes/dev/-visual-registry.tsx",
+      'export const visualRegistry = {\n  fixture: {\n    loader: () => import("./fixture"),\n  },\n  other: {\n    loader: () => import("./other"),\n  },\n} as const;\n',
+    );
+    fixture.write(
+      "apps/web/e2e/ui-playground/other.geometry.spec.ts",
+      'const url = "/dev?visual=other";\n',
+    );
+    fixture.write("apps/web/src/routes/dev/other.ts", "export {};\n");
+    fixture.write(
+      "apps/web/src/routes/dev/fixture.ts",
+      'import worker from "./worker?worker&url#asset";\nexport { worker };\n',
+    );
+    fixture.write(
+      "apps/web/src/routes/dev/worker.ts",
+      'export default "worker";\n',
+    );
+    expect(
+      selectGeometrySpecs(["apps/web/src/routes/dev/worker.ts"], fixture.root),
+    ).toEqual([fixture.spec]);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("an unresolved loader import selects every spec", () => {
+  const fixture = createSelectionFixture();
+  const secondSpec =
+    "apps/web/e2e/ui-playground/second-fixture.geometry.spec.ts";
+  try {
+    fixture.write(secondSpec, 'const url = "/dev?visual=fixture";\n');
+    fixture.write(
+      "apps/web/src/routes/dev/fixture.ts",
+      'import "./missing-internal-module";\n',
+    );
+    expect(
+      selectGeometrySpecs(["apps/web/src/unrelated.ts"], fixture.root),
+    ).toEqual([fixture.spec, secondSpec]);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test("a missing workspace package selects the affected spec", () => {
   const { root, spec, write } = createSelectionFixture();
   try {
@@ -352,6 +402,25 @@ test("an app shell change selects every spec, the route tree does not", () => {
     expect(
       selectGeometrySpecs(["apps/web/src/routes/other.tsx"], fixture.root),
     ).toEqual([]);
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
+  }
+});
+
+test("an absent generated route tree remains an app shell boundary", () => {
+  const fixture = createSelectionFixture();
+  try {
+    fixture.write("apps/web/src/routes/dev/fixture.tsx", "export {};\n");
+    fixture.write(
+      "apps/web/src/router.tsx",
+      'export { routeTree } from "@/routeTree.gen";\n',
+    );
+    expect(
+      selectGeometrySpecs(
+        ["apps/web/src/routes/dev/fixture.tsx"],
+        fixture.root,
+      ),
+    ).toEqual([fixture.spec]);
   } finally {
     rmSync(fixture.root, { force: true, recursive: true });
   }
