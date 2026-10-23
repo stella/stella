@@ -1,0 +1,7104 @@
+[
+  {
+    "name": "parsers/cz-nss-10-as-124-2025.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68844,
+        "astLength": 68415,
+        "retainedPct": 99.4,
+        "blockCount": 139,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 4,
+          "paragraph": 128,
+          "paragraph-holding": 4,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 258,
+          "textCharacters": 137529,
+          "ancestorChecks": 253
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-as-124-2025.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68844,
+        "astLength": 68312,
+        "retainedPct": 99.2,
+        "blockCount": 138,
+        "missingWords": [
+          "https://upmb.brno.cz/uzemni-plan-mesta-brna/historie-uzemniho-planovani-mesta-brna"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 4,
+          "paragraph": 127,
+          "paragraph-holding": 4,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 258,
+          "textCharacters": 137529,
+          "ancestorChecks": 253
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-as-124-2025.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 68844,
+        "astLength": 68518,
+        "retainedPct": 99.5,
+        "blockCount": 140,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 4,
+          "paragraph": 129,
+          "paragraph-holding": 4,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 258,
+          "textCharacters": 137529,
+          "ancestorChecks": 253
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-as-124-2025.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68844,
+        "astLength": 68414,
+        "retainedPct": 99.4,
+        "blockCount": 139,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 4,
+          "paragraph": 128,
+          "paragraph-holding": 4,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 258,
+          "textCharacters": 137529,
+          "ancestorChecks": 253
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-as-124-2025.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68844,
+        "astLength": 68415,
+        "retainedPct": 99.4,
+        "blockCount": 139,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 4,
+          "paragraph": 128,
+          "paragraph-holding": 4,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 258,
+          "textCharacters": 137529,
+          "ancestorChecks": 253
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-as-124-2025.html.gz#removed-footnote",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68844,
+        "astLength": 68194,
+        "retainedPct": 99.1,
+        "blockCount": 138,
+        "missingWords": [
+          "dostupné",
+          "https://mmr.gov.cz/cs/ministerstvo/stavebni-pravo/stanoviska-a-metodiky/uzemni-planovani/9-zakon-c-283-2021-sb/2-uzemne-planovaci-dokumentace-a-jejich-zmeny/postup-porizovani-uzemnich-planu-po"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 4,
+          "paragraph": 127,
+          "paragraph-holding": 4,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 258,
+          "textCharacters": 137529,
+          "ancestorChecks": 253
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-azs-28-2026.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 16231,
+        "astLength": 16157,
+        "retainedPct": 99.5,
+        "blockCount": 28,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph": 20,
+          "paragraph-holding": 2,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 50,
+          "textCharacters": 32429,
+          "ancestorChecks": 49
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-azs-28-2026.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "36 meaningful words missing: dostupným, informacím, naplňují, dovozené, maximální, míře, důvěryhodné, vyvážené, aktuální, ověřené",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 16231,
+        "astLength": 15053,
+        "retainedPct": 92.7,
+        "blockCount": 27,
+        "missingWords": [
+          "dostupným",
+          "informacím",
+          "naplňují",
+          "dovozené",
+          "maximální",
+          "míře",
+          "důvěryhodné",
+          "vyvážené",
+          "aktuální",
+          "ověřené",
+          "různých",
+          "zdrojů",
+          "transparentní",
+          "opírá",
+          "velké",
+          "množství",
+          "podkladů",
+          "seznatelné",
+          "považoval",
+          "jakými",
+          "úvahami",
+          "řídil",
+          "žalobní",
+          "body",
+          "spisu",
+          "neučinil",
+          "následků",
+          "účasti",
+          "srozumitelně",
+          "vysvětlil",
+          "proč",
+          "uplatňování",
+          "politických",
+          "práv",
+          "uzavřít",
+          "přezkoumatelný"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph": 19,
+          "paragraph-holding": 2,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 50,
+          "textCharacters": 32429,
+          "ancestorChecks": 49
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-azs-28-2026.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 16231,
+        "astLength": 17261,
+        "retainedPct": 106.3,
+        "blockCount": 29,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph": 21,
+          "paragraph-holding": 2,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 50,
+          "textCharacters": 32429,
+          "ancestorChecks": 49
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-azs-28-2026.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 16231,
+        "astLength": 16156,
+        "retainedPct": 99.5,
+        "blockCount": 28,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph": 20,
+          "paragraph-holding": 2,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 50,
+          "textCharacters": 32429,
+          "ancestorChecks": 49
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-azs-28-2026.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 16231,
+        "astLength": 16157,
+        "retainedPct": 99.5,
+        "blockCount": 28,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph": 20,
+          "paragraph-holding": 2,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 50,
+          "textCharacters": 32429,
+          "ancestorChecks": 49
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-22-as-35-2026.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 11012,
+        "astLength": 10958,
+        "retainedPct": 99.5,
+        "blockCount": 28,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph": 20,
+          "paragraph-holding": 2,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 68,
+          "textCharacters": 21995,
+          "ancestorChecks": 67
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-22-as-35-2026.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 11012,
+        "astLength": 10609,
+        "retainedPct": 96.3,
+        "blockCount": 27,
+        "missingWords": [
+          "žalobou",
+          "kterou",
+          "zamítl",
+          "rozsudkem",
+          "brojí",
+          "stížností",
+          "součástí",
+          "této"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph": 19,
+          "paragraph-holding": 2,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 68,
+          "textCharacters": 21995,
+          "ancestorChecks": 67
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-22-as-35-2026.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 11012,
+        "astLength": 11307,
+        "retainedPct": 102.7,
+        "blockCount": 29,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph": 21,
+          "paragraph-holding": 2,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 68,
+          "textCharacters": 21995,
+          "ancestorChecks": 67
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-22-as-35-2026.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 11012,
+        "astLength": 10957,
+        "retainedPct": 99.5,
+        "blockCount": 28,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph": 20,
+          "paragraph-holding": 2,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 68,
+          "textCharacters": 21995,
+          "ancestorChecks": 67
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-22-as-35-2026.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 11012,
+        "astLength": 10958,
+        "retainedPct": 99.5,
+        "blockCount": 28,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph": 20,
+          "paragraph-holding": 2,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 68,
+          "textCharacters": 21995,
+          "ancestorChecks": 67
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iii-us-2429-24.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 19344,
+        "astLength": 19037,
+        "retainedPct": 98.4,
+        "blockCount": 47,
+        "missingWords": ["iii.ús", "nikoliv"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 10,
+          "paragraph": 34,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 38683,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iii-us-2429-24.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "21 meaningful words missing: iii.ús, nikoliv, příloh, podává, zamítl, žalobu, podanou, určeno, zástavní, smluvní",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 19344,
+        "astLength": 18145,
+        "retainedPct": 93.8,
+        "blockCount": 46,
+        "missingWords": [
+          "iii.ús",
+          "nikoliv",
+          "příloh",
+          "podává",
+          "zamítl",
+          "žalobu",
+          "podanou",
+          "určeno",
+          "zástavní",
+          "smluvní",
+          "neexistuje",
+          "podala",
+          "tomuto",
+          "nesouhlasila",
+          "výmazem",
+          "považovala",
+          "nezákonný",
+          "povinnostech",
+          "aniž",
+          "konstatoval",
+          "vydanému"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 10,
+          "paragraph": 33,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 38683,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iii-us-2429-24.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 19344,
+        "astLength": 19929,
+        "retainedPct": 103,
+        "blockCount": 48,
+        "missingWords": ["iii.ús", "nikoliv"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 10,
+          "paragraph": 35,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 38683,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iii-us-2429-24.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 19344,
+        "astLength": 19036,
+        "retainedPct": 98.4,
+        "blockCount": 47,
+        "missingWords": ["iii.ús", "nikoliv"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 10,
+          "paragraph": 34,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 38683,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iii-us-2429-24.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 19344,
+        "astLength": 19037,
+        "retainedPct": 98.4,
+        "blockCount": 47,
+        "missingWords": ["iii.ús", "nikoliv"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 10,
+          "paragraph": 34,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 38683,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-1394-24.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 85061,
+        "astLength": 84493,
+        "retainedPct": 99.3,
+        "blockCount": 147,
+        "missingWords": ["iv.ús"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph": 125,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 170117,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-1394-24.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "44 meaningful words missing: iv.ús, složeném, předsedy, zdeňka, kühna, soudce, zpravodaje, soudců, michala, bartoně",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 85061,
+        "astLength": 83091,
+        "retainedPct": 97.7,
+        "blockCount": 146,
+        "missingWords": [
+          "iv.ús",
+          "složeném",
+          "předsedy",
+          "zdeňka",
+          "kühna",
+          "soudce",
+          "zpravodaje",
+          "soudců",
+          "michala",
+          "bartoně",
+          "milana",
+          "hulmáka",
+          "leonharda",
+          "zastoupeného",
+          "judr",
+          "jakubem",
+          "fröhlichem",
+          "advokátem",
+          "sídlem",
+          "toyen",
+          "smíchov",
+          "masarykovo",
+          "náměstí",
+          "antonínem",
+          "ondrákem",
+          "brandlova",
+          "hradec",
+          "husinecká",
+          "žižkov",
+          "podniku",
+          "přemyslova",
+          "ing",
+          "milošem",
+          "olíkem",
+          "ph.d",
+          "ll.m",
+          "fciarb",
+          "pankráci",
+          "nusle",
+          "rašínovo",
+          "nábřeží",
+          "těšnov",
+          "vedlejších",
+          "takto"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph": 124,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 170117,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-1394-24.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 85061,
+        "astLength": 85895,
+        "retainedPct": 101,
+        "blockCount": 148,
+        "missingWords": ["iv.ús"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph": 126,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 170117,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-1394-24.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 85061,
+        "astLength": 84492,
+        "retainedPct": 99.3,
+        "blockCount": 147,
+        "missingWords": ["iv.ús"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph": 125,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 170117,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-1394-24.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 85061,
+        "astLength": 84493,
+        "retainedPct": 99.3,
+        "blockCount": 147,
+        "missingWords": ["iv.ús"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph": 125,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 170117,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-422-26.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 11147,
+        "astLength": 10909,
+        "retainedPct": 97.9,
+        "blockCount": 37,
+        "missingWords": ["iv.ús", "nevyhovění"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 8,
+          "paragraph": 26,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 22289,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-422-26.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 11147,
+        "astLength": 10555,
+        "retainedPct": 94.7,
+        "blockCount": 36,
+        "missingWords": [
+          "iv.ús",
+          "nevyhovění",
+          "vyhověl",
+          "zrušil",
+          "bude",
+          "muset",
+          "nově",
+          "rozhodnout",
+          "přistoupit",
+          "vyloženými",
+          "principy"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 8,
+          "paragraph": 25,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 22289,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-422-26.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 11147,
+        "astLength": 11263,
+        "retainedPct": 101,
+        "blockCount": 38,
+        "missingWords": ["iv.ús", "nevyhovění"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 8,
+          "paragraph": 27,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 22289,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-422-26.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 11147,
+        "astLength": 10908,
+        "retainedPct": 97.9,
+        "blockCount": 37,
+        "missingWords": ["iv.ús", "nevyhovění"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 8,
+          "paragraph": 26,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 22289,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-422-26.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 11147,
+        "astLength": 10909,
+        "retainedPct": 97.9,
+        "blockCount": 37,
+        "missingWords": ["iv.ús", "nevyhovění"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 8,
+          "paragraph": 26,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 22289,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62013TO0488.cs.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 18358,
+        "astLength": 18401,
+        "retainedPct": 100.2,
+        "blockCount": 78,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 75,
+          "heading": 3
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 77,
+          "textCharacters": 55086,
+          "ancestorChecks": 150
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62013TO0488.cs.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 18358,
+        "astLength": 18383,
+        "retainedPct": 100.1,
+        "blockCount": 77,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 74,
+          "heading": 3
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 77,
+          "textCharacters": 55086,
+          "ancestorChecks": 150
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62013TO0488.cs.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 18358,
+        "astLength": 18419,
+        "retainedPct": 100.3,
+        "blockCount": 79,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 76,
+          "heading": 3
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 77,
+          "textCharacters": 55086,
+          "ancestorChecks": 150
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62013TO0488.cs.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 18358,
+        "astLength": 18400,
+        "retainedPct": 100.2,
+        "blockCount": 78,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 75,
+          "heading": 3
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 77,
+          "textCharacters": 55086,
+          "ancestorChecks": 150
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62013TO0488.cs.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 18358,
+        "astLength": 18401,
+        "retainedPct": 100.2,
+        "blockCount": 78,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 75,
+          "heading": 3
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 77,
+          "textCharacters": 55086,
+          "ancestorChecks": 150
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62017CJ0258.pl.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 37824,
+        "astLength": 37626,
+        "retainedPct": 99.5,
+        "blockCount": 147,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 13,
+          "paragraph-intro": 18,
+          "paragraph": 112,
+          "paragraph-holding": 3,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 4,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 231,
+          "textCharacters": 43694,
+          "ancestorChecks": 313
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62017CJ0258.pl.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 37824,
+        "astLength": 37441,
+        "retainedPct": 99,
+        "blockCount": 146,
+        "missingWords": [
+          "postanowił",
+          "zawiesić",
+          "zwrócić",
+          "następującymi",
+          "pytaniami",
+          "prejudycjalnymi"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 13,
+          "paragraph-intro": 18,
+          "paragraph": 111,
+          "paragraph-holding": 3,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 4,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 231,
+          "textCharacters": 43694,
+          "ancestorChecks": 313
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62017CJ0258.pl.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 37824,
+        "astLength": 37811,
+        "retainedPct": 100,
+        "blockCount": 148,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 13,
+          "paragraph-intro": 18,
+          "paragraph": 113,
+          "paragraph-holding": 3,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 4,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 231,
+          "textCharacters": 43694,
+          "ancestorChecks": 313
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62017CJ0258.pl.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 37824,
+        "astLength": 37625,
+        "retainedPct": 99.5,
+        "blockCount": 147,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 13,
+          "paragraph-intro": 18,
+          "paragraph": 112,
+          "paragraph-holding": 3,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 4,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 231,
+          "textCharacters": 43694,
+          "ancestorChecks": 313
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62017CJ0258.pl.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 37824,
+        "astLength": 37626,
+        "retainedPct": 99.5,
+        "blockCount": 147,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 13,
+          "paragraph-intro": 18,
+          "paragraph": 112,
+          "paragraph-holding": 3,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 4,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 231,
+          "textCharacters": 43694,
+          "ancestorChecks": 313
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CC0311.fi.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 279982,
+        "astLength": 280735,
+        "retainedPct": 100.3,
+        "blockCount": 805,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 43,
+          "paragraph-intro": 51,
+          "paragraph": 711
+        },
+        "tinyBlocks": 20,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 1213,
+          "textCharacters": 304174,
+          "ancestorChecks": 1375
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CC0311.fi.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 279982,
+        "astLength": 280276,
+        "retainedPct": 100.1,
+        "blockCount": 804,
+        "missingWords": [
+          "kanadan",
+          "pnr-tietoja",
+          "oliko",
+          "luonnos",
+          "väliseksi",
+          "kansainväliseksi",
+          "sopimukseksi",
+          "kanadaan"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 43,
+          "paragraph-intro": 51,
+          "paragraph": 710
+        },
+        "tinyBlocks": 20,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 1213,
+          "textCharacters": 304174,
+          "ancestorChecks": 1375
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CC0311.fi.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 279982,
+        "astLength": 281194,
+        "retainedPct": 100.4,
+        "blockCount": 806,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 43,
+          "paragraph-intro": 51,
+          "paragraph": 712
+        },
+        "tinyBlocks": 20,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 1213,
+          "textCharacters": 304174,
+          "ancestorChecks": 1375
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CC0311.fi.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 279982,
+        "astLength": 280734,
+        "retainedPct": 100.3,
+        "blockCount": 805,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 43,
+          "paragraph-intro": 51,
+          "paragraph": 711
+        },
+        "tinyBlocks": 20,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 1213,
+          "textCharacters": 304174,
+          "ancestorChecks": 1375
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CC0311.fi.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 279982,
+        "astLength": 280735,
+        "retainedPct": 100.3,
+        "blockCount": 805,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 43,
+          "paragraph-intro": 51,
+          "paragraph": 711
+        },
+        "tinyBlocks": 20,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 1213,
+          "textCharacters": 304174,
+          "ancestorChecks": 1375
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CJ0311.en.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 171593,
+        "astLength": 170955,
+        "retainedPct": 99.6,
+        "blockCount": 506,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph-intro": 40,
+          "paragraph": 423,
+          "paragraph-holding": 6,
+          "paragraph-signature": 18
+        },
+        "tinyBlocks": 41,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 760,
+          "textCharacters": 216439,
+          "ancestorChecks": 1380
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CJ0311.en.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 171593,
+        "astLength": 170952,
+        "retainedPct": 99.6,
+        "blockCount": 505,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph-intro": 40,
+          "paragraph": 422,
+          "paragraph-holding": 6,
+          "paragraph-signature": 18
+        },
+        "tinyBlocks": 40,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 760,
+          "textCharacters": 216439,
+          "ancestorChecks": 1380
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CJ0311.en.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 171593,
+        "astLength": 170958,
+        "retainedPct": 99.6,
+        "blockCount": 507,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph-intro": 40,
+          "paragraph": 424,
+          "paragraph-holding": 6,
+          "paragraph-signature": 18
+        },
+        "tinyBlocks": 42,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 760,
+          "textCharacters": 216439,
+          "ancestorChecks": 1380
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CJ0311.en.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 171593,
+        "astLength": 170955,
+        "retainedPct": 99.6,
+        "blockCount": 506,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph-intro": 40,
+          "paragraph": 423,
+          "paragraph-holding": 6,
+          "paragraph-signature": 18
+        },
+        "tinyBlocks": 41,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 760,
+          "textCharacters": 216439,
+          "ancestorChecks": 1380
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CJ0311.en.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 171593,
+        "astLength": 170955,
+        "retainedPct": 99.6,
+        "blockCount": 506,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph-intro": 40,
+          "paragraph": 423,
+          "paragraph-holding": 6,
+          "paragraph-signature": 18
+        },
+        "tinyBlocks": 41,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 760,
+          "textCharacters": 216439,
+          "ancestorChecks": 1380
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CJ0311.lv.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 158919,
+        "astLength": 158253,
+        "retainedPct": 99.6,
+        "blockCount": 489,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph-intro": 40,
+          "paragraph": 423,
+          "paragraph-holding": 6,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 30,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 740,
+          "textCharacters": 201236,
+          "ancestorChecks": 1329
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CJ0311.lv.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 158919,
+        "astLength": 158248,
+        "retainedPct": 99.6,
+        "blockCount": 488,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph-intro": 40,
+          "paragraph": 422,
+          "paragraph-holding": 6,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 29,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 740,
+          "textCharacters": 201236,
+          "ancestorChecks": 1329
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CJ0311.lv.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 158919,
+        "astLength": 158258,
+        "retainedPct": 99.6,
+        "blockCount": 490,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph-intro": 40,
+          "paragraph": 424,
+          "paragraph-holding": 6,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 31,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 740,
+          "textCharacters": 201236,
+          "ancestorChecks": 1329
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CJ0311.lv.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 158919,
+        "astLength": 158253,
+        "retainedPct": 99.6,
+        "blockCount": 489,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph-intro": 40,
+          "paragraph": 423,
+          "paragraph-holding": 6,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 30,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 740,
+          "textCharacters": 201236,
+          "ancestorChecks": 1329
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62018CJ0311.lv.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 158919,
+        "astLength": 158253,
+        "retainedPct": 99.6,
+        "blockCount": 489,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 19,
+          "paragraph-intro": 40,
+          "paragraph": 423,
+          "paragraph-holding": 6,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 30,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 740,
+          "textCharacters": 201236,
+          "ancestorChecks": 1329
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.el.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 107566,
+        "astLength": 107164,
+        "retainedPct": 99.6,
+        "blockCount": 273,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 7,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 11,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 121703,
+          "ancestorChecks": 650
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.el.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 107566,
+        "astLength": 106252,
+        "retainedPct": 98.8,
+        "blockCount": 272,
+        "missingWords": [
+          "επιδημιολογική",
+          "επιβάρυνσης",
+          "ανεξέλεγκτης",
+          "δραστικής",
+          "επανεξάπλωσης",
+          "μολύνσεων",
+          "ελλείψει",
+          "φορείς",
+          "ασυμπτωματικά",
+          "εμφανίζουν",
+          "στοχευθούν",
+          "περισσότερα",
+          "ανασχεθεί",
+          "απομονωθούν",
+          "μνημονευόμενα"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 230,
+          "paragraph-holding": 7,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 11,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 121703,
+          "ancestorChecks": 650
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.el.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 107566,
+        "astLength": 108076,
+        "retainedPct": 100.5,
+        "blockCount": 274,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 232,
+          "paragraph-holding": 7,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 11,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 121703,
+          "ancestorChecks": 650
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.el.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 107566,
+        "astLength": 107163,
+        "retainedPct": 99.6,
+        "blockCount": 273,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 7,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 11,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 121703,
+          "ancestorChecks": 650
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.el.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 107566,
+        "astLength": 107164,
+        "retainedPct": 99.6,
+        "blockCount": 273,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 7,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 11,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 121703,
+          "ancestorChecks": 650
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.en.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 99134,
+        "astLength": 98732,
+        "retainedPct": 99.6,
+        "blockCount": 271,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 111853,
+          "ancestorChecks": 646
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.en.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 99134,
+        "astLength": 98187,
+        "retainedPct": 99,
+        "blockCount": 270,
+        "missingWords": [
+          "acted",
+          "wrongly",
+          "drawing",
+          "seeking",
+          "introduction",
+          "subsequent",
+          "amendment",
+          "codes",
+          "contended",
+          "dismissed",
+          "unfounded"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 230,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 111853,
+          "ancestorChecks": 646
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.en.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 99134,
+        "astLength": 99277,
+        "retainedPct": 100.1,
+        "blockCount": 272,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 232,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 111853,
+          "ancestorChecks": 646
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.en.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 99134,
+        "astLength": 98731,
+        "retainedPct": 99.6,
+        "blockCount": 271,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 111853,
+          "ancestorChecks": 646
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.en.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 99134,
+        "astLength": 98732,
+        "retainedPct": 99.6,
+        "blockCount": 271,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 111853,
+          "ancestorChecks": 646
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.en.page.html.gz#current",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "CONTENT_LOSS",
+          "message": "Only 89.0% of text retained (threshold: 90%)",
+          "severity": "error"
+        },
+        {
+          "code": "MISSING_WORDS",
+          "message": "319 meaningful words missing: eur-lex, sign, register, recent, searches, select, your, languages, bgбългарски, esespañol",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 110990,
+        "astLength": 98732,
+        "retainedPct": 89,
+        "blockCount": 271,
+        "missingWords": [
+          "eur-lex",
+          "sign",
+          "register",
+          "recent",
+          "searches",
+          "select",
+          "your",
+          "languages",
+          "bgбългарски",
+          "esespañol",
+          "csčeština",
+          "dadansk",
+          "dedeutsch",
+          "eteesti",
+          "keel",
+          "elελληνικά",
+          "enenglish",
+          "frfrançais",
+          "gagaeilge",
+          "hrhrvatski",
+          "ititaliano",
+          "lvlatviešu",
+          "valoda",
+          "ltlietuvių",
+          "kalba",
+          "humagyar",
+          "mtmalti",
+          "nlnederlands",
+          "plpolski",
+          "ptportuguês",
+          "roromână",
+          "skslovenčina",
+          "slslovenščina",
+          "fisuomi",
+          "svsvenska",
+          "href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html",
+          "target=\"_blank\">more",
+          "about",
+          "experimental",
+          "features",
+          "corner</a",
+          "you",
+          "want",
+          "improving",
+          "development",
+          "tested",
+          "reduce",
+          "stability",
+          "don't",
+          "forget",
+          "feedback",
+          "feature",
+          "conflicts",
+          "detected",
+          "replacement",
+          "celex",
+          "identifiers",
+          "short",
+          "titles",
+          "replaces",
+          "clickable",
+          "visualisation",
+          "relationships",
+          "displays",
+          "dynamic",
+          "graph",
+          "currently",
+          "deep",
+          "linking",
+          "enables",
+          "links",
+          "smaller",
+          "excerpt",
+          "europa",
+          "home",
+          "print",
+          "force",
+          "founding",
+          "accession",
+          "protocols",
+          "chronological",
+          "overview",
+          "consolidated",
+          "texts",
+          "agreements",
+          "preparatory",
+          "efta",
+          "lawmaking",
+          "summaries",
+          "browse",
+          "central",
+          "bank",
+          "auditors",
+          "committee",
+          "regions",
+          "eurovoc",
+          "reports",
+          "directory",
+          "journal",
+          "daily",
+          "legally",
+          "printed",
+          "editions",
+          "transposition",
+          "jure",
+          "themes",
+          "focus",
+          "developments",
+          "statistics",
+          "eli",
+          "background",
+          "why",
+          "testimonials",
+          "how",
+          "glossary",
+          "budget",
+          "online",
+          "quick",
+          "search",
+          "quotation",
+          "marks",
+          "exact",
+          "phrase",
+          "append",
+          "asterisk",
+          "variations",
+          "transp",
+          "mark",
+          "instead",
+          "single",
+          "character",
+          "ca?e",
+          "finds",
+          "cane",
+          "tips",
+          "options",
+          "advanced",
+          "text",
+          "abstract",
+          "link",
+          "download",
+          "notice",
+          "create",
+          "email",
+          "alert",
+          "rss",
+          "staat.#request",
+          "brussel.#reference",
+          "pandemic.#case",
+          "ecli",
+          "identifier",
+          "ecli:eu:c",
+          "expand",
+          "collapse",
+          "dates",
+          "lodged",
+          "miscellaneous",
+          "author",
+          "originates",
+          "authentic",
+          "kamer",
+          "vonnis",
+          "relationship",
+          "interprets",
+          "doctrine",
+          "öberg",
+          "marja-liisa",
+          "covidfencing",
+          "market",
+          "volume",
+          "carlier",
+          "jean-yves",
+          "frasca",
+          "eleonora",
+          "libre",
+          "circulation",
+          "des",
+          "personnes",
+          "dans",
+          "l'union",
+          "européenne",
+          "droit",
+          "européen",
+          "dąbrowska-kłosińska",
+          "patrycja",
+          "deference",
+          "securitisation",
+          "approach",
+          "warin",
+          "catherine",
+          "arrêt",
+          "petit",
+          "manuel",
+          "l’union",
+          "appliqué",
+          "une",
+          "crise",
+          "sanitaire",
+          "delhomme",
+          "vincent",
+          "constitutional",
+          "réveillère",
+          "chronique",
+          "citoyenneté",
+          "proportionnalité",
+          "aux",
+          "droits",
+          "citoyen",
+          "pour",
+          "raisons",
+          "d'ordre",
+          "sécurité",
+          "santé",
+          "publics",
+          "revue",
+          "trimestrielle",
+          "constantinou",
+          "eftychia",
+          "tale",
+          "four",
+          "crises",
+          "justice’s",
+          "grudler",
+          "clara",
+          "liberté",
+          "europe",
+          "février",
+          "comm",
+          "classifications",
+          "tasks",
+          "establishment",
+          "citizenship",
+          "non-discrimination",
+          "guarantees",
+          "asylum",
+          "formats",
+          "html",
+          "pdf",
+          "digital",
+          "status",
+          "multilingual",
+          "display",
+          "bulgarian",
+          "spanish",
+          "czech",
+          "danish",
+          "german",
+          "estonian",
+          "greek",
+          "french",
+          "irish",
+          "croatian",
+          "italian",
+          "latvian",
+          "lithuanian",
+          "hungarian",
+          "maltese",
+          "polish",
+          "portuguese",
+          "slovak",
+          "slovenian",
+          "finnish",
+          "swedish",
+          "please",
+          "choose",
+          "timeline",
+          "legend",
+          "initial",
+          "version",
+          "selected",
+          "hidden",
+          "intermediate",
+          "versions",
+          "today",
+          "future",
+          "site",
+          "managed",
+          "office",
+          "pages",
+          "contact",
+          "sitemap",
+          "cookies",
+          "accessibility",
+          "privacy",
+          "statement",
+          "newsletter",
+          "useful",
+          "tenders",
+          "research",
+          "results",
+          "whoiswho",
+          "n-lex",
+          "tracker",
+          "discover",
+          "europa.eu",
+          "telephone",
+          "write",
+          "via",
+          "our",
+          "meet",
+          "centres",
+          "channels",
+          "cjeu",
+          "ecb",
+          "eeas",
+          "cor",
+          "investment",
+          "ombudsman",
+          "supervisor",
+          "edps",
+          "board",
+          "selection",
+          "agencies",
+          "switch",
+          "desktop",
+          "flag",
+          "back",
+          "homepage",
+          "logo"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 903,
+          "textCharacters": 1759516,
+          "ancestorChecks": 8871
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.en.page.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "CONTENT_LOSS",
+          "message": "Only 87.7% of text retained (threshold: 90%)",
+          "severity": "error"
+        },
+        {
+          "code": "MISSING_WORDS",
+          "message": "332 meaningful words missing: eur-lex, sign, register, recent, searches, select, your, languages, bgбългарски, esespañol",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 110990,
+        "astLength": 97316,
+        "retainedPct": 87.7,
+        "blockCount": 270,
+        "missingWords": [
+          "eur-lex",
+          "sign",
+          "register",
+          "recent",
+          "searches",
+          "select",
+          "your",
+          "languages",
+          "bgбългарски",
+          "esespañol",
+          "csčeština",
+          "dadansk",
+          "dedeutsch",
+          "eteesti",
+          "keel",
+          "elελληνικά",
+          "enenglish",
+          "frfrançais",
+          "gagaeilge",
+          "hrhrvatski",
+          "ititaliano",
+          "lvlatviešu",
+          "valoda",
+          "ltlietuvių",
+          "kalba",
+          "humagyar",
+          "mtmalti",
+          "nlnederlands",
+          "plpolski",
+          "ptportuguês",
+          "roromână",
+          "skslovenčina",
+          "slslovenščina",
+          "fisuomi",
+          "svsvenska",
+          "href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html",
+          "target=\"_blank\">more",
+          "about",
+          "experimental",
+          "features",
+          "corner</a",
+          "you",
+          "want",
+          "improving",
+          "development",
+          "tested",
+          "reduce",
+          "stability",
+          "don't",
+          "forget",
+          "feedback",
+          "feature",
+          "conflicts",
+          "detected",
+          "replacement",
+          "celex",
+          "identifiers",
+          "short",
+          "titles",
+          "replaces",
+          "clickable",
+          "treaties",
+          "visualisation",
+          "relationships",
+          "displays",
+          "dynamic",
+          "graph",
+          "currently",
+          "deep",
+          "linking",
+          "enables",
+          "links",
+          "smaller",
+          "excerpt",
+          "europa",
+          "home",
+          "print",
+          "force",
+          "founding",
+          "accession",
+          "protocols",
+          "chronological",
+          "overview",
+          "consolidated",
+          "texts",
+          "agreements",
+          "preparatory",
+          "efta",
+          "lawmaking",
+          "summaries",
+          "browse",
+          "central",
+          "bank",
+          "auditors",
+          "committee",
+          "regions",
+          "eurovoc",
+          "reports",
+          "directory",
+          "journal",
+          "daily",
+          "legally",
+          "printed",
+          "editions",
+          "transposition",
+          "jure",
+          "themes",
+          "focus",
+          "developments",
+          "statistics",
+          "eli",
+          "background",
+          "why",
+          "testimonials",
+          "how",
+          "glossary",
+          "budget",
+          "online",
+          "quick",
+          "search",
+          "quotation",
+          "marks",
+          "exact",
+          "phrase",
+          "append",
+          "asterisk",
+          "variations",
+          "transp",
+          "mark",
+          "instead",
+          "single",
+          "character",
+          "ca?e",
+          "finds",
+          "cane",
+          "tips",
+          "options",
+          "advanced",
+          "text",
+          "abstract",
+          "link",
+          "download",
+          "notice",
+          "create",
+          "email",
+          "alert",
+          "rss",
+          "staat.#request",
+          "brussel.#reference",
+          "pandemic.#case",
+          "ecli",
+          "identifier",
+          "ecli:eu:c",
+          "expand",
+          "collapse",
+          "dates",
+          "lodged",
+          "miscellaneous",
+          "author",
+          "originates",
+          "authentic",
+          "kamer",
+          "vonnis",
+          "relationship",
+          "interprets",
+          "doctrine",
+          "öberg",
+          "marja-liisa",
+          "covidfencing",
+          "market",
+          "volume",
+          "carlier",
+          "jean-yves",
+          "frasca",
+          "eleonora",
+          "libre",
+          "circulation",
+          "des",
+          "personnes",
+          "dans",
+          "l'union",
+          "européenne",
+          "droit",
+          "européen",
+          "dąbrowska-kłosińska",
+          "patrycja",
+          "deference",
+          "securitisation",
+          "approach",
+          "warin",
+          "catherine",
+          "arrêt",
+          "petit",
+          "manuel",
+          "l’union",
+          "appliqué",
+          "une",
+          "crise",
+          "sanitaire",
+          "delhomme",
+          "vincent",
+          "constitutional",
+          "réveillère",
+          "chronique",
+          "citoyenneté",
+          "proportionnalité",
+          "aux",
+          "droits",
+          "citoyen",
+          "pour",
+          "raisons",
+          "d'ordre",
+          "sécurité",
+          "santé",
+          "publics",
+          "revue",
+          "trimestrielle",
+          "constantinou",
+          "eftychia",
+          "tale",
+          "four",
+          "crises",
+          "justice’s",
+          "grudler",
+          "clara",
+          "liberté",
+          "europe",
+          "février",
+          "comm",
+          "classifications",
+          "tasks",
+          "establishment",
+          "citizenship",
+          "non-discrimination",
+          "guarantees",
+          "asylum",
+          "formats",
+          "html",
+          "pdf",
+          "digital",
+          "status",
+          "multilingual",
+          "display",
+          "bulgarian",
+          "spanish",
+          "czech",
+          "danish",
+          "german",
+          "estonian",
+          "greek",
+          "french",
+          "irish",
+          "croatian",
+          "italian",
+          "latvian",
+          "lithuanian",
+          "hungarian",
+          "maltese",
+          "polish",
+          "portuguese",
+          "slovak",
+          "slovenian",
+          "finnish",
+          "swedish",
+          "please",
+          "choose",
+          "reconciled",
+          "disadvantages",
+          "caused",
+          "aims",
+          "limitation",
+          "teu",
+          "assessed",
+          "measuring",
+          "verifying",
+          "luxembourg",
+          "registers",
+          "poland",
+          "timeline",
+          "legend",
+          "initial",
+          "version",
+          "selected",
+          "hidden",
+          "intermediate",
+          "versions",
+          "today",
+          "future",
+          "site",
+          "managed",
+          "office",
+          "pages",
+          "contact",
+          "sitemap",
+          "cookies",
+          "accessibility",
+          "privacy",
+          "statement",
+          "newsletter",
+          "useful",
+          "tenders",
+          "research",
+          "results",
+          "whoiswho",
+          "n-lex",
+          "tracker",
+          "discover",
+          "europa.eu",
+          "telephone",
+          "write",
+          "via",
+          "our",
+          "meet",
+          "centres",
+          "channels",
+          "cjeu",
+          "ecb",
+          "eeas",
+          "cor",
+          "investment",
+          "ombudsman",
+          "supervisor",
+          "edps",
+          "board",
+          "selection",
+          "agencies",
+          "switch",
+          "desktop",
+          "flag",
+          "back",
+          "homepage",
+          "logo"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 230,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 903,
+          "textCharacters": 1759516,
+          "ancestorChecks": 8871
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.en.page.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "319 meaningful words missing: eur-lex, sign, register, recent, searches, select, your, languages, bgбългарски, esespañol",
+          "severity": "error"
+        },
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 110990,
+        "astLength": 100148,
+        "retainedPct": 90.2,
+        "blockCount": 272,
+        "missingWords": [
+          "eur-lex",
+          "sign",
+          "register",
+          "recent",
+          "searches",
+          "select",
+          "your",
+          "languages",
+          "bgбългарски",
+          "esespañol",
+          "csčeština",
+          "dadansk",
+          "dedeutsch",
+          "eteesti",
+          "keel",
+          "elελληνικά",
+          "enenglish",
+          "frfrançais",
+          "gagaeilge",
+          "hrhrvatski",
+          "ititaliano",
+          "lvlatviešu",
+          "valoda",
+          "ltlietuvių",
+          "kalba",
+          "humagyar",
+          "mtmalti",
+          "nlnederlands",
+          "plpolski",
+          "ptportuguês",
+          "roromână",
+          "skslovenčina",
+          "slslovenščina",
+          "fisuomi",
+          "svsvenska",
+          "href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html",
+          "target=\"_blank\">more",
+          "about",
+          "experimental",
+          "features",
+          "corner</a",
+          "you",
+          "want",
+          "improving",
+          "development",
+          "tested",
+          "reduce",
+          "stability",
+          "don't",
+          "forget",
+          "feedback",
+          "feature",
+          "conflicts",
+          "detected",
+          "replacement",
+          "celex",
+          "identifiers",
+          "short",
+          "titles",
+          "replaces",
+          "clickable",
+          "visualisation",
+          "relationships",
+          "displays",
+          "dynamic",
+          "graph",
+          "currently",
+          "deep",
+          "linking",
+          "enables",
+          "links",
+          "smaller",
+          "excerpt",
+          "europa",
+          "home",
+          "print",
+          "force",
+          "founding",
+          "accession",
+          "protocols",
+          "chronological",
+          "overview",
+          "consolidated",
+          "texts",
+          "agreements",
+          "preparatory",
+          "efta",
+          "lawmaking",
+          "summaries",
+          "browse",
+          "central",
+          "bank",
+          "auditors",
+          "committee",
+          "regions",
+          "eurovoc",
+          "reports",
+          "directory",
+          "journal",
+          "daily",
+          "legally",
+          "printed",
+          "editions",
+          "transposition",
+          "jure",
+          "themes",
+          "focus",
+          "developments",
+          "statistics",
+          "eli",
+          "background",
+          "why",
+          "testimonials",
+          "how",
+          "glossary",
+          "budget",
+          "online",
+          "quick",
+          "search",
+          "quotation",
+          "marks",
+          "exact",
+          "phrase",
+          "append",
+          "asterisk",
+          "variations",
+          "transp",
+          "mark",
+          "instead",
+          "single",
+          "character",
+          "ca?e",
+          "finds",
+          "cane",
+          "tips",
+          "options",
+          "advanced",
+          "text",
+          "abstract",
+          "link",
+          "download",
+          "notice",
+          "create",
+          "email",
+          "alert",
+          "rss",
+          "staat.#request",
+          "brussel.#reference",
+          "pandemic.#case",
+          "ecli",
+          "identifier",
+          "ecli:eu:c",
+          "expand",
+          "collapse",
+          "dates",
+          "lodged",
+          "miscellaneous",
+          "author",
+          "originates",
+          "authentic",
+          "kamer",
+          "vonnis",
+          "relationship",
+          "interprets",
+          "doctrine",
+          "öberg",
+          "marja-liisa",
+          "covidfencing",
+          "market",
+          "volume",
+          "carlier",
+          "jean-yves",
+          "frasca",
+          "eleonora",
+          "libre",
+          "circulation",
+          "des",
+          "personnes",
+          "dans",
+          "l'union",
+          "européenne",
+          "droit",
+          "européen",
+          "dąbrowska-kłosińska",
+          "patrycja",
+          "deference",
+          "securitisation",
+          "approach",
+          "warin",
+          "catherine",
+          "arrêt",
+          "petit",
+          "manuel",
+          "l’union",
+          "appliqué",
+          "une",
+          "crise",
+          "sanitaire",
+          "delhomme",
+          "vincent",
+          "constitutional",
+          "réveillère",
+          "chronique",
+          "citoyenneté",
+          "proportionnalité",
+          "aux",
+          "droits",
+          "citoyen",
+          "pour",
+          "raisons",
+          "d'ordre",
+          "sécurité",
+          "santé",
+          "publics",
+          "revue",
+          "trimestrielle",
+          "constantinou",
+          "eftychia",
+          "tale",
+          "four",
+          "crises",
+          "justice’s",
+          "grudler",
+          "clara",
+          "liberté",
+          "europe",
+          "février",
+          "comm",
+          "classifications",
+          "tasks",
+          "establishment",
+          "citizenship",
+          "non-discrimination",
+          "guarantees",
+          "asylum",
+          "formats",
+          "html",
+          "pdf",
+          "digital",
+          "status",
+          "multilingual",
+          "display",
+          "bulgarian",
+          "spanish",
+          "czech",
+          "danish",
+          "german",
+          "estonian",
+          "greek",
+          "french",
+          "irish",
+          "croatian",
+          "italian",
+          "latvian",
+          "lithuanian",
+          "hungarian",
+          "maltese",
+          "polish",
+          "portuguese",
+          "slovak",
+          "slovenian",
+          "finnish",
+          "swedish",
+          "please",
+          "choose",
+          "timeline",
+          "legend",
+          "initial",
+          "version",
+          "selected",
+          "hidden",
+          "intermediate",
+          "versions",
+          "today",
+          "future",
+          "site",
+          "managed",
+          "office",
+          "pages",
+          "contact",
+          "sitemap",
+          "cookies",
+          "accessibility",
+          "privacy",
+          "statement",
+          "newsletter",
+          "useful",
+          "tenders",
+          "research",
+          "results",
+          "whoiswho",
+          "n-lex",
+          "tracker",
+          "discover",
+          "europa.eu",
+          "telephone",
+          "write",
+          "via",
+          "our",
+          "meet",
+          "centres",
+          "channels",
+          "cjeu",
+          "ecb",
+          "eeas",
+          "cor",
+          "investment",
+          "ombudsman",
+          "supervisor",
+          "edps",
+          "board",
+          "selection",
+          "agencies",
+          "switch",
+          "desktop",
+          "flag",
+          "back",
+          "homepage",
+          "logo"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 232,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 903,
+          "textCharacters": 1759516,
+          "ancestorChecks": 8871
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.en.page.html.gz#merged-words",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "CONTENT_LOSS",
+          "message": "Only 89.0% of text retained (threshold: 90%)",
+          "severity": "error"
+        },
+        {
+          "code": "MISSING_WORDS",
+          "message": "319 meaningful words missing: eur-lex, sign, register, recent, searches, select, your, languages, bgбългарски, esespañol",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 110990,
+        "astLength": 98731,
+        "retainedPct": 89,
+        "blockCount": 271,
+        "missingWords": [
+          "eur-lex",
+          "sign",
+          "register",
+          "recent",
+          "searches",
+          "select",
+          "your",
+          "languages",
+          "bgбългарски",
+          "esespañol",
+          "csčeština",
+          "dadansk",
+          "dedeutsch",
+          "eteesti",
+          "keel",
+          "elελληνικά",
+          "enenglish",
+          "frfrançais",
+          "gagaeilge",
+          "hrhrvatski",
+          "ititaliano",
+          "lvlatviešu",
+          "valoda",
+          "ltlietuvių",
+          "kalba",
+          "humagyar",
+          "mtmalti",
+          "nlnederlands",
+          "plpolski",
+          "ptportuguês",
+          "roromână",
+          "skslovenčina",
+          "slslovenščina",
+          "fisuomi",
+          "svsvenska",
+          "href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html",
+          "target=\"_blank\">more",
+          "about",
+          "experimental",
+          "features",
+          "corner</a",
+          "you",
+          "want",
+          "improving",
+          "development",
+          "tested",
+          "reduce",
+          "stability",
+          "don't",
+          "forget",
+          "feedback",
+          "feature",
+          "conflicts",
+          "detected",
+          "replacement",
+          "celex",
+          "identifiers",
+          "short",
+          "titles",
+          "replaces",
+          "clickable",
+          "visualisation",
+          "relationships",
+          "displays",
+          "dynamic",
+          "graph",
+          "currently",
+          "deep",
+          "linking",
+          "enables",
+          "links",
+          "smaller",
+          "excerpt",
+          "europa",
+          "home",
+          "print",
+          "force",
+          "founding",
+          "accession",
+          "protocols",
+          "chronological",
+          "overview",
+          "consolidated",
+          "texts",
+          "agreements",
+          "preparatory",
+          "efta",
+          "lawmaking",
+          "summaries",
+          "browse",
+          "central",
+          "bank",
+          "auditors",
+          "committee",
+          "regions",
+          "eurovoc",
+          "reports",
+          "directory",
+          "journal",
+          "daily",
+          "legally",
+          "printed",
+          "editions",
+          "transposition",
+          "jure",
+          "themes",
+          "focus",
+          "developments",
+          "statistics",
+          "eli",
+          "background",
+          "why",
+          "testimonials",
+          "how",
+          "glossary",
+          "budget",
+          "online",
+          "quick",
+          "search",
+          "quotation",
+          "marks",
+          "exact",
+          "phrase",
+          "append",
+          "asterisk",
+          "variations",
+          "transp",
+          "mark",
+          "instead",
+          "single",
+          "character",
+          "ca?e",
+          "finds",
+          "cane",
+          "tips",
+          "options",
+          "advanced",
+          "text",
+          "abstract",
+          "link",
+          "download",
+          "notice",
+          "create",
+          "email",
+          "alert",
+          "rss",
+          "staat.#request",
+          "brussel.#reference",
+          "pandemic.#case",
+          "ecli",
+          "identifier",
+          "ecli:eu:c",
+          "expand",
+          "collapse",
+          "dates",
+          "lodged",
+          "miscellaneous",
+          "author",
+          "originates",
+          "authentic",
+          "kamer",
+          "vonnis",
+          "relationship",
+          "interprets",
+          "doctrine",
+          "öberg",
+          "marja-liisa",
+          "covidfencing",
+          "market",
+          "volume",
+          "carlier",
+          "jean-yves",
+          "frasca",
+          "eleonora",
+          "libre",
+          "circulation",
+          "des",
+          "personnes",
+          "dans",
+          "l'union",
+          "européenne",
+          "droit",
+          "européen",
+          "dąbrowska-kłosińska",
+          "patrycja",
+          "deference",
+          "securitisation",
+          "approach",
+          "warin",
+          "catherine",
+          "arrêt",
+          "petit",
+          "manuel",
+          "l’union",
+          "appliqué",
+          "une",
+          "crise",
+          "sanitaire",
+          "delhomme",
+          "vincent",
+          "constitutional",
+          "réveillère",
+          "chronique",
+          "citoyenneté",
+          "proportionnalité",
+          "aux",
+          "droits",
+          "citoyen",
+          "pour",
+          "raisons",
+          "d'ordre",
+          "sécurité",
+          "santé",
+          "publics",
+          "revue",
+          "trimestrielle",
+          "constantinou",
+          "eftychia",
+          "tale",
+          "four",
+          "crises",
+          "justice’s",
+          "grudler",
+          "clara",
+          "liberté",
+          "europe",
+          "février",
+          "comm",
+          "classifications",
+          "tasks",
+          "establishment",
+          "citizenship",
+          "non-discrimination",
+          "guarantees",
+          "asylum",
+          "formats",
+          "html",
+          "pdf",
+          "digital",
+          "status",
+          "multilingual",
+          "display",
+          "bulgarian",
+          "spanish",
+          "czech",
+          "danish",
+          "german",
+          "estonian",
+          "greek",
+          "french",
+          "irish",
+          "croatian",
+          "italian",
+          "latvian",
+          "lithuanian",
+          "hungarian",
+          "maltese",
+          "polish",
+          "portuguese",
+          "slovak",
+          "slovenian",
+          "finnish",
+          "swedish",
+          "please",
+          "choose",
+          "timeline",
+          "legend",
+          "initial",
+          "version",
+          "selected",
+          "hidden",
+          "intermediate",
+          "versions",
+          "today",
+          "future",
+          "site",
+          "managed",
+          "office",
+          "pages",
+          "contact",
+          "sitemap",
+          "cookies",
+          "accessibility",
+          "privacy",
+          "statement",
+          "newsletter",
+          "useful",
+          "tenders",
+          "research",
+          "results",
+          "whoiswho",
+          "n-lex",
+          "tracker",
+          "discover",
+          "europa.eu",
+          "telephone",
+          "write",
+          "via",
+          "our",
+          "meet",
+          "centres",
+          "channels",
+          "cjeu",
+          "ecb",
+          "eeas",
+          "cor",
+          "investment",
+          "ombudsman",
+          "supervisor",
+          "edps",
+          "board",
+          "selection",
+          "agencies",
+          "switch",
+          "desktop",
+          "flag",
+          "back",
+          "homepage",
+          "logo"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 903,
+          "textCharacters": 1759516,
+          "ancestorChecks": 8871
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62022CJ0128.en.page.html.gz#reordered-blocks",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "CONTENT_LOSS",
+          "message": "Only 89.0% of text retained (threshold: 90%)",
+          "severity": "error"
+        },
+        {
+          "code": "MISSING_WORDS",
+          "message": "319 meaningful words missing: eur-lex, sign, register, recent, searches, select, your, languages, bgбългарски, esespañol",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 110990,
+        "astLength": 98732,
+        "retainedPct": 89,
+        "blockCount": 271,
+        "missingWords": [
+          "eur-lex",
+          "sign",
+          "register",
+          "recent",
+          "searches",
+          "select",
+          "your",
+          "languages",
+          "bgбългарски",
+          "esespañol",
+          "csčeština",
+          "dadansk",
+          "dedeutsch",
+          "eteesti",
+          "keel",
+          "elελληνικά",
+          "enenglish",
+          "frfrançais",
+          "gagaeilge",
+          "hrhrvatski",
+          "ititaliano",
+          "lvlatviešu",
+          "valoda",
+          "ltlietuvių",
+          "kalba",
+          "humagyar",
+          "mtmalti",
+          "nlnederlands",
+          "plpolski",
+          "ptportuguês",
+          "roromână",
+          "skslovenčina",
+          "slslovenščina",
+          "fisuomi",
+          "svsvenska",
+          "href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html",
+          "target=\"_blank\">more",
+          "about",
+          "experimental",
+          "features",
+          "corner</a",
+          "you",
+          "want",
+          "improving",
+          "development",
+          "tested",
+          "reduce",
+          "stability",
+          "don't",
+          "forget",
+          "feedback",
+          "feature",
+          "conflicts",
+          "detected",
+          "replacement",
+          "celex",
+          "identifiers",
+          "short",
+          "titles",
+          "replaces",
+          "clickable",
+          "visualisation",
+          "relationships",
+          "displays",
+          "dynamic",
+          "graph",
+          "currently",
+          "deep",
+          "linking",
+          "enables",
+          "links",
+          "smaller",
+          "excerpt",
+          "europa",
+          "home",
+          "print",
+          "force",
+          "founding",
+          "accession",
+          "protocols",
+          "chronological",
+          "overview",
+          "consolidated",
+          "texts",
+          "agreements",
+          "preparatory",
+          "efta",
+          "lawmaking",
+          "summaries",
+          "browse",
+          "central",
+          "bank",
+          "auditors",
+          "committee",
+          "regions",
+          "eurovoc",
+          "reports",
+          "directory",
+          "journal",
+          "daily",
+          "legally",
+          "printed",
+          "editions",
+          "transposition",
+          "jure",
+          "themes",
+          "focus",
+          "developments",
+          "statistics",
+          "eli",
+          "background",
+          "why",
+          "testimonials",
+          "how",
+          "glossary",
+          "budget",
+          "online",
+          "quick",
+          "search",
+          "quotation",
+          "marks",
+          "exact",
+          "phrase",
+          "append",
+          "asterisk",
+          "variations",
+          "transp",
+          "mark",
+          "instead",
+          "single",
+          "character",
+          "ca?e",
+          "finds",
+          "cane",
+          "tips",
+          "options",
+          "advanced",
+          "text",
+          "abstract",
+          "link",
+          "download",
+          "notice",
+          "create",
+          "email",
+          "alert",
+          "rss",
+          "staat.#request",
+          "brussel.#reference",
+          "pandemic.#case",
+          "ecli",
+          "identifier",
+          "ecli:eu:c",
+          "expand",
+          "collapse",
+          "dates",
+          "lodged",
+          "miscellaneous",
+          "author",
+          "originates",
+          "authentic",
+          "kamer",
+          "vonnis",
+          "relationship",
+          "interprets",
+          "doctrine",
+          "öberg",
+          "marja-liisa",
+          "covidfencing",
+          "market",
+          "volume",
+          "carlier",
+          "jean-yves",
+          "frasca",
+          "eleonora",
+          "libre",
+          "circulation",
+          "des",
+          "personnes",
+          "dans",
+          "l'union",
+          "européenne",
+          "droit",
+          "européen",
+          "dąbrowska-kłosińska",
+          "patrycja",
+          "deference",
+          "securitisation",
+          "approach",
+          "warin",
+          "catherine",
+          "arrêt",
+          "petit",
+          "manuel",
+          "l’union",
+          "appliqué",
+          "une",
+          "crise",
+          "sanitaire",
+          "delhomme",
+          "vincent",
+          "constitutional",
+          "réveillère",
+          "chronique",
+          "citoyenneté",
+          "proportionnalité",
+          "aux",
+          "droits",
+          "citoyen",
+          "pour",
+          "raisons",
+          "d'ordre",
+          "sécurité",
+          "santé",
+          "publics",
+          "revue",
+          "trimestrielle",
+          "constantinou",
+          "eftychia",
+          "tale",
+          "four",
+          "crises",
+          "justice’s",
+          "grudler",
+          "clara",
+          "liberté",
+          "europe",
+          "février",
+          "comm",
+          "classifications",
+          "tasks",
+          "establishment",
+          "citizenship",
+          "non-discrimination",
+          "guarantees",
+          "asylum",
+          "formats",
+          "html",
+          "pdf",
+          "digital",
+          "status",
+          "multilingual",
+          "display",
+          "bulgarian",
+          "spanish",
+          "czech",
+          "danish",
+          "german",
+          "estonian",
+          "greek",
+          "french",
+          "irish",
+          "croatian",
+          "italian",
+          "latvian",
+          "lithuanian",
+          "hungarian",
+          "maltese",
+          "polish",
+          "portuguese",
+          "slovak",
+          "slovenian",
+          "finnish",
+          "swedish",
+          "please",
+          "choose",
+          "timeline",
+          "legend",
+          "initial",
+          "version",
+          "selected",
+          "hidden",
+          "intermediate",
+          "versions",
+          "today",
+          "future",
+          "site",
+          "managed",
+          "office",
+          "pages",
+          "contact",
+          "sitemap",
+          "cookies",
+          "accessibility",
+          "privacy",
+          "statement",
+          "newsletter",
+          "useful",
+          "tenders",
+          "research",
+          "results",
+          "whoiswho",
+          "n-lex",
+          "tracker",
+          "discover",
+          "europa.eu",
+          "telephone",
+          "write",
+          "via",
+          "our",
+          "meet",
+          "centres",
+          "channels",
+          "cjeu",
+          "ecb",
+          "eeas",
+          "cor",
+          "investment",
+          "ombudsman",
+          "supervisor",
+          "edps",
+          "board",
+          "selection",
+          "agencies",
+          "switch",
+          "desktop",
+          "flag",
+          "back",
+          "homepage",
+          "logo"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 903,
+          "textCharacters": 1759516,
+          "ancestorChecks": 8871
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62023CO0786.en.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 16902,
+        "astLength": 16806,
+        "retainedPct": 99.4,
+        "blockCount": 68,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 14,
+          "paragraph": 39,
+          "paragraph-holding": 3,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 109,
+          "textCharacters": 16957,
+          "ancestorChecks": 87
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62023CO0786.en.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 16902,
+        "astLength": 16779,
+        "retainedPct": 99.3,
+        "blockCount": 67,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 13,
+          "paragraph": 39,
+          "paragraph-holding": 3,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 109,
+          "textCharacters": 16957,
+          "ancestorChecks": 87
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62023CO0786.en.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 16902,
+        "astLength": 16833,
+        "retainedPct": 99.6,
+        "blockCount": 69,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 15,
+          "paragraph": 39,
+          "paragraph-holding": 3,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 109,
+          "textCharacters": 16957,
+          "ancestorChecks": 87
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62023CO0786.en.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 16902,
+        "astLength": 16805,
+        "retainedPct": 99.4,
+        "blockCount": 68,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 14,
+          "paragraph": 39,
+          "paragraph-holding": 3,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 109,
+          "textCharacters": 16957,
+          "ancestorChecks": 87
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62023CO0786.en.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 16902,
+        "astLength": 16806,
+        "retainedPct": 99.4,
+        "blockCount": 68,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 14,
+          "paragraph": 39,
+          "paragraph-holding": 3,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 109,
+          "textCharacters": 16957,
+          "ancestorChecks": 87
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62023TJ0201.en.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 77768,
+        "astLength": 77410,
+        "retainedPct": 99.5,
+        "blockCount": 194,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 13,
+          "paragraph": 157,
+          "paragraph-holding": 5,
+          "paragraph-signature": 5
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 337,
+          "textCharacters": 77850,
+          "ancestorChecks": 336
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62023TJ0201.en.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 77768,
+        "astLength": 76869,
+        "retainedPct": 98.8,
+        "blockCount": 193,
+        "missingWords": [
+          "section",
+          "input",
+          "parameters",
+          "method",
+          "output",
+          "response",
+          "classification",
+          "requested",
+          "composition"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 13,
+          "paragraph": 156,
+          "paragraph-holding": 5,
+          "paragraph-signature": 5
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 337,
+          "textCharacters": 77850,
+          "ancestorChecks": 336
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62023TJ0201.en.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 77768,
+        "astLength": 77951,
+        "retainedPct": 100.2,
+        "blockCount": 195,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 13,
+          "paragraph": 158,
+          "paragraph-holding": 5,
+          "paragraph-signature": 5
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 337,
+          "textCharacters": 77850,
+          "ancestorChecks": 336
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62023TJ0201.en.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 77768,
+        "astLength": 77409,
+        "retainedPct": 99.5,
+        "blockCount": 194,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 13,
+          "paragraph": 157,
+          "paragraph-holding": 5,
+          "paragraph-signature": 5
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 337,
+          "textCharacters": 77850,
+          "ancestorChecks": 336
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62023TJ0201.en.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 77768,
+        "astLength": 77410,
+        "retainedPct": 99.5,
+        "blockCount": 194,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 13,
+          "paragraph": 157,
+          "paragraph-holding": 5,
+          "paragraph-signature": 5
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 337,
+          "textCharacters": 77850,
+          "ancestorChecks": 336
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61985CJ0214.cs.page.html.gz#current",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8200,
+        "retainedPct": 199.1,
+        "blockCount": 49,
+        "missingWords": ["flag", "back", "homepage", "logo"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 41
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61985CJ0214.cs.page.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8147,
+        "retainedPct": 197.8,
+        "blockCount": 48,
+        "missingWords": [
+          "excerpt",
+          "from",
+          "website",
+          "flag",
+          "back",
+          "homepage",
+          "logo"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 40
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61985CJ0214.cs.page.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8253,
+        "retainedPct": 200.4,
+        "blockCount": 50,
+        "missingWords": ["flag", "back", "homepage", "logo"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 42
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61985CJ0214.cs.page.html.gz#merged-words",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8199,
+        "retainedPct": 199.1,
+        "blockCount": 49,
+        "missingWords": ["flag", "back", "homepage", "logo"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 41
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61985CJ0214.cs.page.html.gz#reordered-blocks",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8200,
+        "retainedPct": 199.1,
+        "blockCount": 49,
+        "missingWords": ["flag", "back", "homepage", "logo"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 41
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61992TJ0027.sk.page.html.gz#current",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8200,
+        "retainedPct": 199.1,
+        "blockCount": 49,
+        "missingWords": ["flag", "back", "homepage", "logo"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 41
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61992TJ0027.sk.page.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "31 meaningful words missing: bgбългарски, esespañol, csčeština, dadansk, dedeutsch, eteesti, keel, elελληνικά, enenglish, frfrançais",
+          "severity": "error"
+        },
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 7933,
+        "retainedPct": 192.6,
+        "blockCount": 48,
+        "missingWords": [
+          "bgбългарски",
+          "esespañol",
+          "csčeština",
+          "dadansk",
+          "dedeutsch",
+          "eteesti",
+          "keel",
+          "elελληνικά",
+          "enenglish",
+          "frfrançais",
+          "gagaeilge",
+          "hrhrvatski",
+          "ititaliano",
+          "lvlatviešu",
+          "valoda",
+          "ltlietuvių",
+          "kalba",
+          "humagyar",
+          "mtmalti",
+          "nlnederlands",
+          "plpolski",
+          "ptportuguês",
+          "roromână",
+          "skslovenčina",
+          "slslovenščina",
+          "fisuomi",
+          "svsvenska",
+          "flag",
+          "back",
+          "homepage",
+          "logo"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 40
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61992TJ0027.sk.page.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8467,
+        "retainedPct": 205.6,
+        "blockCount": 50,
+        "missingWords": ["flag", "back", "homepage", "logo"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 42
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61992TJ0027.sk.page.html.gz#merged-words",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8199,
+        "retainedPct": 199.1,
+        "blockCount": 49,
+        "missingWords": [
+          "bgбългарски",
+          "esespañol",
+          "flag",
+          "back",
+          "homepage",
+          "logo"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 41
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61992TJ0027.sk.page.html.gz#reordered-blocks",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8200,
+        "retainedPct": 199.1,
+        "blockCount": 49,
+        "missingWords": ["flag", "back", "homepage", "logo"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 41
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61996TJ0183.lt.page.html.gz#current",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8200,
+        "retainedPct": 199.1,
+        "blockCount": 49,
+        "missingWords": ["flag", "back", "homepage", "logo"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 41
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61996TJ0183.lt.page.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8173,
+        "retainedPct": 198.5,
+        "blockCount": 48,
+        "missingWords": [
+          "discover",
+          "europa.eu",
+          "flag",
+          "back",
+          "homepage",
+          "logo"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 40
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61996TJ0183.lt.page.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8227,
+        "retainedPct": 199.8,
+        "blockCount": 50,
+        "missingWords": ["flag", "back", "homepage", "logo"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 42
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61996TJ0183.lt.page.html.gz#merged-words",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8199,
+        "retainedPct": 199.1,
+        "blockCount": 49,
+        "missingWords": ["discover", "flag", "back", "homepage", "logo"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 41
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-61996TJ0183.lt.page.html.gz#reordered-blocks",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "NO_HEADINGS",
+          "message": "AST has no heading blocks",
+          "severity": "warning"
+        },
+        {
+          "code": "MARKUP_RESIDUE",
+          "message": "2 block(s) carry source markup (HTML tags at p-13): <a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 4118,
+        "astLength": 8200,
+        "retainedPct": 199.1,
+        "blockCount": 49,
+        "missingWords": ["flag", "back", "homepage", "logo"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 8,
+          "paragraph": 41
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<a href=\"https://eur-lex.europa.eu/content/help/eurlex-content/experimental-features.html\" target=\"_blank\">More about th",
+            "anchorId": "p-13"
+          },
+          {
+            "rule": "html-tag",
+            "reason": "HTML tags",
+            "excerpt": "<abbr title='Asterisk'>*</abbr>) to a search term to find variations of it (transp<abbr title='Asterisk'>*</abbr>, 32019",
+            "anchorId": "p-31"
+          }
+        ],
+        "work": {
+          "textComputations": 240,
+          "textCharacters": 38796,
+          "ancestorChecks": 1109
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-fulltext-cs.html#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 93128,
+        "astLength": 92726,
+        "retainedPct": 99.6,
+        "blockCount": 273,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 7,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 12,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 105527,
+          "ancestorChecks": 650
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-fulltext-cs.html#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 93128,
+        "astLength": 92241,
+        "retainedPct": 99,
+        "blockCount": 272,
+        "missingWords": [
+          "dopustil",
+          "pochybení",
+          "podala",
+          "zavedení",
+          "následné",
+          "změny",
+          "barevných",
+          "vyhlášce",
+          "navrhl",
+          "žaloba",
+          "zamítnuta",
+          "neopodstatněná"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 230,
+          "paragraph-holding": 7,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 12,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 105527,
+          "ancestorChecks": 650
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-fulltext-cs.html#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 93128,
+        "astLength": 93211,
+        "retainedPct": 100.1,
+        "blockCount": 274,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 232,
+          "paragraph-holding": 7,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 12,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 105527,
+          "ancestorChecks": 650
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-fulltext-cs.html#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 93128,
+        "astLength": 92725,
+        "retainedPct": 99.6,
+        "blockCount": 273,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 7,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 12,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 105527,
+          "ancestorChecks": 650
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-fulltext-cs.html#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 93128,
+        "astLength": 92726,
+        "retainedPct": 99.6,
+        "blockCount": 273,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 7,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 12,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 105527,
+          "ancestorChecks": 650
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-fulltext-en.html#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 99134,
+        "astLength": 98732,
+        "retainedPct": 99.6,
+        "blockCount": 271,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 111853,
+          "ancestorChecks": 646
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-fulltext-en.html#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 99134,
+        "astLength": 98710,
+        "retainedPct": 99.6,
+        "blockCount": 270,
+        "missingWords": ["frontier"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 230,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 111853,
+          "ancestorChecks": 646
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-fulltext-en.html#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 99134,
+        "astLength": 98754,
+        "retainedPct": 99.6,
+        "blockCount": 272,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 232,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 111853,
+          "ancestorChecks": 646
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-fulltext-en.html#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 99134,
+        "astLength": 98731,
+        "retainedPct": 99.6,
+        "blockCount": 271,
+        "missingWords": ["frontier"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 111853,
+          "ancestorChecks": 646
+        }
+      }
+    }
+  },
+  {
+    "name": "adapters/eu-ecj-fulltext-en.html#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 99134,
+        "astLength": 98732,
+        "retainedPct": 99.6,
+        "blockCount": 271,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 14,
+          "paragraph-intro": 20,
+          "paragraph": 231,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 13,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 404,
+          "textCharacters": 111853,
+          "ancestorChecks": 646
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-45-2022.xml#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 56248,
+        "retainedPct": 100,
+        "blockCount": 108,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 11,
+          "paragraph": 90,
+          "paragraph-quote": 4
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-45-2022.xml#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 56178,
+        "retainedPct": 100,
+        "blockCount": 107,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 11,
+          "paragraph": 89,
+          "paragraph-quote": 4
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-45-2022.xml#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 56318,
+        "retainedPct": 100,
+        "blockCount": 109,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 11,
+          "paragraph": 91,
+          "paragraph-quote": 4
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-45-2022.xml#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 56247,
+        "retainedPct": 100,
+        "blockCount": 108,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 11,
+          "paragraph": 90,
+          "paragraph-quote": 4
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-45-2022.xml#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 56248,
+        "retainedPct": 100,
+        "blockCount": 108,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 11,
+          "paragraph": 90,
+          "paragraph-quote": 4
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-45-2022.xml#removed-footnote",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 56059,
+        "retainedPct": 100,
+        "blockCount": 107,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 11,
+          "paragraph": 89,
+          "paragraph-quote": 4
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zsoss-440-82-2019.xml#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 4414,
+        "retainedPct": 100,
+        "blockCount": 12,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 6
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zsoss-440-82-2019.xml#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 4189,
+        "retainedPct": 100,
+        "blockCount": 11,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 5
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zsoss-440-82-2019.xml#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 4639,
+        "retainedPct": 100,
+        "blockCount": 13,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 7
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zsoss-440-82-2019.xml#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 4413,
+        "retainedPct": 100,
+        "blockCount": 12,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 6
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zsoss-440-82-2019.xml#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 4414,
+        "retainedPct": 100,
+        "blockCount": 12,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 6
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-2-26.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 166281,
+        "astLength": 165293,
+        "retainedPct": 99.4,
+        "blockCount": 316,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 14,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 11,
+          "paragraph-argumentation": 235,
+          "paragraph-dissent": 39
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 881,
+          "textCharacters": 635741,
+          "ancestorChecks": 1626
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-2-26.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 166281,
+        "astLength": 165117,
+        "retainedPct": 99.3,
+        "blockCount": 315,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 13,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 11,
+          "paragraph-argumentation": 235,
+          "paragraph-dissent": 39
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 881,
+          "textCharacters": 635741,
+          "ancestorChecks": 1626
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-2-26.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 166281,
+        "astLength": 165469,
+        "retainedPct": 99.5,
+        "blockCount": 317,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 15,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 11,
+          "paragraph-argumentation": 235,
+          "paragraph-dissent": 39
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 881,
+          "textCharacters": 635741,
+          "ancestorChecks": 1626
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-2-26.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 166281,
+        "astLength": 165292,
+        "retainedPct": 99.4,
+        "blockCount": 316,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 14,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 11,
+          "paragraph-argumentation": 235,
+          "paragraph-dissent": 39
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 881,
+          "textCharacters": 635741,
+          "ancestorChecks": 1626
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-2-26.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 166281,
+        "astLength": 165293,
+        "retainedPct": 99.4,
+        "blockCount": 316,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 14,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 11,
+          "paragraph-argumentation": 235,
+          "paragraph-dissent": 39
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 881,
+          "textCharacters": 635741,
+          "ancestorChecks": 1626
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-44-16.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 62225,
+        "astLength": 62023,
+        "retainedPct": 99.7,
+        "blockCount": 97,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 6,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 6,
+          "paragraph-argumentation": 69,
+          "paragraph-apparatus": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 251,
+          "textCharacters": 245241,
+          "ancestorChecks": 452
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-44-16.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 62225,
+        "astLength": 61407,
+        "retainedPct": 98.7,
+        "blockCount": 96,
+        "missingWords": [
+          "budzi",
+          "procedowaniu",
+          "wziąć",
+          "dotyczyć",
+          "wydawania",
+          "rozstrzygnięć",
+          "wydaje",
+          "kilkoro",
+          "legitymacji",
+          "wymaganego",
+          "przedmiotowego",
+          "biorą",
+          "legitymowani",
+          "istocie",
+          "składem"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 6,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 6,
+          "paragraph-argumentation": 68,
+          "paragraph-apparatus": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 251,
+          "textCharacters": 245241,
+          "ancestorChecks": 452
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-44-16.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 62225,
+        "astLength": 62639,
+        "retainedPct": 100.7,
+        "blockCount": 98,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 6,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 6,
+          "paragraph-argumentation": 70,
+          "paragraph-apparatus": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 251,
+          "textCharacters": 245241,
+          "ancestorChecks": 452
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-44-16.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 62225,
+        "astLength": 62022,
+        "retainedPct": 99.7,
+        "blockCount": 97,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 6,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 6,
+          "paragraph-argumentation": 69,
+          "paragraph-apparatus": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 251,
+          "textCharacters": 245241,
+          "ancestorChecks": 452
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-44-16.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 62225,
+        "astLength": 62023,
+        "retainedPct": 99.7,
+        "blockCount": 97,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 6,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 6,
+          "paragraph-argumentation": 69,
+          "paragraph-apparatus": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 251,
+          "textCharacters": 245241,
+          "ancestorChecks": 452
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-44-16.html.gz#removed-footnote",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 62225,
+        "astLength": 61738,
+        "retainedPct": 99.2,
+        "blockCount": 96,
+        "missingWords": [
+          "sentencja",
+          "ogłoszona",
+          "poz",
+          "adnotacją",
+          "wydane",
+          "dotyczyło",
+          "normatywnego",
+          "utracił"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 6,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 6,
+          "paragraph-argumentation": 69,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 251,
+          "textCharacters": 245241,
+          "ancestorChecks": 452
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-14-11.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 3091,
+        "astLength": 3081,
+        "retainedPct": 99.7,
+        "blockCount": 19,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 6,
+          "paragraph-holding": 2,
+          "paragraph-argumentation": 5
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 36,
+          "textCharacters": 11202,
+          "ancestorChecks": 43
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-14-11.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 3091,
+        "astLength": 3050,
+        "retainedPct": 98.7,
+        "blockCount": 18,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 6,
+          "paragraph-intro": 1,
+          "paragraph-holding": 2,
+          "paragraph-argumentation": 5
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 36,
+          "textCharacters": 11202,
+          "ancestorChecks": 43
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-14-11.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 3091,
+        "astLength": 3112,
+        "retainedPct": 100.7,
+        "blockCount": 20,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 6,
+          "paragraph-holding": 2,
+          "paragraph-argumentation": 5
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 36,
+          "textCharacters": 11202,
+          "ancestorChecks": 43
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-14-11.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 3091,
+        "astLength": 3080,
+        "retainedPct": 99.6,
+        "blockCount": 19,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 6,
+          "paragraph-holding": 2,
+          "paragraph-argumentation": 5
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 36,
+          "textCharacters": 11202,
+          "ancestorChecks": 43
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-14-11.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 3091,
+        "astLength": 3081,
+        "retainedPct": 99.7,
+        "blockCount": 19,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 6,
+          "paragraph-holding": 2,
+          "paragraph-argumentation": 5
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 36,
+          "textCharacters": 11202,
+          "ancestorChecks": 43
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-ts-70-24.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 2129,
+        "astLength": 2125,
+        "retainedPct": 99.8,
+        "blockCount": 14,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 2,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 2,
+          "paragraph-holding": 2,
+          "paragraph-argumentation": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 26,
+          "textCharacters": 5037,
+          "ancestorChecks": 24
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-ts-70-24.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 2129,
+        "astLength": 1948,
+        "retainedPct": 91.5,
+        "blockCount": 13,
+        "missingWords": [
+          "stwierdza",
+          "spełnia",
+          "ona",
+          "przesłanki",
+          "nadania",
+          "jej",
+          "dalszego",
+          "biegu"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 2,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 2,
+          "paragraph-holding": 2,
+          "paragraph-argumentation": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 26,
+          "textCharacters": 5037,
+          "ancestorChecks": 24
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-ts-70-24.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 2129,
+        "astLength": 2302,
+        "retainedPct": 108.1,
+        "blockCount": 15,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 2,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 2,
+          "paragraph-holding": 2,
+          "paragraph-argumentation": 3
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 26,
+          "textCharacters": 5037,
+          "ancestorChecks": 24
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-ts-70-24.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 2129,
+        "astLength": 2124,
+        "retainedPct": 99.8,
+        "blockCount": 14,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 2,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 2,
+          "paragraph-holding": 2,
+          "paragraph-argumentation": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 26,
+          "textCharacters": 5037,
+          "ancestorChecks": 24
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-ts-70-24.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 2129,
+        "astLength": 2125,
+        "retainedPct": 99.8,
+        "blockCount": 14,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-front-matter": 1,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 2,
+          "paragraph-holding": 2,
+          "paragraph-argumentation": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 26,
+          "textCharacters": 5037,
+          "ancestorChecks": 24
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-u-1-86.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 63443,
+        "astLength": 63095,
+        "retainedPct": 99.5,
+        "blockCount": 139,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 6,
+          "paragraph-holding": 3,
+          "paragraph-argumentation": 114
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 391,
+          "textCharacters": 248962,
+          "ancestorChecks": 730
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-u-1-86.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 63443,
+        "astLength": 62655,
+        "retainedPct": 98.8,
+        "blockCount": 138,
+        "missingWords": [
+          "rozpatrywanym",
+          "zastosować",
+          "nową",
+          "ciągłych",
+          "warunkiem",
+          "uznałoby",
+          "artykule",
+          "wyliczenie",
+          "wyczerpujące",
+          "chce",
+          "doktryna",
+          "ciągłym",
+          "ogóle",
+          "każdym"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 6,
+          "paragraph-holding": 3,
+          "paragraph-argumentation": 113
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 391,
+          "textCharacters": 248962,
+          "ancestorChecks": 730
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-u-1-86.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 63443,
+        "astLength": 63535,
+        "retainedPct": 100.1,
+        "blockCount": 140,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 6,
+          "paragraph-holding": 3,
+          "paragraph-argumentation": 115
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 391,
+          "textCharacters": 248962,
+          "ancestorChecks": 730
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-u-1-86.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 63443,
+        "astLength": 63094,
+        "retainedPct": 99.4,
+        "blockCount": 139,
+        "missingWords": ["rozpatrywanym"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 6,
+          "paragraph-holding": 3,
+          "paragraph-argumentation": 114
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 391,
+          "textCharacters": 248962,
+          "ancestorChecks": 730
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-u-1-86.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 63443,
+        "astLength": 63095,
+        "retainedPct": 99.5,
+        "blockCount": 139,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 6,
+          "paragraph-holding": 3,
+          "paragraph-argumentation": 114
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 391,
+          "textCharacters": 248962,
+          "ancestorChecks": 730
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-w-3-94.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 44570,
+        "astLength": 44393,
+        "retainedPct": 99.6,
+        "blockCount": 87,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 5,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 13,
+          "paragraph-holding": 3,
+          "paragraph-argumentation": 62,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 220,
+          "textCharacters": 172364,
+          "ancestorChecks": 396
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-w-3-94.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 44570,
+        "astLength": 43593,
+        "retainedPct": 97.8,
+        "blockCount": 86,
+        "missingWords": ["odnosząc", "drugiego"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 5,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 13,
+          "paragraph-holding": 3,
+          "paragraph-argumentation": 61,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 220,
+          "textCharacters": 172364,
+          "ancestorChecks": 396
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-w-3-94.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 44570,
+        "astLength": 45193,
+        "retainedPct": 101.4,
+        "blockCount": 88,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 5,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 13,
+          "paragraph-holding": 3,
+          "paragraph-argumentation": 63,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 220,
+          "textCharacters": 172364,
+          "ancestorChecks": 396
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-w-3-94.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 44570,
+        "astLength": 44392,
+        "retainedPct": 99.6,
+        "blockCount": 87,
+        "missingWords": ["odnosząc"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 5,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 13,
+          "paragraph-holding": 3,
+          "paragraph-argumentation": 62,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 220,
+          "textCharacters": 172364,
+          "ancestorChecks": 396
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-w-3-94.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 44570,
+        "astLength": 44393,
+        "retainedPct": 99.6,
+        "blockCount": 87,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 5,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 13,
+          "paragraph-holding": 3,
+          "paragraph-argumentation": 62,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 220,
+          "textCharacters": 172364,
+          "ancestorChecks": 396
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-w-3-94.html.gz#removed-footnote",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 44570,
+        "astLength": 44341,
+        "retainedPct": 99.5,
+        "blockCount": 86,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 5,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 13,
+          "paragraph-holding": 3,
+          "paragraph-argumentation": 62
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 220,
+          "textCharacters": 172364,
+          "ancestorChecks": 396
+        }
+      }
+    }
+  }
+]
