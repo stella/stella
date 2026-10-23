@@ -22,7 +22,9 @@ const stepSchema = v.looseObject({
 });
 const workflowSchema = v.looseObject({
   on: v.looseObject({
-    pull_request: v.optional(v.unknown()),
+    pull_request: v.optional(
+      v.nullable(v.looseObject({ paths: v.array(v.string()) })),
+    ),
     push: v.optional(
       v.nullable(v.looseObject({ branches: v.array(v.string()) })),
     ),
@@ -112,6 +114,9 @@ const detectsDependencyChange = (changedPath: string) => {
       "base",
     );
     const base = git("rev-parse", "HEAD");
+    mkdirSync(path.dirname(path.join(repository, changedPath)), {
+      recursive: true,
+    });
     writeFileSync(path.join(repository, changedPath), "changed\n");
     git("add", ".");
     git(
@@ -140,8 +145,31 @@ const detectsDependencyChange = (changedPath: string) => {
 };
 
 test("pull requests avoid network work when the lockfile is unchanged", () => {
-  expect(auditWorkflow.on.pull_request).toBeNull();
-  for (const changed of ["bun.lock", "package.json", "apps/api/package.json"]) {
+  expect(auditWorkflow.on.pull_request?.paths).toEqual([
+    "bun.lock",
+    "**/package.json",
+    "Cargo.lock",
+    "**/Cargo.lock",
+    "Cargo.toml",
+    "**/Cargo.toml",
+    ".github/workflows/dependency-audit.yml",
+    "scripts/dependency-audit.ts",
+    "scripts/check-trusted-dependencies.ts",
+    "scripts/retry.sh",
+  ]);
+  for (const changed of [
+    "bun.lock",
+    "package.json",
+    "apps/api/package.json",
+    "Cargo.lock",
+    "apps/desktop/Cargo.lock",
+    "Cargo.toml",
+    "apps/desktop/Cargo.toml",
+    ".github/workflows/dependency-audit.yml",
+    "scripts/dependency-audit.ts",
+    "scripts/check-trusted-dependencies.ts",
+    "scripts/retry.sh",
+  ]) {
     expect(detectsDependencyChange(changed), changed).toBe("changed=true");
   }
   expect(detectsDependencyChange("README.md")).toBe("changed=false");
