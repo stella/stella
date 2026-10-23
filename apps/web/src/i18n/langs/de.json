@@ -157,7 +157,7 @@
     "professionalUse": {
       "title": "Berufliche Nutzung bestätigen"
     },
-    "professionalUseStatement": "Sie bestätigen, dass Sie stella für berufliche Zwecke nutzen, und nehmen zur Kenntnis, dass stella ein Werkzeug für Rechtsfachleute ist und keine Rechtsberatung ersetzt.",
+    "professionalUseStatement": "Mit der Erstellung eines Kontos bestätigen Sie, dass Sie stella für berufliche Zwecke nutzen, und nehmen zur Kenntnis, dass stella ein Werkzeug für Rechtsfachleute ist und keine Rechtsberatung ersetzt.",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
     "reauthenticationRequired": "Melden Sie sich erneut an, um diese Aktion fortzusetzen.",
     "resendCode": "Code erneut an <email>{emailAddress}</email> senden",

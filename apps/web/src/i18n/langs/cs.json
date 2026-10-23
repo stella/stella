@@ -157,7 +157,7 @@
     "professionalUse": {
       "title": "Potvrďte profesní použití"
     },
-    "professionalUseStatement": "Potvrzujete, že stellu používáte pro profesní účely, a berete na vědomí, že stella je nástroj pro právní profesionály a nenahrazuje právní poradenství.",
+    "professionalUseStatement": "Vytvořením účtu potvrzujete, že stellu používáte pro profesní účely, a berete na vědomí, že stella je nástroj pro právní profesionály a nenahrazuje právní poradenství.",
     "rateLimitExceeded": "Příliš mnoho pokusů. Zkuste to prosím později.",
     "reauthenticationRequired": "Pro pokračování v této akci se znovu přihlaste.",
     "resendCode": "Poslat kód znovu na <email>{emailAddress}</email>",

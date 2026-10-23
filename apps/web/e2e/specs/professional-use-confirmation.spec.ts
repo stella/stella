@@ -1,6 +1,8 @@
 import { request as playwrightRequest } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { PROFESSIONAL_USE_STATEMENT_VERSION } from "@stll/api-contract/professional-use";
+
 import { E2E_API_ORIGIN } from "../helpers/api";
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import { expect, test } from "../helpers/test";
@@ -37,18 +39,18 @@ test("an account awaiting confirmation sees the statement and enters the product
 
     await page.goto("/workspaces");
     await expect(
-      page.getByRole("heading", { name: "Confirm professional use" }),
+      page.getByText("Confirm professional use", { exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText(
-        "You confirm that you use stella for professional purposes and understand that stella is a tool for legal professionals and not a substitute for legal advice.",
+        "By creating an account, you confirm that you use stella for professional purposes and understand that stella is a tool for legal professionals and not a substitute for legal advice.",
       ),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
     await page.getByRole("button", { name: "Accept" }).click();
     await expect(page).toHaveURL(/\/workspaces\/?$/u);
     await expect(
-      page.getByRole("heading", { name: "Confirm professional use" }),
+      page.getByText("Confirm professional use", { exact: true }),
     ).not.toBeVisible();
   } finally {
     await api.dispose();
@@ -60,11 +62,18 @@ test("an account with a recorded acceptance enters the product without the card"
 }) => {
   const api = await createSignedInAccount();
   try {
+    const accepted = await api.post(
+      `${E2E_API_ORIGIN}/v1/me/professional-use`,
+      {
+        data: { statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION },
+      },
+    );
+    expect(accepted.ok(), await accepted.text()).toBe(true);
     await page.context().addCookies((await api.storageState()).cookies);
     await page.goto("/workspaces");
     await expect(page).toHaveURL(/\/workspaces\/?$/u);
     await expect(
-      page.getByRole("heading", { name: "Confirm professional use" }),
+      page.getByText("Confirm professional use", { exact: true }),
     ).not.toBeVisible();
   } finally {
     await api.dispose();

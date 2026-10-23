@@ -157,7 +157,7 @@
     "professionalUse": {
       "title": "Kinnitage kutsealane kasutus"
     },
-    "professionalUseStatement": "Kinnitate, et kasutate stellat kutsealastel eesmärkidel, ning võtate teadmiseks, et stella on tööriist õigusvaldkonna spetsialistidele ega asenda õigusnõustamist.",
+    "professionalUseStatement": "Konto loomisega kinnitate, et kasutate stellat kutsealastel eesmärkidel, ning võtate teadmiseks, et stella on tööriist õigusvaldkonna spetsialistidele ega asenda õigusnõustamist.",
     "rateLimitExceeded": "Liiga palju katseid. Palun proovige hiljem uuesti.",
     "reauthenticationRequired": "Selle toimingu jätkamiseks logige uuesti sisse.",
     "resendCode": "Saada kood uuesti aadressile <email>{emailAddress}</email>",

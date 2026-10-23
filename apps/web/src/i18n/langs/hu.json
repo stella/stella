@@ -157,7 +157,7 @@
     "professionalUse": {
       "title": "Szakmai célú használat megerősítése"
     },
-    "professionalUseStatement": "Megerősíti, hogy a stellát szakmai célokra használja, és tudomásul veszi, hogy a stella jogi szakembereknek szóló eszköz, és nem helyettesíti a jogi tanácsadást.",
+    "professionalUseStatement": "A fiók létrehozásával megerősíti, hogy a stellát szakmai célokra használja, és tudomásul veszi, hogy a stella jogi szakembereknek szóló eszköz, és nem helyettesíti a jogi tanácsadást.",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
     "reauthenticationRequired": "A művelet folytatásához jelentkezzen be újra.",
     "resendCode": "Kód újraküldése erre: <email>{emailAddress}</email>",

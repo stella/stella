@@ -157,7 +157,7 @@
     "professionalUse": {
       "title": "Patvirtinkite profesinį naudojimą"
     },
-    "professionalUseStatement": "Patvirtinate, kad stella naudojatės profesiniais tikslais, ir suprantate, kad stella yra įrankis teisės specialistams ir nepakeičia teisinės konsultacijos.",
+    "professionalUseStatement": "Sukurdami paskyrą patvirtinate, kad stella naudojatės profesiniais tikslais, ir suprantate, kad stella yra įrankis teisės specialistams ir nepakeičia teisinės konsultacijos.",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",
     "reauthenticationRequired": "Norėdami tęsti šį veiksmą, prisijunkite iš naujo.",
     "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",
