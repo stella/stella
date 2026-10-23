@@ -38,6 +38,11 @@ export const buildApiTestCommand = ({
     "--update-timings",
     "--preload",
     path.join(import.meta.dirname, "../src/tests/publisher-gate-preload.ts"),
+    "--preload",
+    path.join(
+      import.meta.dirname,
+      "../src/tests/response-conformance-preload.ts",
+    ),
     ...testArguments,
     ...testFiles,
   ];

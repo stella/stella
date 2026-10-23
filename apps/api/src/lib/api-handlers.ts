@@ -31,6 +31,7 @@ import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import { requestValidationResponseSchema } from "@/api/lib/errors/request-validation-response";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -104,6 +105,8 @@ import {
   type OrganizationResourceSetUpdates,
   type ResourceSetRealtime,
 } from "@/api/lib/resource-set-realtime";
+import { rethrowResponseConformanceError } from "@/api/lib/response-conformance-error";
+import { observeHandlerResponses } from "@/api/lib/response-conformance-observer";
 import {
   projectPublicErrorBody,
   PUBLIC_ERROR_TEXT_BYTES,
@@ -491,12 +494,24 @@ const recordSafeHandler = <
       accountAccess: AccountAccess;
       body?: unknown;
       description?: string;
+      response?: unknown;
     };
     handler: object;
   },
 >(
   definition: TDefinition,
 ): TDefinition => {
+  const originalHandler = definition.handler;
+  definition.handler = observeHandlerResponses(
+    originalHandler,
+    definition.config,
+  );
+  if (definition.handler !== originalHandler) {
+    const publicRegistration = safePublicHandlers.get(originalHandler);
+    if (publicRegistration !== undefined) {
+      safePublicHandlers.set(definition.handler, publicRegistration);
+    }
+  }
   recordWriteContract(definition.handler, definition.config);
   safeHandlerAccountAccess.set(
     definition.handler,
@@ -781,16 +796,29 @@ const SAFE_PUBLIC_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS =
     safePublicHandlerErrorOrStatusTextResponseSchema,
   );
 
+const publicRequestValidationResponseSchema = t.Union([
+  safePublicHandlerErrorOrStatusTextResponseSchema,
+  requestValidationResponseSchema,
+]);
+
+type SafePublicHandlerStatusTextResponseSchemas<
+  TSuccessSchema extends TSchema,
+> = {
+  readonly [TStatus in 200 | HandlerErrorStatusCode]: TStatus extends 200
+    ? TSuccessSchema
+    : TStatus extends 422
+      ? typeof publicRequestValidationResponseSchema
+      : typeof safePublicHandlerErrorOrStatusTextResponseSchema;
+};
+
 export const safePublicHandlerResponseSchemasWithStatusText = <
   TSuccessSchema extends TSchema,
 >(
   successSchema: TSuccessSchema,
-): SafeHandlerResponseSchemasFor<
-  TSuccessSchema,
-  typeof safePublicHandlerErrorOrStatusTextResponseSchema
-> => ({
+): SafePublicHandlerStatusTextResponseSchemas<TSuccessSchema> => ({
   200: successSchema,
   ...SAFE_PUBLIC_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS,
+  422: publicRequestValidationResponseSchema,
 });
 
 // The conditional form is intentional: it keeps status unions distributive so
@@ -942,6 +970,7 @@ const runSafeHandlerInDeliveryScope = async <
     }
 
     const error = result.error;
+    rethrowResponseConformanceError(error);
 
     const handlerError =
       publicReadTimeoutError(error) ??
@@ -1006,6 +1035,7 @@ const runSafeHandlerInDeliveryScope = async <
       message: "Internal server error",
     });
   } catch (error) {
+    rethrowResponseConformanceError(error);
     // A typed HandlerError thrown synchronously (or escaping the
     // Result.gen pipeline) must still surface as its own status,
     // not a generic 500. Without this branch a deeper handler

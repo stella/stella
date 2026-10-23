@@ -578,7 +578,6 @@
     "apps/api/src/lib/permissive-route-schema.ts": 1,
     "apps/api/src/lib/pick-defined.ts": 1,
     "apps/api/src/lib/provider-safe-json-schema.ts": 6,
-    "apps/api/src/lib/rate-limit/tenant-action-boundary.ts": 1,
     "apps/api/src/lib/safe-outbound-fetch.ts": 1,
     "apps/api/src/lib/search/detect-language.ts": 1,
     "apps/api/src/lib/style-set-editor.ts": 1,

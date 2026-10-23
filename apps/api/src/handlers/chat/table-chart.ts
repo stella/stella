@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import { tableChartRequestSchema } from "@stll/api-contract/table-chart";
+import {
+  tableChartRequestSchema,
+  tableChartResponseSchema,
+} from "@stll/api-contract/table-chart";
 
 import type { TableChartDecisionCaller } from "@/api/handlers/chat/table-chart-plan";
 import { planTableChart } from "@/api/handlers/chat/table-chart-plan";
@@ -12,6 +15,7 @@ import {
   ACCOUNT_ACCESS,
   configuredModelAdmission,
   createSafeRootHandler,
+  safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
@@ -27,6 +31,7 @@ const config = {
   mcp: { type: "internal", reason: "assistant_chat" },
   // Validate privately: framework errors must not echo table contents.
   body: t.Unknown(),
+  response: safeHandlerResponseSchemas(tableChartResponseSchema),
 } satisfies HandlerConfig;
 
 type CreateTableChartOptions = { decide: TableChartDecisionCaller };

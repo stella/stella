@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 3,
+  "reason": "Central response conformance needs a shared typed error, an optional safe-handler observer, and the extracted canonical route matcher reused by the existing tenant boundary; keeping these owners explicit avoids test-only imports in production and duplicate routing logic."
+}

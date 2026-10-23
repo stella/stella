@@ -116,6 +116,7 @@ import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
 import { windowProvisionText } from "@/api/mcp/provision-text-window";
 import type { ReadCaseLawDecisionSuccess } from "@/api/mcp/public-law-handlers";
 import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
+import { setMcpResponseConformanceObserver } from "@/api/mcp/response-conformance-observer";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
   CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
@@ -154,7 +155,7 @@ import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-en
 import {
   compileWireSchema,
   createWireSchemaValidator,
-} from "@/api/tests/helpers/wire-json-schema";
+} from "@/api/tests/helpers/wire-json-schema-validator";
 import {
   createScopedDbMock,
   createSelectQueryMock,
@@ -2883,6 +2884,8 @@ describe("OpenAI-compatible MCP tools", () => {
       warnings: [],
     });
     const logs = installRecordingLogger();
+    // Exercise production recovery from deliberately malformed output.
+    const restoreConformance = setMcpResponseConformanceObserver(undefined);
     try {
       const result = await handleMcpToolCall({
         args: { country: "CZE", queries: ["contract"] },
@@ -2914,6 +2917,7 @@ describe("OpenAI-compatible MCP tools", () => {
       ]);
     } finally {
       logs.restore();
+      restoreConformance();
     }
   });
 
@@ -2936,6 +2940,8 @@ describe("OpenAI-compatible MCP tools", () => {
       warnings: [],
     });
     const logs = installRecordingLogger();
+    // Exercise production recovery from deliberately malformed output.
+    const restoreConformance = setMcpResponseConformanceObserver(undefined);
     try {
       const result = await handleMcpToolCall({
         args: { country: "CZE", queries: ["contract"] },
@@ -2964,6 +2970,7 @@ describe("OpenAI-compatible MCP tools", () => {
       ]);
     } finally {
       logs.restore();
+      restoreConformance();
     }
   });
 

@@ -159,7 +159,7 @@ export const addressCountry = (country: string | null): string | null => {
 };
 
 /** Why the invoice carries the VAT treatment it was given. */
-const INVOICE_VAT_REASONS = [
+export const INVOICE_VAT_REASONS = [
   "no_seller_profile",
   "seller_not_vat_payer",
   "reverse_charge",

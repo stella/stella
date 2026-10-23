@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import {
   AiCassetteError,
@@ -53,6 +53,30 @@ const expectRejected = async (promise: Promise<unknown>, message: string) => {
 };
 
 describe("AI provider cassette transport", () => {
+  test("a body override never clones or consumes the original Request body", async () => {
+    const originalBody = { model: "original", prompt: "unread" };
+    const original = request(originalBody);
+    const clone = spyOn(original, "clone");
+    try {
+      const transport = record(async () => jsonResponse({ ok: true }));
+      const response = await transport.fetch(original, {
+        body: JSON.stringify(DEFAULT_BODY),
+      });
+      expect(await response.json()).toEqual({ ok: true });
+      const cassette = await transport.finish();
+      expect(clone).not.toHaveBeenCalled();
+      expect(original.bodyUsed).toBe(false);
+      expect(await original.json()).toEqual(originalBody);
+      const replay = createCassetteFetch({ mode: "replay", cassette });
+      expect(await (await replay.fetch(request())).json()).toEqual({
+        ok: true,
+      });
+      await replay.finish();
+    } finally {
+      clone.mockRestore();
+    }
+  });
+
   test("records sanitized metadata and replays the ordered response", async () => {
     let calls = 0;
     const transport = record(async (_input, init) => {

@@ -37,6 +37,7 @@ export const createListVerificationRoutes = (
       permissions: createBulkClaimReviews.config.permissions,
     })
     .post("/sample-case", createSampleCase.handler, {
+      response: createSampleCase.config.response,
       body: createSampleCase.config.body,
       permissions: createSampleCase.config.permissions,
     })

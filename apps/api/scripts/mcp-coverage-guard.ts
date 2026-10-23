@@ -56,6 +56,10 @@ import {
   REPO_ROOT,
   toEndpointIdentifier,
 } from "./lib/enumerate-safe-handlers";
+import {
+  checkResponseConformanceCensus,
+  responseConformanceGuardSelfTest,
+} from "./response-conformance-guard";
 
 const BASELINE_PATH = path.resolve(
   REPO_ROOT,
@@ -528,6 +532,10 @@ const runCheck = async (): Promise<number> => {
     return 1;
   }
 
+  const { generateResponseConformanceCensus } =
+    await import("./response-conformance-census");
+  checkResponseConformanceCensus(await generateResponseConformanceCensus());
+
   console.log(
     `mcp-coverage-guard: OK. ${endpoints.length} endpoint modules enumerated; ${currentPending.length} pending (baselined); ${MCP_STATIC_TOOL_NAMES.length} static tools, no orphans.`,
   );
@@ -687,6 +695,7 @@ const runSelfTest = (): number => {
 
 const main = async (): Promise<number> => {
   if (process.argv.includes("--self-test")) {
+    responseConformanceGuardSelfTest();
     return runSelfTest();
   }
   if (process.argv.includes("--write-baseline")) {

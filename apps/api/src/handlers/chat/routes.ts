@@ -58,6 +58,7 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     permissions: getExactIcon.config.permissions,
   })
   .get("/link-icons/:hostname", getLinkIcon.handler, {
+    response: getLinkIcon.config.response,
     params: getLinkIcon.config.params,
     permissions: getLinkIcon.config.permissions,
   })
@@ -125,6 +126,7 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     query: listUnavailableChatSkills.config.query,
   })
   .post("/table-chart", tableChart.handler, {
+    response: tableChart.config.response,
     body: tableChart.config.body,
     permissions: tableChart.config.permissions,
   })

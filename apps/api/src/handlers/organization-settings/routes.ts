@@ -156,6 +156,7 @@ export const organizationSettingsRoute = new Elysia({
     permissions: getDocumentOcrAvailability.config.permissions,
   })
   .post("/ai-config/defaults-preview", previewAIConfigDefaults.handler, {
+    response: previewAIConfigDefaults.config.response,
     body: previewAIConfigDefaults.config.body,
     permissions: previewAIConfigDefaults.config.permissions,
   })
