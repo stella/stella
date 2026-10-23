@@ -224,13 +224,13 @@ export const listAuthSessions = async () => {
 
     if (Result.isError(handoffSessionsResult)) {
       getAnalytics().captureError(handoffSessionsResult.error, {
-        type: "detached",
-        operation: "auth.list_sessions.handoffs",
+        fingerprintKey: "auth.listSessions.handoffs:fetch",
+        scope: { type: "handler", handlerId: "auth.listSessions.handoffs" },
       });
     } else if (handoffSessionsResult.value.error) {
       getAnalytics().captureError(handoffSessionsResult.value.error, {
-        type: "detached",
-        operation: "auth.list_sessions.handoffs",
+        fingerprintKey: "auth.listSessions.handoffs:response",
+        scope: { type: "handler", handlerId: "auth.listSessions.handoffs" },
       });
     } else {
       const handoffsResult = v.safeParse(
