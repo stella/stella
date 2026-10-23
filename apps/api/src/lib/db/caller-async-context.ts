@@ -2,9 +2,11 @@ import { panic } from "better-result";
 import type { SQL } from "bun";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { meterSqlClient } from "@/api/lib/db/meter-client";
+
 /**
  * Runs every transaction callback on `client` in the async context of the
- * code that opened the transaction, and returns the same client.
+ * code that opened the transaction, and meters the raw results returned by its queries.
  *
  * Bun's pool calls a `begin` callback when a connection becomes free, in
  * whatever async context that happens: a new connection's context (no
@@ -26,7 +28,7 @@ export const runTransactionsInCallerContext = (client: SQL): SQL => {
     if (typeof optionsOrCallback !== "string") {
       return await begin(
         async (transaction) =>
-          await runInCaller(optionsOrCallback, transaction),
+          await runInCaller(optionsOrCallback, meterSqlClient(transaction)),
       );
     }
     if (callback === undefined) {
@@ -34,12 +36,13 @@ export const runTransactionsInCallerContext = (client: SQL): SQL => {
     }
     return await begin(
       optionsOrCallback,
-      async (transaction) => await runInCaller(callback, transaction),
+      async (transaction) =>
+        await runInCaller(callback, meterSqlClient(transaction)),
     );
   };
   Object.defineProperty(client, "begin", {
     configurable: true,
     value: beginInCallerContext,
   });
-  return client;
+  return meterSqlClient(client);
 };

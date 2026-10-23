@@ -19,6 +19,7 @@ import {
   zstdDecompressToStringBounded,
 } from "@/api/lib/compression";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
+import { recordReadWork } from "@/api/lib/db-query-counter";
 import {
   CorpusMemberDigestMismatchError,
   CorpusMemberTombstonedError,
@@ -114,6 +115,7 @@ export const parsePersistedCorpusSections = (
 export const parsePersistedCorpusAst = (
   value: unknown,
 ): DocumentAst | EmptyAst | null => {
+  recordReadWork("astParses");
   const parsed = v.parse(persistedCorpusAstSchema, value);
   const degradations = persistedAstDegradations(value);
   if (degradations.length > 0) {

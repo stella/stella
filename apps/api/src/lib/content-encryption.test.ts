@@ -10,6 +10,10 @@ import {
   decryptContent,
   encryptContent,
 } from "@/api/lib/content-encryption";
+import {
+  currentReadWork,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
 
 /**
  * Behavioural coverage for the real AES-256-GCM envelope. `CONTENT_ENCRYPTION_KEY`
@@ -44,9 +48,14 @@ describe("encryptContent / decryptContent", () => {
   test("roundtrips a payload for the same organization", async () => {
     const { ciphertext, iv } = await encryptContent(organizationId, plaintext);
 
-    expect(await decryptContent(organizationId, ciphertext, iv)).toBe(
-      plaintext,
-    );
+    await runWithQueryCounter(async () => {
+      expect(await decryptContent(organizationId, ciphertext, iv)).toBe(
+        plaintext,
+      );
+      expect(currentReadWork()?.decryptedBytes).toBe(
+        Buffer.byteLength(plaintext),
+      );
+    });
   });
 
   test("roundtrips an empty payload", async () => {

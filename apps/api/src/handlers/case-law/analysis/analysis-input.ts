@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * The exact input an analysis of one decision is computed over: the
  * decision row, the text as the reader sees it today, and the resolved
@@ -10,8 +11,6 @@
  * same prompt registry; if they resolved it differently, the fingerprint
  * they compare would not mean the same thing.
  */
-
-import { Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { envBase } from "@/api/env-base";
@@ -28,8 +27,11 @@ import {
 import {
   readDecisionAnalysis,
   readDecisionAnalysisAst,
+  readDecisionAnalysisAstColumn,
 } from "@/api/lib/case-law/decision-analysis";
+import { readCachedDecisionRowAst } from "@/api/lib/case-law/decision-row-ast-cache";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
+import { defineWindowedRead } from "@/api/lib/windowed-read-surface";
 
 import { getSystemPrompt } from "./prompts/prompt-registry";
 
@@ -50,64 +52,92 @@ export type AnalysisInputResolution =
   /** No analysis prompt is written for the decision's language. */
   | { kind: "unsupported-language"; language: string };
 
-export const resolveAnalysisInput = async ({
-  decisionId,
-  scopedDb,
-}: {
-  decisionId: SafeId<"caseLawDecision">;
-  scopedDb: ScopedDb;
-}): Promise<AnalysisInputResolution> => {
-  const decision =
-    envBase.PUBLIC_LAW_DATABASE_URL === undefined
-      ? await scopedDb(async (tx) => await readDecisionAnalysis(tx, decisionId))
-      : await caseLawPublicReadDb(
-          async (tx) => await readDecisionAnalysis(tx, decisionId),
-        );
+export const resolveAnalysisInput = defineWindowedRead(
+  "analysis-input",
+  async ({
+    decisionId,
+    scopedDb,
+  }: {
+    decisionId: SafeId<"caseLawDecision">;
+    scopedDb: ScopedDb;
+  }): Promise<AnalysisInputResolution> => {
+    const decision =
+      envBase.PUBLIC_LAW_DATABASE_URL === undefined
+        ? await scopedDb(
+            async (tx) => await readDecisionAnalysis(tx, decisionId),
+          )
+        : await caseLawPublicReadDb(
+            async (tx) => await readDecisionAnalysis(tx, decisionId),
+          );
 
-  if (!decision) {
-    return { kind: "decision-not-found" };
-  }
-  // Decided from the row alone, before the tree is read from storage.
-  const systemPrompt = getSystemPrompt(decision.language);
-  if (Result.isError(systemPrompt)) {
+    if (!decision) {
+      return { kind: "decision-not-found" };
+    }
+    // Decided from the row alone, before the tree is read from storage.
+    const systemPrompt = getSystemPrompt(decision.language);
+    if (Result.isError(systemPrompt)) {
+      return {
+        kind: "unsupported-language",
+        language: systemPrompt.error.language,
+      };
+    }
+
+    // The text the reader sees: in development that may be the tree's own
+    // parse rather than the stored one, and the anchors must agree. Resolved
+    // before the stored analysis is consulted, because whether that analysis
+    // still applies is a property of this text.
+    const reparsed =
+      devReparseEnabled() && decision.source !== null
+        ? await reparseForDev({
+            adapterKey: decision.source.adapterKey,
+            caseNumber: decision.caseNumber,
+            court: decision.court,
+            decisionDate: decision.decisionDate,
+            decisionType: decision.decisionType,
+            documentUrl: decision.documentUrl,
+            ecli: decision.ecli,
+            id: decisionId,
+            metadata: decision.metadata,
+          })
+        : null;
+    const ast =
+      reparsed ??
+      (await readDecisionAnalysisAst(
+        { ...decision, documentAst: null },
+        readCorpusTombstones,
+        async () =>
+          await readCachedDecisionRowAst({
+            key: JSON.stringify([
+              decision.id,
+              decision.updatedAt,
+              decision.contentHash,
+              decision.astS3Key,
+            ]),
+            read: async () =>
+              envBase.PUBLIC_LAW_DATABASE_URL === undefined
+                ? await scopedDb(
+                    async (tx) =>
+                      await readDecisionAnalysisAstColumn(tx, decisionId),
+                  )
+                : await caseLawPublicReadDb(
+                    async (tx) =>
+                      await readDecisionAnalysisAstColumn(tx, decisionId),
+                  ),
+          }),
+      ));
+    if (ast === null) {
+      return { kind: "unparseable-document" };
+    }
+
     return {
-      kind: "unsupported-language",
-      language: systemPrompt.error.language,
-    };
-  }
-
-  // The text the reader sees: in development that may be the tree's own
-  // parse rather than the stored one, and the anchors must agree. Resolved
-  // before the stored analysis is consulted, because whether that analysis
-  // still applies is a property of this text.
-  const reparsed =
-    devReparseEnabled() && decision.source !== null
-      ? await reparseForDev({
-          adapterKey: decision.source.adapterKey,
-          caseNumber: decision.caseNumber,
-          court: decision.court,
-          decisionDate: decision.decisionDate,
-          decisionType: decision.decisionType,
-          documentUrl: decision.documentUrl,
-          ecli: decision.ecli,
-          id: decisionId,
-          metadata: decision.metadata,
-        })
-      : null;
-  const ast =
-    reparsed ?? (await readDecisionAnalysisAst(decision, readCorpusTombstones));
-  if (ast === null) {
-    return { kind: "unparseable-document" };
-  }
-
-  return {
-    kind: "resolved",
-    decision,
-    anchorIds: ast.blocks.map((block) => block.anchorId),
-    input: analysisInputOf({
-      blocks: ast.blocks,
+      kind: "resolved",
       decision,
-      systemPrompt: systemPrompt.value,
-    }),
-  };
-};
+      anchorIds: ast.blocks.map((block) => block.anchorId),
+      input: analysisInputOf({
+        blocks: ast.blocks,
+        decision,
+        systemPrompt: systemPrompt.value,
+      }),
+    };
+  },
+);

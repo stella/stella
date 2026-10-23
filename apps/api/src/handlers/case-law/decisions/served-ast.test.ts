@@ -10,6 +10,10 @@ import {
   transientDecisionAstProjection,
 } from "@/api/handlers/case-law/decisions/served-ast";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  currentReadWork,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
 import { decisionOutline } from "@/api/mcp/case-law-decision-outline";
 
 const ast = (text: string): DocumentAst => ({
@@ -200,4 +204,30 @@ describe("served decision AST projection", () => {
     expect(projected.projectionDigest).toBe(await projectionDigest(reparsed));
     expect(projected.documentAstSource).toBeNull();
   });
+});
+
+test("reader phases share one normalization and digest per immutable payload", async () => {
+  const stored = ast("canonical body ".repeat(4000));
+  const read = async () =>
+    await readServedDecisionAst({
+      astS3Key: "immutable-key",
+      contentHash: "version",
+      pgAst: null,
+      decisionId,
+      corpusReadEnabled: true,
+      readStore: async () => stored,
+    });
+  const first = await runWithQueryCounter(async () => {
+    const result = await read();
+    expect(currentReadWork()?.astParses).toBe(1);
+    return result;
+  });
+  const second = await runWithQueryCounter(async () => {
+    const result = await read();
+    expect(currentReadWork()?.astParses).toBe(0);
+    expect(currentReadWork()?.cacheHits).toBeGreaterThan(0);
+    return result;
+  });
+  expect(second.payload).toBe(first.payload);
+  expect(second.projectionDigest).toBe(first.projectionDigest);
 });

@@ -32,6 +32,7 @@ import {
   untypedToolDataResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
+import { anonymizeWindowFields } from "@/api/mcp/window-anonymization-cache";
 
 const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
 
@@ -264,18 +265,28 @@ const anonymizeTextFieldsByWorkspace = async ({
     ]);
 
   for (const [workspaceId, group] of byWorkspace) {
-    const anonymized = await anonymize({
-      catalogs: {
-        type: "preloaded",
-        excludedCanonicals: catalogFor(
-          excludedCanonicalsByWorkspace,
-          workspaceId,
-        ),
-        gazetteerEntries: catalogFor(gazetteerByWorkspace, workspaceId),
-      },
-      fields: group.map((field) => field.value),
-      organizationId: context.organizationId,
+    const catalogs = {
+      type: "preloaded",
+      excludedCanonicals: catalogFor(
+        excludedCanonicalsByWorkspace,
+        workspaceId,
+      ),
+      gazetteerEntries: catalogFor(gazetteerByWorkspace, workspaceId),
+    } as const;
+    const fieldValues = group.map((field) => field.value);
+    const anonymized = await anonymizeWindowFields({
+      context,
       workspaceId,
+      source: { catalogs, fields: fieldValues },
+      anonymize: async () => {
+        const result = await anonymize({
+          catalogs,
+          fields: fieldValues,
+          organizationId: context.organizationId,
+          workspaceId,
+        });
+        return result.map((value) => value.fields);
+      },
     });
     // Fail closed: the caller discards the whole payload, so no field of this
     // or any other group leaves unanonymized.
@@ -289,7 +300,7 @@ const anonymizeTextFieldsByWorkspace = async ({
           allowEmptyFallback: false,
           fallback: field.value,
           missingFallback: ANONYMIZED_FIELD_MISSING_FALLBACK,
-          value: anonymized.value.fields[index],
+          value: anonymized.value[index],
         }),
       );
     }

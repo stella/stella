@@ -11,6 +11,7 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
+import { meterSqlClient } from "@/api/lib/db/meter-client";
 import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read";
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
@@ -66,7 +67,7 @@ const nativeRootClient = new SQL({
   },
 });
 const rootClient = instrumentRootPoolTransactions(
-  nativeRootClient,
+  meterSqlClient(nativeRootClient),
   rootPoolWindow,
 );
 

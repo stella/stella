@@ -1,12 +1,11 @@
 import { eq } from "drizzle-orm";
 
-import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
-
 import { publishedCaseLawDecisions } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import {
   readCorpusAst,
   readCorpusText,
@@ -90,6 +89,6 @@ export const loadDocumentContext = async (
     caseNumber: decision.caseNumber,
     court: decision.court,
     fulltext,
-    documentAst: parseCaseLawDecisionAst(documentAst),
+    documentAst: parseCachedDecisionAst(documentAst),
   };
 };

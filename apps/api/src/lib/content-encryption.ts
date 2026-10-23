@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Per-organization AES-256-GCM encryption for extracted
  * file content. Defense-in-depth: even if the DB is
@@ -10,14 +11,13 @@
  * requires the key unless local development access is open, so this
  * fallback only fires in local development and tests.
  */
-
-import { Result } from "better-result";
 import { createHmac, hkdf } from "node:crypto";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { SafeId } from "@/api/lib/branded-types";
+import { recordReadWork } from "@/api/lib/db-query-counter";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
 const AES_KEY_BYTES = 32;
@@ -152,6 +152,7 @@ const decryptScopedContent = async (
     new Uint8Array(ciphertext),
   );
 
+  recordReadWork("decryptedBytes", decrypted.byteLength);
   return new TextDecoder().decode(decrypted);
 };
 

@@ -18,9 +18,25 @@ import { AsyncLocalStorage } from "node:async_hooks";
 /** Response header carrying the per-request query count outside production. */
 export const DB_QUERY_COUNT_HEADER = "x-db-queries";
 
-type QueryCounter = {
-  count: number;
+export type ReadWork = {
+  storageReadBytes: number;
+  decryptedBytes: number;
+  astParses: number;
+  documentConversions: number;
+  dbResultBytes: number;
+  cacheHits: number;
 };
+
+type QueryCounter = ReadWork & { count: number };
+
+const emptyReadWork = (): ReadWork => ({
+  storageReadBytes: 0,
+  decryptedBytes: 0,
+  astParses: 0,
+  documentConversions: 0,
+  dbResultBytes: 0,
+  cacheHits: 0,
+});
 
 const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
 
@@ -45,7 +61,7 @@ const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
 export const runWithQueryCounter = <TResult>(
   fn: (counter: Readonly<QueryCounter>) => TResult,
 ): TResult => {
-  const counter: QueryCounter = { count: 0 };
+  const counter: QueryCounter = { count: 0, ...emptyReadWork() };
   return queryCounterStore.run(counter, () => fn(counter));
 };
 
@@ -67,4 +83,58 @@ export const queryCountLogger: Logger = {
     }
     counter.count += 1;
   },
+};
+
+/** Record work at the owning I/O or transformation boundary, never at callers. */
+export const recordReadWork = (metric: keyof ReadWork, amount = 1): void => {
+  const counter = queryCounterStore.getStore();
+  if (counter === undefined) {
+    return;
+  }
+  counter[metric] += amount;
+};
+
+/** Detached snapshot: later work cannot alter a captured page's measurements. */
+export const currentReadWork = (): Readonly<ReadWork> | undefined => {
+  const counter = queryCounterStore.getStore();
+  if (counter === undefined) {
+    return undefined;
+  }
+  const { count: _count, ...work } = counter;
+  return Object.freeze(work);
+};
+
+/** Meter transferred bodies once, below stored-file and corpus adapters. */
+export const meterStorageRead = <T extends { byteLength: number }>(
+  bytes: T,
+): T => {
+  recordReadWork("storageReadBytes", bytes.byteLength);
+  return bytes;
+};
+
+/** UTF-8 JSON payload bytes, excluding driver metadata and protocol framing. */
+export const recordDbResult = (rows: unknown): void => {
+  if (queryCounterStore.getStore() === undefined) {
+    return;
+  }
+  const serialized = JSON.stringify(rows, (_key, value: unknown) =>
+    typeof value === "bigint" ? value.toString() : value,
+  );
+  recordReadWork("dbResultBytes", Buffer.byteLength(serialized ?? ""));
+};
+
+/** Count streamed chunks in the request that opened the object. */
+export const meterStorageReadStream = (stream: ReadableStream<Uint8Array>) => {
+  if (queryCounterStore.getStore() === undefined) {
+    return stream;
+  }
+  const runInCaller = AsyncLocalStorage.snapshot();
+  return stream.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform: (chunk, controller) => {
+        runInCaller(meterStorageRead, chunk);
+        controller.enqueue(chunk);
+      },
+    }),
+  );
 };
