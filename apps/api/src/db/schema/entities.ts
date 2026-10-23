@@ -1494,6 +1494,14 @@ export const fields = p.pgTable(
       .references(() => entityVersions.id, { onDelete: "cascade" }),
     fileId: safeUuid<"userFile">("file_id"),
     content: jsonb().$type<FieldContent>().notNull(),
+    /** Workflow run that currently owns this non-terminal cell. */
+    ownerRunId: p.text("owner_run_id"),
+    /** Batch within the workflow run that currently owns this cell. */
+    ownerBatchId: p.text("owner_batch_id"),
+    /** Time after which the cell owner may be reconciled. */
+    deadlineAt: timestamptz("deadline_at"),
+    /** Bounded automatic-retry attempt for an owned cell. */
+    attempt: p.smallint("attempt"),
   },
   (table) => [
     ...entityFeatureGateChecks(table),
