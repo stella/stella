@@ -28,8 +28,10 @@ const HEADING_KINDS = [
 
 /** ECLI court codes allow comparison across publishers without a court-name guess. */
 const courtKey = ({ ecli, court }: DecisionKindAuditRow) => {
-  const match = /^ECLI:(CZ|SK):([^:]+):/u.exec(ecli ?? "");
-  return match === null ? court : `${match[1]}:${match[2]}`;
+  const [, country, code] = /^ECLI:(CZ|SK):([^:]+):/u.exec(ecli ?? "") ?? [];
+  return country === undefined || code === undefined
+    ? court
+    : `${country}:${code}`;
 };
 
 type DecisionKindAuditOptions = {
