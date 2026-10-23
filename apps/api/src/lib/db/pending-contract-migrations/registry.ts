@@ -5,10 +5,9 @@ import nodePath from "node:path";
  * Contract steps of an expand/contract schema change that must wait until
  * older readers are retired. The expand migration ships in `drizzle/`; its
  * contract SQL lives here, where the migrator never applies it, and is
- * registered with a deadline. `pending-contract-migrations.test.ts` fails once
- * the deadline passes, and whenever a SQL file here is unregistered, so the
- * step is either moved into `drizzle/` (under a fresh timestamp) or its
- * deadline is consciously renewed.
+ * registered with a deadline. The dated-waiver gate enforces elapsed deadlines
+ * when this registry changes, while its scheduled full check alerts owners.
+ * The registry test also rejects any SQL file here that is unregistered.
  *
  * To retire an entry: move the SQL into `apps/api/drizzle/<name>/migration.sql`,
  * drop the schema policies it removes, and delete the entry and the file.
