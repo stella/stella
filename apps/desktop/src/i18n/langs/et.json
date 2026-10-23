@@ -507,6 +507,7 @@
     "windowsKeyReserved": "Windows hoiab Windowsi klahviga otseteed endale. Kasutage Ctrl- või Alt-klahvi.",
     "taken": "Teine rakendus kasutab otseteed {shortcut} juba. Valige mõni muu.",
     "unavailable": "Teine rakendus kasutab otseteed {shortcut}, seega ei ava see lõikelauda. Valige mõni muu otsetee.",
+    "managed": "Teie organisatsioon on lõikelaua ajaloo välja lülitanud.",
     "action": {
       "copy": "Kopeeri",
       "paste": "Kleebi",
