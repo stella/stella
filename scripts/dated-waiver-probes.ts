@@ -8,6 +8,7 @@ import {
   DOC_SOURCE_FILE,
   ZERO_AGE_OVERRIDE,
   type DatedWaiver,
+  type ProbeKind,
 } from "./dated-waivers";
 import {
   parseRegistry,
@@ -22,6 +23,17 @@ import {
 import { parseLedger } from "./suppression-waivers";
 
 export type RemovalChange = { source: string; before: string; after: string };
+
+export const AUTOMATIC_REMOVAL_ALLOWED = {
+  "no-llms-txt": true,
+  "release-age-exclusion": true,
+  "release-age-exception": true,
+  "dependency-audit": true,
+  "quarantined-test": true,
+  "flaky-test-quarantine": true,
+  "suppression-waiver": true,
+  "pending-contract-migration": false,
+} as const satisfies Record<ProbeKind, boolean>;
 
 // Offsets must come from a parseable owner, never from regex over source text.
 const parseOwner = (source: string, file: string): ts.SourceFile => {
@@ -243,6 +255,9 @@ export const removeWaiver = (
   entry: DatedWaiver,
   read: (file: string) => string,
 ): RemovalChange[] => {
+  if (!AUTOMATIC_REMOVAL_ALLOWED[entry.kind]) {
+    return panic(`Automatic removal is disabled for ${entry.kind}`);
+  }
   const before = read(entry.source);
   let after: string;
   switch (entry.kind) {
@@ -429,6 +444,8 @@ export const removeWaiver = (
       });
       break;
     }
+    case "pending-contract-migration":
+      return panic(`Automatic removal is disabled for ${entry.kind}`);
     default:
       entry.kind satisfies never;
       return panic("Unhandled dated waiver kind");
@@ -506,6 +523,7 @@ const receiptSelector = (
     case "release-age-exception":
     case "dependency-audit":
     case "suppression-waiver":
+    case "pending-contract-migration":
       return undefined;
     default:
       entry.kind satisfies never;

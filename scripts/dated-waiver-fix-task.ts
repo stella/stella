@@ -47,6 +47,7 @@ export const RESOLUTION_POLICY = {
   "quarantined-test": "repository",
   "guard-rollout": "repository",
   "flaky-test-quarantine": "repository",
+  "pending-contract-migration": "repository",
 } as const satisfies Record<ProbeKind, "external" | "repository">;
 
 const failureSourceSchema = v.object({

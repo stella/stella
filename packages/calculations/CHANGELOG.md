@@ -1,5 +1,11 @@
 # @stll/calculations
 
+## 0.1.3
+
+### Patch Changes
+
+- [#6544](https://github.com/stella/stella/pull/6544) [`ebc823d`](https://github.com/stella/stella/commit/ebc823d679dce14f1f408ff24014a1459dab3c79) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Column calculations now report non-finite inputs and overflowing reductions as unsupported instead of returning non-finite results.
+
 ## 0.1.2
 
 ### Patch Changes

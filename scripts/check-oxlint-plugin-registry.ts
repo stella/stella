@@ -20,6 +20,7 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "budget-ledger.ts",
   "database-access.ts",
   "eden-client.ts",
+  "icon-ownership.ts",
   "module-id.ts",
   "physical-properties.ts",
   "public-law-decision-surface-modules.ts",
