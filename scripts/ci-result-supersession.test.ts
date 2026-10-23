@@ -121,7 +121,9 @@ const runOutcome = (env: Record<string, string>, fixtures: Fixtures) => {
   writeFileSync(fixtureFile, JSON.stringify(fixtures));
   const output = path.join(directory, "output");
   writeFileSync(output, "");
+  // A mirror that waits would poll for 90 minutes: fail fast instead.
   const child = Bun.spawnSync(["bash", "-e", "-o", "pipefail", "-c", script], {
+    timeout: 60_000,
     env: {
       PATH: process.env["PATH"] ?? "",
       HOME: directory,
@@ -302,7 +304,12 @@ test("a run superseded by a newer code run passes through without an evaluated v
   }
 });
 
-type CodeRun = { id: number; record?: unknown; attempt?: number };
+type CodeRun = {
+  id: number;
+  record?: unknown;
+  attempt?: number;
+  status?: string;
+};
 const codeRunJobs = (id: number, attempt: number): Fixtures => ({
   [`repos/${REPO}/actions/runs/${id}/jobs?per_page=100`]: [
     {
@@ -325,11 +332,11 @@ const mirrorFixtures = (runs: CodeRun[], extra: Fixtures = {}): Fixtures => {
     [`repos/${REPO}/actions/workflows/ci.yml/runs?event=pull_request&head_sha=${HEAD}&per_page=100`]:
       [
         {
-          workflow_runs: runs.map(({ id }) => ({
+          workflow_runs: runs.map(({ id, status = "completed" }) => ({
             id,
             run_number: id,
             head_sha: HEAD,
-            status: "completed",
+            status,
             pull_requests: [{ number: PR }],
           })),
         },
@@ -390,6 +397,19 @@ test("a metadata run mirrors a code run's evaluated success", () => {
     pass_through_reason: "metadata-mirror",
     reused_from_run_id: 90,
   });
+});
+
+test("a metadata run never waits on a newer run of its head", () => {
+  // A newer metadata run waits on this run's concurrency group, listing no
+  // job yet: waiting on it would deadlock until the deadline.
+  const run = mirror(
+    mirrorFixtures([
+      { id: RUN + 50, status: "pending" },
+      { id: 90, record: record(90) },
+    ]),
+  );
+  expect(run.exitCode, run.log).toBe(0);
+  expect(run.record?.reused_from_run_id).toBe(90);
 });
 
 test("a metadata run never mirrors a code run that passed through", () => {

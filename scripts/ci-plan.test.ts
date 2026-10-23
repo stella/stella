@@ -692,7 +692,8 @@ const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
       ? []
       : [
           {
-            id: 200,
+            // Older than the mirroring run (123): a mirror never waits on a newer one.
+            id: 100,
             run_number: 99,
             head_sha: head,
             status: runStatus,
@@ -711,11 +712,23 @@ const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
     planned: [plan],
     in_progress: [
       plan,
-      { id: 2, name: "ci-result", status: "in_progress", conclusion: null },
+      {
+        id: 2,
+        name: "ci-result",
+        status: "in_progress",
+        conclusion: null,
+        run_attempt: 1,
+      },
     ],
     completed: [
       plan,
-      { id: 2, name: "ci-result", status: "completed", conclusion },
+      {
+        id: 2,
+        name: "ci-result",
+        status: "completed",
+        conclusion,
+        run_attempt: 1,
+      },
     ],
   };
   const jobs = (stage: CodeRunStage) => [{ jobs: listed[stage] }];
@@ -733,6 +746,19 @@ const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
         finalStage,
     ),
     finalJobs: jobs(finalStage),
+    // The required-jobs record the code run uploaded: the mirror's evidence.
+    record: {
+      version: 1,
+      event: "pull_request",
+      head_sha: head,
+      run_id: 100,
+      run_attempt: 1,
+      basis: "evaluated",
+      pass_through_reason: null,
+      reused_from_run_id: null,
+      required: [{ job: "ci-tests", conclusion }],
+      verdict: conclusion,
+    },
     runs,
     state: state ?? "",
   };
@@ -744,6 +770,11 @@ writeFileSync(
   nodePath.join(fakeGhDirectory, "gh"),
   `#!/usr/bin/env bash
 set -eu
+if [[ "$1" == "run" && "$2" == "download" && "$3" == "100" ]]; then
+  while (($#)) && [[ "$1" != "-D" ]]; do shift; done
+  printf '%s\n' "$FAKE_CODE_RECORD" > "$2/ci-required-summary.json"
+  exit 0
+fi
 [[ "$1" == "api" ]] || exit 2
 shift
 while [[ "$1" == "--paginate" || "$1" == "--slurp" ]]; do shift; done
@@ -768,7 +799,11 @@ case "$endpoint" in
   "repos/${PULL_REQUEST.repo}/actions/workflows/ci.yml/runs?event=pull_request&head_sha="*)
     echo "$FAKE_CODE_RUNS"
     ;;
-  "repos/${PULL_REQUEST.repo}/actions/runs/200/jobs?per_page=100")
+  "repos/${PULL_REQUEST.repo}/actions/runs/124/jobs?per_page=100")
+    # The newer run that superseded this one is a code run.
+    echo '[{"jobs":[{"name":"ci-plan"}]}]'
+    ;;
+  "repos/${PULL_REQUEST.repo}/actions/runs/100/jobs?per_page=100")
     state="${nodePath.join(fakeGhDirectory, "metadata-counter")}-$FAKE_CODE_STATE"
     if [[ ! -e "$state" ]]; then
       : > "$state"
@@ -983,6 +1018,7 @@ const resultGateCase = ({
       FAKE_CODE_RUNS: JSON.stringify([{ workflow_runs: codeRun.runs }]),
       FAKE_CODE_JOBS: JSON.stringify(codeRun.finalJobs),
       FAKE_CODE_JOBS_FIRST: JSON.stringify(codeRun.firstJobs),
+      FAKE_CODE_RECORD: JSON.stringify(codeRun.record),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       FOLDED_SUITES: resultStep.env["FOLDED_SUITES"] ?? "",
       NEEDS: JSON.stringify(needs),
@@ -2906,8 +2942,12 @@ test("a metadata run without an earlier code run of its head runs the suites", a
 
 test("metadata ci-result mirrors only a code run on the same pull request head", () => {
   const immediateCases = [
-    { state: "green", exitCode: 0, message: "succeeded for head" },
-    { state: "red", exitCode: 1, message: "completed with failure" },
+    {
+      state: "green",
+      exitCode: 0,
+      message: "evaluated every required job of head",
+    },
+    { state: "red", exitCode: 1, message: "(evaluated-failure)" },
     { state: "missing", exitCode: 1, message: "no code run exists" },
     { state: "other-head", exitCode: 1, message: "no code run exists" },
     {
@@ -2947,7 +2987,9 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
       })),
     );
     expect(waitedThenGreen.exitCode, state).toBe(0);
-    expect(waitedThenGreen.stdout, state).toContain("succeeded for head");
+    expect(waitedThenGreen.stdout, state).toContain(
+      "evaluated every required job of head",
+    );
   }
 
   const timedOut = onlyOutcome(

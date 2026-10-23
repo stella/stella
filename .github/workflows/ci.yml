@@ -6620,6 +6620,9 @@ jobs:
               elif .basis == "pass_through" then "pass-through \(.pass_through_reason // "unknown")"
               else "invalid basis" end'
           }
+          # Only runs older than this one: a newer metadata run of the head waits
+          # on this run's concurrency group, and a newer code run reports its
+          # own ci-result, so waiting on either would only wait out the deadline.
           mirror_metadata_code_run() {
             local poll_seconds=30 max_wait_seconds=5400 waited=0 runs candidates candidate run_status jobs plan_name result status attempt record evidence evidence_run running passed_through=""
             while true; do
@@ -6629,7 +6632,7 @@ jobs:
               }
               candidates=$(jq -cr --argjson current "$GITHUB_RUN_ID" --argjson pr "$PR_NUMBER" --arg head "$HEAD_SHA" '
                 [.[].workflow_runs[]
-                  | select(.id != $current and .head_sha == $head)
+                  | select(.id < $current and .head_sha == $head)
                   | select(any(.pull_requests[]?; .number == $pr))]
                 | sort_by(.run_number, .id) | reverse | .[]
                 | select(.status | type == "string")
