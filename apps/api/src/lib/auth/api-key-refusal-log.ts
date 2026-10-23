@@ -58,6 +58,9 @@ export const logApiKeyRefusal = (
 export const apiKeyVerificationRefusalReason = (
   code: string | undefined,
 ): ApiKeyRefusalReason => {
+  if (code === undefined) {
+    return API_KEY_REFUSAL_REASON.invalid;
+  }
   switch (code) {
     case "KEY_EXPIRED":
       return API_KEY_REFUSAL_REASON.expired;
