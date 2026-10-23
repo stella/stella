@@ -125,12 +125,12 @@ export const useCopiedFeedback = () => {
 };
 
 type CopyFeedbackProps = {
-  icon?: typeof CopyToClipboardIcon;
-  labelClassName?: string;
+  icon?: typeof CopyToClipboardIcon | undefined;
+  labelClassName?: string | undefined;
   copied: boolean;
   copiedLabel: string;
-  iconOnly?: boolean;
-  iconClassName?: string;
+  iconOnly?: boolean | undefined;
+  iconClassName?: string | undefined;
   label: string;
 };
 
