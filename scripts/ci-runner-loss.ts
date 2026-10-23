@@ -1,7 +1,7 @@
 export type WorkflowJob = {
   name: string;
   conclusion: string | null;
-  steps?: readonly { conclusion: string | null }[];
+  steps?: readonly { conclusion: string | null; status?: string }[];
 };
 
 // A lost runner fails the job without failing a step: the running step ends cancelled, or no step ran at all.
@@ -11,6 +11,10 @@ export const runnerLost = (job: WorkflowJob) => {
   return (
     job.conclusion === "failure" &&
     !steps.some((step) => step.conclusion === "failure") &&
+    // Every step has finished: a step still running is no evidence yet.
+    steps.every(
+      (step) => step.status === undefined || step.status === "completed",
+    ) &&
     (steps.length === 0 ||
       steps.some((step) => step.conclusion === "cancelled"))
   );
