@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "chat-continuation-error": {
+    load: async () => {
+      const { ChatContinuationErrorPlayground } =
+        await import("./-components/chat-continuation-error-playground");
+      return { default: ChatContinuationErrorPlayground };
+    },
+  },
   "hungarian-decision": {
     load: async () => {
       const { HungarianDecisionPlayground } =

@@ -29,6 +29,10 @@ export const visualRegistry = {
   "page-crop": { label: "PDF page crop", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
   "chat-status": { label: "Chat status motion", layout: "plain" },
+  "chat-continuation-error": {
+    label: "Chat continuation recovery",
+    layout: "plain",
+  },
   "chat-citations": { label: "Chat case-law citations", layout: "plain" },
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
   "hungarian-decision": { label: "Hungarian decision", layout: "plain" },
