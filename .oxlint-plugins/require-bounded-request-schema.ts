@@ -196,10 +196,7 @@ const CURSOR_WRAPPERS: ReadonlySet<string> = new Set([
 ]);
 
 type MessageId =
-  | "unboundedString"
-  | "unboundedArray"
-  | "unboundedRecord"
-  | "unboundedFile";
+  "unboundedString" | "unboundedArray" | "unboundedRecord" | "unboundedFile";
 
 type Finding = { node: AstNode; messageId: MessageId };
 

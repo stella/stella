@@ -111,9 +111,7 @@ export const sealRequestClientAddress = (
 
 /** The sealed client address; `undefined` outside a request or before sealing. */
 export const sealedRequestClientAddress = ():
-  | ClientAddress
-  | null
-  | undefined => requestStore.getStore()?.clientAddress;
+  ClientAddress | null | undefined => requestStore.getStore()?.clientAddress;
 
 /**
  * A per-request correlation id: `req_` + 128 bits of Bun-native randomness

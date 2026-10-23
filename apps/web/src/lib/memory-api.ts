@@ -13,11 +13,7 @@ type WorkspaceNavigationStatusScope =
 export type MemoryScope = "organization" | "user" | "workspace";
 export type MemoryStatus = "suggested" | "active" | "stale" | "archived";
 type MemoryKind =
-  | "preference"
-  | "instruction"
-  | "fact"
-  | "decision"
-  | "relationship";
+  "preference" | "instruction" | "fact" | "decision" | "relationship";
 
 type FetchMemoriesPageOptions = {
   cursor: string | null;

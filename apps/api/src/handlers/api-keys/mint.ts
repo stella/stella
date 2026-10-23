@@ -134,8 +134,7 @@ export const machineApiKeyAlreadyRevoked = (): HandlerError =>
   });
 
 type ValidatedPermissions =
-  | { type: "ok" }
-  | { type: "error"; error: HandlerError };
+  { type: "ok" } | { type: "error"; error: HandlerError };
 
 /**
  * The no-escalation gate. Two independent checks, both required:

@@ -2143,8 +2143,7 @@ const facetValuesForFilters = ({
 
 /** One query's page, or the mark of a query whose page had already ended. */
 type CaseLawQueryOutcome =
-  | { exhausted: true }
-  | { exhausted: false; page: SearchCaseLawSuccess };
+  { exhausted: true } | { exhausted: false; page: SearchCaseLawSuccess };
 
 type CaseLawSearchAnswer =
   | { type: "page"; page: SearchCaseLawSuccess }

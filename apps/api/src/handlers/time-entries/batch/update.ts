@@ -41,10 +41,7 @@ const batchUpdateBodySchema = v.object({
 });
 
 type BatchAction =
-  | "approve"
-  | "revert_to_draft"
-  | "mark_billable"
-  | "mark_non_billable";
+  "approve" | "revert_to_draft" | "mark_billable" | "mark_non_billable";
 
 const buildBatchEvents = (
   rows: { id: SafeId<"timeEntry"> }[],

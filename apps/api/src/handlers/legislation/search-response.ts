@@ -23,8 +23,7 @@ type LegislationSearchHit = v.InferOutput<
 >["items"][number];
 type TextField = {
   [Key in keyof LegislationSearchHit]: LegislationSearchHit[Key] extends
-    | string
-    | null
+    string | null
     ? Key
     : never;
 }[keyof LegislationSearchHit];

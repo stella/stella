@@ -70,8 +70,7 @@ export const SEARCH_TOTAL_TYPE = {
 } as const;
 
 type CountedSearchTotalType =
-  | typeof SEARCH_TOTAL_TYPE.EXACT
-  | typeof SEARCH_TOTAL_TYPE.ESTIMATE;
+  typeof SEARCH_TOTAL_TYPE.EXACT | typeof SEARCH_TOTAL_TYPE.ESTIMATE;
 
 export type SearchTotal =
   | {

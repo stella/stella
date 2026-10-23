@@ -25,8 +25,7 @@ export type ReviewParty = { role: string; name: string | null };
 // means no side was chosen, and the comparison then reports impact as
 // `unknown`.
 export type ReviewPerspective =
-  | { type: "neutral" }
-  | ({ type: "party" } & ReviewParty);
+  { type: "neutral" } | ({ type: "party" } & ReviewParty);
 
 export const NEUTRAL_PERSPECTIVE: ReviewPerspective = { type: "neutral" };
 
