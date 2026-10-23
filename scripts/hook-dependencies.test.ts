@@ -67,9 +67,9 @@ const jsPluginSchema = v.union([
   v.object({ name: v.string(), specifier: v.string() }),
 ]);
 type LintConfig = {
-  jsPlugins?: v.InferOutput<typeof jsPluginSchema>[];
-  extends?: LintConfig[];
-  overrides?: LintConfig[];
+  jsPlugins?: v.InferOutput<typeof jsPluginSchema>[] | undefined;
+  extends?: LintConfig[] | undefined;
+  overrides?: LintConfig[] | undefined;
 };
 const lintConfigSchema: v.GenericSchema<LintConfig> = v.looseObject({
   jsPlugins: v.optional(v.array(jsPluginSchema)),
