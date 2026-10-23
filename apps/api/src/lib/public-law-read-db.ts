@@ -506,6 +506,11 @@ export const publicLawReadDb = async <T>(
   const database = await getPublicLawDatabase();
   return await database.transaction(async (tx) => {
     await configureReadTransaction(tx, isolation, publicLawReadGuards());
+    if (envBase.PUBLIC_LAW_DATABASE_URL === undefined) {
+      await tx.execute(
+        sql`SELECT set_config('role', ${stellaPublicLawReader.name}, true)`,
+      );
+    }
 
     return await fn(tx);
   });
