@@ -12,13 +12,6 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
-  "upload-rejections": {
-    load: async () => {
-      const { UploadRejectionsPlayground } =
-        await import("./-components/upload-rejections-playground");
-      return { default: UploadRejectionsPlayground };
-    },
-  },
   "hungarian-decision": {
     load: async () => {
       const { HungarianDecisionPlayground } =
@@ -38,6 +31,13 @@ const visualLoaders = {
       const { OAuthConsentPlayground } =
         await import("./-components/oauth-consent-playground");
       return { default: OAuthConsentPlayground };
+    },
+  },
+  "upload-rejections": {
+    load: async () => {
+      const { UploadRejectionsPlayground } =
+        await import("./-components/upload-rejections-playground");
+      return { default: UploadRejectionsPlayground };
     },
   },
   "page-crop": {
