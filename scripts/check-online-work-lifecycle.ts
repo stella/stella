@@ -12,7 +12,7 @@ type GitResult = { exitCode: number; stdout: string; stderr: string };
 export type OnlineWorkLifecycleGit = (args: readonly string[]) => GitResult;
 type LifecycleState = OnlineWorkLifecycle["state"];
 
-const ENTRY_LINE = /^\s*"?([A-Za-z0-9_-]+)"?: (PENDING|FINALIZED),$/gmu;
+const ENTRY_LINE = /^"?([A-Za-z0-9_-]+)"?: (PENDING|FINALIZED),$/u;
 const STATE_OF_CONSTANT = {
   PENDING: "pending",
   FINALIZED: "finalized",
@@ -23,7 +23,12 @@ export const parseOnlineWorkLifecycle = (
   source: string,
 ): Map<string, LifecycleState> => {
   const entries = new Map<string, LifecycleState>();
-  for (const [, name, constant] of source.matchAll(ENTRY_LINE)) {
+  for (const line of source.split("\n")) {
+    const match = ENTRY_LINE.exec(line.trimStart());
+    if (match === null) {
+      continue;
+    }
+    const [, name, constant] = match;
     if (
       name === undefined ||
       (constant !== "PENDING" && constant !== "FINALIZED")

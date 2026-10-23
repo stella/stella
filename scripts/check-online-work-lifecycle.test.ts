@@ -34,7 +34,8 @@ const fakeGit =
   ({ base, tags = [], calls = [] }: FakeGitOptions): OnlineWorkLifecycleGit =>
   (args) => {
     calls.push([...args]);
-    switch (args.at(0)) {
+    const command = args.at(0);
+    switch (command) {
       case "show":
         return base === null
           ? { exitCode: 128, stdout: "", stderr: "missing" }
@@ -43,8 +44,10 @@ const fakeGit =
         return { exitCode: 0, stdout: `${"a".repeat(40)}\n`, stderr: "" };
       case "tag":
         return { exitCode: 0, stdout: `${tags.join("\n")}\n`, stderr: "" };
+      case undefined:
+        throw new Error("Missing fake git command");
       default:
-        return { exitCode: 1, stdout: "", stderr: "Unexpected git command" };
+        throw new Error(`Unexpected fake git command: ${command}`);
     }
   };
 
