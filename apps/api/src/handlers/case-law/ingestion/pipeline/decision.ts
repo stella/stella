@@ -1,9 +1,9 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  SUPPLEMENT_ABSORB_FAILED,
   absorbComposedSupplementRows,
+  SUPPLEMENT_ABSORB_FAILED,
 } from "@/api/handlers/case-law/ingestion/pipeline/composed-supplements";
 import { enqueueCorpusMirror } from "@/api/handlers/case-law/ingestion/pipeline/decision-corpus";
 import {

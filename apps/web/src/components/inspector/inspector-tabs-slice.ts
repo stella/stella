@@ -3,10 +3,10 @@ import { current, type Draft } from "immer";
 
 import { forgetDocxDocuments } from "@/components/docx/docx-document-cache";
 import {
-  CASE_DECISION_VIEW,
   CASE_DECISION_PLACEMENT,
-  isCaseDecisionViewPayload,
+  CASE_DECISION_VIEW,
   caseDecisionTabId,
+  isCaseDecisionViewPayload,
 } from "@/components/inspector/case-decision-view";
 import {
   getInspectorTabGroupId,

@@ -14,12 +14,12 @@ import { errorFingerprint } from "@/api/lib/errors/utils";
 import {
   CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
   type CorpusIndexClient,
-  CorpusIndexError,
   corpusIndexCommittedIngestTimeoutMs,
+  CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
-  requireCorpusIndexManifest,
   type CorpusIndexManifest,
+  requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   buildCorpusProjectionDocuments,
@@ -27,19 +27,19 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import {
   censusCorpusProjectionRevisions,
-  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
   corpusIndexCommitTimeoutSecs,
-  planCorpusProjectionAppendRequests,
   type CorpusProjectionAppendCommitMode,
   type CorpusProjectionAppendEntry,
+  planCorpusProjectionAppendRequests,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
-  readReservedCorpusProjectionMaterialsTx,
   type CorpusProjectionMaterial,
+  readReservedCorpusProjectionMaterialsTx,
 } from "@/api/lib/legal-search/corpus-index-projection-materials";
 import type { CorpusProjectionAppendScopedWorkSelection } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
@@ -47,19 +47,19 @@ import {
   cancelCorpusProjectionReservationTx,
   classifyCorpusProjectionReservationFailureTx,
   commitCorpusProjectionAppendTx,
-  CORPUS_PROJECTION_RETRY_MAX_MS,
+  continueCorpusProjectionAppendPartTx,
+  CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
   CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX,
   CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN,
+  CORPUS_PROJECTION_RETRY_MAX_MS,
   CORPUS_PROJECTION_RETRY_MIN_MS,
-  CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
+  type CorpusProjectionAppendAbandonResult,
+  type CorpusProjectionIntentLease,
+  type CorpusProjectionReservationFailure,
   prepareCorpusProjectionReplacementsTx,
   reserveCorpusProjectionIntentsTx,
   startCorpusProjectionAppendBatchTx,
-  type CorpusProjectionAppendAbandonResult,
   startCorpusProjectionMultipartAppendTx,
-  continueCorpusProjectionAppendPartTx,
-  type CorpusProjectionReservationFailure,
-  type CorpusProjectionIntentLease,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import {
   readCorpusAst,
