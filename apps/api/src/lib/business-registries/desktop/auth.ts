@@ -9,6 +9,7 @@ import { createMembershipScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import type { VerifyApiKey } from "@/api/lib/auth/api-key-endpoints";
 import {
   API_KEY_REFUSAL_REASON,
   apiKeyVerificationRefusalReason,
@@ -95,7 +96,7 @@ type DesktopCredentialInfrastructure = {
   membershipDb: typeof rlsDb;
   // A getter, so authentication starts only for a request that carries a
   // desktop credential, inside the step that maps its failure to 503.
-  verifyApiKey: () => ReturnType<typeof getAuth>["api"]["verifyApiKey"];
+  verifyApiKey: () => VerifyApiKey;
   resolveMember: typeof resolveCredentialMemberAuthorization;
 };
 

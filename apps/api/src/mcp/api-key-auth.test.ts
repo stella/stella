@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterEach, expect, mock, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -157,6 +158,8 @@ for (const reason of Object.values(API_KEY_REFUSAL_REASON)) {
     setLogSinkForTesting((record) => records.push(record));
     await runWithRequestIdScope(async () => {
       initRequestContext(new Request("https://example.test/mcp"));
+      const requestId =
+        getCurrentRequestId() ?? panic("Expected an initialized request id");
       const error = await rejectionOf(
         resolveMachineApiKeyCredential(PRESENTED, dependenciesFor(reason)),
       );
@@ -171,7 +174,7 @@ for (const reason of Object.values(API_KEY_REFUSAL_REASON)) {
           attributes: {
             "auth.refusal_reason": reason,
             "auth.mode": "default",
-            "request.id": getCurrentRequestId(),
+            "request.id": requestId,
             ...(cases[reason].resolved ? { "key.start": START } : {}),
             ...(cases[reason].resolved &&
             reason !== API_KEY_REFUSAL_REASON.invalidMetadata
