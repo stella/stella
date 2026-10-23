@@ -22,13 +22,21 @@ import {
   CORPUS_SCHEMA_LANE_LOCK_STATEMENTS,
   CORPUS_SCHEMA_LANE_UNLOCK_SQL,
 } from "./corpus-schema-lane";
+import {
+  MIGRATE_ONLINE_WORK_MODE,
+  type MigrateOnlineWorkMode,
+} from "./migrate-online-work-mode";
 import { DEFAULT_MIGRATION_TIMING } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexHoldRef } from "./online-index-gate";
 import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
-import { runOnlineMigrations } from "./online-migrations";
+import {
+  assertOnlineMigrationsApplied,
+  FINALIZED_SCOPE,
+  runOnlineMigrations,
+} from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import { terminateReserved } from "./sql-close";
 
@@ -473,9 +481,12 @@ type RunMigrationsOptions = {
   migrationsFolder: string;
   /** Resolved before the migrator connects; a missing one never gets here. */
   ebs: ConfiguredEbsConfiguration;
+  /** Release databases verify finalized work; disposable ones build it. */
+  onlineWorkMode: MigrateOnlineWorkMode;
   migrationsSchema?: string;
   migrationsTable?: string;
   runOnline?: typeof runOnlineMigrations;
+  validateOnline?: typeof assertOnlineMigrationsApplied;
   onlineIndexHold?: OnlineIndexHoldRef;
   /** Test seam: the pauses between lock-wait attempts and how to wait them. */
   lockWaitRetry?: LockWaitRetry;
@@ -488,9 +499,11 @@ export const runMigrations = async ({
   databaseUrl,
   migrationsFolder,
   ebs,
+  onlineWorkMode,
   migrationsSchema = "drizzle",
   migrationsTable = "__drizzle_migrations",
   runOnline = runOnlineMigrations,
+  validateOnline = assertOnlineMigrationsApplied,
   onlineIndexHold = createOnlineIndexHold(),
   lockWaitRetry = DEFAULT_LOCK_WAIT_RETRY,
   timing = DEFAULT_MIGRATION_TIMING,
@@ -643,14 +656,28 @@ export const runMigrations = async ({
         await connection.unsafe(query, [...params]),
       release: (): void => undefined,
     };
-    const online = await runOnline(
-      { reserve: async () => await Promise.resolve(onlineConnection) },
-      {
-        indexGate: { ebs, hold: onlineIndexHold },
-        reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
-        timing,
-      },
-    );
+    const pool = {
+      reserve: async () => await Promise.resolve(onlineConnection),
+    };
+    let online: Awaited<ReturnType<typeof runOnlineMigrations>>;
+    switch (onlineWorkMode) {
+      case MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED:
+        online = await runOnline(pool, {
+          scope: FINALIZED_SCOPE,
+          indexGate: { ebs, hold: onlineIndexHold },
+          reserveObserver: async () =>
+            await openOnlineIndexObserver(databaseUrl),
+          timing,
+        });
+        break;
+      case MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED:
+        await validateOnline(pool);
+        online = { type: "complete" };
+        break;
+      default:
+        onlineWorkMode satisfies never;
+        return panic("Unknown migrate online-work mode");
+    }
     clock.phase = "done";
     timing.emit({
       event: "migrate.phase_duration",

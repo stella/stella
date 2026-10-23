@@ -47,6 +47,7 @@
 # that pulled it with credentials this script never sees (CI does, before it
 # drops them) can run without registry access.
 set -euo pipefail
+export STELLA_MIGRATE_ONLINE_WORK=build_finalized
 
 : "${DATABASE_URL:?DATABASE_URL is required}"
 base_ref="${REHEARSAL_BASE_REF:-}"

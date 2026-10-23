@@ -18,11 +18,13 @@ import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair"
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import {
   assertOnlineMigrationsApplied,
+  FINALIZED_SCOPE,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   runOnlineMigrations,
   type OnlineRepairOptions,
 } from "./online-migrations";
+import { FINALIZED, ONLINE_WORK_LIFECYCLE } from "./online-work-lifecycle";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import {
   caseLawCitations,
@@ -292,6 +294,11 @@ describe.skipIf(!enabled)(
             const outcome = await runOnlineMigrations(
               { reserve: async () => connection },
               {
+                scope: FINALIZED_SCOPE,
+                lifecycle: {
+                  ...ONLINE_WORK_LIFECYCLE,
+                  "later-repair": FINALIZED,
+                },
                 indexGate: {
                   config,
                   clock: () => now,
@@ -442,6 +449,7 @@ describe.skipIf(!enabled)(
             reserve: async () => repairConnection(await client.reserve()),
           };
           const runnerOptions = {
+            scope: FINALIZED_SCOPE,
             repairs: [repair],
             // The adapter reports every index ready, so only the repair's
             // constraint validation opens the gate, on a session of its own.

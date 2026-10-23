@@ -26,6 +26,7 @@ import {
   CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
   isCorpusSchemaLaneGranted,
 } from "./corpus-schema-lane";
+import { MIGRATE_ONLINE_WORK_MODE } from "./migrate-online-work-mode";
 import {
   MIGRATION_LOCK_WAIT_FAILURE,
   MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
@@ -164,6 +165,7 @@ const withScratch = async <T>(
               const connection = await openScratchClient().sql.reserve();
               try {
                 return await runMigrations({
+                  onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
                   connection,
                   migrationsFolder: folder,
                   ebs: DISABLED_EBS,
@@ -587,6 +589,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const secondPid = await backendPid(second);
             await gate.unsafe(HOLD_SCHEMA_GATE);
             const firstRun = runMigrations({
+              onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
               connection: first,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
@@ -597,6 +600,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               // The first run holds the lane while its schema SQL waits.
               await waitUntilBlocked(observer, firstPid);
               const secondRun = runMigrations({
+                onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
                 connection: second,
                 migrationsFolder: folder,
                 ebs: DISABLED_EBS,
@@ -663,6 +667,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           const connection = await openClient().reserve();
           try {
             await runMigrations({
+              onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
@@ -693,6 +698,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               await rejectionOf(
                 async () =>
                   await runMigrations({
+                    onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
                     connection,
                     migrationsFolder: folder,
                     ebs: DISABLED_EBS,
@@ -736,6 +742,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           const connection = await openClient().reserve();
           try {
             const single = await runMigrations({
+              onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
@@ -760,6 +767,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const holds = new Set<unknown>();
             const sleeps: number[] = [];
             const settled = await runMigrationsUntilSettled({
+              onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
@@ -812,6 +820,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           const connection = await openClient().reserve();
           try {
             const run = runMigrations({
+              onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
@@ -1131,6 +1140,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             try {
               await holder.held;
               const result = await runMigrations({
+                onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
                 connection,
                 databaseUrl: scratchUrl,
                 ebs: DISABLED_EBS,
@@ -1190,6 +1200,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 const rejection = await rejectionOf(
                   async () =>
                     await runMigrations({
+                      onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
                       connection,
                       databaseUrl: scratchUrl,
                       ebs: DISABLED_EBS,
@@ -1287,6 +1298,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           try {
             const initial = appliedResult(
               await runMigrations({
+                onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
                 connection: initialConnection,
                 migrationsFolder: corpusFolder,
                 ebs: DISABLED_EBS,
@@ -1316,6 +1328,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               try {
                 const result = appliedResult(
                   await runMigrations({
+                    onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
                     connection,
                     migrationsFolder: corpusFolder,
                     ebs: DISABLED_EBS,
