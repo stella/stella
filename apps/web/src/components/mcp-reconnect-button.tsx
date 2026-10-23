@@ -17,9 +17,9 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectionsOptions } from "@/lib/knowledge/queries";
 import {
+  type McpOAuthOutcome,
   openMcpOAuthWindow,
   subscribeToMcpOAuthOutcome,
-  type McpOAuthOutcome,
 } from "@/lib/mcp-oauth-channel";
 
 type McpReconnectButtonProps = {

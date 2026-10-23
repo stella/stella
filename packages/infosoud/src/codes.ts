@@ -211,8 +211,7 @@ export const collectUnknownInfoSoudCodes = ({
 }: {
   readonly details?: readonly Pick<EventDetailResult, "atributy">[] | undefined;
   readonly events?:
-    | readonly Pick<CaseEvent | CaseEventWithDetail, "udalost">[]
-    | undefined;
+    readonly Pick<CaseEvent | CaseEventWithDetail, "udalost">[] | undefined;
 }): UnknownInfoSoudCodes => ({
   attributeTypes: Array.from(
     new Set(

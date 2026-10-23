@@ -19,8 +19,8 @@ import {
 import {
   canMentionMcpConnection,
   matchBrokenMcpConnections,
-  mcpReconnectDismissKey,
   type McpReconnectCandidate,
+  mcpReconnectDismissKey,
 } from "@/features/chat/lib/mcp-reconnect.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useUserStorageState } from "@/lib/account/use-user-storage-state";

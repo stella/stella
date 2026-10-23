@@ -646,9 +646,7 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
   };
 
   type HelperDeclaration =
-    | ts.ArrowFunction
-    | ts.FunctionDeclaration
-    | ts.FunctionExpression;
+    ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression;
 
   const isHelperDeclaration = (node: ts.Node): node is HelperDeclaration =>
     ts.isArrowFunction(node) ||

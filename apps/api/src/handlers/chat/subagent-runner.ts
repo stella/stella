@@ -94,11 +94,7 @@ export type RunSubagentOptions = {
  * assistant message at all.
  */
 type SubagentFailureReason =
-  | "content_filter"
-  | "empty"
-  | "length"
-  | "run-error"
-  | "tool_calls";
+  "content_filter" | "empty" | "length" | "run-error" | "tool_calls";
 
 /**
  * `usage` is the whole run's, summed over every model step, on both branches:

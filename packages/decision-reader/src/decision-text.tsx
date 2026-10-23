@@ -745,8 +745,7 @@ export type PrepareDecisionTextPlacementsOptions = {
   citationAnchors: readonly CitationAnchorSource[];
   provisionAnchors: readonly DecisionProvisionAnchor[];
   externalProvisionAnchors?:
-    | readonly ExternalDecisionProvisionAnchor[]
-    | undefined;
+    readonly ExternalDecisionProvisionAnchor[] | undefined;
   statuteCitationAnchors: readonly DecisionStatuteCitationAnchor[];
 };
 

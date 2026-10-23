@@ -121,8 +121,7 @@ export type AnalysisSignificanceNone = {
 };
 
 export type AnalysisSignificance =
-  | AnalysisSignificanceStatement
-  | AnalysisSignificanceNone;
+  AnalysisSignificanceStatement | AnalysisSignificanceNone;
 
 type DecisionAnalysisCore = {
   generatedAt: string;

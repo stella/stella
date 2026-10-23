@@ -235,8 +235,7 @@ type ObserveDocumentFetchOptions = {
   fetch: () => Promise<Response>;
   expectedContentType?: "pdf" | undefined;
   responseOutcome?:
-    | ((response: Response) => DocumentFetchObservation)
-    | undefined;
+    ((response: Response) => DocumentFetchObservation) | undefined;
 };
 
 /** Preserve response/error identity and leave body consumption to the adapter. */
@@ -347,12 +346,10 @@ export const withDocumentStageWindow = async ({
     }
     if (page.supplements !== undefined) {
       for (const { document } of page.supplements) {
-        if (
-          !(
-            hasUsableAst(document.documentAst) ||
-            Boolean(document.fulltext?.trim())
-          )
-        ) {
+        if (!(
+          hasUsableAst(document.documentAst) ||
+          Boolean(document.fulltext?.trim())
+        )) {
           unresolved += 1;
           continue;
         }
