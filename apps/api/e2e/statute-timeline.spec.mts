@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import * as v from "valibot";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
+import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 
 import { READ_PROVISION_HISTORY_PROJECTION } from "../src/lib/chat/legislation-result-projections";
 
@@ -158,6 +159,7 @@ const mountTimeline = async ({
       input,
       firstPage,
       secondPage,
+      handoffTool,
     }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
       if (iframe === null) {
@@ -244,6 +246,18 @@ const mountTimeline = async ({
           }
           const { name, arguments: args } = params;
           calls.push({ name, arguments: args });
+          // The host declines the sign-in handoff, so links open unchanged.
+          if (name === handoffTool) {
+            reply({
+              jsonrpc: "2.0",
+              id,
+              result: {
+                isError: true,
+                content: [{ type: "text", text: "Handoff declined." }],
+              },
+            });
+            return;
+          }
           if (
             name === "read_provision_history" &&
             args["cursor"] === "timeline-page-2"
@@ -287,6 +301,7 @@ const mountTimeline = async ({
       input: INPUT,
       firstPage: parsedHistory,
       secondPage: SECOND_PAGE,
+      handoffTool: MCP_WEB_HANDOFF_TOOL_NAME,
     },
   );
   expect(mounted).toBe(true);
