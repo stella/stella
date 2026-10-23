@@ -31,7 +31,7 @@ test("shows the named document field conversion refusal", () => {
 
   expect(
     screen.getByText(
-      "This document contains a INCLUDEPICTURE field, which can't be converted.",
+      "This document contains INCLUDEPICTURE, which can't be converted.",
     ),
   ).toBeTruthy();
 });
@@ -66,7 +66,7 @@ test("shows the document encoding conversion refusal", () => {
 
   expect(
     screen.getByText(
-      "This document uses the unsupported windows-1252 encoding, so it can’t be converted.",
+      "This document uses the unsupported windows-1252 encoding, so it can't be converted.",
     ),
   ).toBeTruthy();
 });

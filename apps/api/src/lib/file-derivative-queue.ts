@@ -655,13 +655,24 @@ type FileFieldContent = Extract<FieldContent, { type: "file" }>;
 type DisplayableConversionRefusal = ConversionRefusal;
 
 /** Every refusal the user can act on is shown; a new kind must choose. */
-const displayableConversionRefusal = (
+export const displayableConversionRefusal = (
   reason: ConversionInputErrorReason,
 ): DisplayableConversionRefusal | undefined => {
   switch (reason.kind) {
-    case "unsupported_encoding":
-    case "unsupported_reference":
-    case "unsupported_field":
+    case "unsupported_encoding": {
+      return { kind: reason.kind, encoding: reason.encoding.slice(0, 256) };
+    }
+    case "unsupported_reference": {
+      return {
+        kind: reason.kind,
+        format: reason.format.slice(0, 256),
+        element: reason.element.slice(0, 512),
+        attribute: reason.attribute.slice(0, 512),
+      };
+    }
+    case "unsupported_field": {
+      return { kind: reason.kind, fieldType: reason.fieldType.slice(0, 256) };
+    }
     case "legacy_format": {
       return reason;
     }

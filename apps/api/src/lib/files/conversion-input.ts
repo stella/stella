@@ -243,7 +243,12 @@ const normalizeEncoding = (encoding: string): string =>
   encoding.trim().toLowerCase().replaceAll("_", "-");
 
 const supportedEncoding = (encoding: string): SupportedEncoding | null => {
-  switch (normalizeEncoding(encoding)) {
+  const normalized = normalizeEncoding(encoding);
+  if (/^utf8$/u.test(normalized)) {
+    return "utf-8";
+  }
+  switch (normalized) {
+    case "unicode-1-1-utf-8":
     case "utf-8":
       return "utf-8";
     case "utf-16":
@@ -318,6 +323,10 @@ const decodeText = (bytes: Uint8Array): DecodedText => {
   }
   const declared = supportedEncoding(declaration);
   if (declared === null) {
+    return { kind: "unsupported_encoding", encoding: declaration };
+  }
+  const signature = signatureEncoding(bytes);
+  if (bom === null && signature !== null && declared !== signature) {
     return { kind: "unsupported_encoding", encoding: declaration };
   }
   const encoding =
@@ -1094,6 +1103,14 @@ const ooxmlUnsupportedField = (source: string): string | null => {
         if (fieldType !== null) {
           return fieldType;
         }
+      }
+    }
+  }
+  for (const { instruction, closed } of instructions) {
+    if (!closed) {
+      const fieldType = unsupportedFieldType(instruction);
+      if (fieldType !== null) {
+        return fieldType;
       }
     }
   }

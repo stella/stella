@@ -24,6 +24,10 @@ const encodeUtf16 = (value: string, byteOrder: "le" | "be"): Uint8Array => {
   }
   return bytes;
 };
+const encodeUtf16WithoutBom = (
+  value: string,
+  byteOrder: "le" | "be",
+): Uint8Array => encodeUtf16(value, byteOrder).slice(2);
 const zip = async (path: string, value: string): Promise<Uint8Array> =>
   new Uint8Array(
     await writeZipEntry(new JSZip(), path, encode(value)).generateAsync({
@@ -175,6 +179,31 @@ describe("document conversion input", () => {
       kind: "refuse",
       format: "text/html",
       reason: { kind: "unsupported_encoding", encoding: "windows-1252" },
+    });
+  });
+
+  test.each([["utf", "8"].join(""), "unicode-1-1-utf-8"])(
+    "accepts the standard UTF-8 label %s",
+    async (encoding) => {
+      expect(
+        await checkConversionInput(
+          "text/html",
+          encode(`<meta charset="${encoding}"><p>Document</p>`),
+        ),
+      ).toEqual({ kind: "convert" });
+    },
+  );
+
+  test("refuses a declaration that conflicts with the byte signature", async () => {
+    const input = encodeUtf16WithoutBom(
+      '<?xml version="1.0" encoding="UTF-8"?><document/>',
+      "le",
+    );
+
+    expect(await checkConversionInput("application/xhtml+xml", input)).toEqual({
+      kind: "refuse",
+      format: "application/xhtml+xml",
+      reason: { kind: "unsupported_encoding", encoding: "utf-8" },
     });
   });
 
@@ -1187,6 +1216,24 @@ describe("document conversion input", () => {
     const input = await zip(
       "word/document.xml",
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:instrText>INCLUDEPICTURE https://example.test/a.png</w:instrText></w:document>',
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({
+      kind: "refuse",
+      reason: { kind: "unsupported_field", fieldType: "INCLUDEPICTURE" },
+      format:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  });
+
+  test("refuses an unfinished OOXML field instruction", async () => {
+    const input = await zip(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:fldChar w:fldCharType="begin"/><w:instrText>INCLUDEPICTURE https://example.test/a.png</w:instrText></w:document>',
     );
     expect(
       await checkConversionInput(
