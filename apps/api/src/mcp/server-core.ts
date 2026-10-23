@@ -45,9 +45,10 @@ import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
+import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import {
   isMcpSession,
-  type McpAuthenticationFailure,
+  type authenticateMcpRequest,
   type McpSession,
 } from "@/api/mcp/auth";
 import {
@@ -189,10 +190,7 @@ type McpServerDependencies = {
   admitAction?: typeof withActionAdmission;
   chargeReadBytes?: typeof chargeMcpReadBytes;
   actionSizePolicy?: typeof getActionSizePolicy;
-  authenticateMcpRequest: (
-    token: string,
-    options: { mode: McpMode },
-  ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
+  authenticateMcpRequest: typeof authenticateMcpRequest;
   captureError: (error: unknown, context?: Record<string, string>) => void;
   getMcpToolDefinition: (
     toolName: string,
@@ -1486,7 +1484,10 @@ export const createMcpHttpRequestHandler = ({
             stream: {
               kind: "credential",
               revalidate: async () => {
-                const again = await authenticateMcpRequest(token, { mode });
+                const again = await authenticateMcpRequest(token, {
+                  mode,
+                  resolveApiKeySession: revalidateMachineApiKeySession,
+                });
                 if (Result.isOk(again)) {
                   return true;
                 }
