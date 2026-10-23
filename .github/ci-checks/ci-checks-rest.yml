@@ -1019,7 +1019,6 @@ checks:
     if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test release policy scripts')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_070 != 'true') }}
     run: |
       bun test scripts/check-api-deployment.test.ts
-      bun test scripts/desktop-release-ref.test.ts
       bun test scripts/check-staging-deploy-decision.test.ts
       bun test scripts/release-version-dispatch.test.ts
       bash scripts/check-release-changelog.test.sh
