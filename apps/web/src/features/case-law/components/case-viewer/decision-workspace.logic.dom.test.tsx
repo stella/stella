@@ -15,6 +15,7 @@ import {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
 import type { AnalysisQueryResult } from "@/features/case-law/queries/decision-analysis";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -289,7 +290,7 @@ const installWorkspaceServer = () => {
         return Response.json({ items: [], nextCursor: null });
       }
       if (path.endsWith("/organization-settings/ai-availability")) {
-        return Response.json({ available: true });
+        return Response.json(aiAvailableResponse());
       }
       if (path.endsWith("/workspaces/navigation")) {
         return Response.json({ items: [], nextCursor: null, workspaces: [] });

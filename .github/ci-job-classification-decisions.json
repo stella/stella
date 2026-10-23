@@ -732,32 +732,32 @@
   "candidate:.github/workflows/release-desktop.yml/resolve": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "3b4bb3c0d0aa3ba0f99f8dc0e822fcddfb5d34b5442f7b3603d303a2a98f9d23"
+    "reviewedDigest": "be20fb57ff87b47ade002ca776eb16cb7102ee4e65929c53bef02bd95d9cda3b"
   },
   "candidate:.github/workflows/release-desktop.yml/build": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "90b7bcf9eabef8a47bf199ee3b42452069587883105b4fe7116610ceafb91acd"
+    "reviewedDigest": "4011dd1420356e49d4e3291e809502e1897485de130f2fc75c13ef1c22fa76bf"
   },
   "candidate:.github/workflows/release-desktop.yml/verify-production": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "02714f9163ec0326019129030b0697cf1ea367c8fe6e614e7590880decdebb53"
+    "reviewedDigest": "ba9739dfc4f29247705413ca62bd731e0ec514a3e24885c7653fcfa1871463e4"
   },
   "candidate:.github/workflows/release-desktop.yml/manifest": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "99a4fdf4d52f8306853e45073464460002f6908549fbd8915d24768ef64fdc4c"
+    "reviewedDigest": "6ab2f1139e73ea38824d3844d7a07de278b90f80d9d25e3dc3344aae5c55a60d"
   },
   "candidate:.github/workflows/release-desktop.yml/promote-latest": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "bf4d61c0dc447ffb18e64e482206d04d1eb761876b05fef500e46eb444d201cc"
+    "reviewedDigest": "b65f04f95dc65518b3e1505fbdeeac10eb0192395bc9603c7ca4bad427c5917b"
   },
   "candidate:.github/workflows/release-desktop.yml/carry-forward": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "a82e9302dc73c22cda5bd4a274bfacb7bd913a359a3ae17a3da93caa8ec33c2d"
+    "reviewedDigest": "f01b640b6a52884b6a6d4672ebb5ef3d75724e4b4765fafe740a707a70ee7df7"
   },
   "candidate:.github/workflows/release-pr.yml/gate": {
     "kind": "ordinary",

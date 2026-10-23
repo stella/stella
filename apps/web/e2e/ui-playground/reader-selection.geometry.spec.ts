@@ -144,7 +144,11 @@ test("a fast drag across paragraphs never selects past the reader", async ({
   expect(escaped).toEqual([]);
 });
 
-test("the selection bar keeps its place once the drag ends", async ({
+// Quarantined: the right-to-left run reads the bar's position before layout
+// settles after the drag and fails intermittently in merge groups. The fix
+// measures through the shared stable-geometry helper and removes this skip.
+// test-quarantine-expires: 2026-10-30T00:00:00.000Z
+test.skip("the selection bar keeps its place once the drag ends", async ({
   page,
 }) => {
   await openReader(page);

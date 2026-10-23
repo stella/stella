@@ -1011,9 +1011,11 @@ const expectScope = ({
   const migrated = { ...scope };
   // A check-pool matrix changes scheduling, not the inherited job scope.
   // Accept only the exact exhaustive two-way partition used by the runner;
-  // arbitrary strategy changes remain visible to this comparison.
+  // arbitrary strategy changes remain visible to this comparison. Normalize
+  // only an added partition: a baseline that owns it must retain it.
   if (
     job === "ci-checks-rest" &&
+    originalScope["strategy"] === undefined &&
     isDeepStrictEqual(migrated["strategy"], {
       "fail-fast": false,
       matrix: { partition: [1, 2] },
