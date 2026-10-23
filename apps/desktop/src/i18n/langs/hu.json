@@ -507,6 +507,7 @@
     "windowsKeyReserved": "A Windows-billentyűs parancsokat a Windows magának tartja fenn. Használja a Ctrl vagy az Alt billentyűt.",
     "taken": "Ezt a billentyűparancsot már egy másik alkalmazás használja: {shortcut}. Válasszon másikat.",
     "unavailable": "Egy másik alkalmazás használja ezt: {shortcut}, ezért nem nyitja meg a vágólapot. Válasszon másik billentyűparancsot.",
+    "managed": "A szervezete kikapcsolta a vágólap-előzményeket.",
     "action": {
       "copy": "Másolás",
       "paste": "Beillesztés",

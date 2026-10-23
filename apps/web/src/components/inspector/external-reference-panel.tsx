@@ -36,6 +36,7 @@ import {
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
+import { useProxiedIconSrc } from "@/components/proxied-icon";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
@@ -66,7 +67,8 @@ export const ExternalSourceLogo = ({
   className?: string | undefined;
   iconHref?: string | undefined;
 }) => {
-  if (iconHref) {
+  const proxiedIconSrc = useProxiedIconSrc(iconHref);
+  if (proxiedIconSrc) {
     return (
       <span
         className={cn(
@@ -78,7 +80,7 @@ export const ExternalSourceLogo = ({
           alt=""
           className="size-3 rounded-xs object-contain"
           height={12}
-          src={iconHref}
+          src={proxiedIconSrc}
           width={12}
         />
       </span>
