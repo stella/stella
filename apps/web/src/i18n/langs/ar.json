@@ -954,7 +954,8 @@
       "searchable": "قابلة للبحث",
       "title": "تغطية الاجتهاد القضائي",
       "totalFrom": "الإجمالي بتاريخ {date}",
-      "unavailable": "أرقام التغطية غير متاحة حاليًا."
+      "unavailable": "أرقام التغطية غير متاحة حاليًا.",
+      "unreadListingPeriods": "فترات القائمة غير المقروءة"
     },
     "decisionNotFound": "لم يُعثر على القرار",
     "decisionTypes": {
