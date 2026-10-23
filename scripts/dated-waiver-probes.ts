@@ -25,6 +25,7 @@ import { parseLedger } from "./suppression-waivers";
 export type RemovalChange = { source: string; before: string; after: string };
 
 export const AUTOMATIC_REMOVAL_ALLOWED = {
+  "guard-rollout": true,
   "no-llms-txt": true,
   "release-age-exclusion": true,
   "release-age-exception": true,
