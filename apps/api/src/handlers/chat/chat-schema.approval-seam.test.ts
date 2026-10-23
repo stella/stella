@@ -10,6 +10,7 @@ import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   chatMessageContentFromMessage,
+  isChatPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -121,11 +122,15 @@ for (const definition of [searchTool, noDefaultsTool]) {
       });
       await client.sendMessage("Search earlier chats");
       const generated = assistantFromSdk(client.getMessages().at(-1));
+      const generatedParts = generated.parts;
+      if (!generatedParts.every(isChatPart)) {
+        panic("The SDK approval must contain supported chat parts");
+      }
       const canonicalParts = validateToolCallParts({
         message: {
           id: generated.id,
           role: generated.role,
-          parts: generated.parts,
+          parts: generatedParts,
         },
         tools,
       })
