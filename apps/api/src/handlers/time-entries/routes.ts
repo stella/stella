@@ -151,7 +151,6 @@ export const timeEntriesRoute = new Elysia({
     {
       body: polishTimeEntryNarrative.config.body,
       permissions: polishTimeEntryNarrative.config.permissions,
-      requiresUsage: polishTimeEntryNarrative.config.requiresUsage,
     },
     polishTimeEntryNarrative.handler,
   );

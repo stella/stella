@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { getPublicHandlerCachePolicy } from "@/api/lib/api-handlers";
-import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import {
+  finalizeResponseCachePolicy,
+  setSecurityHeaders,
+} from "@/api/lib/security-headers";
 import {
   MCP_MODES,
   MCP_RESOURCE_MODE_CONFIG,
@@ -43,41 +46,21 @@ const PUBLIC_CACHE_HEADERS = {
   "GET /v1/public/knowledge/playbook-starters/:id": "public, max-age=300",
 } as const satisfies Record<string, string>;
 
-// Elysia stores lifecycle hook containers outside LocalHook's declared type.
-const firstRouteHook = (hooks: unknown, name: string) => {
-  if (!isRecord(hooks)) {
-    return panic(`Missing route ${name} hooks`);
-  }
-  const entries = hooks[name];
-  if (!isUnknownArray(entries)) {
-    return panic(`Missing route ${name} hooks`);
-  }
-  const hook = entries.at(0);
-  if (!isRecord(hook) || typeof hook["fn"] !== "function") {
-    return panic(`Missing first route ${name} hook`);
-  }
-  return hook["fn"];
-};
-
 describe("composed API cache policy", () => {
   test("every mounted route declares its response cache policy", async () => {
     expect(api.routes.length).toBeGreaterThan(100);
     const observedPublicHeaders: Record<string, string> = {};
-    // onRequest executes from the app's global event list before route lookup.
-    const firstRequestHook = firstRouteHook(api.event, "request");
-
     for (const route of api.routes) {
       const routeName = `${route.method} ${route.path}`;
       const set = { headers: {} };
-      await firstRequestHook({ set });
+      setSecurityHeaders(set);
       expect(new Headers(set.headers).get("Cache-Control"), routeName).toBe(
         "private, no-store",
       );
 
-      const mapResponse = firstRouteHook(route.hooks, "mapResponse");
-      const response = await mapResponse({
+      const response = finalizeResponseCachePolicy({
         set,
-        responseValue: new Response("example"),
+        response: new Response("example"),
       });
       expect(response, routeName).toBeInstanceOf(Response);
       if (!(response instanceof Response)) {

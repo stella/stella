@@ -91,11 +91,13 @@ const recorderFor = (
 
 function expectSuccess<T>(
   response: T,
-): Exclude<T, ElysiaStatus<number, unknown, number>>;
+): T extends { readonly "~status": true } ? never : T;
 function expectSuccess(response: unknown): unknown {
   expect(response).not.toBeInstanceOf(ElysiaStatus);
   if (response instanceof ElysiaStatus) {
-    throw new TypeError(`Expected success, received status ${response.status}`);
+    throw new TypeError(
+      `Expected success, received status ${String(response.status)}`,
+    );
   }
   return response;
 }

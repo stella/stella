@@ -111,7 +111,7 @@ const assignedUserIds = async () => {
 
 const CAPACITY_REJECTION = elysiaStatus(409, {
   message: "All included per-user limits are assigned",
-}) as const;
+});
 
 describe("assign-seat capacity", () => {
   test("assigns a member while the entitlement has a free seat", async () => {

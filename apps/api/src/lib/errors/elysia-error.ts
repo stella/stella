@@ -7,7 +7,13 @@
  * string.
  */
 
-import { ElysiaError, ValidationError } from "elysia";
+import {
+  ElysiaError,
+  type InternalServerError,
+  type NotFound,
+  type ParseError,
+  ValidationError,
+} from "elysia";
 import { IsLocalizedValidationError } from "typebox/error";
 import type { TLocalizedValidationError } from "typebox/error";
 
@@ -19,13 +25,35 @@ import { isResponseValidationError } from "@/api/lib/errors/response-validation"
 import type { FrameworkFailure } from "@/api/lib/observability/failure";
 
 const ELYSIA_ERROR_CODE = {
+  internal: "internal-server-error",
   validation: "validation",
   notFound: "not-found",
   parse: "parse",
 } as const;
 
-const frameworkErrorCode = (code: unknown, error: unknown) =>
-  code ?? (error instanceof ElysiaError ? error.code : undefined);
+type ElysiaErrorCode = NonNullable<
+  | InternalServerError["code"]
+  | NotFound["code"]
+  | ParseError["code"]
+  | ValidationError["code"]
+>;
+
+const frameworkErrorCode = (
+  code: unknown,
+  error: unknown,
+): ElysiaErrorCode | undefined => {
+  const candidate =
+    code ?? (error instanceof ElysiaError ? error.code : undefined);
+  if (
+    candidate === ELYSIA_ERROR_CODE.internal ||
+    candidate === ELYSIA_ERROR_CODE.validation ||
+    candidate === ELYSIA_ERROR_CODE.notFound ||
+    candidate === ELYSIA_ERROR_CODE.parse
+  ) {
+    return candidate;
+  }
+  return undefined;
+};
 
 type ElysiaErrorAnswer = {
   status: number;
@@ -129,18 +157,24 @@ export const elysiaErrorAnswer = (
   if (resolvedCode === undefined) {
     return INTERNAL_ANSWER;
   }
+  let answer: ElysiaErrorAnswer;
   switch (resolvedCode) {
     case ELYSIA_ERROR_CODE.validation:
-      return isResponseValidationError(error)
+      answer = isResponseValidationError(error)
         ? INTERNAL_ANSWER
         : { ...INVALID_REQUEST_ANSWER, issues: requestValidationIssues(error) };
+      break;
     case ELYSIA_ERROR_CODE.notFound:
-      return NOT_FOUND_ANSWER;
+      answer = NOT_FOUND_ANSWER;
+      break;
     case ELYSIA_ERROR_CODE.parse:
-      return MALFORMED_REQUEST_ANSWER;
-    default:
-      return INTERNAL_ANSWER;
+      answer = MALFORMED_REQUEST_ANSWER;
+      break;
+    case ELYSIA_ERROR_CODE.internal:
+      answer = INTERNAL_ANSWER;
+      break;
   }
+  return answer;
 };
 
 /**
@@ -168,16 +202,22 @@ export const elysiaFailureReason = (
   if (resolvedCode === undefined) {
     return undefined;
   }
+  let reason: FrameworkFailure | undefined;
   switch (resolvedCode) {
     case ELYSIA_ERROR_CODE.validation:
-      return isResponseValidationError(error)
+      reason = isResponseValidationError(error)
         ? "response_invalid"
         : "request_validation";
+      break;
     case ELYSIA_ERROR_CODE.notFound:
-      return "route_not_found";
+      reason = "route_not_found";
+      break;
     case ELYSIA_ERROR_CODE.parse:
-      return "request_malformed";
-    default:
-      return undefined;
+      reason = "request_malformed";
+      break;
+    case ELYSIA_ERROR_CODE.internal:
+      reason = undefined;
+      break;
   }
+  return reason;
 };

@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 import { eq, getTableName, sql, TransactionRollbackError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { ElysiaStatus } from "elysia";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -402,8 +403,8 @@ describe("publisher amendment snapshots", () => {
         legislationDb,
         surface: "pages",
       });
-      if ("code" in statute || "code" in versions) {
-        throw new Error("Expected amendment reader fixtures to exist");
+      if (statute instanceof ElysiaStatus || versions instanceof ElysiaStatus) {
+        throw new TypeError("Expected amendment reader fixtures to exist");
       }
       return {
         pending: statute.pendingChanges?.items

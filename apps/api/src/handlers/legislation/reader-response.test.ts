@@ -318,13 +318,9 @@ test("reader response serialization preserves the complete official AST and text
   expect(
     Buffer.byteLength(projected.sections?.at(0)?.title ?? ""),
   ).toBeLessThanOrEqual(readerTextBytes.sectionTitle);
-  const app = new Elysia().get(
-    "/statute",
-    {
-      response: { 200: statuteReaderSuccessResponseSchema },
-    },
-    () => projected,
-  );
+  const app = new Elysia().get("/statute", () => projected, {
+    response: { 200: statuteReaderSuccessResponseSchema },
+  });
   const response = await app.handle(new Request("http://localhost/statute"));
   expect(response.status).toBe(200);
   // Compare the actual wire object, including all inline text, to the complete

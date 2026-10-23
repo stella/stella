@@ -10,7 +10,10 @@ import {
 import type { createMcpAuthenticationFailureLimiter } from "@/api/handlers/mcp/transport-rate-limit";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { createRequestRouteClassifier } from "@/api/lib/rate-limit/tenant-action-boundary";
+import {
+  createRequestRouteClassifier,
+  matchesAnyHttpMethod,
+} from "@/api/lib/rate-limit/tenant-action-boundary";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ADVANCED_HTTP_PATH,
@@ -163,37 +166,43 @@ export const createMcpRoute = ({
     .options(MCP_ADVANCED_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(
       MCP_ADVANCED_DISCOVERY_PATH,
-      readAdvancedMetadata.config,
+      { response: readAdvancedMetadata.config.response },
+
       readAdvancedMetadata.handler,
     )
     .options(ROOT_MCP_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(
       ROOT_MCP_DISCOVERY_PATH,
-      readDefaultMetadata.config,
+      { response: readDefaultMetadata.config.response },
+
       readDefaultMetadata.handler,
     )
     .options(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(
       MCP_ANONYMIZED_DISCOVERY_PATH,
-      readAnonymizedMetadata.config,
+      { response: readAnonymizedMetadata.config.response },
+
       readAnonymizedMetadata.handler,
     )
     .options(MCP_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(
       MCP_DISCOVERY_PATH,
-      readDefaultMetadata.config,
+      { response: readDefaultMetadata.config.response },
+
       readDefaultMetadata.handler,
     )
     .options(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(
       MCP_DOCUMENTS_DISCOVERY_PATH,
-      readDocumentsMetadata.config,
+      { response: readDocumentsMetadata.config.response },
+
       readDocumentsMetadata.handler,
     )
     .options(MCP_LAW_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(
       MCP_LAW_DISCOVERY_PATH,
-      readLawMetadata.config,
+      { response: readLawMetadata.config.response },
+
       readLawMetadata.handler,
     )
     .all(
@@ -297,6 +306,6 @@ const mcpRouteRegistry = createMcpRoute({
 
 export const isMcpTransportRequest = createRequestRouteClassifier({
   routes: mcpRouteRegistry.routes,
-  strictPath: undefined,
-  classifyRoute: (route) => route.method === "ALL",
+  strictPath: false,
+  classifyRoute: (route) => matchesAnyHttpMethod(route.method),
 });

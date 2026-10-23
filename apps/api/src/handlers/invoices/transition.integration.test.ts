@@ -188,14 +188,22 @@ describe("invoice transition integration", () => {
       status: INVOICE_STATUS.DRAFT,
       invoiceNumber: "DRAFT-001",
     });
-    const context = createContext({
+    const {
+      body: _body,
+      defer: _defer,
+      ...context
+    } = createContext({
       invoiceId,
       action: "finalize",
       auditEvents: [],
     });
     for (const invoiceNumber of ["DRAFT-002", null, "DRAFT-003"]) {
       expect(
-        await updateInvoice.handler({ ...context, body: { invoiceNumber } }),
+        await updateInvoice.handler({
+          ...context,
+          defer: () => {},
+          body: { invoiceNumber },
+        }),
       ).toEqual({ id: invoiceId });
       const row = await testDb.query.invoices.findFirst({
         where: { id: { eq: invoiceId } },
@@ -411,7 +419,11 @@ const assertAssignedNumber = async (
   invoiceId: SafeId<"invoice">,
   assignedNumber: string,
 ) => {
-  const context = createContext({
+  const {
+    body: _body,
+    defer: _defer,
+    ...context
+  } = createContext({
     invoiceId,
     action: "finalize",
     auditEvents: [],
@@ -419,6 +431,7 @@ const assertAssignedNumber = async (
   for (const invoiceNumber of [null, `${assignedNumber}-CHANGED`]) {
     const result = await updateInvoice.handler({
       ...context,
+      defer: () => {},
       body: { invoiceNumber },
     });
     expect(result).toMatchObject({ code: 409 });
@@ -430,12 +443,14 @@ const assertAssignedNumber = async (
   expect(
     await updateInvoice.handler({
       ...context,
+      defer: () => {},
       body: { invoiceNumber: assignedNumber },
     }),
   ).toEqual({ id: invoiceId });
   expect(
     await updateInvoice.handler({
       ...context,
+      defer: () => {},
       body: { notes: "Updated notes" },
     }),
   ).toEqual({ id: invoiceId });

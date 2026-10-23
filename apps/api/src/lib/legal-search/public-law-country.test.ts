@@ -75,7 +75,11 @@ const buildApp = () =>
     .onError((context) => answerRequestError(context))
     .onAfterHandle(async (context) => await completeRequest(context))
     .group("/v1", (app) => app.use(publicLegislationRoute))
-    .get("/v1/contacts/search", refusing.config, refusing.handler);
+    .get(
+      "/v1/contacts/search",
+      { response: refusing.config.response },
+      refusing.handler,
+    );
 
 describe("typed public country unavailability through the request lifecycle", () => {
   let logs: RecordingLogger;

@@ -22,20 +22,12 @@ const responseWithStatusText = safeHandlerResponseSchemasWithStatusText(
 );
 
 const app = new Elysia()
-  .get(
-    "/invalid",
-    {
-      response,
-    },
-    () => status(400, { message: "Invalid request" }),
-  )
-  .get(
-    "/unauthorized",
-    {
-      response: responseWithStatusText,
-    },
-    () => status(401),
-  );
+  .get("/invalid", () => status(400, { message: "Invalid request" }), {
+    response,
+  })
+  .get("/unauthorized", () => status(401), {
+    response: responseWithStatusText,
+  });
 
 describe("safe handler response schemas", () => {
   test("keep the success schema when a route overrides an error status", () => {

@@ -30,10 +30,14 @@ test("exact icon bytes require an authenticated chat principal", async () => {
     .use(workspaceAccessMacro)
     .use(permissionMacro)
     .guard({ validateAuth: true })
-    .get("/chat/link-icons/exact", getExactIcon.handler, {
-      query: getExactIcon.config.query,
-      permissions: getExactIcon.config.permissions,
-    });
+    .get(
+      "/chat/link-icons/exact",
+      {
+        query: getExactIcon.config.query,
+        permissions: getExactIcon.config.permissions,
+      },
+      getExactIcon.handler,
+    );
   const response = await app.handle(
     new Request(
       "http://localhost/chat/link-icons/exact?url=https%3A%2F%2Fexample.com%2Ficon.png",

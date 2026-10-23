@@ -473,8 +473,8 @@ const api = new Elysia()
   )
   .onError(({ error, request, route, set }) => {
     const errorCode =
-      typeof error === "object" && error !== null
-        ? Reflect.get(error, "code")
+      typeof error === "object" && error !== null && "code" in error
+        ? error.code
         : undefined;
     return answerRequestError({
       error,
@@ -747,7 +747,7 @@ const decorateActionSizeRefusal = (
 const scopeRequestAsyncStores = (): void => {
   const isTenantAction = createTenantActionClassifier({
     routes: api.routes,
-    strictPath: undefined,
+    strictPath: false,
   });
   api.wrap(
     (handleRequest) => async (request: Request) =>

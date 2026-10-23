@@ -1,8 +1,7 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
-import Elysia, { status, t } from "elysia";
+import Elysia, { status, t, type AnySchema } from "elysia";
 import fc from "fast-check";
-import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 
 import {
@@ -185,10 +184,14 @@ test("bounded public handlers bound both returned status errors and resolved han
     },
   );
   const app = new Elysia()
-    .get("/legacy", legacy.config, legacy.handler)
-    .get("/returned", returned.config, returned.handler)
-    .get("/resolved", resolved.config, resolved.handler)
-    .get("/status-text", statusText.config, statusText.handler);
+    .get("/legacy", { response: legacy.config.response }, legacy.handler)
+    .get("/returned", { response: returned.config.response }, returned.handler)
+    .get("/resolved", { response: resolved.config.response }, resolved.handler)
+    .get(
+      "/status-text",
+      { response: statusText.config.response },
+      statusText.handler,
+    );
   for (const [path, expectedStatus] of [
     ["/returned", 503],
     ["/resolved", 400],
@@ -230,7 +233,7 @@ test("bounded public handlers bound both returned status errors and resolved han
   );
 });
 
-const configFor = <TSuccess extends TSchema>(success: TSuccess) => ({
+const configFor = <TSuccess extends AnySchema>(success: TSuccess) => ({
   ...publicConfig,
   response: safePublicHandlerResponseSchemasWithStatusText(success),
 });
@@ -280,7 +283,7 @@ test("bounded public handlers bind the 200 schema to the payload both ways", () 
     ),
     async function* () {
       const tags: readonly string[] = ["a"];
-      return Result.ok({ id: DECISION_ID, limit: PAGE.limit, tags });
+      return Result.ok({ id: DECISION_ID, limit: PAGE.limit, tags: [...tags] });
     },
   );
   // The cases are compile-time; each definition still registers at runtime.

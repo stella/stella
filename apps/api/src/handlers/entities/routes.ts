@@ -226,7 +226,8 @@ export const entitiesRoute = new Elysia({
   .post(
     "/clip",
     {
-      ...clipEndpoint.config,
+      body: clipEndpoint.config.body,
+      permissions: clipEndpoint.config.permissions,
     },
     clipEndpoint.handler,
   )

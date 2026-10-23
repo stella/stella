@@ -1,17 +1,18 @@
 import { isAiRequest } from "@/api/lib/observability/request-context";
 import type { RequestClass } from "@/api/lib/observability/request-metrics";
+import { matchesAnyHttpMethod } from "@/api/lib/rate-limit/tenant-action-boundary";
 
 // Every registered METHOD pattern has a decision. The route-table census
 // rejects additions without a class and declarations without a live route.
 // MCP transports execute search and other multi-step tools under the search
 // latency SLO. Stream setup does not measure the duration of the stream.
 export const ROUTE_LATENCY_CLASSES = {
-  "ALL /*": "crud",
-  "ALL /mcp": "search",
-  "ALL /mcp-anonymized": "search",
-  "ALL /mcp-documents": "search",
-  "ALL /mcp-law": "search",
-  "ALL /mcp/advanced": "search",
+  "* /*": "crud",
+  "* /mcp": "search",
+  "* /mcp-anonymized": "search",
+  "* /mcp-documents": "search",
+  "* /mcp-law": "search",
+  "* /mcp/advanced": "search",
   "POST /synthetic/session": "crud",
   "DELETE /v1/billing-codes/:workspaceId/": "crud",
   "DELETE /v1/case/matter-links/:workspaceId/:linkId": "crud",
@@ -836,11 +837,20 @@ const routeLatencyClass = ({
   // served route always has a declaration. Only a sub-application mounted on
   // its own (handler tests) reaches the fallback; failing the request over a
   // metric label would turn a telemetry gap into an outage.
-  return (
-    DECLARED_CLASSES.get(`${method} ${route}`) ??
-    DECLARED_CLASSES.get(`ALL ${route}`) ??
-    "crud"
-  );
+  const exact = DECLARED_CLASSES.get(`${method} ${route}`);
+  if (exact !== undefined) {
+    return exact;
+  }
+  for (const [key, requestClass] of DECLARED_CLASSES) {
+    const separator = key.indexOf(" ");
+    if (
+      key.slice(separator + 1) === route &&
+      matchesAnyHttpMethod(key.slice(0, separator))
+    ) {
+      return requestClass;
+    }
+  }
+  return "crud";
 };
 
 /** A model call moves a completed request into the AI latency series. */

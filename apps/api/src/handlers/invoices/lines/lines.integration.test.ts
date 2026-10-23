@@ -392,7 +392,7 @@ describe("invoice lines", () => {
     await setStatus(invoiceId, INVOICE_STATUS.FINALIZED);
     const refused = elysiaStatus(409, {
       message: "Invoice not found or not in draft status",
-    }) as const;
+    });
 
     expect(
       await runCreate(

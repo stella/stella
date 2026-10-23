@@ -371,7 +371,7 @@ const acceptGoverned = async (seeded: SeededAcceptance) =>
 /** The rejection the compensation path answers with, on both ownerships. */
 const SOURCE_MISSING_REJECTION = elysiaStatus(409, {
   message: "Candidate source is no longer available",
-}) as const;
+});
 
 const taskEntityCount = async (seeded: SeededAcceptance) =>
   await testDb.$count(

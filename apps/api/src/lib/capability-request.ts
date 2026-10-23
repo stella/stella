@@ -114,7 +114,7 @@ export const capabilityRequestGuard = ({
       }))());
 
   return new Elysia().onBeforeHandle(
-    { as: "global" },
+    "global",
     async ({ request, route, set }) => {
       const declared = request.headers.get(CAPABILITY_REQUEST_HEADER);
       if (declared === null) {
@@ -123,7 +123,7 @@ export const capabilityRequestGuard = ({
       const outcome = resolveCapabilityRequest({
         declared,
         method: request.method,
-        route,
+        route: route ?? "unmatched",
         index: await getIndex(),
       });
       switch (outcome.type) {

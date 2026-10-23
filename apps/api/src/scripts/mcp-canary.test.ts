@@ -16,6 +16,7 @@ import { sha256Base64Url as legacySha256Base64Url } from "@stll/sha256/node";
 
 import { VerifiedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof";
 import { bridgeOauthUiRedirect } from "@/api/lib/oauth-ui-fragment";
+import { matchesAnyHttpMethod } from "@/api/lib/rate-limit/tenant-action-boundary";
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
 import api from "@/api/server";
 
@@ -2030,7 +2031,7 @@ describe("staging credential journeys", () => {
         ({ method, path }) =>
           !mounted.some(
             (route) =>
-              (route.method === method || route.method === "ALL") &&
+              (route.method === method || matchesAnyHttpMethod(route.method)) &&
               route.pattern.test(path),
           ),
       )

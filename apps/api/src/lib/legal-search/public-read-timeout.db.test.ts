@@ -69,8 +69,22 @@ if (!databaseUrl || !runPostgresTests) {
     );
     // Mount the production route identifiers so the same policy classifier runs.
     const app = new Elysia({ prefix: STELLA_API_VERSION_PREFIX })
-      .get("/law/statutes/search", readBudget.config, readBudget.handler)
-      .post("/case/decisions/search", readBudget.config, readBudget.handler);
+      .get(
+        "/law/statutes/search",
+        {
+          query: readBudget.config.query,
+          response: readBudget.config.response,
+        },
+        readBudget.handler,
+      )
+      .post(
+        "/case/decisions/search",
+        {
+          query: readBudget.config.query,
+          response: readBudget.config.response,
+        },
+        readBudget.handler,
+      );
 
     test(
       "a server-cancelled public search returns a bounded typed error and the next read succeeds",

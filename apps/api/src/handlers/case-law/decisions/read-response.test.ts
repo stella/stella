@@ -167,9 +167,12 @@ test("decision readers bound every non-document Unicode field and retain officia
         const errors = [
           ...Value.Errors(readDecisionSuccessResponseSchema, response),
         ];
-        expect(errors.map(({ path, message }) => ({ path, message }))).toEqual(
-          [],
-        );
+        expect(
+          errors.map(({ instancePath, message }) => ({
+            path: instancePath,
+            message,
+          })),
+        ).toEqual([]);
         expect(response.fulltext).toBe(text);
         expect(response.documentAst).toBe(original.documentAst);
         const { documentAst, fulltext, sections, ...nonDocument } = response;

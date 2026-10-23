@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { status as elysiaStatus } from "elysia";
+import { status as elysiaStatus, ElysiaStatus } from "elysia";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -398,7 +398,9 @@ if (!databaseUrl || !runPostgres) {
       expect(outcomes.filter((outcome) => "id" in outcome)).toEqual([
         { id: invoiceId },
       ]);
-      expect(outcomes.filter((outcome) => "code" in outcome)).toEqual([
+      expect(
+        outcomes.filter((outcome) => outcome instanceof ElysiaStatus),
+      ).toEqual([
         elysiaStatus(409, {
           message: "Cannot finalize invoice from its current status",
         }),

@@ -42,7 +42,7 @@ const RAW_ROUTES = {
   },
   ...Object.fromEntries(
     MCP_MODES.map((mode) => [
-      `ALL ${MCP_RESOURCE_MODE_CONFIG[mode].httpPath}`,
+      `* ${MCP_RESOURCE_MODE_CONFIG[mode].httpPath}`,
       {
         access: RAW_ROUTE_ACCESS.sessionless,
         reason:

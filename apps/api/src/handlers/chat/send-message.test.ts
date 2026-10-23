@@ -1456,18 +1456,28 @@ describe("send message disconnect handling", () => {
           }),
         );
 
-        expect(result).toEqual({
-          code: refusal.status,
-          response: {
-            message: refusal.message,
-            code: refusal.code,
-            retryable: refusal.retryable,
-            hint: refusal.hint,
-            ...(refusal.contactUrl === undefined
-              ? {}
-              : { contactUrl: refusal.contactUrl }),
-          },
-        });
+        const refusalBody = {
+          message: refusal.message,
+          code: refusal.code,
+          retryable: refusal.retryable,
+          hint: refusal.hint,
+          ...(refusal.contactUrl === undefined
+            ? {}
+            : { contactUrl: refusal.contactUrl }),
+        };
+        let expectedRefusal;
+        switch (refusal.status) {
+          case 403:
+            expectedRefusal = elysiaStatus(403, refusalBody);
+            break;
+          case 429:
+            expectedRefusal = elysiaStatus(429, refusalBody);
+            break;
+          case 503:
+            expectedRefusal = elysiaStatus(503, refusalBody);
+            break;
+        }
+        expect(result).toEqual(expectedRefusal);
         expect(acquisitions).toBe(1);
         expect(releases).toBe(1);
         expect(insertedMessages).toHaveLength(2);

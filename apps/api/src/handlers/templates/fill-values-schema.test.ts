@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import Elysia, { t } from "elysia";
-import type { TSchema } from "typebox";
+import Elysia, { t, type AnySchema } from "elysia";
 
 import fillTemplateToWorkspace from "@/api/handlers/templates/fills/create";
 import fillTemplateById from "@/api/handlers/templates/fills/download";
@@ -25,11 +24,10 @@ const recordOnlySchema = t.Object({
   values: t.Record(t.String(), t.Unknown()),
 });
 
-const validateBody = async (body: unknown, schema: TSchema) => {
+const validateBody = async (body: unknown, schema: AnySchema) => {
   const app = new Elysia().post(
     "/fill",
-    { body: schema },
-    ({ body: submitted }) => {
+    ({ body: submitted }: { body: unknown }) => {
       if (typeof submitted !== "object" || submitted === null) {
         return new Response(null, { status: 500 });
       }
@@ -38,6 +36,7 @@ const validateBody = async (body: unknown, schema: TSchema) => {
       }
       return Response.json(submitted.values);
     },
+    { body: schema },
   );
   return await app.handle(
     new Request("https://example.test/fill", {

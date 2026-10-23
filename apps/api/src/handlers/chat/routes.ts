@@ -205,7 +205,6 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     {
       body: improvePrompt.config.body,
       permissions: improvePrompt.config.permissions,
-      requiresUsage: improvePrompt.config.requiresUsage,
     },
     improvePrompt.handler,
   )

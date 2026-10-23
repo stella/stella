@@ -125,9 +125,9 @@ type ResponseSet = {
 type RequestErrorContext = {
   error: unknown;
   set: ResponseSet;
-  code: number | string;
+  code?: number | string;
   request: Request;
-  route: string | undefined;
+  route?: string | undefined;
 };
 
 /** The server's `onError` hook: the framework-level failure record and answer. */
@@ -235,7 +235,7 @@ export const answerRequestError = ({
 type RequestCompletionContext = {
   request: Request;
   responseValue: unknown;
-  route: string | undefined;
+  route?: string | undefined;
   set: ResponseSet;
 };
 

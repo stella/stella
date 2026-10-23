@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { ElysiaStatus } from "elysia";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
@@ -88,8 +89,8 @@ describe("workflow start handler", () => {
 
     const rejected: WorkflowStartStatus[] = [];
     for (const { status, result } of outcomes) {
-      if ("code" in result) {
-        expect(result.code).toBe(500);
+      if (result instanceof ElysiaStatus) {
+        expect(result.status).toBe(500);
         rejected.push(status);
         continue;
       }

@@ -9,7 +9,9 @@ import {
   getTenantActionSizePolicy,
 } from "./action-size-limits";
 import {
+  createRequestRouteClassifier,
   createTenantActionClassifier,
+  matchesAnyHttpMethod,
   runTenantHttpAction,
   TENANT_ACTION_DETAIL,
 } from "./tenant-action-boundary";
@@ -21,6 +23,21 @@ const limits = { requestBytes: 8, responseBytes: 512, pageSize: 3 };
 const bytes = new TextEncoder();
 
 describe("tenant route classification", () => {
+  test("classifies requests through both all-method route spellings", () => {
+    const allRoute = new Elysia().all("/all", () => "all");
+    const mountRoute = new Elysia().mount(() => new Response("mount"));
+    expect(allRoute.routes.map(({ method }) => method)).toEqual(["*"]);
+    expect(mountRoute.routes.map(({ method }) => method)).toEqual(["*"]);
+
+    const classify = createRequestRouteClassifier({
+      routes: [...allRoute.routes, ...mountRoute.routes],
+      strictPath: false,
+      classifyRoute: ({ method }) => matchesAnyHttpMethod(method),
+    });
+    expect(classify(new Request("http://localhost/all"))).toBe(true);
+    expect(classify(new Request("http://localhost/mounted"))).toBe(true);
+  });
+
   for (const aot of [true, false]) {
     for (const strictPath of [true, false]) {
       test(`matches framework dispatch without running handlers (aot=${aot}, strict=${strictPath})`, async () => {
@@ -35,12 +52,12 @@ describe("tenant route classification", () => {
         };
         const app = new Elysia({ strictPath })
           .all("/fixed", exempt)
-          .get("/:id", tenant, tenantHooks)
-          .post("/write", tenant, tenantHooks)
+          .get("/:id", tenantHooks, tenant)
+          .post("/write", tenantHooks, tenant)
           .get("/public/*", exempt)
-          .get("/tenant/*", tenant, tenantHooks)
-          .get("/encoded space", tenant, tenantHooks)
-          .get("/optional/:id?", tenant, tenantHooks);
+          .get("/tenant/*", tenantHooks, tenant)
+          .get("/encoded space", tenantHooks, tenant)
+          .get("/optional/:id?", tenantHooks, tenant);
         const classify = createTenantActionClassifier({
           routes: app.routes,
           strictPath,
@@ -100,7 +117,7 @@ describe("tenant route classification", () => {
       .route("WS", "/live/:id", () => "exempt");
     const classify = createTenantActionClassifier({
       routes: app.routes,
-      strictPath: undefined,
+      strictPath: false,
     });
     for (const path of ["/socket", "/live/item"]) {
       for (const upgrade of [undefined, "websocket", "WebSocket"]) {
@@ -109,10 +126,7 @@ describe("tenant route classification", () => {
           headers.set("upgrade", upgrade);
         }
         const request = new Request(`http://localhost${path}`, { headers });
-        const response = await app.handle(request);
-        expect(classify(request)).toBe(
-          response.status === 200 && (await response.text()) === "tenant",
-        );
+        expect(classify(request)).toBe(upgrade === undefined);
       }
     }
   });

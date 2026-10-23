@@ -8,6 +8,7 @@ import {
   requestClassAtCompletion,
   ROUTE_LATENCY_CLASSES,
 } from "@/api/lib/observability/route-latency-class";
+import { matchesAnyHttpMethod } from "@/api/lib/rate-limit/tenant-action-boundary";
 import api from "@/api/server";
 
 describe("the route latency class census", () => {
@@ -28,7 +29,7 @@ describe("the class a completed request is measured under", () => {
         const method = key.slice(0, split);
         const route = key.slice(split + 1);
         expect(requestClassAtCompletion({ method, route })).toBe(declared);
-        if (method === "ALL") {
+        if (matchesAnyHttpMethod(method)) {
           for (const actualMethod of ["GET", "POST", "DELETE", "OPTIONS"]) {
             expect(
               requestClassAtCompletion({ method: actualMethod, route }),

@@ -17,9 +17,14 @@ export const TENANT_ACTION_DETAIL =
 
 type RequestRouteClassifierOptions = {
   routes: Readonly<Elysia["routes"]>;
-  strictPath: boolean | undefined;
+  strictPath: boolean;
   classifyRoute: (route: Elysia["routes"][number]) => boolean;
 };
+
+type ElysiaHttpMethod = Elysia["routes"][number]["method"];
+
+export const matchesAnyHttpMethod = (method: ElysiaHttpMethod): boolean =>
+  method === "ALL" || method === "*";
 
 export const createRequestRouteClassifier = ({
   routes,
@@ -29,21 +34,42 @@ export const createRequestRouteClassifier = ({
   const entries = routes.map((route) => ({
     included: classifyRoute(route),
     method: route.method,
-    pattern: new URLPattern({ pathname: route.path }),
+    pattern: new URLPattern({
+      pathname:
+        strictPath || route.path === "/"
+          ? route.path
+          : route.path.replace(/\/$/u, ""),
+    }),
+    specificity: route.path.replaceAll(/:[^/]+|\*/gu, "").length,
   }));
   return (request: Request): boolean => {
     const path = new URL(request.url).pathname;
     const routePath =
-      strictPath === true || path === "/" ? path : path.replace(/\/$/u, "");
+      strictPath || path === "/" ? path : path.replace(/\/$/u, "");
     const upgrade =
       request.headers.get("upgrade")?.toLowerCase() === "websocket";
     const method = upgrade ? "WS" : request.method;
-    const match = entries.find(
-      (entry) =>
-        (entry.method === method || entry.method === "ALL") &&
-        entry.pattern.test({ pathname: routePath }),
-    );
-    return match?.included === true;
+    const matchingEntries = (candidateMethod: string) =>
+      entries
+        .filter(
+          (entry) =>
+            (entry.method === candidateMethod ||
+              matchesAnyHttpMethod(entry.method)) &&
+            entry.pattern.test({ pathname: routePath }),
+        )
+        .toSorted(
+          (left, right) =>
+            right.specificity - left.specificity ||
+            Number(right.method === candidateMethod) -
+              Number(left.method === candidateMethod),
+        );
+    const primary = matchingEntries(method);
+    const match = (
+      primary.length === 0 && upgrade
+        ? matchingEntries(request.method)
+        : primary
+    ).at(0);
+    return match?.included ?? false;
   };
 };
 

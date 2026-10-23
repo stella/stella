@@ -97,7 +97,7 @@ describe("token-route validation order guard", () => {
           );
         }
         const bodySchema = endpoint.config["body"];
-        if (bodySchema !== undefined) {
+        if (bodySchema !== undefined && bodySchema !== null) {
           // Body schemas must be root-optional so a body-less probe cannot
           // produce a framework validation error either.
           expect(Reflect.get(bodySchema, "~optional")).toBe(true);

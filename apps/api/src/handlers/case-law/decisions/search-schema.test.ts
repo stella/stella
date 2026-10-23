@@ -95,9 +95,13 @@ const validResponse = {
   pageReach: SEARCH_PAGE_REACH.REACHED,
   queryUsed: "nájemné výpověď",
   warnings: [],
-};
+} satisfies SearchDecisionsSuccess;
 
-const bucket = (value: string) => ({ value, label: null, count: 3 });
+const bucket = <const TValue extends string>(value: TValue) => ({
+  value,
+  label: null,
+  count: 3,
+});
 
 const firstPageFacets = {
   courtYear: null,
@@ -113,7 +117,7 @@ const firstPageFacets = {
     },
   ],
   language: [bucket("cs")],
-};
+} satisfies NonNullable<SearchDecisionsSuccess["facets"]>;
 
 const validBody = { query: "promlčení", country: "CZE" };
 
@@ -318,10 +322,15 @@ describe("case-law search response schema", () => {
       const response = { ...validResponse, facets: firstPageFacets };
       expect(validator.Check(response)).toBe(true);
       const mirrored = validator.Clean?.(response);
-      expect(Value.Check(searchDecisionsSuccessResponseSchema, mirrored)).toBe(
-        true,
+      const validMirror = Value.Check(
+        searchDecisionsSuccessResponseSchema,
+        mirrored,
       );
-      expect(mirrored?.facets?.courtYear).toBeNull();
+      expect(validMirror).toBe(true);
+      if (!validMirror) {
+        throw new TypeError("Expected the cleaned response to remain valid");
+      }
+      expect(mirrored.facets?.courtYear).toBeNull();
     } finally {
       warnings.mockRestore();
     }

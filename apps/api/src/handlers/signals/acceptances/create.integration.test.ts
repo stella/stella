@@ -8,7 +8,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
-import { status as elysiaStatus } from "elysia";
+import { status as elysiaStatus, ElysiaStatus } from "elysia";
 
 import {
   SCOUT_KEY,
@@ -141,8 +141,12 @@ describe("signal acceptance", () => {
     });
 
     const outcomes = await Promise.all([accept(signalId), accept(signalId)]);
-    expect(outcomes.filter((outcome) => "status" in outcome)).toHaveLength(1);
-    expect(outcomes.filter((outcome) => "code" in outcome)).toEqual([
+    expect(
+      outcomes.filter((outcome) => !(outcome instanceof ElysiaStatus)),
+    ).toHaveLength(1);
+    expect(
+      outcomes.filter((outcome) => outcome instanceof ElysiaStatus),
+    ).toEqual([
       elysiaStatus(409, {
         message: "Signal is no longer in a state that allows this action",
       }),

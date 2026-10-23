@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import Elysia, { status, t } from "elysia";
+import Elysia, { ElysiaError, status, t } from "elysia";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { parseTrustedProxies } from "@/api/lib/client-ip";
@@ -978,26 +978,11 @@ describe("RedisRateLimitContext", () => {
   test("accounts for early failures after an earlier error handler returns", async () => {
     const context = new TrackingRateLimitContext();
     const app = new Elysia()
-      .onError(({ code, set }) => {
-        switch (code) {
-          case "NOT_FOUND":
-            set.status = 404;
-            break;
-          case "PARSE":
-            set.status = 400;
-            break;
-          case "VALIDATION":
-            set.status = 422;
-            break;
-          case "INTERNAL_SERVER_ERROR":
-          case "INVALID_COOKIE_SIGNATURE":
-          case "INVALID_FILE_TYPE":
-          case "UNKNOWN":
-            set.status = 500;
-            break;
-          default:
-            set.status = 500;
-        }
+      .onError(({ error, set }) => {
+        set.status =
+          error instanceof ElysiaError && error.status !== undefined
+            ? error.status
+            : 500;
         return { message: "sanitized" };
       })
       .use(

@@ -178,8 +178,7 @@ const seedThread = async ({
     await insertUpload({ fileName, threadId });
   }
 
-  for (const [index, fileName] of attachmentNames.entries() instanceof
-    ElysiaStatus) {
+  for (const [index, fileName] of attachmentNames.entries()) {
     const fileId = await insertUpload({ fileName, threadId });
     await testDb.insert(chatMessages).values({
       ...message(index),
