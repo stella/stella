@@ -96,12 +96,7 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
     "us.amazon.nova-pro-v1:0",
     "us.amazon.nova-lite-v1:0",
   ],
-  mistral: [
-    "mistral-large-4",
-    "mistral-large-latest",
-    "mistral-medium-latest",
-    "mistral-small-latest",
-  ],
+  mistral: [],
 } as const satisfies {
   [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
 };
