@@ -26,6 +26,7 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
+import { assertUploadFileNotEmpty } from "@/lib/files/upload-file-validation";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import {
@@ -80,6 +81,7 @@ const prepareFolderTreeUpload = async ({
 }: PrepareFolderTreeUploadOptions): Promise<PreparedFolderTreeUpload> => {
   const files = [];
   for (const [index, placement] of plan.files.entries()) {
+    assertUploadFileNotEmpty(placement.file.size);
     files.push({
       key: String(index),
       parentKey: placement.parentKey,

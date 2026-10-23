@@ -41,13 +41,10 @@ describe("entity-create upload payload", () => {
     expect(payload.parentId).toBeNull();
   });
 
-  test("preserves zero-byte file sizes", () => {
-    const payload = buildEntityCreatePresignPayload({
-      ...baseInput,
-      size: 0,
-    });
-
-    expect(payload.size).toBe(0);
+  test("rejects an empty file before a presign payload can be sent", () => {
+    expect(() =>
+      buildEntityCreatePresignPayload({ ...baseInput, size: 0 }),
+    ).toThrow("The file is empty.");
   });
 
   test("invalidates overview and activity once after the upload operation", () => {

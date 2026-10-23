@@ -5990,6 +5990,7 @@
       "downloadFailed": "Pobieranie nie powiodło się",
       "downloadPdf": "Pobierz jako PDF",
       "downloadSearchablePdf": "Przeszukiwalny PDF",
+      "emptyFile": "Plik jest pusty.",
       "includeReferenceNumber": "Dołącz numer referencyjny",
       "itemLimitReached": "Ta sprawa osiągnęła limit elementów.",
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę elementów",

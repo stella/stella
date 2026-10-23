@@ -5990,6 +5990,7 @@
       "downloadFailed": "Error al descargar",
       "downloadPdf": "Descargar como PDF",
       "downloadSearchablePdf": "PDF con texto buscable",
+      "emptyFile": "El archivo está vacío.",
       "includeReferenceNumber": "Incluir número de referencia",
       "itemLimitReached": "Este asunto ha alcanzado su límite de elementos.",
       "maxEntitiesReached": "Se ha alcanzado el número máximo de elementos",

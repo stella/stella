@@ -5990,6 +5990,7 @@
       "downloadFailed": "Sťahovanie zlyhalo",
       "downloadPdf": "Stiahnuť ako PDF",
       "downloadSearchablePdf": "Prehľadávateľné PDF",
+      "emptyFile": "Súbor je prázdny.",
       "includeReferenceNumber": "Pridať referenčné číslo",
       "itemLimitReached": "Tento spis dosiahol limit položiek.",
       "maxEntitiesReached": "Dosiahnutý maximálny počet položiek",

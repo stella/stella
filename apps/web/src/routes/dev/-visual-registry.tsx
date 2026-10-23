@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "upload-rejections": {
+    load: async () => {
+      const { UploadRejectionsPlayground } =
+        await import("./-components/upload-rejections-playground");
+      return { default: UploadRejectionsPlayground };
+    },
+  },
   "hungarian-decision": {
     load: async () => {
       const { HungarianDecisionPlayground } =

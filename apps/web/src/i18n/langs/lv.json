@@ -5990,6 +5990,7 @@
       "downloadFailed": "Lejupielāde neizdevās",
       "downloadPdf": "Lejupielādēt kā PDF",
       "downloadSearchablePdf": "Meklējams PDF",
+      "emptyFile": "Fails ir tukšs.",
       "includeReferenceNumber": "Iekļaut atsauces numuru",
       "itemLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums.",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",

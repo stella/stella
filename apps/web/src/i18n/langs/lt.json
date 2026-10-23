@@ -5990,6 +5990,7 @@
       "downloadFailed": "Nepavyko atsisiųsti",
       "downloadPdf": "Atsisiųsti kaip PDF",
       "downloadSearchablePdf": "PDF su paieškos tekstu",
+      "emptyFile": "Failas tuščias.",
       "includeReferenceNumber": "Įtraukti nuorodos numerį",
       "itemLimitReached": "Šioje byloje pasiektas elementų limitas.",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
