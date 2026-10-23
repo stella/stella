@@ -62,6 +62,10 @@ const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
 const HEAD = "a".repeat(40);
 const MAIN = "b".repeat(40);
 
+// Where a dispatched run's id comes from: the dispatch answer, a listing
+// after it, or nowhere.
+type RunIdSource = "named" | "listed" | "missing";
+
 describe("dispatch", () => {
   const dispatch = script(
     DISPATCH,
@@ -83,15 +87,21 @@ describe("dispatch", () => {
     plannedHeads: string[] = [],
     refusedRefs: string[] = [],
     failingStatus?: number,
-    noRunId?: boolean,
+    runId: RunIdSource = "named",
   ) => {
     const dispatched: Record<string, unknown>[] = [];
     const outputs: Record<string, string> = {};
+    const warnings: string[] = [];
     await dispatch.runInNewContext({
-      setTimeout,
+      setTimeout: (resolve: () => void) => {
+        resolve();
+      },
       context: { repo: { owner: "stella", repo: "stella" } },
       core: {
         notice: () => {},
+        warning: (message: string) => {
+          warnings.push(message);
+        },
         setOutput: (name: string, value: string) => {
           outputs[name] = value;
         },
@@ -104,6 +114,34 @@ describe("dispatch", () => {
           actions: {
             listWorkflowRuns: async (request: Record<string, unknown>) => {
               expect(request["workflow_id"]).toBe(RESOLVE);
+              // The lookup of a dispatch that named no run.
+              if (request["branch"] !== undefined) {
+                const lookup = v.parse(
+                  v.looseObject({
+                    branch: v.string(),
+                    event: v.literal("workflow_dispatch"),
+                    created: v.pipe(v.string(), v.regex(/^>=\d{4}-/u)),
+                  }),
+                  request,
+                );
+                const index = dispatched.findIndex(
+                  (entry) => entry["ref"] === lookup.branch,
+                );
+                return {
+                  data: {
+                    workflow_runs:
+                      runId === "listed"
+                        ? [
+                            {
+                              id: 1001 + index,
+                              display_title: `Resolve generated-only conflicts on ${lookup.branch}`,
+                            },
+                            { id: 9999, display_title: "Some other run" },
+                          ]
+                        : [],
+                  },
+                };
+              }
               return {
                 data: {
                   workflow_runs: plannedHeads.map((head) => ({
@@ -125,12 +163,14 @@ describe("dispatch", () => {
                   status: 422,
                 });
               }
-              dispatched.push(request);
+              expect(request["return_run_details"]).toBe(true);
+              const { return_run_details: _, ...accepted } = request;
+              dispatched.push(accepted);
               return {
                 data:
-                  noRunId === true
-                    ? undefined
-                    : { workflow_run_id: 1000 + dispatched.length },
+                  runId === "named"
+                    ? { workflow_run_id: 1000 + dispatched.length }
+                    : undefined,
               };
             },
           },
@@ -145,10 +185,12 @@ describe("dispatch", () => {
         }),
       },
     });
-    // Every accepted dispatch is followed by the publish step.
+    // Every accepted dispatch whose run was found is followed by the
+    // publish step; a run never found is only reported.
     expect(JSON.parse(outputs["runs"] ?? "")).toEqual(
-      dispatched.map((_, index) => 1001 + index),
+      runId === "missing" ? [] : dispatched.map((_, index) => 1001 + index),
     );
+    expect(warnings).toHaveLength(runId === "missing" ? dispatched.length : 0);
     return dispatched;
   };
   const sha = (index: number) => index.toString(16).padStart(40, "0");
@@ -252,12 +294,24 @@ describe("dispatch", () => {
     }
   });
 
-  test("a dispatch that names no run fails the run", async () => {
-    expect(
-      await rejectionOf(
-        run([pull({ updatedAt: updatedAt(1) })], [], [], undefined, true),
-      ),
-    ).toMatchObject({ message: "#1: the dispatch returned no run id" });
+  test("a dispatch that names no run is found by listing, never fails main", async () => {
+    const pulls = [
+      pull({ updatedAt: updatedAt(2) }),
+      pull({
+        number: 2,
+        headRefName: "feat/b",
+        headRefOid: "c".repeat(40),
+        updatedAt: updatedAt(1),
+      }),
+    ];
+    for (const source of ["listed", "missing"] as const) {
+      expect(
+        (await run(pulls, [], [], undefined, source)).map(
+          (request) => request["ref"],
+        ),
+        source,
+      ).toEqual(["feat/a", "feat/b"]);
+    }
   });
 
   test("unplanned heads go first, then the most recently updated", async () => {
@@ -324,6 +378,8 @@ describe("dispatch follows each resolve run to its publish", () => {
     polls: Map<number, Run[]>;
     // Resolve runs that uploaded a resolution.
     uploaded: Set<number>;
+    // Where each publish run's id comes from.
+    publishRunId: RunIdSource;
   };
   // Publish runs are numbered after the resolve run they publish.
   const publishOf = (resolve: number) => resolve + 100;
@@ -337,6 +393,7 @@ describe("dispatch follows each resolve run to its publish", () => {
       [102, [done("success")]],
     ]),
     uploaded: new Set([1, 2, 3]),
+    publishRunId: "named",
   });
   const followFor = async (input: Scenario) => {
     const dispatches: Record<string, unknown>[] = [];
@@ -387,14 +444,47 @@ describe("dispatch follows each resolve run to its publish", () => {
             createWorkflowDispatch: async (
               request: Record<string, unknown>,
             ) => {
-              dispatches.push(request);
+              expect(request["return_run_details"]).toBe(true);
+              const { return_run_details: _, ...accepted } = request;
+              dispatches.push(accepted);
               const inputs = v.parse(
                 v.object({ resolve_run_id: v.string() }),
                 request["inputs"],
               );
               return {
+                data:
+                  input.publishRunId === "named"
+                    ? {
+                        workflow_run_id: publishOf(
+                          Number(inputs.resolve_run_id),
+                        ),
+                      }
+                    : undefined,
+              };
+            },
+            listWorkflowRuns: async (params: Record<string, unknown>) => {
+              expect(params).toMatchObject({
+                workflow_id: PUBLISH,
+                branch: "main",
+                event: "workflow_dispatch",
+              });
+              if (input.publishRunId === "missing") {
+                return { data: { workflow_runs: [] } };
+              }
+              // Every publish dispatched so far is listed; the title names
+              // the resolve run each one publishes.
+              return {
                 data: {
-                  workflow_run_id: publishOf(Number(inputs.resolve_run_id)),
+                  workflow_runs: dispatches.map((request) => {
+                    const resolve = v.parse(
+                      v.object({ resolve_run_id: v.string() }),
+                      request["inputs"],
+                    ).resolve_run_id;
+                    return {
+                      id: publishOf(Number(resolve)),
+                      display_title: `Publish generated-only conflict resolution of run ${resolve}`,
+                    };
+                  }),
                 },
               };
             },
@@ -418,6 +508,22 @@ describe("dispatch follows each resolve run to its publish", () => {
         inputs: { resolve_run_id: String(id) },
       })),
     );
+  });
+
+  test("a publish run the dispatch did not name is found by its title", async () => {
+    const input = scenario();
+    input.publishRunId = "listed";
+    const result = await followFor(input);
+    expect(result.failures).toEqual([]);
+    expect(result.warnings).toHaveLength(1);
+  });
+
+  test("a publish run never found is reported, never fails main", async () => {
+    const input = scenario();
+    input.publishRunId = "missing";
+    const result = await followFor(input);
+    expect(result.failures).toEqual([]);
+    expect(result.warnings).toHaveLength(3);
   });
 
   test("a run that uploaded no resolution starts no publish", async () => {

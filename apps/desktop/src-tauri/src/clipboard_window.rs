@@ -454,7 +454,9 @@ impl ClipboardEditorSessions {
     item_id: String,
     open_kind: ClipboardOpenKind,
   ) -> Result<u64, String> {
-    let mut sessions = self.0.lock().map_err(|_| EDITOR_SESSIONS_UNAVAILABLE)?;
+    let mut sessions = self.0.lock().map_err(crate::logging::with_cause_logged(
+      EDITOR_SESSIONS_UNAVAILABLE,
+    ))?;
     sessions.last += 1;
     let session = sessions.last;
     sessions.open = Some(OpenEditor {
@@ -468,7 +470,13 @@ impl ClipboardEditorSessions {
   }
 
   fn end(&self) -> Result<(), String> {
-    self.0.lock().map_err(|_| EDITOR_SESSIONS_UNAVAILABLE)?.open = None;
+    self
+      .0
+      .lock()
+      .map_err(crate::logging::with_cause_logged(
+        EDITOR_SESSIONS_UNAVAILABLE,
+      ))?
+      .open = None;
     Ok(())
   }
 
@@ -478,7 +486,9 @@ impl ClipboardEditorSessions {
 
   /// `None` while no clip is open: a prewarmed window reads before any open.
   pub fn read(&self) -> Result<Option<EditorRead>, String> {
-    let mut sessions = self.0.lock().map_err(|_| EDITOR_SESSIONS_UNAVAILABLE)?;
+    let mut sessions = self.0.lock().map_err(crate::logging::with_cause_logged(
+      EDITOR_SESSIONS_UNAVAILABLE,
+    ))?;
     let read = sessions.open.as_mut().map(|open| {
       let first_read = (!open.read).then(|| (open.requested.elapsed(), open.open_kind));
       open.read = true;
