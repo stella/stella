@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import JSZip from "jszip";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -19,7 +19,11 @@ import {
   workspaceViewTemplates,
   workspaces,
 } from "@/api/db/schema";
-import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import {
+  createMembershipScopedDb,
+  createScopedDb,
+  markRlsDatabase,
+} from "@/api/db/scoped";
 import { prepareSearchHistoryRows } from "@/api/handlers/search-history/entries";
 import {
   buildAccountExportArchive,
@@ -246,6 +250,31 @@ describe.skipIf(!enabled)("account export personal data", () => {
                 ),
               ),
         );
+
+        await db
+          .delete(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, workspaceId),
+              eq(workspaceMembers.userId, exportingUserId),
+            ),
+          );
+
+        const annotationsOutsideExport = await createMembershipScopedDb(
+          scopedDatabase,
+          {
+            organizationId,
+            serverValidatedWorkspaceIds: [],
+            userId: exportingUserId,
+          },
+        )(
+          async (tx) =>
+            await tx
+              .select({ id: legalReaderAnnotations.id })
+              .from(legalReaderAnnotations)
+              .where(eq(legalReaderAnnotations.userId, exportingUserId)),
+        );
+        expect(annotationsOutsideExport).toEqual([]);
 
         const exported = await Array.fromAsync(
           exportAccountRows({

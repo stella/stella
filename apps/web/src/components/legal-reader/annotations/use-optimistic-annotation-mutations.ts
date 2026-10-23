@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { DataTag, QueryKey } from "@tanstack/react-query";
+import type { DataTag, QueryClient, QueryKey } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -121,6 +121,19 @@ type OptimisticAnnotationMutations<TCreate, TChange> = {
   update: (change: TChange) => Promise<unknown>;
 };
 
+export const patchAnnotationCache = async (
+  queryClient: QueryClient,
+  queryKey: DataTag<QueryKey, ReaderAnnotation[], Error>,
+  patch: (rows: readonly ReaderAnnotation[]) => ReaderAnnotation[],
+): Promise<{ previous: ReaderAnnotation[] | undefined }> => {
+  await queryClient.cancelQueries({ queryKey });
+  const previous = queryClient.getQueryData(queryKey);
+  if (previous !== undefined) {
+    queryClient.setQueryData(queryKey, (rows) => patch(optionalArray(rows)));
+  }
+  return { previous };
+};
+
 /**
  * Creates, changes and removes signed-in marks the way every reader does:
  * each change lands in the cache at once, rolls back on failure, and is then
@@ -147,12 +160,8 @@ export const useOptimisticAnnotationMutations = <
 
   const patchCache = async (
     patch: (rows: readonly ReaderAnnotation[]) => ReaderAnnotation[],
-  ): Promise<{ previous: ReaderAnnotation[] | undefined }> => {
-    await queryClient.cancelQueries({ queryKey });
-    const previous = queryClient.getQueryData(queryKey);
-    queryClient.setQueryData(queryKey, (rows) => patch(optionalArray(rows)));
-    return { previous };
-  };
+  ): Promise<{ previous: ReaderAnnotation[] | undefined }> =>
+    await patchAnnotationCache(queryClient, queryKey, patch);
 
   const settle = {
     onError: (

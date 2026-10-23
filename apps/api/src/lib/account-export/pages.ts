@@ -26,7 +26,7 @@ import {
   userProfessionalUseAcceptances,
   workspaceViewTemplates,
 } from "@/api/db/schema";
-import { createMembershipScopedDb, createScopedDb } from "@/api/db/scoped";
+import { createAccountExportScopedDb, createScopedDb } from "@/api/db/scoped";
 import type { AccountExportProjections } from "@/api/lib/account-export/projections";
 import type { ExportedAccountTableName } from "@/api/lib/account-export/registry";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -88,7 +88,7 @@ type FeedbackReportPageRow = Awaited<
 type ExportOrganizationPageOptions = {
   projections: AccountExportProjections;
   narrowScopedDb: ScopedDb;
-  membershipScopedDb: ScopedDb;
+  accountExportScopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   table: Exclude<
@@ -109,9 +109,9 @@ const projectRows = <T extends { id: string }>(
 
 type OrganizationPageQueryOptions = Omit<
   ExportOrganizationPageOptions,
-  "table" | "membershipScopedDb"
+  "table" | "accountExportScopedDb"
 >;
-type MembershipOrganizationPageQueryOptions = Omit<
+type AccountExportOrganizationPageQueryOptions = Omit<
   ExportOrganizationPageOptions,
   "table" | "narrowScopedDb"
 >;
@@ -383,12 +383,12 @@ const readSearchHistoryPage = async ({
 
 const readLegalReaderAnnotationsPage = async ({
   projections,
-  membershipScopedDb,
+  accountExportScopedDb,
   organizationId,
   userId,
   cursor,
-}: MembershipOrganizationPageQueryOptions) =>
-  await membershipScopedDb(async (tx) => {
+}: AccountExportOrganizationPageQueryOptions) =>
+  await accountExportScopedDb(async (tx) => {
     const rows = await tx
       .select()
       .from(legalReaderAnnotations)
@@ -541,8 +541,8 @@ const readWorkspaceViewTemplatesPage = async ({
     return projectRows(rows, projections.workspace_view_templates);
   });
 
-// Only annotations need membership scope to read an author's workspace comments.
-// Every other organization page retains the narrower empty-workspace scope.
+// Only annotations need the export-only author scope. Every other organization
+// page retains the narrower empty-workspace scope.
 const readOrganizationPage = async ({
   table,
   ...options
@@ -669,17 +669,17 @@ export async function* exportAccountRows({
       membership.organizationId,
     );
     const narrowScopedDb = createScopedDb(database, [], organizationId, userId);
-    const membershipScopedDb = createMembershipScopedDb(database, {
+    const accountExportScopedDb = createAccountExportScopedDb(
+      database,
       organizationId,
-      serverValidatedWorkspaceIds: [],
       userId,
-    });
+    );
     const pages = idPages(
       async (cursor) =>
         await readOrganizationPage({
           projections,
           narrowScopedDb,
-          membershipScopedDb,
+          accountExportScopedDb,
           organizationId,
           userId,
           table,
