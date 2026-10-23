@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import { agentRegistration } from "@/api/db/agent-auth-schema";
@@ -28,15 +28,15 @@ export const resolveAgentAuditExecution = async ({
   userId,
   db = rootDb,
 }: ResolveAgentAuditExecutionOptions): Promise<
-  AuditExecutionContext | undefined
+  Result<AuditExecutionContext | undefined, McpAuthenticationError>
 > => {
   if (credential === undefined) {
-    return undefined;
+    return Result.ok(undefined);
   }
 
   switch (credential.type) {
     case "agent_run":
-      return {
+      return Result.ok({
         performer: {
           type: "agent",
           id: "stella-assistant",
@@ -49,15 +49,15 @@ export const resolveAgentAuditExecution = async ({
           source: "mcp",
           sourceId: credential.runId,
         },
-      };
+      });
     case "delegated_user":
-      return {
+      return Result.ok({
         performer: { id: userId, type: "user" },
         trigger: { source: "mcp", type: "direct" },
-      };
+      });
     case "personal_api_key":
     case "machine_api_key":
-      return {
+      return Result.ok({
         performer: {
           type: "agent",
           id: `${credential.type === "personal_api_key" ? "personal-key" : "machine-key"}:${credential.id}`,
@@ -69,7 +69,7 @@ export const resolveAgentAuditExecution = async ({
           source: "mcp",
           sourceId: credential.id,
         },
-      };
+      });
     case "oauth_client": {
       const match = await db
         .select({
@@ -101,19 +101,21 @@ export const resolveAgentAuditExecution = async ({
         .then((rows) => rows.at(0) ?? null);
 
       if (match?.revocationStatus === "revoked") {
-        throw new McpAuthenticationError({
-          message: "Invalid or expired token",
-        });
+        return Result.err(
+          new McpAuthenticationError({
+            message: "Invalid or expired token",
+          }),
+        );
       }
 
       if (!match?.registrationId) {
-        return {
+        return Result.ok({
           performer: { id: userId, type: "user" },
           trigger: { source: "mcp", type: "direct" },
-        };
+        });
       }
 
-      return {
+      return Result.ok({
         performer: {
           type: "agent",
           id: match.registrationId,
@@ -125,7 +127,7 @@ export const resolveAgentAuditExecution = async ({
           source: "mcp",
           sourceId: match.registrationId,
         },
-      };
+      });
     }
     default: {
       credential satisfies never;
