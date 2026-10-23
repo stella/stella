@@ -57,6 +57,7 @@ import {
   installPgliteSanctionsMonitoringTriggers,
   installPgliteTreeParentGuards,
   installPgliteSyntheticMembershipTrigger,
+  installPgliteUserFileOrganizationKeyGuard,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
 import {
@@ -801,6 +802,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   });
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteSyntheticMembershipTrigger(db);
+  await installPgliteUserFileOrganizationKeyGuard(db);
   await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
