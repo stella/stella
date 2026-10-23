@@ -97,7 +97,9 @@ type ReadMachineApiKeyDependencies = {
 /** Read the plugin's stored digest without consuming or refilling any budget. */
 const readMachineApiKey = async (
   credential: string,
-  { getAuthContext = () => getAuth().$context }: ReadMachineApiKeyDependencies,
+  {
+    getAuthContext = async () => getAuth().$context,
+  }: ReadMachineApiKeyDependencies,
 ) => {
   const { adapter } = await getAuthContext();
   const key = await adapter.findOne<
