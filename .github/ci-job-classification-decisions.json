@@ -362,12 +362,12 @@
   "candidate:.github/workflows/dependency-audit.yml/audit": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "c648a3783a69072a8d7b6f1b5dfc3a0ae92f5023c23f2a8ff6ab2b3ef317888b"
+    "reviewedDigest": "88d14fbc378f622a2a121bda94a24e7764f8fcbdd2f2e21213a74406b3e36236"
   },
   "candidate:.github/workflows/dependency-audit.yml/remediate": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "e0afe9bb68db8eee91550799bfe07479d5d80b4e0265c95e886205b20c10f0d6"
+    "reviewedDigest": "ce5af635eccf1c45e5500372ddc401d373e38832368a4c8733bcfa4107c4636e"
   },
   "candidate:.github/workflows/dependency-audit.yml/cargo-advisories": {
     "kind": "ordinary",
