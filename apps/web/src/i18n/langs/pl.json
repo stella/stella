@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Powrót do aplikacji",
-    "billingAndUsage": "Rozliczenia i wykorzystanie",
     "billingProfiles": "Profile rozliczeniowe",
     "deleteDescription": "Trwale usuniesz tę organizację i jej dane. Tej operacji nie można cofnąć.",
     "deleteOrganization": "Usuń organizację",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Opuść organizację",
     "leaveRefusedOnlyOwner": "Jesteś jedynym właścicielem. Zanim odejdziesz, nadaj rolę właściciela innemu członkowi.",
     "modelsAndProviders": "Modele i dostawcy",
-    "noPlan": "Brak aktywnego planu",
     "organizationDeleted": "Organizacja została usunięta.",
     "organizationId": "ID organizacji",
     "organizationLeft": "Opuszczono organizację.",
-    "overviewDescription": "Zarządzaj organizacją, osobami i narzędziami.",
-    "people": "Osoby",
     "planAndUsage": "Plan i wykorzystanie",
     "title": "Administracja organizacji",
     "toolsDescription": "Włącz lub wyłącz wbudowane narzędzia dla wszystkich osób w tej organizacji."
@@ -54,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asystent poprosi o ten adres",
-    "copiedToast": "Instrukcje skopiowane. Wklej je do czatu z asystentem.",
     "copy": "Skopiuj mu instrukcje",
     "description": "Pytaj Claude lub ChatGPT o swoje sprawy i dokumenty. Wybierz asystenta, aby otworzyć krótką instrukcję; zajmie to około minuty.",
     "instructions": "Połącz mnie ze stellą, moim prawniczym obszarem roboczym. Postępuj zgodnie z sekcją „Instructions for AI agents” na {guideUrl} i użyj tego adresu serwera: {mcpUrl}",
     "openGuide": "Otwórz instrukcję dla {assistant}",
+    "pasteHint": "Wklej je do czatu z asystentem.",
     "selfSetupHint": "Korzystasz z Claude Code lub Codexa?",
     "title": "Korzystaj ze stelli w swoim asystencie AI"
   },
@@ -855,7 +850,6 @@
         "unavailable": "Analiza AI nie jest dostępna dla tego orzeczenia."
       },
       "generate": "Ułóż tezy w AI",
-      "holdingAnchor": "Przejdź do akapitu",
       "invitation": "Z bezpłatnym kontem AI przygotuje robocze notatki do tego orzeczenia.",
       "topics": "Tematy",
       "treatment": "Późniejsze orzecznictwo"
@@ -1111,6 +1105,8 @@
         "hint": "Usuń lub poszerz filtr i wyszukaj ponownie.",
         "message": "Nic nie odpowiada wybranym filtrom."
       },
+      "partialMatch": "Częściowe dopasowanie",
+      "partialMatches": "Częściowe dopasowania dla: <bdi>{query}</bdi>",
       "resultsFor": "Wyniki dla: <bdi>{query}</bdi>",
       "searchEveryWord": "Szukaj wszystkich słów"
     },
@@ -1148,6 +1144,7 @@
       "judges": "Sędziowie",
       "legalArea": "Dziedzina prawa",
       "legalSentence": "Teza orzeczenia",
+      "paragraphReference": "Akapit {number}",
       "popularName": "Nazwa potoczna",
       "portraitCredit": "Źródło portretów: {source}",
       "provisionMentions": "{count, number}×",
@@ -1394,6 +1391,7 @@
     "credentialSendDescription": "Wyślij ją tylko wtedy, gdy chcesz udostępnić tę wartość w rozmowie.",
     "credentialSendTitle": "Ta wiadomość może zawierać dane dostępowe",
     "deleteThread": "Usuń rozmowę",
+    "diagramUnavailable": "Nie udało się wyświetlić tego diagramu. Poniżej znajduje się jego kod źródłowy.",
     "editMode": {
       "autoDirect": "Automatycznie · przepisz",
       "autoDirectDescription": "Zmiany AI są stosowane natychmiast przez bezpośrednie przepisanie dokumentu (bez śledzenia zmian).",
@@ -1614,6 +1612,9 @@
         "private": "Twoje umiejętności AI",
         "team": "Umiejętności AI zespołu"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Również sprawdzono ({count, number})"
     },
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",
@@ -2703,6 +2704,7 @@
       "aiConfigModelInvalid": "Konfiguracja modelu AI jest nieprawidłowa. Sprawdź wybrane modele.",
       "aiConfigProviderInvalid": "Konfiguracja dostawcy AI jest nieprawidłowa. Sprawdź ustawienia dostawcy.",
       "aiConfigProviderValidationFailed": "Dostawca AI odrzucił konfigurację. Sprawdź klucz API i model.",
+      "aiDeadlineExceeded": "AI nie odpowiedziała na czas. Spróbuj ponownie za chwilę.",
       "aiOutputInvalid": "Odpowiedź AI miała nieoczekiwany format. Spróbuj ponownie.",
       "aiOutputModerated": "Dostawca AI objął odpowiedź moderacją. Przeformułuj żądanie lub wybierz inny model.",
       "aiProviderTaskUnsupported": "Skonfigurowany dostawca AI nie może wykonać tego zadania. Wybierz dostawcę, który może.",
@@ -4192,7 +4194,9 @@
     "prompt": "Czego szukasz?",
     "recent": "Ostatnie",
     "recentCasesFilter": "Orzeczenia",
+    "recentLoadFailed": "Nie udało się wczytać ostatniej aktywności.",
     "recentSearchFilter": "Wyszukiwania",
+    "recentUpdateFailed": "Nie udało się zaktualizować ostatniej aktywności.",
     "recentlyInForce": "Niedawno weszło w życie",
     "searchLabel": "Szukaj w bazie prawnej",
     "searchPlaceholder": "Sygnatura, numer aktu, ECLI lub słowa kluczowe",

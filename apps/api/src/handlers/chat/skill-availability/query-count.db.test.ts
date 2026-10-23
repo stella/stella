@@ -6,7 +6,10 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+import { eq } from "drizzle-orm";
 
+import { session } from "@/api/db/auth-schema";
+import { rootDb } from "@/api/db/root";
 import { chatRoute } from "@/api/handlers/chat/routes";
 import {
   queryCountLogger,
@@ -61,6 +64,13 @@ const countQueries = async (headers: Record<string, string>) =>
     return counter.count;
   });
 
+const requireNextRequestToRecordActivity = async (userId: string) => {
+  await rootDb
+    .update(session)
+    .set({ lastSeenAt: null })
+    .where(eq(session.userId, userId));
+};
+
 describe("skill availability runs a fixed query plan", () => {
   test("the first call and every later one issue the same statements", async () => {
     const { cookieHeader } = await createHumanSession({
@@ -92,7 +102,7 @@ describe("skill availability runs a fixed query plan", () => {
   });
 
   test("a call without the session snapshot adds only the session reads and one activity write", async () => {
-    const { cookieHeader } = await createHumanSession({
+    const { cookieHeader, userId } = await createHumanSession({
       email: `skill-queries-${Bun.randomUUIDv7()}@stella.dev`,
       orgName: "Skill queries",
       orgSlugPrefix: "skill-queries",
@@ -102,6 +112,7 @@ describe("skill availability runs a fixed query plan", () => {
       .filter((pair) => !pair.includes("session_data="))
       .join("; ");
     expect(withoutSnapshot).not.toBe(cookieHeader);
+    await requireNextRequestToRecordActivity(userId);
 
     expect(await countQueries({ cookie: withoutSnapshot })).toBe(
       WITHOUT_SESSION_SNAPSHOT + SESSION_ACTIVITY_WRITE,

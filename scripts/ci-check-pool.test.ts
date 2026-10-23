@@ -17,6 +17,7 @@ import {
   processLauncher,
   resolveEnv,
   runChecks,
+  selectChecks,
   summaryTable,
   type CheckResult,
   type Launched,
@@ -51,6 +52,18 @@ const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
   ...extra,
 });
 
+test("an exact named subset retains manifest order", () => {
+  const checks = [check("First"), check("Second"), check("Third")];
+  expect(selectChecks(checks, "Third,First").map(({ name }) => name)).toEqual([
+    "First",
+    "Third",
+  ]);
+  expect(selectChecks(checks, undefined)).toEqual(checks);
+  expect(() => selectChecks(checks, "First,Missing")).toThrow(
+    "Unknown check name(s): Missing",
+  );
+});
+
 test("failed checks emit one annotation with their first actionable cause", () => {
   const result = { name: "Unit tests", detail: "exit code 1" };
   // Bun prints a test's error before its (fail) line; a later test's error is
@@ -79,6 +92,48 @@ test("failed checks emit one annotation with their first actionable cause", () =
   expect(failedCheckAnnotation(result, "loading\nno diagnostic")).toBe(
     "::error title=FAILED check%3A Unit tests::exit code 1",
   );
+});
+
+test("a check that passes its own tests reports its first finding, never a passing test", () => {
+  const result = { name: "CI network step retries and timeouts", detail: "x" };
+  expect(
+    failedCheckAnnotation(
+      result,
+      [
+        "bun test v1.4.3 (c6da4a4d3)",
+        "",
+        "::group::scripts/check-ci-network-steps.test.ts:",
+        "(pass) shell detection > curl with its own retry-all-errors budget counts as retried [0.09ms]",
+        "(pass) allowlist > every entry needs a reason [1.10ms]",
+        "::endgroup::",
+        "",
+        " 43 pass",
+        " 0 fail",
+        " 46 expect() calls",
+        "Ran 43 tests across 1 file. [119.00ms]",
+        ".github/actions/build-web-image/action.yml: Report carried web asset and image sizes: route docker pull through scripts/retry.sh",
+        ".github/workflows/release.yml: prepare-web-image: docker pull needs a step timeout-minutes",
+      ].join("\n"),
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A CI network step retries and timeouts::.github/actions/build-web-image/action.yml: Report carried web asset and image sizes: route docker pull through scripts/retry.sh",
+  );
+  // A finding is named by its path, even one with a line and no extension.
+  expect(
+    failedCheckAnnotation(
+      { name: "Ratchet guard", detail: "x" },
+      "bun test v1.4.3 (c6da4a4d3)\n(pass) ratchet > counts [1ms]\napps/web/Dockerfile:15: uncataloged env PREVIOUS_WEB_IMAGE\nerror: script exited with code 1",
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A Ratchet guard::apps/web/Dockerfile:15: uncataloged env PREVIOUS_WEB_IMAGE",
+  );
+  // A word that merely contains "error" is not an error line.
+  expect(
+    failedCheckAnnotation(
+      { name: "Policy", detail: "exit code 1" },
+      "(pass) retry-all-errors budget [1ms]\nchecking mirrors\nnothing matched",
+    ),
+  ).toBe("::error title=FAILED check%3A Policy::exit code 1");
 });
 
 test("failed check annotations escape and truncate their messages", () => {
@@ -230,6 +285,45 @@ test("pooled conditions keep change selection, receipt reuse and event gates", (
   );
   expect(reused).not.toContain("Test unsignalled skip detection");
   expect(reused).toContain("Ratchet scanner invariants");
+});
+
+test("an unset root check selection keeps every pooled check, as GitHub reads it", () => {
+  // A main PR-depth run whose planner was unavailable writes no root_checks
+  // output, so toJSON(needs) omits the key. GitHub evaluates the selection
+  // gate `root_checks == ''` as true for the unset output; the pool must
+  // agree, or main skips the checks every pull request then inherits as red.
+  for (const job of CHECK_POOL_JOBS) {
+    const checks = readCheckPool(job);
+    const names = (rootChecks: Value | undefined) =>
+      planChecks(
+        checks,
+        poolContext({
+          github: { event_name: "workflow_dispatch", ref: "refs/heads/main" },
+          needs: {
+            "ci-plan": {
+              outputs: {
+                package_checks_required: "true",
+                ...(rootChecks === undefined
+                  ? {}
+                  : { root_checks: rootChecks }),
+              },
+            },
+          },
+          steps: {
+            checkout: { outcome: "success", outputs: {} },
+            install: { outcome: "success", outputs: {} },
+          },
+          inputs: { depth: "fast", heavy_only: false, pr_depth_only: true },
+        }),
+      ).flatMap((entry) =>
+        entry.status === "selected" ? [entry.check.name] : [],
+      );
+    const all = JSON.stringify(
+      Object.keys(ROOT_CHECK_INPUTS[job]).map((name) => `${job}/${name}`),
+    );
+    expect(names(undefined), job).toEqual(names(""));
+    expect(names(undefined), job).toEqual(names(all));
+  }
 });
 
 const EXPRESSION = (body: string) => `\${{ ${body} }}`;

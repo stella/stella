@@ -24,6 +24,10 @@ import {
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
 import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
+import {
+  caseLawCanariesEnvSchema,
+  caseLawDailyBandsEnvSchema,
+} from "@/api/lib/observability/data-invariants/config-schema";
 import { rateLimitBudgetEnvSchema } from "@/api/lib/rate-limit/budget-config-schema";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
@@ -93,6 +97,10 @@ const originVerifyValue = v.pipe(
 export const envApiServerSchema = {
   ...rateLimitBudgetEnvSchema,
   ...verificationRunCapEnvSchema,
+  // Data invariants: each adapter's expected published decisions per day, and
+  // case-law queries the corpus must answer. Unset skips that invariant.
+  DATA_INVARIANT_CASE_LAW_DAILY_BANDS: caseLawDailyBandsEnvSchema,
+  DATA_INVARIANT_CASE_LAW_CANARIES: caseLawCanariesEnvSchema,
   VISUAL_PREVIEW_FUNCTION_NAME: v.optional(
     v.pipe(
       v.string(),
@@ -229,6 +237,26 @@ export const envApiServerSchema = {
    * deployments only (see handlers/smoke/routes.ts).
    */
   SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
+  SYNTHETIC_SESSION_KEYS: v.optional(
+    v.pipe(
+      v.string(),
+      v.parseJson(),
+      v.array(
+        v.strictObject({
+          label: v.pipe(
+            v.string(),
+            v.minLength(1),
+            v.maxLength(64),
+            v.regex(/^[A-Za-z0-9_-]+$/u),
+          ),
+          sha256: v.pipe(v.string(), v.regex(/^[a-fA-F0-9]{64}$/u)),
+          notAfter: v.pipe(v.string(), v.isoTimestamp()),
+        }),
+      ),
+      v.minLength(1),
+      v.maxLength(2),
+    ),
+  ),
   /**
    * Deployment-owned bearer credential for collaboration snapshot transport.
    * Unset disables the service-only load/store routes.

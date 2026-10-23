@@ -17,7 +17,10 @@ import {
   PublicLawUnavailableError,
   unwrapPublicLawEden,
 } from "@/lib/public-law-api";
-import { createAppQueryClient } from "@/lib/react-query";
+import {
+  createAppQueryClient,
+  CriticalQueryTimeoutError,
+} from "@/lib/react-query";
 
 const thrownBy = (status: number, value: unknown): unknown => {
   try {
@@ -86,7 +89,7 @@ describe("isSearchUnavailableError", () => {
   test("country admission is localized and never treated as a retryable engine outage or a miss", () => {
     const refusal = {
       status: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
-      value: publicCountryUnavailable("POL", {
+      value: publicCountryUnavailable("HUN", {
         domain: "caseLaw",
         surface: "search",
       }),
@@ -251,6 +254,18 @@ describe("isSearchUnavailableError", () => {
     expect(
       isSearchUnavailableError(thrownBy(404, { error: "Not Found" })),
     ).toBe(false);
+  });
+
+  test("a read the page stopped waiting for is a search outage", () => {
+    expect(
+      isSearchUnavailableError(
+        new CriticalQueryTimeoutError({
+          message: "Critical query timed out after 10000ms",
+          queryKey: ["case-law-decisions", "page"],
+          timeoutMs: 10_000,
+        }),
+      ),
+    ).toBe(true);
   });
 
   test("anything that is not an API failure is not a search outage", () => {

@@ -5,7 +5,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { env } from "@/api/env";

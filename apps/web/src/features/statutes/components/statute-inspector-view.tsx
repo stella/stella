@@ -10,6 +10,7 @@ import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
@@ -19,8 +20,8 @@ import {
 } from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
-import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
-import { ZoomControls } from "@/components/inspector/zoom-controls";
+import { VIEWER_OVERLAY_BAR_TOP_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
+import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
@@ -136,7 +137,10 @@ export const StatuteInspectorView = ({
             {/* The floating bar owns the top corner, so the act's masthead
                 starts below it rather than under the zoom controls. */}
             <div
-              className="flex flex-col gap-4 pt-12 pb-4"
+              className={cn(
+                "flex flex-col gap-4 pb-4",
+                VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+              )}
               ref={contentRef}
               {...textScale.rootProps}
             >
@@ -170,15 +174,13 @@ export const StatuteInspectorView = ({
             </div>
           </div>
         </ScrollArea>
-        <ViewerOverlayBar>
-          <ZoomControls
-            atMax={textScale.atMax}
-            atMin={textScale.atMin}
-            level={textScale.level}
-            onReset={textScale.reset}
-            onZoom={textScale.zoom}
-          />
-        </ViewerOverlayBar>
+        <FloatingZoomControls
+          atMax={textScale.atMax}
+          atMin={textScale.atMin}
+          level={textScale.level}
+          onReset={textScale.reset}
+          onZoom={textScale.zoom}
+        />
       </LegalReaderAIChat>
     </div>
   );
