@@ -1564,6 +1564,45 @@ describe("install-free invocation classification", () => {
     );
   });
 
+  test("an install through a retry helper copy outside scripts/ is an install", () => {
+    for (const helper of [
+      '"$RELEASE_TOOLING/scripts/retry.sh"',
+      "./scripts/retry.sh",
+      "tooling/retry.sh",
+    ]) {
+      expect(
+        classify(`bash ${helper} bun ci --ignore-scripts`).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install"]);
+    }
+    // A helper whose name only ends in retry.sh is a different program.
+    expect(
+      classify("bash scripts/gh-retry.sh bun ci --ignore-scripts").map(
+        ({ classification }) => classification.type,
+      ),
+    ).not.toEqual(["install"]);
+  });
+
+  test("a release gate recorder run is followed to the command it runs", () => {
+    for (const helper of [
+      '"$RUNNER_TEMP/release-gate.sh"',
+      "scripts/release-gate.sh",
+    ]) {
+      expect(
+        classify(`bash ${helper} run audit bun ci --ignore-scripts`).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install"]);
+    }
+    // Only `run <gate>` hands its words to a command.
+    expect(
+      classify("bash scripts/release-gate.sh verdict bun ci").map(
+        ({ classification }) => classification.type,
+      ),
+    ).not.toEqual(["install"]);
+  });
+
   test("bounded installs and planner calls retain dependency coverage", () => {
     for (const prefix of [
       ...["0", "1.5", ".5", "1.", "2s", "3.5m", "4h", "5d"].map(
@@ -1662,6 +1701,7 @@ test("everything CI runs without the dependency install imports only built-ins",
     "scripts/detect-e2e-changes.test.ts",
     "scripts/e2e-spec-shards-core.ts",
     "scripts/install-free-ci.test.ts",
+    "scripts/ci-pr-jobs-cli.ts",
   ]) {
     expect(loaded).toContain(file);
   }

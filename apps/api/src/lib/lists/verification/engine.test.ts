@@ -8,6 +8,7 @@ import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
+import { locateQuote } from "@stll/legal-ast/quote-locate";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -32,9 +33,8 @@ import {
   ListVerificationAccessRevokedError,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
-import { locateQuote } from "@/api/lib/lists/verification/quote-locate";
 import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
-import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -90,8 +90,8 @@ const deps: VerificationModelDeps = {
     workspaceId,
   } satisfies AIUsageMetering,
   abortSignal: AbortSignal.timeout(1000),
-  generateObjectForRole:
-    asTestRaw<typeof generateTanStackObjectForRole>(generateMock),
+  generateObjectForTask:
+    asTestRaw<typeof generateTanStackObjectForTask>(generateMock),
 };
 
 const BLOCKS: VerificationBlock[] = [
@@ -582,7 +582,7 @@ test("access removal after extraction blocks the later grading batch", async () 
   const currentDeps: VerificationModelDeps = {
     ...deps,
     refreshAccessProof: async () => currentProof,
-    generateObjectForRole: asTestRaw<typeof generateTanStackObjectForRole>(
+    generateObjectForTask: asTestRaw<typeof generateTanStackObjectForTask>(
       async () => {
         dispatched.push("extraction");
         currentProof = null;

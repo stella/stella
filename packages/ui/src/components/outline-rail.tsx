@@ -2,8 +2,8 @@
  * Outline navigation: an embedded panel, a host-owned rail, or a disclosure.
  *
  * Embedded presentations fill their host track. The standalone disclosure
- * owns a toggle above a thin column of ticks; hovering or pressing it reveals
- * the collapsible tree. Click a tick or a row to jump.
+ * owns a thin column of ticks; hovering, focusing, or tapping the column
+ * reveals the collapsible tree. Click a tick or a row to jump.
  *
  * Generic over the position source: callers supply `resolvePct` (vertical % for
  * a tick) and `onJump`. Active tracking is derived from `resolvePct` by default,
@@ -27,7 +27,7 @@ import {
 
 import { Temporal } from "temporal-polyfill/full";
 
-import { ChevronRightIcon as ChevronRight, PanelLeftIcon } from "../icons";
+import { ChevronRightIcon as ChevronRight } from "../icons";
 import { DOCUMENT_PANEL_SAFE_BOTTOM } from "../lib/panel-inset";
 import { cn } from "../lib/utils";
 import { DirectionalIcon } from "./directional-icon";
@@ -111,6 +111,11 @@ const RAIL_MAX_TICKS = 40;
 // fractional scrollHeight would otherwise leave a wheel stuck at an edge that
 // reads as one pixel short of its own end.
 const WHEEL_EDGE_TOLERANCE = 1;
+// How long the pointer rests on the tick strip before the panel opens. A
+// pointer crossing the strip on its way elsewhere (the scrollbar, a control
+// beside it) passes in less, so only a reader who stops there opens it.
+// Focus and a click open it at once.
+const HOVER_OPEN_DWELL_MS = 150;
 // Marks the active row for the reveal below: the rows are rendered by a
 // recursive walk, so the one to scroll to is found in the committed DOM
 // rather than held in a ref the walk would have to thread through.
@@ -214,21 +219,20 @@ export const OutlineRail = ({
   );
   const [derivedActive, setDerivedActive] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
-  // Held open by keyboard. The pointer path reveals the panel on hover, which
-  // a keyboard has no equivalent of, and an `inert` panel cannot take focus to
-  // open itself — so the way in is a control outside it that latches this.
-  const [pinned, setPinned] = useState(false);
+  const [focusWithin, setFocusWithin] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   // Rows the reader has opened or closed by hand. Their state is theirs: the
   // active-chain auto-expand below must not reopen a branch they just shut.
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const panelId = useId();
-  const triggerId = useId();
-  const panelOpen = presentation === "panel" || hovered || pinned;
+  const panelOpen = presentation === "panel" || hovered || focusWithin;
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualLockUntil = useRef(0);
   const panelRef = useRef<HTMLDivElement>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  const focusedTickRef = useRef<HTMLButtonElement>(null);
   // Hold onJump and the scroll-time resolver in refs so the active-tracking
   // scroll listener reads the latest without re-subscribing. recalc instead
   // depends on resolvePct directly, so ticks recompute when the resolver's
@@ -468,13 +472,30 @@ export const OutlineRail = ({
     }
   }, [activeIndex, panelOpen]);
 
+  const cancelOpen = useCallback(() => {
+    if (openTimer.current !== null) {
+      clearTimeout(openTimer.current);
+      openTimer.current = null;
+    }
+  }, []);
+
   const openPanel = useCallback(() => {
+    cancelOpen();
     if (closeTimer.current !== null) {
       clearTimeout(closeTimer.current);
       closeTimer.current = null;
     }
     setHovered(true);
-  }, []);
+  }, [cancelOpen]);
+
+  const scheduleOpen = useCallback(() => {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    cancelOpen();
+    openTimer.current = setTimeout(openPanel, HOVER_OPEN_DWELL_MS);
+  }, [cancelOpen, openPanel]);
 
   const scheduleClose = useCallback(() => {
     if (closeTimer.current !== null) {
@@ -483,27 +504,22 @@ export const OutlineRail = ({
     closeTimer.current = setTimeout(() => setHovered(false), 120);
   }, []);
 
-  // Opening by keyboard has to land the reader in the panel; it is `inert`
-  // until this render commits, so the move cannot happen in the click.
-  useEffect(() => {
-    if (pinned) {
-      panelRef.current?.closest("nav")?.focus();
-    }
-  }, [pinned]);
-
   const closePanel = useCallback(() => {
     if (closeTimer.current !== null) {
       clearTimeout(closeTimer.current);
       closeTimer.current = null;
     }
     setHovered(false);
-    setPinned(false);
+    setFocusWithin(false);
   }, []);
 
   useEffect(
     () => () => {
       if (closeTimer.current !== null) {
         clearTimeout(closeTimer.current);
+      }
+      if (openTimer.current !== null) {
+        clearTimeout(openTimer.current);
       }
     },
     [],
@@ -664,6 +680,7 @@ export const OutlineRail = ({
     <div
       aria-label={ariaLabel}
       className={OUTLINE_PRESENTATION_CLASS[presentation]}
+      ref={railRef}
       role="group"
       style={{
         marginBlockEnd: bottomInset ?? DOCUMENT_PANEL_SAFE_BOTTOM,
@@ -672,47 +689,15 @@ export const OutlineRail = ({
           : {}),
       }}
     >
-      {/* The disclosure owns a normal-size row above the ticks; a host-owned
-          rail supplies its own toggle in that same flow. */}
-      {presentation === "popover" && (
-        <button
-          aria-controls={panelId}
-          aria-expanded={panelOpen}
-          className={cn(
-            "focus-visible:ring-ring bg-popover text-popover-foreground flex shrink-0 items-center justify-center self-start rounded-md focus-visible:ring-2 focus-visible:outline-none",
-            "pointer-coarse:my-1.5",
-            OUTLINE_CONTROL_TARGET_CLASS,
-          )}
-          aria-label={ariaLabel}
-          style={{
-            minWidth: OUTLINE_CONTROL_MIN_SIZE,
-            minHeight: OUTLINE_CONTROL_MIN_SIZE,
-          }}
-          id={triggerId}
-          onClick={() => {
-            if (pinned) {
-              closePanel();
-              return;
-            }
-            setPinned(true);
-            openPanel();
-          }}
-          type="button"
-        >
-          <PanelLeftIcon aria-hidden className="size-4 rtl:-scale-x-100" />
-        </button>
-      )}
       {presentation !== "panel" && (
         <div
           className="relative min-h-0 flex-1"
           data-outline-ticks
-          style={
-            presentation === "popover"
-              ? { height: `calc(100% - ${OUTLINE_CONTROL_MIN_SIZE}px)` }
-              : undefined
-          }
-          onMouseEnter={openPanel}
-          onMouseLeave={scheduleClose}
+          onMouseEnter={scheduleOpen}
+          onMouseLeave={() => {
+            cancelOpen();
+            scheduleClose();
+          }}
           onWheel={(event) => {
             scrollContainerRef.current?.scrollBy(0, event.deltaY);
           }}
@@ -725,6 +710,12 @@ export const OutlineRail = ({
                 <TooltipTrigger
                   render={
                     <button
+                      {...(presentation === "popover"
+                        ? {
+                            "aria-controls": panelId,
+                            "aria-expanded": panelOpen,
+                          }
+                        : {})}
                       aria-current={isActive ? "true" : undefined}
                       aria-label={item.label}
                       className={cn(
@@ -733,7 +724,26 @@ export const OutlineRail = ({
                           ? "opacity-100"
                           : "opacity-45 hover:opacity-90",
                       )}
+                      onBlur={(event) => {
+                        // Focus moving to another tick or into the panel keeps
+                        // the outline open; leaving the rail closes it.
+                        if (!railRef.current?.contains(event.relatedTarget)) {
+                          closePanel();
+                        }
+                      }}
                       onClick={() => jumpTo(item.id)}
+                      onFocus={(event) => {
+                        focusedTickRef.current = event.currentTarget;
+                        setFocusWithin(true);
+                      }}
+                      onKeyDown={(event) => {
+                        if (
+                          event.key === "Escape" &&
+                          presentation === "popover"
+                        ) {
+                          closePanel();
+                        }
+                      }}
                       onMouseEnter={() => setHoveredId(item.id)}
                       onMouseLeave={() => setHoveredId(null)}
                       style={{
@@ -790,36 +800,34 @@ export const OutlineRail = ({
           // open for as long as focus is inside it, or `inert` would take the
           // focused control away mid-keystroke.
           onBlurCapture={(event) => {
-            // Focus returns to the disclosure before its click runs; let that
-            // click close the pinned panel instead of clearing and reopening it.
-            if (
-              event.relatedTarget instanceof HTMLElement &&
-              event.relatedTarget.id === triggerId
-            ) {
-              return;
-            }
-            // A panel latched open by keyboard releases when focus leaves it;
-            // the hover path keeps its grace period so a click inside the panel
-            // (blur, then focus) does not flicker it shut.
-            if (pinned && !event.currentTarget.contains(event.relatedTarget)) {
+            // Focus leaving the rail from inside the panel closes it the same
+            // way leaving from a tick does; moving within the rail keeps it.
+            if (!railRef.current?.contains(event.relatedTarget)) {
               closePanel();
               return;
             }
             scheduleClose();
           }}
-          onFocusCapture={openPanel}
+          onFocusCapture={() => {
+            // Focus that entered by pointer, with no tick focused first, holds
+            // the panel open too: a hover alone would lapse on mouse-out.
+            openPanel();
+            setFocusWithin(true);
+          }}
           onKeyDown={(event) => {
-            if (event.key !== "Escape") {
+            // Escape hands focus back to the tick the reader came from, or to
+            // the current tick when the panel was opened by pointer.
+            if (event.key !== "Escape" || presentation !== "popover") {
               return;
             }
-            // Closing makes this panel inert, which would leave focus nowhere.
-            // Hand it back to the control that opened it, before that happens.
-            const trigger = event.currentTarget.ownerDocument.querySelector(
-              `#${CSS.escape(triggerId)}`,
-            );
-            if (trigger instanceof HTMLElement) {
-              trigger.focus();
-            }
+            const tickSelector = `button[aria-controls="${CSS.escape(panelId)}"]`;
+            const returnTick =
+              focusedTickRef.current ??
+              railRef.current?.querySelector<HTMLButtonElement>(
+                `${tickSelector}[aria-current="true"]`,
+              ) ??
+              railRef.current?.querySelector<HTMLButtonElement>(tickSelector);
+            returnTick?.focus();
             closePanel();
           }}
           onMouseEnter={openPanel}

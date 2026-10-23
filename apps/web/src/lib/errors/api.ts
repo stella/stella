@@ -22,13 +22,19 @@ import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
-import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
+import {
+  PUBLIC_COUNTRY_UNAVAILABLE_CODE,
+  publicCountryUnavailableSchema,
+  type PublicCountryUnavailable,
+  type PublicLawDomain,
+} from "@stll/api-contract/public-country-capability";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
 
 import { getTranslator } from "@/i18n/translator";
 import type { TranslationKey } from "@/i18n/types";
+import { AI_FAILURE_ERROR_KEYS } from "@/lib/errors/ai-failure";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import { ClientOperationError } from "@/lib/errors/client";
 import {
@@ -48,7 +54,12 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
 }> {}
 
 const MAX_API_RETRY_COUNT = 3;
+const CLIENT_ERROR_STATUS = 400;
 const TOO_MANY_REQUESTS_STATUS = 429;
+const SERVER_ERROR_STATUS = 500;
+
+const isClientErrorStatus = (status: number): boolean =>
+  status >= CLIENT_ERROR_STATUS && status < SERVER_ERROR_STATUS;
 
 export const shouldRetryAPIRequest = (
   failureCount: number,
@@ -106,16 +117,30 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
     value: parseApiErrorValue(value),
   });
   const { code, details, rawMessage } = normalized;
+  const countryRefusal =
+    code === PUBLIC_COUNTRY_UNAVAILABLE_CODE
+      ? v.safeParse(publicCountryUnavailableSchema, value)
+      : undefined;
   const diagnosticValue = details?.["providerDiagnostic"];
   const diagnostic =
     diagnosticValue === undefined
       ? undefined
       : v.safeParse(providerDiagnosticSchema, diagnosticValue);
-  if (diagnostic !== undefined && !diagnostic.success) {
-    throw new ClientOperationError({
+  let malformedResponse =
+    countryRefusal?.success === false
+      ? {
+          action: "parse-public-country-unavailable",
+          message: "Invalid public country unavailability response",
+        }
+      : null;
+  if (malformedResponse === null && diagnostic?.success === false) {
+    malformedResponse = {
       action: "parse-provider-diagnostic",
       message: "Invalid provider diagnostic response",
-    });
+    };
+  }
+  if (malformedResponse !== null) {
+    throw new ClientOperationError(malformedResponse);
   }
   return new APIError({
     ...(diagnostic?.success ? { providerDiagnostic: diagnostic.output } : {}),
@@ -123,9 +148,33 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
     ...(details === undefined ? {} : { details }),
     ...(rawMessage === undefined ? {} : { rawMessage }),
     status: normalized.status,
-    message: localizeAPIError({ code, details, status: normalized.status }),
+    message: countryRefusal?.success
+      ? translateError(
+          PUBLIC_COUNTRY_ERROR_KEYS[countryRefusal.output.domain][
+            countryRefusal.output.reason
+          ],
+        )
+      : localizeAPIError({ code, details, status: normalized.status }),
   });
 };
+
+const PUBLIC_COUNTRY_ERROR_KEYS = {
+  caseLaw: {
+    identity_public: "errors.api.caseLawIdentityOnly",
+    pending_public: "errors.api.caseLawCountryUnavailable",
+    withdrawn: "errors.api.caseLawCountryUnavailable",
+    pages_public: "errors.api.caseLawSearchUnavailable",
+  },
+  legislation: {
+    identity_public: "errors.api.legislationIdentityOnly",
+    pending_public: "errors.api.legislationCountryUnavailable",
+    withdrawn: "errors.api.legislationCountryUnavailable",
+    pages_public: "errors.api.legislationSearchUnavailable",
+  },
+} as const satisfies Record<
+  PublicLawDomain,
+  Record<PublicCountryUnavailable["reason"], TranslationKey>
+>;
 
 const RAW_INTERNAL_TOOL_ERROR_CODE = {
   legalSourceStructuralRepairRequired:
@@ -140,6 +189,7 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
 const CODE_ERROR_KEYS = {
+  ...AI_FAILURE_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
@@ -149,7 +199,6 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.matterContactCapacityExceeded",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
-  [PUBLIC_COUNTRY_UNAVAILABLE_CODE]: "errors.api.publicCountryUnavailable",
   [MEMBER_REMOVAL_BUSY_CODE]: "errors.actionAdmission.concurrencyBusy",
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
@@ -238,7 +287,11 @@ export const apiFieldIssueMessage = (
   error: unknown,
   field: string,
 ): string | undefined => {
-  if (!APIError.is(error) || error.code !== API_VALIDATION_ERROR_CODE) {
+  if (
+    !APIError.is(error) ||
+    error.code !== API_VALIDATION_ERROR_CODE ||
+    !isClientErrorStatus(error.status)
+  ) {
     return undefined;
   }
   const issue = parseApiValidationIssues(error.details).find(
@@ -296,14 +349,20 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
   if (isActionAdmissionCode(code)) {
     return translateError(ACTION_ADMISSION_ERROR_KEYS[code]);
   }
+  // Only a rejected request (4xx) is a validation answer. An outage that
+  // carries the code must keep the unavailable/retry message.
   const issue =
-    code === API_VALIDATION_ERROR_CODE
+    code === API_VALIDATION_ERROR_CODE && isClientErrorStatus(status)
       ? parseApiValidationIssues(details).at(0)
       : undefined;
   if (issue !== undefined) {
     return validationIssueMessage(issue);
   }
-  if (code && isKnownErrorCode(code)) {
+  if (
+    code &&
+    isKnownErrorCode(code) &&
+    !(code === API_VALIDATION_ERROR_CODE && !isClientErrorStatus(status))
+  ) {
     return translateError(CODE_ERROR_KEYS[code]);
   }
   if (

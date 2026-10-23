@@ -1,6 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { getTableName, isTable } from "drizzle-orm";
+import { getTableName, getViewName, isTable, isView } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
 import nodePath from "node:path";
 
@@ -9,9 +9,11 @@ import {
   createTestPglite,
   HARNESS_RELATIONS_SQL,
   ROLE_GRANT_STATEMENTS,
+  availableSchemaRelationNames as harnessSchemaRelationNames,
 } from "@/api/tests/pglite-test-db";
 import {
   deriveStellaTablePrivileges,
+  migrationSqlWithoutLineComments,
   readCommittedMigrations,
 } from "@/api/tests/stella-table-privileges";
 import type {
@@ -27,12 +29,10 @@ import type {
  * migration and never here, so every suite that SET ROLE'd to ingestion saw a
  * permission error the real deployment does not have.
  *
- * This is the mirror check. Every `(role, table)` pair a committed migration
- * grants must also be granted by the harness, for every table the schema still
- * defines. It compares the pairs, not the verbs: the harness deliberately
- * spells some grants more coarsely (one statement per role rather than per
- * migration), and a table nobody may touch at all is the failure worth
- * catching.
+ * This is the mirror check. Every effective relation-wide `(role, relation)`
+ * grant committed migrations leave must also be granted by the harness, for
+ * every relation the schema still defines. Column grants are checked
+ * separately below.
  */
 
 const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
@@ -53,8 +53,8 @@ const MIGRATION_REPLAYED_ROLES = new Set(["stella_entity_gate"]);
  */
 const COLUMN_UNSCOPED_ROLES = new Set(["public"]);
 
-const GRANT_STATEMENT =
-  /\bGRANT\b([\s\S]*?)\bTO\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:;|$)/gu;
+const GRANT_OR_REVOKE_STATEMENT =
+  /\b(GRANT|REVOKE)\b([^;]*?)\b(TO|FROM)\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:;|$)/gu;
 
 const OBJECT_CLAUSE = /\bON\s+(?:TABLE\s+)?([\s\S]*?)$/u;
 
@@ -95,12 +95,18 @@ const COLUMN_PRIVILEGE = /\b(SELECT|INSERT|UPDATE|REFERENCES)\s*\(([^)]*)\)/giu;
 
 const unquote = (value: string): string => value.replaceAll('"', "");
 
-/** Every `(role, table)` pair the given SQL grants, as `role:table`. */
+/** Effective relation-wide grants, as `role:relation`. */
 const grantedPairs = (sqlText: string): Set<string> => {
   const pairs = new Set<string>();
-  for (const match of sqlText.matchAll(GRANT_STATEMENT)) {
-    const [, body = "", rawRole = ""] = match;
+  for (const match of migrationSqlWithoutLineComments(sqlText).matchAll(
+    GRANT_OR_REVOKE_STATEMENT,
+  )) {
+    const [, verb = "", body = "", , rawRole = ""] = match;
     if (NOT_A_TABLE_GRANT.test(body)) {
+      continue;
+    }
+    // Column-scoped privileges do not grant relation-wide access.
+    if (/\b(?:SELECT|INSERT|UPDATE|REFERENCES)\s*\(/iu.test(body)) {
       continue;
     }
     const objects = OBJECT_CLAUSE.exec(body)?.[1];
@@ -115,20 +121,27 @@ const grantedPairs = (sqlText: string): Set<string> => {
       if (name.length === 0 || PRIVILEGE_WORDS.has(name.toLowerCase())) {
         continue;
       }
-      pairs.add(`${role}:${name}`);
+      const pair = `${role}:${name}`;
+      if (verb.toUpperCase() === "GRANT") {
+        pairs.add(pair);
+      } else {
+        pairs.delete(pair);
+      }
     }
   }
   return pairs;
 };
 
 /**
- * Every `(role, table, column, privilege)` the given SQL grants column by
- * column, as `role:table:column:PRIVILEGE`.
+ * Effective `(role, relation, column, privilege)` grants, as
+ * `role:relation:column:PRIVILEGE`.
  */
 const grantedColumnPairs = (sqlText: string): Set<string> => {
   const pairs = new Set<string>();
-  for (const match of sqlText.matchAll(GRANT_STATEMENT)) {
-    const [, body = "", rawRole = ""] = match;
+  for (const match of migrationSqlWithoutLineComments(sqlText).matchAll(
+    GRANT_OR_REVOKE_STATEMENT,
+  )) {
+    const [, verb = "", body = "", , rawRole = ""] = match;
     const role = unquote(rawRole);
     const objects = OBJECT_CLAUSE.exec(body)?.[1];
     if (objects === undefined) {
@@ -145,7 +158,12 @@ const grantedColumnPairs = (sqlText: string): Set<string> => {
         for (const rawColumn of columnList.split(",")) {
           const column = unquote(rawColumn.trim());
           if (table.length > 0 && column.length > 0) {
-            pairs.add(`${role}:${table}:${column}:${privilege.toUpperCase()}`);
+            const pair = `${role}:${table}:${column}:${privilege.toUpperCase()}`;
+            if (verb.toUpperCase() === "GRANT") {
+              pairs.add(pair);
+            } else {
+              pairs.delete(pair);
+            }
           }
         }
       }
@@ -154,10 +172,12 @@ const grantedColumnPairs = (sqlText: string): Set<string> => {
   return pairs;
 };
 
-const schemaTableNames = new Set<string>(
+const availableSchemaRelationNames = new Set<string>(
   Object.values(schema)
-    .filter((value) => isTable(value))
-    .map((table) => getTableName(table)),
+    .filter((value) => isTable(value) || isView(value))
+    .map((relation) =>
+      isTable(relation) ? getTableName(relation) : getViewName(relation),
+    ),
 );
 
 const readMigrationSql = async (): Promise<string> => {
@@ -178,6 +198,19 @@ const readMigrationSql = async (): Promise<string> => {
 };
 
 describe("pglite role grants mirror the committed migrations", () => {
+  test("the public reader harness grants only relations present in its schema", () => {
+    const harnessPairs = grantedPairs(ROLE_GRANT_STATEMENTS.join(";\n"));
+    const absent = [...harnessPairs].filter((pair) => {
+      const [role, table = ""] = pair.split(":");
+      return (
+        role === "stella_public_law_reader" &&
+        !harnessSchemaRelationNames.has(table)
+      );
+    });
+
+    expect(absent).toEqual([]);
+  });
+
   test("the migrations grant no table the harness leaves ungranted", async () => {
     const migrationPairs = grantedPairs(await readMigrationSql());
     const harnessPairs = grantedPairs(ROLE_GRANT_STATEMENTS.join(";\n"));
@@ -188,7 +221,7 @@ describe("pglite role grants mirror the committed migrations", () => {
         return (
           !WHOLESALE_ROLES.has(role) &&
           !MIGRATION_REPLAYED_ROLES.has(role) &&
-          schemaTableNames.has(table) &&
+          availableSchemaRelationNames.has(table) &&
           !harnessPairs.has(pair)
         );
       })
@@ -218,7 +251,7 @@ describe("pglite role grants mirror the committed migrations", () => {
       return (
         !COLUMN_UNSCOPED_ROLES.has(role) &&
         !MIGRATION_REPLAYED_ROLES.has(role) &&
-        schemaTableNames.has(table)
+        availableSchemaRelationNames.has(table)
       );
     };
     const migrationColumns = [
@@ -243,6 +276,23 @@ describe("pglite role grants mirror the committed migrations", () => {
       migrationPairs.has("stella_ingestion:case_law_reconciliation_items"),
     ).toBe(true);
     expect(harnessPairs.has("stella_ingestion:case_law_decisions")).toBe(true);
+    expect(
+      migrationPairs.has("stella_public_law_reader:case_law_decisions"),
+    ).toBe(false);
+    // Expand phase: the previous release still reads the base table.
+    expect(migrationPairs.has("stella_caselaw_reader:case_law_decisions")).toBe(
+      true,
+    );
+    expect(harnessPairs.has("stella_caselaw_reader:case_law_decisions")).toBe(
+      true,
+    );
+    for (const view of [
+      "case_law_published_decisions",
+      "case_law_unredacted_decisions",
+    ]) {
+      expect(migrationPairs.has(`stella_caselaw_reader:${view}`)).toBe(true);
+      expect(harnessPairs.has(`stella_caselaw_reader:${view}`)).toBe(true);
+    }
 
     // An empty column set on both sides would satisfy the equality above.
     const migrationColumns = grantedColumnPairs(await readMigrationSql());
@@ -253,6 +303,21 @@ describe("pglite role grants mirror the committed migrations", () => {
       "stella_ingestion:case_law_sources:stored_total:UPDATE";
     expect(migrationColumns.has(storedTotalGrant)).toBe(true);
     expect(harnessColumns.has(storedTotalGrant)).toBe(true);
+    expect(
+      migrationColumns.has(
+        "stella_public_law_reader:case_law_decisions:case_number:SELECT",
+      ),
+    ).toBe(true);
+    expect(
+      harnessColumns.has(
+        "stella_public_law_reader:case_law_decisions:case_number:SELECT",
+      ),
+    ).toBe(true);
+    expect(
+      migrationColumns.has(
+        "stella_public_law_reader:case_law_published_decisions:case_number:SELECT",
+      ),
+    ).toBe(true);
   });
 });
 
@@ -502,6 +567,18 @@ describe("stella table privilege derivation", () => {
         "t",
       ),
     ).toEqual([]);
+  });
+
+  test("column grants are read from statements rather than comments or view projections", () => {
+    const pairs = grantedColumnPairs(`
+      -- GRANT access through the published view.
+      CREATE VIEW published_rows AS
+        SELECT (redacted_at IS NULL AND jsonb_extract_path_text(metadata, 'marker', 'field') IS DISTINCT FROM 'true') AS published
+        FROM decisions;
+      -- GRANT SELECT (comment_field) ON decisions TO reader;
+      GRANT SELECT (id) ON published_rows TO reader;
+    `);
+    expect([...pairs]).toEqual(["reader:published_rows:id:SELECT"]);
   });
 
   test("reads mixed column grants on schema-qualified tables", () => {

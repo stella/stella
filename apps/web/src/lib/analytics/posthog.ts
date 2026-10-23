@@ -202,6 +202,9 @@ const NOISE_PATTERNS = [
 export const isNoiseException = (event: {
   properties?: Record<string, unknown>;
 }): boolean => {
+  if (event.properties?.["user_visible"] === true) {
+    return false;
+  }
   const list = event.properties?.["$exception_list"];
   if (!Array.isArray(list) || list.length === 0) {
     return false;
@@ -226,6 +229,46 @@ export const isNoiseException = (event: {
 // (`ClientTelemetryError.area`). The pattern rejects anything free-form so
 // no dynamic string can ride along.
 const TELEMETRY_AREA = /^[a-z][a-z0-9-]{0,39}$/u;
+const USER_VISIBLE_FEATURE = /^[a-z][a-z0-9-]{0,39}$/u;
+const ROUTE_TEMPLATE = /^(?:unknown|\/[A-Za-z0-9_.$/-]*)$/u;
+
+declare const exceptionCodeBrand: unique symbol;
+type ExceptionCode = string & { readonly [exceptionCodeBrand]: true };
+declare const telemetryAreaBrand: unique symbol;
+type TelemetryArea = string & { readonly [telemetryAreaBrand]: true };
+
+type ExceptionValueFields = {
+  /** Already a class token: `normalizeTelemetryErrorTypeName` output. */
+  type: string;
+  code?: ExceptionCode;
+  status?: number;
+  area?: TelemetryArea;
+};
+
+/** Renders only structural fields that have already crossed their allowlist. */
+const exceptionValue = ({
+  type,
+  code,
+  status,
+  area,
+}: ExceptionValueFields): string =>
+  `${type}${code === undefined ? "" : `[${code}]`}${
+    status === undefined ? "" : ` ${status}`
+  }${area === undefined ? "" : ` area=${area}`}`;
+
+// The allowlists narrow by predicate, so a branded value only ever comes from
+// a string that passed its pattern.
+const isExceptionCode = (value: string): value is ExceptionCode =>
+  API_ERROR_CODE.test(value);
+
+const isTelemetryArea = (value: string): value is TelemetryArea =>
+  TELEMETRY_AREA.test(value);
+
+const exceptionCode = (value: string | undefined): ExceptionCode | undefined =>
+  value !== undefined && isExceptionCode(value) ? value : undefined;
+
+const telemetryArea = (value: unknown): TelemetryArea | undefined =>
+  typeof value === "string" && isTelemetryArea(value) ? value : undefined;
 
 const telemetryAreaProperty = (
   error: unknown,
@@ -370,7 +413,10 @@ export const sanitizeFrame = (frame: unknown): SanitizedFrame => {
   };
 };
 
-const sanitizeExceptionEntry = (entry: unknown) => {
+const sanitizeExceptionEntry = (
+  entry: unknown,
+  fields: Omit<ExceptionValueFields, "type">,
+) => {
   const type = domExceptionClass(
     normalizeTelemetryErrorTypeName(readStringField(entry, "type")),
     readStringField(entry, "value"),
@@ -379,7 +425,7 @@ const sanitizeExceptionEntry = (entry: unknown) => {
   const frames = isRecord(stacktrace) ? stacktrace["frames"] : undefined;
   return {
     type,
-    value: "",
+    value: exceptionValue({ type, ...fields }),
     ...(Array.isArray(frames)
       ? { stacktrace: { type: "raw", frames: frames.map(sanitizeFrame) } }
       : {}),
@@ -410,7 +456,7 @@ const templateUrl = (
   return { url: `${parsed.origin}${template}`, pathname: template };
 };
 
-const sanitizeExceptionEvent = (
+export const sanitizeExceptionEvent = (
   event: CaptureResult,
   history: RouteTemplateHistory,
 ): CaptureResult => {
@@ -419,16 +465,28 @@ const sanitizeExceptionEvent = (
   const appVersion = properties["app_version"];
   const area = properties["area"];
   const errorReference = properties["error_reference"];
+  const feature = properties["feature"];
+  const routeTemplate = properties["route_template"];
+  const userVisible = properties["user_visible"] === true;
   const exceptionList = properties["$exception_list"];
   const entries: unknown[] = Array.isArray(exceptionList) ? exceptionList : [];
+  const safeArea = telemetryArea(area);
+  const http = apiErrorIdentity(properties);
+  const safeCode = exceptionCode(http?.code);
+  const valueFields = {
+    ...(safeArea === undefined ? {} : { area: safeArea }),
+    ...(http === undefined
+      ? {}
+      : {
+          status: http.status,
+          ...(safeCode === undefined ? {} : { code: safeCode }),
+        }),
+  };
   const sanitizedList =
     entries.length > 0
-      ? entries.map(sanitizeExceptionEntry)
-      : [sanitizeExceptionEntry(undefined)];
+      ? entries.map((entry) => sanitizeExceptionEntry(entry, valueFields))
+      : [sanitizeExceptionEntry(undefined, valueFields)];
   const type = sanitizedList.at(0)?.type ?? normalizeTelemetryErrorTypeName("");
-  const safeArea =
-    typeof area === "string" && TELEMETRY_AREA.test(area) ? area : undefined;
-  const http = apiErrorIdentity(properties);
   // Session and window ids join an exception to the page views and actions
   // around it; they are random SDK ids that carry no user content.
   const sessionId = properties["$session_id"];
@@ -466,6 +524,17 @@ const sanitizeExceptionEvent = (
           }),
       ...(isErrorReference(errorReference)
         ? { error_reference: errorReference }
+        : {}),
+      ...(userVisible ? { user_visible: true } : {}),
+      ...(userVisible &&
+      typeof feature === "string" &&
+      USER_VISIBLE_FEATURE.test(feature)
+        ? { feature }
+        : {}),
+      ...(userVisible &&
+      typeof routeTemplate === "string" &&
+      ROUTE_TEMPLATE.test(routeTemplate)
+        ? { route_template: routeTemplate }
         : {}),
     },
   };
@@ -672,12 +741,24 @@ const sanitizeSdkUrlContext = (
 
 const errorContextProperties = (
   context: ErrorCaptureContext | undefined,
-): Record<string, string> | undefined => {
-  if (context?.type !== "recovery") {
-    return undefined;
+): Record<string, string | boolean> | undefined => {
+  switch (context?.type) {
+    case "recovery":
+      return { error_reference: context.reference };
+    case "user-visible":
+      return {
+        feature: context.feature,
+        route_template: context.routeTemplate,
+        user_visible: true,
+      };
+    case "detached":
+    case undefined:
+      return undefined;
+    default: {
+      context satisfies never;
+      return panic(`Unhandled context: ${String(context)}`);
+    }
   }
-
-  return { error_reference: context.reference };
 };
 
 const devErrorContext = (
@@ -692,6 +773,12 @@ const devErrorContext = (
       return { detached: context.operation };
     case "recovery":
       return { error_reference: context.reference };
+    case "user-visible":
+      return {
+        feature: context.feature,
+        route_template: context.routeTemplate,
+        user_visible: "true",
+      };
     default: {
       context satisfies never;
       return panic(`Unhandled context: ${String(context)}`);
@@ -793,6 +880,10 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
         case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
         case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
+        case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
+        case WEB_ANALYTICS_EVENTS.followupShown:
+        case WEB_ANALYTICS_EVENTS.followupSelected:
+        case WEB_ANALYTICS_EVENTS.keyActionTimed:
           return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
         default: {
           event.event satisfies never;
@@ -905,6 +996,21 @@ export const createPostHogAnalytics = ({
     },
     captureProvisionPlacementGaps: (properties) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
+    },
+    captureInspectorRestoreRecovered: (properties) => {
+      posthog.capture(
+        WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered,
+        properties,
+      );
+    },
+    captureFollowupShown: (properties) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.followupShown, properties);
+    },
+    captureFollowupSelected: (properties) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.followupSelected, properties);
+    },
+    captureKeyActionTiming: (properties) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.keyActionTimed, properties);
     },
     captureRouteErrorLifecycle: async (properties) =>
       import("@/lib/analytics/posthog-route-error")

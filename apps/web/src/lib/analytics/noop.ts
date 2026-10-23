@@ -21,6 +21,12 @@ const devErrorContext = (
       return { detached: context.operation };
     case "recovery":
       return { error_reference: context.reference };
+    case "user-visible":
+      return {
+        feature: context.feature,
+        route_template: context.routeTemplate,
+        user_visible: "true",
+      };
     default: {
       context satisfies never;
       return panic(`Unhandled context: ${String(context)}`);
@@ -38,6 +44,10 @@ export const noopAnalytics: Analytics = {
   capturePageViewed: noop,
   captureGuideStepSkipped: noop,
   captureProvisionPlacementGaps: noop,
+  captureInspectorRestoreRecovered: noop,
+  captureFollowupShown: noop,
+  captureFollowupSelected: noop,
+  captureKeyActionTiming: noop,
   captureFeedbackDialogOpened: noop,
   captureFeedbackReportSubmitted: noop,
   captureRouteErrorLifecycle: noopAsync,

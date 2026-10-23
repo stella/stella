@@ -45,6 +45,22 @@ const ProxyIcon = ({ src }: { src: string }) => {
   );
 };
 
+const GITHUB_LINK_ICON = (
+  <GitHubLogoIcon aria-hidden="true" className="size-[1em]" />
+);
+const X_LINK_ICON = <XLogoIcon aria-hidden="true" className="size-[1em]" />;
+const BUNDLED_ICONS = new Map([
+  ["github.com", GITHUB_LINK_ICON],
+  ["www.github.com", GITHUB_LINK_ICON],
+  ["x.com", X_LINK_ICON],
+  ["www.x.com", X_LINK_ICON],
+  ["twitter.com", X_LINK_ICON],
+  ["www.twitter.com", X_LINK_ICON],
+]);
+
+export const hasBundledChatLinkIcon = (hostname: string): boolean =>
+  BUNDLED_ICONS.has(hostname);
+
 export type ChatLinkIconSource = { type: "proxy"; src: string };
 
 type ChatLinkProps = Omit<
@@ -52,11 +68,13 @@ type ChatLinkProps = Omit<
   "href" | "target" | "rel" | "className"
 > & {
   href: string;
-  iconSource?: ChatLinkIconSource;
+  appearance?: "inline" | "tray";
+  iconSource?: ChatLinkIconSource | undefined;
   newTabLabel?: string;
 };
 
 export const ChatLink = ({
+  appearance = "inline",
   children,
   href,
   iconSource,
@@ -64,6 +82,12 @@ export const ChatLink = ({
   title,
   ...anchorProps
 }: ChatLinkProps) => {
+  const className =
+    appearance === "tray"
+      ? "bg-muted/50 hover:bg-muted inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      : CHAT_LINK_CLASS_NAME;
+  const labelClassName =
+    appearance === "tray" ? "max-w-[20ch] truncate" : undefined;
   const target = normalizeChatLink(href);
   if (!target) {
     const parsed = URL.canParse(href) ? new URL(href) : null;
@@ -71,18 +95,24 @@ export const ChatLink = ({
       href.startsWith("#") || /^(?:\/(?![\\/])|\.{1,2}\/)/u.test(href);
     const safeMail = parsed?.protocol === "mailto:";
     if ((!safeLocal && !safeMail) || /[\p{Cc}\p{Cf}]/u.test(href)) {
-      return <span>{children ?? href}</span>;
+      return appearance === "tray" ? (
+        <span className={className}>
+          <bdi className={labelClassName}>{children ?? href}</bdi>
+        </span>
+      ) : (
+        <span>{children ?? href}</span>
+      );
     }
     return (
       <a
         {...anchorProps}
         title={newTabLabel ?? title}
-        className={CHAT_LINK_CLASS_NAME}
+        className={className}
         href={href}
         target={CHAT_LINK_ATTRIBUTES.target}
         rel={CHAT_LINK_ATTRIBUTES.rel}
       >
-        <bdi>{children ?? href}</bdi>
+        <bdi className={labelClassName}>{children ?? href}</bdi>
       </a>
     );
   }
@@ -92,33 +122,32 @@ export const ChatLink = ({
       ? children
       : target.hostname.replace(/^www\./u, "");
   let icon = <GlobeIcon aria-hidden="true" className="size-[1em]" />;
+  const bundledIcon = BUNDLED_ICONS.get(target.hostname);
   if (iconSource) {
     icon = <ProxyIcon key={iconSource.src} src={iconSource.src} />;
-  } else if (
-    target.hostname === "github.com" ||
-    target.hostname === "www.github.com"
-  ) {
-    icon = <GitHubLogoIcon aria-hidden="true" className="size-[1em]" />;
-  } else if (
-    ["x.com", "www.x.com", "twitter.com", "www.twitter.com"].includes(
-      target.hostname,
-    )
-  ) {
-    icon = <XLogoIcon aria-hidden="true" className="size-[1em]" />;
+  } else if (bundledIcon) {
+    icon = bundledIcon;
   }
   return (
     <a
       {...anchorProps}
       title={newTabLabel ?? title}
-      className={CHAT_LINK_CLASS_NAME}
+      className={className}
       href={target.href}
       target={CHAT_LINK_ATTRIBUTES.target}
       rel={CHAT_LINK_ATTRIBUTES.rel}
     >
-      <span aria-hidden="true" className="me-1 inline-block align-[-0.125em]">
+      <span
+        aria-hidden="true"
+        className={
+          appearance === "tray"
+            ? "inline-block shrink-0"
+            : "me-1 inline-block align-[-0.125em]"
+        }
+      >
         {icon}
       </span>
-      <bdi>{label}</bdi>
+      <bdi className={labelClassName}>{label}</bdi>
     </a>
   );
 };

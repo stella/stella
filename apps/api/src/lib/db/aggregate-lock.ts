@@ -35,6 +35,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
@@ -47,12 +48,20 @@ import { isRecord } from "@/api/lib/type-guards";
 
 /** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = {
+  account: { rank: -20, kind: "row" },
+  accountExport: { rank: -10, kind: "row" },
   organization: { rank: 0, kind: "row" },
   professionalUseAcceptance: { rank: 5, kind: "advisory" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
   definition: { rank: 40, kind: "row" },
+  // Global fence for linking republished rulings and discovering their aliases.
+  // Take it before any case-law decision row lock: link pages use exclusive
+  // mode, while erasures use shared mode so independent erasures can proceed.
+  caseLawRepublication: { rank: 45, kind: "advisory" },
+  // Public-corpus work fence is taken before its legacy projection/expression locks.
+  legislationAmendmentWork: { rank: 50, kind: "advisory" },
   scoutCensus: { rank: 60, kind: "row" },
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
@@ -66,9 +75,11 @@ export const AGGREGATE_LOCKS = {
   readerAnswerMessage: { rank: 130, kind: "row" },
   chatTurn: { rank: 130, kind: "row" },
   chatSecret: { rank: 140, kind: "row" },
+  chatToolGrants: { rank: 150, kind: "advisory" },
   run: { rank: 200, kind: "row" },
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
+  folioCollabRoom: { rank: 450, kind: "row" },
   entity: { rank: 500, kind: "row" },
   entityVersion: { rank: 510, kind: "row" },
   field: { rank: 520, kind: "row" },
@@ -77,6 +88,7 @@ export const AGGREGATE_LOCKS = {
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
+  sampleCase: { rank: 700, kind: "advisory" },
   searchHistory: { rank: 710, kind: "row" },
   chatMessage: { rank: 810, kind: "row" },
   signingSession: { rank: 900, kind: "row" },
@@ -135,7 +147,10 @@ export const AGGREGATE_CHAINS = {
     "processingClaim",
   ],
   scoutRun: ["orgFeatureAdmission", "scoutCensus"],
+  legislationAmendments: ["legislationAmendmentWork"],
+  caseLawRepublication: ["caseLawRepublication"],
   chatSecret: ["chatThread", "chatTurn", "chatSecret"],
+  chatToolGrants: ["chatThread", "chatToolGrants"],
   memberPrefix: [
     "workspace",
     "memberCleanup",
@@ -144,6 +159,7 @@ export const AGGREGATE_CHAINS = {
     "obligation",
     "entity",
   ],
+  accountExport: ["account", "accountExport"],
   professionalUseAcceptance: ["professionalUseAcceptance"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   desktopBatch: ["desktopBatch", "workspace"],
@@ -154,10 +170,19 @@ export const AGGREGATE_CHAINS = {
     "field",
     "processingClaim",
   ],
+  folioPublication: [
+    "workspace",
+    "folioCollabRoom",
+    "entity",
+    "entityVersion",
+    "field",
+    "processingClaim",
+  ],
   signal: ["signal"],
   automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
   personalCatalog: ["personalCatalog"],
+  sampleCase: ["workspace", "sampleCase"],
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
   readerAnswer: ["readerAnswer", "readerAnswerMessage"],
@@ -199,6 +224,14 @@ const modeCovers = (
 };
 
 type AggregateIdentities = {
+  legislationAmendmentWork: {
+    sourceId: SafeId<"legislationSource">;
+    eli: string;
+    language: string;
+  };
+  account: SafeId<"user">;
+  accountExport: { id: string; userId: SafeId<"user"> };
+  sampleCase: { workspaceId: SafeId<"workspace"> };
   organization: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
   desktopMembership: {
@@ -221,6 +254,7 @@ type AggregateIdentities = {
     id: SafeId<"flowDefinition">;
     organizationId: SafeId<"organization">;
   };
+  caseLawRepublication: "global";
   scoutCensus: {
     type: "run";
     id: SafeId<"scoutRun">;
@@ -270,6 +304,10 @@ type AggregateIdentities = {
   run: { id: SafeId<"flowRun">; workspaceId: SafeId<"workspace"> };
   currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
   obligation: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
+  folioCollabRoom: {
+    id: SafeId<"folioCollabRoom">;
+    workspaceId: SafeId<"workspace">;
+  };
   entity: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
   entityVersion: {
     id: SafeId<"entityVersion">;
@@ -283,6 +321,10 @@ type AggregateIdentities = {
     workspaceId: SafeId<"workspace">;
   };
   contactCapacity: { organizationId: SafeId<"organization"> };
+  chatToolGrants: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
   personalCatalog: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
@@ -593,6 +635,81 @@ export const withSkipLockedBatch = async <Tx extends object, Row, T>({
   });
 };
 
+const executorSavepoints = new WeakSet<object>();
+
+type ExecutorSavepointDecision<T> = {
+  type: "commit" | "rollback";
+  value: T;
+};
+
+export class ExecutorSavepointError extends TaggedError(
+  "ExecutorSavepointError",
+)<{
+  message: string;
+  cause: unknown;
+  phase: "setup" | "callback" | "cleanup";
+}> {}
+
+/**
+ * A savepoint for execute-only callbacks. The callback must not acquire typed
+ * aggregate handles: those require withAggregateSavepoint and its lock history.
+ * One executor cannot own overlapping or nested scopes. Admission covers timeout
+ * capture through restoration, including savepoint cleanup.
+ */
+export const withExecutorSavepoint = async <T>(
+  tx: { execute: (statement: SQL) => Promise<unknown> },
+  run: (previous: {
+    statementTimeoutMs: number;
+    lockTimeoutMs: number;
+  }) => Promise<ExecutorSavepointDecision<T>>,
+): Promise<Result<T, ExecutorSavepointError>> => {
+  if (executorSavepoints.has(tx)) {
+    return panic("Await the executor savepoint before reusing its transaction");
+  }
+  executorSavepoints.add(tx);
+  const name = sql.identifier(
+    `stella_scope_${Bun.randomUUIDv7().replaceAll("-", "")}`,
+  );
+  let phase: ExecutorSavepointError["phase"] = "setup";
+  try {
+    const scope = await Result.tryPromise({
+      try: async () =>
+        await withSharedTransactionTimeoutRestoration(tx, async (previous) => {
+          await tx.execute(sql`SAVEPOINT ${name}`);
+          const outcome = await Result.tryPromise({
+            try: async () => await run(previous),
+            catch: (cause) =>
+              new ExecutorSavepointError({
+                message: "Executor savepoint callback failed",
+                cause,
+                phase: "callback",
+              }),
+          });
+          phase = "cleanup";
+          if (outcome.isErr() || outcome.value.type === "rollback") {
+            await tx.execute(sql`ROLLBACK TO SAVEPOINT ${name}`);
+          }
+          await tx.execute(sql`RELEASE SAVEPOINT ${name}`);
+          if (outcome.isErr()) {
+            return abortTransaction(outcome.error);
+          }
+          return outcome.value.value;
+        }),
+      catch: (cause) =>
+        cause instanceof ExecutorSavepointError
+          ? cause
+          : new ExecutorSavepointError({
+              message: `Executor savepoint ${phase} failed`,
+              cause,
+              phase,
+            }),
+    });
+    return scope;
+  } finally {
+    executorSavepoints.delete(tx);
+  }
+};
+
 /** Track the public savepoint callback without inspecting driver internals. */
 export const withAggregateSavepoint = async <T>(
   tx: Pick<Transaction, "execute" | "transaction">,
@@ -686,14 +803,22 @@ const memberCleanupRowResource = (
 };
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
+    case "account":
     case "organization":
       return {
-        table: "organization",
+        table: options.aggregate === "account" ? "user" : "organization",
         columns: ["id"],
         values: [options.id],
         scopeColumns: [],
         scopeValues: [],
       };
+    case "accountExport":
+      return byIdWithin(
+        "account_exports",
+        options.id.id,
+        "user_id",
+        options.id.userId,
+      );
     case "desktopMembership":
       return {
         table: "member",
@@ -753,6 +878,13 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeColumns: ["workspace_id"],
         scopeValues: [options.id.workspaceId],
       };
+    case "folioCollabRoom":
+      return byIdWithin(
+        "folio_collab_rooms",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "entity":
       return byIdWithin(
         "entities",
@@ -1100,6 +1232,17 @@ const rowStatement = (
 };
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
+    case "legislationAmendmentWork":
+      return {
+        first: sql`${0x0f_10_cc_ad}::integer`,
+        second: sql`hashtext(${JSON.stringify([options.id.sourceId, options.id.eli, options.id.language])})`,
+        order: [
+          options.aggregate,
+          options.id.sourceId,
+          options.id.eli,
+          options.id.language,
+        ],
+      };
     case "desktopBatch":
       return {
         first: sql`${0x0f_10_cc_ac}::integer`,
@@ -1110,6 +1253,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.userId,
           options.id.idempotencyKey,
         ],
+      };
+    case "sampleCase":
+      return {
+        first: sql`hashtext('lists.sample-case')`,
+        second: sql`hashtext(${options.id.workspaceId})`,
+        order: [options.aggregate, options.id.workspaceId],
       };
     case "professionalUseAcceptance":
       return {
@@ -1128,6 +1277,16 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         first: sql`hashtext('contact_capacity')`,
         second: sql`hashtext(${options.id.organizationId})`,
         order: [options.aggregate, options.id.organizationId],
+      };
+    case "chatToolGrants":
+      return {
+        first: sql`hashtext('chat.tool-grants')`,
+        second: sql`hashtext(${JSON.stringify([options.id.organizationId, options.id.userId])})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.userId,
+        ],
       };
     case "personalCatalog":
       return {
@@ -1154,6 +1313,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         first: sql`${0x0f_10_cc_ab}::integer`,
         second: sql`hashtext(${options.id.definitionId})`,
         order: [options.aggregate, options.id.definitionId],
+      };
+    case "caseLawRepublication":
+      return {
+        first: sql`${0x0f_10_cc_ae}::integer`,
+        second: sql`0::integer`,
+        order: [options.aggregate, options.id],
       };
     default:
       options satisfies never;
@@ -2007,6 +2172,44 @@ type DecisionCitationStatsLocksOptions = {
  * holds its own row while it waits for stripes.
  */
 const lockedDecisionRowSchema = v.object({ id: v.string() });
+
+/** Coordinate republication linking with alias discovery during erasure. */
+export const lockCaseLawRepublication = async ({
+  tx,
+  mode,
+}: {
+  tx: ExecuteTransaction;
+  mode: AdvisoryLockMode;
+}): Promise<void> => {
+  await withAggregateLock({
+    aggregate: "caseLawRepublication",
+    id: "global",
+    mode,
+    tx,
+  });
+};
+
+/** Lock every retained copy before a case-law erasure mutates any of them. */
+export const lockCaseLawDecisionErasureRows = async ({
+  tx,
+  decisionIds,
+}: {
+  tx: ExecuteTransaction;
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+}): Promise<void> => {
+  if (decisionIds.length === 0) {
+    return;
+  }
+  await tx.execute(sql`
+    SELECT id FROM case_law_decisions
+    WHERE id IN (${sql.join(
+      decisionIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+    ORDER BY id
+    FOR UPDATE
+  `);
+};
 
 /**
  * The citing decisions a reviewed-label run admits: the unredacted ones among

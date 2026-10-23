@@ -131,7 +131,7 @@ const resolvedBodyToRichPatch = (body: ClauseBody): RichPatchValue => {
       continue;
     }
 
-    const level = Math.max(0, p.listLevel ?? 0);
+    const level = Math.max(0, p.numbering?.ilvl ?? 0);
     // Leaving a deeper level invalidates its counter for a fresh restart.
     for (const key of counters.keys()) {
       if (key > level) {
@@ -407,9 +407,9 @@ export const clauseBodyToRichPatch = (
       ...(origin.style === undefined ? {} : { style: origin.style }),
       ...(origin.level === undefined ? {} : { level: origin.level }),
       ...(origin.listKind === undefined ? {} : { listKind: origin.listKind }),
-      ...(origin.listLevel === undefined
+      ...(origin.numbering === undefined
         ? {}
-        : { listLevel: origin.listLevel }),
+        : { numbering: origin.numbering }),
     });
   }
   return Result.ok(resolvedBodyToRichPatch(resolved));

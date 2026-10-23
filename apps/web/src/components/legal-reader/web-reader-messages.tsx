@@ -16,6 +16,7 @@ export const useWebReaderMessages = (): ReaderMessages => {
     "statutes.diffRemoved": t("statutes.diffRemoved"),
     "statutes.diffInserted": t("statutes.diffInserted"),
     "common.copyLink": t("common.copyLink"),
+    "common.copied": t("common.copied"),
     "common.back": t("common.back"),
     "caseLaw.viewer.legalSentence": t("caseLaw.viewer.legalSentence"),
     "caseLaw.viewer.abstract": t("caseLaw.viewer.abstract"),
@@ -29,6 +30,7 @@ export const useWebReaderMessages = (): ReaderMessages => {
     "statutes.provisionTextUnavailable": t("statutes.provisionTextUnavailable"),
     "statutes.showCitedPartOnly": t("statutes.showCitedPartOnly"),
     "statutes.showFullProvision": t("statutes.showFullProvision"),
+    "aiDisclosure.caseLaw": t("aiDisclosure.caseLaw"),
     // Explicit ReactNode: the inferred `t.rich` result carries React 19's
     // Promise<AwaitedReactNode> member, which promise-function-async flags.
     sourceAttribution: (source, link): ReactNode =>

@@ -3,15 +3,13 @@ import * as v from "valibot";
 
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
 import launchReadiness from "./launch-readiness.json" with { type: "json" };
-import {
-  ADMITTED_PUBLIC_COUNTRIES,
-  PAGES_PUBLIC_COUNTRIES,
-} from "./public-country-capability";
+import { publicCountriesFor } from "./public-country-capability";
 
 /** Countries the public case-law browser has a complete routing/display model for. */
 export const CASE_LAW_BROWSER_COUNTRIES = [
   "CZE",
   "EU",
+  "HUN",
   "POL",
   "SVK",
 ] as const satisfies readonly CaseLawJurisdiction[];
@@ -22,6 +20,7 @@ export type CaseLawBrowserCountry = (typeof CASE_LAW_BROWSER_COUNTRIES)[number];
 export const CASE_LAW_REGION_BY_COUNTRY = {
   CZE: "CZ",
   EU: "EU",
+  HUN: "HU",
   POL: "PL",
   SVK: "SK",
 } as const satisfies Record<CaseLawBrowserCountry, string>;
@@ -71,28 +70,78 @@ export const parseCaseLawLaunchReadiness = (
   return countries;
 };
 
+const ADMITTED_CASE_LAW_COUNTRIES = publicCountriesFor("caseLaw", "search");
+const CASE_LAW_PAGE_COUNTRIES = publicCountriesFor("caseLaw", "pages");
+
 const servingReceipts = parseCaseLawLaunchReadiness(launchReadiness);
 
-/** Every admitted country must have a receipt, and receipts cannot admit independently. */
+type CaseLawExplicitLaunch = {
+  decidedBy: string;
+  decidedOn: string;
+};
+
+/** Countries launched to case-law search by an explicit decision; null means none. */
+export const CASE_LAW_EXPLICIT_LAUNCHES = {
+  CZE: null,
+  EU: null,
+  HUN: null,
+  POL: { decidedBy: "project owner", decidedOn: "2026-10-20" },
+  SVK: null,
+} as const satisfies Record<
+  CaseLawBrowserCountry,
+  CaseLawExplicitLaunch | null
+>;
+
+export const CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES =
+  CASE_LAW_BROWSER_COUNTRIES.filter(
+    (country) => CASE_LAW_EXPLICIT_LAUNCHES[country] !== null,
+  );
+
 /**
  * Countries admitted to case-law search, the API search surfaces and MCP.
+ * Each needs exactly one of a serving receipt or an explicit launch.
  * Pages, sitemaps and crawl use `PUBLIC_CASE_LAW_PAGE_COUNTRIES` instead.
  */
-export const PUBLIC_CASE_LAW_COUNTRIES = ADMITTED_PUBLIC_COUNTRIES.map(
+export const PUBLIC_CASE_LAW_COUNTRIES = ADMITTED_CASE_LAW_COUNTRIES.map(
   (country) => {
     const receipt = servingReceipts.find((candidate) => candidate === country);
-    if (receipt === undefined) {
+    const explicit = CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES.some(
+      (candidate) => candidate === country,
+    );
+    if (receipt !== undefined && explicit) {
+      return panic(
+        "A country with a case-law serving receipt cannot also be an explicit launch.",
+      );
+    }
+    if (receipt !== undefined) {
+      return receipt;
+    }
+    if (!explicit) {
       return panic(
         "An admitted public country needs a case-law serving receipt.",
       );
     }
-    return receipt;
+    const branded = v.safeParse(launchReadinessCountrySchema, country);
+    if (!branded.success) {
+      return panic("An explicit case-law launch must name a browser country.");
+    }
+    return branded.output;
   },
 );
 if (
+  CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES.some(
+    (country) =>
+      !ADMITTED_CASE_LAW_COUNTRIES.some((candidate) => candidate === country),
+  )
+) {
+  panic(
+    "An explicit case-law launch cannot admit a pending or withdrawn country.",
+  );
+}
+if (
   servingReceipts.some(
     (country) =>
-      !ADMITTED_PUBLIC_COUNTRIES.some((candidate) => candidate === country),
+      !ADMITTED_CASE_LAW_COUNTRIES.some((candidate) => candidate === country),
   )
 ) {
   panic(
@@ -111,7 +160,7 @@ export const isPublicCaseLawCountry = (
  * paths can never be dropped silently.
  */
 const PAGES_PUBLIC_BROWSER_COUNTRIES: readonly CaseLawBrowserCountry[] =
-  PAGES_PUBLIC_COUNTRIES;
+  CASE_LAW_PAGE_COUNTRIES;
 
 /**
  * Countries whose decision pages are served, listed in sitemaps and open to

@@ -1,7 +1,8 @@
 /**
- * AVT verification screen: the document's claims underlined by verdict, the
- * filter and triage toolbar, and the claim detail panel. Sentence granularity
- * and one two-column layout (stacked below `md`).
+ * AVT verification screen: the document's text in the shared legal reader
+ * with its claims underlined by verdict, the filter and triage toolbar, and
+ * the claim detail panel. Sentence granularity and one two-column layout
+ * (stacked below `md`).
  */
 
 import * as React from "react";
@@ -9,6 +10,8 @@ import * as React from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { LiteralTextProvider } from "@stll/decision-reader/display-elision-policy";
+import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
 import { Button } from "@stll/ui/button";
 import {
   CheckIcon,
@@ -18,11 +21,17 @@ import {
   FlagIcon,
 } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { Skeleton } from "@stll/ui/skeleton";
+import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { textMarkClass } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import { ClaimDetailPanel } from "@/features/avt/claim-detail-panel";
+import type {
+  OriginalClaimMark,
+  OriginalScrollTarget,
+} from "@/features/avt/original-docx-view";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   MatchStepper,
@@ -51,11 +60,22 @@ import {
   routineUnsettledClaimIds,
 } from "@/features/avt/verdict";
 import {
+  claimMark,
   selectClaimPresentation,
   spanPresentation,
 } from "@/features/avt/verification-view.logic";
+import type { ClaimPresentation } from "@/features/avt/verification-view.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
+
+// Folio and the file viewer load only when someone opens the original.
+const OriginalDocxView = React.lazy(async () => {
+  const m = await import("@/features/avt/original-docx-view");
+  return { default: m.OriginalDocxView };
+});
+
+/** The reader's text of the stored blocks, or the file as Folio lays it out. */
+type DocumentView = "reading" | "original";
 
 type VerdictFilter =
   | "all"
@@ -94,6 +114,19 @@ export const VerificationView = ({
 
   const [selected, setSelected] = React.useState(readingOrder.at(0) ?? null);
   const [filter, setFilter] = React.useState<VerdictFilter>("all");
+  const [documentView, setDocumentView] =
+    React.useState<DocumentView>("reading");
+  // Where the original should bring the reader next. It is held, not fired,
+  // so a step taken while the original is still loading lands once the
+  // viewer has the document.
+  const [originalScroll, setOriginalScroll] =
+    React.useState<OriginalScrollTarget | null>(null);
+  // Only a DOCX read through Folio has an original to lay the claims over
+  // here; a PDF's page text has no block ids.
+  const hasOriginal =
+    run.blocks.length > 0 &&
+    run.blocks.every((block) => block.kind === "docx-block");
+  const view = hasOriginal ? documentView : "reading";
 
   const matches = (claim: VerificationClaim, value: VerdictFilter) =>
     claimMatchesFilter(claim, value, contested);
@@ -126,6 +159,15 @@ export const VerificationView = ({
 
   const goToMatch = (id: VerificationClaim["id"]) => {
     setSelected(id);
+    if (view === "original") {
+      const anchor = claimById.get(id)?.anchor;
+      if (anchor?.type === "docx-block") {
+        // A new target for every step, so stepping back onto the same block
+        // scrolls again.
+        setOriginalScroll({ blockId: anchor.blockId });
+      }
+      return;
+    }
     document
       .querySelector(`#${claimDomId(id)}`)
       ?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -136,6 +178,40 @@ export const VerificationView = ({
     selected,
     goTo: goToMatch,
   });
+
+  // One claim mark, wherever the pane draws it: over the reader's text, or
+  // on its own in a passage.
+  const renderClaim = (claim: VerificationClaim, children: React.ReactNode) => {
+    const { dim, highlight } = spanPresentation({
+      filterActive: filter !== "all",
+      matches: matches(claim, filter),
+    });
+    return (
+      <ClaimSpan
+        claim={claim}
+        contested={isContested(claim, contested)}
+        dim={dim}
+        highlight={highlight}
+        onSelect={setSelected}
+        selected={claim.id === selected}
+        state={effectiveState(claim, claim.review)}
+      >
+        {children}
+      </ClaimSpan>
+    );
+  };
+
+  // The same claim mark over the original's painted pages.
+  const originalMark = (claim: VerificationClaim): OriginalClaimMark => {
+    const { dim, highlight } = spanPresentation({
+      filterActive: filter !== "all",
+      matches: matches(claim, filter),
+    });
+    return {
+      state: effectiveState(claim, claim.review),
+      mark: claimMark({ selected: claim.id === selected, dim, highlight }),
+    };
+  };
 
   const stats: {
     key: string;
@@ -250,104 +326,58 @@ export const VerificationView = ({
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-5">
         <div className="flex h-96 flex-col overflow-hidden rounded-xl border md:col-span-3 md:h-auto md:min-h-0">
-          {stepper.total > 0 && (
-            <div className="flex items-center justify-end border-b px-5 py-2">
-              <MatchStepper stepper={stepper} />
+          {(hasOriginal || stepper.total > 0) && (
+            <div
+              className={cn(
+                "flex flex-wrap items-center gap-2 border-b px-3 py-2",
+                hasOriginal ? "justify-between" : "justify-end",
+              )}
+            >
+              {hasOriginal && (
+                <Tabs
+                  onValueChange={(next: DocumentView) => {
+                    // A step taken in an earlier visit is not replayed when
+                    // the original mounts again.
+                    setOriginalScroll(null);
+                    setDocumentView(next);
+                  }}
+                  value={view}
+                >
+                  <TabsList
+                    aria-label={t("avt.verification.documentView.label")}
+                  >
+                    <TabsTab value="reading">
+                      {t("avt.verification.documentView.reading")}
+                    </TabsTab>
+                    <TabsTab value="original">
+                      {t("avt.verification.documentView.original")}
+                    </TabsTab>
+                  </TabsList>
+                </Tabs>
+              )}
+              {stepper.total > 0 && <MatchStepper stepper={stepper} />}
             </div>
           )}
-          <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-4 p-5">
-              {presentation.type === "prose"
-                ? presentation.blocks.map((block) => (
-                    <div className="space-y-1" key={block.ordinal}>
-                      {block.pageNumber !== null && (
-                        <div className="text-muted-foreground text-2xs font-medium">
-                          {t("common.page", {
-                            page: format.number(block.pageNumber),
-                          })}
-                        </div>
-                      )}
-                      <p
-                        className="font-serif text-base leading-relaxed text-pretty whitespace-pre-wrap"
-                        dir="auto"
-                      >
-                        {block.segments.map((segment) => {
-                          if (segment.type === "plain") {
-                            return segment.text;
-                          }
-                          const claim = segment.claim;
-                          const { dim, highlight } = spanPresentation({
-                            filterActive: filter !== "all",
-                            matches: matches(claim, filter),
-                          });
-                          return (
-                            <ClaimSpan
-                              claim={claim}
-                              contested={isContested(claim, contested)}
-                              dim={dim}
-                              highlight={highlight}
-                              key={claim.id}
-                              onSelect={setSelected}
-                              selected={claim.id === selected}
-                              state={effectiveState(claim, claim.review)}
-                              text={segment.text}
-                            />
-                          );
-                        })}
-                      </p>
-                    </div>
-                  ))
-                : presentation.passages.map((passage) => (
-                    <div className="space-y-1" key={passage.key}>
-                      {passage.pageNumber !== null && (
-                        <div className="text-muted-foreground text-2xs font-medium">
-                          {t("common.page", {
-                            page: format.number(passage.pageNumber),
-                          })}
-                        </div>
-                      )}
-                      <p
-                        className="font-serif text-base leading-relaxed"
-                        dir="auto"
-                      >
-                        {passage.claims.map((claim, index) => {
-                          const { dim, highlight } = spanPresentation({
-                            filterActive: filter !== "all",
-                            matches: matches(claim, filter),
-                          });
-                          return (
-                            <React.Fragment key={claim.id}>
-                              {index > 0 && (
-                                <span
-                                  aria-hidden="true"
-                                  className="text-muted-foreground"
-                                >
-                                  {" … "}
-                                </span>
-                              )}
-                              <ClaimSpan
-                                claim={claim}
-                                contested={isContested(claim, contested)}
-                                dim={dim}
-                                highlight={highlight}
-                                onSelect={setSelected}
-                                selected={claim.id === selected}
-                                state={effectiveState(claim, claim.review)}
-                                text={claim.text}
-                              />
-                            </React.Fragment>
-                          );
-                        })}
-                      </p>
-                    </div>
-                  ))}
-              <div className="flex flex-wrap gap-2 border-t pt-3">
-                {LEGEND_STATES.map((state) => (
-                  <StateChip key={state} state={state} />
-                ))}
-              </div>
+          {view === "original" ? (
+            <div className="min-h-0 flex-1">
+              <React.Suspense fallback={<Skeleton className="h-full w-full" />}>
+                <OriginalDocxView
+                  claims={claims}
+                  markOf={originalMark}
+                  onSelect={setSelected}
+                  run={run}
+                  scrollTarget={originalScroll}
+                  selected={selected}
+                  workspaceId={workspaceId}
+                />
+              </React.Suspense>
             </div>
-          </ScrollArea>
+          ) : (
+            <ReadingDocument
+              presentation={presentation}
+              renderClaim={renderClaim}
+            />
+          )}
         </div>
 
         <div className="flex flex-col overflow-hidden rounded-xl border md:col-span-2 md:min-h-0">
@@ -388,7 +418,115 @@ true satisfies Exclude<ClaimState, (typeof STAT_STATES)[number]> extends never
 
 const LEGEND_STATES = STAT_STATES;
 
+// The pane has no find bar: the reader draws no search marks.
+const NO_RANGES = {};
+const NO_ACTIVE_MATCH = -1;
+
+/** The reader's body typography, as the statute reader sets it. */
+const READER_STYLE = {
+  fontFamily: "var(--reader-body-font)",
+  fontSize: "var(--reader-body-size)",
+  lineHeight: "var(--reader-body-line-height)",
+} as const;
+
 const claimDomId = (claimId: string): string => `avt-claim-${claimId}`;
+
+type ReadingDocumentProps = {
+  presentation: ClaimPresentation;
+  renderClaim: (
+    claim: VerificationClaim,
+    children: React.ReactNode,
+  ) => React.ReactElement;
+};
+
+/** The stored text in the shared reader, or the claims' own passages. */
+const ReadingDocument = ({
+  presentation,
+  renderClaim,
+}: ReadingDocumentProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <div className="space-y-4 p-5">
+        {presentation.type === "prose" ? (
+          // The shared reader draws the stored text; each claim is a
+          // text anchor over its block, so the marks sit on the same
+          // offsets the server stored.
+          <LiteralTextProvider>
+            <div className="space-y-4" style={READER_STYLE}>
+              {presentation.blocks.map((block) => (
+                <div
+                  className="space-y-1 whitespace-pre-wrap"
+                  key={block.ordinal}
+                >
+                  {block.pageNumber !== null && (
+                    <div className="text-muted-foreground text-2xs font-sans font-medium">
+                      {t("common.page", {
+                        page: format.number(block.pageNumber),
+                      })}
+                    </div>
+                  )}
+                  <div dir="auto">
+                    <BlockRenderer
+                      activeMatchIndex={NO_ACTIVE_MATCH}
+                      anchorPresentation="embedded"
+                      anchorsByPieceId={{
+                        [block.paragraph.id]: block.claimSpans.map(
+                          ({ claim, start, end }) => ({
+                            start,
+                            end,
+                            key: claim.id,
+                            render: (children) => renderClaim(claim, children),
+                          }),
+                        ),
+                      }}
+                      block={block.paragraph}
+                      rangesByPieceId={NO_RANGES}
+                      variant="case-law"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </LiteralTextProvider>
+        ) : (
+          presentation.passages.map((passage) => (
+            <div className="space-y-1" key={passage.key}>
+              {passage.pageNumber !== null && (
+                <div className="text-muted-foreground text-2xs font-medium">
+                  {t("common.page", {
+                    page: format.number(passage.pageNumber),
+                  })}
+                </div>
+              )}
+              <p className="font-serif text-base leading-relaxed" dir="auto">
+                {passage.claims.map((claim, index) => (
+                  <React.Fragment key={claim.id}>
+                    {index > 0 && (
+                      <span
+                        aria-hidden="true"
+                        className="text-muted-foreground"
+                      >
+                        {" … "}
+                      </span>
+                    )}
+                    {renderClaim(claim, claim.text)}
+                  </React.Fragment>
+                ))}
+              </p>
+            </div>
+          ))
+        )}
+        <div className="flex flex-wrap gap-2 border-t pt-3">
+          {LEGEND_STATES.map((state) => (
+            <StateChip key={state} state={state} />
+          ))}
+        </div>
+      </div>
+    </ScrollArea>
+  );
+};
 
 const claimMatchesFilter = (
   claim: VerificationClaim,
@@ -490,7 +628,8 @@ type ClaimSpanProps = {
   highlight: boolean;
   contested: boolean;
   onSelect: (id: VerificationClaim["id"]) => void;
-  text: string;
+  /** The claim's words, as the reader or the passage drew them. */
+  children: React.ReactNode;
 };
 
 const ClaimSpan = ({
@@ -501,7 +640,7 @@ const ClaimSpan = ({
   highlight,
   contested,
   onSelect,
-  text,
+  children,
 }: ClaimSpanProps) => {
   const t = useTranslations();
   const reviewStatus = claim.review?.status ?? null;
@@ -522,7 +661,7 @@ const ClaimSpan = ({
       onClick={() => onSelect(claim.id)}
       type="button"
     >
-      {text}
+      {children}
       {contested && (
         <CircleAlertIcon
           aria-hidden="true"

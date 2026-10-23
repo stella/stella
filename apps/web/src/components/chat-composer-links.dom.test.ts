@@ -147,19 +147,59 @@ test("link detection spans formatting boundaries but not hard breaks", () => {
   );
 });
 
-test("composer anchors open immediately with opener isolation", () => {
+test("ordinary composer clicks preserve editing while explicit open gestures isolate the opener", () => {
   const editor = createEditor("www.stll.app");
+  const anchor = editor.view.dom.querySelector("a[data-chat-composer-link]");
+  expect(anchor).not.toBeNull();
   const open = spyOn(window, "open").mockReturnValue(null);
-  editor.view.dom
-    .querySelector("a[data-chat-composer-link]")
-    ?.dispatchEvent(
-      new MouseEvent("click", { bubbles: true, cancelable: true }),
-    );
+  // happy-dom navigates contenteditable anchors on synthetic clicks. Observe
+  // the editor's decision before suppressing that default in this fixture.
+  const prevented: boolean[] = [];
+  const stopSyntheticNavigation = (event: MouseEvent) => {
+    prevented.push(event.defaultPrevented);
+    event.preventDefault();
+  };
+  const container = editor.view.dom.parentElement;
+  expect(container).not.toBeNull();
+  container?.addEventListener("click", stopSyntheticNavigation);
+  container?.addEventListener("auxclick", stopSyntheticNavigation);
+  for (const options of [
+    { type: "click", button: 0 },
+    { type: "click", button: 0, shiftKey: true },
+    { type: "click", button: 0, altKey: true },
+    { type: "auxclick", button: 2 },
+  ]) {
+    const event = new MouseEvent(options.type, {
+      ...options,
+      bubbles: true,
+      cancelable: true,
+    });
+    anchor?.dispatchEvent(event);
+    expect(prevented.at(-1)).toBe(false);
+    expect(open).not.toHaveBeenCalled();
+  }
+  for (const options of [
+    { type: "click", button: 0, metaKey: true },
+    { type: "click", button: 0, ctrlKey: true },
+    { type: "auxclick", button: 1 },
+  ]) {
+    const event = new MouseEvent(options.type, {
+      ...options,
+      bubbles: true,
+      cancelable: true,
+    });
+    anchor?.dispatchEvent(event);
+    expect(prevented.at(-1)).toBe(true);
+  }
+  container?.removeEventListener("click", stopSyntheticNavigation);
+  container?.removeEventListener("auxclick", stopSyntheticNavigation);
+  expect(open).toHaveBeenCalledTimes(3);
   expect(open).toHaveBeenCalledWith(
     "https://www.stll.app/",
     "_blank",
     "noopener,noreferrer",
   );
+  expect(editor.getText()).toBe("www.stll.app");
 });
 
 test("composer links stop at reference atoms without losing adjacent links", () => {

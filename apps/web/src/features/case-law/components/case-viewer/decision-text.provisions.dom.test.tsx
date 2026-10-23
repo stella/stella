@@ -384,7 +384,7 @@ describe("provision wording below decision paragraphs", () => {
 
 describe("compact provision cards", () => {
   const firstCard = (view: Awaited<ReturnType<typeof renderDecision>>) =>
-    view.container.querySelector('[data-slot="provision-card"]');
+    view.container.querySelector<HTMLElement>('[data-slot="provision-card"]');
 
   const withTarget = (
     patch: (
@@ -414,6 +414,29 @@ describe("compact provision cards", () => {
       // Icon-only: the name comes from the label, not from visible text.
       expect(open.textContent).toBe("");
     }
+  });
+
+  test("a key on a control inside the card is that control's, not the card's", async () => {
+    const view = await renderDecision(true);
+    const card =
+      firstCard(view) ?? panic("Expected an expanded provision card");
+    expect(card.getAttribute("aria-expanded")).toBe("false");
+    const open = within(card).getByRole("button", {
+      name: messages.statutes.openProvision,
+    });
+    // Enter on the nested button leaves the card as it was: the browser's own
+    // activation of that button is not cancelled by the card.
+    const nestedKey = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Enter",
+    });
+    open.dispatchEvent(nestedKey);
+    expect(nestedKey.defaultPrevented).toBe(false);
+    expect(card.getAttribute("aria-expanded")).toBe("false");
+    // Enter on the card itself still toggles it.
+    fireEvent.keyDown(card, { key: "Enter" });
+    expect(card.getAttribute("aria-expanded")).toBe("true");
   });
 
   test("shows where a provision sits only where its label does not say so", async () => {
@@ -819,11 +842,11 @@ describe("the provision card header", () => {
     const summary =
       header.querySelector('[data-slot="provision-card-summary"]') ??
       panic("The header has no summary");
+    // Each separator lives inside the part after it, so a part that gives
+    // way entirely leaves no stray dot behind.
     expect(headerParts(summary)).toEqual([
       "provision-card-label",
-      "span",
       "provision-card-act",
-      "span",
       "provision-card-date",
     ]);
     const classesOf = (slot: string) =>
@@ -839,7 +862,8 @@ describe("the provision card header", () => {
     expect(header.classList.contains("overflow-hidden")).toBe(false);
     expect(header.classList.contains("flex-wrap")).toBe(false);
     // The act takes only the room left over, so it gives way first; the
-    // label shrinks after it; the date never shrinks, only clips last.
+    // date shrinks after it; the label never shrinks, only clips when it
+    // alone is wider than the row.
     for (const token of [
       "flex-1",
       "basis-0",
@@ -850,9 +874,11 @@ describe("the provision card header", () => {
       expect(classesOf("provision-card-act").contains(token)).toBe(true);
     }
     for (const token of ["min-w-0", "truncate"]) {
+      expect(classesOf("provision-card-date").contains(token)).toBe(true);
+    }
+    for (const token of ["shrink-0", "max-w-full", "truncate"]) {
       expect(classesOf("provision-card-label").contains(token)).toBe(true);
     }
-    expect(classesOf("provision-card-date").contains("shrink-0")).toBe(true);
     const label =
       header.querySelector('[data-slot="provision-card-label"]') ??
       panic("No label");

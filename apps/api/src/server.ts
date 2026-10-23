@@ -6,6 +6,7 @@ import {
   REQUEST_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { redisConnectionConfig } from "@stll/redis-config";
 
@@ -13,6 +14,7 @@ import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { readRootPoolReport } from "@/api/db/root";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { accountExportsRoute } from "@/api/handlers/account-exports/routes";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
@@ -23,6 +25,7 @@ import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import {
   authCapabilitiesRoute,
+  authMetadataPreflightRoute,
   authMetadataRoute,
 } from "@/api/handlers/auth/routes";
 import { authUiRoute } from "@/api/handlers/auth/ui-routes";
@@ -104,6 +107,7 @@ import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-ra
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
+import { syntheticRoute } from "@/api/handlers/synthetic/routes";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
 import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
@@ -134,10 +138,16 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
+import { applyDiscoveryMetadataCachePolicy } from "@/api/lib/auth/discovery-metadata-cache";
 import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
 } from "@/api/lib/browser-origin-guard";
+import {
+  capabilityRequestGuard,
+  type MountedRoute,
+} from "@/api/lib/capability-request";
+import { loadCapabilityEndpoints } from "@/api/lib/capability-request-endpoints";
 import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-checks";
 import {
   clientAddressConfigurationWarning,
@@ -159,6 +169,10 @@ import {
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
+import {
+  clientTooOldError,
+  LOCAL_CLIENT_IDENTITY_HEADER,
+} from "@/api/lib/mcp-connectors/local-client-support";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
 import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
@@ -173,7 +187,10 @@ import {
   completeRequest,
   withFinalResponseCompletion,
 } from "@/api/lib/observability/request-lifecycle";
-import { emitEventLoopDelayMetric } from "@/api/lib/observability/request-metrics";
+import {
+  emitEventLoopDelayMetric,
+  emitProcessMemoryLog,
+} from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import {
   closeActionAdmissionRedis,
@@ -276,6 +293,7 @@ const readProcessMemoryReport = () => {
 const startEventLoopDelayReporting = () => {
   let reporting: Promise<void> | undefined;
   startEventLoopDelayMonitor({
+    onReportInterval: () => emitProcessMemoryLog(readProcessMemoryReport()),
     onReport: (delay) => {
       if (reporting !== undefined) {
         return;
@@ -285,7 +303,6 @@ const startEventLoopDelayReporting = () => {
           emitEventLoopDelayMetric({
             ...delay,
             rootPool,
-            memory: readProcessMemoryReport(),
           }),
         )
         .finally(() => {
@@ -359,6 +376,17 @@ const api = new Elysia()
   .onRequest(({ set }) => {
     setSecurityHeaders(set);
   })
+  .onRequest(({ request, set }) => {
+    applyDiscoveryMetadataCachePolicy({ request, set });
+  })
+  .onRequest(({ request, set }) => {
+    const error = clientTooOldError(request);
+    if (error) {
+      set.status = 426;
+      return error;
+    }
+    return undefined;
+  })
   .onRequest(async (context) => {
     const { request, set } = context;
 
@@ -412,11 +440,11 @@ const api = new Elysia()
     }
 
     // Ahead of the CORS layer below, which otherwise answers every preflight
-    // with the API-wide method list and leaves the MCP route's own preflight
-    // unreachable.
-    const mcpPreflightResponse = handleMcpPreflightRequest(request, set);
-    if (mcpPreflightResponse) {
-      return mcpPreflightResponse;
+    // with the API-wide method list and trusted origins only, leaving the MCP
+    // route's own preflight unreachable.
+    const publicPreflightResponse = handleMcpPreflightRequest(request, set);
+    if (publicPreflightResponse) {
+      return publicPreflightResponse;
     }
 
     return (
@@ -424,6 +452,9 @@ const api = new Elysia()
       handleVisualSandboxRequest(request, set)
     );
   })
+  // Keep discovery interception in its owning handler module while mounting it
+  // before the credentialed global CORS layer.
+  .use(authMetadataPreflightRoute)
   .use(
     cors({
       origin: ALLOWED_BROWSER_ORIGINS,
@@ -433,10 +464,12 @@ const api = new Elysia()
         "Content-Type",
         "Authorization",
         "MCP-Protocol-Version",
+        LOCAL_CLIENT_IDENTITY_HEADER,
         FORMATTING_LOCALE_HEADER,
         SESSION_ID_HEADER,
         AUTH_SESSION_STARTUP_HEADER,
         TANSTACK_RUN_ID_HEADER,
+        CAPABILITY_REQUEST_HEADER,
       ],
       exposeHeaders: CORS_EXPOSED_HEADERS,
       maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
@@ -444,6 +477,14 @@ const api = new Elysia()
   )
   .onError((context) => answerRequestError(context))
   .onAfterHandle(async (context) => await completeRequest(context))
+  // Global, and ahead of every route, so each route below inherits the hook.
+  // The explicit return type keeps `api` out of its own inferred type.
+  .use(
+    capabilityRequestGuard({
+      mountedRoutes: (): readonly MountedRoute[] => api.routes,
+      loadEndpoints: loadCapabilityEndpoints,
+    }),
+  )
   .use(authUiRoute)
   .use(authMetadataRoute)
   .use(
@@ -510,6 +551,7 @@ const api = new Elysia()
   )
   .use(localDevPublicRoutes)
   .use(smokeRoute)
+  .use(syntheticRoute)
   .mount(getAuth().handler)
   .group(STELLA_API_VERSION_PREFIX, (app) =>
     app
@@ -616,6 +658,7 @@ const api = new Elysia()
       .use(tasksRoute)
       .use(workObligationsRoute)
       .use(myWorkRoute)
+      .use(accountExportsRoute)
       .use(meRoute)
       .use(localDevVersionedRoutes)
       .use(verifyAuthRoute),
@@ -857,7 +900,9 @@ const startServer = async (): Promise<void> => {
     shuttingDown = true;
     logger.info("api.shutdown_started", { signal });
     const outcome = await shutdownApiServices({
-      closeBackgroundWorkers: backgroundWorkers.close,
+      closeBackgroundWorkers: async () => {
+        await backgroundWorkers.close();
+      },
       closeManagedProviderChecks,
       closeDatabaseLoginProbe,
       // Undefined when the signal beat scheduler registration; there is

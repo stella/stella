@@ -14,7 +14,10 @@ import {
 } from "@stll/api-contract";
 
 import { env } from "@/api/env";
-import { declareCliSupportBand } from "@/api/mcp/cli-support-band";
+import {
+  LOCAL_CLIENT_IDENTITY_HEADER,
+  LOCAL_CLIENT_SUPPORT,
+} from "@/api/lib/mcp-connectors/local-client-support";
 import {
   getMcpResourceModeConfig,
   getMcpResourceScopes,
@@ -102,41 +105,29 @@ export {
   ROOT_MCP_DISCOVERY_PATH,
 };
 
-export const MCP_ALLOWED_HEADERS = [
+export const MCP_PROTOCOL_VERSION_HEADER = "MCP-Protocol-Version";
+
+export const MCP_DISCOVERY_ALLOWED_HEADERS = [
   "Authorization",
   "Content-Type",
-  "MCP-Protocol-Version",
+  MCP_PROTOCOL_VERSION_HEADER,
 ] as const;
 
-// Public protocol/revision contract advertised by protected-resource
-// discovery. CLI package versions are deliberately absent: compatibility is a
-// property of the wire protocol and capabilities, not release numbering.
-export const STELLA_API_CONTRACT = {
-  // 3: capability execution is split into read_capability and write_capability.
-  // Clients built for the mixed executor refuse this protocol before dispatch.
-  protocol: 3,
-  revision: 1,
-  capabilities: {
-    "document-version-upload": 1,
-    "mcp-v2-transport": 1,
-  },
-} as const;
+export const MCP_ALLOWED_HEADERS = [
+  ...MCP_DISCOVERY_ALLOWED_HEADERS,
+  LOCAL_CLIENT_IDENTITY_HEADER,
+] as const;
 
-// Retained as a response header and in the legacy discovery object for clients
-// published before `stella_contract` existed.
-export const STELLA_MCP_API_CONTRACT_VERSION = STELLA_API_CONTRACT.protocol;
+export {
+  STELLA_API_CONTRACT,
+  STELLA_MCP_API_CONTRACT_VERSION,
+} from "./stella-api-contract";
 
-// Legacy package-version band. Freeze the ceiling at the transition CLI:
-// future CLIs negotiate `STELLA_API_CONTRACT` and never require another bump.
-const CLI_SUPPORT_BAND = declareCliSupportBand({
-  minimum: "0.3.0",
-  maximum: "0.4.3",
-});
-
-export const STELLA_CLI_MINIMUM_VERSION = CLI_SUPPORT_BAND.minimum;
-export const STELLA_CLI_MAXIMUM_VERSION = CLI_SUPPORT_BAND.maximum;
+export const STELLA_CLI_MINIMUM_VERSION = LOCAL_CLIENT_SUPPORT.cli.minimum;
+export const STELLA_CLI_LATEST_VERSION = LOCAL_CLIENT_SUPPORT.cli.latest;
 export const STELLA_MCP_API_CONTRACT_HEADER = "x-stella-api-contract-version";
 export const STELLA_CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
+export const STELLA_CLI_LATEST_HEADER = "x-stella-cli-latest";
 
 // Identity of the authenticated session, echoed back to the caller on every
 // authenticated MCP response so `stella auth whoami` can confirm which org and
@@ -175,6 +166,7 @@ export const MCP_EXPOSE_HEADERS = [
   "WWW-Authenticate",
   STELLA_MCP_API_CONTRACT_HEADER,
   STELLA_CLI_MINIMUM_HEADER,
+  STELLA_CLI_LATEST_HEADER,
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPES_HEADER,
   ...MCP_TOOL_OMISSION_REASONS.map(

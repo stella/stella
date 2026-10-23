@@ -12,6 +12,8 @@ import {
   LOSSY_JSON_NUMBER,
 } from "./chat-content-v3-legacy";
 import { readConstraintCompletion } from "./online-constraint-completion";
+import { validateOnlineConstraints } from "./online-ddl";
+import type { OnlineConstraintValidation } from "./online-ddl";
 import type {
   OnlineMigrationConnection,
   OnlineRepair,
@@ -292,6 +294,14 @@ export const readChatContentV3Completion: OnlineRepair["readCompletion"] =
     return { type: "complete" };
   };
 
+/** The write guards a schema migration added NOT VALID, one per source. */
+export const CHAT_CONTENT_V3_CONSTRAINTS = Object.values(
+  CHAT_CONTENT_V3_SOURCES,
+).map(({ table }) => ({
+  tableName: table,
+  constraintName: `${table}_content_v3_check`,
+})) satisfies readonly OnlineConstraintValidation[];
+
 type RepairOptions = {
   readVerdict?: () => Promise<Verdict>;
   sleep?: (milliseconds: number) => Promise<void>;
@@ -302,7 +312,7 @@ export const createChatContentV3Repair = (
 ): OnlineRepair => ({
   name: "chat-content-v3",
   readCompletion: readChatContentV3Completion,
-  repair: async (connection) => {
+  repair: async (connection, tables) => {
     for (const key of Object.keys(CHAT_CONTENT_V3_SOURCES)) {
       const source = chatContentV3Source(key);
       // Fresh installations have no data work or metric source to wait for.
@@ -360,22 +370,25 @@ export const createChatContentV3Repair = (
             "Non-v3 chat content remains; inspect chat_content_v3_backfill_receipts, repair failed rows and retry",
         });
       }
-      // Validation proves existing rows; NOT VALID already fenced new writes.
-      // The scan inherits the repair session's unbounded statement budget: its
-      // SHARE UPDATE EXCLUSIVE lock blocks neither reads nor writes.
-      const validated = await Result.tryPromise(
-        async () =>
-          await connection.execute(
-            `ALTER TABLE public.${table} VALIDATE CONSTRAINT ${table}_content_v3_check`,
-          ),
-      );
-      if (validated.isErr()) {
-        throw new ChatContentV3UpgradeError({
-          message: "Chat v3 constraint validation failed; rerun db:migrate",
-          cause: validated.error,
-        });
-      }
     }
+    // Validation proves existing rows; NOT VALID already fenced new writes.
+    // The gated scan runs with no statement budget: its SHARE UPDATE
+    // EXCLUSIVE lock blocks neither reads nor writes.
+    const validated = await Result.tryPromise(
+      async () =>
+        await validateOnlineConstraints({
+          connection,
+          tables,
+          constraints: CHAT_CONTENT_V3_CONSTRAINTS,
+        }),
+    );
+    if (validated.isErr()) {
+      throw new ChatContentV3UpgradeError({
+        message: "Chat v3 constraint validation failed; rerun db:migrate",
+        cause: validated.error,
+      });
+    }
+    return validated.value;
   },
 });
 export const CHAT_CONTENT_V3_REPAIR = createChatContentV3Repair();

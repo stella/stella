@@ -58,6 +58,7 @@ import {
   orgPolicies,
   orgReadOnlyPolicies,
   savedSearchPolicies,
+  chatToolGrantPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
   stella,
@@ -349,6 +350,7 @@ export type DestructiveEffectChunkStatus =
 
 export type AccountDeletionStorageCleanup = {
   s3Keys: string[];
+  notBefore?: string;
 };
 
 export const tsvector = customType<{ data: string }>({
@@ -562,6 +564,7 @@ export {
   orgPolicies,
   orgReadOnlyPolicies,
   savedSearchPolicies,
+  chatToolGrantPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
   stella,

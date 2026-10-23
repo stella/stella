@@ -26,6 +26,7 @@ import {
   count,
   eq,
   exists,
+  gt,
   inArray,
   isNotNull,
   or,
@@ -48,11 +49,19 @@ import {
 } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
-import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
 import { isUuid } from "@stll/uuid-codec";
 
-import { member, user as authUser } from "@/api/db/auth-schema";
-import { rootDb, rlsDb } from "@/api/db/root";
+import {
+  member,
+  session as authSession,
+  user as authUser,
+} from "@/api/db/auth-schema";
+import {
+  authorizeOwnerSyntheticSession,
+  bindOwnerSyntheticSessionAuthorityReader,
+  rootDb,
+  rlsDb,
+} from "@/api/db/root";
 import {
   featureEnrolments,
   userProfessionalUseAcceptances,
@@ -78,7 +87,6 @@ import {
   AUTH_SESSION_STORAGE_OPTIONS,
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
-import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
@@ -116,6 +124,7 @@ import type {
   MemberAuthorization,
   MemberAuthorizationLookup,
 } from "@/api/lib/auth/member-authorization";
+import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
@@ -159,11 +168,17 @@ import {
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
+import { findOtherSessionDevices } from "@/api/lib/auth/session-history";
 import {
   createSessionLifetime,
+  decidePinnedSessionLifetime,
   SESSION_LIFETIME_FIELDS,
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
+import {
+  isSecondFactorAuthSessionPath,
+  isSessionCreatingAuthPath,
+} from "@/api/lib/auth/session-path-classification";
 import {
   createMicrosoftProfileMapper,
   createSocialIdentityValidation,
@@ -175,6 +190,7 @@ import {
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
+import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -212,7 +228,6 @@ import {
 import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
-  LIMITS,
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
@@ -276,6 +291,13 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
+import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
+import { isSyntheticSessionPrincipal } from "@/api/lib/synthetic-principal/constants";
+import {
+  checkSyntheticPrincipalAccess,
+  syntheticPrincipalAuthConfig,
+} from "@/api/lib/synthetic-principal/policy";
+import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
 import { includes, isRecord } from "@/api/lib/type-guards";
 import {
   checkMemberAdmission,
@@ -296,6 +318,9 @@ import {
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 
 /** Access token lifetime in seconds (15 minutes). */
+const syntheticSessionAuthorityReader =
+  bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
+
 const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
@@ -303,14 +328,50 @@ const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
 // A lost rotation response can be replayed idempotently within this window.
 const REFRESH_TOKEN_REUSE_INTERVAL = 30;
 
-const VERIFY_EMAIL_PATH = "/email-otp/verify-email";
 const SEND_VERIFICATION_OTP_PATH = "/email-otp/send-verification-otp";
-const SIGN_IN_EMAIL_PATH = "/sign-in/email";
 const PREFERRED_NAME_MAX_LENGTH = 120;
 const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 
 /** Passwordless email-OTP sign-in path (not a better-auth credential path). */
 const SIGN_IN_EMAIL_OTP_PATH = "/sign-in/email-otp";
+
+export const createSocialProvider = <T extends object>(provider: T) => ({
+  ...provider,
+  disableIdTokenSignIn: true,
+});
+
+type SocialProviderSettings = {
+  googleClientId: string | undefined;
+  googleClientSecret: string | undefined;
+  microsoftClientId: string | undefined;
+  microsoftClientSecret: string | undefined;
+  microsoftTenantId: string | undefined;
+};
+
+export const createSocialProviders = (settings: SocialProviderSettings) => ({
+  ...(settings.googleClientId && settings.googleClientSecret
+    ? {
+        google: createSocialProvider({
+          clientId: settings.googleClientId,
+          clientSecret: settings.googleClientSecret,
+        }),
+      }
+    : {}),
+  ...(settings.microsoftClientId &&
+  settings.microsoftClientSecret &&
+  settings.microsoftTenantId
+    ? {
+        microsoft: createSocialProvider({
+          clientId: settings.microsoftClientId,
+          clientSecret: settings.microsoftClientSecret,
+          tenantId: settings.microsoftTenantId,
+          mapProfileToUser: createMicrosoftProfileMapper(
+            settings.microsoftTenantId,
+          ),
+        }),
+      }
+    : {}),
+});
 
 type SignInEmailOtpBody = {
   email: string;
@@ -462,30 +523,13 @@ export const getNewAccountEmailOtpAction = async (
   }
 };
 
-/**
- * Better Auth handles every social provider (`/callback/google`,
- * `/callback/microsoft`, ...) through the `/callback/:id` endpoint. The MCP
- * OAuth provider plugin uses `/oauth2/*` paths instead, so this prefix
- * matches only social sign-in callbacks.
- */
 const isSocialSignInCallbackPath = (path: string | undefined): boolean =>
   path?.startsWith("/callback/") ?? false;
 
 const isStellaTwoFactorSignInGatePath = (path: string | undefined): boolean =>
-  path === SIGN_IN_EMAIL_OTP_PATH || isSocialSignInCallbackPath(path);
+  isSecondFactorAuthSessionPath(path);
 
-/**
- * Every better-auth path whose response can establish a new session: the two
- * surfaces the second-factor gate already covers (passwordless email-OTP
- * sign-in and the shared social callback), plus first-verification and the
- * self-host credential path, which carry no second factor. Derived from the
- * gate so a sign-in surface added there also raises the new-device notice
- * instead of silently skipping it.
- */
-export const isSessionCreatingAuthPath = (path: string | undefined): boolean =>
-  path === VERIFY_EMAIL_PATH ||
-  path === SIGN_IN_EMAIL_PATH ||
-  isStellaTwoFactorSignInGatePath(path);
+export { isSessionCreatingAuthPath };
 
 /**
  * Frontend route that presents the second-factor challenge (mirrors the path
@@ -513,33 +557,99 @@ export const isTwoFactorRedirectResponse = (value: unknown): boolean =>
   value.twoFactorRedirect === true;
 
 /**
- * The two-factor plugin's own management endpoints only require an active
- * (fresh) session — see node_modules/better-auth/dist/plugins/two-factor/index.mjs
- * (enable, disable) and its totp/backup-codes sub-plugins (get-totp-uri,
- * generate-backup-codes). A hijacked session could otherwise silently strip
- * 2FA, re-enable it to rotate the secret out from under the real owner,
- * read back the current TOTP secret to clone the authenticator, or mint
- * fresh backup codes, so these paths are additionally gated on a fresh
- * email verification code (see `requireTwoFactorManageOtp`), mirroring the
- * delete-account flow.
+ * Every HTTP endpoint the two-factor plugin registers, by how it uses the
+ * caller's session. Each one resolves that session from storage, never from
+ * Better Auth's signed cookie snapshot, which trades a short revocation delay
+ * for ordinary-request performance (see `resolveAuthoritativeSessionForSensitiveAuthPath`).
+ *
+ * - `manage`: exposes or replaces second-factor material. The plugin itself
+ *   only requires an active session (node_modules/better-auth/dist/plugins/two-factor/index.mjs
+ *   and its totp/backup-codes sub-plugins), so Stella also requires a live
+ *   session plus a fresh email verification code (see `requireTwoFactorManageOtp`),
+ *   mirroring the delete-account flow, so a session cookie alone can neither
+ *   remove 2FA, rotate the secret, read back the TOTP secret nor mint backup codes.
+ * - `challenge`: completes a sign-in challenge from its challenge cookie, or,
+ *   with a live session, finishes enrollment or consumes a backup code.
+ *
+ * A registry test enumerates the registered plugin, so a new endpoint fails
+ * until it is classified here.
  */
-export const TWO_FACTOR_MANAGE_PATHS = new Set([
-  "/two-factor/enable",
-  "/two-factor/disable",
-  "/two-factor/get-totp-uri",
-  "/two-factor/generate-backup-codes",
-]);
+export const TWO_FACTOR_SESSION_PATHS = {
+  "/two-factor/enable": "manage",
+  "/two-factor/disable": "manage",
+  "/two-factor/get-totp-uri": "manage",
+  "/two-factor/generate-backup-codes": "manage",
+  "/two-factor/verify-totp": "challenge",
+  "/two-factor/verify-otp": "challenge",
+  "/two-factor/verify-backup-code": "challenge",
+  "/two-factor/send-otp": "challenge",
+} as const satisfies Record<`/two-factor/${string}`, "manage" | "challenge">;
 
 /**
- * These endpoints can either mint durable OAuth credentials or change the
- * account's second factor. They must never authorize from Better Auth's
- * signed cookie snapshot: it deliberately trades a short revocation delay for
- * ordinary-request performance. Resolve their session from storage instead.
+ * Every HTTP endpoint registered by the OAuth provider, classified by whether
+ * it reads the caller's browser session. The registry test deliberately also
+ * includes server-only endpoints: an upstream endpoint cannot start trusting
+ * a browser session without an explicit decision here.
  */
-export const AUTHORITATIVE_SESSION_PATHS = new Set([
-  ...TWO_FACTOR_MANAGE_PATHS,
-  "/oauth2/authorize",
-  "/oauth2/consent",
+export const OAUTH_PROVIDER_SESSION_PATHS = {
+  "/.well-known/oauth-authorization-server": "no-browser-session",
+  "/.well-known/openid-configuration": "no-browser-session",
+  "/admin/oauth2/create-client": "no-browser-session",
+  "/admin/oauth2/resources": "no-browser-session",
+  "/admin/oauth2/resources/:identifier": "no-browser-session",
+  "/admin/oauth2/resources/:identifier/clients/:client_id":
+    "no-browser-session",
+  "/admin/oauth2/update-client": "no-browser-session",
+  "/oauth2/authorize": "browser-session",
+  "/oauth2/client/rotate-secret": "browser-session",
+  "/oauth2/consent": "browser-session",
+  "/oauth2/continue": "browser-session",
+  "/oauth2/create-client": "browser-session",
+  "/oauth2/delete-client": "browser-session",
+  "/oauth2/delete-consent": "browser-session",
+  "/oauth2/end-session": "browser-session",
+  "/oauth2/end-session/confirm": "browser-session",
+  "/oauth2/get-client": "browser-session",
+  "/oauth2/get-clients": "browser-session",
+  "/oauth2/get-consent": "browser-session",
+  "/oauth2/get-consents": "browser-session",
+  "/oauth2/introspect": "no-browser-session",
+  "/oauth2/public-client": "browser-session",
+  "/oauth2/public-client-prelogin": "no-browser-session",
+  "/oauth2/register": "browser-session",
+  "/oauth2/revoke": "no-browser-session",
+  "/oauth2/token": "no-browser-session",
+  "/oauth2/update-client": "browser-session",
+  "/oauth2/update-consent": "browser-session",
+  "/oauth2/userinfo": "no-browser-session",
+} as const satisfies Record<string, "browser-session" | "no-browser-session">;
+
+const isOAuthProviderSessionPath = (
+  path: string,
+): path is keyof typeof OAUTH_PROVIDER_SESSION_PATHS =>
+  Object.hasOwn(OAUTH_PROVIDER_SESSION_PATHS, path);
+
+const isTwoFactorSessionPath = (
+  path: string,
+): path is keyof typeof TWO_FACTOR_SESSION_PATHS =>
+  Object.hasOwn(TWO_FACTOR_SESSION_PATHS, path);
+
+export const TWO_FACTOR_MANAGE_PATHS: ReadonlySet<string> = new Set(
+  Object.entries(TWO_FACTOR_SESSION_PATHS)
+    .filter(([, use]) => use === "manage")
+    .map(([path]) => path),
+);
+
+/**
+ * These endpoints can either mint durable OAuth credentials or read or change
+ * the account's second factor. They must never authorize from the signed
+ * cookie snapshot. Resolve their session from storage instead.
+ */
+export const AUTHORITATIVE_SESSION_PATHS: ReadonlySet<string> = new Set([
+  ...Object.keys(TWO_FACTOR_SESSION_PATHS),
+  ...Object.entries(OAUTH_PROVIDER_SESSION_PATHS).flatMap(([path, use]) =>
+    use === "browser-session" ? [path] : [],
+  ),
 ]);
 const SIX_DIGIT_OTP_PATTERN = /^\d{6}$/u;
 
@@ -559,18 +669,71 @@ type RequireTwoFactorManageOtpArgs = {
 
 type SensitiveAuthPathContext = {
   body?: unknown;
+  context?:
+    | {
+        authCookies?:
+          | {
+              sessionData: { name: string };
+              sessionToken: { name: string };
+            }
+          | undefined;
+      }
+    | undefined;
+  headers?: Headers | undefined;
   path?: string | undefined;
+  query?: Record<string, unknown> | undefined;
   request?: Request | undefined;
 };
 type AuthoritativeSessionPathContext = SensitiveAuthPathContext & {
   path: string;
-  request: Request;
+};
+/** A `before` hook result whose context Better Auth merges into the endpoint's. */
+type StorageSessionHookResult = {
+  context: { query: Record<string, unknown> };
+};
+
+const removeSessionCookies = (ctx: SensitiveAuthPathContext): void => {
+  const headers = ctx.headers;
+  const authCookies = ctx.context?.authCookies;
+  if (!headers || !authCookies) {
+    panic("Authoritative-session hook is missing the auth cookie context");
+  }
+  const sessionCookieNames = new Set([
+    authCookies.sessionToken.name,
+    authCookies.sessionData.name,
+  ]);
+  // Better Auth splits a large session-data cookie into `<name>.<index>`
+  // chunks and reassembles them on read, so the chunks go too.
+  const sessionDataChunkPrefix = `${authCookies.sessionData.name}.`;
+  const isSessionDataChunk = (name: string): boolean =>
+    name.startsWith(sessionDataChunkPrefix) &&
+    /^\d+$/u.test(name.slice(sessionDataChunkPrefix.length));
+  const remainingCookies = (headers.get("cookie") ?? "")
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .filter((cookie) => {
+      const separator = cookie.indexOf("=");
+      const name = separator === -1 ? cookie : cookie.slice(0, separator);
+      return !sessionCookieNames.has(name) && !isSessionDataChunk(name);
+    });
+  if (remainingCookies.length === 0) {
+    headers.delete("cookie");
+    return;
+  }
+  headers.set("cookie", remainingCookies.join("; "));
 };
 /**
  * Establish database-backed session state before a sensitive plugin endpoint
- * runs. Better Auth's endpoint middleware reuses this context, so neither the
- * OAuth authorization-code flow nor two-factor rotation can fall back to a
- * signed cookie-cache snapshot.
+ * runs. Better Auth's endpoint middleware reuses a resolved session from this
+ * context, so neither the OAuth authorization-code flow nor two-factor
+ * rotation can fall back to a signed cookie-cache snapshot.
+ *
+ * A session absent from storage leaves that context empty, and the endpoint
+ * middleware would then read the cookie snapshot again. A two-factor endpoint
+ * therefore also gets `disableCookieCache` in its query, which Better Auth's
+ * session read honours, so the endpoint sees the same absent session. The
+ * returned hook result carries that query; `undefined` means the request
+ * continues unchanged.
  */
 export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
   TContext extends SensitiveAuthPathContext,
@@ -582,34 +745,58 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
   resolveSession: (
     ctx: TContext & AuthoritativeSessionPathContext,
   ) => Promise<TwoFactorManageSession>;
-}): Promise<Result<boolean, APIError>> => {
+}): Promise<Result<StorageSessionHookResult | undefined, APIError>> => {
   const path = ctx.path;
   if (path === undefined || !AUTHORITATIVE_SESSION_PATHS.has(path)) {
-    return Result.ok(false);
+    return Result.ok(undefined);
   }
-  const request = ctx.request;
-  if (request === undefined) {
+  if (isOAuthProviderSessionPath(path)) {
+    // HTTP requests and server-side `auth.api.*` calls alike: whenever the
+    // call carries cookies, the endpoint could read the cookie snapshot, so
+    // resolve the session from storage. A call without cookies has no
+    // snapshot to fall back to.
+    if (
+      OAUTH_PROVIDER_SESSION_PATHS[path] === "browser-session" &&
+      (ctx.headers?.get("cookie") ?? "") !== ""
+    ) {
+      const session = await resolveSession({ ...ctx, path });
+      if (!session) {
+        // OAuth authorization queries are signed and survive the login
+        // redirect, so pin the absent result by removing only Better Auth's
+        // session cookies from the headers the endpoint's middleware reads.
+        removeSessionCookies(ctx);
+      }
+    }
+    return Result.ok(undefined);
+  }
+  if (ctx.request === undefined) {
     panic("Authoritative-session hook ran outside HTTP dispatch");
   }
-  const session = await resolveSession({ ...ctx, path, request });
-  if (!TWO_FACTOR_MANAGE_PATHS.has(path)) {
-    return Result.ok(true);
+  const session = await resolveSession({ ...ctx, path });
+  if (!isTwoFactorSessionPath(path)) {
+    return Result.ok(undefined);
+  }
+  const storageSession: StorageSessionHookResult = {
+    context: { query: { ...ctx.query, disableCookieCache: true } },
+  };
+  if (TWO_FACTOR_SESSION_PATHS[path] === "challenge") {
+    return Result.ok(storageSession);
   }
   const gate = await requireTwoFactorManageOtp({ body: ctx.body, session });
-  return gate.map(() => true);
+  return gate.map(() => storageSession);
 };
 
 /**
- * Requires a fresh, single-use email verification code before letting any
- * path in `TWO_FACTOR_MANAGE_PATHS` proceed, so a session cookie alone can
- * neither enroll a second factor, disable it, rotate the TOTP secret via
- * re-enable, read back the current TOTP secret, nor mint fresh backup codes.
- * Enrollment is gated like every other transition: binding an authenticator
- * decides who can pass the challenge from then on.
+ * Requires a live session and a fresh, single-use email verification code
+ * before letting any path in `TWO_FACTOR_MANAGE_PATHS` proceed, so a session
+ * cookie alone can neither enroll a second factor, disable it, rotate the TOTP
+ * secret via re-enable, read back the current TOTP secret, nor mint fresh
+ * backup codes. Enrollment is gated like every other transition: binding an
+ * authenticator decides who can pass the challenge from then on.
  *
- * Resolves the session itself (this runs as a global `before` hook, ahead of
- * each endpoint's own session middleware) and no-ops when there is no
- * session, because the endpoint's own middleware will reject the request.
+ * Receives the session resolved from storage (this runs in the global
+ * `before` hook, ahead of each endpoint's own session middleware) and refuses
+ * a request whose session storage no longer holds, such as a revoked one.
  *
  * One deployment shape is exempt: transactional email is optional, and an
  * instance without a transport cannot deliver a manage code at all, so
@@ -624,7 +811,12 @@ const requireTwoFactorManageOtp = async ({
   session,
 }: RequireTwoFactorManageOtpArgs): Promise<Result<void, APIError>> => {
   if (!session) {
-    return Result.ok(undefined);
+    return Result.err(
+      new APIError("UNAUTHORIZED", {
+        code: "UNAUTHORIZED",
+        message: "Unauthorized",
+      }),
+    );
   }
 
   if (
@@ -850,13 +1042,6 @@ const isMcpResourceScope = (
 ): scope is (typeof MCP_ALL_RESOURCE_SCOPES)[number] =>
   includes(MCP_ALL_RESOURCE_SCOPES, scope);
 
-// A device is its browser and OS; a user agent naming neither is no device.
-const newDeviceLoginDeviceKey = ({
-  browser,
-  os,
-}: ParsedUserAgent): string | null =>
-  browser === null && os === null ? null : `${browser ?? ""}|${os ?? ""}`;
-
 // Building an `Intl.DateTimeFormat` re-parses its options every call; cache
 // one per language instead of rebuilding it for every new-device-login email.
 const newDeviceLoginDateTimeFormatCache = new Map<
@@ -1080,6 +1265,7 @@ export const createAuth = (
       capEnabled: env.SESSION_LIFETIME_CAP_ENABLED,
     }),
   });
+  const syntheticAuthHooks = createSyntheticPrincipalAuthHooks();
   const demoConfig = getDemoAccountConfig();
   const reviewConfig = getReviewAccountConfig();
   const resolveSessionAccount = async (userId: SafeId<"user">) =>
@@ -1113,6 +1299,11 @@ export const createAuth = (
   });
   const reviewSessionPolicy = createDemoSessionPolicy({
     config: reviewConfig,
+    resolveUser: resolveSessionAccount,
+    hasMembership: hasSessionMembership,
+  });
+  const syntheticSessionPolicy = createDemoSessionPolicy({
+    config: syntheticPrincipalAuthConfig,
     resolveUser: resolveSessionAccount,
     hasMembership: hasSessionMembership,
   });
@@ -1773,9 +1964,15 @@ export const createAuth = (
       localPasswordEnabled: isSelfhostLocalPasswordAuthEnabled(),
       reviewAccountConfigured: isReviewAccountConfigured(),
     }),
+    emailVerification: { autoSignInAfterVerification: false },
     databaseHooks: {
       account: {
-        create: { before: reviewDatabaseHooks.accountCreateBefore },
+        create: {
+          before: async (account, ctx) => {
+            syntheticAuthHooks.accountCreateBefore(account);
+            await reviewDatabaseHooks.accountCreateBefore(account, ctx);
+          },
+        },
       },
       member: {
         create: { before: reviewDatabaseHooks.memberCreateBefore },
@@ -1785,9 +1982,17 @@ export const createAuth = (
       },
       session: {
         create: {
-          before: async (session) =>
-            (await demoSessionPolicy(session)) ??
-            (await reviewSessionPolicy(session)),
+          before: async (session) => {
+            const accountPolicy =
+              (await demoSessionPolicy(session)) ??
+              (await reviewSessionPolicy(session)) ??
+              (await syntheticSessionPolicy(session));
+            const data = accountPolicy?.data ?? session;
+            const lifetime = decidePinnedSessionLifetime(data);
+            return accountPolicy || lifetime
+              ? { data: { ...data, ...lifetime } }
+              : undefined;
+          },
         },
       },
       user: {
@@ -1796,6 +2001,7 @@ export const createAuth = (
             // Refuses a creation path that has not decided whether it shows
             // the professional-use statement, before the row is written.
             requireUserCreationOrigin(ctx?.path);
+            syntheticAuthHooks.userCreateBefore(user);
             await reviewDatabaseHooks.userCreateBefore(user, ctx);
             const data = Result.gen(function* () {
               yield* checkNewAccountEmailAllowedForCreation({
@@ -1848,35 +2054,25 @@ export const createAuth = (
       },
     },
     database: membershipAuthAdapter,
-    socialProviders: {
-      ...(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET
-        ? {
-            google: {
-              clientId: env.GOOGLE_AUTH_CLIENT_ID,
-              clientSecret: env.GOOGLE_AUTH_CLIENT_SECRET,
-            },
-          }
-        : {}),
-      ...(env.MICROSOFT_AUTH_CLIENT_ID &&
-      env.MICROSOFT_AUTH_CLIENT_SECRET &&
-      env.MICROSOFT_AUTH_TENANT_ID
-        ? {
-            microsoft: {
-              clientId: env.MICROSOFT_AUTH_CLIENT_ID,
-              clientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
-              tenantId: env.MICROSOFT_AUTH_TENANT_ID,
-              mapProfileToUser: createMicrosoftProfileMapper(
-                env.MICROSOFT_AUTH_TENANT_ID,
-              ),
-            },
-          }
-        : {}),
-    },
+    socialProviders: createSocialProviders({
+      googleClientId: env.GOOGLE_AUTH_CLIENT_ID,
+      googleClientSecret: env.GOOGLE_AUTH_CLIENT_SECRET,
+      microsoftClientId: env.MICROSOFT_AUTH_CLIENT_ID,
+      microsoftClientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
+      microsoftTenantId: env.MICROSOFT_AUTH_TENANT_ID,
+    }),
     plugins: [
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
       createAgentUserPlugin(),
       createReviewAccountUserPlugin(reviewConfig),
+      createReviewAccountPlugin({
+        id: "restricted-monitoring-account",
+        config: syntheticPrincipalAuthConfig,
+        localPasswordEnabled: true,
+        checkAccess: checkSyntheticPrincipalAccess,
+        authorizeSession: authorizeOwnerSyntheticSession,
+      }),
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
@@ -2233,8 +2429,8 @@ export const createAuth = (
           async () =>
             await resolveAuthoritativeSessionForSensitiveAuthPath({
               ctx,
-              resolveSession: async ({ path, request }) =>
-                await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
+              resolveSession: async ({ path }) =>
+                await getAuthoritativeSessionFromCtx({ ...ctx, path }),
             }),
         );
         // Better Auth rejects a request from a `before` hook by the APIError
@@ -2243,7 +2439,7 @@ export const createAuth = (
           throw authoritative.error;
         }
         if (authoritative.value) {
-          return undefined;
+          return authoritative.value;
         }
 
         if (!shouldHandleSelfhostBootstrapPath(ctx.path)) {
@@ -2254,97 +2450,50 @@ export const createAuth = (
         return undefined;
       }),
       after: createAuthMiddleware(async (ctx) => {
-        if (!isSessionCreatingAuthPath(ctx.path) || isLocalDevOpen()) {
-          return;
-        }
-
-        if (
-          ctx.path === SIGN_IN_EMAIL_PATH &&
-          !isTransactionalEmailConfigured()
-        ) {
-          return;
-        }
-
         const newSession = ctx.context.newSession;
-        if (!newSession) {
-          return;
-        }
-
-        const notified = await Result.tryPromise({
-          try: async () => {
-            const { user, session } = newSession;
-
-            const previousSessions = await rootDb.query.session.findMany({
-              where: {
-                userId: user.id,
-                id: { ne: session.id },
-              },
-              orderBy: { createdAt: "desc" },
-              limit: LIMITS.newDeviceLoginSessionScanLimit,
-              columns: {
-                ipAddress: true,
-                userAgent: true,
-              },
-            });
-
-            if (previousSessions.length === 0) {
-              return;
-            }
-
-            const knownIPs = new Set<string>();
-            const knownDevices = new Set<string>();
-            for (const previous of previousSessions) {
-              if (previous.ipAddress) {
-                knownIPs.add(previous.ipAddress);
+        await sendNewDeviceNotice({
+          path: ctx.path,
+          newSession: newSession
+            ? {
+                user: {
+                  id: toSafeId<"user">(newSession.user.id),
+                  email: newSession.user.email,
+                },
+                session: {
+                  id: newSession.session.id,
+                  ipAddress: newSession.session.ipAddress,
+                  userAgent: newSession.session.userAgent,
+                  createdAt: newSession.session.createdAt,
+                },
               }
-              const previousDeviceKey = newDeviceLoginDeviceKey(
-                parseUserAgent(previous.userAgent),
+            : null,
+          dependencies: {
+            findPreviousSessions: findOtherSessionDevices,
+            sendNotice: ({ email, device, ipAddress, createdAt }) => {
+              const lang = extractLangFromRequest(ctx.request);
+              const formattedTime =
+                getNewDeviceLoginDateTimeFormat(lang).format(createdAt);
+
+              ctx.context.runInBackground(
+                sendNewDeviceLoginEmail({
+                  email,
+                  device,
+                  ipAddress,
+                  time: formattedTime,
+                  sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
+                  lang,
+                }).catch((error: unknown) => {
+                  captureError(error, { source: "new-device-login-email" });
+                  throw error;
+                }),
               );
-              if (previousDeviceKey !== null) {
-                knownDevices.add(previousDeviceKey);
-              }
-            }
-
-            const currentDevice = parseUserAgent(session.userAgent);
-            const deviceKey = newDeviceLoginDeviceKey(currentDevice);
-            const currentIpAddress = session.ipAddress;
-            const isNewIP =
-              typeof currentIpAddress === "string" &&
-              !knownIPs.has(currentIpAddress);
-            const isNewDevice =
-              deviceKey !== null && !knownDevices.has(deviceKey);
-
-            if (!isNewIP && !isNewDevice) {
-              return;
-            }
-
-            const deviceLabel =
-              currentDevice.browser && currentDevice.os
-                ? `${currentDevice.browser} on ${currentDevice.os}`
-                : (currentDevice.browser ?? currentDevice.os ?? "Unknown");
-            const lang = extractLangFromRequest(ctx.request);
-            const formattedTime = getNewDeviceLoginDateTimeFormat(lang).format(
-              session.createdAt,
-            );
-
-            ctx.context.runInBackground(
-              sendNewDeviceLoginEmail({
-                email: user.email,
-                device: deviceLabel,
-                ipAddress: session.ipAddress ?? "Unknown",
-                time: formattedTime,
-                sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
-                lang,
-              }).catch((error: unknown) => {
-                captureError(error, { source: "new-device-login-email" });
-              }),
-            );
+            },
+            isTransactionalEmailConfigured,
+            isLocalDev: isLocalDevOpen,
+            onError: (error) =>
+              captureError(error, { source: "new-device-login-hook" }),
           },
-          catch: (cause) => cause,
         });
-        if (Result.isError(notified)) {
-          captureError(notified.error, { source: "new-device-login-hook" });
-        }
       }),
     },
   });
@@ -2480,6 +2629,14 @@ const VALIDATE_AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
+/**
+ * Account routes confirm the session still exists in storage. Organization
+ * routes may serve the cached cookie snapshot because their member lookup runs
+ * live on every request; an account route has no such lookup, so the stored
+ * session is the only thing that ends when the session or the account does.
+ * The snapshot still supplies the session itself; one indexed read checks it
+ * is live, instead of a full uncached session load.
+ */
 export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
   validateSession: {
     async resolve({ status, request, set }) {
@@ -2499,6 +2656,30 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
       const session = sessionResult.value?.session;
       const user = sessionResult.value?.user;
       if (!session || !user) {
+        return status(401, AUTH_REJECTION_BODY[401]);
+      }
+
+      // The signed snapshot may outlive its stored session for its cache
+      // lifetime; one indexed read confirms the session still exists. Signing
+      // out elsewhere deletes the row, and deleting the account cascades.
+      // The read goes through the auth layer's own database adapter, which
+      // only reaches auth tables.
+      const liveResult = await Result.tryPromise(async () => {
+        const { adapter } = await getAuth().$context;
+        return await adapter.findOne<{ id: string }>({
+          model: "session",
+          where: [
+            { field: "id", value: session.id },
+            { field: "userId", value: user.id },
+            { field: "expiresAt", operator: "gt", value: new Date() },
+          ],
+          select: ["id"],
+        });
+      });
+      if (Result.isError(liveResult)) {
+        return status(500, AUTH_REJECTION_BODY[500]);
+      }
+      if (liveResult.value === null) {
         return status(401, AUTH_REJECTION_BODY[401]);
       }
 
@@ -2759,14 +2940,41 @@ export const isActiveOrganizationMember = async ({
 export const resolveUserRealtimeAuthorization = async (
   {
     organizationId,
+    sessionIds,
     userId,
-  }: { organizationId: SafeId<"organization">; userId: SafeId<"user"> },
+  }: {
+    organizationId: SafeId<"organization">;
+    sessionIds: readonly string[];
+    userId: SafeId<"user">;
+  },
   db: MemberAuthorizationDb,
-): Promise<boolean> =>
-  (await resolveMemberAuthorization({ organizationId, userId }, db)) !== null;
+): Promise<ReadonlySet<string>> => {
+  const uniqueSessionIds = [...new Set(sessionIds)];
+  if (uniqueSessionIds.length === 0) {
+    return new Set();
+  }
+
+  const rows = await db
+    .select({ sessionId: authSession.id })
+    .from(member)
+    .innerJoin(
+      authSession,
+      and(
+        eq(authSession.userId, member.userId),
+        inArray(authSession.id, uniqueSessionIds),
+        gt(authSession.expiresAt, new Date()),
+      ),
+    )
+    .where(
+      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
+    )
+    .limit(uniqueSessionIds.length);
+
+  return new Set(rows.map((row) => row.sessionId));
+};
 
 type WorkspaceRealtimeAudienceLookup = {
-  userIds: readonly SafeId<"user">[];
+  sessionIds: readonly string[];
   workspaceId: SafeId<"workspace">;
 };
 
@@ -2778,17 +2986,25 @@ type WorkspaceRealtimeAudienceLookup = {
  * RLS-scoped request of their own.
  */
 export const resolveWorkspaceRealtimeAudience = async (
-  { userIds, workspaceId }: WorkspaceRealtimeAudienceLookup,
+  { sessionIds, workspaceId }: WorkspaceRealtimeAudienceLookup,
   db: MemberAuthorizationDb,
 ) => {
-  const uniqueUserIds = [...new Set(userIds)];
-  if (uniqueUserIds.length === 0) {
-    return new Set<SafeId<"user">>();
+  const uniqueSessionIds = [...new Set(sessionIds)];
+  if (uniqueSessionIds.length === 0) {
+    return new Set<string>();
   }
 
   const rows = await db
-    .select({ userId: member.userId })
+    .select({ sessionId: authSession.id })
     .from(member)
+    .innerJoin(
+      authSession,
+      and(
+        eq(authSession.userId, member.userId),
+        inArray(authSession.id, uniqueSessionIds),
+        gt(authSession.expiresAt, new Date()),
+      ),
+    )
     .innerJoin(
       workspaces,
       and(
@@ -2798,10 +3014,9 @@ export const resolveWorkspaceRealtimeAudience = async (
         memberWorkspaceAccess(db),
       ),
     )
-    .where(inArray(member.userId, uniqueUserIds))
-    .limit(LIMITS.organizationMembersCount);
+    .limit(uniqueSessionIds.length);
 
-  return new Set(rows.map((row) => brandPersistedUserId(row.userId)));
+  return new Set(rows.map((row) => row.sessionId));
 };
 
 /**
@@ -2927,6 +3142,18 @@ const readOrganizationWorkspaces = async (
   return outcome.value.workspaces;
 };
 
+const hasSyntheticSessionAuthority = async (current: {
+  session: { id: string };
+  user: { id: string };
+}) => {
+  const sessionId = current.session.id;
+  const userId = brandPersistedUserId(current.user.id);
+  return (
+    !isSyntheticSessionPrincipal({ sessionId, principalId: userId }) ||
+    (await syntheticSessionAuthorityReader({ sessionId, userId })) !== null
+  );
+};
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -2950,6 +3177,10 @@ const resolveValidateAuth = async ({
   const rawOrgId = session?.activeOrganizationId;
 
   if (!session || !user || !rawOrgId) {
+    return { ok: false as const, statusCode: 401 as const };
+  }
+
+  if (!(await hasSyntheticSessionAuthority({ session, user }))) {
     return { ok: false as const, statusCode: 401 as const };
   }
 
@@ -3120,6 +3351,7 @@ const resolveValidateAuth = async ({
         email: user.email,
       },
       session: {
+        id: session.id,
         activeOrganizationId,
       },
       getActiveWorkspaceIds,

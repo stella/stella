@@ -93,7 +93,7 @@ type ProvisionAnchor = {
   pieceId: string;
   start: number;
   end: number;
-  appUrl: string | null;
+  url: string | null;
   provision: { document_id: string; anchor: string; cited_anchor: string };
 };
 
@@ -163,7 +163,7 @@ const locateProvisionAnchors = async ({
       pieceId: row.printPieceId,
       start: row.printStart,
       end: row.printEnd,
-      appUrl: preview.appUrl,
+      url: preview.url,
       provision: {
         document_id: preview.documentId,
         anchor: provisionHeadingAnchor(row.anchor),
@@ -239,7 +239,7 @@ export const readDecisionReaderSource = async ({
     end: number;
     citationId: string;
     decisionId: string;
-    appUrl: string | null;
+    url: string | null;
   }[] = [];
   if (citations !== null) {
     if (!("items" in citations)) {
@@ -263,7 +263,7 @@ export const readDecisionReaderSource = async ({
           end: span.end,
           citationId: span.source.id,
           decisionId: span.source.citedDecisionId,
-          appUrl: span.source.appUrl,
+          url: span.source.url,
         });
       }
     }
@@ -305,6 +305,7 @@ export const readDecisionReaderSource = async ({
     ast: textAccess === "readable" ? ast : null,
     citationAnchors,
     provisionAnchors,
+    provisionStatus: provisions?.status ?? null,
     referenceNextCursor:
       citations?.nextCursor ?? provisions?.nextCursor ?? null,
   };

@@ -83,6 +83,10 @@ import {
 import { useHydrated } from "@/hooks/use-hydrated";
 import { getTranslator } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
+import {
+  searchTiming,
+  useSearchResultsTiming,
+} from "@/lib/analytics/search-timing";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import {
@@ -265,7 +269,9 @@ function PublicStatuteFullText({ query }: { query: string }) {
   const country = Route.useParams({
     select: ({ country: routeCountry }) => routeCountry,
   });
-  const search = Route.useSearch({ select: ({ type }) => ({ type }) });
+  const search = Route.useSearch({
+    select: ({ asOf, q, type }) => ({ asOf, q, type }),
+  });
   const navigate = Route.useNavigate();
   const [input, setInput] = useState(query);
   const [requestedQuery, setRequestedQuery] = useState(query);
@@ -277,6 +283,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
     }
   }
   const writeQuery = useDebouncedCallback((value: string) => {
+    searchTiming.requested("legislation", value);
     detached(
       navigate({
         replace: true,
@@ -288,12 +295,18 @@ function PublicStatuteFullText({ query }: { query: string }) {
   }, 300);
   const dataQuery = useInfiniteQuery({
     ...statuteSearchInfiniteOptions({
+      ...(search.asOf === undefined ? {} : { asOf: search.asOf }),
       country: country.toUpperCase(),
       query,
       ...(search.type === undefined ? {} : { documentType: search.type }),
     }),
     enabled: hydrated,
   });
+  useSearchResultsTiming(
+    "legislation",
+    search.q ?? "",
+    dataQuery.data !== undefined && !dataQuery.isPlaceholderData,
+  );
   const { fetchNextPage, hasNextPage, isFetchingNextPage, isPending } =
     dataQuery;
   const dataView = useQueryView(dataQuery, {
@@ -403,6 +416,45 @@ function PublicStatuteFullText({ query }: { query: string }) {
   );
 }
 
+type StatuteListFilterChipsOptions = {
+  search: StatutesIndexSearch;
+  onRemove: (key: "year" | "validity" | "type") => void;
+};
+
+const useStatuteListFilterChips = ({
+  search,
+  onRemove,
+}: StatuteListFilterChipsOptions) => {
+  const t = useTranslations();
+  const chips: PublicLawFilterChip[] = [];
+  if (search.year !== undefined) {
+    chips.push({
+      id: "filter:year",
+      kind: t("workspaces.views.calendar.year"),
+      onRemove: () => onRemove("year"),
+      value: search.year,
+    });
+  }
+  if (search.validity !== undefined) {
+    chips.push({
+      id: "filter:validity",
+      kind: t(FILTER_KIND_LABEL_KEYS.validity),
+      onRemove: () => onRemove("validity"),
+      value: t(STATUTE_VALIDITY_LABEL_KEYS[search.validity]),
+    });
+  }
+  if (search.type !== undefined) {
+    chips.push({
+      id: "filter:type",
+      kind: t(FILTER_KIND_LABEL_KEYS.type),
+      onRemove: () => onRemove("type"),
+      value: search.type,
+    });
+  }
+
+  return chips;
+};
+
 function PublicStatuteList({
   routeState,
 }: {
@@ -412,12 +464,13 @@ function PublicStatuteList({
   const queryClient = useQueryClient();
   const country = Route.useParams({ select: (params) => params.country });
   const search = Route.useSearch({
-    select: ({ page, pageSize, q, type, validity }) => ({
+    select: ({ page, pageSize, q, type, validity, year }) => ({
       page,
       pageSize,
       q,
       type,
       validity,
+      year,
     }),
   });
   const navigate = Route.useNavigate();
@@ -428,6 +481,7 @@ function PublicStatuteList({
   // this value is the field's own write coming back, not somebody else's.
   const [requestedQuery, setRequestedQuery] = useState(search.q ?? "");
   const writeQuery = useDebouncedCallback((value: string) => {
+    searchTiming.requested("legislation", value);
     detached(
       navigate({
         replace: true,
@@ -476,6 +530,11 @@ function PublicStatuteList({
     isLoading,
     isPlaceholderData,
   } = dataQuery;
+  useSearchResultsTiming(
+    "legislation",
+    search.q ?? "",
+    dataQuery.data !== undefined && !isPlaceholderData,
+  );
   const dataView = useQueryView(dataQuery, {
     isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
   });
@@ -570,23 +629,14 @@ function PublicStatuteList({
     );
   };
 
-  const chips: PublicLawFilterChip[] = [];
-  if (search.validity !== undefined) {
-    chips.push({
-      id: "filter:validity",
-      kind: t(FILTER_KIND_LABEL_KEYS.validity),
-      onRemove: () => selectFacet("validity", undefined),
-      value: t(STATUTE_VALIDITY_LABEL_KEYS[search.validity]),
-    });
-  }
-  if (search.type !== undefined) {
-    chips.push({
-      id: "filter:type",
-      kind: t(FILTER_KIND_LABEL_KEYS.type),
-      onRemove: () => selectFacet("type", undefined),
-      value: search.type,
-    });
-  }
+  const chips = useStatuteListFilterChips({
+    search,
+    onRemove: (key) =>
+      detached(
+        searchNavigation((previous) => ({ ...previous, [key]: undefined })),
+        "statutes.filter-navigate",
+      ),
+  });
 
   // Enter on an act reference opens the act when exactly one work answers
   // to it. Several (the same number in two collections) stay listed, so the
@@ -684,6 +734,7 @@ function PublicStatuteList({
                 ...previous,
                 type: undefined,
                 validity: undefined,
+                year: undefined,
               })),
               "statutes.clear-filters",
             );

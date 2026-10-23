@@ -78,8 +78,8 @@ describe("Button loading icon", () => {
   // the only icon a reader sees, not a second spinner beside the first.
   test("the loader stands in for the caller's icon while loading", () => {
     const markup = renderToStaticMarkup(
-      <Button loading>
-        <RetryIcon /> Try again
+      <Button icon={<RetryIcon />} loading>
+        <span>Try again</span>
       </Button>,
     );
 
@@ -87,18 +87,56 @@ describe("Button loading icon", () => {
     expect(markup).toContain('aria-busy="true"');
     expect(markup).toContain('aria-hidden="true"');
     expect(markup).not.toContain("animate-spin");
-    // The ampersand of the arbitrary variant is HTML-escaped in markup.
-    expect(markup).toContain("_svg:not([data-slot=button-loader]_svg)]:hidden");
+    expect(markup.match(/<svg/gu)).toHaveLength(1);
+    expect(markup).not.toContain('data-testid="retry-icon"');
+    expect(markup).toContain("<span>Try again</span>");
   });
 
   test("the caller's icon shows once the button is idle", () => {
     const markup = renderToStaticMarkup(
-      <Button>
-        <RetryIcon /> Try again
-      </Button>,
+      <Button icon={<RetryIcon />}>Try again</Button>,
     );
 
     expect(markup).toContain('data-testid="retry-icon"');
     expect(markup).not.toContain("button-loader");
+  });
+});
+
+describe("Button press feedback", () => {
+  const PRESS = "motion-safe:active:scale-[0.98]";
+
+  test("an enabled button gives under the pointer, icon buttons included", () => {
+    for (const markup of [
+      renderToStaticMarkup(<Button>Save</Button>),
+      renderToStaticMarkup(<Button aria-label="Close" size="icon" />),
+      renderToStaticMarkup(<Button variant="ghost">Cancel</Button>),
+    ]) {
+      expect(markup).toContain(PRESS);
+      expect(markup).toContain("transition-transform");
+      expect(markup).toContain("select-none");
+    }
+  });
+
+  test("a button that cannot act never appears to respond", () => {
+    for (const markup of [
+      renderToStaticMarkup(<Button disabled>Save</Button>),
+      renderToStaticMarkup(
+        <Button disabled tooltip="Save the draft first">
+          Approve
+        </Button>,
+      ),
+      renderToStaticMarkup(<Button loading>Save</Button>),
+    ]) {
+      expect(markup).not.toContain(PRESS);
+    }
+  });
+
+  test("menu rows and link-styled buttons keep their surface's treatment", () => {
+    expect(
+      renderToStaticMarkup(<Button size="row">Rename</Button>),
+    ).not.toContain(PRESS);
+    expect(
+      renderToStaticMarkup(<Button variant="link">Learn more</Button>),
+    ).not.toContain(PRESS);
   });
 });

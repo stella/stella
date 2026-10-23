@@ -55,6 +55,7 @@
     "appearance.calendar",
     "auth.continueWithEmail",
     "avt.claimTypes.opinion.label",
+    "avt.verification.documentView.original",
     "billing.codes.activity",
     "billing.codes.codeLabelField",
     "billing.codes.task",
@@ -130,6 +131,7 @@
     "flows.trigger.manual",
     "folio.comments.visibility",
     "folio.deleted",
+    "folio.markupView.original",
     "guides.status.skipped",
     "inbox.view.new",
     "inspector.anonymization.deleteAction",
@@ -318,6 +320,12 @@
     "avt.claimDetail.sourceCount": [
       "fr"
     ],
+    "avt.verification.documentView.original": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
+    ],
     "billing.codes.codeLabel": [
       "de",
       "fr"
@@ -365,6 +373,9 @@
     ],
     "chat.landing.skills": [
       "de"
+    ],
+    "chat.mention.category.sources": [
+      "fr"
     ],
     "chat.pastedText.fromPromptFallback": [
       "de"
@@ -1192,7 +1203,6 @@
     "workspaces.overview.activity.details.channel",
     "workspaces.overview.activity.loadEarlier",
     "workspaces.overview.atAGlance",
-    "workspaces.overview.edited",
     "workspaces.overview.getStarted",
     "workspaces.overview.openTasks",
     "workspaces.overview.uploaded",
@@ -1255,7 +1265,6 @@
     "workspaces.views.fields",
     "workspaces.views.reportExport.action",
     "workspaces.views.timeline.noDates",
-    "workspaces.views.timeline.showTable",
     "workspaces.workflow.allManualInputsDescription",
     "workspaces.workflow.allManualInputsTitle",
     "workspaces.workflow.generate",

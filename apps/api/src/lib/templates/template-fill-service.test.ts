@@ -38,6 +38,7 @@ import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import { buildTemplateS3Key } from "./storage-keys";
 import {
   decideTemplateFillCompletion,
   fillDiagnosticsOf,
@@ -675,7 +676,7 @@ describe("fillTemplateDocx required-field rejection", () => {
 
 describe("fillStoredTemplateDocx use recording", () => {
   const usedTemplateId = toSafeId<"template">("tmpl_use");
-  const storedS3Key = "fake-key-use-recording";
+  const storedS3Key = buildTemplateS3Key(organizationId, usedTemplateId);
   const storedRow = {
     name: "NDA",
     fileName: "nda.docx",
@@ -1025,7 +1026,7 @@ describe("fillTemplateDocx undecided AI conditions grade the fill", () => {
 
 describe("describeStoredTemplate gated blocks", () => {
   const templateId = toSafeId<"template">("tmpl_2");
-  const s3Key = "fake-key-conditions";
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
 
   const stubDescribeScopedDb = (): ScopedDb => {
     const fakeTx = {
@@ -1119,7 +1120,7 @@ describe("describeStoredTemplate gated blocks", () => {
 describe("describeStoredTemplate array shape", () => {
   const templateId = toSafeId<"template">("tmpl_1");
 
-  const s3Key = "fake-key-unused-because-loadTemplate-is-bypassed";
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
 
   const stubDescribeScopedDb = (): ScopedDb => {
     const fakeTx = {
@@ -1427,7 +1428,7 @@ describe("clause and template directive parity", () => {
         text: "{{ loop.index }}: {{ term.value }}",
         runs: [{ text: "{{ loop.index }}: {{ term.value }}", italic: true }],
         listKind: "ordered",
-        listLevel: 1,
+        numbering: { kind: "levelOnly", ilvl: 1 },
       },
       clauseDirective("{% endfor %}"),
       clauseDirective("{% endif %}"),
@@ -2017,10 +2018,11 @@ test("stored web discovery, description and effective fill declarations agree fo
   const templateId = toSafeId<"template">(
     "00000000-0000-4000-8000-000000000001",
   );
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
   const fakeS3 = startFakeS3();
   try {
-    fakeS3.put("stella", "clause-web-discovery", new Uint8Array(file.bytes));
-    const scopedDb = stubScopedDb(clauseBody, "clause-web-discovery");
+    fakeS3.put("stella", s3Key, new Uint8Array(file.bytes));
+    const scopedDb = stubScopedDb(clauseBody, s3Key);
     const app = new Elysia().post(
       "/templates/discover",
       async ({ body, request }) =>

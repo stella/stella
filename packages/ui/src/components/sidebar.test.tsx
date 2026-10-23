@@ -101,6 +101,33 @@ describe("SidebarProvider / Sidebar", () => {
     expect(markup).toContain('data-state="collapsed"');
     expect(markup).toContain('data-collapsible="icon"');
   });
+
+  for (const variant of ["floating", "inset"] as const) {
+    test.each(["left", "right"] as const)(
+      `${variant} sidebar on the %s adds its gutter to exposed safe-area insets`,
+      (side) => {
+        const markup = renderToStaticMarkup(
+          <SidebarProvider>
+            <Sidebar side={side} variant={variant}>
+              Content
+            </Sidebar>
+          </SidebarProvider>,
+        );
+
+        expect(markup).toContain(
+          "pt-[calc(var(--safe-area-top)+--spacing(2))]",
+        );
+        expect(markup).toContain(
+          "pb-[calc(var(--safe-area-bottom)+--spacing(2))]",
+        );
+        const attachedEdge = side === "left" ? "ps" : "pe";
+        const inset = side === "left" ? "inline-start" : "inline-end";
+        expect(markup).toContain(
+          `${attachedEdge}-[calc(var(--safe-area-${inset})+--spacing(2))]`,
+        );
+      },
+    );
+  }
 });
 
 describe("SidebarRail", () => {
