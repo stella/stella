@@ -211,8 +211,18 @@ const exceptionFrame = (
  * component the other never gets, which silently regroups issues on one path
  * and throttles across defects on the other.
  */
-const errorIdentity = (component: (key: string) => string): string =>
-  ERROR_IDENTITY_COMPONENTS.map(component).join("|");
+const errorIdentity = (fields: Readonly<Record<string, unknown>>): string =>
+  [
+    ...ERROR_IDENTITY_COMPONENTS.map((key) => fields[key]),
+    ...(fields["error.provider.status"] === undefined
+      ? []
+      : [
+          fields["error.provider.code"] ?? fields["error.provider.type"],
+          fields["error.provider.status"],
+        ]),
+  ]
+    .map((value) => (typeof value === "string" ? value : ""))
+    .join("|");
 
 /**
  * Structural key for repeat suppression: error class, stable code, code
@@ -225,13 +235,7 @@ const errorIdentity = (component: (key: string) => string): string =>
  * above are the same defect.
  */
 const captureWindowKey = (properties: ExceptionProperties): string =>
-  errorIdentity((key) => {
-    // `ExceptionProperties` widens every value to include `$exception_list`,
-    // so read each field back as a string rather than stringifying whatever
-    // is there.
-    const value = properties[key];
-    return typeof value === "string" ? value : "";
-  });
+  errorIdentity(properties);
 
 /**
  * Drop the key whose window opened longest ago once the map is full, so a
@@ -343,6 +347,7 @@ const captureErrorWithOptions = (
   const rootProviderStatus = evidence.nodes.at(0)?.providerStatus?.status;
   const providerFields =
     rootProviderStatus === undefined ? {} : providerErrorFields(error);
+  const providerStatusFields = providerStatusFieldsOf(evidence);
   const status =
     requestErrorStatusFields(evidence)["error.status_code"] ??
     rootProviderStatus;
@@ -382,7 +387,11 @@ const captureErrorWithOptions = (
     // source positions rather than bundle positions; the artifact test guards
     // that build contract. Stack symbols are deliberately absent: engines can
     // infer one from a data-derived computed property key.
-    $exception_fingerprint: errorIdentity((key) => fingerprint[key] ?? ""),
+    $exception_fingerprint: errorIdentity({
+      ...fingerprint,
+      ...providerStatusFields,
+      ...providerFields,
+    }),
     $exception_level: "error",
     $exception_list: [
       {
@@ -398,7 +407,7 @@ const captureErrorWithOptions = (
     // carry no client data, so they make the exception actionable in
     // the dashboard without violating it.
     ...fingerprint,
-    ...providerStatusFieldsOf(evidence),
+    ...providerStatusFields,
     ...providerFields,
     ...safeErrorTelemetryFields(error),
     ...(options.organizationId

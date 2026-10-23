@@ -238,7 +238,7 @@ describe("captureError issue grouping", () => {
     );
   });
 
-  test("names a provider body by its provider status and code", () => {
+  test("names and separates provider bodies by provider status and code", () => {
     // The shape a provider stream forwards as its run error's raw event: a
     // plain object, so it has no class, code or frame of its own.
     const providerBody = {
@@ -252,19 +252,53 @@ describe("captureError issue grouping", () => {
     };
     classifyFailure(providerBody, "provider_request_rejected");
     captureError(providerBody);
+    captureError({
+      status: 429,
+      error: {
+        code: "rate_limit_exceeded",
+        type: "requests",
+      },
+    });
 
     const properties = captured.at(0)?.properties;
+    expect(captured).toHaveLength(2);
     expect(firstExceptionValue()).toBe(
       "UnknownError[invalid_value] 400 provider_request_rejected defect",
     );
     expect(properties).toMatchObject({
-      $exception_fingerprint: "UnknownError||||",
+      $exception_fingerprint: "UnknownError|||||invalid_value|400",
       "error.provider.code": "invalid_value",
       "error.provider.param": "input[3].call_id",
       "error.provider.status": "400",
       "error.provider.type": "invalid_request_error",
     });
+    expect(captured.at(1)?.properties["$exception_fingerprint"]).toBe(
+      "UnknownError|||||rate_limit_exceeded|429",
+    );
+    expect(properties?.["$exception_fingerprint"]).not.toBe(
+      captured.at(1)?.properties["$exception_fingerprint"],
+    );
     expect(JSON.stringify(properties)).not.toContain("alex@example.test");
+  });
+
+  test("contains throwing provider field getters", () => {
+    const providerBody = {
+      status: 400,
+      error: {
+        get code(): string {
+          throw new Error("provider getter failed");
+        },
+        type: "invalid_request_error",
+      },
+    };
+
+    expect(() => captureError(providerBody)).not.toThrow();
+    expect(captured).toHaveLength(1);
+    expect(captured.at(0)?.properties).toMatchObject({
+      $exception_fingerprint: "UnknownError|||||invalid_request_error|400",
+      "error.provider.status": "400",
+      "error.provider.type": "invalid_request_error",
+    });
   });
 
   test.each([
